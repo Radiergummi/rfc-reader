@@ -53,4 +53,35 @@ struct DisclosureGeometryTests {
         == CGPoint(x: 0, y: 50))
     #expect(FragmentGeometry.disclosureHit(atContainerPoint: CGPoint(x: 4, y: 50)) == nil)
   }
+
+  /// The arrow covers exactly what a click toggles: the gutter beside the heading's
+  /// fragment, every point of which `disclosureHit` takes to the heading's own height
+  /// on the column's edge; nothing of the column.
+  @Test func `the arrow's rect is the gutter beside the heading`() {
+    let fragment = CGRect(x: 0, y: 200, width: 300, height: 30)
+    let origin = CGPoint(x: 120, y: 64)
+    let rect = FragmentGeometry.disclosureCursorRect(
+      fragmentFrame: fragment, containerOrigin: origin)
+    #expect(rect == CGRect(x: 0, y: 264, width: 120, height: 30))
+    for point in [
+      CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX - 0.5, y: rect.maxY - 0.5),
+    ] {
+      let container = CGPoint(x: point.x - origin.x, y: point.y - origin.y)
+      let hit = FragmentGeometry.disclosureHit(atContainerPoint: container)
+      #expect(hit.map { fragment.minY...fragment.maxY ~= $0.y } == true)
+    }
+    let inColumn = CGPoint(x: origin.x + 1 - origin.x, y: 210)
+    #expect(FragmentGeometry.disclosureHit(atContainerPoint: inColumn) == nil)
+  }
+
+  /// The chevron fits well inside the gutter's share of the line: smaller than a
+  /// third of the line's height across.
+  @Test func `the chevron is small beside its heading`() {
+    for open in [false, true] {
+      let points = FragmentGeometry.disclosureChevron(open: open, firstLine: line)
+      let across = points.map(\.x).max()! - points.map(\.x).min()!
+      let down = points.map(\.y).max()! - points.map(\.y).min()!
+      #expect(max(across, down) < line.height / 3)
+    }
+  }
 }

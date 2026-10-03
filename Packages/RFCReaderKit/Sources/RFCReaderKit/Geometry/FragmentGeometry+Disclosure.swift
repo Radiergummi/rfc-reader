@@ -6,7 +6,7 @@ extension FragmentGeometry {
   /// heading's first line, and sized by it. Closed, it points right, at the heading;
   /// open, it points down, at the section it shows.
   public static func disclosureChevron(open: Bool, firstLine: CGRect) -> [CGPoint] {
-    let size = firstLine.height * 0.22
+    let size = firstLine.height * 0.16
     // Close to the heading: an iPhone's gutter is barely wider than the chevron.
     let center = CGPoint(x: firstLine.minX - size * 1.8, y: firstLine.midY)
     if open {
@@ -43,5 +43,17 @@ extension FragmentGeometry {
   /// which is the text's: its links, its selection.
   public static func disclosureHit(atContainerPoint point: CGPoint) -> CGPoint? {
     point.x < 0 ? CGPoint(x: 0, y: point.y) : nil
+  }
+
+  /// Where the pointer is the arrow beside a heading the outline discloses, in the
+  /// text view's coordinates: the gutter left of the column, the height of the
+  /// heading's fragment. Exactly what a click toggles, since `disclosureHit` takes
+  /// every point of it to the column's edge at a height inside the fragment.
+  public static func disclosureCursorRect(fragmentFrame: CGRect, containerOrigin: CGPoint)
+    -> CGRect
+  {
+    CGRect(
+      x: 0, y: containerOrigin.y + fragmentFrame.minY, width: containerOrigin.x,
+      height: fragmentFrame.height)
   }
 }

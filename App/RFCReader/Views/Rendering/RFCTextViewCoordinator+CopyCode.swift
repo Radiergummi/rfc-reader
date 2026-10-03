@@ -26,8 +26,30 @@ import RFCReaderKit
       return textView.textLayoutManager?.attributedText?.copyButton(at: offset)
     }
 
+    /// Where the pointer is the arrow in the outline (#698): the gutter beside each
+    /// heading with a disclosure in the viewport (`FragmentGeometry.disclosureCursorRect`).
+    func disclosureCursorRects() -> [CGRect] {
+      guard folding.mode == .outline, let textView, let layout = textView.textLayoutManager,
+        let viewport = layout.textViewportLayoutController.viewportRange
+      else { return [] }
+      let end = layout.offset(of: viewport.endLocation)
+      let origin = textView.textContainerOrigin
+      var rects: [CGRect] = []
+      layout.enumerateTextLayoutFragments(from: viewport.location, options: []) { fragment in
+        let start = layout.offset(of: fragment.rangeInElement.location)
+        guard start < end else { return false }
+        if foldingDelegate.disclosure(at: start) != nil {
+          rects.append(
+            FragmentGeometry.disclosureCursorRect(
+              fragmentFrame: fragment.layoutFragmentFrame, containerOrigin: origin))
+        }
+        return true
+      }
+      return rects
+    }
+
     /// The heading whose disclosure is under the pointer of `event`, in the outline
-    /// (#698): where a click there toggles, and where the pointer is the arrow. Only
+    /// (#698): where a click there toggles. Only
     /// in the gutter beside a heading the outline shows: a click on the heading's
     /// text is the text view's, for its links, a selection, a double-click on a word.
     func disclosureHeading(under event: NSEvent) -> Int? {

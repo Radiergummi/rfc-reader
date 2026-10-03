@@ -65,6 +65,10 @@ extension RFCTextViewCoordinator {
     // heading's fragment, which has to be drawn again.
     foldingDelegate.fold(foldingIndex, by: folding)
     engine.refold(foldingDelegate.hidden, placeAt: place)
+    #if !canImport(UIKit)
+      // Leaving the outline too, whose arrows go with it.
+      if let textView { textView.window?.invalidateCursorRects(for: textView) }
+    #endif
     reportVisibleAnchor()
   }
 

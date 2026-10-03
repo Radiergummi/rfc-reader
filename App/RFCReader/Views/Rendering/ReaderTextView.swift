@@ -126,10 +126,11 @@ import RFCReaderKit
     var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
     var copyCode: (NSEvent) -> Bool = { _ in false }
     /// Opens or closes the section of a heading clicked in the outline (#698);
-    /// answers whether the click was on one. Where it would, the pointer is the
-    /// arrow, as over a copy button.
+    /// answers whether the click was on one.
     var toggleSection: (NSEvent) -> Bool = { _ in false }
-    var isOverDisclosure: (NSEvent) -> Bool = { _ in false }
+    /// Where a click would toggle a heading's section in the outline, in this view's
+    /// coordinates: where the pointer is the arrow (`resetCursorRects()`).
+    var disclosureCursorRects: () -> [CGRect] = { [] }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -184,6 +185,18 @@ import RFCReaderKit
     /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
     /// view does not handle arrives here through the responder chain, and every move
     /// resets it.
+    /// The arrow beside a heading the outline discloses (#698). As cursor rects,
+    /// because that is how `NSTextView` sets its I-beam: its own tracking area asks
+    /// for neither moves nor cursor updates, so `mouseMoved` and `cursorUpdate` here
+    /// see only what a subview such as the header passes up. Added after `super`'s,
+    /// as `NSTextView` adds a link's pointing hand over its I-beam.
+    override func resetCursorRects() {
+      super.resetCursorRects()
+      for rect in disclosureCursorRects() {
+        addCursorRect(rect, cursor: .arrow)
+      }
+    }
+
     override func cursorUpdate(with event: NSEvent) {
       guard !wantsArrow(event) else {
         NSCursor.arrow.set()
@@ -204,7 +217,7 @@ import RFCReaderKit
       if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
         return true
       }
-      if isOverCopyButton(event) || isOverDisclosure(event) { return true }
+      if isOverCopyButton(event) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }
