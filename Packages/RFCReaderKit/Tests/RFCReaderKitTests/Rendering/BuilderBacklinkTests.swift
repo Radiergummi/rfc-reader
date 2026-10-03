@@ -126,7 +126,7 @@ struct BuilderBacklinkTests {
     let heading = try Fixtures.offset(of: "2. Two", in: built.text)
     let selection = built.text.attributedSubstring(
       from: NSRange(location: heading, length: "2. Two \u{FFFC}\u{2060}3\n".utf16.count))
-    let copied = SelectionText.withoutBacklinkChips(of: selection)
+    let copied = SelectionText.withoutReaderText(of: selection)
     #expect(copied.string == "2. Two\n")
   }
 

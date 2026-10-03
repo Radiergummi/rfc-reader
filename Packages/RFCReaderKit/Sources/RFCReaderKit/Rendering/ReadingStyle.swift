@@ -79,6 +79,9 @@ public struct ReadingStyle: Sendable, Hashable {
   public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
   public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
   public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
+  /// A source code block's language: a tag on its card, small and tracked, so it
+  /// does not read as a heading over a line or two of code.
+  public var codeLabelFont: PlatformFont { .systemFont(ofSize: bodySize * 0.7) }
 
   /// Strong text in `surrounding`: bold, or heavy where the surrounding text is
   /// already bold, at its size and slant. A bold trait added to the face is not

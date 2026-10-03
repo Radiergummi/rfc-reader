@@ -205,6 +205,7 @@ extension DocumentTextBuilder {
   ) -> NSAttributedString {
     var attributes = Self.outsideHeading(base)
     attributes[.rfcBacklinks] = anchor
+    attributes[.rfcReaderOnly] = ""
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
     attributes[.rfcSpoken] = AccessibleReading.backlinksLabel(count: count)
     if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
@@ -212,6 +213,24 @@ extension DocumentTextBuilder {
     }
     result.append(chipRun(String(count), symbol: "arrow.turn.up.left", attributes: attributes))
     return result
+  }
+
+  /// How large the copy button's symbol is against its label's font: smaller than
+  /// the capitals beside it, so it does not outweigh them. The checkmark shown after
+  /// a copy takes the same size.
+  public static let copyButtonScale: CGFloat = 0.85
+
+  /// A code block's copy button: its symbol alone, a chip so the attachment is one
+  /// the reader allows, drawn without the chip's tint and in the color of the text
+  /// beside it. No link: a link is a web page's control, with its pointing hand, and
+  /// the reader takes a click on the button itself (`copyButton(at:)`).
+  func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+    var attributes = base
+    attributes[.rfcCopyCode] = ""
+    attributes[.rfcSpoken] = "Copy code"
+    nextChipID += 1
+    attributes[.rfcChip] = nextChipID
+    return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
   }
 
   /// A heading's attributes less what makes a run the heading: its anchor and its
@@ -231,15 +250,16 @@ extension DocumentTextBuilder {
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size and its bounds are centered on that font's cap height,
+  /// the run's own font size, or `scale` of it, and its bounds are centered on that
+  /// font's cap height,
   /// to the nearest whole point: a symbol that hangs below the line's descender
   /// makes its line that much taller, even past a fixed line height, and a
   /// fraction there puts every fragment below it off the pixel grid (#273).
   private func chipSymbolRun(
-    _ name: String, attributes: [NSAttributedString.Key: Any]
+    _ name: String, scale: CGFloat = 1, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    guard let symbol = chipSymbol(name, pointSize: font.pointSize) else { return nil }
+    guard let symbol = chipSymbol(name, pointSize: font.pointSize * scale) else { return nil }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
     // after the default initializer instead, which UIKit also accepts.
     let attachment = NSTextAttachment()

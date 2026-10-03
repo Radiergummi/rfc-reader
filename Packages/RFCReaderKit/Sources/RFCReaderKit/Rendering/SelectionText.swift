@@ -28,7 +28,7 @@ public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
   public static func plainText(of selection: NSAttributedString) -> String {
-    let attributed = withoutBacklinkChips(of: selection)
+    let attributed = withoutReaderText(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -48,20 +48,21 @@ public enum SelectionText {
     return result
   }
 
-  /// A heading's backlink chip counts what refers to the section (#183): the
-  /// reader's, not the document's words, so a copied heading is the heading alone,
-  /// in the rich flavors as in the plain one.
-  public static func withoutBacklinkChips(of selection: NSAttributedString) -> NSAttributedString {
-    var chips: [NSRange] = []
+  /// What the reader adds to the document's words (`.rfcReaderOnly`) — a heading's
+  /// backlink chip (#183), a code block's language and copy button — is not part of
+  /// what was copied: a copied heading is the heading alone, and copied code is the
+  /// code, in the rich flavors as in the plain one.
+  public static func withoutReaderText(of selection: NSAttributedString) -> NSAttributedString {
+    var runs: [NSRange] = []
     selection.enumerateAttribute(
-      .rfcBacklinks, in: NSRange(location: 0, length: selection.length)
+      .rfcReaderOnly, in: NSRange(location: 0, length: selection.length)
     ) { value, range, _ in
-      if value != nil { chips.append(range) }
+      if value != nil { runs.append(range) }
     }
-    guard !chips.isEmpty else { return selection }
+    guard !runs.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
-    for chip in chips.reversed() {
-      result.deleteCharacters(in: chip)
+    for run in runs.reversed() {
+      result.deleteCharacters(in: run)
     }
     return result
   }

@@ -25,10 +25,17 @@ extension NSAttributedString.Key {
   /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
   /// Set on a heading's backlink chip and the space before it (#183): the anchor of
-  /// the section the chip lists the backlinks of. A `String`, so the runs merge. A
-  /// copied selection leaves these runs out (`SelectionText`): they are the reader's,
-  /// not the document's words.
+  /// the section the chip lists the backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on what the reader adds to the document's words: a heading's backlink chip
+  /// and the space before it, a code block's language and its copy button. A copied
+  /// selection leaves these runs out (`SelectionText`). A `String`, so the runs
+  /// merge; only its presence is meaningful.
+  public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
+  /// Set on a code block's copy button (macOS), whose click copies the block's text
+  /// (`copyButton(at:)`), and which is drawn as a chip without its tint. A `String`;
+  /// only its presence is meaningful.
+  public static let rfcCopyCode = NSAttributedString.Key("rfcCopyCode")
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink chip (#183), which would otherwise
   /// read as its arrow and a bare number. A `String`, carried by every character of
@@ -48,10 +55,14 @@ extension NSAttributedString.Key {
   /// every character of the block so each line's fragment finds them, and which of
   /// the block's lines it holds, through the box's extent (`StrokeGeometry`).
   public static let rfcStrokes = NSAttributedString.Key("rfcStrokes")
-  /// How wide a verbatim block's widest line is set, in points, on every character
-  /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
+  /// How wide a figure's widest line is set, in points, on every character of the
+  /// block: where its card ends (`FragmentGeometry.Placement`). A number,
   /// which compares by value, so the runs of one block coalesce.
   public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
+  /// How far a verbatim block's text is set in from where its card is measured
+  /// (`FragmentGeometry.cardInset`), on every character of a block that spans the
+  /// column: its card starts that much before the text's indent. A number.
+  public static let rfcCardInset = NSAttributedString.Key("rfcCardInset")
   /// Makes a block with a rendering one item for a long press, which shows the
   /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
   /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
@@ -221,5 +232,21 @@ extension NSAttributedString {
     var chip = run
     _ = attribute(.rfcChip, at: NSMaxRange(run) - 1, longestEffectiveRange: &chip, in: run)
     return (anchor, chip)
+  }
+
+  /// The code block's copy button at this character offset: what it copies, the
+  /// block as written less the indent its lines share, as it is shown, and the
+  /// button's own extent, where its feedback is shown. Nil anywhere but on the
+  /// button.
+  public func copyButton(at offset: Int) -> (code: String, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
+      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+    else { return nil }
+    var button = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcCopyCode, at: offset, longestEffectiveRange: &button,
+      in: NSRange(location: 0, length: length))
+    return (DocumentTextBuilder.removingSharedIndent(box.content.text), button)
   }
 }

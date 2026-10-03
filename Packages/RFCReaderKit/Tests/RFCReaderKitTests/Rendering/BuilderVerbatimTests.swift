@@ -49,7 +49,9 @@ struct BuilderVerbatimTests {
       return paragraph.paragraphSpacing
     }
     #expect(spacings.dropLast().allSatisfy { $0 == 0 }, "no spacing between a block's lines")
-    #expect(spacings.last == style.paragraphSpacing, "the block is spaced from what follows it")
+    #expect(
+      spacings.last == style.paragraphSpacing + FragmentGeometry.cardPadding * 1.5,
+      "the block is spaced from what follows it")
   }
 
   /// The body's line height leaves a gap between the lines of a vertical `|` stroke,
@@ -153,6 +155,104 @@ struct BuilderVerbatimTests {
     #expect(NSLocationInRange(code, run), "the label and the code must be one card")
   }
 
+  /// The label is a tag on the card, not a caption: smaller than a caption, so it
+  /// does not read as a heading over a block of one or two lines.
+  @Test func `the language label is smaller than a caption`() throws {
+    let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let label = try Fixtures.offset(of: "ABNF", in: built.text)
+    let font = try #require(
+      built.text.attribute(.font, at: label, effectiveRange: nil) as? PlatformFont)
+    #expect(font.pointSize < style.captionFont.pointSize)
+  }
+
+  @Test func `the language label sits at the card's trailing edge`() throws {
+    let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let label = try Fixtures.offset(of: "ABNF", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: label, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.alignment == .right)
+  }
+
+  /// Nobody wants a stray "JSON" in the code they copied.
+  @Test func `a copied code block leaves out its language and its button`() {
+    let content = Preformatted(kind: .sourceCode, text: #"{ "a": true }"#, type: "json")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let copied = SelectionText.plainText(of: built.text)
+    #expect(!copied.contains("JSON"))
+    #expect(!copied.contains("\u{FFFC}"))
+    #expect(copied.contains(#"{ "a": true }"#))
+  }
+
+  #if !canImport(UIKit)
+    @Test func `the copy button copies the code without its shared indent`() throws {
+      let content = Preformatted(
+        kind: .sourceCode, text: "   {\n     \"a\": true\n   }", type: "json")
+      let built = DocumentTextBuilder.build(document(content), style: style)
+      let button = (built.text.string as NSString).range(of: "\u{FFFC}").location
+      #expect(button != NSNotFound)
+      #expect(built.text.copyButton(at: button)?.code == "{\n  \"a\": true\n}")
+      #expect(built.text.copyButton(at: try Fixtures.offset(of: "JSON", in: built.text)) == nil)
+    }
+  #endif
+
+  /// The XML of a converted RFC keeps the text format's three-space indent inside a
+  /// code block, which sat inside the card's own padding as a second margin.
+  @Test func `source code is shown without the indent its lines share`() {
+    let content = Preformatted(kind: .sourceCode, text: "   {\n\n     a\n   }", type: "json")
+    #expect(
+      DocumentTextBuilder(style: style).displayedText(of: content, indent: 0) == "{\n\n  a\n}")
+  }
+
+  /// In a drawing the indent is part of the picture.
+  @Test func `artwork keeps the indent its lines share`() {
+    let content = Preformatted(kind: .artwork, text: "   +--+\n   |  |\n   +--+")
+    #expect(DocumentTextBuilder(style: style).displayedText(of: content, indent: 0) == content.text)
+  }
+
+  @Test(arguments: [
+    ("   a\n     b", "a\n  b"),
+    ("a\n   b", "a\n   b"),
+    ("  a\n \n  b", "a\n\nb"),
+    ("    \n  a", "  \na"),
+  ])
+  func `the shared indent is the least of the lines that have text`(
+    text: String, expected: String
+  ) {
+    #expect(DocumentTextBuilder.removingSharedIndent(text) == expected)
+  }
+
+  @Test func `a build without live links has no copy button`() {
+    let content = Preformatted(kind: .sourceCode, text: #"{ "a": true }"#, type: "json")
+    let built = DocumentTextBuilder.build(
+      document(content), style: ReadingStyle(emitsLinks: false))
+    #expect(!built.text.string.contains("\u{FFFC}"))
+  }
+
+  /// The card is drawn inside its first line's spacing before and its last line's
+  /// after, so each holds the card's padding and a paragraph's margin besides.
+  @Test(arguments: [
+    Preformatted(kind: .sourceCode, text: "x = 1\ny = 2", type: "abnf"),
+    Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"),
+    Preformatted(kind: .artwork, text: "+--+"),
+  ])
+  func `a card keeps a margin to the text around it`(content: Preformatted) throws {
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let text = built.text.string as NSString
+    let block = try Fixtures.offset(of: content.type?.uppercased() ?? "+--+", in: built.text)
+    let first = try #require(
+      built.text.attribute(.paragraphStyle, at: block, effectiveRange: nil) as? NSParagraphStyle)
+    let lastLocation =
+      NSMaxRange(
+        text.range(of: content.text.components(separatedBy: "\n").last!, options: .backwards)) - 1
+    let last = try #require(
+      built.text.attribute(.paragraphStyle, at: lastLocation, effectiveRange: nil)
+        as? NSParagraphStyle)
+    #expect(first.paragraphSpacingBefore == FragmentGeometry.cardPadding / 2)
+    #expect(last.paragraphSpacing == style.paragraphSpacing + FragmentGeometry.cardPadding * 1.5)
+  }
+
   /// Artwork inside a quote starts an indent step in, so the widest line has to fit
   /// what is left of the measure — scaled against the whole measure, it overruns
   /// the column by exactly the indent.
@@ -166,7 +266,7 @@ struct BuilderVerbatimTests {
       built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
 
     let rendered = DocumentTextBuilder(style: style).lineWidth(wide, font: font)
-    let available = style.measure - style.indentStep
+    let available = style.measure - style.indentStep - FragmentGeometry.cardInset * 2
     #expect(
       abs(rendered - available) < 1,
       "the widest line fills the indented measure: \(rendered) vs \(available)")
@@ -215,9 +315,10 @@ struct BuilderVerbatimTests {
 
     let ruler = DocumentTextBuilder(style: style)
     let rendered = ruler.lineWidth(wide, font: font)
+    let available = style.measure - FragmentGeometry.cardInset * 2
     #expect(
-      abs(rendered - style.measure) < 1,
-      "the widest line fills the measure: \(rendered) vs \(style.measure)")
+      abs(rendered - available) < 1,
+      "the widest line fills the measure inside the card: \(rendered) vs \(available)")
   }
 
   // MARK: - RFC 8792 folding (issue #64)

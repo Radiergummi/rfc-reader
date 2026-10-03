@@ -152,7 +152,11 @@ struct AccessibleReadingTests {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
     )
-    #expect(AccessibleReading.pieces(of: whole(text), in: text) == [.text(whole(text))])
+    // Read as its words, not as a diagram: the only label is the copy button's.
+    let labels = AccessibleReading.pieces(of: whole(text), in: text).compactMap { piece in
+      if case .label(let label) = piece { label } else { nil }
+    }
+    #expect(labels.allSatisfy { $0 == "Copy code" })
   }
 
   /// Artwork that is not a drawing reads perfectly well as words, and legacy
