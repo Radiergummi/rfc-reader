@@ -236,19 +236,28 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
-  /// The code block's copy button at this character offset: what it copies, the
-  /// block as written less the indent its lines share, as it is shown, and the
-  /// button's own extent, where its feedback is shown. Nil anywhere but on the
-  /// button.
-  public func copyButton(at offset: Int) -> (code: String, range: NSRange)? {
+  /// The extent of the code block's copy button at this character offset, where its
+  /// feedback is shown; nil anywhere but on the button. Asked on every pointer
+  /// move, so it only looks: what the button copies is `code(ofCopyButtonAt:)`.
+  public func copyButton(at offset: Int) -> NSRange? {
     guard offset >= 0, offset < length,
-      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
-      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil
     else { return nil }
     var button = NSRange(location: 0, length: 0)
     _ = attribute(
       .rfcCopyCode, at: offset, longestEffectiveRange: &button,
       in: NSRange(location: 0, length: length))
-    return (DocumentTextBuilder.removingSharedIndent(box.content.text), button)
+    return button
+  }
+
+  /// What the copy button at this character offset copies: its block as Copy
+  /// Figure copies it (`FigureCopy.pasteboardText(for:)`). Nil anywhere but on the
+  /// button. Asked on a click.
+  public func code(ofCopyButtonAt offset: Int) -> String? {
+    guard offset >= 0, offset < length,
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
+      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+    else { return nil }
+    return FigureCopy.pasteboardText(for: box.content)
   }
 }

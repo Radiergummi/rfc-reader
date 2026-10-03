@@ -62,7 +62,6 @@ enum Fixtures {
   /// The header RFC 8792 puts on a folded block.
   static let foldingHeader =
     "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
-
   /// A source block folded per RFC 8792 to fit the page, whose single unfolded line
   /// is `unfolded`: the header, a blank line, and the line cut every 60 characters.
   static func folded(

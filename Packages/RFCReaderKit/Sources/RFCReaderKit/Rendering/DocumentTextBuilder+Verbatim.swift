@@ -267,7 +267,8 @@ extension DocumentTextBuilder {
   /// Either way its tabs are spaces to the next eighth column, as the RFC Editor's
   /// text rendering sets them: the verbatim style has no tab stops, and a default
   /// stop is a distance in points, not in the block's columns, so a tabbed figure
-  /// sheared (#31). The box keeps the tabs; this is only what is drawn and measured.
+  /// sheared (#31). The box keeps the tabs; this is what is drawn, measured and
+  /// copied (`copiedText(of:)`).
   ///
   /// Unfolded before the tabs are expanded: a tab at the start of a continuation is
   /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
@@ -277,14 +278,26 @@ extension DocumentTextBuilder {
   /// converted RFC keeps from the text format, and which sat inside the card's
   /// padding as a second margin. Artwork keeps it, as part of the drawing.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    func shown(_ text: String) -> String {
-      let expanded = Self.expandingTabsTrimmingTabbedLines(text)
-      return content.kind == .sourceCode ? Self.removingSharedIndent(expanded) : expanded
-    }
+    let shown = { (text: String) in Self.shown(text, kind: content.kind) }
     guard let unfolded = FoldedLines.unfold(content.text).map(shown),
       monospaceScale(for: unfolded, indent: indent) == 1
     else { return shown(content.text) }
     return unfolded
+  }
+
+  /// The block as copied, by Copy Figure and by a code block's copy button: what a
+  /// column wide enough shows, so that a selection over the whole block pastes the
+  /// same. Unfolded whatever the column, its tabs expanded, and source code without
+  /// the indent its lines share.
+  static func copiedText(of content: Preformatted) -> String {
+    shown(content.unfoldedText, kind: content.kind)
+  }
+
+  /// `text`, a block's or its unfolding, as the reader sets it: tabs expanded, and
+  /// for source code the shared indent taken off.
+  private static func shown(_ text: String, kind: Preformatted.Kind) -> String {
+    let expanded = expandingTabsTrimmingTabbedLines(text)
+    return kind == .sourceCode ? removingSharedIndent(expanded) : expanded
   }
 
   /// `text` less the spaces every line with any text starts with; a line of white
