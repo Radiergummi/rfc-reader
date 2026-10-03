@@ -249,6 +249,8 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // A find hit in folded text opens its section first (#698).
+        coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
@@ -346,6 +348,9 @@ struct ReaderInputs {
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
+      textView.toggleSection = { [weak coordinator = context.coordinator] event in
+        coordinator?.toggleSection(under: event) ?? false
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
@@ -354,6 +359,8 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // A find hit in folded text opens its section first (#698).
+        coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed

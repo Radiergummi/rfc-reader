@@ -152,6 +152,13 @@ struct DocumentCommands: Commands {
             ListViewOptions(navigation: navigation)
           }
         }
+        // View > Reading Mode (#698): the window's, as the reader's place is.
+        if let reader {
+          Section {
+            ReadingModePicker(reader: reader)
+              .disabled(!showsDocument)
+          }
+        }
       #endif
     }
     CommandGroup(before: .sidebar) {

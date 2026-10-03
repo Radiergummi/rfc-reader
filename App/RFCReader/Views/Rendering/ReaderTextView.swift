@@ -125,6 +125,9 @@ import RFCReaderKit
     /// there was one.
     var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
     var copyCode: (NSEvent) -> Bool = { _ in false }
+    /// Opens or closes the section of a heading clicked in the outline (#698);
+    /// answers whether the click was on one.
+    var toggleSection: (NSEvent) -> Bool = { _ in false }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -215,6 +218,11 @@ import RFCReaderKit
       guard !willTrackMouseDown() else { return }
       // A copy button is a button: a click on it copies, and selects nothing.
       if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
+        return
+      }
+      if event.clickCount == 1, event.modifierFlags.isDisjoint(with: [.control, .shift, .command]),
+        toggleSection(event)
+      {
         return
       }
       guard event.clickCount == 1, !event.modifierFlags.contains(.control),

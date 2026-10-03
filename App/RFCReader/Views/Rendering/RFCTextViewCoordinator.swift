@@ -522,8 +522,17 @@ final class RFCTextViewCoordinator: NSObject {
       if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-      if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
-        return
+      if let offset = characterOffset(atContainerPoint: containerPoint) {
+        if link(at: offset) != nil { return }
+        // In the outline, a tap on a heading opens or closes its section (#698).
+        if folding.mode == .outline,
+          toggleSection(
+            atHeading: characterOffset(
+              atContainerPoint: CGPoint(x: max(0, containerPoint.x), y: containerPoint.y)) ?? offset
+          )
+        {
+          return
+        }
       }
       chrome.tapped()
       reportChrome()

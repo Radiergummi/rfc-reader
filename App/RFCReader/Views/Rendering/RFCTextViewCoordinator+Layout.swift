@@ -33,7 +33,7 @@ extension RFCTextViewCoordinator {
     // `StorageInstallTests` pins it.
     // Before the text, so the first layout skips what the reading mode folds.
     self.folding = folding
-    foldingDelegate.hidden = folding.hidden(in: built)
+    foldingDelegate.fold(built, by: folding)
     signposter.withIntervalSignpost("Install document") {
       storage.install(built.text)
     }
@@ -50,11 +50,22 @@ extension RFCTextViewCoordinator {
   func apply(_ folding: Folding) {
     guard folding != self.folding, let built else { return }
     self.folding = folding
-    let hidden = folding.hidden(in: built)
-    guard hidden != foldingDelegate.hidden else { return }
-    foldingDelegate.hidden = hidden
-    engine.refold(hidden)
+    // A new layout even when only a disclosure turned: its chevron is drawn by the
+    // heading's fragment, which has to be drawn again.
+    foldingDelegate.fold(built, by: folding)
+    engine.refold(foldingDelegate.hidden)
     reportVisibleAnchor()
+  }
+
+  /// A click or tap on a heading in the outline opens its section, or closes it;
+  /// answers whether there was a heading to toggle there.
+  func toggleSection(atHeading offset: Int) -> Bool {
+    guard let built, let toggled = folding.toggling(heading: offset, in: built) else {
+      return false
+    }
+    apply(toggled)
+    Task { self.onFoldingChange(toggled) }
+    return true
   }
 
   /// A jump to `offset`, which the reading mode may have folded away: its section is

@@ -54,6 +54,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
+    if let chevron = disclosureChevron {
+      // A point of slack all round, for the line's width and its antialiasing.
+      bounds = bounds.union(Self.boundingRect(of: chevron).insetBy(dx: -2, dy: -2))
+    }
     // A point of slack all round: a stroke is a line a point wide, centered on its
     // path, and antialiasing puts ink just outside it.
     if let strokes = StrokeGeometry.bounds(of: strokeSegments) {
@@ -165,6 +169,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     drawChips(at: point, on: card, in: context)
     drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
+    drawDisclosure(at: point, in: context)
   }
 
   /// Opaque lines rather than translucent fills, so where two fragments' pieces of
@@ -215,6 +220,42 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       backdrop = fill.color.composited(opacity: fill.opacity, over: backdrop)
     }
     return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
+  }
+
+  // MARK: - Disclosure
+
+  /// The heading's chevron in the outline (#698), from the folding its layout
+  /// manager's content holds; nil for a fragment that is no disclosed heading.
+  private var disclosureChevron: [CGPoint]? {
+    guard let range = documentRange,
+      let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
+      let open = folding.disclosure(at: range.location),
+      let line = textLineFragments.first
+    else { return nil }
+    return FragmentGeometry.disclosureChevron(open: open, firstLine: line.typographicBounds)
+  }
+
+  private static func boundingRect(of points: [CGPoint]) -> CGRect {
+    let xs = points.map(\.x)
+    let ys = points.map(\.y)
+    return CGRect(
+      x: xs.min() ?? 0, y: ys.min() ?? 0, width: (xs.max() ?? 0) - (xs.min() ?? 0),
+      height: (ys.max() ?? 0) - (ys.min() ?? 0))
+  }
+
+  private func drawDisclosure(at point: CGPoint, in context: CGContext) {
+    guard let chevron = disclosureChevron, let first = chevron.first else { return }
+    context.saveGState()
+    context.setStrokeColor(RFCColors.secondaryLabel.cgColor)
+    context.setLineWidth(1.5)
+    context.setLineCap(.round)
+    context.setLineJoin(.round)
+    context.move(to: CGPoint(x: point.x + first.x, y: point.y + first.y))
+    for next in chevron.dropFirst() {
+      context.addLine(to: CGPoint(x: point.x + next.x, y: point.y + next.y))
+    }
+    context.strokePath()
+    context.restoreGState()
   }
 
   private func drawChips(at point: CGPoint, on card: PlatformColor?, in context: CGContext) {
