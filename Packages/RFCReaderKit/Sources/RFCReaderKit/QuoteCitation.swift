@@ -192,8 +192,10 @@ public enum QuoteCitation {
       if let box, let last = blocks.last?.box, last === box {
         blocks[blocks.count - 1].lines.append(line)
       } else if let box {
-        // The label is the first line of its block, and reads as the type uppercased.
-        let isLabel = box.content.kind == .sourceCode && line == box.content.type?.uppercased()
+        // The label is the first line of its block, and the reader's own.
+        let isLabel =
+          range.length > 0
+          && selection.attribute(.rfcReaderOnly, at: range.location, effectiveRange: nil) != nil
         blocks.append(Block(lines: isLabel ? [] : [line], box: box))
       } else {
         // A table row whose cell has a line break is one paragraph (#506), and its

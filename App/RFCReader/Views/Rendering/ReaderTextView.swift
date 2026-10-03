@@ -120,6 +120,11 @@ import RFCReaderKit
     /// The link, and the character it is on, that a click at a mouse-down follows
     /// when the mouse-down is on a reference, or nil anywhere else.
     var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
+    /// Whether a code block's copy button is under the pointer of an event, which
+    /// shows the arrow; and copying the block for a click on it, answering whether
+    /// there was one.
+    var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
+    var copyCode: (NSEvent) -> Bool = { _ in false }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -194,6 +199,7 @@ import RFCReaderKit
       if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
         return true
       }
+      if isOverCopyButton(event) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }
@@ -207,6 +213,10 @@ import RFCReaderKit
     /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
+      // A copy button is a button: a click on it copies, and selects nothing.
+      if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
+        return
+      }
       guard event.clickCount == 1, !event.modifierFlags.contains(.control),
         let (link, index) = referenceLink(event)
       else {
@@ -281,14 +291,14 @@ import RFCReaderKit
         return pboard.setString(SelectionText.plainText(of: selection), forType: type)
       case .rtf, .rtfd:
         let selection = attributedString().attributedSubstring(from: selectedRange())
-        let withoutCaptions = SelectionText.withoutBacklinkCaptions(of: selection)
-        let revealed = SelectionText.richText(of: withoutCaptions)
+        let withoutReaderText = SelectionText.withoutReaderText(of: selection)
+        let revealed = SelectionText.richText(of: withoutReaderText)
         guard selectedRanges.count == 1,
-          revealed != nil || withoutCaptions.length != selection.length
+          revealed != nil || withoutReaderText.length != selection.length
         else {
           return super.writeSelection(to: pboard, type: type)
         }
-        let copied = revealed ?? withoutCaptions
+        let copied = revealed ?? withoutReaderText
         let whole = NSRange(location: 0, length: copied.length)
         let data =
           flavor == .rtf

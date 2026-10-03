@@ -87,13 +87,13 @@ struct FigureMenuTests {
   }
 
   /// Nothing sits above a rendered block's first line any more, so nothing is
-  /// reserved there.
-  @Test func `a rendered block's first line has no spacing before it`() throws {
+  /// reserved there beyond the card's margin.
+  @Test func `a rendered block's first line has only the card's margin before it`() throws {
     let built = build()
     let first = try Fixtures.offset(of: "    0 ", in: built.text)
     let paragraph = try #require(
       built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
-    #expect(paragraph.paragraphSpacingBefore == 0)
+    #expect(paragraph.paragraphSpacingBefore == FragmentGeometry.cardPadding / 2)
   }
 
   private func build(

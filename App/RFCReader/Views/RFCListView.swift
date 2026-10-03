@@ -11,6 +11,10 @@ struct RFCListView: View {
   @State private var limit = ListWindow.page
   /// The collection the picker adds to, while it is on show (#349).
   @State private var addingTo: PickerTarget?
+  #if !os(macOS)
+    /// Whether the notices of the code the app adapts are on show.
+    @State private var showsAcknowledgements = false
+  #endif
 
   private var rows: [LibraryRow] {
     navigation.listed?.rows ?? []
@@ -300,6 +304,7 @@ struct RFCListView: View {
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
       .refreshable { await library.refreshIndex() }
+      .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
     #endif
   }
 
@@ -308,6 +313,11 @@ struct RFCListView: View {
     private var optionsMenu: some View {
       Menu {
         ListViewOptions(navigation: navigation)
+        Section {
+          Button("Acknowledgements", systemImage: "doc.text") {
+            showsAcknowledgements = true
+          }
+        }
       } label: {
         Label("View Options", systemImage: "ellipsis")
       }
