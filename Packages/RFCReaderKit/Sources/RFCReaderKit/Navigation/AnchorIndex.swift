@@ -19,6 +19,10 @@ public struct AnchorIndex: Sendable, Equatable {
     /// unnumbered section. Also the builder's to fill in, so a citation needs nothing
     /// but the build (#186).
     public let place: String?
+    /// How deep a section is nested, 1 for a top-level one; nil for any other anchor.
+    /// What a Focus reading mode's section runs to: the next heading at its depth or
+    /// shallower (#699).
+    public let depth: Int?
 
     /// True when the anchor names a `Section`. Derived from `heading`, so the
     /// two cannot disagree: a section without a heading would have no card.
@@ -26,11 +30,14 @@ public struct AnchorIndex: Sendable, Equatable {
       heading != nil
     }
 
-    public init(anchor: String, offset: Int, heading: String? = nil, place: String? = nil) {
+    public init(
+      anchor: String, offset: Int, heading: String? = nil, place: String? = nil, depth: Int? = nil
+    ) {
       self.anchor = anchor
       self.offset = offset
       self.heading = heading
       self.place = place
+      self.depth = depth
     }
   }
 

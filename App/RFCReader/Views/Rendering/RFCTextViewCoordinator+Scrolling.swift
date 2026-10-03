@@ -26,7 +26,10 @@ extension RFCTextViewCoordinator {
       chrome.jumped()
       reportChrome()
     #endif
-    engine.jump(toOffset: offset)
+    // Into folded text, the section opens and the line lands there in one layout.
+    if !show(offset) {
+      engine.jump(toOffset: offset)
+    }
     reportVisibleAnchor()
   }
 
@@ -36,6 +39,12 @@ extension RFCTextViewCoordinator {
     // Everything that reports where the viewport is comes through here — scrolls,
     // jumps, restored places — which is every time the title's position can move.
     updateToolbarTitle()
+    #if !canImport(UIKit)
+      // The outline's arrows are cursor rects over the viewport's headings.
+      if folding.mode == .outline, let textView {
+        textView.window?.invalidateCursorRects(for: textView)
+      }
+    #endif
     guard let built, textView?.textLayoutManager != nil else { return }
     let offset = engine.userScrolled() ?? 0
     lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)

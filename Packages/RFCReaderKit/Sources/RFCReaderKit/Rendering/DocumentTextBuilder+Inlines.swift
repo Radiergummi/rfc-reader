@@ -104,7 +104,7 @@ extension DocumentTextBuilder {
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
   /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
   /// the link color with the underline, since nothing else colors it there.
-  private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+  func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }
       return [
@@ -224,8 +224,8 @@ extension DocumentTextBuilder {
     // A few points under the words' size: a diagonal arrow fills its whole square,
     // and at the words' size it outweighs them.
     if let symbol = chipSymbolRun(
-      "arrow.down.backward", color: RFCColors.secondaryLabel, smallerBy: 4,
-      attributes: attributes)
+      "arrow.down.backward", color: RFCColors.secondaryLabel,
+      pointSize: style.backlinksFont.pointSize - 4, attributes: attributes)
     {
       result.append(symbol)
       // NO-BREAK SPACE: the arrow never wraps away from the words it introduces.
@@ -241,17 +241,20 @@ extension DocumentTextBuilder {
   /// a copy takes the same size.
   public static let copyButtonScale: CGFloat = 0.85
 
-  /// A code block's copy button: its symbol alone, a chip so the attachment is one
-  /// the reader allows, drawn without the chip's tint and in the color of the text
-  /// beside it. No link: a link is a web page's control, with its pointing hand, and
-  /// the reader takes a click on the button itself (`copyButton(at:)`).
+  /// A code block's copy button: its symbol alone, in the color of the text beside
+  /// it. Not a chip, which would be tinted and kerned for its tint, and set out of
+  /// line with the code under it: an attachment in its own `.rfcCopyCode` run, which
+  /// the attachment guard sanctions as it does a chip's. No link: a link is a web
+  /// page's control, with its pointing hand, and the reader takes a click on the
+  /// button itself (`copyButton(at:)`). Nothing for VoiceOver to say, either: it
+  /// cannot press the button, and Copy Figure is in the block's menu
+  /// (`AccessibleReading` leaves it out).
   func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     var attributes = base
     attributes[.rfcCopyCode] = ""
-    attributes[.rfcSpoken] = "Copy code"
-    nextChipID += 1
-    attributes[.rfcChip] = nextChipID
-    return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
+    return chipSymbolRun(
+      "doc.on.doc", pointSize: style.codeLabelFont.pointSize * Self.copyButtonScale,
+      attributes: attributes)
   }
 
   /// What a backlink caption says, and VoiceOver says for it: the number of
@@ -266,6 +269,18 @@ extension DocumentTextBuilder {
     }
   }
 
+  /// A text view's link attributes, `defaults`, for a link on a card: in
+  /// `RFCColors.cardLink`, since the text view's color may fall below the minimum
+  /// contrast on a card's fill in dark (#694). Made once, with the text view's.
+  public static func cardLinkAttributes(
+    _ defaults: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any] {
+    var attributes = defaults
+    attributes[.foregroundColor] = RFCColors.cardLink(
+      over: defaults[.foregroundColor] as? PlatformColor ?? RFCColors.link)
+    return attributes
+  }
+
   /// The attributes a text view draws the link `link` with, given its own
   /// `defaults`: a text view colors every link itself, over the storage's color,
   /// which a backlink caption has to keep to stay in the background. The caption
@@ -273,7 +288,7 @@ extension DocumentTextBuilder {
   /// pointing hand, since it opens a list beside it as a control does. Passed in
   /// rather than made here, because a cursor is AppKit's to make on the main
   /// thread and TextKit may ask from another. Every other link is drawn as the
-  /// text view would.
+  /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
     caption: [NSAttributedString.Key: Any] = [:]
@@ -291,20 +306,21 @@ extension DocumentTextBuilder {
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size, or `scale` of it, and its bounds are centered on that
-  /// font's cap height,
-  /// to the nearest whole point: a symbol that hangs below the line's descender
-  /// makes its line that much taller, even past a fixed line height, and a
-  /// fraction there puts every fragment below it off the pixel grid (#273). A
-  /// backlink caption's arrow is set the same way, in the caption's `color` and
-  /// `smallerBy` points under its font's size.
+  /// the run's own font size, or `pointSize`, and its bounds are centered on that
+  /// font's cap height, to the nearest whole point: a symbol that hangs below the
+  /// line's descender makes its line that much taller, even past a fixed line
+  /// height, and a fraction there puts every fragment below it off the pixel grid
+  /// (#273). A backlink caption's arrow and a code block's copy button are set the
+  /// same way, the arrow in the caption's `color`, both a little smaller than the
+  /// words beside them.
   private func chipSymbolRun(
-    _ name: String, color: PlatformColor = RFCColors.accent, scale: CGFloat = 1,
-    smallerBy: CGFloat = 0, attributes: [NSAttributedString.Key: Any]
+    _ name: String, color: PlatformColor = RFCColors.accent, pointSize: CGFloat? = nil,
+    attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    let pointSize = font.pointSize * scale - smallerBy
-    guard let symbol = chipSymbol(name, pointSize: pointSize, color: color) else {
+    guard
+      let symbol = chipSymbol(name, pointSize: pointSize ?? font.pointSize, color: color)
+    else {
       return nil
     }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
@@ -319,9 +335,10 @@ extension DocumentTextBuilder {
     return run
   }
 
-  /// Rendering the symbol is the expensive part and depends only on which symbol and
-  /// the point size, of which a build sees a few — but there is a chip per cross reference, and
-  /// RFCs are full of them. The attachment itself stays per run.
+  /// Rendering the symbol is the expensive part and depends only on which symbol,
+  /// its point size and its color, of which a build sees a few — but there is a chip
+  /// per cross reference, and RFCs are full of them. The attachment itself stays per
+  /// run.
   private func chipSymbol(_ name: String, pointSize: CGFloat, color: PlatformColor)
     -> PlatformImage?
   {

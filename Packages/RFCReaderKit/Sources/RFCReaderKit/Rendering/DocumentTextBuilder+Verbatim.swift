@@ -26,13 +26,14 @@ extension DocumentTextBuilder {
     let text = displayedText(of: content, indent: fittedIndent)
     let scale = monospaceScale(for: text, indent: fittedIndent)
     let context = RenderContext(
-      style: style, column: max(style.indentStep, style.measure - fittedIndent))
+      style: style, column: max(style.indentStep, style.measure - fittedIndent), grammar: grammar)
     var shownContent = content
     shownContent.text = text
     let rendered = ArtworkRenderers.render(shownContent, classification, context: context)
-    // Tokens are a function of the text alone, so a highlighted block follows the
-    // text shown, unfolded (#64) or not. A decoration's ranges are into the grid of
-    // the block as written, so a block shown other than as written is not decorated.
+    // Tokens and a grammar's links are a function of the text alone, so they follow
+    // the text shown, unfolded (#64) or not. A decoration's ranges are into the grid
+    // of the block as written, so a block shown other than as written is not
+    // decorated.
     let rendition: Rendition? =
       switch rendered {
       case .decorated? where text != content.text: nil
@@ -41,18 +42,22 @@ extension DocumentTextBuilder {
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     // Code is highlighted whatever the choices say: it has no other presentation, and
-    // "Draw diagrams" and "Show as Text" are about drawings.
+    // "Draw diagrams" and "Show as Text" are about drawings. A grammar's links change
+    // nothing that is drawn, so it is plain, with no presentation to switch, and its
+    // links and anchors are there whatever the reader prefers for figures (#185).
     let shown: VerbatimBox.Shown =
       switch rendition {
-      case nil: .plain
+      case nil, .linked?: .plain
       case .styled?: .highlighted
       case .decorated?: showsSource ? .source : .rendered
       }
+    let linked: LinkedText? = if case .linked(let linked)? = rendition { linked } else { nil }
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
+    // Shown folded keeps the header, which a block shown unfolded has lost.
     let box = VerbatimBox(
       content, ordinal: ordinal, classification: classification, shown: shown,
-      spokenLabel: decorated?.spokenLabel)
+      spokenLabel: decorated?.spokenLabel, shownFolding: FoldedLines.strategy(of: text))
     // A figure's card hugs it; every other card's text is set in from its edges.
     let inset = shown.isFigure ? 0 : FragmentGeometry.cardInset
 
@@ -90,6 +95,9 @@ extension DocumentTextBuilder {
       ])
     if let decorated {
       decorate(decorated, from: bodyStart)
+    }
+    if let linked {
+      link(linked, from: bodyStart)
     }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
@@ -166,6 +174,28 @@ extension DocumentTextBuilder {
     #endif
     line.append(NSAttributedString(string: "\n", attributes: attributes))
     output.append(line)
+  }
+
+  /// Sets a linked block's anchors and links (#185): a rule's definition is an anchor
+  /// in the index, a use is a cross reference to it. Attributes only, and no chip: the
+  /// text and its layout are the block's.
+  func link(_ linked: LinkedText, from bodyStart: Int) {
+    for definition in linked.definitions where definedRules.insert(definition.anchor).inserted {
+      entries.append(
+        AnchorIndex.Entry(
+          anchor: definition.anchor, offset: bodyStart + definition.range.location, heading: nil,
+          place: nil))
+    }
+    for link in linked.links {
+      let reference = CrossReference(target: link.target)
+      var attributes: [NSAttributedString.Key: Any] = [.rfcReference: ReferenceBox(reference)]
+      if let url = url(for: reference) {
+        attributes.merge(linkAttributes(url)) { _, link in link }
+      }
+      output.addAttributes(
+        attributes,
+        range: NSRange(location: bodyStart + link.range.location, length: link.range.length))
+    }
   }
 
   /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
@@ -267,7 +297,8 @@ extension DocumentTextBuilder {
   /// Either way its tabs are spaces to the next eighth column, as the RFC Editor's
   /// text rendering sets them: the verbatim style has no tab stops, and a default
   /// stop is a distance in points, not in the block's columns, so a tabbed figure
-  /// sheared (#31). The box keeps the tabs; this is only what is drawn and measured.
+  /// sheared (#31). The box keeps the tabs; this is what is drawn, measured and
+  /// copied (`copiedText(of:)`).
   ///
   /// Unfolded before the tabs are expanded: a tab at the start of a continuation is
   /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
@@ -275,30 +306,59 @@ extension DocumentTextBuilder {
   ///
   /// Source code also loses the indent all its lines share, which the XML of a
   /// converted RFC keeps from the text format, and which sat inside the card's
-  /// padding as a second margin. Artwork keeps it, as part of the drawing.
+  /// padding as a second margin. Artwork keeps it, as part of the drawing. Shown
+  /// folded, it loses the indent its unfolded lines share, not the folded ones':
+  /// `rfcfold` sets the header, and a `'\\'` continuation's backslash, at the first
+  /// column whatever the code's indent, and a selection unfolded over the block
+  /// would otherwise keep an indent its copy button does not.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    func shown(_ text: String) -> String {
-      let expanded = Self.expandingTabsTrimmingTabbedLines(text)
-      return content.kind == .sourceCode ? Self.removingSharedIndent(expanded) : expanded
+    guard let unfolded = FoldedLines.unfold(content.text) else {
+      return Self.shown(content.text, kind: content.kind)
     }
-    guard let unfolded = FoldedLines.unfold(content.text).map(shown),
-      monospaceScale(for: unfolded, indent: indent) == 1
-    else { return shown(content.text) }
-    return unfolded
+    let shownUnfolded = Self.shown(unfolded, kind: content.kind)
+    if monospaceScale(for: shownUnfolded, indent: indent) == 1 { return shownUnfolded }
+    let folded = Self.expandingTabsTrimmingTabbedLines(content.text)
+    guard content.kind == .sourceCode else { return folded }
+    let unfoldedIndent = Self.sharedIndent(of: Self.expandingTabsTrimmingTabbedLines(unfolded))
+    return Self.removingIndent(unfoldedIndent, from: folded)
+  }
+
+  /// The block as copied, by Copy Figure and by a code block's copy button: what a
+  /// column wide enough shows, so that a selection over the whole block pastes the
+  /// same. Unfolded whatever the column, its tabs expanded, and source code without
+  /// the indent its lines share.
+  static func copiedText(of content: Preformatted) -> String {
+    shown(content.unfoldedText, kind: content.kind)
+  }
+
+  /// `text`, a block's or its unfolding, as the reader sets it: tabs expanded, and
+  /// for source code the shared indent taken off.
+  private static func shown(_ text: String, kind: Preformatted.Kind) -> String {
+    let expanded = expandingTabsTrimmingTabbedLines(text)
+    return kind == .sourceCode ? removingSharedIndent(expanded) : expanded
   }
 
   /// `text` less the spaces every line with any text starts with; a line of white
   /// space alone loses as many of its own.
   static func removingSharedIndent(_ text: String) -> String {
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-    let shared =
-      lines
+    removingIndent(sharedIndent(of: text), from: text)
+  }
+
+  /// The number of spaces every line of `text` with any text starts with.
+  private static func sharedIndent(of text: String) -> Int {
+    text.split(separator: "\n", omittingEmptySubsequences: false)
       .filter { line in line.contains { $0 != " " } }
       .map { line in line.prefix { $0 == " " }.count }
       .min() ?? 0
-    guard shared > 0 else { return text }
+  }
+
+  /// `text` with up to `indent` leading spaces taken off each line: a line with
+  /// fewer loses all its own.
+  private static func removingIndent(_ indent: Int, from text: String) -> String {
+    guard indent > 0 else { return text }
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
     return lines.map { line in
-      String(line.dropFirst(min(shared, line.prefix { $0 == " " }.count)))
+      String(line.dropFirst(min(indent, line.prefix { $0 == " " }.count)))
     }
     .joined(separator: "\n")
   }

@@ -5,9 +5,10 @@ import RFCReaderKit
 
   // A code block's copy button (macOS): a click copies the block, and the button
   // shows a checkmark for a moment. What it copies and where it is are
-  // `copyButton(at:)`; this is the click and the feedback. The checkmark is a view
-  // over the button rather than a change to the text, which no text view may write
-  // to: a kept build is installed into more than one.
+  // `copyButton(at:)` and `code(ofCopyButtonAt:)`; this is the click and the
+  // feedback. The checkmark is a view over the button rather than a change to the
+  // text, which no text view may write to: a kept build is installed into more
+  // than one.
 
   extension RFCTextViewCoordinator {
     private static let feedbackIdentifier = NSUserInterfaceItemIdentifier("copyCodeFeedback")
@@ -15,24 +16,84 @@ import RFCReaderKit
     private static let holdDuration: TimeInterval = 2
     private static let fadeOutDuration: TimeInterval = 0.6
 
-    /// The copy button under the pointer of `event`, or nil.
-    func copyButton(under event: NSEvent) -> (code: String, range: NSRange)? {
-      guard let textView, event.window === textView.window else { return nil }
+    /// Whether a copy button is under the pointer of `event`. Asked on every
+    /// pointer move, so it only looks; the code is worked out on a click.
+    func isOverCopyButton(_ event: NSEvent) -> Bool {
+      guard let hit = textOffset(under: event) else { return false }
+      return hit.text.copyButton(at: hit.offset) != nil
+    }
+
+    /// Where the pointer is the arrow in the outline (#698): the gutter beside each
+    /// heading with a disclosure in the viewport (`FragmentGeometry.disclosureCursorRect`).
+    func disclosureCursorRects() -> [CGRect] {
+      guard folding.mode == .outline, let textView, let layout = textView.textLayoutManager,
+        let viewport = layout.textViewportLayoutController.viewportRange
+      else { return [] }
+      let end = layout.offset(of: viewport.endLocation)
+      let origin = textView.textContainerOrigin
+      var rects: [CGRect] = []
+      layout.enumerateTextLayoutFragments(from: viewport.location, options: []) { fragment in
+        let start = layout.offset(of: fragment.rangeInElement.location)
+        guard start < end else { return false }
+        if foldingDelegate.disclosure(at: start) != nil {
+          rects.append(
+            FragmentGeometry.disclosureCursorRect(
+              fragmentFrame: fragment.layoutFragmentFrame, containerOrigin: origin))
+        }
+        return true
+      }
+      return rects
+    }
+
+    /// The heading whose disclosure is under the pointer of `event`, in the outline
+    /// (#698): where a click there toggles. Only
+    /// in the gutter beside a heading the outline shows: a click on the heading's
+    /// text is the text view's, for its links, a selection, a double-click on a word.
+    func disclosureHeading(under event: NSEvent) -> Int? {
+      guard folding.mode == .outline, let foldingIndex, let textView,
+        event.window === textView.window
+      else { return nil }
       let viewPoint = textView.convert(event.locationInWindow, from: nil)
       let containerPoint = CGPoint(
         x: viewPoint.x - textView.textContainerOrigin.x,
         y: viewPoint.y - textView.textContainerOrigin.y)
-      guard let offset = characterOffset(atContainerPoint: containerPoint) else { return nil }
-      return textView.textLayoutManager?.attributedText?.copyButton(at: offset)
+      guard let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
+        let offset = characterOffset(atContainerPoint: gutter),
+        folding.toggling(heading: offset, in: foldingIndex) != nil
+      else { return nil }
+      return offset
+    }
+
+    /// Opens or closes the section of the heading whose disclosure is under the
+    /// pointer of `event`; answers whether there was one.
+    func toggleSection(under event: NSEvent) -> Bool {
+      guard let offset = disclosureHeading(under: event) else { return false }
+      return toggleSection(atHeading: offset)
     }
 
     /// Copies the block whose button is under the pointer of `event`; answers
     /// whether there was one.
     func copyCode(under event: NSEvent) -> Bool {
-      guard let button = copyButton(under: event) else { return false }
-      Clipboard.copy(button.code)
-      showCopied(over: button.range)
+      guard let hit = textOffset(under: event),
+        let range = hit.text.copyButton(at: hit.offset),
+        let code = hit.text.code(ofCopyButtonAt: hit.offset)
+      else { return false }
+      Clipboard.copy(code)
+      showCopied(over: range)
       return true
+    }
+
+    /// The text and the character offset under the pointer of `event`, or nil.
+    private func textOffset(under event: NSEvent) -> (text: NSAttributedString, offset: Int)? {
+      guard let textView, event.window === textView.window,
+        let text = textView.textLayoutManager?.attributedText
+      else { return nil }
+      let viewPoint = textView.convert(event.locationInWindow, from: nil)
+      let containerPoint = CGPoint(
+        x: viewPoint.x - textView.textContainerOrigin.x,
+        y: viewPoint.y - textView.textContainerOrigin.y)
+      guard let offset = characterOffset(atContainerPoint: containerPoint) else { return nil }
+      return (text, offset)
     }
 
     private func showCopied(over range: NSRange) {

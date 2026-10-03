@@ -46,4 +46,25 @@ public enum ReaderLayout {
   public static func headerHeight(measured: CGFloat, offered: CGFloat) -> CGFloat {
     measured < offered ? measured : 0
   }
+
+  /// The scroll view's origin for a scroll to `target`, kept to what it can show:
+  /// no higher than the top, under the toolbar's `topInset`, and no lower than where
+  /// the end of the text, with `bottomInset` under it, meets the bottom of the
+  /// viewport. Text shorter than the viewport sits at the top. AppKit's clip view
+  /// and UIKit's offset take any origin they are given, so a jump that pins a line
+  /// near the end at the top, and a reveal that moves it a third down from there, had
+  /// scrolled past the end and back up under the toolbar.
+  ///
+  /// `contentHeight` is nil while the end is an estimate, under viewport layout,
+  /// which only the top is then held to: an estimate short of the real end would pull
+  /// a jump short of its line (`docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`).
+  public static func scrollOrigin(
+    _ target: CGFloat, contentHeight: CGFloat?, viewportHeight: CGFloat, topInset: CGFloat,
+    bottomInset: CGFloat
+  ) -> CGFloat {
+    let highest = -topInset
+    guard let contentHeight else { return max(target, highest) }
+    let lowest = max(highest, contentHeight + bottomInset - viewportHeight)
+    return min(max(target, highest), lowest)
+  }
 }

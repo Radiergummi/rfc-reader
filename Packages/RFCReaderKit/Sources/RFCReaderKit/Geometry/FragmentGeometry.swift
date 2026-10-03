@@ -140,7 +140,7 @@ public enum FragmentGeometry {
   /// Whether the character at `location` belongs to a block drawn as a card. A
   /// quote is decorated too, but draws a rule beside its text, which no card's cap
   /// can stack on.
-  private static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
+  static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
     guard location >= 0, location < text.length else { return false }
     let decoration = RFCDecoration(
       attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
@@ -202,10 +202,7 @@ public enum FragmentGeometry {
       guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
 
       text.enumerateAttribute(.rfcChip, in: lineRange) { value, piece, _ in
-        // A copy button is a chip for its attachment's sake, and has no tint.
-        guard value != nil,
-          text.attribute(.rfcCopyCode, at: piece.location, effectiveRange: nil) == nil
-        else { return }
+        guard value != nil else { return }
 
         // The piece `enumerateAttribute` hands back is already clipped to
         // this line; the run's own full extent — which may start before or

@@ -125,6 +125,12 @@ import RFCReaderKit
     /// there was one.
     var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
     var copyCode: (NSEvent) -> Bool = { _ in false }
+    /// Opens or closes the section of a heading clicked in the outline (#698);
+    /// answers whether the click was on one.
+    var toggleSection: (NSEvent) -> Bool = { _ in false }
+    /// Where a click would toggle a heading's section in the outline, in this view's
+    /// coordinates: where the pointer is the arrow (`resetCursorRects()`).
+    var disclosureCursorRects: () -> [CGRect] = { [] }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -179,6 +185,18 @@ import RFCReaderKit
     /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
     /// view does not handle arrives here through the responder chain, and every move
     /// resets it.
+    /// The arrow beside a heading the outline discloses (#698), in two halves that
+    /// both have to hold, as a run of the app showed: a cursor rect, added after
+    /// `super`'s as `NSTextView` adds a link's pointing hand over its I-beam, sets it
+    /// on the way in; and `wantsArrow`, which answers for the same rects, keeps
+    /// `mouseMoved` from putting the I-beam back on every move.
+    override func resetCursorRects() {
+      super.resetCursorRects()
+      for rect in disclosureCursorRects() {
+        addCursorRect(rect, cursor: .arrow)
+      }
+    }
+
     override func cursorUpdate(with event: NSEvent) {
       guard !wantsArrow(event) else {
         NSCursor.arrow.set()
@@ -200,6 +218,10 @@ import RFCReaderKit
         return true
       }
       if isOverCopyButton(event) { return true }
+      // Beside a heading the outline discloses: the cursor rects show the arrow on the
+      // way in, and every move reaches here, where `super` would put the I-beam back.
+      let point = convert(event.locationInWindow, from: nil)
+      if disclosureCursorRects().contains(where: { $0.contains(point) }) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }
@@ -215,6 +237,11 @@ import RFCReaderKit
       guard !willTrackMouseDown() else { return }
       // A copy button is a button: a click on it copies, and selects nothing.
       if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
+        return
+      }
+      if event.clickCount == 1, event.modifierFlags.isDisjoint(with: [.control, .shift, .command]),
+        toggleSection(event)
+      {
         return
       }
       guard event.clickCount == 1, !event.modifierFlags.contains(.control),

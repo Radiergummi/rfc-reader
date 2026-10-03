@@ -18,11 +18,13 @@
     @Binding var barsHidden: Bool
     let output: DocumentOutput
 
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
+    @State private var readingPathAfterPanel: ReadingPathRequest?
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
-    private var isCompact: Bool { horizontalSizeClass == .compact }
+    private var isCompact: Bool { chrome.isCollapsed }
 
     func body(content: Content) -> some View {
       content
@@ -80,12 +82,22 @@
         // away, set the binding back to false but dropped the next request to
         // show it, so the panel's buttons opened it only on every other tap.
         .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
-            .inspectorColumnWidth(min: 260, ideal: 320)
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: false,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .inspectorColumnWidth(min: 260, ideal: 320)
         }
         .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
-            .presentationDetents([.medium, .large])
+          guard let request = readingPathAfterPanel else { return }
+          readingPathAfterPanel = nil
+          navigation.readingPath = request
+        } content: {
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .presentationDetents([.medium, .large])
         }
         .fileExporter(
           isPresented: Binding(
@@ -104,7 +116,7 @@
     /// In a single column only: beside other columns, the back/forward pair is in
     /// the bar.
     private var visibleReturn: HistoryEntry? {
-      horizontalSizeClass == .compact ? navigation.returnOffer : nil
+      chrome.isCollapsed ? navigation.returnOffer : nil
     }
 
     /// "Back to § 4.2" after following a link within the document (#254). In a

@@ -19,16 +19,29 @@ public enum CollectionStore {
 
   // MARK: - Collections
 
-  /// A new collection, after the others in the sidebar.
+  /// A new collection, after the others in the sidebar, holding `documents` in
+  /// their order: a reading path saved as a collection (#189). One save, and what
+  /// `add` would leave out is left out: a document that is not an RFC, and a second
+  /// copy of one.
   @discardableResult
   public static func create(
-    named name: String, color: CollectionColor, in context: ModelContext
+    named name: String, color: CollectionColor, documents: [DocumentID] = [],
+    in context: ModelContext
   ) throws -> DocumentCollection {
     let name = try validName(name)
     let last = try collections(in: context).last?.position
     let collection = DocumentCollection(
       name: name, color: color, position: CollectionOrder.appending(after: last))
     context.insert(collection)
+    var position: Double?
+    var added: Set<DocumentID> = []
+    for document in documents where document.series == .rfc && added.insert(document).inserted {
+      let next = CollectionOrder.appending(after: position)
+      context.insert(
+        DocumentCollectionItem(
+          collection: collection.identifier, document: document, position: next))
+      position = next
+    }
     try context.save()
     return collection
   }

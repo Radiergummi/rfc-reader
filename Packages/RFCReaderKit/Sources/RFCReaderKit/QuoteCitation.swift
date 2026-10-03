@@ -181,8 +181,10 @@ public enum QuoteCitation {
     string.enumerateSubstrings(
       in: NSRange(location: 0, length: string.length), options: .byParagraphs
     ) { _, range, enclosingRange, _ in
-      let line = SelectionText.plainText(of: selection.attributedSubstring(from: range))
-        .trimmingTrailingSpaces()
+      let line = SelectionText.plainText(
+        of: selection.attributedSubstring(from: range), unfolding: false
+      )
+      .trimmingTrailingSpaces()
       // An empty line has no character of its own; its line break carries the attribute.
       let box =
         enclosingRange.length > 0

@@ -80,6 +80,9 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+  /// The reading path sheet on show, if any (#189): asked for by a row's context
+  /// menu or the Info pane, presented by `ReaderScene`, for the same reason.
+  var readingPath: ReadingPathRequest?
   /// The glossary entry on show on iOS, asked for by a view that cannot present it:
   /// the reader header, hosted outside the view-controller hierarchy (#362).
   var glossaryTerm: Glossary.Term?
@@ -173,6 +176,11 @@ final class NavigationModel: Identifiable {
       }
     }
   }
+  /// The document the history holds, shown or not. A collapsed split view that has
+  /// gone back to its list hides the document and still holds it, so a link to it
+  /// belongs in this tab: routing reads this, not `selection` (#256).
+  var heldDocument: DocumentID? { history.current?.id }
+
   private(set) var scrollRequest: ScrollRequest? {
     didSet {
       // A jump waited on is done once the reader has recorded it, which replaces

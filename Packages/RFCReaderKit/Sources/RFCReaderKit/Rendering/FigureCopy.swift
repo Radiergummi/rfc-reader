@@ -45,9 +45,12 @@ public enum FigureCopy {
     return ambiguous ? nil : found
   }
 
-  /// What goes on the pasteboard: the block as its author wrote it, not as the
-  /// page or the reader laid it out.
+  /// What goes on the pasteboard, from Copy Figure and from a code block's copy
+  /// button alike: the block as its author wrote it, not as the page folded it, and
+  /// as the reader sets it in a column wide enough -- tabs expanded, and source code
+  /// without the indent its lines share -- so a selection over the whole block
+  /// pastes the same (`DocumentTextBuilder.copiedText(of:)`).
   public static func pasteboardText(for figure: Preformatted) -> String {
-    figure.unfoldedText
+    DocumentTextBuilder.copiedText(of: figure)
   }
 }

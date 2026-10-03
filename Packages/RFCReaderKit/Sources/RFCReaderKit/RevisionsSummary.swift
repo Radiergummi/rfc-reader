@@ -147,7 +147,7 @@ public struct RevisionsSummary: Equatable, Sendable {
   }
 
   /// "In the RFC Editor queue" → "in the RFC Editor queue", for the middle of a sentence.
-  private static func lowercasingFirst(_ string: String) -> String {
+  static func lowercasingFirst(_ string: String) -> String {
     string.prefix(1).lowercased() + string.dropFirst()
   }
 }

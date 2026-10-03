@@ -27,15 +27,26 @@ import RFCKit
 public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
-  public static func plainText(of selection: NSAttributedString) -> String {
+  ///
+  /// `unfolding` undoes RFC 8792's folds in a block shown folded. A caller that
+  /// passes one line at a time, as a quote does, has no fold whole to undo, and
+  /// would lose only the header that explains the folds it keeps.
+  public static func plainText(of selection: NSAttributedString, unfolding: Bool = true)
+    -> String
+  {
     let attributed = withoutReaderText(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
-      guard let box = value as? ReferenceBox else {
+      // A rule link in a grammar is the grammar's own text (#185): a block is copied
+      // as it is set.
+      let isVerbatim =
+        attributed.attribute(.rfcVerbatim, at: range.location, effectiveRange: nil) != nil
+      guard let box = value as? ReferenceBox, !isVerbatim else {
         // A table cell's line break is set as a line separator, to keep its row
         // one paragraph (#506); on the pasteboard it is the newline it stands for.
-        result += attributed.attributedSubstring(from: range).string
+        let run = attributed.attributedSubstring(from: range)
+        result += (unfolding ? unfolded(run) : run.string)
           .replacing(DocumentTextBuilder.cellLineSeparator, with: "\n")
         return
       }
@@ -44,6 +55,26 @@ public enum SelectionText {
       // is also the only way a run that begins after the symbol still yields a
       // label rather than a fragment of one.
       result += pasteboardLabel(for: box.reference)
+    }
+    return result
+  }
+
+  /// `run`'s text, with the folds undone in any part of it that is a block RFC 8792
+  /// folded (#212). A block too wide for the column is shown as published, folds and
+  /// header included, and a selection over it would otherwise paste code that works
+  /// or not depending on the window's width; Copy Figure always unfolds. A block
+  /// already shown unfolded has no fold left, so it copies as it is: unfolded again,
+  /// two of the author's own lines could read as a fold (`VerbatimBox.shownFolding`).
+  private static func unfolded(_ run: NSAttributedString) -> String {
+    var result = ""
+    run.enumerateAttribute(.rfcVerbatim, in: NSRange(location: 0, length: run.length)) {
+      value, range, _ in
+      let text = run.attributedSubstring(from: range).string
+      guard let box = value as? VerbatimBox, let strategy = box.shownFolding else {
+        result += text
+        return
+      }
+      result += FoldedLines.unfold(selection: text, strategy: strategy)
     }
     return result
   }

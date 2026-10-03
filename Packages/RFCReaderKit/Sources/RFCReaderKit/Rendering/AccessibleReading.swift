@@ -73,12 +73,26 @@ public enum AccessibleReading {
       }
     }
 
+    // An attachment the reader adds to the document's words with nothing to say for
+    // it, a code block's copy button, is a pointer's control and not read at all:
+    // VoiceOver would otherwise name the object-replacement character.
+    func readUnlabelled(_ range: NSRange) {
+      text.enumerateAttribute(.attachment, in: range) { value, piece, _ in
+        guard value != nil,
+          text.attribute(.rfcReaderOnly, at: piece.location, effectiveRange: nil) != nil
+        else {
+          read(piece)
+          return
+        }
+      }
+    }
+
     // A run with a `.rfcSpoken` label is said as it, where the range reaches its
     // first character, and is silent after: its characters are never read out.
     func readText(_ range: NSRange) {
       text.enumerateAttribute(.rfcSpoken, in: range) { value, piece, _ in
         guard let spoken = value as? String else {
-          read(piece)
+          readUnlabelled(piece)
           return
         }
         var run = NSRange(location: 0, length: 0)
@@ -203,7 +217,7 @@ public enum AccessibleReading {
 
 extension AccessibleReading {
   /// One rotor stop: the run's extent, and — for diagrams and a heading's backlink
-  /// chip only — what VoiceOver says about it. Headings and other links keep
+  /// caption only — what VoiceOver says about it. Headings and other links keep
   /// `label` nil and let VoiceOver read the text at `range`, which already says the
   /// right thing.
   public struct RotorItem: Equatable, Sendable {

@@ -7,8 +7,10 @@ import Foundation
 /// (BSD 2-Clause License); both notices are in THIRD_PARTY_NOTICES. Changed from it:
 /// an attribute's `=` is punctuation; a quoted value ends at its line, so a quote
 /// left open colors nothing after it, unless RFC 8792 folded the line; a `<` inside
-/// a tag or before a value means the tag was never closed, and leaves it;
-/// repetitions are possessive where that does not change what matches.
+/// a tag or before a value means the tag was never closed, and leaves it; an
+/// instruction ends at a `<`, a CDATA section at another one's start, and a
+/// declaration at a `<` or `[`; repetitions are possessive where that does not
+/// change what matches.
 enum XMLLexer {
   static let options: NSRegularExpression.Options = [.dotMatchesLineSeparators]
 
@@ -16,10 +18,14 @@ enum XMLLexer {
     "root": [
       Lexer.Rule(#"[^<&]++"#, .plain),
       Lexer.Rule(#"&[^\s;<&]*+;"#, .keyword),
-      Lexer.Rule(#"<!\[CDATA\[.*?\]\]>"#, .keyword),
+      // A section or instruction left open ends its search at the next one, and a
+      // declaration at the next `<`, so none is searched to the end from each.
+      Lexer.Rule(#"<!\[CDATA\[(?:[^\]<]++|\](?!\]>)|<(?!!\[CDATA\[))*+\]\]>"#, .keyword),
       Lexer.Rule(#"<!--"#, .comment, .push("comment")),
-      Lexer.Rule(#"<\?.*?\?>"#, .keyword),
-      Lexer.Rule(#"<![^>]*+>"#, .keyword),
+      Lexer.Rule(#"<\?(?:[^?<]++|\?(?!>))*+\?>"#, .keyword),
+      // To its `>`, or to the `[` of a document type's internal subset, whose
+      // declarations are their own.
+      Lexer.Rule(#"<![^<>\[]*+[>\[]"#, .keyword),
       Lexer.Rule(#"<\s*+[\w:.-]++"#, .name, .push("tag")),
       Lexer.Rule(#"<\s*+/\s*+[\w:.-]++\s*+>"#, .name),
     ],

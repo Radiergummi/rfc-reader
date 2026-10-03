@@ -75,7 +75,17 @@ final class LibraryModel {
   /// Each working group's RFCs, worked out once per index for its card (#363): the
   /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
-  private(set) var indexState: IndexState = .idle
+  private(set) var indexState: IndexState = .idle {
+    didSet {
+      guard indexState != .loading, indexState != .idle else { return }
+      let waiting = indexWaiters
+      indexWaiters = []
+      for waiter in waiting { waiter.resume() }
+    }
+  }
+  /// What waits for the index to be ready or to have failed: a background refresh
+  /// that arrived while launch was still loading it (#191).
+  @ObservationIgnored private var indexWaiters: [CheckedContinuation<Void, Never>] = []
   private(set) var recent: [RecentRFC] = []
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
@@ -83,7 +93,8 @@ final class LibraryModel {
   private(set) var revisions: RFCRevisions?
   /// When this launch last fetched it; nil until it has.
   @ObservationIgnored private var revisionsFetchedAt: Date?
-  @ObservationIgnored private var isRefreshingRevisions = false
+  /// The refresh under way, which a second call joins rather than repeats.
+  @ObservationIgnored private var revisionsRefresh: Task<Void, Never>?
   /// `groups.json`: the groups the index names, for a working group's card (#363).
   /// Nil until the cached copy or a fetch has arrived.
   private(set) var workingGroups: WorkingGroups?
@@ -228,13 +239,17 @@ final class LibraryModel {
 
   /// Runs a change to collections on the app's context. A failure is logged rather
   /// than shown (#125): every change the interface offers is one the store accepts,
-  /// and an empty name is refused before it gets here.
-  func editCollections(_ change: (ModelContext) throws -> Void) {
+  /// and an empty name is refused before it gets here. Answers whether it was made,
+  /// for a view that says it was.
+  @discardableResult
+  func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
     do {
       try change(container.mainContext)
+      return true
     } catch {
       libraryLog.error(
         "changing a collection failed: \(String(describing: error), privacy: .public)")
+      return false
     }
   }
 
@@ -267,6 +282,9 @@ final class LibraryModel {
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
+    // So that the baseline holds a new bookmark from now on, and reports a change to
+    // it from the next refresh rather than taking it for one from before (#191).
+    compareBookmarks()
   }
 
   private func refreshDownloadedNumbers() async {
@@ -327,7 +345,7 @@ final class LibraryModel {
         // Check in the background if the index was last checked over a day ago:
         // only on a cheap network, since nobody is waiting for it (#314).
         if IndexCheck.isDue(checkedAt: updatedAt, now: .now) {
-          Task(name: "Refresh index") { await refreshIndex(onExpensiveNetworks: false) }
+          checkIndex()
         }
       } else {
         await refreshIndex()
@@ -412,21 +430,37 @@ final class LibraryModel {
 
   #if DEBUG
     /// `-installPack <url>`, a developer's way to install a pack from a URL or a
-    /// path (#36). Logged, not shown: nothing on screen asked for it.
+    /// path (#36), and `-installIndexesPack <url>` for the `indexes` pack (#189).
+    /// Logged, not shown: nothing on screen asked for it.
     private func installPackFromLaunchArgument() {
-      guard let argument = UserDefaults.standard.string(forKey: "installPack") else { return }
+      let legacy = UserDefaults.standard.string(forKey: "installPack")
+      let indexes = UserDefaults.standard.string(forKey: "installIndexesPack")
+      guard legacy != nil || indexes != nil else { return }
       // Installed on every launch the argument is set for, which is what a
-      // developer setting it in a scheme wants while iterating on a pack.
-      let source = PackInstaller.source(fromArgument: argument)
+      // developer setting it in a scheme wants while iterating on a pack. One after
+      // the other, since the store installs one pack at a time, and each whether or
+      // not the other failed.
       Task(name: "Install data pack") {
-        do {
-          let pack = try await installLegacyPack(from: source)
-          libraryLog.info(
-            "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
-          )
-        } catch {
-          libraryLog.error(
-            "installing a data pack failed: \(String(describing: error), privacy: .public)")
+        if let legacy {
+          do {
+            let pack = try await installLegacyPack(from: PackInstaller.source(fromArgument: legacy))
+            libraryLog.info(
+              "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
+            )
+          } catch {
+            libraryLog.error(
+              "installing a data pack failed: \(String(describing: error), privacy: .public)")
+          }
+        }
+        if let indexes {
+          do {
+            let pack = try await store.installIndexesPack(
+              from: PackInstaller.source(fromArgument: indexes))
+            libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
+          } catch {
+            libraryLog.error(
+              "installing the indexes pack failed: \(String(describing: error), privacy: .public)")
+          }
         }
       }
     }
@@ -524,6 +558,7 @@ final class LibraryModel {
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
     settleIndex()
+    compareBookmarks()
   }
 
   // MARK: - Spotlight
@@ -559,12 +594,21 @@ final class LibraryModel {
   /// launch and again when the last fetch is a day old: launch and every activation
   /// call this, and the first to get here does the fetch. A failure keeps the cached
   /// copy, leaves the next call to try again, and is logged, not shown (#125).
+  ///
+  /// A call while one is under way waits for that one, so that a background refresh
+  /// that asks returns only once the file is in (#191).
   func refreshRevisions() async {
-    guard !isRefreshingRevisions else { return }
-    isRefreshingRevisions = true
-    defer { isRefreshingRevisions = false }
+    if let revisionsRefresh { return await revisionsRefresh.value }
+    let refresh = Task(name: "Refresh revisions") { await loadRevisions() }
+    revisionsRefresh = refresh
+    await refresh.value
+    revisionsRefresh = nil
+  }
+
+  private func loadRevisions() async {
     if revisions == nil, let cached = await store.cachedRevisions() {
       revisions = cached
+      compareBookmarks()
     }
     if let fetchedAt = revisionsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
       return
@@ -573,7 +617,10 @@ final class LibraryModel {
       let fetched = try await client.fetchRevisions()
       try await store.storeRevisions(fetched.data)
       revisionsFetchedAt = .now
-      if fetched.revisions != revisions { revisions = fetched.revisions }
+      if fetched.revisions != revisions {
+        revisions = fetched.revisions
+        compareBookmarks()
+      }
     } catch {
       libraryLog.error(
         "fetching revisions failed: \(String(describing: error), privacy: .public)")
@@ -583,6 +630,102 @@ final class LibraryModel {
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
     RevisionsSummary(revisions, for: id, now: .now)
+  }
+
+  // MARK: - Bookmark notifications
+
+  /// The automatic daily check of the index under way, which a second one joins.
+  @ObservationIgnored private var indexRefresh: Task<Void, Never>?
+  /// The comparison under way. Each waits for the one before, so two never read the
+  /// same baseline and both report what changed since.
+  @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
+
+  /// What a background refresh does (#191): the revisions, then the index when its
+  /// daily check is due, each of which compares the bookmarks when it changes; and
+  /// waits for each comparison, so the system does not suspend the app before it
+  /// has posted.
+  ///
+  /// The revisions come first because the index check waits for a network that is
+  /// neither expensive nor constrained (#314), which on a phone network can outlast
+  /// iOS's background task. Canceling this, as iOS does when that task expires,
+  /// cancels the check.
+  func refreshForBookmarks() async {
+    await bootstrap()
+    if indexState == .loading {
+      await withCheckedContinuation { indexWaiters.append($0) }
+    }
+    await refreshRevisions()
+    await bookmarkComparison?.value
+    let isIndexDue =
+      switch indexState {
+      case .ready(let checkedAt): IndexCheck.isDue(checkedAt: checkedAt, now: .now)
+      case .failed: true
+      case .idle, .loading: false
+      }
+    guard isIndexDue else { return }
+    let check = checkIndex()
+    await withTaskCancellationHandler {
+      await check.value
+    } onCancel: {
+      check.cancel()
+    }
+    await bookmarkComparison?.value
+  }
+
+  /// The automatic daily check of the index, only on a cheap network (#314): the one
+  /// under way, or a new one.
+  @discardableResult
+  private func checkIndex() -> Task<Void, Never> {
+    if let indexRefresh { return indexRefresh }
+    let check = Task(name: "Refresh index") {
+      await refreshIndex(onExpensiveNetworks: false)
+      indexRefresh = nil
+    }
+    indexRefresh = check
+    return check
+  }
+
+  /// Compares the bookmarked RFCs with the last baseline, after every change to the
+  /// index or the revisions, and posts what changed (`BookmarkNotifications`). Runs
+  /// whether notifications are on or not, so the baseline is current when they are
+  /// turned on.
+  private func compareBookmarks() {
+    let previous = bookmarkComparison
+    bookmarkComparison = Task(name: "Compare bookmarks") {
+      await previous?.value
+      await compareBookmarksNow()
+    }
+  }
+
+  private func compareBookmarksNow() async {
+    // A store that fell back to memory (#152) reads as no bookmarks, which would
+    // start every one afresh at the next launch that opens the real one.
+    guard !AppData.isStoredInMemory else { return }
+    let bookmarks: Set<DocumentID>
+    do {
+      // Read here rather than taken from `bookmarkedDocuments`, which a failed read
+      // leaves empty: a baseline of no bookmarks would start every one afresh.
+      bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
+    } catch {
+      libraryLog.error(
+        "reading bookmarks to compare failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    let previous = await store.bookmarkBaseline()
+    let baseline = BookmarkBaseline(
+      bookmarks: bookmarks, index: index, revisions: revisions, carryingOver: previous)
+    guard baseline != previous else { return }
+    do {
+      // Kept before anything is posted: a baseline that cannot be kept would report
+      // the same changes on every refresh.
+      try await store.storeBookmarkBaseline(baseline)
+    } catch {
+      libraryLog.error(
+        "keeping the bookmark baseline failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    let events = BookmarkEvents.between(previous, baseline)
+    await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
   }
 
   // MARK: - Working groups
@@ -825,7 +968,7 @@ final class LibraryModel {
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     let preferred = preferredScene
-    switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
+    switch sceneRegistry.route(link, showing: \.heldDocument, preferring: { $0 === preferred }) {
     case .deliver(let delivery):
       carryOut(delivery)
     case .openWindow:
@@ -1044,6 +1187,30 @@ final class LibraryModel {
       libraryLog.error(
         "reading the recently read list failed: \(String(describing: error), privacy: .public)")
       return []
+    }
+  }
+
+  // MARK: - Reading paths (#189)
+
+  enum ReadingPathResult {
+    case path(ReadingPath)
+    /// No `indexes` pack is installed, which the sheet says rather than computing a
+    /// partial path from the documents in the cache.
+    case noIndex
+    /// The pack is there and did not read: logged, and said in a sentence.
+    case failed
+  }
+
+  /// The reading path from `root`, `depth` citations deep, read from the installed
+  /// `indexes` pack off the main actor.
+  func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
+    guard let url = await store.citationIndexURL() else { return .noIndex }
+    do {
+      return .path(try await CitationIndex.readingPath(from: root, depth: depth, in: url))
+    } catch {
+      libraryLog.error(
+        "reading the citation index failed: \(String(describing: error), privacy: .public)")
+      return .failed
     }
   }
 

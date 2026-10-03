@@ -33,8 +33,8 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   public var rule: PlatformColor
   /// The lines a decorated block draws over its text, such as a packet diagram's.
   public var stroke: PlatformColor
-  /// What a reference chip is tinted with, at `chipOpacity`, or half of it for an
-  /// informative reference (#184).
+  /// What a reference chip is tinted with, at `AccentContrast.chipTintOpacity`
+  /// (#317), or half of it for an informative reference (#184).
   public var chipTint: PlatformColor
 
   public init(
@@ -53,13 +53,6 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
 
   public static func == (lhs: ReaderPalette, rhs: ReaderPalette) -> Bool { lhs.id == rhs.id }
   public func hash(into hasher: inout Hasher) { hasher.combine(id) }
-
-  /// The opacity of a normative reference's chip tint.
-  public static let chipOpacity: CGFloat = 0.15
-  /// An informative citation is background to the specification rather than part
-  /// of it, and reads so beside a normative one (#184): half the tint, not a
-  /// different shape.
-  public static let informativeChipOpacity: CGFloat = chipOpacity / 2
 
   /// The system's colors, as the reader has always drawn them, and what a print
   /// draws with: its light appearance resolves them to a white page's.

@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -103,9 +103,9 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2910 rfc3407 rfc355 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
-CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
@@ -117,13 +117,16 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc
 # ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
-# saying so, from `CorpusText`, rather than on a missing file.
+# saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
+# run on a Mac only, where the package builds; the weekly Linux job skips them.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCKIT) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
+	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
+	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
@@ -479,6 +482,13 @@ corpus-score: corpus-fetch-xml
 corpus-index: corpus-tool
 	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
 	  --version $(CORPUS_VERSION)
+
+## Report the abbreviations the parser collects across the converted corpus
+# Each document's abbreviations and their totals, in corpus/abbreviations.json (#211):
+# what a precision check of the collection samples from before the reader shows
+# expansions (#67). Not part of `corpus`: it measures the corpus rather than builds it.
+corpus-abbreviations: corpus-tool
+	$(CORPUS_BIN) abbreviations --in $(CORPUS)/xml.noindex --out $(CORPUS)/abbreviations.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

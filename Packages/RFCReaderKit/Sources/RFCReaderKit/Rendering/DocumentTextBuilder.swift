@@ -57,12 +57,13 @@ public final class DocumentTextBuilder {
   /// See the chip case in `run(_:base:)`.
   var nextChipID = 0
 
-  /// Rendering an SF Symbol is the expensive part and depends only on which symbol
-  /// and the point size, of which a build sees a few — but there is a chip per cross
-  /// reference, and RFCs are full of them.
+  /// Rendering an SF Symbol is the expensive part and depends only on which symbol,
+  /// its point size and its color, of which a build sees a few — but there is a chip
+  /// per cross reference, and RFCs are full of them.
   var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
 
-  /// A symbol is one of two: a reference chip's, or a backlink caption's.
+  /// A symbol is one of three: a reference chip's, a backlink caption's arrow, or a
+  /// code block's copy button.
   struct ChipSymbolKey: Hashable {
     let name: String
     let pointSize: CGFloat
@@ -78,10 +79,17 @@ public final class DocumentTextBuilder {
   /// `referenceAnchors` is.
   var referenceKinds = ReferenceKinds([])
 
-  /// Which sections refer to each section, for the headings' chips. Collected before
+  /// Which sections refer to each section, for the headings' backlink captions. Collected before
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
+
+  /// The rules the document's grammar blocks define. Collected before anything is
+  /// emitted, so a use links to a definition in a later block (#185).
+  var grammar = DocumentGrammar()
+  /// The rule anchors already emitted: one block repeated word for word would
+  /// otherwise define its rules twice.
+  var definedRules: Set<String> = []
 
   /// Which blocks the reader asked to see as their source.
   let choices: PresentationChoices
@@ -124,7 +132,7 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -136,10 +144,11 @@ public final class DocumentTextBuilder {
   /// paragraph anchor would silently break all of them. Only `appendSection` passes
   /// one, which is the one place that knows, and passes the section's `place` with
   /// it.
-  func mark(_ anchor: String?, heading: String? = nil, place: String? = nil) {
+  func mark(_ anchor: String?, heading: String? = nil, place: String? = nil, depth: Int? = nil) {
     guard let anchor, !anchor.isEmpty else { return }
     entries.append(
-      AnchorIndex.Entry(anchor: anchor, offset: output.length, heading: heading, place: place))
+      AnchorIndex.Entry(
+        anchor: anchor, offset: output.length, heading: heading, place: place, depth: depth))
   }
 
   func append(_ string: String, _ attributes: [NSAttributedString.Key: Any]) {
@@ -217,6 +226,7 @@ extension DocumentTextBuilder {
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
+    grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
     }
@@ -303,7 +313,7 @@ extension DocumentTextBuilder {
     // References tab instead — `DocumentInspector` in the app — and is skipped
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
-    mark(section.anchor, heading: section.displayTitle, place: section.place)
+    mark(section.anchor, heading: section.displayTitle, place: section.place, depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs

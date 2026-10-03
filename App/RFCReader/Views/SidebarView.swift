@@ -7,7 +7,7 @@ struct SidebarView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.editMode) private var editMode
   #endif
   // Which sections are open, kept across launches (#344).
@@ -91,7 +91,7 @@ struct SidebarView: View {
       // as it is in Notes. Otherwise the sidebar comes back showing the whole
       // library searched for what narrowed Bookmarks.
       .onAppear {
-        if horizontalSizeClass == .compact { navigation.searchText = "" }
+        if chrome.isCollapsed { navigation.searchText = "" }
       }
       // A list of places, titled the way Notes' folders are (#343).
       .navigationBarTitleDisplayMode(.large)
@@ -232,7 +232,7 @@ struct SidebarView: View {
     /// iPhone the list is not on screen, and the field searched for nothing anyone
     /// could see.
     private var isSearchingInPlace: Bool {
-      horizontalSizeClass == .compact
+      chrome.isCollapsed
         && !navigation.appliedQuery.isUnsearchedQuery
     }
 
@@ -297,7 +297,7 @@ struct SidebarView: View {
       // Collapsed, a row pushes the list, and nothing said so: the rows are
       // selection-tagged rather than `NavigationLink`s, which is what draws the
       // system's own chevron.
-      if horizontalSizeClass == .compact {
+      if chrome.isCollapsed {
         Image(systemName: "chevron.forward")
           .font(.footnote.weight(.semibold))
           .foregroundStyle(.tertiary)
