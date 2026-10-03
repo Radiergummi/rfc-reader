@@ -144,8 +144,8 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
-# corpus pipeline fetches its rfc-index.xml again whenever it is removed and
-# converts whatever lies in text.noindex. Written to a partial file first, like the legacy RFCs below.
+# corpus pipeline refetches its rfc-index.xml and converts whatever lies in
+# text.noindex. Written to a partial file first, like the legacy RFCs below.
 $(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
@@ -154,9 +154,10 @@ $(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
-# The RFC index, fetched once. It never refreshes on its own: what `convert` takes
-# from it was fixed when each document was published, and a fresh one would move a
-# run's baseline. `rm corpus/rfc-index.xml` fetches it again.
+# The RFC index, fetched when it is missing, for what reads it without a corpus run:
+# the overrides check and `test-corpus`. What they take from it was fixed when each
+# document was published. `corpus-fetch` and `corpus-fetch-xml` download a fresh
+# one over it, so a corpus run sees every RFC published since.
 $(CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
 	$(CURL) -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
@@ -373,8 +374,8 @@ CORPUS_VERSION ?= dev
 CORPUS_SCHEMA := $(CORPUS_BUILD)/Schema/v3.rng
 
 ## Fetch the legacy plain-text RFCs
-corpus-fetch: corpus-tool $(CORPUS)/rfc-index.xml
-	$(CORPUS_BIN) fetch --out $(CORPUS) --index $(CORPUS)/rfc-index.xml $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+corpus-fetch: corpus-tool
+	$(CORPUS_BIN) fetch --out $(CORPUS) $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 
 ## Fetch the RFCs that were authored in RFCXML
 # These need no conversion, so they land straight in the XML directory beside the
@@ -382,9 +383,8 @@ corpus-fetch: corpus-tool $(CORPUS)/rfc-index.xml
 # gap in coverage: the current form of most of HTTP and TLS is a modern XML RFC,
 # so a search index built without them cannot rank by currency -- the document
 # that supersedes a hit is simply absent (issue #37).
-corpus-fetch-xml: corpus-tool $(CORPUS)/rfc-index.xml
-	$(CORPUS_BIN) fetch --out $(CORPUS) --format xml --index $(CORPUS)/rfc-index.xml \
-	  $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+corpus-fetch-xml: corpus-tool
+	$(CORPUS_BIN) fetch --out $(CORPUS) --format xml $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 # The report's `schema` field says, per document, why the output is not valid
@@ -419,7 +419,7 @@ $(CORPUS)/schema-control.noindex/%.xml:
 # converter makes of one document, so a parser change can break it. This converts
 # only the patched documents, with the index as a corpus run does, into a scratch
 # directory, and fails on a patch that no longer applies. The documents and the
-# index are fetched once, by the file rules above, and never again. Run on every
+# index are fetched when they are missing, by the file rules above. Run on every
 # pull request (.github/workflows/ci.yml), so a parser change that breaks a patch
 # fails its own pull request.
 PATCHED := $(shell grep -lE '<diff[[:space:]>]' $(CORPUS)/overrides/rfc*.xml 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.xml$$//')

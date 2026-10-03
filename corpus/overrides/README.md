@@ -27,19 +27,21 @@ A patch fails, and the run with it, when:
 - a selector matches no node, or more than one;
 - the node does not suit the operation: `add pos="before"` on the root, or `replace` of an attribute with an element;
 - the file holds an operation or an attribute this does not know, so a typo like `postion=` fails rather than appending;
-- writing the patched document again would lose some of its text, because the patch added something the document model cannot hold.
+- writing the patched document again would lose some of its text, because the patch added something the document model cannot hold;
+- writing it again gives the converter's own output to the byte, because writing undid the whole patch, such as an attribute the writer derives.
 
 A failed document gets no output, an earlier run's is removed, and `convert` logs every failure, records each in `report.json` and exits non-zero once all documents are converted. `make corpus-overrides-check` converts only the patched documents and runs on every pull request, so a parser change that breaks a patch fails its own pull request; `make corpus-convert` runs it first.
 
 ## Writing one
 
 - **Fix structure, never wording.** Every converted file says "the text itself is unchanged"; errata are the channel for wording. The header's metadata comes from the RFC index (#170, #218); a patch adds only what the page states and the index lacks, such as a day.
+- **Carry no RFC text but the minimal text a misclassification took.** Selectors locate by a few words, as below. Content may hold RFC text only to restore what the converter misclassified and the patch has to remove, such as the words of a line that converted inside an artwork: those words and nothing more, never a sentence that was converted correctly, never surrounding context. This is the one exception to the rule that no RFC text is committed (`CLAUDE.md`); `rfc5.xml` is the example.
 - **Precede each operation with a comment** giving the reason and the issue it fixes.
 - **Select by anchor first, then by content**, as in `artwork[starts-with(normalize-space(), ':DEL')]`, since the text is frozen even where structure is not. **Never by position** (`section[3]/t[4]`): a parser change shifts every count. A legacy anchor is not fully stable either: it is `name-` and the slug of the detected heading, and moves when detection does. `preamble` is the one fixed anchor.
 - **A patch shape that recurs in about three documents is a parser bug**, not an override. Fix the heuristic (see `CLAUDE.md`) and delete the patches.
 - **When a parser change breaks an operation**, check first whether the change made it unnecessary. Often the node it corrected is now right, and the fix is to delete the operation.
 
-The source texts are never committed: `make corpus-overrides-check` and `make test-corpus` fetch the ones they need into `corpus/text.noindex/`, and the RFC index into `corpus/rfc-index.xml`, once. The index never refreshes on its own; `rm corpus/rfc-index.xml` fetches it again.
+The source texts are never committed: `make corpus-overrides-check` and `make test-corpus` fetch the ones they need into `corpus/text.noindex/`, and the RFC index into `corpus/rfc-index.xml` when it is missing. `make corpus-fetch` downloads a fresh index over it.
 
 ## The snapshot
 

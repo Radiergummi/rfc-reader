@@ -30,27 +30,27 @@ struct PatchedConversionTests {
     #expect(text.contains("from rfc2119.txt and patched by corpus/overrides/rfc2119.xml."))
   }
 
-  /// The patched output is the canonical one: written again from what the app reads,
-  /// so a patched document differs from an unpatched one only where the patch does,
-  /// artwork's spaces included. And unpatched, parsing and writing a converted document
-  /// again gives the same bytes (#683), which a corpus run warns about where it does not.
+  /// A patch whose effect writing the document again undoes does less than it says,
+  /// so it fails: the writer puts `version="3"` back. Its failure is also the proof
+  /// that the patched path changes no byte of its own, artwork's spaces included,
+  /// since only output equal to the converter's to the byte is refused. And unpatched,
+  /// parsing and writing a converted document again gives the same bytes (#683),
+  /// which a corpus run warns about where it does not.
   @Test(arguments: Fixtures.legacyTexts)
-  func `a patch that changes nothing changes no byte`(fixture: String) throws {
+  func `a patch that changes nothing the model holds fails`(fixture: String) throws {
     let stem = String(fixture.dropLast(4))
     let text = try Fixtures.text(fixture)
     let patch = try XMLPatch(
-      parsing: Data("<diff><replace sel=\"/rfc/@version\">3</replace></diff>".utf8),
-      name: "\(stem).xml")
+      parsing: Data("<diff><remove sel=\"/rfc/@version\"/></diff>".utf8), name: "\(stem).xml")
     let unpatched = DocumentConverter().convert(text: text, stem: stem, metadata: nil)
     let roundTrip = unpatched.report.warnings.filter { $0.contains("round trip") }
     #expect(roundTrip.isEmpty, "\(roundTrip)")
     let patched = DocumentConverter().convert(
       text: text, stem: stem, metadata: nil, patch: patch)
-    let xml = try #require(patched.xml, "\(patched.report.failure ?? "")")
-    let restored = String(decoding: xml, as: UTF8.self).replacingOccurrences(
-      of: "from \(stem).txt and patched by corpus/overrides/\(stem).xml.",
-      with: "from \(stem).txt.")
-    #expect(restored == unpatched.xml.map { String(decoding: $0, as: UTF8.self) })
+    #expect(patched.xml == nil)
+    #expect(
+      patched.report.failure == "\(stem).xml: it changes nothing the model holds",
+      "\(patched.report.failure ?? "")")
   }
 
   @Test func `a failing patch writes nothing and says why`() throws {

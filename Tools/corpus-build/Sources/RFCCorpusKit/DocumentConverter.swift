@@ -51,8 +51,8 @@ public struct DocumentConverter: Sendable {
   ///
   /// `patch` is its correction in `corpus/overrides/`, where it has one (#197). The
   /// patched document is parsed and written again, so its XML is the canonical one,
-  /// and fails if that loses any of its text. A document whose patch fails has no
-  /// XML, and its report says why.
+  /// and fails if that loses any of its text or undoes all of the patch. A document
+  /// whose patch fails has no XML, and its report says why.
   public func convert(
     text: String, stem: String, metadata: RFCMetadata?, patch: XMLPatch? = nil
   ) -> Conversion {
@@ -129,7 +129,8 @@ public struct DocumentConverter: Sendable {
   /// the space. Writing it again gives one canonical output whatever XML library
   /// applied the patch, and guards against a patch adding what the model cannot hold,
   /// which writing would otherwise drop without a word: the text of the patched tree
-  /// and of the written XML must be the same words.
+  /// and of the written XML must be the same words, and the written XML must not be
+  /// the converter's own.
   static func apply(
     _ patch: XMLPatch, to xml: Data, serializer: RFCXMLSerializer
   ) throws(PatchFailure) -> (RFCDocument, Data) {
@@ -143,6 +144,11 @@ public struct DocumentConverter: Sendable {
         tree.rootElement()?.stringValue ?? "", writtenTree.rootElement()?.stringValue ?? "")
       {
         throw PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)")
+      }
+      // What writing it again undid, such as an attribute the writer derives, would
+      // otherwise pass as a correction.
+      if written == xml {
+        throw PatchFailure(message: "\(patch.name): it changes nothing the model holds")
       }
       return (document, written)
     } catch let failure as PatchFailure {
