@@ -17,8 +17,32 @@ import RFCReaderKit
 nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// The fragment every layout manager of built text asks its delegate for: the
   /// reader's, and a print's (`DocumentPDF`), so the two cannot draw differently.
-  static func make(for textElement: NSTextElement) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
+  ///
+  /// - Parameter palette: the colors it draws its decoration in: the reader's
+  ///   setting, which a theme switch replaces without laying anything out again,
+  ///   or for paper the automatic palette, which a print's light appearance
+  ///   resolves to a white page's.
+  static func make(
+    for textElement: NSTextElement, palette: ReaderPaletteBox = RFCTextLayoutFragment.paper
+  ) -> NSTextLayoutFragment {
+    RFCTextLayoutFragment(
+      textElement: textElement, range: textElement.elementRange, palette: palette)
+  }
+
+  /// A print's palette, whatever the reader's is (#703).
+  static let paper = ReaderPaletteBox(.automatic)
+
+  /// Read on every draw, so a replaced palette is picked up by the next one.
+  private let paletteBox: ReaderPaletteBox
+
+  init(textElement: NSTextElement, range: NSTextRange?, palette: ReaderPaletteBox) {
+    paletteBox = palette
+    super.init(textElement: textElement, range: range)
+  }
+
+  required init?(coder: NSCoder) {
+    paletteBox = Self.paper
+    super.init(coder: coder)
   }
 
   static let cardPadding = FragmentGeometry.cardPadding
@@ -146,31 +170,33 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   // MARK: - Drawing
 
   override func draw(at point: CGPoint, in context: CGContext) {
+    // Once per draw, so a theme switch is picked up by the redraw it asks for.
+    let palette = paletteBox.palette
     if let span = decorationSpan {
       context.saveGState()
       switch span.decoration {
       case .artwork, .table:
-        drawCard(at: point, span: span, color: RFCColors.cardFill, in: context)
+        drawCard(at: point, span: span, color: palette.cardFill, in: context)
       case .aside:
-        drawCard(at: point, span: span, color: RFCColors.asideFill, in: context)
+        drawCard(at: point, span: span, color: palette.asideFill, in: context)
       case .blockQuote:
-        drawRule(at: point, span: span, in: context)
+        drawRule(at: point, span: span, color: palette.rule, in: context)
       }
       context.restoreGState()
     }
-    drawChips(at: point, in: context)
-    drawStrokes(at: point, in: context)
+    drawChips(at: point, tint: palette.chipTint, in: context)
+    drawStrokes(at: point, color: palette.stroke, in: context)
     super.draw(at: point, in: context)
   }
 
   /// Opaque lines rather than translucent fills, so where two fragments' pieces of
   /// one stroke meet at a shared edge they compose, and #31's seams cannot recur.
-  private func drawStrokes(at point: CGPoint, in context: CGContext) {
+  private func drawStrokes(at point: CGPoint, color: PlatformColor, in context: CGContext) {
     let segments = strokeSegments
     guard !segments.isEmpty else { return }
     context.saveGState()
     // Per draw, so a change of appearance or print's light appearance is picked up.
-    context.setStrokeColor(RFCColors.stroke.cgColor)
+    context.setStrokeColor(color.cgColor)
     context.setLineWidth(1)
     context.setLineCap(.butt)
     for segment in segments {
@@ -197,17 +223,17 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
-  private func drawChips(at point: CGPoint, in context: CGContext) {
+  private func drawChips(at point: CGPoint, tint chipTint: PlatformColor, in context: CGContext) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
-    let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
+    let tint = chipTint.withAlphaComponent(ReaderPalette.chipOpacity).cgColor
     // An informative citation is background to the specification rather than part
     // of it, and reads so beside a normative one (#184). Half the tint, not a
     // different shape: a chip whose kind no list says is drawn as a normative one.
-    let lighterTint = RFCColors.accent.withAlphaComponent(0.075).cgColor
+    let lighterTint = chipTint.withAlphaComponent(ReaderPalette.informativeChipOpacity).cgColor
     for chip in chips {
       fill(
         chip.rect.offsetBy(dx: point.x, dy: point.y),
@@ -244,7 +270,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   /// Where the rule goes is `Placement.ruleRect`; this only fills it.
   private func drawRule(
-    at point: CGPoint, span: FragmentGeometry.DecorationSpan, in context: CGContext
+    at point: CGPoint, span: FragmentGeometry.DecorationSpan, color: PlatformColor,
+    in context: CGContext
   ) {
     let placement = placement(at: point, span: span)
     let rule = placement.ruleRect(padding: Self.rulePadding, width: Self.ruleWidth)
@@ -252,7 +279,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       joined(rule, placement: placement, span: span, in: context),
       radius: 1.5,
       corners: FragmentGeometry.Corners(first: span.isFirst, last: span.isLast),
-      color: RFCColors.rule.cgColor,
+      color: color.cgColor,
       in: context
     )
   }

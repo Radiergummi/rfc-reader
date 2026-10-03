@@ -7,12 +7,15 @@ import SwiftUI
   import AppKit
 #endif
 
-/// Everything the builder needs to know about presentation — and nothing about color.
+/// Everything the builder needs to know about presentation: the build-time half of
+/// the reader's settings, where `ReaderPalette` is the draw-time half.
 ///
 /// Colors are dynamic `PlatformColor` values stored straight into the attributed
-/// string, so switching to dark mode or changing the accent redraws rather than
-/// rebuilding. Only a change here costs a rebuild, and a rebuild loses the reader's
-/// place until the anchor index puts it back.
+/// string, or drawn from the palette, so switching to dark mode, changing the accent
+/// or the page's colors redraws rather than rebuilding. Only a change here costs a
+/// rebuild, and a rebuild loses the reader's place until the anchor index puts it
+/// back. The one color here is the syntax theme's, which the builder writes into a
+/// code block's runs. See `docs/decisions/2026-10-03-reader-settings-are-a-build-time-style-and-a-draw-time-palette.md`.
 public struct ReadingStyle: Sendable, Hashable {
   /// The body text's point size: the reader's own size, scaled for the system's
   /// text size. Everything else measured from the body — captions, code, spacing,
@@ -43,6 +46,8 @@ public struct ReadingStyle: Sendable, Hashable {
   /// How a cross reference's label is set: as a chip on screen, and as text on
   /// paper, where a chip breaks the line it sits in and there is nothing to tap.
   public var references: ReferenceStyle
+  /// The colors of a highlighted code block's tokens.
+  public var syntaxTheme: SyntaxTheme
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
@@ -56,7 +61,7 @@ public struct ReadingStyle: Sendable, Hashable {
     measure: CGFloat = ReaderLayout.idealMeasure,
     lineHeightMultiple: CGFloat = 1.25,
     underlinesLinks: Bool = false, emitsLinks: Bool = true, references: ReferenceStyle = .chip,
-    textSize: DynamicTypeSize = .large
+    syntaxTheme: SyntaxTheme = .standard, textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
     self.textSize = textSize
@@ -65,6 +70,7 @@ public struct ReadingStyle: Sendable, Hashable {
     self.underlinesLinks = underlinesLinks
     self.emitsLinks = emitsLinks
     self.references = references
+    self.syntaxTheme = syntaxTheme
   }
 
   /// The same style at a different size — everything else about reading it is
