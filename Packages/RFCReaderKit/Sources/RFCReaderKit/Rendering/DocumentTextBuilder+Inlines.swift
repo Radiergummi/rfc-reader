@@ -104,7 +104,7 @@ extension DocumentTextBuilder {
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
   /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
   /// the link color with the underline, since nothing else colors it there.
-  private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+  func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }
       return [

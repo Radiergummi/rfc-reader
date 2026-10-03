@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// ABNF rule names as links (#185): a rule's definition is an anchor, and every use
 /// of a name the document defines links to it, across the document's grammar blocks;
 /// RFC 5234's core rules link to its Appendix B.1.

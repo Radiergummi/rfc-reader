@@ -84,6 +84,13 @@ public final class DocumentTextBuilder {
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
 
+  /// The rules the document's grammar blocks define. Collected before anything is
+  /// emitted, so a use links to a definition in a later block (#185).
+  var grammar = DocumentGrammar()
+  /// The rule anchors already emitted: one block repeated word for word would
+  /// otherwise define its rules twice.
+  var definedRules: Set<String> = []
+
   /// Which blocks the reader asked to see as their source.
   let choices: PresentationChoices
   /// Reviewed verdicts on artwork types, for `ArtworkClassifier`.
@@ -125,7 +132,7 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -218,6 +225,14 @@ extension DocumentTextBuilder {
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
+    grammar = DocumentGrammar(
+      blocks: document.blocks.compactMap { block in
+        guard case .preformatted(let content) = block,
+          let type = ArtworkClassifier.classify(content, in: documentID, hints: hints).type,
+          ABNFPresentation.types.contains(type.name)
+        else { return nil }
+        return content.text
+      })
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
     }

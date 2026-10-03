@@ -32,7 +32,8 @@ public struct RendererEntry: Sendable {
 /// place a test can check that no type is claimed twice.
 enum ArtworkRenderers {
   static let entries: [RendererEntry] = [
-    PacketPresentation.entry
+    PacketPresentation.entry,
+    ABNFPresentation.entry,
   ]
 
   static func presentations(for type: ArtworkType?) -> [Presentation] {

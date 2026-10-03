@@ -28,13 +28,19 @@ extension DocumentTextBuilder {
       text == content.text
       ? ArtworkRenderers.render(
         content, classification,
-        context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
+        context: RenderContext(
+          style: style, column: max(style.indentStep, style.measure - indent), grammar: grammar))
       : nil
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
+    let linked: LinkedText? =
+      if shown == .rendered, case .linked(let linked)? = rendition { linked } else { nil }
+    // A grammar is text with links, not a drawing: it keeps its indent, rendered or
+    // shown as text.
+    let isLinkedText = if case .linked? = rendition { true } else { false }
     let box = VerbatimBox(
       content, ordinal: ordinal, classification: classification, shown: shown,
       spokenLabel: decorated?.spokenLabel)
@@ -59,7 +65,7 @@ extension DocumentTextBuilder {
     // strokes follow. The scale fitted the block at `indent`, which this never
     // narrows.
     let bodyIndent =
-      content.kind == .artwork && shown != .plain
+      content.kind == .artwork && shown != .plain && !isLinkedText
       ? max(indent, (style.measure - contentWidth) / 2) : indent
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
@@ -74,6 +80,9 @@ extension DocumentTextBuilder {
       ])
     if let decorated {
       decorate(decorated, from: bodyStart)
+    }
+    if let linked {
+      link(linked, from: bodyStart)
     }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
@@ -97,6 +106,28 @@ extension DocumentTextBuilder {
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+  }
+
+  /// Sets a linked block's anchors and links (#185): a rule's definition is an anchor
+  /// in the index, a use is a cross reference to it. Attributes only, and no chip: the
+  /// text and its layout are the block's.
+  func link(_ linked: LinkedText, from bodyStart: Int) {
+    for definition in linked.definitions where definedRules.insert(definition.anchor).inserted {
+      entries.append(
+        AnchorIndex.Entry(
+          anchor: definition.anchor, offset: bodyStart + definition.range.location, heading: nil,
+          place: nil))
+    }
+    for link in linked.links {
+      let reference = CrossReference(target: link.target)
+      var attributes: [NSAttributedString.Key: Any] = [.rfcReference: ReferenceBox(reference)]
+      if let url = url(for: reference) {
+        attributes.merge(linkAttributes(url)) { _, link in link }
+      }
+      output.addAttributes(
+        attributes,
+        range: NSRange(location: bodyStart + link.range.location, length: link.range.length))
+    }
   }
 
   /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
