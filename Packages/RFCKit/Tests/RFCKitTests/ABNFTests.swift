@@ -87,14 +87,18 @@ struct ABNFTests {
   }
 
   /// A grammar defines each rule once and adds to it only with `=/`. Pseudocode and
-  /// listings of settings assign one name twice, which ABNF does not.
-  @Test func `a rule defined twice does not parse`() {
-    #expect(ABNF.parse(Self.text("limit = first-bound", "limit = second-bound")) == nil)
+  /// listings of settings assign one name twice, which ABNF does not, so such a
+  /// block is not recognized as a grammar. It still parses: a block its author typed
+  /// `abnf` gets its links whatever its mistakes (#185).
+  @Test func `a rule defined twice parses but is not recognized`() {
+    let text = Self.text("limit = first-bound", "limit = second-bound")
+    #expect(ABNF.parse(text) != nil)
+    #expect(!ABNF.recognizes(text))
   }
 
   /// Rule names are case-insensitive, so two spellings of one name are one rule.
-  @Test func `a rule defined twice in two spellings does not parse`() {
-    #expect(ABNF.parse(Self.text("Limit = first-bound", "LIMIT = second-bound")) == nil)
+  @Test func `a rule defined twice in two spellings is not recognized`() {
+    #expect(!ABNF.recognizes(Self.text("Limit = first-bound", "LIMIT = second-bound")))
   }
 
   /// A listing of settings quotes its values and a message layout marks what is
@@ -104,8 +108,10 @@ struct ABNFTests {
     ["kind=OPEN   [id] name arguments", "kind=CLOSE  id   outcome results"],
     ["limit = first-bound / other-bound", "limit = second-bound"],
   ])
-  func `a rule defined twice with no repetition or numeric value fails`(lines: [String]) {
-    #expect(ABNF.parse(lines.joined(separator: "\n")) == nil, "\(lines)")
+  func `a rule defined twice with no repetition or numeric value is not recognized`(
+    lines: [String]
+  ) {
+    #expect(!ABNF.recognizes(lines.joined(separator: "\n")), "\(lines)")
   }
 
   /// Grammars in the legacy series define a name twice where `=/` or another name was
@@ -115,8 +121,10 @@ struct ABNFTests {
     ["entry = LF 1*SP entry-id", "entry-id = 1*3DIGIT", "entry = name SP entry-id"],
     ["marker = open-marker / close-marker", "marker = %x00-0F"],
   ])
-  func `a rule defined twice beside a repetition or a numeric value parses`(lines: [String]) {
-    #expect(ABNF.parse(lines.joined(separator: "\n")) != nil, "\(lines)")
+  func `a rule defined twice beside a repetition or a numeric value is recognized`(
+    lines: [String]
+  ) {
+    #expect(ABNF.recognizes(lines.joined(separator: "\n")), "\(lines)")
   }
 
   @Test(arguments: [
@@ -156,6 +164,11 @@ struct ABNFTests {
   /// Test vectors are valid ABNF by the letter: `4c0ffee` reads as four of a rule
   /// named `c0ffee`, and `0x7` as none of `x7`. A count before a name of hex digits, or
   /// before `x`, is a hex number.
+  /// Hex data parses, as a count and a name, and is refused by recognizing.
+  @Test func `hex data parses but is not a grammar`() {
+    #expect(ABNF.parse("mask = 0x7") != nil)
+  }
+
   @Test func `hex data is not a grammar`() {
     #expect(!ABNF.recognizes(Self.text("key    = 4c0ffee1234abcd5678", "nonce  = 9aa0b1c2d3e4f5")))
     #expect(!ABNF.recognizes("mask = 0x7"))
@@ -198,6 +211,53 @@ struct ABNFTests {
 
   @Test func `two plain rules are recognized`() {
     #expect(ABNF.recognizes(Self.text("start = first-part", "first-part = ALPHA")))
+  }
+
+  // MARK: Where the names are (#185)
+
+  /// The ranges are UTF-16, into the text as given, indentation, continuation lines
+  /// and comments included: what the reader marks as a definition and its links.
+  private static func substring(_ text: String, _ range: NSRange) -> String {
+    (text as NSString).substring(with: range)
+  }
+
+  @Test func `a rule's name is found where it is defined`() throws {
+    let text = Self.text("   greeting = salutation SP name", "   name     = 1*ALPHA")
+    let rules = try #require(ABNF.parse(text))
+    #expect(rules.map { Self.substring(text, $0.nameRange) } == ["greeting", "name"])
+    #expect(
+      rules[1].nameRange.location == ("   greeting = salutation SP name\n   " as NSString).length)
+  }
+
+  /// Every mention, not each name once, and on continuation lines too.
+  @Test func `every use of a name is found, continuation lines included`() throws {
+    let text = Self.text(
+      "pair  = item \",\" item   ; two of them",
+      "        [ item ]",
+      "item  = 1*DIGIT")
+    let rules = try #require(ABNF.parse(text))
+    let uses = rules[0].uses
+    #expect(uses.map(\.name) == ["item", "item", "item"])
+    #expect(uses.allSatisfy { Self.substring(text, $0.range) == "item" })
+    #expect(
+      uses.last.map { $0.range.location }
+        == (Self.text("pair  = item \",\" item   ; two of them", "        [ ") as NSString).length)
+  }
+
+  /// A quoted literal, a prose value, a numeric value and a comment hold no names.
+  @Test func `literals, prose, numbers and comments hold no names`() throws {
+    let text = "token = \"name\" <name of it> %x41 other  ; name"
+    let rules = try #require(ABNF.parse(text))
+    #expect(rules[0].uses.map(\.name) == ["other"])
+  }
+
+  /// Offsets count UTF-16 code units, so text before a name that is not ASCII, as a
+  /// comment may be, moves it by what the reader's storage counts.
+  @Test func `a name after text outside ASCII is found at its UTF-16 offset`() throws {
+    let text = Self.text("; ünïcödé — 𝒜 comment", "first = second")
+    let rules = try #require(ABNF.parse(text))
+    #expect(Self.substring(text, rules[0].nameRange) == "first")
+    #expect(Self.substring(text, rules[0].uses[0].range) == "second")
   }
 
   // MARK: Through parse

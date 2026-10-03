@@ -152,7 +152,11 @@ struct AccessibleReadingTests {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
     )
-    #expect(AccessibleReading.pieces(of: whole(text), in: text) == [.text(whole(text))])
+    // Read as its words, not as a diagram: the only label is the copy button's.
+    let labels = AccessibleReading.pieces(of: whole(text), in: text).compactMap { piece in
+      if case .label(let label) = piece { label } else { nil }
+    }
+    #expect(labels.allSatisfy { $0 == "Copy code" })
   }
 
   /// Artwork that is not a drawing reads perfectly well as words, and legacy
@@ -187,7 +191,7 @@ struct AccessibleReadingTests {
   }
 
   /// Over a whole real document, every character is either read as text or stands
-  /// under a label, a diagram's or a backlink chip's (#183): nothing is skipped,
+  /// under a label, a diagram's or a backlink caption's (#183): nothing is skipped,
   /// nothing is read twice.
   ///
   /// RFC 793 has ten drawings: its layering and header diagrams, the sequence

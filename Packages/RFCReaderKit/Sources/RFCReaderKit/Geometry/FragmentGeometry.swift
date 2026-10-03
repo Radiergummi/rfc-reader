@@ -30,6 +30,11 @@ public enum FragmentGeometry {
   /// past its run's own first and last line.
   public static let cardPadding: CGFloat = 10
 
+  /// How far a verbatim block's text is set in from the column on either side,
+  /// inside its card, which stays where it is (`.rfcCardInset`): the card's padding
+  /// alone left the code close to its edge, against the larger padding below it.
+  public static let cardInset: CGFloat = cardPadding / 2
+
   /// A decoration a fragment's own range carries, plus whether it is the first
   /// and/or last fragment of that decoration's run.
   public struct DecorationSpan: Equatable, Sendable {
@@ -47,9 +52,13 @@ public enum FragmentGeometry {
     /// above one: the ends `Placement.cardRect` cuts rather than caps.
     public let meetsCardAbove: Bool
     public let meetsCardBelow: Bool
-    /// How wide the run's content is set, where the card hugs it: a verbatim
-    /// block's widest line. Nil where the card spans the column.
+    /// How wide the run's content is set, where the card hugs it: a figure's
+    /// widest line. Nil where the card spans the column.
     public let contentWidth: CGFloat?
+    /// The paragraph spacing before and after this fragment's own paragraph, which
+    /// its frame includes, and a card's capped end leaves out.
+    public var spacingBefore: CGFloat = 0
+    public var spacingAfter: CGFloat = 0
   }
 
   /// A chip's fill and rounding, worked out per *line* fragment.
@@ -106,23 +115,32 @@ public enum FragmentGeometry {
       return nil
     }
     effective = verbatimBlock(in: text, at: fragment.location, within: effective)
+    let paragraph =
+      text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
+      as? NSParagraphStyle
     return DecorationSpan(
       decoration: decoration,
       isFirst: fragment.location <= effective.location,
       isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
       runRange: effective,
-      indent: indent(in: text, over: effective),
+      // The card is measured from where the block's text would sit without its
+      // inset, so the inset is room inside the card rather than a moved card.
+      indent: indent(in: text, over: effective)
+        - (text.attribute(.rfcCardInset, at: effective.location, effectiveRange: nil) as? CGFloat
+          ?? 0),
       meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
       meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective)),
       contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
-        as? CGFloat
+        as? CGFloat,
+      spacingBefore: paragraph?.paragraphSpacingBefore ?? 0,
+      spacingAfter: paragraph?.paragraphSpacing ?? 0
     )
   }
 
   /// Whether the character at `location` belongs to a block drawn as a card. A
   /// quote is decorated too, but draws a rule beside its text, which no card's cap
   /// can stack on.
-  private static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
+  static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
     guard location >= 0, location < text.length else { return false }
     let decoration = RFCDecoration(
       attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
@@ -184,7 +202,10 @@ public enum FragmentGeometry {
       guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
 
       text.enumerateAttribute(.rfcChip, in: lineRange) { value, piece, _ in
-        guard value != nil else { return }
+        // A copy button is a chip for its attachment's sake, and has no tint.
+        guard value != nil,
+          text.attribute(.rfcCopyCode, at: piece.location, effectiveRange: nil) == nil
+        else { return }
 
         // The piece `enumerateAttribute` hands back is already clipped to
         // this line; the run's own full extent — which may start before or
@@ -278,16 +299,22 @@ public enum FragmentGeometry {
     /// How wide the decorated content is set, where the band hugs it rather than
     /// spanning the column (`DecorationSpan.contentWidth`).
     public let contentWidth: CGFloat?
+    /// The paragraph spacing the frame includes above and below the text
+    /// (`DecorationSpan.spacingBefore`, `spacingAfter`).
+    public let spacingBefore: CGFloat
+    public let spacingAfter: CGFloat
 
     public init(
       origin: CGPoint, frame: CGRect, containerWidth: CGFloat, indent: CGFloat,
-      contentWidth: CGFloat? = nil
+      contentWidth: CGFloat? = nil, spacingBefore: CGFloat = 0, spacingAfter: CGFloat = 0
     ) {
       self.origin = origin
       self.frame = frame
       self.containerWidth = containerWidth
       self.indent = indent
       self.contentWidth = contentWidth
+      self.spacingBefore = spacingBefore
+      self.spacingAfter = spacingAfter
     }
 
     /// The decorated text's own left edge, in the drawing space. The fragment's
@@ -312,9 +339,16 @@ public enum FragmentGeometry {
     /// instead, never past the column: a narrow diagram on a wide window sat at the
     /// left of a card twice its width. Every line of a block reports the same width,
     /// so the right edge is as straight as the left.
+    ///
+    /// A capped end is measured from the text, not the frame, which holds the
+    /// paragraph's spacing: a card that filled it sat directly on the paragraph
+    /// before and after it. The spacing is the margin around the card instead.
+    /// A line's leading is set above its glyphs, so a card padded alike at both
+    /// ends looked padded at the top alone: where the spacing after has room for
+    /// it, the bottom reaches a whole padding further past the text than the top.
     public func decorationRect(padding: CGFloat, capTop: Bool, capBottom: Bool) -> CGRect {
-      let top = capTop ? padding / 2 : 0
-      let bottom = capBottom ? padding / 2 : 0
+      let top = capTop ? padding / 2 - spacingBefore : 0
+      let bottom = capBottom ? padding / 2 + min(spacingAfter, padding) - spacingAfter : 0
       return CGRect(
         x: columnLeft - padding,
         y: origin.y - top,

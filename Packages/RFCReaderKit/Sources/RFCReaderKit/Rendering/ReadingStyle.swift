@@ -79,6 +79,12 @@ public struct ReadingStyle: Sendable, Hashable {
   public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
   public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
   public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
+  /// A source code block's language: a tag on its card, small and tracked, so it
+  /// does not read as a heading over a line or two of code.
+  public var codeLabelFont: PlatformFont { .systemFont(ofSize: bodySize * 0.7) }
+  /// A heading's backlink caption (#584): smaller than a caption, because it is the
+  /// reader's note about the section and not part of the document.
+  public var backlinksFont: PlatformFont { .systemFont(ofSize: bodySize * 0.76) }
 
   /// Strong text in `surrounding`: bold, or heavy where the surrounding text is
   /// already bold, at its size and slant. A bold trait added to the face is not

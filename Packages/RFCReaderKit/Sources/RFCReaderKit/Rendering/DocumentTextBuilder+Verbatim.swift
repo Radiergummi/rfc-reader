@@ -20,31 +20,50 @@ extension DocumentTextBuilder {
     let ordinal = nextVerbatimOrdinal
     nextVerbatimOrdinal += 1
     let classification = ArtworkClassifier.classify(content, in: documentID, hints: hints)
-    let text = displayedText(of: content, indent: indent)
-    let scale = monospaceScale(for: text, indent: indent)
-    // A rendition's ranges are into the block's own text, so a block shown other
-    // than as written (unfolded, #64) is not decorated.
-    let rendition =
-      text == content.text
-      ? ArtworkRenderers.render(
-        content, classification,
-        context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
-      : nil
+    // Fitted inside the card's inset on either side: a figure's card hugs it rather
+    // than inset it, but the presentation is not known before the text is.
+    let fittedIndent = indent + FragmentGeometry.cardInset * 2
+    let text = displayedText(of: content, indent: fittedIndent)
+    let scale = monospaceScale(for: text, indent: fittedIndent)
+    let context = RenderContext(
+      style: style, column: max(style.indentStep, style.measure - fittedIndent), grammar: grammar)
+    var shownContent = content
+    shownContent.text = text
+    let rendered = ArtworkRenderers.render(shownContent, classification, context: context)
+    // Tokens and a grammar's links are a function of the text alone, so they follow
+    // the text shown, unfolded (#64) or not. A decoration's ranges are into the grid
+    // of the block as written, so a block shown other than as written is not
+    // decorated.
+    let rendition: Rendition? =
+      switch rendered {
+      case .decorated? where text != content.text: nil
+      default: rendered
+      }
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
-    let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
+    // Code is highlighted whatever the choices say: it has no other presentation, and
+    // "Draw diagrams" and "Show as Text" are about drawings. A grammar's links change
+    // nothing that is drawn, so it is plain, with no presentation to switch, and its
+    // links and anchors are there whatever the reader prefers for figures (#185).
+    let shown: VerbatimBox.Shown =
+      switch rendition {
+      case nil, .linked?: .plain
+      case .styled?: .highlighted
+      case .decorated?: showsSource ? .source : .rendered
+      }
+    let linked: LinkedText? = if case .linked(let linked)? = rendition { linked } else { nil }
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
     let box = VerbatimBox(
       content, ordinal: ordinal, classification: classification, shown: shown,
       spokenLabel: decorated?.spokenLabel)
+    // A figure's card hugs it; every other card's text is set in from its edges.
+    let inset = shown.isFigure ? 0 : FragmentGeometry.cardInset
 
     // Before the label, so the label is inside the card it names.
     let start = output.length
     if content.kind == .sourceCode, let type = content.type, !type.isEmpty {
-      var label = captionAttributes(paragraphStyle(indent: indent, spacingAfter: 0))
-      label[.rfcVerbatim] = box
-      append(type.uppercased() + "\n", label)
+      appendCodeLabel(type, box: box, indent: indent, inset: inset)
     }
 
     let labelWidth =
@@ -53,14 +72,15 @@ extension DocumentTextBuilder {
         output.attributedSubstring(from: NSRange(location: start, length: output.length - start)))
       : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
-    let contentWidth = max(labelWidth, widestLine(of: text, scale: scale))
-    // A rendered diagram's card sits in the middle of the column; source code and
-    // plain artwork keep their indent. Through the indent, so selection, find and
-    // strokes follow. The scale fitted the block at `indent`, which this never
-    // narrows.
+    // A figure's card ends a padding past its widest line and sits in the middle of
+    // the column; every other card spans the column from its indent, as a table's
+    // does, its text set in by the card's inset. Through the indent, so selection,
+    // find and strokes follow. The scale fitted the block inside the inset, which
+    // centering never narrows.
+    let contentWidth: CGFloat? =
+      shown.isFigure ? max(labelWidth, widestLine(of: text, scale: scale)) : nil
     let bodyIndent =
-      content.kind == .artwork && shown != .plain
-      ? max(indent, (style.measure - contentWidth) / 2) : indent
+      contentWidth.map { max(indent, (style.measure - $0) / 2) } ?? indent + inset
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
     append(
@@ -75,28 +95,106 @@ extension DocumentTextBuilder {
     if let decorated {
       decorate(decorated, from: bodyStart)
     }
+    if let linked {
+      link(linked, from: bodyStart)
+    }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
     }
-    if shown != .plain, style.emitsLinks {
+    if shown.isFigure, style.emitsLinks {
       output.addAttribute(
         .rfcFigureItem, value: FigureMenu.itemTag(of: box),
         range: NSRange(location: bodyStart, length: output.length - bodyStart))
     }
-    // Every line ends a paragraph, so the spacing that separates the block from what
-    // follows goes on its last line alone. On all of them, a figure read double
-    // spaced (#31).
+    // Every line ends a paragraph, so the spacing that separates the card from what
+    // comes before goes on its first line alone, and from what follows on its last.
+    // On all of them, a figure read double spaced (#31). The card is drawn inside
+    // that spacing (`FragmentGeometry.Placement`), which therefore has room for its
+    // padding as well as for the margin a paragraph keeps.
+    let margin = FragmentGeometry.cardPadding / 2
+    let opensCard = bodyStart == start
+    let firstLine = output.mutableString.paragraphRange(
+      for: NSRange(location: bodyStart, length: 0))
     let lastLine = output.mutableString.paragraphRange(
       for: NSRange(location: output.length - 1, length: 0))
+    func lineStyle(before: CGFloat, after: CGFloat) -> NSParagraphStyle {
+      paragraphStyle(
+        indent: bodyIndent, spacingBefore: before, spacingAfter: after, wraps: false,
+        lineHeightMultiple: lineHeight)
+    }
+    if opensCard, firstLine != lastLine {
+      output.addAttribute(
+        .paragraphStyle, value: lineStyle(before: margin, after: 0), range: firstLine)
+    }
     output.addAttribute(
       .paragraphStyle,
-      value: paragraphStyle(
-        indent: bodyIndent, spacingAfter: style.paragraphSpacing, wraps: false,
-        lineHeightMultiple: lineHeight),
+      value: lineStyle(
+        before: opensCard && firstLine == lastLine ? margin : 0,
+        after: style.paragraphSpacing + FragmentGeometry.cardPadding * 1.5),
       range: lastLine)
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
-    output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+    if let contentWidth {
+      output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+    }
+    if inset > 0 {
+      output.addAttribute(.rfcCardInset, value: inset, range: block)
+    }
+    // Last, so no pass above walks the runs the colors cut the block into.
+    if case .styled(let tokens)? = rendition {
+      highlight(tokens, from: bodyStart)
+    }
+  }
+
+  /// A code block's language, a line of its own at the card's trailing edge, and on
+  /// macOS the button that copies the block after it. The reader's, not the
+  /// document's words: a copied selection leaves both out. The line opens the card,
+  /// so it carries the margin before it.
+  private func appendCodeLabel(
+    _ type: String, box: VerbatimBox, indent: CGFloat, inset: CGFloat
+  ) {
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: style.codeLabelFont,
+      .foregroundColor: RFCColors.secondaryLabel,
+      .paragraphStyle: paragraphStyle(
+        indent: indent + inset, spacingBefore: FragmentGeometry.cardPadding / 2,
+        spacingAfter: 0, alignment: .right, trailingIndent: inset),
+      .rfcVerbatim: box,
+      .rfcReaderOnly: "",
+    ]
+    var label = attributes
+    label[.kern] = style.codeLabelFont.pointSize * 0.08
+    let line = NSMutableAttributedString(string: type.uppercased(), attributes: label)
+    #if !canImport(UIKit)
+      if style.emitsLinks, let button = copyButton(attributes: attributes) {
+        line.append(NSAttributedString(string: " ", attributes: attributes))
+        line.append(button)
+      }
+    #endif
+    line.append(NSAttributedString(string: "\n", attributes: attributes))
+    output.append(line)
+  }
+
+  /// Sets a linked block's anchors and links (#185): a rule's definition is an anchor
+  /// in the index, a use is a cross reference to it. Attributes only, and no chip: the
+  /// text and its layout are the block's.
+  func link(_ linked: LinkedText, from bodyStart: Int) {
+    for definition in linked.definitions where definedRules.insert(definition.anchor).inserted {
+      entries.append(
+        AnchorIndex.Entry(
+          anchor: definition.anchor, offset: bodyStart + definition.range.location, heading: nil,
+          place: nil))
+    }
+    for link in linked.links {
+      let reference = CrossReference(target: link.target)
+      var attributes: [NSAttributedString.Key: Any] = [.rfcReference: ReferenceBox(reference)]
+      if let url = url(for: reference) {
+        attributes.merge(linkAttributes(url)) { _, link in link }
+      }
+      output.addAttributes(
+        attributes,
+        range: NSRange(location: bodyStart + link.range.location, length: link.range.length))
+    }
   }
 
   /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
@@ -127,6 +225,46 @@ extension DocumentTextBuilder {
           range: NSRange(location: bodyStart + range.location, length: range.length))
       }
     }
+  }
+
+  /// Colors a highlighted block's tokens from the theme. Plain tokens keep the
+  /// body color the block was set in, which a quote or an aside sets. The text is
+  /// unchanged.
+  ///
+  /// As few runs as the colors need: white space shows no color, so it joins the
+  /// colored run before it, and so does a token of the same color after it. A block
+  /// of JSON is otherwise cut into a run for every token and every space between
+  /// two, and every later pass over the storage walks them (`Build: RFC 8727` in
+  /// `make benchmark`).
+  func highlight(_ tokens: [SyntaxToken], from bodyStart: Int) {
+    let text = output.mutableString
+    var run: (range: NSRange, color: PlatformColor)?
+    for token in tokens {
+      let range = NSRange(location: bodyStart + token.range.location, length: token.range.length)
+      let color = SyntaxTheme.standard.color(for: token.kind)
+      if let current = run, color == nil || color === current.color,
+        color != nil || Self.isWhitespace(range, in: text)
+      {
+        run = (
+          NSRange(
+            location: current.range.location, length: NSMaxRange(range) - current.range.location),
+          current.color
+        )
+        continue
+      }
+      if let current = run {
+        output.addAttribute(.foregroundColor, value: current.color, range: current.range)
+      }
+      run = color.map { (range, $0) }
+    }
+    if let current = run {
+      output.addAttribute(.foregroundColor, value: current.color, range: current.range)
+    }
+  }
+
+  private static func isWhitespace(_ range: NSRange, in text: NSString) -> Bool {
+    text.rangeOfCharacter(from: CharacterSet.whitespacesAndNewlines.inverted, range: range)
+      .location == NSNotFound
   }
 
   /// How wide a verbatim block's widest line is set. An ASCII line is its columns at
@@ -163,12 +301,35 @@ extension DocumentTextBuilder {
   /// Unfolded before the tabs are expanded: a tab at the start of a continuation is
   /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
   /// column in the rejoined line, not in the folded one.
+  ///
+  /// Source code also loses the indent all its lines share, which the XML of a
+  /// converted RFC keeps from the text format, and which sat inside the card's
+  /// padding as a second margin. Artwork keeps it, as part of the drawing.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    guard
-      let unfolded = FoldedLines.unfold(content.text).map(Self.expandingTabsTrimmingTabbedLines),
+    func shown(_ text: String) -> String {
+      let expanded = Self.expandingTabsTrimmingTabbedLines(text)
+      return content.kind == .sourceCode ? Self.removingSharedIndent(expanded) : expanded
+    }
+    guard let unfolded = FoldedLines.unfold(content.text).map(shown),
       monospaceScale(for: unfolded, indent: indent) == 1
-    else { return Self.expandingTabsTrimmingTabbedLines(content.text) }
+    else { return shown(content.text) }
     return unfolded
+  }
+
+  /// `text` less the spaces every line with any text starts with; a line of white
+  /// space alone loses as many of its own.
+  static func removingSharedIndent(_ text: String) -> String {
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    let shared =
+      lines
+      .filter { line in line.contains { $0 != " " } }
+      .map { line in line.prefix { $0 == " " }.count }
+      .min() ?? 0
+    guard shared > 0 else { return text }
+    return lines.map { line in
+      String(line.dropFirst(min(shared, line.prefix { $0 == " " }.count)))
+    }
+    .joined(separator: "\n")
   }
 
   /// Tabs expanded, and a line that had one loses its trailing white space: a tab

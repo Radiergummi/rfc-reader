@@ -114,8 +114,11 @@ import SwiftUI
             precedingDraft: reader.precedingDraft),
           perform: perform)
         Divider()
+        ReadingModePicker(reader: reader)
+        FocusSteps(reader: reader)
+        Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
-          ForEach(ExportFormat.allCases) { format in
+          ForEach(reader.exportFormats) { format in
             Button(format.name) { exportDocument(format) }
           }
         }

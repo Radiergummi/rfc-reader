@@ -29,6 +29,7 @@ struct RFCReaderApp: App {
         SettingsView()
       }
       .commands {
+        AboutCommands()
         WindowCommands()
         DocumentCommands()
         #if DEBUG

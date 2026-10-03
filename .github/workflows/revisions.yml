@@ -42,9 +42,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # make for the Makefile, gh for the release. The image carries neither.
+      # make for the Makefile, gh for the release, SQLite's headers for corpus-build
+      # (#174). The image carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make gh >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make gh libsqlite3-dev >/dev/null
 
       - name: Build corpus-build
         run: make corpus-tool

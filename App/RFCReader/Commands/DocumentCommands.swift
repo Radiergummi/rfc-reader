@@ -152,6 +152,17 @@ struct DocumentCommands: Commands {
             ListViewOptions(navigation: navigation)
           }
         }
+        // View > Reading Mode (#698): the window's, as the reader's place is.
+        //
+        // Not in a `Section`: the list options' section draws a line after itself and
+        // the `.sidebar` group one before itself, which are the two around this, and a
+        // section of its own drew a second line on each side.
+        if let reader {
+          ReadingModePicker(reader: reader)
+            .disabled(!showsDocument)
+          FocusSteps(reader: reader)
+            .disabled(!showsDocument)
+        }
       #endif
     }
     CommandGroup(before: .sidebar) {

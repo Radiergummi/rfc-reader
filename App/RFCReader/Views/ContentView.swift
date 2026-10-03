@@ -13,6 +13,7 @@ import SwiftUI
     /// own state, as a `ReaderEnvironment` applied at the end of `body`.
     let library: LibraryModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
@@ -27,6 +28,8 @@ import SwiftUI
     /// The link this window was asked to open (#158), held until it has appeared.
     @State private var requestedLink: RFCLink?
     @State private var hasAppeared = false
+    /// This scene's `SceneSnapshot`, kept by the system with the scene (#155).
+    @SceneStorage("scene") private var sceneSnapshot: Data?
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
     /// The reader's own text size, which ⌘= steps (#153).
@@ -36,6 +39,12 @@ import SwiftUI
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
       navigation.selection?.displayName ?? library.title(for: navigation.filter)
+    }
+
+    /// The scene's chrome, worked out here once and read by every view inside it
+    /// that lays itself out by it (#257).
+    private var chrome: SceneChrome {
+      SceneChrome(horizontal: horizontalSizeClass, vertical: verticalSizeClass)
     }
 
     var body: some View {
@@ -59,6 +68,7 @@ import SwiftUI
           EmptyDetailView()
         }
       }
+      .environment(\.sceneChrome, chrome)
       // The scene's title, for the app switcher and iPad's window controls. It
       // reaches no column's bar: each column titles itself, the list included
       // (#246).
@@ -101,11 +111,18 @@ import SwiftUI
         }
       }
       .onAppear {
+        // Once, before anything else moves the tab: where it was when the app last
+        // ran (#155). A link it was asked to open comes after, and wins.
+        if !hasAppeared, let data = sceneSnapshot,
+          let snapshot = SceneSnapshot.decoded(from: data)
+        {
+          navigation.restore(snapshot, into: reader)
+        }
         // Collapsed, the sidebar is a list of push rows, and a filter selected
         // before anything was tapped reads as a tap left behind. The list still
         // lists it: `filter` keeps its value. Before registering, which may open a
         // waiting link and reveal it in the list.
-        if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
+        if chrome.isCollapsed { navigation.sidebarSelection = nil }
         library.register(navigation)
         hasAppeared = true
         if let link = requestedLink {
@@ -118,6 +135,12 @@ import SwiftUI
         if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {
           navigation.sidebarSelection = navigation.filter
         }
+      }
+      // Written as the tab changes: SwiftUI keeps the scene's storage, and writing it
+      // costs a comparison and an encode.
+      .onChange(of: navigation.snapshot(inspectorTab: reader.tab)) { _, snapshot in
+        guard hasAppeared else { return }
+        sceneSnapshot = snapshot.encoded()
       }
       .onDisappear { library.unregister(navigation) }
       // Once, when the bookmarks store fell back to memory (#152). Continue only:
