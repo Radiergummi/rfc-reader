@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<diff>
+  <!-- The page dates RFC 5 June 2, 1969; the index gives only the month (#172). -->
+  <add sel="/rfc/front/date" type="@day">2</add>
+  <!-- Between the title and the abstract sit an NLS file header, which is not the
+       document's, and a line that is; they convert as one artwork (#172). -->
+  <remove sel="//section[@anchor='preamble']/artwork[starts-with(normalize-space(), ':DEL')]"/>
+  <!-- The line, as the paragraph it is (#172). -->
+  <add sel="//section[@anchor='preamble']"><t>dual transmission?</t></add>
+</diff>
