@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import Synchronization
 
 #if canImport(UIKit)
   import UIKit
@@ -66,8 +67,24 @@ final class RFCTextViewCoordinator: NSObject {
       #if !canImport(UIKit)
         setUpHover()
       #endif
+      let attributes = LinkAttributes(attributes: textView?.linkTextAttributes ?? [:])
+      linkAttributes.withLock { $0 = attributes }
       setUpAccessibilityRotors()
     }
+  }
+
+  /// The text view's own link attributes, taken when it is handed over, after it is
+  /// configured. A layout manager whose delegate answers for a link's rendering
+  /// stops reading them and starts from TextKit's (blue and underlined), so the
+  /// delegate starts from these instead (#584). Behind a lock because TextKit may
+  /// ask off the main thread.
+  nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:]))
+
+  /// A text view's link attributes, handed across threads. `@unchecked Sendable`
+  /// because the dictionary is a copy taken once and never written to, and its
+  /// values, a color and a cursor, are only read to draw.
+  nonisolated struct LinkAttributes: @unchecked Sendable {
+    let attributes: [NSAttributedString.Key: Any]
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -645,14 +662,16 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     RFCTextLayoutFragment.make(for: textElement)
   }
 
-  /// The text view draws every link in its own color, over the storage's; a
-  /// heading's backlink caption keeps the caption's (#584).
+  /// Every link as the text view draws it, over the storage's color, but a
+  /// heading's backlink caption, which keeps the caption's (#584). Not
+  /// `renderingAttributes`, which are TextKit's and not the text view's.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     renderingAttributesForLink link: Any,
     at location: any NSTextLocation,
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
-    DocumentTextBuilder.linkRenderingAttributes(for: link, defaults: renderingAttributes)
+    let textView = linkAttributes.withLock { $0 }
+    return DocumentTextBuilder.linkRenderingAttributes(for: link, defaults: textView.attributes)
   }
 }
