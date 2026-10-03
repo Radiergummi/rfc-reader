@@ -65,10 +65,10 @@ final class RFCTextViewCoordinator: NSObject {
     didSet {
       engine.textView = textView
       #if canImport(UIKit)
-        // UIKit's are a link color only, the tint as it was when asked; the dynamic
-        // tint follows the view's as UIKit's own link coloring does.
+        // The reader's link color, which `makeUIView` sets in place of the system
+        // tint (#317).
         let attributes = LinkAttributes(
-          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
+          attributes: textView?.linkTextAttributes ?? [:], caption: [:])
       #else
         setUpHover()
         // A backlink caption opens a list beside it, as a control does, under the
