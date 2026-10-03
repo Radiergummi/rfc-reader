@@ -107,7 +107,7 @@ struct CitationIndexTests {
     #expect(!FileManager.default.fileExists(atPath: url.path))
   }
 
-  @Test func `a path is walked from the database`() throws {
+  @Test func `a path is walked from the database`() async throws {
     let database = try Database(
       documents: 100,
       rows: [
@@ -117,7 +117,7 @@ struct CitationIndexTests {
         ("RFC2", "RFC2119", "section", "normative"),
         ("RFC3", "RFC2119", "section", "normative"),
       ])
-    let path = try CitationIndex.readingPath(from: .rfc(1), depth: 4, in: database.url)
+    let path = try await CitationIndex.readingPath(from: .rfc(1), depth: 4, in: database.url)
     #expect(path.steps.map(\.document) == [.rfc(3), .rfc(2), .rfc(1)])
     #expect(path.assumed == [.rfc(2119)])
   }
