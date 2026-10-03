@@ -39,21 +39,11 @@ public enum Backlinks {
         }
       }
     }
-    // `proseInlinesBySection`, less what the body leaves out.
-    let abstract = drawn(document.header.abstract).flatMap(\.proseRuns)
-    let places =
-      [(sectionAnchor: String?.none, runs: abstract)]
-      + document.allSections.filter { !$0.holdsOnlyReferences }.map { section in
-        (
-          sectionAnchor: Optional(section.anchor),
-          runs: [section.title] + drawn(section.blocks).flatMap(\.proseRuns)
-        )
-      }
     var backlinks: [String: [Backlink]] = [:]
-    for place in places {
+    for place in document.drawnProseBySection {
       var counts: [String: Int] = [:]
       var order: [String] = []
-      for inline in place.runs.flatMap(\.flattened) {
+      for inline in place.inlines {
         guard case .crossReference(let xref) = inline, case .anchor(let anchor) = xref.target,
           let section = holder[anchor], section != place.sectionAnchor
         else { continue }
