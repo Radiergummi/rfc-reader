@@ -34,8 +34,8 @@ public struct BuiltDocument: @unchecked Sendable {
   /// ends on one (`PrintPagination`). Recorded by the builder as it emits them,
   /// so a new kind of heading is kept with its text where it is written.
   public let keepsWithNext: Set<Int>
-  /// Which sections refer to each section, as the headings' chips count them;
-  /// empty in a build with no live links, which draws no chips.
+  /// Which sections refer to each section, as the headings' captions count them;
+  /// empty in a build with no live links, which has no captions.
   public let backlinks: [String: [Backlink]]
 
   public init(
@@ -48,7 +48,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
   }
 
-  /// What a heading's backlink chip lists (#183): the sections that refer to the
+  /// What a heading's backlink caption lists (#183): the sections that refer to the
   /// one at `anchor`, in document order, each by its heading as the reader draws it.
   public func backlinks(of anchor: String) -> [BacklinkEntry] {
     (backlinks[anchor] ?? []).compactMap { backlink in
@@ -62,7 +62,7 @@ public struct BuiltDocument: @unchecked Sendable {
   }
 }
 
-/// A section that refers to another, as a backlink chip lists it.
+/// A section that refers to another, as a backlink caption lists it.
 public struct BacklinkEntry: Sendable, Hashable {
   /// Where following the entry scrolls to.
   public let anchor: String
