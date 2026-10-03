@@ -85,6 +85,16 @@ struct ReadingPathTests {
     #expect(numbers(graph.walk(from: 1, depth: 1)) == [3, 2, 1])
   }
 
+  @Test func `a chain longer than a thread's stack is walked`() {
+    // Each document cites the next, as deep as Show Deeper can go.
+    let length = 200_000
+    let graph = Graph(
+      normative: Dictionary(uniqueKeysWithValues: (1..<length).map { ($0, [$0 + 1]) }))
+    let path = graph.walk(from: 1, depth: length)
+    #expect(path.steps.count == length)
+    #expect(path.steps.first?.document == .rfc(length))
+  }
+
   @Test func `a walk that reaches every document is not cut`() {
     let graph = Graph(normative: [1: [2], 2: [3]])
     #expect(!graph.walk(from: 1, depth: 2).isCut)

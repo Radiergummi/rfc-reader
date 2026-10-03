@@ -185,6 +185,10 @@ struct PanelHost: View {
     /// class inside the panel is the panel's, which as a narrow column may be
     /// compact while the reader is not.
     let closesAfterChoice: Bool
+    /// A reading path asked for while the panel is a sheet, which the reader
+    /// presents once the panel's sheet is gone: UIKit presents nothing while a
+    /// dismissal is under way, and a request it refused would stay set.
+    @Binding var readingPathAfterClosing: ReadingPathRequest?
   #endif
 
   var body: some View {
@@ -228,10 +232,16 @@ struct PanelHost: View {
             #endif
           }
         },
-        // Closes the panel first where it is a sheet, which the reading path's sheet
-        // would otherwise be presented over.
         showReadingPath: { id in
-          leave { navigation.readingPath = ReadingPathRequest(root: id) }
+          let request = ReadingPathRequest(root: id)
+          #if !os(macOS)
+            if closesAfterChoice {
+              readingPathAfterClosing = request
+              isPresented = false
+              return
+            }
+          #endif
+          navigation.readingPath = request
         }
       )
     } else {

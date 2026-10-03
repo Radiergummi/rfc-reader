@@ -18,7 +18,7 @@ public final class CitationIndex {
   public static let assumedShare = 0.02
 
   public enum Failure: Error, Equatable {
-    /// The file could not be opened as a database, or is missing.
+    /// The file is missing, or could not be read as a database.
     case unreadable(String)
     /// The database's `meta.schema`, or nil when it has none.
     case unknownSchema(String?)
@@ -38,8 +38,9 @@ public final class CitationIndex {
     let schema: String?
     do {
       schema = try strings("SELECT value FROM meta WHERE key = 'schema'").first
-    } catch {
-      throw Failure.unknownSchema(nil)
+    } catch Failure.query(let message) {
+      // SQLite opens lazily: a file that is not a database fails at the first query.
+      throw Failure.unreadable(message)
     }
     guard schema == String(Self.schemaVersion) else { throw Failure.unknownSchema(schema) }
   }

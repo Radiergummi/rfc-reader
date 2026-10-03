@@ -34,6 +34,14 @@ public struct ReadingPath: Sendable, Equatable {
     }
   }
 
+  /// A document the walk has entered and not yet emitted: what it cites on the
+  /// path, and how many of those it has followed.
+  private struct Entered {
+    var document: DocumentID
+    var cited: [DocumentID]
+    var next = 0
+  }
+
   /// How many citations deep a walk goes unless asked for more.
   public static let defaultDepth = 4
 
@@ -87,18 +95,29 @@ public struct ReadingPath: Sendable, Equatable {
       }
     }
 
+    // A stack of its own rather than recursion, which would go as deep as the
+    // longest chain on the path, unbounded as Show Deeper raises the depth, on a
+    // task's small stack.
     var steps: [Step] = []
     var entered: Set<DocumentID> = []
-    func visit(_ id: DocumentID) throws(Failure) {
+    var stack: [Entered] = []
+    func enter(_ id: DocumentID) throws(Failure) {
       guard entered.insert(id).inserted else { return }
       // Every edge between documents on the path, a document at the depth's too: it
       // brings in nothing new, but what it cites still comes before it.
-      for cited in try referencesOf(id).normative where depths[cited] != nil {
-        try visit(cited)
-      }
-      steps.append(Step(document: id, depth: depths[id]!))
+      let cited = try referencesOf(id).normative.filter { depths[$0] != nil }
+      stack.append(Entered(document: id, cited: cited))
     }
-    try visit(root)
+    try enter(root)
+    while let top = stack.last {
+      if top.next < top.cited.count {
+        stack[stack.count - 1].next += 1
+        try enter(top.cited[top.next])
+      } else {
+        stack.removeLast()
+        steps.append(Step(document: top.document, depth: depths[top.document]!))
+      }
+    }
 
     let undeclared = steps.map(\.document).filter { cache[$0]?.isUndeclared == true }
     return ReadingPath(

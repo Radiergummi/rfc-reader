@@ -56,6 +56,18 @@ struct CitationIndexTests {
     }
 
     deinit { try? FileManager.default.removeItem(at: directory) }
+
+    /// The index over this database. Opened in a method, so the database is alive
+    /// until the file is open: an optimized build may release a local after its last
+    /// use, which `database.url` would be, and delete the file before it is opened.
+    func open() throws -> CitationIndex {
+      try CitationIndex(contentsOf: url)
+    }
+
+    /// The path from `root`, walked over this database, alive until the walk is done.
+    func readingPath(from root: DocumentID, depth: Int) async throws -> ReadingPath {
+      try await CitationIndex.readingPath(from: root, depth: depth, in: url)
+    }
   }
 
   @Test func `a document's normative references keep their citation order`() throws {
@@ -69,7 +81,7 @@ struct CitationIndexTests {
         Row("RFC1", "RFC4", nil),
         Row("RFC2", "RFC1", "normative"),
       ])
-    let index = try CitationIndex(contentsOf: database.url)
+    let index = try database.open()
     let references = try index.references(of: .rfc(1))
     #expect(references.normative == [.rfc(5), .rfc(2)])
     #expect(!references.isUndeclared)
@@ -83,7 +95,7 @@ struct CitationIndexTests {
         Row("RFC3", "RFC2", "unknown"),
         Row("RFC3", "RFC4", "informative"),
       ])
-    let index = try CitationIndex(contentsOf: database.url)
+    let index = try database.open()
     #expect(try index.references(of: .rfc(1)) == .init(normative: [], isUndeclared: true))
     #expect(try index.references(of: .rfc(3)) == .init(normative: [], isUndeclared: false))
     #expect(try index.references(of: .rfc(9)) == .init(normative: [], isUndeclared: false))
@@ -105,14 +117,26 @@ struct CitationIndexTests {
         Row("RFC11", "BCP14", "normative"),
         Row("RFC13", "BCP14", "normative"),
       ])
-    let index = try CitationIndex(contentsOf: database.url)
+    let index = try database.open()
     #expect(try index.assumed(share: 0.02) == [.rfc(2119), DocumentID(series: .bcp, number: 14)])
   }
 
   @Test func `a database of another schema is refused`() throws {
     let database = try Database(schema: "1", documents: 1, rows: [])
     #expect(throws: CitationIndex.Failure.unknownSchema("1")) {
-      try CitationIndex(contentsOf: database.url)
+      try database.open()
+    }
+  }
+
+  @Test func `a file that is not a database is unreadable, not of an unknown schema`() throws {
+    let url = FileManager.default.temporaryDirectory.appending(
+      path: "CitationIndexTests-\(UUID().uuidString).sqlite")
+    try Data(repeating: 0x2A, count: 4096).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let error = #expect(throws: CitationIndex.Failure.self) { try CitationIndex(contentsOf: url) }
+    guard case .unreadable = error else {
+      Issue.record("expected unreadable, got \(String(describing: error))")
+      return
     }
   }
 
@@ -133,7 +157,7 @@ struct CitationIndexTests {
         Row("RFC2", "RFC2119", "normative"),
         Row("RFC3", "RFC2119", "normative"),
       ])
-    let path = try await CitationIndex.readingPath(from: .rfc(1), depth: 4, in: database.url)
+    let path = try await database.readingPath(from: .rfc(1), depth: 4)
     #expect(path.steps.map(\.document) == [.rfc(3), .rfc(2), .rfc(1)])
     #expect(path.assumed == [.rfc(2119)])
   }

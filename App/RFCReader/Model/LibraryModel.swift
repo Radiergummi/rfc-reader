@@ -1091,12 +1091,6 @@ final class LibraryModel {
     }
   }
 
-  /// Every document that has been opened, by its reading position, in one fetch.
-  /// Empty when the fetch fails, which is logged: the marks are only shown.
-  func readDocuments() -> Set<DocumentID> {
-    Set(recentlyRead())
-  }
-
   func download(_ id: DocumentID) async throws {
     _ = try await document(for: id)
   }

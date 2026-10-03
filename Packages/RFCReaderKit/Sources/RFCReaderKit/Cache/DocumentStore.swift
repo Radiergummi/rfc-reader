@@ -69,8 +69,8 @@ public actor DocumentStore {
     directory.appending(path: "Packs", directoryHint: .isDirectory)
   }
 
-  /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
-  /// is installed.
+  /// The converted legacy RFCs, the one pack the app reads documents from. Nil
+  /// until one is installed.
   private lazy var legacyPack: InstalledPack? = Self.installedPack(
     in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
@@ -467,8 +467,6 @@ public actor DocumentStore {
   /// verified. Documents already parsed are parsed again on their next open, so
   /// they come from the pack.
   public func installLegacyPack(from source: URL) async throws -> InstalledPack {
-    // Checked and set without a suspension between them, so a second install
-    // arriving while the first is off the actor is refused rather than raced.
     let pack = try await installPack(source, as: Self.legacyPackName)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
