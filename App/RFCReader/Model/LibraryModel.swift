@@ -210,6 +210,8 @@ final class LibraryModel {
     }
     guard count != recentlyReadCount else { return }
     recentlyReadCount = count
+    // A document read for the first time: what a phrase can name (#192).
+    RFCReaderShortcuts.refreshParameters()
   }
 
   private func refreshCollections() {
@@ -359,7 +361,11 @@ final class LibraryModel {
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
-      Task(name: "Load registries") { await refreshRegistries() }
+      // Unless an intent has read them already (#192). Immediate, as the intent's is,
+      // so the check is marked before either can look.
+      if registriesCheckedAt == nil {
+        Task.immediate(name: "Load registries") { await refreshRegistries() }
+      }
     #endif
   }
 
@@ -397,6 +403,8 @@ final class LibraryModel {
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
     let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
     for fetch in fetches {
+      // The first fetches come first (`RegistryRefresh`): what is left are refreshes.
+      if !fetch.onExpensiveNetworks { registriesBecameReadable() }
       let registry = fetch.registry
       let fetched: (entries: [RegistryEntry], data: Data)
       do {
@@ -420,12 +428,44 @@ final class LibraryModel {
         )
       }
     }
+    registriesBecameReadable()
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,
   /// `application/dns-message`.
   func registryMatches(for query: String) -> [RegistryEntry] {
     RegistryLookup.matches(query, in: registryEntries)
+  }
+
+  /// What waits in `loadedRegistryEntries()` for the registries to be readable.
+  @ObservationIgnored private var registryWaiters: [CheckedContinuation<Void, Never>] = []
+  /// Whether the registries are readable: the cached ones read, and the ones never
+  /// fetched fetched, or failed to be. Not the refreshes after them, which may wait
+  /// for a cheap network.
+  @ObservationIgnored private var areRegistriesReadable = false
+
+  private func registriesBecameReadable() {
+    guard !areRegistriesReadable else { return }
+    areRegistriesReadable = true
+    let waiters = registryWaiters
+    registryWaiters = []
+    for waiter in waiters { waiter.resume() }
+  }
+
+  /// The registry entries an App Intent asks for (#192), once they are readable.
+  /// Only the Mac reads them at launch, and an intent may be the first to ask on
+  /// either platform, so this starts the read when nothing has, in a task of its own,
+  /// as `settledSearch()` starts the index's.
+  func loadedRegistryEntries() async -> [RegistryEntry] {
+    // Immediate, so the check is marked before this suspends and a second query
+    // asking meanwhile does not read them again.
+    if registriesCheckedAt == nil {
+      Task.immediate(name: "Load registries") { await refreshRegistries() }
+    }
+    if !areRegistriesReadable {
+      await withCheckedContinuation { registryWaiters.append($0) }
+    }
+    return registryEntries
   }
 
   #if DEBUG
@@ -559,6 +599,55 @@ final class LibraryModel {
     indexForSpotlight(prepared.index.rfcs)
     settleIndex()
     compareBookmarks()
+    // The RFCs a phrase can name are the ones read recently, which need the index.
+    RFCReaderShortcuts.refreshParameters()
+  }
+
+  // MARK: - App Intents
+
+  /// What waits in `settledSearch()` for the index to arrive or fail, resumed by
+  /// `settleIndex()`.
+  @ObservationIgnored private var settledIndexWaiters: [CheckedContinuation<Void, Never>] = []
+  /// Whether the index has arrived or failed to, once: from then on an intent takes
+  /// what there is rather than waiting. Not `indexState`, which a launch whose fetch
+  /// answers nothing leaves loading.
+  @ObservationIgnored private var isIndexSettled = false
+
+  /// The index's search once the index has loaded, or nil if it could not: what an
+  /// App Intent's queries run against (#192). The app may have been launched for the
+  /// intent alone, before anything started the load, so this starts it then: in a
+  /// task of its own, since the load is the app's, and a query the system gives up
+  /// on must not cancel it.
+  func settledSearch() async -> IndexSearch? {
+    if indexState == .idle {
+      Task(name: "Bootstrap library") { await bootstrap() }
+    }
+    if !isIndexSettled {
+      await withCheckedContinuation { settledIndexWaiters.append($0) }
+    }
+    return search
+  }
+
+  /// A tab of the navigation pane an App Intent asked to show beside a document
+  /// (#192), which the reader showing that document in the tab the link went to
+  /// takes.
+  private(set) var inspectorRequest: DocumentRequest<InspectorTab>?
+  /// The tab `inspectorRequest`'s link went to, once `carryOut` has sent it to one:
+  /// another window showing the same document leaves the request alone.
+  @ObservationIgnored private weak var inspectorRequestScene: NavigationModel?
+
+  /// Routes `link` as `route(_:)` does, and asks its reader to show `tab`.
+  func route(_ link: RFCLink, showing tab: InspectorTab) {
+    inspectorRequest = DocumentRequest(id: link.id, value: tab)
+    inspectorRequestScene = nil
+    route(link)
+  }
+
+  /// The tab asked for beside `id` in `scene`, which is then no longer asked for; nil
+  /// if none was, or it was asked for beside another document or in another tab.
+  func takeInspectorRequest(for id: DocumentID, in scene: NavigationModel) -> InspectorTab? {
+    guard inspectorRequestScene === scene else { return nil }
+    return DocumentRequest.take(&inspectorRequest, for: id)
   }
 
   // MARK: - Spotlight
@@ -937,6 +1026,10 @@ final class LibraryModel {
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
   private func settleIndex() {
+    isIndexSettled = true
+    let waiters = settledIndexWaiters
+    settledIndexWaiters = []
+    for waiter in waiters { waiter.resume() }
     let preferred = preferredScene
     sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
   }
@@ -981,6 +1074,7 @@ final class LibraryModel {
   }
 
   private func carryOut(_ delivery: SceneRegistry<NavigationModel>.Delivery) {
+    if inspectorRequest?.id == delivery.link.id { inspectorRequestScene = delivery.scene }
     if delivery.bringsForward {
       deliver(delivery.link, to: delivery.scene)
     } else {
