@@ -280,6 +280,61 @@ struct BuilderVerbatimTests {
     #expect(builder.displayedText(of: content, indent: 0) == content.text)
   }
 
+  // MARK: - RFC 8792 folding, through a parsed RFC (issue #210)
+
+  /// The first block a committed fixture folds, and where the reader sets it, found
+  /// by a short locator in one of its folded lines.
+  private static func foldedFixture(_ name: String, locator: String, style: ReadingStyle)
+    throws -> (content: Preformatted, shown: String)
+  {
+    let document = try Fixtures.document(named: name)
+    let content = try #require(
+      document.blocks.lazy.compactMap { block -> Preformatted? in
+        guard case .preformatted(let content) = block,
+          FoldedLines.strategy(of: content.text) != nil
+        else { return nil }
+        return content
+      }.first, "\(name) has no folded block")
+    let built = DocumentTextBuilder.build(document, style: style)
+    let offset = try Fixtures.offset(of: locator, in: built.text)
+    var run = NSRange(location: 0, length: 0)
+    let box =
+      built.text.attribute(
+        .rfcVerbatim, at: offset, longestEffectiveRange: &run,
+        in: NSRange(location: 0, length: built.text.length)) as? VerbatimBox
+    try #require(box?.content == content, "\(locator) is not in the folded block")
+    return (content, (built.text.string as NSString).substring(with: run))
+  }
+
+  /// RFC 9985 folds its YANG example with `'\'`, RFC 9783 its key with `'\\'`.
+  private static let foldedFixtures = [
+    ("rfc9985.xml", "xmlns:bfd-mki="),
+    ("rfc9783.xml", "\"k\":"),
+  ]
+
+  /// In a column wide enough, the parsed block is set as the author wrote it: every
+  /// folded line whole, the header and the continuations gone, and the lines that
+  /// were never folded as they were.
+  @Test(arguments: foldedFixtures)
+  func `a parsed folded block that fits is set unfolded`(name: String, locator: String) throws {
+    let (content, shown) = try Self.foldedFixture(
+      name, locator: locator, style: ReadingStyle(measure: 4000))
+    #expect(shown.contains(content.unfoldedText))
+    #expect(!shown.contains("line wrapping per RFC 8792"))
+    #expect(!shown.contains("\\\n"), "no fold is left")
+  }
+
+  /// Too narrow to unfold, it is set as published, its header included.
+  @Test(arguments: foldedFixtures)
+  func `a parsed folded block that does not fit is set as published`(
+    name: String, locator: String
+  ) throws {
+    let (content, shown) = try Self.foldedFixture(
+      name, locator: locator, style: ReadingStyle(measure: 300))
+    #expect(shown.contains(content.text))
+    #expect(shown.contains("line wrapping per RFC 8792"))
+  }
+
   /// 168 artwork blocks in 65 published RFCXML documents carry a literal tab, and
   /// the verbatim style sets no tab stops, so each tab went to the next default
   /// stop, a distance in points unrelated to the monospaced columns
