@@ -27,7 +27,13 @@ import RFCKit
 public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
-  public static func plainText(of selection: NSAttributedString) -> String {
+  ///
+  /// `unfolding` undoes RFC 8792's folds in a block shown folded. A caller that
+  /// passes one line at a time, as a quote does, has no fold whole to undo, and
+  /// would lose only the header that explains the folds it keeps.
+  public static func plainText(of selection: NSAttributedString, unfolding: Bool = true)
+    -> String
+  {
     let attributed = withoutBacklinkChips(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
@@ -35,7 +41,8 @@ public enum SelectionText {
       guard let box = value as? ReferenceBox else {
         // A table cell's line break is set as a line separator, to keep its row
         // one paragraph (#506); on the pasteboard it is the newline it stands for.
-        result += unfolded(attributed.attributedSubstring(from: range))
+        let run = attributed.attributedSubstring(from: range)
+        result += (unfolding ? unfolded(run) : run.string)
           .replacing(DocumentTextBuilder.cellLineSeparator, with: "\n")
         return
       }
