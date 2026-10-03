@@ -280,3 +280,43 @@ extension AccessibleReading {
       : items.last { $0.range.location < location }
   }
 }
+
+// MARK: - Speech on iOS
+
+extension AccessibleReading {
+  /// A line of a diagram, and the pronunciation VoiceOver is given in place of its
+  /// characters.
+  struct SpokenLine: Equatable {
+    let range: NSRange
+    /// IPA, as `accessibilitySpeechIPANotation` takes it.
+    let pronunciation: String
+  }
+
+  /// What VoiceOver says in place of each line of the diagram at `range`, on iOS
+  /// (#308).
+  ///
+  /// `UITextView` has no per-range accessor to override, as `ReaderTextView` does
+  /// on macOS, so there the only way to change what a range is said as is a speech
+  /// attribute in the text itself. The diagram's first line that is not blank is
+  /// pronounced as the word "diagram" and its later lines as nothing. Line breaks,
+  /// and lines with nothing on them, carry nothing, so VoiceOver still has lines to
+  /// move between. Unlike macOS, where the label goes on the diagram's first
+  /// character, a blank first line is passed over: it has nothing to pronounce in
+  /// place of. Only "diagram": IPA can't be made of a packet diagram's fields, so
+  /// its `spokenLabel` stays the Mac's.
+  static func diagramSpeech(ofDiagram range: NSRange, in string: NSString) -> [SpokenLine] {
+    var lines: [SpokenLine] = []
+    string.enumerateSubstrings(in: range, options: .byLines) { line, range, _, _ in
+      guard let line, !line.allSatisfy(\.isWhitespace) else { return }
+      lines.append(
+        SpokenLine(range: range, pronunciation: lines.isEmpty ? labelPronunciation : silence))
+    }
+    return lines
+  }
+
+  /// `label`, "Diagram", in IPA.
+  static let labelPronunciation = "ˈdaɪəɡɹæm"
+
+  /// A pronunciation of nothing at all.
+  static let silence = ""
+}

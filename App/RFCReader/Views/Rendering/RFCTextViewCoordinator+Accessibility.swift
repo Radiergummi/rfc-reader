@@ -55,7 +55,8 @@ extension RFCTextViewCoordinator {
     /// `UIAccessibilityCustomRotorItemResult` has no label override (unlike its
     /// AppKit counterpart's `customLabel`), so on iOS a diagram rotor stop is
     /// announced from whatever VoiceOver already reads at `targetRange` — real
-    /// navigation to the diagram, but not a spoken name.
+    /// navigation to the diagram, said as the speech the builder puts on its first
+    /// line ("diagram", #308), never by its caption.
     private func accessibilityRotorResult(
       items: [AccessibilityRotorItem],
       predicate: UIAccessibilityCustomRotorSearchPredicate

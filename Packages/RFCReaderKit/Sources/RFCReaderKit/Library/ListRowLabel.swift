@@ -34,3 +34,17 @@ extension RFCMetadata {
     return workingGroup
   }
 }
+
+extension LibraryRow {
+  /// What the row is, spoken as one element. A series is spoken with the RFCs it
+  /// names, and with no status or group: those belong to its members.
+  public func accessibilityLabel(isBookmarked: Bool) -> String {
+    if let rfc { return rfc.accessibilityLabel(isBookmarked: isBookmarked) }
+    guard let memberList else { return id.displayName }
+    var parts = [id.displayName, title, memberList, String(date.year)]
+    if isBookmarked {
+      parts.append("Bookmarked")
+    }
+    return parts.joined(separator: ", ")
+  }
+}

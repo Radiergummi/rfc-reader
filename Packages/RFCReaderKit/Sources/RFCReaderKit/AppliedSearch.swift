@@ -18,9 +18,14 @@ public enum AppliedSearch {
     /// Apply `query` before returning: the search is cleared, so there is nothing to
     /// search for.
     case apply(query: String)
-    /// Search for `query` off the main actor after `delay`, and apply it once its
-    /// hits are ready.
+    /// Search for `query` after `delay`: the list follows once its rows are made.
     case search(query: String, after: Duration)
+  }
+
+  /// How long to wait before searching for `query`, a normalized one: a pause in
+  /// typing, or nothing when the search is cleared.
+  public static func pause(before query: String) -> Duration {
+    query.isEmpty ? .zero : pause
   }
 
   /// The query `text` asks for, normalized as every list reads one (`normalizedQuery`).

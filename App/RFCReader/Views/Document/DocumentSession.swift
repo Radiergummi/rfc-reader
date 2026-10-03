@@ -161,13 +161,14 @@ final class DocumentSession {
     }
   }
 
-  /// Builds for `inputs`, as `BuildRequest` decides, and hands the build and its
-  /// document to `built` once it is the state's. `built` must not capture the view,
-  /// for the reason `startLoad` gives. `resizeIsLive` is whether a new column comes
-  /// from a resize still under way; see `ReaderResize`.
+  /// Builds for `inputs`, as `BuildRequest` decides, and lists the sections the
+  /// build holds into `reader` once it is the state's: unless the document is no
+  /// longer the one selected, which a replaced reader's rebuild through its fade is
+  /// not (`ReaderHost`). `resizeIsLive` is whether a new column comes from a resize
+  /// still under way; see `ReaderResize`.
   func requestBuild(
-    for inputs: BuildInputs, resizeIsLive: Bool,
-    built: @escaping (BuiltDocument, RFCDocument) -> Void
+    for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState,
+    navigation: NavigationModel
   ) {
     switch BuildRequest.decide(inputs, built: builtInputs, building: buildingFor) {
     case .keep:
@@ -193,7 +194,7 @@ final class DocumentSession {
     let delay = state.buildDelay(
       for: ColumnChange(from: builtInputs?.column, to: inputs.column, isLive: resizeIsLive))
     trace("building")
-    build = Task(name: "Build document") { [weak self] in
+    build = Task(name: "Build document") { [weak self, reader, navigation, id] in
       if delay > .zero {
         try? await Task.sleep(for: delay)
       }
@@ -201,13 +202,14 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await DocumentView.build(document, style: style, choices: inputs.choices)
+      let rebuilt = await Self.built(document, style: style, choices: inputs.choices)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs
       buildingFor = nil
       trace("built")
-      built(rebuilt, document)
+      guard navigation.selection == id else { return }
+      reader.sections = rebuilt.reachableSections(of: document)
     }
   }
 

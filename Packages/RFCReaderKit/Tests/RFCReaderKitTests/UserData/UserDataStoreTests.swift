@@ -123,14 +123,15 @@ struct UserDataStoreTests {
     #expect(try ReadingPositionStore.recentlyRead(in: context) == [.rfc(3), .rfc(2), .rfc(1)])
   }
 
-  @Test func `the recently read count is of the RFCs recently read lists`() throws {
+  /// A BCP, STD or FYI read is a row of Recently Read too (#321).
+  @Test func `the recently read count is of every document recently read lists`() throws {
     let container = try makeContainer()
     let context = container.mainContext
     try ReadingPositionStore.markOpened(.rfc(1), in: context)
     try ReadingPositionStore.markOpened(.rfc(2), in: context)
     try ReadingPositionStore.markOpened(DocumentID(series: .bcp, number: 14), in: context)
 
-    #expect(try ReadingPositionStore.recentlyReadRFCCount(in: context) == 2)
+    #expect(try ReadingPositionStore.recentlyReadCount(in: context) == 3)
   }
 
   @Test func `read since a date leaves out what was read before it`() throws {

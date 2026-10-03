@@ -11,6 +11,7 @@ Everything goes through the `Makefile`:
 | `make check` | `lint build test`, plus `test-app` on a Mac — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK; part of `make check` on a Mac) |
+| `make test-corpus` | the `Corpus-backed:` suites, over the documents in the Makefile's `CORPUS_TEST_DOCUMENTS` and `CORPUS_TEST_XML_DOCUMENTS`, fetched into `corpus/` and passed as `RFC_CORPUS_TEXT` and `RFC_CORPUS_XML`; not part of `make check` |
 | `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
@@ -37,7 +38,7 @@ Swift 6 language mode with complete strict concurrency, everywhere. The app targ
 
 ## Read the docs before changing the model
 
-`docs/ARCHITECTURE.md` is the decision record, not just a description: the document model (blocks, inlines, anchors, cross-reference targets), how each of the two source formats is parsed, the app's data flow, and dated decisions with their reasoning. `docs/DATA_PIPELINE.md` covers the corpus packs, their sizes and the unresolved licensing question. `docs/VISION.md` has the feature tiers and the principles the UI is held to ("never ship a web view", "everything is a link").
+`docs/ARCHITECTURE.md` describes the code as it is, and `docs/decisions/` holds the dated decisions behind it, one file each with their reasoning and what was measured first. ARCHITECTURE.md covers the document model (blocks, inlines, anchors, cross-reference targets), how each of the two source formats is parsed, the app's data flow, and the TextKit 2 traps. `docs/DATA_PIPELINE.md` covers the corpus packs, their sizes and the unresolved licensing question. `docs/VISION.md` has the feature tiers and the principles the UI is held to ("never ship a web view", "everything is a link").
 
 Standing constraints those documents establish, which are easy to violate by accident:
 
@@ -49,10 +50,12 @@ Standing constraints those documents establish, which are easy to violate by acc
 - **Ask for a decoration's extent with `longestEffectiveRange`, never `effectiveRange`**, which returns the storage run and turns a block into a staircase of cards. The value must be `String`-backed and carried by every character of the block. ARCHITECTURE.md, "TextKit 2 traps".
 - **A TextKit 2 text view on macOS needs a `dismantleNSView` that detaches it from its container** (`textContainer?.textView = nil`), or what AppKit keeps of the view holds its whole document. `RFCTextView` does it in `RFCTextViewCoordinator.releaseDocument()`, `OriginalTextBody` in its own; a new text view needs the same. ARCHITECTURE.md, "TextKit 2 traps".
 - **On macOS the window is AppKit's, and a hosted root is outside the environment chain.** There is no `WindowGroup`: `AppDelegate` makes every window as a `ReaderWindowController` whose four-item `NSSplitViewController` is the window's own content, because window chrome — the inspector's glass, the titlebar section an item owns, the tab bar that follows it — engages for nothing else. Every `NSHostingController` it creates is handed `LibraryModel`, `NavigationModel`, `ReaderState` and the SwiftData container explicitly; an `@Environment` lookup inside one is a runtime trap with no compile-time warning. `@FocusedValue` does not resolve from a hosted root either — menu commands go through `ActiveReaderWindow`. Never replace a `WindowGroup` window's `contentViewController`: SwiftUI opens a replacement window, measured at 24 in 0.9 s.
-- **The contents panel's width is refused twice, and both are load-bearing**: `safeAreaRegions = []` on the reader's hosted root, and `ReaderScrollView` refusing the trailing inset (only that one). Removing either re-wraps the document when the panel opens. ARCHITECTURE.md, "Decision: the window layer is AppKit's on macOS"; the comments at both lines have the measurements.
+- **The contents panel's width is refused twice, and both are load-bearing**: `safeAreaRegions = []` on the reader's hosted root, and `ReaderScrollView` refusing the trailing inset (only that one). Removing either re-wraps the document when the panel opens. `docs/decisions/2026-09-22-the-window-layer-is-appkits-on-macos.md`; the comments at both lines have the measurements.
 - **Anchors are stable strings**, never indices — deep links, the table of contents and reading positions all key off them.
 - **Cross references resolve at parse time**, not at render time. Both parsers index the references section first, then linkify.
 - Both XML parsers **deliberately ignore a parser error reported after the root element closes** (a swift-corelibs-foundation quirk on large valid inputs). There is a test pinning it; it is not a bug to fix.
+
+A comment that cites a cost names what measures it — a benchmark of `make benchmark`, or a signpost a trace shows — rather than carrying the number, which drifts as the code does (#607). A figure belongs in a decision record or a pull request, dated by where it is.
 
 ## Working on the legacy text heuristics
 
@@ -63,7 +66,7 @@ Standing constraints those documents establish, which are easy to violate by acc
    2. a test through `parse` over a fixture already committed in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` that has the right shape;
    3. a corpus-backed test.
 
-   Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and the CI run on every push skip them; the weekly `Corpus-backed tests` workflow runs them. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input; it refuses to run when a test reads a document the list lacks. An RFC authored in RFCXML is read the same way, as `rfcNNNN.xml` from `RFC_CORPUS_XML`, listed in `CORPUS_TEST_XML_DOCUMENTS` and fetched into `corpus/xml.noindex/`. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
+   Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and the CI run on every push skip them; the `Corpus-backed tests` workflow runs them on every pull request that touches `Packages/RFCKit`, `Tools/corpus-build` or the Makefile, and weekly. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input; it refuses to run when a test reads a document the list lacks. An RFC authored in RFCXML is read the same way, as `rfcNNNN.xml` from `RFC_CORPUS_XML`, listed in `CORPUS_TEST_XML_DOCUMENTS` and fetched into `corpus/xml.noindex/`. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
 2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 

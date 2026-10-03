@@ -249,4 +249,96 @@ struct BuilderTableTests {
     let header = expected == .grid ? "Method" : "Code"
     #expect(try Fixtures.offset(of: header, in: built.text) == offset)
   }
+
+  /// A line break in a grid cell (RFCXML's `<br/>`) was a newline, which ended the
+  /// row's paragraph: the rest of the cell and every cell after it started a new
+  /// paragraph at the indent, not at their tab stops (#506). A row with one is
+  /// still one paragraph, of as many lines as its tallest cell, each line holding
+  /// every cell's line of that number at its stop.
+  @Test func `a line break in a grid cell keeps the row one paragraph`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [
+        RFCKit.Table.Row(cells: [
+          [.text("a1"), .lineBreak, .text("a2")], [.text("b1")], [.text("c1")],
+        ]),
+        RFCKit.Table.Row(cells: [
+          [.text("d1")], [.text("e1"), .lineBreak, .text("e2")], [.text("f1")],
+        ]),
+      ])
+    #expect(shape(table) == .grid)
+    let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
+    #expect(text.contains("a1\tb1\tc1\u{2028}a2\n"))
+    #expect(text.contains("d1\te1\tf1\u{2028}\te2\n"))
+  }
+
+  /// A cell with a line break is as wide as its widest line, not as its lines laid
+  /// end to end, which could tip a table that fits into the stacked shape (#506).
+  @Test func `a cell with a line break is measured as its widest line`() {
+    let builder = DocumentTextBuilder(style: ReadingStyle())
+    func width(_ cell: [Inline]) -> CGFloat {
+      builder.naturalColumnWidths(
+        RFCKit.Table(title: nil, header: [], rows: [RFCKit.Table.Row(cells: [cell])]))[0]
+    }
+    let long = "Implementation Considerations"
+    #expect(width([.text(long), .lineBreak, .text("short")]) == width([.text(long)]))
+  }
+
+  /// In the stacked shape a cell is a paragraph of its own, and a line break in it
+  /// is a line separator there too, so a cell is always one paragraph.
+  @Test func `a line break in a stacked cell keeps the cell one paragraph`() {
+    var table = prose
+    table.rows[0].cells[2] = [.text("6.5.4"), .lineBreak, .text("6.5.5")]
+    table.header[0].cells[2] = [.text("Ref."), .lineBreak, .text("Section")]
+    #expect(shape(table) == .stacked)
+    let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
+    #expect(text.contains("Ref.\u{2028}Section  6.5.4\u{2028}6.5.5\n"))
+  }
+
+  /// A chip that opens a cell's second line starts a line, as one that opens the
+  /// cell does, and has no room made before it: the line separator is not kerned.
+  @Test func `the line separator before a chip is not kerned`() throws {
+    let chip = Inline.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [RFCKit.Table.Row(cells: [[.text("first"), .lineBreak, chip], [.text("next")]])])
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let separator = try Fixtures.offset(of: "\u{2028}", in: built.text)
+    #expect(built.text.attribute(.kern, at: separator, effectiveRange: nil) == nil)
+  }
+
+  /// Laid out, a cell's second line starts where its first does: the first
+  /// column's at the row's indent, another's at its tab stop.
+  @Test func `a cell's second line is laid out under its first`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [
+        RFCKit.Table.Row(cells: [[.text("a1"), .lineBreak, .text("a2")], [.text("b1")]]),
+        RFCKit.Table.Row(cells: [[.text("d1")], [.text("e1"), .lineBreak, .text("e2")]]),
+      ])
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let storage = NSTextContentStorage()
+    storage.install(built.text)
+    let layout = NSTextLayoutManager()
+    storage.addTextLayoutManager(layout)
+    let container = NSTextContainer(size: CGSize(width: 10_000, height: 100_000))
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
+    layout.ensureLayout(for: layout.documentRange)
+    defer { withExtendedLifetime(storage) {} }
+
+    /// Where the character at `offset` is drawn, from the left of its fragment.
+    func x(_ needle: String) throws -> CGFloat {
+      let offset = try Fixtures.offset(of: needle, in: built.text)
+      let location = try #require(layout.location(atOffset: offset))
+      let fragment = try #require(layout.textLayoutFragment(for: location))
+      let inFragment = offset - layout.offset(of: fragment.rangeInElement.location)
+      let line = try #require(
+        fragment.textLineFragments.first { $0.characterRange.contains(inFragment) })
+      return line.typographicBounds.minX + line.locationForCharacter(at: inFragment).x
+    }
+    #expect(abs(try x("a2") - x("a1")) < 0.5)
+    #expect(abs(try x("e2") - x("e1")) < 0.5)
+    #expect(abs(try x("e1") - x("b1")) < 0.5)
+  }
 }

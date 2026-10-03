@@ -13,23 +13,30 @@ struct CollectionPickerSheet: View {
   @Environment(\.dismiss) private var dismiss
   @State private var query = ""
   @State private var limit = ListWindow.page
+  /// Unsearched, the whole library newest first, as All RFCs lists it: the same
+  /// listing with the `.all` filter, made off the main actor (#597).
+  @State private var rows: [LibraryRow] = []
+
+  /// What the rows are listed again for: the query, normalized, so a space typed
+  /// after a word searches nothing again, and a new index.
+  private struct Listing: Equatable {
+    let query: String
+    let indexVersion: Int
+  }
 
   var body: some View {
-    // Unsearched, the whole library newest first, as All RFCs lists it:
-    // `librarySearch` goes through the same list computation with the `.all` filter.
-    let rows = library.librarySearch(query)
     let members = Set(library.collections[collection]?.members ?? [])
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     NavigationStack {
-      List(rows.prefix(limit)) { rfc in
-        let isMember = members.contains(rfc.id)
+      List(rows.prefix(limit)) { row in
+        let isMember = members.contains(row.id)
         Button {
           library.editCollections {
-            try CollectionStore.toggle(rfc.id, in: collection, undoManager: undoManager, in: $0)
+            try CollectionStore.toggle(row.id, in: collection, undoManager: undoManager, in: $0)
           }
         } label: {
           HStack {
-            RFCRow(rfc: rfc, isBookmarked: false)
+            RFCRow(row: row, isBookmarked: false)
             Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
               .foregroundStyle(isMember ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
               .accessibilityHidden(true)
@@ -38,12 +45,21 @@ struct CollectionPickerSheet: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isMember ? .isSelected : [])
         .onAppear {
-          guard rfc.id == trigger else { return }
+          guard row.id == trigger else { return }
           limit = ListWindow.extendedLimit(from: limit, total: rows.count)
         }
       }
       .searchable(text: $query, prompt: "Search RFCs")
       .onChange(of: query) { limit = ListWindow.page }
+      .task(
+        id: Listing(query: AppliedSearch.query(for: query), indexVersion: library.indexVersion)
+      ) {
+        let list = LibraryList(filter: .all, query: query)
+        guard await Debounce.outlasted(AppliedSearch.pause(before: list.query)),
+          let listed = await library.listed(list), !Task.isCancelled
+        else { return }
+        rows = listed.rows
+      }
       // Deleted elsewhere — another window, a script, sync — there is nothing left
       // to add to.
       .onChange(of: library.collections[collection] == nil) { _, isGone in

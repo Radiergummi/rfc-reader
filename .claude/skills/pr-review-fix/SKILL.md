@@ -45,7 +45,7 @@ Steps
 8. If the PR description now says something untrue, fix it with `gh pr edit N --body-file`.
 9. If you turned the PR into a draft in step 0 and leave no question, mark it ready again: `gh pr ready N`. If you leave a question, or stopped on a conflict, it stays a draft until the maintainer has answered.
 
-Do not decide on assumptions: product or UX behaviour, design tradeoffs, scope changes, anything contradicting the PR's or issue's intent, and anything touching a docs/ARCHITECTURE.md decision are left alone and reported as questions with the options and your recommendation.
+Do not decide on assumptions: product or UX behaviour, design tradeoffs, scope changes, anything contradicting the PR's or issue's intent, and anything touching a decision in docs/ARCHITECTURE.md or docs/decisions/ are left alone and reported as questions with the options and your recommendation.
 
 Report: each finding as fixed / rejected with reason / question; what simplify changed; commits pushed; which make targets ran and their result; whether the PR ended ready or a draft; questions.
 </prompt>

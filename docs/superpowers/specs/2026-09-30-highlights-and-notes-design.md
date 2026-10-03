@@ -205,8 +205,7 @@ relocation rules are written for exactly those cases.
 
 ## The rows
 
-The rows follow the collections precedent (`ARCHITECTURE.md`, "collections are rows linked by
-identifier"): rows linked by identifier, never SwiftData relationships, and in CloudKit's
+The rows follow the collections precedent (`docs/decisions/2026-09-28-collections-are-rows-linked-by-identifier-ordered-by-position.md`): rows linked by identifier, never SwiftData relationships, and in CloudKit's
 shape, with nothing `@Attribute(.unique)` and every attribute optional or defaulted.
 Uniqueness is the store's job. Every row is keyed on the document's `fileStem` as
 `documentKey`.
@@ -236,7 +235,7 @@ Uniqueness is the store's job. Every row is keyed on the document's `fileStem` a
 attachment before its note. A note whose highlight is missing is re-pointed to the surviving
 highlight that covers its quote, as happens when a merge on another device deleted its
 highlight; with none, it shows as detached. The sweep with a grace period that collections are
-waiting on (`ARCHITECTURE.md`) covers these rows too, and it belongs to the sync work.
+waiting on (the same record) covers these rows too, and it belongs to the sync work.
 
 **Deleting.** Deleting a highlight that has notes asks first, then deletes the highlight and
 its notes. Deleting a note deletes its attachments.
@@ -488,7 +487,7 @@ The probe builds both on RFC 9110, and measures them.
 Under either, the text column's width is `ReaderLayout`'s from the reader pane's width and
 the notes toggle. This **amends** the rule on `DocumentView.column`, "the pane's width and the
 measure preference, and nothing else": the toggle becomes its third input. Slice 3 updates
-that comment and `ARCHITECTURE.md` along with its decision. **The contents panel stays out of
+that comment and `ARCHITECTURE.md`, and records its decision in `docs/decisions/`. **The contents panel stays out of
 it:**
 
 - with notes on, the panel covers the notes, exactly as it covers the slack today;
@@ -623,7 +622,7 @@ is deferred until the column exists and has been used.
   - slice 2: ⌃⌘H, ⌘K and Find each do the right thing while a note is being edited, and ⌘K
     again on an iPad with a keyboard, where it is also Go to RFC;
   - slice 3: the probe's measurements, above.
-- **Docs:** each slice adds its dated decision to `ARCHITECTURE.md`:
+- **Docs:** each slice adds its dated decision record to `docs/decisions/`:
   - slice 1: the model text and position map, relocation, and highlights as rendering
     attributes;
   - slice 2: the Markdown body;

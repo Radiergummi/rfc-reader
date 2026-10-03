@@ -72,7 +72,7 @@ Claim the issue before you read any further, so no other session takes it while 
 
 ## 3. Understand it before touching code
 
-Read the issue with its comments, and any issue or pull request it links. Read the sections of `docs/ARCHITECTURE.md`, `docs/DATA_PIPELINE.md` and `docs/VISION.md` for the code it touches, and the code itself. `CLAUDE.md`'s standing constraints apply in full.
+Read the issue with its comments, and any issue or pull request it links. Read the sections of `docs/ARCHITECTURE.md`, `docs/DATA_PIPELINE.md` and `docs/VISION.md`, and the records in `docs/decisions/`, for the code it touches, and the code itself. `CLAUDE.md`'s standing constraints apply in full.
 
 **Ask whenever the answer is the maintainer's to give.** That means an issue that can be read two ways, a change to the document model or a standing constraint, a user-visible behavior the issue doesn't specify, or an expected result you can't pin down. It applies at this step and at any later one. Don't proceed on an assumption. To ask:
 
@@ -104,6 +104,7 @@ Run all of these, and read their output rather than assuming it:
 - `make xcodeproj build-app`, when anything under `App/` or `project.yml` changed.
 - **A user-visible change in the app:** `make run`, look at it (the `run` skill), and describe what you saw in the pull request. If you couldn't check it visually, say so plainly.
 - **A user-visible change on iOS:** `make run-sim CODE_SIGNING_ALLOWED=NO`, then look at a screenshot (`xcrun simctl io booted screenshot`). The Simulator runs headless and nothing can tap in it: `xcrun simctl openurl` stops at an "Open in RFC Reader?" prompt. So what launch doesn't show needs the iPhone (`devicectl … --payload-url` opens a link without asking) or the maintainer. Use the iPhone also for what the Simulator can't show, such as TextKit's layout or timing on real hardware.
+- `make test-corpus`, when `LegacyTextParser` or a classifier it calls changed. The corpus-backed suites run `parse` over the fetched documents the committed fixtures don't cover, and `make check` skips them.
 - A wide legacy-parser change: `make corpus CORPUS_LIMIT=` before and after, then compare `corpus/report.json` between the two runs.
 
 Then run `/code-review` on the branch's diff against `origin/main`, and fix what holds up.

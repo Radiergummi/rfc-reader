@@ -127,6 +127,21 @@ struct CorpusBackedTitlePageTests {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc355"))
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }
+
+  /// A title the index and the title page both set in capitals is title-cased (#219),
+  /// where the front matter took another line and only the title page's runs repeat
+  /// the index's: RFC 822 sets its title over two of them under a header, and RFC 169
+  /// under a workshop's name.
+  @Test func `a title in capitals on the title page and in the index is title cased`() throws {
+    let format = LegacyTextParser.parse(
+      try CorpusText.text("rfc822"),
+      title: "STANDARD FOR THE FORMAT OF ARPA INTERNET TEXT MESSAGES")
+    #expect(format.header.title == "Standard for the Format of ARPA Internet Text Messages")
+
+    let networks = LegacyTextParser.parse(
+      try CorpusText.text("rfc169"), title: "COMPUTER NETWORKS")
+    #expect(networks.header.title == "Computer Networks")
+  }
 }
 
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
@@ -577,6 +592,21 @@ struct CorpusBackedDefinedTermsTests {
   }
 }
 
+@Suite("Corpus-backed: citations", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedCitationsTests {
+  /// RFC 9393 lists BCP 26 and BCP 178 as groups and cites each only through its
+  /// member, RFC 8126 and RFC 6648: the prose cites the group's entry, so the
+  /// bibliography adds no row for it (#174).
+  @Test func `a group cited through its member is not cited from the bibliography`() throws {
+    let citations = Citations.of(try RFCXMLParser.parse(try CorpusText.xml("rfc9393")))
+    #expect(citations.contains { $0.cited == .rfc(8126) && $0.place != .bibliography })
+    #expect(citations.contains { $0.cited == .rfc(6648) && $0.place != .bibliography })
+    let bibliography = citations.filter { $0.place == .bibliography }.map(\.cited)
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 26)))
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 178)))
+  }
+}
+
 /// What a converted citation points at: its entry's document, read from outside the
 /// entry's title, and the entry itself, kept through the XML (#424).
 @Suite("Corpus-backed: bibliography entries", .enabled(if: CorpusText.isAvailable))
@@ -609,5 +639,25 @@ struct CorpusBackedBibliographyEntryTests {
         continue
       }
     }
+  }
+}
+
+@Suite("Corpus-backed: joined artwork", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedJoinedArtworkTests {
+  /// RFC 793's state diagram has blank lines in it, and came out as a block per
+  /// stretch between them (#437).
+  @Test func `a drawing with blank lines in it is one artwork`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
+    #expect(document.artworkText.contains { $0.contains("LISTEN") && $0.contains("TIME WAIT") })
+  }
+
+  /// RFC 3407's attribute registrations are one-line definitions a blank line
+  /// apart, which a hanging list below takes back as the blocks they made; joined
+  /// as artwork, they were left out of it.
+  @Test func `one-line definitions a blank line apart are still a list`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc3407"))
+    let terms = document.definitionLists.flatMap { $0 }.map(\.term.plainText)
+    #expect(terms.filter { $0.hasPrefix("Attribute name") }.count >= 3)
+    #expect(!document.artworkText.contains { $0.contains("Attribute name") })
   }
 }

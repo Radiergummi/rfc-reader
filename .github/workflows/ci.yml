@@ -90,6 +90,10 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
+      # SQLite's headers, for corpus-build's index database (#174): the image has
+      # the library but not them.
+      - name: Install SQLite's headers
+        run: apt-get update -qq && apt-get install -y -qq libsqlite3-dev >/dev/null
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
       - name: Save the SwiftPM builds

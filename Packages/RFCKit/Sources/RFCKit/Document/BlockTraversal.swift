@@ -107,6 +107,28 @@ extension RFCDocument {
     return [(sectionAnchor: nil, inlines: abstract.flatMap(\.flattened))] + sections
   }
 
+  /// `proseInlinesBySection`, less what the reader does not draw in the body: a
+  /// bibliography's annotations, which the references panel shows, and a section
+  /// that `holdsOnlyReferences`, which the body leaves out. What `Backlinks` and
+  /// `Citations` count references in, so the two agree on where the text refers to
+  /// anything. Flattened as `proseInlines` is.
+  public var drawnProseBySection: [(sectionAnchor: String?, inlines: [Inline])] {
+    func drawn(_ blocks: [Block]) -> [Inline] {
+      blocks.flattened.flatMap { block -> [[Inline]] in
+        if case .references = block { return [] }
+        return block.proseRuns
+      }
+      .flatMap(\.flattened)
+    }
+    let sections = allSections.filter { !$0.holdsOnlyReferences }.map { section in
+      (
+        sectionAnchor: Optional(section.anchor),
+        inlines: section.title.flattened + drawn(section.blocks)
+      )
+    }
+    return [(sectionAnchor: nil, inlines: drawn(header.abstract))] + sections
+  }
+
   /// The first section, depth first, that `matches`, without building the list of
   /// every section to look through.
   func firstSection(where matches: (Section) -> Bool) -> Section? {

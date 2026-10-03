@@ -2,7 +2,6 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
-import os
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -15,6 +14,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.scenePhase) private var scenePhase
   #endif
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
@@ -47,12 +47,8 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
-    /// Whether a print is being prepared or its sheet is up; see `printDocument()`.
-    @State private var isPrinting = false
-    /// A finished export, while Save to Files is showing it (#376).
-    @State private var exported: ExportedFile?
-    /// Whether an export is being made or Save to Files is up; see `exportDocument(as:)`.
-    @State private var isExporting = false
+    /// Export and Print, and the sheets they present.
+    @State private var output = DocumentOutput()
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
@@ -78,6 +74,7 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var placeSaver = ReadingPlaceSaver()
   /// Where the reader was when the text view last went — turning Original Text on
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
@@ -114,6 +111,10 @@ struct DocumentView: View {
 
   private var metadata: RFCMetadata? { library.metadata(id) }
 
+  private var positions: ReadingPositionKeeper {
+    ReadingPositionKeeper(id: id, context: modelContext)
+  }
+
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: session.state.document != nil, fontSize: fontSize,
@@ -140,78 +141,11 @@ struct DocumentView: View {
     content
       .navigationTitle(id.displayName)
       #if !os(macOS)
-        .navigationBarTitleDisplayMode(.inline)
-        // The designation over what it is called, in the bar once the header has
-        // scrolled away. The navigation title stays, for the back button and the
-        // app switcher.
-        .toolbar {
-          ToolbarItem(placement: .principal) {
-            DocumentTitle(
-              title: id.displayName,
-              subtitle: DocumentActions.subtitle(
-                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
-              reader: reader)
-          }
-        }
-        .toolbar {
-          DocumentToolbar(
-            id: id, metadata: metadata, library: library, navigation: navigation,
-            reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
-            showsInspector: $showsInspector,
-            exportDocument: exportDocument(as:), printDocument: printDocument,
-            showsBottomBar: !barsHidden)
-        }
-        // The top bar, which leaves the status bar; the bottom one goes by losing
-        // its items (`DocumentToolbar.showsBottomBar`). The reader runs under both,
-        // so neither moves it.
-        .toolbarVisibility(barsHidden ? .hidden : .automatic, for: .navigationBar)
-        // The original text has no reader to bring them back with a tap, and the
-        // reader made afresh on the way back starts with them showing.
-        .onChange(of: reader.showOriginal) { barsHidden = false }
-        // An overlay rather than an inset: it floats over the text and takes no
-        // layout, so it cannot disturb the column, which is derived from this
-        // view's frame.
-        .overlay(alignment: .bottom) {
-          returnButton.animation(.snappy, value: visibleReturn)
-        }
-        // Long enough to decide, without sitting over the text for good. Not under
-        // VoiceOver, where a control that leaves on a timer may be gone before it
-        // is reached: there it stays until the next navigation replaces it.
-        .task(id: visibleReturn) {
-          guard visibleReturn != nil, !voiceOverEnabled else { return }
-          try? await Task.sleep(for: .seconds(8))
-          guard !Task.isCancelled else { return }
-          navigation.settleReturnOffer()
-        }
-        // iOS keeps the inspector as a column beside the reader where there is
-        // room for one. In compact width it is a sheet, and a `.sheet` of our own
-        // rather than the one `.inspector` turns itself into: that one, swiped
-        // away, set the binding back to false but dropped the next request to
-        // show it, so the panel's buttons opened it only on every other tap.
-        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
-          .inspectorColumnWidth(min: 260, ideal: 320)
-        }
-        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
-          .presentationDetents([.medium, .large])
-        }
-        .fileExporter(
-          isPresented: Binding(
-            get: { exported != nil },
-            set: {
-              if !$0 {
-                exported = nil
-                isExporting = false
-              }
-            }),
-          document: exported,
-          contentType: (exported?.format ?? .pdf).contentType,
-          defaultFilename: ExportFormat.fileStem(for: id)
-        ) { _ in
-          exported = nil
-          isExporting = false
-        }
+        .modifier(
+          IOSDocumentChrome(
+            id: id, metadata: metadata, document: session.state.document, library: library,
+            navigation: navigation, reader: reader, showsInspector: $showsInspector,
+            barsHidden: $barsHidden, output: output))
       #endif
       .onAppear {
         if !session.hasStartedLoading { startLoad() }
@@ -227,25 +161,23 @@ struct DocumentView: View {
         reader.isLoading = isLoading
       }
       .onChange(of: buildInputs, initial: true) {
-        // Captures the reader, not the view; see `DocumentSession.startLoad`.
-        session.requestBuild(for: buildInputs, resizeIsLive: resize.isLive) {
-          [reader, navigation, id] built, document in
-          // A replaced reader lives on through its fade (`ReaderHost`), and its
-          // rebuild must not list its sections under the next document.
-          guard navigation.selection == id else { return }
-          Self.listSections(of: document, in: built, into: reader)
-        }
+        session.requestBuild(
+          for: buildInputs, resizeIsLive: resize.isLive, into: reader, navigation: navigation)
       }
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) {
-        deriveInfo()
-        markPublishedOriginal()
+        session.deriveInfo(into: reader, library: library, navigation: navigation)
+        session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
       }
       // A pack installed while the document is open can make it a pointer (#316).
-      .onChange(of: library.pointersInPack) { markPublishedOriginal() }
-      .onChange(of: library.revisions) { deriveInfo() }
+      .onChange(of: library.pointersInPack) {
+        session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
+      }
+      .onChange(of: library.revisions) {
+        session.deriveInfo(into: reader, library: library, navigation: navigation)
+      }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
         // the selected document's.
@@ -256,7 +188,41 @@ struct DocumentView: View {
           jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
         }
       }
-      .onDisappear(perform: saveReadingPosition)
+      // Not only on the way out: quitting, or iOS ending an app in the background,
+      // takes the reader with no `onDisappear` (#155). So the place is saved once
+      // the reader stops, and when the app goes.
+      .onAppear {
+        // Not the view, and the box weakly: the box holds this.
+        let box = lastVisibleAnchor
+        box.placeDidChange = { [positions, placeSaver, weak box] in
+          placeSaver.schedule {
+            if let box { positions.save(box) }
+          }
+        }
+      }
+      #if os(macOS)
+        // Hosted outside any scene, so no `scenePhase` reaches here: the app's quit.
+        .onReceive(
+          NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
+        ) { _ in saveNow() }
+      #else
+        // The scene's phase, not the app's: an iPad window swiped away goes to the
+        // background alone.
+        .onChange(of: scenePhase) {
+          if scenePhase == .background { saveNow() }
+        }
+      #endif
+      .onDisappear {
+        // A report after this, during the fade-out, would save the document left
+        // over the one now read.
+        lastVisibleAnchor.placeDidChange = {}
+        saveNow()
+      }
+  }
+
+  private func saveNow() {
+    placeSaver.cancel()
+    positions.save(lastVisibleAnchor)
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
@@ -380,7 +346,7 @@ struct DocumentView: View {
           request: navigation.scrollRequest,
           // Any anchor, not only a section's: a place is saved at the nearest anchor
           // of any kind (`ReadingPlace`), a paragraph's as often as not.
-          stored: storedPosition()?.place.flatMap { saved in
+          stored: positions.stored()?.place.flatMap { saved in
             saved.anchor.flatMap(built.anchors.offset(of:)) != nil ? saved : nil
           })
         switch arrival {
@@ -474,240 +440,13 @@ struct DocumentView: View {
     #endif
   }
 
-  #if !os(macOS)
-    /// Save to Files, with the document in `format` (#376). Laid out for the region's
-    /// paper, as a print is.
-    private func exportDocument(as format: ExportFormat) {
-      // A second tap while the file is made would make it again, and present Save to
-      // Files over the first.
-      guard !isExporting else { return }
-      isExporting = true
-      Task {
-        guard
-          let data = try? await DocumentExport.data(
-            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
-            library: library)
-        else {
-          isExporting = false
-          return
-        }
-        exported = ExportedFile(data: data, format: format)
-      }
-    }
-
-    /// The system's print sheet, with the document laid out for paper (#375). Laid
-    /// out for the region's paper; the sheet scales it to whatever paper is chosen.
-    private func printDocument() {
-      // A second tap while the PDF is built would build it again and present the
-      // shared controller twice.
-      guard !isPrinting else { return }
-      isPrinting = true
-      let original = reader.showOriginal
-      Task {
-        guard
-          let data = try? await DocumentPDF.make(
-            for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
-            library: library)
-        else {
-          isPrinting = false
-          return
-        }
-        let info = UIPrintInfo.printInfo()
-        info.jobName = PrintFurniture.documentTitle(
-          id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
-        info.outputType = .general
-        let controller = UIPrintInteractionController.shared
-        controller.printInfo = info
-        controller.printingItem = data
-        controller.present(animated: true) { _, _, _ in isPrinting = false }
-      }
-    }
-
-    /// Where a tap on the return offer goes, while it is on show.
-    ///
-    /// In a single column only: beside other columns, the back/forward pair is in
-    /// the bar.
-    private var visibleReturn: HistoryEntry? {
-      horizontalSizeClass == .compact ? navigation.returnOffer : nil
-    }
-
-    /// "Back to § 4.2" after following a link within the document (#254). In a
-    /// single column there is no back/forward pair, and the system back button
-    /// leaves the document.
-    @ViewBuilder
-    private var returnButton: some View {
-      if let offer = visibleReturn {
-        Button {
-          navigation.goBack()
-        } label: {
-          Label(
-            ReturnOffer.title(for: offer, in: session.state.document),
-            systemImage: "arrow.uturn.backward")
-        }
-        .buttonStyle(.glass)
-        .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-      }
-    }
-
-  #endif
-
   // MARK: - Actions
 
   /// Fetches the document, with the reader's panel made ready for it first.
-  ///
-  /// Once per view, plus Try Again after a failure: the view is made per document
-  /// (`.id(selection)`), and appearing again keeps what it loaded.
   private func startLoad() {
-    // The scene's `ReaderState` must not carry the previous document's place into
-    // this one; `install()` reports the real anchor a moment later.
-    reader.clear()
-    reader.showOriginal = preferOriginalText
-    reader.isLoading = true
-    // Its header is on its way until the reader reports, so the title stays out of
-    // the toolbar rather than showing and then dropping (#281).
-    reader.documentStartsLoading()
-    markPublishedOriginal()
-    // Before the fetch, not after: the index knows the document before its body
-    // arrives, so the tab is ready the moment the panel is.
-    deriveInfo()
-    // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
-    // the pack lists (#316), whose XML it left out.
-    let pointerInPack = library.pointersInPack.contains(id)
-    guard
-      PublishedOriginalPage.loadsText(
-        id, formats: metadata?.formats, pointerInPack: pointerInPack)
-    else {
-      session.skipLoad()
-      reader.isLoading = false
-      // Recorded as a loaded text would be: Recently Read lists a scan, and a
-      // pointer with a pack or without. Here, so once per opening, like a load's.
-      Self.markOpened(id, in: modelContext)
-      Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
-      return
-    }
-    // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
-    session.startLoad(from: library) { [reader, library, navigation, modelContext, id] loaded in
-      // Not over the next document's reader state; see `requestBuild`'s caller.
-      guard navigation.selection == id else { return }
-      reader.groups = ReferenceGroup.groups(in: loaded)
-      reader.info = Self.info(for: id, authors: loaded.header.authors, in: library)
-      // Here rather than on appearing: once per opening, since each is a view of
-      // its own (`.id(selection)`) and a collapsed split view's spurious
-      // disappear and appear is not another one (#260). And only once the
-      // document is here, so one that failed to open is not listed as read.
-      Self.markOpened(id, in: modelContext)
-      reader.documentTitle = loaded.header.title
-      reader.precedingDraft = loaded.header.precedingDraft
-      reader.hasDocument = true
-      reader.publishedOriginal = Self.publishedOriginal(id, text: loaded, in: library)
-      // Last and apart, so the first build does not wait for it; and, like the
-      // rest, not written over the next document's reader state.
-      Task(name: "Extract requirements") { [reader, navigation, id] in
-        let requirements = await Self.requirements(in: loaded)
-        guard navigation.selection == id else { return }
-        reader.requirements = requirements
-      }
-    } failed: { [reader, navigation, id] in
-      // No header is coming, so the toolbar names the RFC that failed; unless it is
-      // a scan (`publishedOriginal`), whose page shows the header.
-      guard navigation.selection == id else { return }
-      reader.documentFailedToLoad()
-      // A jump waiting for the text is not coming.
-      if let request = navigation.scrollRequest { navigation.settle(request) }
-    }
-  }
-
-  /// Lists the RFC in Recently Read. Static, so the load's callback can call it
-  /// without capturing the view.
-  private static func markOpened(_ id: DocumentID, in modelContext: ModelContext) {
-    do {
-      try ReadingPositionStore.markOpened(id, in: modelContext)
-    } catch {
-      readerLog.error(
-        "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
-      )
-    }
-  }
-
-  /// Why this RFC is read as its original, if it is (#207): as the load starts, and
-  /// again when the index loads, which may be after the fetch ended.
-  private func markPublishedOriginal() {
-    // Not while fading out: the reader state is the selected document's.
-    guard navigation.selection == id else { return }
-    reader.publishedOriginal = Self.publishedOriginal(
-      id, text: session.state.document, in: library)
-  }
-
-  /// Static, so the load's callback can ask it without capturing the view.
-  private static func publishedOriginal(
-    _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
-  ) -> PublishedOriginalPage.Status? {
-    library.metadata(id).flatMap {
-      PublishedOriginalPage.Status(
-        id, formats: $0.formats, text: document,
-        pointerInPack: library.pointersInPack.contains(id))
-    }
-  }
-
-  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
-  /// opened before the index finished loading has none to show until it does. And
-  /// again once the document is here, whose own authors carry the contact details
-  /// their chips open.
-  private func deriveInfo() {
-    reader.info = Self.info(
-      for: id, authors: session.state.document?.header.authors, in: library)
-  }
-
-  /// Static, so the load's callback can derive it without capturing the view.
-  private static func info(
-    for id: DocumentID, authors: [Author]?, in library: LibraryModel
-  ) -> DocumentInfo? {
-    library.metadata(id).map {
-      DocumentInfo(
-        $0, authors: authors, in: library.index,
-        revisions: library.revisionsSummary(for: $0.id))
-    }
-  }
-
-  /// The sections the storage actually holds, straight from the index the builder
-  /// just emitted — rather than re-deriving "is this a bibliography?" from the model
-  /// and hoping the two rules stay in step. A contents row that has no anchor is a
-  /// destination `scroll(to:)` cannot reach.
-  ///
-  /// No place to restore here: the coordinator carries the line at the top of the
-  /// viewport into the new storage itself, which a section anchor — all this view is
-  /// told — could only approximate to the section's heading.
-  private static func listSections(
-    of document: RFCDocument, in built: BuiltDocument, into reader: ReaderState
-  ) {
-    reader.sections = document.allSections.filter {
-      built.anchors.sections.offset(of: $0.anchor) != nil
-    }
-  }
-
-  /// The Requirements tab's rows (#180), off the main actor: every sentence of the
-  /// document is split and read for key words.
-  @concurrent
-  private static func requirements(in document: RFCDocument) async -> [Requirement] {
-    Requirements.extract(from: document)
-  }
-
-  /// Off the main actor, and structured: unlike a detached task, it inherits the
-  /// caller's priority and its cancellation (#129). The builder never checks for
-  /// cancellation, so a build that has started runs to the end;
-  /// `DocumentSession.requestBuild` is what discards a canceled one.
-  /// `DocumentPreview` builds through it too.
-  @concurrent
-  static func build(
-    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
-  ) async -> BuiltDocument {
-    let name = document.header.id?.displayName ?? "untitled"
-    return signposter.withIntervalSignpost(
-      "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
-    ) {
-      DocumentTextBuilder.build(document, style: style, choices: choices)
-    }
+    session.open(
+      into: reader, library: library, navigation: navigation, positions: positions,
+      showsOriginal: preferOriginalText)
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
@@ -792,33 +531,6 @@ struct DocumentView: View {
       return false
     }
     return true
-  }
-
-  private func saveReadingPosition() {
-    // Nothing to save for a document that never showed its text — one that failed
-    // to load, or was left before it did — and saving no place would erase the one
-    // stored, and list a document that never opened as read.
-    guard let anchor = lastVisibleAnchor.anchor else { return }
-    do {
-      try ReadingPositionStore.save(
-        lastVisibleAnchor.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id,
-        in: modelContext)
-    } catch {
-      readerLog.error(
-        "saving the position failed: \(String(describing: error), privacy: .public)")
-    }
-  }
-
-  /// Nil when the fetch fails, which is logged: the reader opens at the top, as it
-  /// does for a document never read.
-  private func storedPosition() -> ReadingPosition? {
-    do {
-      return try ReadingPositionStore.position(for: id, in: modelContext)
-    } catch {
-      readerLog.error(
-        "reading the position failed: \(String(describing: error), privacy: .public)")
-      return nil
-    }
   }
 }
 

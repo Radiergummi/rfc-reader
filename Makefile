@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-index corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -100,16 +100,17 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2910 rfc355 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc8259
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2910 rfc3407 rfc355 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
-CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114 rfc9393
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
 # RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
-# `make test`; CI runs them weekly (.github/workflows/corpus-tests.yml). Filtered by
-# their type names, all `CorpusBacked...`: --filter matches a test's identifier, not
-# the `Corpus-backed: ...` name its suite displays.
+# `make test`; CI runs them on pull requests that touch them and weekly
+# (.github/workflows/corpus-tests.yml). Filtered by their type names, all
+# `CorpusBacked...`: --filter matches a test's identifier, not the `Corpus-backed:
+# ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
 # saying so, from `CorpusText`, rather than on a missing file.
@@ -232,6 +233,9 @@ built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
 
 ## Build the app for macOS
+# No -derivedDataPath, here or in ios-sim: CI restores its compilation cache to
+# the default DerivedData, and a build anywhere else would miss it without saying
+# so (ci.yml, #214).
 build-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(MAC_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
@@ -401,16 +405,20 @@ $(CORPUS)/schema-control.noindex/%.xml:
 # the converter's output, so a converter change can leave it stale without anything
 # failing. This reruns every script against the current converter and compares.
 # Not part of `check`: it needs the source text, fetched here when it is missing,
-# and Python 3.9 or later. On a difference, commit the script's output.
+# and Python 3.9 or later.
+#
+# Informational until #197: it reports a stale override and does not fail. The
+# output is not committed, because it would be a fresh snapshot of RFC text, so
+# rfc1142.xml stays frozen and #197 decides what becomes of it (#243).
 corpus-overrides-check: corpus-tool
-	@status=0; for script in $(CORPUS)/overrides/rfc*.py; do \
+	@for script in $(CORPUS)/overrides/rfc*.py; do \
 	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
 	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
 	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
-	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
-	done; exit $$status
+	  else echo "$$stem.xml: stale -- frozen until #197, not regenerated"; fi; rm -f "$$out"; \
+	done
 
 ## Score the legacy parser against the RFCs xml2rfc generated from XML
 # From RFC 8650 on, an RFC's text is generated from its XML, so the XML says what
@@ -425,6 +433,14 @@ corpus-score: corpus-fetch-xml
 	  $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
 	  --out $(CORPUS)/score.json
+
+## Write the index database of the converted and modern documents
+# What a device cannot compute from one document, such as which documents cite it,
+# computed over all of them (#174). Metadata and anchors only, no RFC text, so it is
+# a pack of its own beside the XML packs (docs/DATA_PIPELINE.md).
+corpus-index: corpus-tool
+	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
+	  --version $(CORPUS_VERSION)
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
@@ -443,7 +459,7 @@ corpus-queries: corpus-tool
 revisions: corpus-tool
 	$(CORPUS_BIN) revisions --out $(CORPUS)/revisions $(if $(wildcard $(CORPUS)/revisions/revisions-scan.json),--scan $(CORPUS)/revisions/revisions-scan.json)
 
-## Run the whole corpus pipeline: fetch, convert, manifest
+## Run the whole corpus pipeline: fetch, convert, index, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-index corpus-manifest
