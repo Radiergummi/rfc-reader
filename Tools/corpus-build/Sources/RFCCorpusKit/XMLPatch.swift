@@ -112,6 +112,7 @@ public struct XMLPatch: Sendable {
         throw failure("<diff> holds something other than operations")
       }
     }
+    guard !operations.isEmpty else { throw failure("<diff> holds no operations") }
   }
 
   /// What is wrong with one operation element.
@@ -142,14 +143,23 @@ public struct XMLPatch: Sendable {
     for child in children {
       switch child.kind {
       case .element:
-        content.append(.element(child.xmlString))
+        // On macOS the whitespace before an element is not a text node but the start
+        // of the element's own XML, and parsing that XML alone would drop it.
+        let xml = child.xmlString
+        let leading = xml.prefix { isWhitespace(String($0)) }
+        if !leading.isEmpty { content.append(.text(String(leading))) }
+        content.append(.element(String(xml.dropFirst(leading.count))))
       case .text:
-        // Between elements, whitespace only lays the patch out.
-        if holdsElements, isWhitespace(child.stringValue) { continue }
         content.append(.text(child.stringValue ?? ""))
       default:
         throw Malformed(message: "<\(name)> holds something other than elements and text")
       }
+    }
+    // Whitespace between elements may be all that keeps two inline elements' words
+    // apart; beside them at the edges, it only lays the patch out.
+    if holdsElements {
+      while case .text(let text) = content.first, isWhitespace(text) { content.removeFirst() }
+      while case .text(let text) = content.last, isWhitespace(text) { content.removeLast() }
     }
 
     let kind: OperationKind
@@ -186,18 +196,32 @@ public struct XMLPatch: Sendable {
     (text ?? "").allSatisfy { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" }
   }
 
+  /// How many operations the patch holds.
+  public var operationCount: Int { operations.count }
+
   /// Applies every operation to `document`, in order. The first that fails stops the
   /// rest, which would see a tree its author did not intend, and `document` is left
   /// as that operation found it.
   public func apply(to document: XMLDocument) throws(Failure) {
-    for (offset, operation) in operations.enumerated() {
-      do {
-        try Self.apply(operation, to: document)
-      } catch let reason {
-        throw Failure(
-          patch: name, operation: offset + 1, summary: operation.summary, reason: reason.message)
-      }
+    for index in operations.indices {
+      try apply(operation: index + 1, to: document)
     }
+  }
+
+  /// Applies the operation `number`, from 1, to `document`.
+  public func apply(operation number: Int, to document: XMLDocument) throws(Failure) {
+    let operation = operations[number - 1]
+    do {
+      try Self.apply(operation, to: document)
+    } catch let reason {
+      throw failure(operation: number, reason.message)
+    }
+  }
+
+  /// The failure of the operation `number`, from 1, for `reason`.
+  public func failure(operation number: Int, _ reason: String) -> Failure {
+    Failure(
+      patch: name, operation: number, summary: operations[number - 1].summary, reason: reason)
   }
 
   private static func apply(_ operation: Operation, to document: XMLDocument) throws(Malformed) {
@@ -236,7 +260,9 @@ public struct XMLPatch: Sendable {
         } else if target.parent is XMLDocument {
           document.setRootElement(replacement)
         }
-      case .attribute, .text:
+      case .attribute:
+        target.stringValue = try attributeValue(operation.content)
+      case .text:
         target.stringValue = try text(operation.content)
       default:
         throw Malformed(message: "only an element, an attribute or a text node is replaced")
@@ -266,7 +292,7 @@ public struct XMLPatch: Sendable {
       guard element.attribute(forName: name) == nil else {
         throw Malformed(message: "the element already has \(name); replace it instead")
       }
-      let value = try text(operation.content)
+      let value = try attributeValue(operation.content)
       guard let attribute = XMLNode.attribute(withName: name, stringValue: value) as? XMLNode
       else { throw Malformed(message: "\(name) is not an attribute name") }
       element.addAttribute(attribute)
@@ -309,5 +335,11 @@ public struct XMLPatch: Sendable {
       text += part
     }
     return text
+  }
+
+  /// The content as an attribute's value: its text without the whitespace that lays
+  /// it out over lines, which the parser would not read.
+  private static func attributeValue(_ content: [Content]) throws(Malformed) -> String {
+    try text(content).trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }

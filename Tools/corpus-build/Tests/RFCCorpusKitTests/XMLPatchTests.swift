@@ -105,6 +105,38 @@ struct XMLPatchTests {
     #expect(paragraph.plainText == "Kept apart words.")
   }
 
+  /// Added straight into an element, the space between two inline elements is all
+  /// that keeps their words apart; only the space at the edges lays the patch out.
+  @Test func `inline elements added straight into an element keep the space between them`()
+    throws
+  {
+    let document = try Self.patched(
+      "<add sel=\"//section[@pn='section-6']/t[last()]\">\n  <em>apart</em> <strong>words</strong>\n</add>"
+    )
+    let section = try #require(document.section(anchor: "section-6"))
+    guard case .paragraph(let paragraph) = section.blocks.last else {
+      Issue.record("the section ends with \(String(describing: section.blocks.last))")
+      return
+    }
+    #expect(paragraph.plainText.hasSuffix("apart words"), "\(paragraph.plainText)")
+  }
+
+  /// An attribute's value laid out over lines would keep the layout, which the parser
+  /// cannot read, and the attribute would be lost without a word said.
+  @Test func `an attribute's value laid out over lines is its text alone`() throws {
+    let document = try Self.patched(
+      """
+      <replace sel="/rfc/front/date/@year">
+        1998
+      </replace>
+      <add sel="/rfc/front/date" type="@day">
+        7
+      </add>
+      """)
+    #expect(document.header.date?.year == 1998)
+    #expect(document.header.date?.day == 7)
+  }
+
   @Test func `add with a type sets an attribute`() throws {
     let document = try Self.patched(
       "<add sel=\"/rfc/front/date\" type=\"@day\">7</add>")
@@ -166,6 +198,8 @@ struct XMLPatchTests {
     // An add with nothing to add would change nothing without a word said.
     "<add sel=\"/rfc/front\"/>",
     "<add sel=\"/rfc/front\" pos=\"before\">\n</add>",
+    // A patch of no operations would change nothing without a word said.
+    "<!-- Only a comment. -->",
     // Not well-formed: libxml2 would drop the bare ampersand and select something else.
     "<remove sel=\"//t[contains(., 'a & b')]\"/>",
   ])

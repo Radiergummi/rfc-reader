@@ -129,26 +129,31 @@ public struct DocumentConverter: Sendable {
   /// the space. Writing it again gives one canonical output whatever XML library
   /// applied the patch, and guards against a patch adding what the model cannot hold,
   /// which writing would otherwise drop without a word: the text of the patched tree
-  /// and of the written XML must be the same words, and the written XML must not be
-  /// the converter's own.
+  /// and of the written XML must be the same words, and each operation must change
+  /// the written XML.
   static func apply(
     _ patch: XMLPatch, to xml: Data, serializer: RFCXMLSerializer
   ) throws(PatchFailure) -> (RFCDocument, Data) {
     do {
       let tree = try XMLDocument(data: xml, options: .nodePreserveWhitespace)
-      try patch.apply(to: tree)
-      let document = try RFCXMLParser.parse(tree.xmlData)
-      let written = Data(serializer.serialize(document).utf8)
+      var document = try RFCXMLParser.parse(xml)
+      var written = xml
+      for index in 0..<patch.operationCount {
+        try patch.apply(operation: index + 1, to: tree)
+        document = try RFCXMLParser.parse(tree.xmlData)
+        let next = Data(serializer.serialize(document).utf8)
+        // What writing it again undid, such as an attribute the writer derives, would
+        // otherwise pass as a correction, behind another operation that took effect.
+        if next == written {
+          throw patch.failure(operation: index + 1, "it changes nothing the model holds")
+        }
+        written = next
+      }
       let writtenTree = try XMLDocument(data: written, options: .nodePreserveWhitespace)
       if let divergence = Self.divergence(
         tree.rootElement()?.stringValue ?? "", writtenTree.rootElement()?.stringValue ?? "")
       {
         throw PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)")
-      }
-      // What writing it again undid, such as an attribute the writer derives, would
-      // otherwise pass as a correction.
-      if written == xml {
-        throw PatchFailure(message: "\(patch.name): it changes nothing the model holds")
       }
       return (document, written)
     } catch let failure as PatchFailure {

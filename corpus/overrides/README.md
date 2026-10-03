@@ -20,17 +20,17 @@ An override is a patch in the format of [RFC 5261](https://www.rfc-editor.org/rf
 | `<remove sel>` | an element, an attribute or a text node | nothing |
 | `<add sel pos>` | an element | its new children. `pos` is `append` (the default), `prepend`, `before` or `after`. With `type="@name"`, the text is that attribute's value |
 
-Two deviations from the RFC: selectors are full XPath 1.0, not its restricted subset, so an operation can select by content; and there is no `ws`, since the output is written again, which normalizes whitespace.
+Two deviations from the RFC: selectors are full XPath 1.0, not its restricted subset, so an operation can select by content; and there is no `ws`, since the output is written again, which normalizes whitespace. Whitespace at the edges of an operation's content only lays the patch out and is dropped, from an attribute's value too; whitespace between two elements is kept, since it is what keeps two inline elements' words apart.
 
 A patch fails, and the run with it, when:
 
 - a selector matches no node, or more than one;
 - the node does not suit the operation: `add pos="before"` on the root, or `replace` of an attribute with an element;
-- the file holds an operation or an attribute this does not know, so a typo like `postion=` fails rather than appending;
+- the file holds an operation or an attribute this does not know, so a typo like `postion=` fails rather than appending, or holds no operation at all;
 - writing the patched document again would lose some of its text, because the patch added something the document model cannot hold;
-- writing it again gives the converter's own output to the byte, because writing undid the whole patch, such as an attribute the writer derives.
+- an operation changes nothing in the written output, because writing undid it, such as an attribute the writer derives. Each operation is checked on its own, so one that writing undoes cannot pass behind another that takes effect.
 
-A failed document gets no output, an earlier run's is removed, and `convert` logs every failure, records each in `report.json` and exits non-zero once all documents are converted. `make corpus-overrides-check` converts only the patched documents and runs on every pull request, so a parser change that breaks a patch fails its own pull request; `make corpus-convert` runs it first.
+A failed document gets no output, an earlier run's is removed, and `convert` logs every failure, records each in `report.json` and exits non-zero once all documents are converted. `make corpus-overrides-check` converts only the overridden documents and runs on every pull request, so a parser change that breaks a patch fails its own pull request; `make corpus-convert` runs it first.
 
 ## Writing one
 
@@ -41,7 +41,7 @@ A failed document gets no output, an earlier run's is removed, and `convert` log
 - **A patch shape that recurs in about three documents is a parser bug**, not an override. Fix the heuristic (see `CLAUDE.md`) and delete the patches.
 - **When a parser change breaks an operation**, check first whether the change made it unnecessary. Often the node it corrected is now right, and the fix is to delete the operation.
 
-The source texts are never committed: `make corpus-overrides-check` and `make test-corpus` fetch the ones they need into `corpus/text.noindex/`, and the RFC index into `corpus/rfc-index.xml` when it is missing. `make corpus-fetch` downloads a fresh index over it.
+The source texts are never committed: `make corpus-overrides-check` fetches the ones it needs into `corpus/overrides-check.noindex/`, out of the way of a corpus run, `make test-corpus` its own into `corpus/text.noindex/`, and the RFC index into `corpus/rfc-index.xml` when it is missing. `make corpus-fetch` downloads a fresh index over it.
 
 ## The snapshot
 

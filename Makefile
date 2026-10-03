@@ -417,19 +417,27 @@ $(CORPUS)/schema-control.noindex/%.xml:
 ## Check that every patch in corpus/overrides still applies to the converter's output
 # A patch (corpus/overrides/rfcNNNN.xml with a <diff> root) corrects what the
 # converter makes of one document, so a parser change can break it. This converts
-# only the patched documents, with the index as a corpus run does, into a scratch
-# directory, and fails on a patch that no longer applies. The documents and the
-# index are fetched when they are missing, by the file rules above. Run on every
-# pull request (.github/workflows/ci.yml), so a parser change that breaks a patch
-# fails its own pull request.
-PATCHED := $(shell grep -lE '<diff[[:space:]>]' $(CORPUS)/overrides/rfc*.xml 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.xml$$//')
+# only the overridden documents, with the index as a corpus run does, into a scratch
+# directory, and fails on a patch that no longer applies. Which override is a patch
+# is the convert step's to say, by its root element, so every override is converted.
+# The documents are fetched into a directory of their own, not the text directory: a
+# limited corpus run converts whatever lies there, and would take them in. Run on
+# every pull request (.github/workflows/ci.yml), so a parser change that breaks a
+# patch fails its own pull request.
+OVERRIDDEN := $(basename $(notdir $(wildcard $(CORPUS)/overrides/rfc*.xml)))
+OVERRIDES_CHECK := $(CORPUS)/overrides-check.noindex
 
-corpus-overrides-check: corpus-tool $(CORPUS)/rfc-index.xml $(PATCHED:%=$(CORPUS)/text.noindex/%.txt)
-ifneq ($(PATCHED),)
-	out=$$(mktemp -d) && $(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out "$$out" \
+corpus-overrides-check: corpus-tool $(CORPUS)/rfc-index.xml $(OVERRIDDEN:%=$(OVERRIDES_CHECK)/%.txt)
+ifneq ($(OVERRIDDEN),)
+	out=$$(mktemp -d) && $(CORPUS_BIN) convert --in $(OVERRIDES_CHECK) --out "$$out" \
 	  --overrides $(CORPUS)/overrides --index $(CORPUS)/rfc-index.xml \
-	  --only $(PATCHED:rfc%=%); status=$$?; rm -rf "$$out"; exit $$status
+	  --only $(OVERRIDDEN:rfc%=%); status=$$?; rm -rf "$$out"; exit $$status
 endif
+
+# One overridden RFC, for the overrides check.
+$(OVERRIDES_CHECK)/%.txt:
+	@mkdir -p $(@D)
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
 
 ## Check that each scripted override is still what its script makes
 # rfc1142.xml is the one snapshot left (#197): its script rejoins words in the plain

@@ -49,8 +49,24 @@ struct PatchedConversionTests {
       text: text, stem: stem, metadata: nil, patch: patch)
     #expect(patched.xml == nil)
     #expect(
-      patched.report.failure == "\(stem).xml: it changes nothing the model holds",
+      patched.report.failure
+        == "\(stem).xml, operation 1 (remove /rfc/@version): it changes nothing the model holds",
       "\(patched.report.failure ?? "")")
+  }
+
+  /// Each operation must take effect, or one that writing undoes would pass behind
+  /// another that does not.
+  @Test func `an operation that writing undoes fails beside one that takes effect`() throws {
+    let conversion = try Self.convert(
+      """
+      <add sel="/rfc/front/date" type="@day">7</add>
+      <remove sel="/rfc/@version"/>
+      """)
+    #expect(conversion.xml == nil)
+    #expect(
+      conversion.report.failure
+        == "rfc2119.xml, operation 2 (remove /rfc/@version): it changes nothing the model holds",
+      "\(conversion.report.failure ?? "")")
   }
 
   @Test func `a failing patch writes nothing and says why`() throws {
