@@ -81,7 +81,8 @@ private struct GeneralSettings: View {
 
 /// Notifications about bookmarked RFCs (#191), off until turned on here. Turning
 /// them on is when permission is asked for; refused, the toggle goes back off and
-/// says where to allow them.
+/// says where to allow them. Only the Mac shows it for now: iOS has no Settings
+/// screen until #703, which places it there.
 struct NotificationSettings: View {
   @AppStorage(ReaderPreferences.notifyAboutBookmarksKey) private var isOn =
     ReaderPreferences.defaultNotifyAboutBookmarks
