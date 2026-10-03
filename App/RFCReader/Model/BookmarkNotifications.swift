@@ -50,7 +50,10 @@ enum BookmarkNotifications {
         while true {
           try? await Task.sleep(for: .seconds(checkInterval))
           guard isEnabled else { continue }
-          await LibraryModel.shared.refreshForBookmarks()
+          // Not waited for: the index check waits for a cheap network (#314) for as
+          // long as the Mac is on an expensive one, and the next hour's look at the
+          // revisions should not wait with it. A refresh still under way is joined.
+          Task(name: "Refresh for bookmarks") { await LibraryModel.shared.refreshForBookmarks() }
         }
       }
     #endif

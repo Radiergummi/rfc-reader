@@ -341,9 +341,7 @@ final class LibraryModel {
         // Check in the background if the index was last checked over a day ago:
         // only on a cheap network, since nobody is waiting for it (#314).
         if IndexCheck.isDue(checkedAt: updatedAt, now: .now) {
-          indexRefresh = Task(name: "Refresh index") {
-            await refreshIndex(onExpensiveNetworks: false)
-          }
+          checkIndex()
         }
       } else {
         await refreshIndex()
@@ -616,32 +614,55 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The background check bootstrap started, so a background refresh can wait for it.
+  /// The automatic daily check of the index under way, which a second one joins.
   @ObservationIgnored private var indexRefresh: Task<Void, Never>?
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
   @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
 
-  /// What a background refresh does (#191): the index, when its daily check is due,
-  /// and the revisions, each of which compares the bookmarks when it changes; then
-  /// waits for that comparison, so the system does not suspend the app before it
+  /// What a background refresh does (#191): the revisions, then the index when its
+  /// daily check is due, each of which compares the bookmarks when it changes; and
+  /// waits for each comparison, so the system does not suspend the app before it
   /// has posted.
+  ///
+  /// The revisions come first because the index check waits for a network that is
+  /// neither expensive nor constrained (#314), which on a phone network can outlast
+  /// iOS's background task. Canceling this, as iOS does when that task expires,
+  /// cancels the check.
   func refreshForBookmarks() async {
     await bootstrap()
     if indexState == .loading {
       await withCheckedContinuation { indexWaiters.append($0) }
     }
-    await indexRefresh?.value
-    switch indexState {
-    case .ready(let checkedAt) where IndexCheck.isDue(checkedAt: checkedAt, now: .now):
-      await refreshIndex(onExpensiveNetworks: false)
-    case .failed:
-      await refreshIndex(onExpensiveNetworks: false)
-    default:
-      break
-    }
     await refreshRevisions()
     await bookmarkComparison?.value
+    let isIndexDue =
+      switch indexState {
+      case .ready(let checkedAt): IndexCheck.isDue(checkedAt: checkedAt, now: .now)
+      case .failed: true
+      case .idle, .loading: false
+      }
+    guard isIndexDue else { return }
+    let check = checkIndex()
+    await withTaskCancellationHandler {
+      await check.value
+    } onCancel: {
+      check.cancel()
+    }
+    await bookmarkComparison?.value
+  }
+
+  /// The automatic daily check of the index, only on a cheap network (#314): the one
+  /// under way, or a new one.
+  @discardableResult
+  private func checkIndex() -> Task<Void, Never> {
+    if let indexRefresh { return indexRefresh }
+    let check = Task(name: "Refresh index") {
+      await refreshIndex(onExpensiveNetworks: false)
+      indexRefresh = nil
+    }
+    indexRefresh = check
+    return check
   }
 
   /// Compares the bookmarked RFCs with the last baseline, after every change to the
@@ -657,6 +678,9 @@ final class LibraryModel {
   }
 
   private func compareBookmarksNow() async {
+    // A store that fell back to memory (#152) reads as no bookmarks, which would
+    // start every one afresh at the next launch that opens the real one.
+    guard !AppData.isStoredInMemory else { return }
     let bookmarks: Set<DocumentID>
     do {
       // Read here rather than taken from `bookmarkedDocuments`, which a failed read

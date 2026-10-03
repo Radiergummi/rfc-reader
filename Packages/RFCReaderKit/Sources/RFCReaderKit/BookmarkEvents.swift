@@ -102,9 +102,9 @@ public enum BookmarkEvent: Hashable, Sendable {
 }
 
 public enum BookmarkEvents {
-  /// What changed from `old` to `new`, by document, then in the order of
-  /// `BookmarkEvent`'s cases, then by name. Nothing when there is no `old`: a first
-  /// comparison only sets the baseline.
+  /// What changed from `old` to `new`, by document, and for each: obsoleted, updated,
+  /// its drafts by name, errata. Nothing when there is no `old`: a first comparison
+  /// only sets the baseline.
   public static func between(_ old: BookmarkBaseline?, _ new: BookmarkBaseline) -> [BookmarkEvent] {
     guard let old else { return [] }
     var events: [BookmarkEvent] = []
