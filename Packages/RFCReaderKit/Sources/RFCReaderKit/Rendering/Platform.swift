@@ -67,7 +67,8 @@ public enum RFCColors {
     byAppearance(light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark)
   }
 
-  /// A link on a card.
+  /// A link on a card, drawn over the text view's own link color:
+  /// `AccentContrast.cardLink`, lighter than the reader's link in dark (#694).
   public static var cardLink: PlatformColor {
     byAppearance(light: AccentContrast.cardLink.light, dark: AccentContrast.cardLink.dark)
   }

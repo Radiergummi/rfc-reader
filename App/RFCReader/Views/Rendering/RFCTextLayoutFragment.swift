@@ -203,10 +203,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   /// The chip tint's opacity for the accent as it resolves now, on the page or on
   /// `card` over it: lighter than 15% where the link would not clear the minimum
-  /// contrast on it (#317).
+  /// contrast on it (#317). On a card the link is the card's link color (#694).
   private static func chipTintOpacity(on card: PlatformColor?) -> Double {
     guard let accent = SRGBColor(resolving: RFCColors.accent),
-      let link = SRGBColor(resolving: RFCColors.readerLink),
+      let link = SRGBColor(resolving: card == nil ? RFCColors.readerLink : RFCColors.cardLink),
       var backdrop = SRGBColor(resolving: RFCColors.page)
     else { return AccentContrast.chipTint }
     if let card, let fill = SRGBColor.resolvingWithOpacity(card) {

@@ -140,7 +140,7 @@ public enum FragmentGeometry {
   /// Whether the character at `location` belongs to a block drawn as a card. A
   /// quote is decorated too, but draws a rule beside its text, which no card's cap
   /// can stack on.
-  private static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
+  public static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
     guard location >= 0, location < text.length else { return false }
     let decoration = RFCDecoration(
       attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))

@@ -677,8 +677,9 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   }
 
   /// Every link as the text view draws it, over the storage's color, but a
-  /// heading's backlink caption, which keeps the caption's (#584). Not
-  /// `renderingAttributes`, which are TextKit's and not the text view's.
+  /// heading's backlink caption, which keeps the caption's (#584), and a link on a
+  /// card, which takes the card's link color (#694). Not `renderingAttributes`,
+  /// which are TextKit's and not the text view's.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     renderingAttributesForLink link: Any,
@@ -686,7 +687,11 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
+    let onCard =
+      textLayoutManager.attributedText.map { text in
+        FragmentGeometry.drawsCard(in: text, at: textLayoutManager.offset(of: location))
+      } ?? false
     return DocumentTextBuilder.linkRenderingAttributes(
-      for: link, defaults: textView.attributes, caption: textView.caption)
+      for: link, defaults: textView.attributes, caption: textView.caption, onCard: onCard)
   }
 }
