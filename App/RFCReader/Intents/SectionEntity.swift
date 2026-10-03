@@ -3,7 +3,7 @@ import RFCKit
 
 /// A section of an RFC (#192), identified across documents as `rfc9110#section-4.2`
 /// (`SectionIdentifier`): what Open Section opens and Find Requirements narrows to.
-nonisolated struct SectionEntity: AppEntity {
+struct SectionEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation {
     TypeDisplayRepresentation(name: "Section", numericFormat: "\(placeholder: .int) sections")
   }
@@ -45,7 +45,7 @@ nonisolated struct SectionEntity: AppEntity {
 /// A document's sections, which means loading the document as opening it would
 /// (`IntentDocuments`). By identifier, sections of any document; by what was typed or
 /// said, and as suggestions, sections of the RFC the intent asking was given.
-nonisolated struct SectionEntityQuery: EntityStringQuery {
+struct SectionEntityQuery: EntityStringQuery {
   @IntentParameterDependency<OpenSectionIntent>(\.$document)
   var openSection
 

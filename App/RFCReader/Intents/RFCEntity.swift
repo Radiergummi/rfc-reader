@@ -6,8 +6,10 @@ import RFCKit
 /// returns, and what a Spotlight result is, since `SpotlightIndexer` associates
 /// each indexed item with one.
 ///
-/// Nonisolated, as every entity here is: plain values the system asks for from
-/// wherever it runs the query.
+/// Nonisolated, because `SpotlightIndexer` makes one per RFC off the main actor. So
+/// its fields are plain values rather than `@Property`, whose storage a nonisolated
+/// type cannot hold: Shortcuts shows them, in the display representation, but does
+/// not offer them as properties to read.
 nonisolated struct RFCEntity: AppEntity, IndexedEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation {
     TypeDisplayRepresentation(name: "RFC", numericFormat: "\(placeholder: .int) RFCs")
@@ -19,18 +21,11 @@ nonisolated struct RFCEntity: AppEntity, IndexedEntity {
   let id: String
   let documentID: DocumentID
 
-  @Property(title: "Number")
-  var number: Int
-
-  @Property(title: "Title")
-  var title: String
-
-  @Property(title: "Status")
-  var status: String
-
+  let number: Int
+  let title: String
+  let status: String
   /// `Obsoleted by RFC 9110`, for an RFC that is not current.
-  @Property(title: "Obsoleted By")
-  var obsoletedBy: String?
+  let obsoletedBy: String?
 
   init(_ metadata: RFCMetadata) {
     id = metadata.id.fileStem

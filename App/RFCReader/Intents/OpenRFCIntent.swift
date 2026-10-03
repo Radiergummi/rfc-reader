@@ -33,10 +33,7 @@ struct OpenRFCIntent: OpenIntent {
 }
 
 /// Opens a section of an RFC (#192), chosen from the document's contents.
-///
-/// Nonisolated, as `RequirementsIntent` is: `SectionEntityQuery` depends on its RFC
-/// parameter through a key path, which cannot name a main-actor property.
-nonisolated struct OpenSectionIntent: OpenIntent {
+struct OpenSectionIntent: OpenIntent {
   static let title: LocalizedStringResource = "Open Section"
   static let description = IntentDescription("Opens a section of an RFC.")
   static let openAppWhenRun = true

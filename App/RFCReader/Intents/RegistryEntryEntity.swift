@@ -3,7 +3,7 @@ import RFCKit
 
 /// A protocol identifier in an IANA registry (#175, #192), such as HTTP status 425
 /// or TLS alert 70, with the RFC section that defines it.
-nonisolated struct RegistryEntryEntity: AppEntity {
+struct RegistryEntryEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation {
     TypeDisplayRepresentation(name: "Identifier", numericFormat: "\(placeholder: .int) identifiers")
   }
@@ -53,7 +53,7 @@ nonisolated struct RegistryEntryEntity: AppEntity {
 
 /// Finds identifiers as the Go to RFC palette does (`RegistryLookup`): `425`,
 /// `tls alert 70`, `Retry-After`.
-nonisolated struct RegistryEntryQuery: EntityStringQuery {
+struct RegistryEntryQuery: EntityStringQuery {
   func entities(for identifiers: [RegistryEntryEntity.ID]) async throws -> [RegistryEntryEntity] {
     let entries = await LibraryModel.shared.loadedRegistryEntries()
     return await entities(RegistryLookup.entries(identifiedBy: identifiers, in: entries))

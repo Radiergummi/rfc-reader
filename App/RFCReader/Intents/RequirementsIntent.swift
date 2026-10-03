@@ -7,10 +7,7 @@ import SwiftUI
 /// section and its subsections state, or the whole RFC, as text a shortcut can pass
 /// on, one per requirement with its section's number (`Requirement.line`). The
 /// result's button shows them in the Requirements tab (#180).
-///
-/// Nonisolated: `SectionEntityQuery` depends on its RFC parameter through a key path,
-/// which cannot name a main-actor property.
-nonisolated struct RequirementsIntent: AppIntent {
+struct RequirementsIntent: AppIntent {
   static let title: LocalizedStringResource = "Find Requirements"
   static let description = IntentDescription(
     "Lists the BCP 14 requirements an RFC states, in one section and its subsections or in the whole RFC, each with its section's number."
