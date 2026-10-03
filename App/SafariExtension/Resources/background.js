@@ -37,6 +37,10 @@ browser.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 
 browser.tabs.onActivated.addListener(async ({ tabId }) => {
-  const tab = await browser.tabs.get(tabId);
-  updateAction(tabId, tab.url);
+  try {
+    const tab = await browser.tabs.get(tabId);
+    await updateAction(tabId, tab.url);
+  } catch {
+    // The tab closed before it could be read; there is no button left to update.
+  }
 });
