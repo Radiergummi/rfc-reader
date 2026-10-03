@@ -135,6 +135,21 @@ struct PinRecipeTests {
     }
   }
 
+  /// TextKit lays out no fragment at the end of the text, where ⌘↓ puts the
+  /// insertion point: a settle there lands on the last character's line rather than
+  /// placing nothing and leaving the viewport where it was (#726).
+  @Test func `a settle at the end of the text lands on its last line`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = Surface(layout: fixture.layout)
+    let length = built.text.length
+    PinRecipe.settle(ReaderAnchor(characterOffset: length), in: fixture.layout, on: surface)
+    let landed = try #require(surface.anchor())
+    // The last line, or the empty one TextKit lays out after a final line break.
+    #expect(landed.anchor.characterOffset >= length - 1)
+    #expect(surface.containerTop > 0)
+  }
+
   @Test func `a jump lands its target at the top from wherever the last one left`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)

@@ -114,6 +114,8 @@ import SwiftUI
             precedingDraft: reader.precedingDraft),
           perform: perform)
         Divider()
+        ReadingModePicker(reader: reader)
+        Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
             Button(format.name) { exportDocument(format) }

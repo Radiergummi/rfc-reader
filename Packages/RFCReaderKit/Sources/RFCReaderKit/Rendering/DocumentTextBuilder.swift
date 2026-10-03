@@ -143,10 +143,11 @@ public final class DocumentTextBuilder {
   /// paragraph anchor would silently break all of them. Only `appendSection` passes
   /// one, which is the one place that knows, and passes the section's `place` with
   /// it.
-  func mark(_ anchor: String?, heading: String? = nil, place: String? = nil) {
+  func mark(_ anchor: String?, heading: String? = nil, place: String? = nil, depth: Int? = nil) {
     guard let anchor, !anchor.isEmpty else { return }
     entries.append(
-      AnchorIndex.Entry(anchor: anchor, offset: output.length, heading: heading, place: place))
+      AnchorIndex.Entry(
+        anchor: anchor, offset: output.length, heading: heading, place: place, depth: depth))
   }
 
   func append(_ string: String, _ attributes: [NSAttributedString.Key: Any]) {
@@ -311,7 +312,7 @@ extension DocumentTextBuilder {
     // References tab instead — `DocumentInspector` in the app — and is skipped
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
-    mark(section.anchor, heading: section.displayTitle, place: section.place)
+    mark(section.anchor, heading: section.displayTitle, place: section.place, depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs

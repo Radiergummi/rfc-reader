@@ -37,12 +37,16 @@ struct RFCTextView: View {
     onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
+    folding: Folding? = nil,
+    onFoldingChange: @escaping (Folding) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
   ) {
     inputs = ReaderInputs(
       built: built,
+      folding: folding,
+      onFoldingChange: onFoldingChange,
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
@@ -94,6 +98,10 @@ struct ReaderScrollTarget: Equatable {
 /// it is the environment's, which `RFCTextView` reads, and passed beside it.
 struct ReaderInputs {
   let built: BuiltDocument
+  /// The reading mode and the sections it has expanded (#698); nil to keep what the
+  /// text view has, as a reader fading out does while the scene has moved on.
+  let folding: Folding?
+  let onFoldingChange: (Folding) -> Void
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
@@ -149,6 +157,7 @@ struct ReaderInputs {
     coordinator.onToolbarTitleReleased = onToolbarTitleReleased
     coordinator.onSelectionChange = onSelectionChange
     coordinator.onChoosePresentation = onChoosePresentation
+    coordinator.onFoldingChange = onFoldingChange
     #if canImport(UIKit)
       coordinator.onChromeHidden = onChromeHidden
       coordinator.setChromeEnabled(hidesChrome)
@@ -168,7 +177,9 @@ struct ReaderInputs {
     }
     coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
-      coordinator.install(built)
+      coordinator.install(built, folding: folding ?? coordinator.folding)
+    } else if let folding {
+      coordinator.apply(folding)
     }
     if let scrollTarget {
       coordinator.scroll(
@@ -231,12 +242,16 @@ struct ReaderInputs {
       // Find-in-document, which is half of why the reader is a text view at all.
       textView.isFindInteractionEnabled = true
       textView.textLayoutManager?.delegate = context.coordinator
+      (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
+        context.coordinator.foldingDelegate
       textView.delegate = context.coordinator
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
+        _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
@@ -319,6 +334,8 @@ struct ReaderInputs {
       // builder underlines them itself when asked (`ReadingStyle.underlinesLinks`).
       textView.linkTextAttributes?[.underlineStyle] = nil
       textView.textLayoutManager?.delegate = context.coordinator
+      (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
+        context.coordinator.foldingDelegate
       textView.delegate = context.coordinator
       textView.quickLookReference = { [weak coordinator = context.coordinator] event in
         coordinator?.quickLookReference(with: event) ?? false
@@ -332,6 +349,12 @@ struct ReaderInputs {
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
+      textView.toggleSection = { [weak coordinator = context.coordinator] event in
+        coordinator?.toggleSection(under: event) ?? false
+      }
+      textView.disclosureCursorRects = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureCursorRects() ?? []
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
@@ -340,6 +363,8 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
+        _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
