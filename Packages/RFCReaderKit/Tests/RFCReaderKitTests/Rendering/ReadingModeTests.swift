@@ -472,6 +472,26 @@ struct ReadingModeTests {
     #expect(FocusCitations.shown(nil, revealing: entries[0].anchor) == nil)
   }
 
+  /// Leaving Focus for the outline keeps the focused section open, and every section
+  /// it is nested in, so the reader's line stays shown; any other switch starts the
+  /// new mode with nothing open.
+  @Test func `focus becomes an outline with the focused section open`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let sections = built.anchors.sections.entries
+    let child = try #require(sections.first { ($0.depth ?? 1) > 1 })
+    let parent = try #require(sections.last { $0.offset < child.offset && ($0.depth ?? 1) == 1 })
+    let outline = Folding(focusingOn: child.anchor).switching(to: .outline, in: index)
+    #expect(outline.mode == .outline)
+    #expect(outline.expanded == [parent.anchor, child.anchor])
+    #expect(!outline.hidden(in: index).contains(child.offset + child.heading!.utf16.count + 2))
+    #expect(
+      Folding(focusingOn: child.anchor).switching(to: .normal, in: index) == Folding(mode: .normal))
+    let fromOutline = Folding(mode: .outline, expanded: [parent.anchor]).switching(
+      to: .focus, in: index)
+    #expect(fromOutline == Folding(mode: .focus))
+  }
+
   @Test func `the modes are named for the menu`() {
     #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus"])
   }

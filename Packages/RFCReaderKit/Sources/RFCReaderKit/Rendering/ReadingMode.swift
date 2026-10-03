@@ -155,6 +155,17 @@ public struct Folding: Sendable, Equatable {
     return index.offset(of: focused)
   }
 
+  /// This folding switched to `mode`, which starts with nothing open, except that
+  /// Focus becoming the outline keeps its section open, and every section it is
+  /// nested in, so the reader's line in it stays shown.
+  public func switching(to mode: ReadingMode, in index: FoldingIndex) -> Folding {
+    guard self.mode == .focus, mode == .outline, let entry = focusedEntry(in: index) else {
+      return Folding(mode: mode)
+    }
+    return Folding(
+      mode: .outline, expanded: Set(index.anchors(enclosing: entry) + [entry.anchor]))
+  }
+
   /// The section Focus shows: the focused one, or the first where none is yet.
   public func focusedAnchor(in index: FoldingIndex) -> String? {
     focusedEntry(in: index)?.anchor

@@ -2,8 +2,9 @@ import RFCReaderKit
 import SwiftUI
 
 /// The Reading Mode menu (#698): View > Reading Mode on the Mac, and in the reader's
-/// More menu on iOS. Choosing a mode starts it with nothing expanded; choosing the one
-/// in use leaves it as it is.
+/// More menu on iOS. Choosing a mode starts it with nothing expanded, but for Focus
+/// becoming the outline, which keeps its section open (`Folding.switching(to:in:)`);
+/// choosing the one in use leaves it as it is.
 struct ReadingModePicker: View {
   let reader: ReaderState
 
@@ -16,7 +17,10 @@ struct ReadingModePicker: View {
           guard mode != reader.folding.mode else { return }
           // Focus starts on the section being read, which the text view knows, the
           // abstract included.
-          reader.folding = Folding(mode: mode)
+          // The folding index is there in Focus, the one mode that keeps anything.
+          reader.folding =
+            reader.foldingIndex.map { reader.folding.switching(to: mode, in: $0) }
+            ?? Folding(mode: mode)
         })
     ) {
       ForEach(ReadingMode.allCases) { mode in
