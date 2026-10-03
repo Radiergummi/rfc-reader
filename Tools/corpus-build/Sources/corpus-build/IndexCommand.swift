@@ -24,12 +24,8 @@ struct IndexCommand: ParsableCommand {
   var version: String
 
   func run() throws {
-    let files = try FileManager.default.contentsOfDirectory(
-      at: URL(fileURLWithPath: input), includingPropertiesForKeys: nil
-    )
-    .filter { $0.pathExtension == "xml" }
-    .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    Self.logger.info("reading", metadata: ["documents": "\(files.count)"])
+    let corpus = try ConvertedCorpus(directory: URL(fileURLWithPath: input))
+    Self.logger.info("reading", metadata: ["documents": "\(corpus.files.count)"])
 
     let clock = ContinuousClock()
     let started = clock.now
@@ -37,29 +33,12 @@ struct IndexCommand: ParsableCommand {
     try database.setMeta("version", to: version)
     var indexed = 0
     var citations = 0
-    var failed: [String] = []
     // Every document read, and what it obsoletes, for the second pass, which needs
     // the documents of an edge at once: holding every parsed document for it would
     // hold the corpus.
     var readFiles: [DocumentID: URL] = [:]
     var obsoletes: [DocumentID: [DocumentID]] = [:]
-    for (index, file) in files.enumerated() {
-      let stem = file.deletingPathExtension().lastPathComponent
-      // A document is the one its file names: a converted header may lack its number,
-      // or state another one, and two files must not index as the same document.
-      guard let id = DocumentID(fileStem: stem) else {
-        Self.logger.info("not an RFC", metadata: ["file": "\(file.lastPathComponent)"])
-        continue
-      }
-      let document: RFCDocument
-      do {
-        document = try RFCXMLParser.parse(Data(contentsOf: file))
-      } catch {
-        Self.logger.error(
-          "unreadable", metadata: ["file": "\(file.lastPathComponent)", "error": "\(error)"])
-        failed.append(stem)
-        continue
-      }
+    let reading = try corpus.read { offset, file, id, document in
       let cited = Citations.of(document, citing: id)
       try database.insert(cited, citing: id)
       indexed += 1
@@ -68,11 +47,12 @@ struct IndexCommand: ParsableCommand {
       if !document.header.obsoletes.isEmpty {
         obsoletes[id] = document.header.obsoletes
       }
-      if (index + 1) % 2000 == 0 {
+      if (offset + 1) % 2000 == 0 {
         Self.logger.info(
-          "progress", metadata: ["completed": "\(index + 1)", "total": "\(files.count)"])
+          "progress", metadata: ["completed": "\(offset + 1)", "total": "\(corpus.files.count)"])
       }
     }
+    Self.logger.report(reading)
 
     // A section's best match is judged across every edge it is on, so the documents
     // joined by obsoletes edges are aligned a group at a time, each parsed once. An
@@ -100,11 +80,7 @@ struct IndexCommand: ParsableCommand {
       ])
     // An RFC left out is a gap in the graph nothing else would show, so the run fails
     // once the rest is written, for the files to be looked at.
-    guard failed.isEmpty else {
-      Self.logger.error(
-        "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
-      throw ExitCode.failure
-    }
+    try Self.logger.failOnLeftOut(reading)
   }
 
   /// The documents joined by obsoletes edges between documents in `read`, a group for
