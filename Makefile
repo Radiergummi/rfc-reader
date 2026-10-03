@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -479,6 +479,13 @@ corpus-score: corpus-fetch-xml
 corpus-index: corpus-tool
 	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
 	  --version $(CORPUS_VERSION)
+
+## Report the abbreviations the parser collects across the converted corpus
+# Each document's abbreviations and their totals, in corpus/abbreviations.json (#211):
+# what a precision check of the collection samples from before the reader shows
+# expansions (#67). Not part of `corpus`: it measures the corpus rather than builds it.
+corpus-abbreviations: corpus-tool
+	$(CORPUS_BIN) abbreviations --in $(CORPUS)/xml.noindex --out $(CORPUS)/abbreviations.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
