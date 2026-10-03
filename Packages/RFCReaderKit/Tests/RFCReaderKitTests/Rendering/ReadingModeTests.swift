@@ -263,17 +263,6 @@ struct ReadingModeTests {
     #expect(!Folding(mode: .normal).hidden(in: index).contains(length))
   }
 
-  /// TextKit lays out no fragment at the end of the text, so a line put there lands
-  /// nowhere: it goes to the last character instead.
-  @Test func `a line at the end of the text goes to its last character`() throws {
-    let built = try Self.rfc8999()
-    let index = FoldingIndex(built)
-    let length = built.text.length
-    #expect(index.lineOffset(for: length) == length - 1)
-    #expect(index.lineOffset(for: length - 1) == length - 1)
-    #expect(index.lineOffset(for: 10) == 10)
-  }
-
   /// Past a run that ends before the text does, the end is shown.
   @Test func `the end of the text is shown after a shown last paragraph`() {
     let hidden = HiddenText(

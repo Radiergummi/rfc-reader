@@ -64,12 +64,6 @@ public struct FoldingIndex: Sendable {
       }
   }
 
-  /// Where a line put at `offset` lands: the last character for the end of the text,
-  /// where TextKit lays out no fragment and a placement would find nothing.
-  public func lineOffset(for offset: Int) -> Int {
-    min(offset, max(0, length - 1))
-  }
-
   /// The entry whose text `offset` is in: the last at or before it.
   func entry(covering offset: Int) -> Entry? {
     let after = entries.partitioningIndex { $0.offset > offset }
