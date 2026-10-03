@@ -14,10 +14,6 @@ import SwiftUI
     let library: LibraryModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
-    /// The column a collapsed split view shows (#256): set from what the scene has
-    /// chosen, so a deep link reaches the document whichever column is on screen,
-    /// and read back when the reader goes back, to clear what the column left.
-    @State private var compactColumn = NavigationSplitViewColumn.sidebar
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
     /// selection, filter, search text and back/forward stack. Shared library state —
@@ -44,17 +40,9 @@ import SwiftUI
       navigation.selection?.displayName ?? library.title(for: navigation.filter)
     }
 
-    /// The column the scene's state reaches, which a collapsed split view shows.
-    private var shownColumn: CompactColumn {
-      CompactColumn.showing(
-        document: navigation.selection != nil, filter: navigation.sidebarSelection != nil)
-    }
-
     var body: some View {
       @Bindable var navigation = navigation
-      NavigationSplitView(
-        columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn
-      ) {
+      NavigationSplitView(columnVisibility: $columnVisibility) {
         SidebarView()
           .navigationSplitViewColumnWidth(min: 200, ideal: 240)
       } content: {
@@ -133,19 +121,6 @@ import SwiftUI
           requestedLink = nil
           navigation.open(link, in: library.index)
         }
-        compactColumn = shownColumn.splitViewColumn
-      }
-      // Collapsed, the stack follows the scene: a document opened from anywhere,
-      // a link included, is pushed, and going back clears what was left.
-      .onChange(of: shownColumn) {
-        guard horizontalSizeClass == .compact else { return }
-        compactColumn = shownColumn.splitViewColumn
-      }
-      .onChange(of: compactColumn) {
-        guard horizontalSizeClass == .compact else { return }
-        let cleared = CompactColumn(compactColumn).clears
-        if cleared.document, navigation.selection != nil { navigation.selection = nil }
-        if cleared.filter, navigation.sidebarSelection != nil { navigation.sidebarSelection = nil }
       }
       // Side by side, the sidebar shows which filter feeds the list.
       .onChange(of: horizontalSizeClass) {
@@ -381,24 +356,6 @@ struct EmptyDetailView: View {
     private func close() {
       isClosing = true
       dismiss()
-    }
-  }
-
-  extension CompactColumn {
-    fileprivate init(_ column: NavigationSplitViewColumn) {
-      switch column {
-      case .sidebar: self = .sidebar
-      case .content: self = .content
-      default: self = .detail
-      }
-    }
-
-    fileprivate var splitViewColumn: NavigationSplitViewColumn {
-      switch self {
-      case .sidebar: .sidebar
-      case .content: .content
-      case .detail: .detail
-      }
     }
   }
 #endif
