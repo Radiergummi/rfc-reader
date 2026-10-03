@@ -54,7 +54,7 @@ struct SectionEntityQuery: EntityStringQuery {
 
   /// The RFC the intent asking for sections was given, if it has been given one.
   private var document: DocumentID? {
-    openSection?.document?.documentID ?? requirements?.document.documentID
+    openSection?.document.documentID ?? requirements?.document.documentID
   }
 
   func entities(for identifiers: [SectionEntity.ID]) async throws -> [SectionEntity] {
