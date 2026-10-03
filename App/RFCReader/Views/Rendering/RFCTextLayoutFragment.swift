@@ -54,6 +54,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
+    if let disclosure {
+      bounds = bounds.union(
+        FragmentGeometry.disclosureBounds(
+          open: disclosure.open, firstLine: disclosure.firstLine, text: disclosure.text))
+    }
     // A point of slack all round: a stroke is a line a point wide, centered on its
     // path, and antialiasing puts ink just outside it.
     if let strokes = StrokeGeometry.bounds(of: strokeSegments) {
@@ -137,28 +142,35 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       frame: layoutFragmentFrame,
       containerWidth: textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width,
       indent: span.indent,
-      contentWidth: span.contentWidth
+      contentWidth: span.contentWidth,
+      spacingBefore: span.spacingBefore,
+      spacingAfter: span.spacingAfter
     )
   }
 
   // MARK: - Drawing
 
   override func draw(at point: CGPoint, in context: CGContext) {
+    // What the chips are drawn on: the page, or a card's fill over it.
+    var card: PlatformColor?
     if let span = decorationSpan {
       context.saveGState()
       switch span.decoration {
       case .artwork, .table:
+        card = RFCColors.cardFill
         drawCard(at: point, span: span, color: RFCColors.cardFill, in: context)
       case .aside:
+        card = RFCColors.asideFill
         drawCard(at: point, span: span, color: RFCColors.asideFill, in: context)
       case .blockQuote:
         drawRule(at: point, span: span, in: context)
       }
       context.restoreGState()
     }
-    drawChips(at: point, in: context)
+    drawChips(at: point, on: card, in: context)
     drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
+    drawDisclosure(at: point, in: context)
   }
 
   /// Opaque lines rather than translucent fills, so where two fragments' pieces of
@@ -195,17 +207,83 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
-  private func drawChips(at point: CGPoint, in context: CGContext) {
+  /// The chip tint's opacity for the accent as it resolves now, on the page or on
+  /// `card` over it: lighter than 15% where the link would not clear the minimum
+  /// contrast on it (#317). On a card the link is the card's link color (#694).
+  private static func chipTintOpacity(on card: PlatformColor?) -> Double {
+    guard let accent = SRGBColor(resolving: RFCColors.accent),
+      let link = SRGBColor(
+        resolving: card == nil
+          ? RFCColors.readerLink : RFCColors.cardLink(over: RFCColors.readerLink)),
+      var backdrop = SRGBColor(resolving: RFCColors.page)
+    else { return AccentContrast.chipTint }
+    if let card, let fill = SRGBColor.resolvingWithOpacity(card) {
+      backdrop = fill.color.composited(opacity: fill.opacity, over: backdrop)
+    }
+    return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
+  }
+
+  // MARK: - Disclosure
+
+  /// A heading's disclosure, as the outline draws it: whether its section is open,
+  /// the heading's first line, and where its text sits on that line.
+  private struct Disclosure {
+    let open: Bool
+    let firstLine: CGRect
+    let text: FragmentGeometry.HeadingText
+  }
+
+  /// Whether this fragment is a heading the outline discloses, and if so its
+  /// disclosure: from the folding its layout manager's content holds (#698).
+  private var disclosure: Disclosure? {
+    guard let range = documentRange,
+      let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
+      let open = folding.disclosure(at: range.location),
+      let line = textLineFragments.first
+    else { return nil }
+    let bounds = line.typographicBounds
+    let font =
+      line.attributedString.length > line.characterRange.location
+      ? line.attributedString.attribute(
+        .font, at: line.characterRange.location, effectiveRange: nil)
+        as? PlatformFont : nil
+    // Without a font, the line's own height stands in for the capitals'.
+    let capHeight = font?.capHeight ?? bounds.height * 0.5
+    let text = FragmentGeometry.HeadingText(
+      baseline: bounds.minY + line.glyphOrigin.y, capHeight: capHeight)
+    return Disclosure(open: open, firstLine: bounds, text: text)
+  }
+
+  private func drawDisclosure(at point: CGPoint, in context: CGContext) {
+    guard let disclosure else { return }
+    let chevron = FragmentGeometry.disclosureChevron(
+      open: disclosure.open, firstLine: disclosure.firstLine, text: disclosure.text)
+    guard let first = chevron.first else { return }
+    context.saveGState()
+    context.setStrokeColor(RFCColors.secondaryLabel.cgColor)
+    context.setLineWidth(1.5)
+    context.setLineCap(.round)
+    context.setLineJoin(.round)
+    context.move(to: CGPoint(x: point.x + first.x, y: point.y + first.y))
+    for next in chevron.dropFirst() {
+      context.addLine(to: CGPoint(x: point.x + next.x, y: point.y + next.y))
+    }
+    context.strokePath()
+    context.restoreGState()
+  }
+
+  private func drawChips(at point: CGPoint, on card: PlatformColor?, in context: CGContext) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
-    let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
+    let opacity = Self.chipTintOpacity(on: card)
+    let tint = RFCColors.accent.withAlphaComponent(opacity).cgColor
     // An informative citation is background to the specification rather than part
     // of it, and reads so beside a normative one (#184). Half the tint, not a
     // different shape: a chip whose kind no list says is drawn as a normative one.
-    let lighterTint = RFCColors.accent.withAlphaComponent(0.075).cgColor
+    let lighterTint = RFCColors.accent.withAlphaComponent(opacity / 2).cgColor
     for chip in chips {
       fill(
         chip.rect.offsetBy(dx: point.x, dy: point.y),

@@ -26,6 +26,16 @@ struct LegacyTextParserReferencesTests {
     #expect(document.referencedDocuments.contains(.rfc(822)))
   }
 
+  /// An entry's title is its words, as reading it back from the XML gives, not the line
+  /// breaks and spaces inside the quotes; and an entry with no text has no raw text
+  /// either, rather than an empty one (#683).
+  @Test func `an entry's title is collapsed, and an empty entry has no raw text`() {
+    let spaced = LegacyTextParser.reference(
+      anchor: "EXAMPLE", text: "Writer, A., \" A   Spaced Title \", March 1990.")
+    #expect(spaced.title == "A Spaced Title")
+    #expect(LegacyTextParser.reference(anchor: "EMPTY", text: "").rawText == nil)
+  }
+
   /// The reference list sets its anchors the way the prose cites them, and a
   /// seventh of the corpus puts a space in: `[RFC 1034]`. `referenceStartPattern`
   /// admitted no whitespace in an anchor, so those lines started no entry and were
@@ -126,8 +136,34 @@ struct LegacyTextParserReferencesTests {
     ] {
       #expect(LegacyTextParser.isReferencesTitle(title), "\(title)")
     }
-    for title in ["Router Preferences", "Priority for Domain Preferences", "Conferences"] {
+    for title in [
+      "Router Preferences", "Priority for Domain Preferences", "Conferences",
+      "Example Message (Headers, Body, and References)",
+    ] {
       #expect(!LegacyTextParser.isReferencesTitle(title), "\(title)")
+    }
+  }
+
+  /// A plain references title is a bibliography whatever the parser finds in it; a
+  /// title that only mentions references -- a style guide's section on writing one, a
+  /// protocol's object references -- is one only when its entries outnumber the blocks
+  /// before them, or its prose is read as one entry's text (#686).
+  @Test func `a title that mentions references is a bibliography only by its entries`() {
+    for title in [
+      "References", "Normative References", "INFORMATIVE REFERENCES:", "References.",
+      "Informative References (Alphabetical)",
+    ] {
+      #expect(
+        LegacyTextParser.isBibliography(title: title, entries: 1, blocksBefore: 4), "\(title)")
+    }
+    for title in [
+      "Writing the References Section", "Following Object References in Replies",
+      "Remote References",
+    ] {
+      #expect(
+        !LegacyTextParser.isBibliography(title: title, entries: 1, blocksBefore: 1), "\(title)")
+      #expect(
+        LegacyTextParser.isBibliography(title: title, entries: 3, blocksBefore: 1), "\(title)")
     }
   }
 
@@ -168,5 +204,62 @@ struct LegacyTextParserReferencesTests {
     #expect(entries[0].seriesInfo.contains(SeriesInfo(name: "BCP", value: "14")))
     #expect(
       !entries[2].seriesInfo.contains { $0.name == "BCP" }, "the title's BCP is not the entry's")
+  }
+
+  private static func bibliography(_ number: String, _ anchors: [String]) -> Section {
+    Section(
+      anchor: "section-\(number)", number: number, title: "References \(number)",
+      blocks: [
+        .references(
+          ReferenceList(
+            title: "References", entries: anchors.map { Reference(anchor: $0, title: $0) }))
+      ])
+  }
+
+  private static func prose(_ number: String) -> Section {
+    Section(
+      anchor: "section-\(number)", number: number, title: "Section \(number)",
+      blocks: [.paragraph(Paragraph([.text("Text of \(number).")]))])
+  }
+
+  private static func outline(_ sections: [Section]) -> [String] {
+    sections.flatMap { section in
+      [section.number ?? "-"] + outline(section.subsections).map { "  \($0)" }
+    }
+  }
+
+  /// `<references>` holds bibliographies and nothing else, so a section numbered under
+  /// one lost its text in the XML (#686): an appendix whose own heading was missing,
+  /// `A.1` after `9 References`, or the authors' addresses numbered under it. Such a
+  /// subsection, and those after it, follow the bibliography instead; a bibliography
+  /// before them stays under it.
+  @Test func `a bibliography adopts no section that is not one`() {
+    let appendix = LegacyTextParser.nest([
+      Self.prose("8"), Self.bibliography("9", ["ONE"]), Self.prose("A.1"), Self.prose("A.1.1"),
+      Self.prose("A.2"),
+    ])
+    #expect(Self.outline(appendix) == ["8", "9", "A.1", "  A.1.1", "A.2"])
+
+    let addresses = LegacyTextParser.nest([
+      Self.bibliography("4", ["ONE"]), Self.bibliography("4.1", ["TWO"]), Self.prose("4.2"),
+      Self.prose("5"),
+    ])
+    #expect(Self.outline(addresses) == ["4", "  4.1", "4.2", "5"])
+
+    let nested = LegacyTextParser.nest([
+      Self.prose("6"), Self.bibliography("6.1", ["ONE"]), Self.prose("6.1.1"), Self.prose("6.2"),
+    ])
+    #expect(Self.outline(nested) == ["6", "  6.1", "  6.1.1", "  6.2"])
+  }
+
+  /// A references section with no entries of its own only groups its lists, and is
+  /// written as a section when anything else is numbered under it, so it keeps that.
+  @Test func `a section that only groups bibliographies keeps its subsections`() {
+    let grouping = Section(anchor: "section-10", number: "10", title: "References")
+    let sections = LegacyTextParser.nest([
+      grouping, Self.bibliography("10.1", ["ONE"]), Self.bibliography("10.2", ["TWO"]),
+      Self.prose("10.3"),
+    ])
+    #expect(Self.outline(sections) == ["10", "  10.1", "  10.2", "  10.3"])
   }
 }

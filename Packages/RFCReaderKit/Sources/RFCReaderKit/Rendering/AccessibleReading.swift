@@ -119,8 +119,11 @@ public enum AccessibleReading {
   /// grammars, message examples, tables — and those read perfectly well as words.
   /// A block its rendering says something about is a diagram whatever it draws
   /// with; only one with no rendering to say is left to the drawing-share guess.
+  /// Highlighted code never is: it is read as code.
   public static func isDiagram(_ box: VerbatimBox) -> Bool {
-    box.spokenLabel != nil || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
+    guard box.shown != .highlighted else { return false }
+    return box.spokenLabel != nil
+      || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
   }
 
   /// A drawing is mostly lines, boxes and arrows: at least this share of the
@@ -188,12 +191,6 @@ public enum AccessibleReading {
   /// drawing (#361 splits it out into a real title).
   public static let label = "Diagram"
 
-  /// What VoiceOver says in place of a heading's backlink chip (#183), whose arrow
-  /// and number say nothing of what they count.
-  public static func backlinksLabel(count: Int) -> String {
-    count == 1 ? "Referred to from 1 section" : "Referred to from \(count) sections"
-  }
-
   /// What the Diagrams rotor lists the diagram at `location` as: its figure's
   /// caption, which the rotor never reads through, so it is not said twice there,
   /// and which is what tells one figure from the next; `label` without one.
@@ -246,7 +243,7 @@ extension AccessibleReading {
 
     public init(_ text: NSAttributedString) {
       let whole = NSRange(location: 0, length: text.length)
-      // A link with a `.rfcSpoken` label, a heading's backlink chip, is listed by
+      // A link with a `.rfcSpoken` label, a heading's backlink caption, is listed by
       // it, as it is read.
       func items(carrying key: NSAttributedString.Key) -> [RotorItem] {
         var items: [RotorItem] = []

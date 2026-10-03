@@ -315,6 +315,11 @@ final class LibraryModel {
       }
     }
     await refreshDownloadedNumbers()
+    // A tab restored onto Available Offline (#155) entered it before there was a
+    // set to take, and took an empty one.
+    for scene in sceneRegistry.open {
+      scene.takeDownloaded()
+    }
     await refreshPointersInPack()
     do {
       if let (prepared, updatedAt) = try await cached {
@@ -820,7 +825,7 @@ final class LibraryModel {
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     let preferred = preferredScene
-    switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
+    switch sceneRegistry.route(link, showing: \.heldDocument, preferring: { $0 === preferred }) {
     case .deliver(let delivery):
       carryOut(delivery)
     case .openWindow:

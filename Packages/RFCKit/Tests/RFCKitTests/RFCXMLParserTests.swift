@@ -86,6 +86,77 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// An `<eref>` to an RFC is a citation of it, but one to a page about it, or to an
+  /// anchor that names no section, stays the link it is: a citation would open the
+  /// document at its top (#683).
+  @Test func `an eref is a citation only where a citation can say all of it`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Linking</title></front>
+        <middle><section anchor="intro"><name>Intro</name>
+          <t><eref target="https://www.rfc-editor.org/rfc/rfc4321">it</eref>
+          <eref target="https://www.rfc-editor.org/errata/rfc4321">errata</eref>
+          <eref target="https://www.rfc-editor.org/rfc/rfc4321.html#name-flows">flows</eref></t>
+        </section></middle>
+      </rfc>
+      """
+    let inlines = try #require(try RFCXMLParser.parse(Data(xml.utf8)).paragraphs.first).inlines
+    #expect(inlines.compactMap(\.crossReference).count == 1)
+    #expect(inlines.count { if case .link = $0 { true } else { false } } == 2)
+  }
+
+  /// Words inside a citation that are the cited document's own name ask for the
+  /// document's label, not the entry's tag: `<xref target="LOCAL">RFC 4321</xref>`
+  /// reads `[RFC 4321]`, as the words say, rather than `[LOCAL]` (#683). An empty one
+  /// still reads as the entry's tag, as xml2rfc renders it.
+  @Test func `a citation naming its document in its words gets the document's label`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Citing</title></front>
+        <middle><section anchor="intro"><name>Intro</name>
+          <t>See <xref target="LOCAL">RFC 4321</xref> and <xref target="LOCAL"/>.</t>
+        </section></middle>
+        <back><references><name>References</name>
+          <reference anchor="LOCAL"><front><title>Local</title></front>
+            <seriesInfo name="RFC" value="4321"/></reference>
+        </references></back>
+      </rfc>
+      """
+    let xrefs = try RFCXMLParser.parse(Data(xml.utf8)).everyCrossReference
+    #expect(xrefs.map(\.label) == ["[RFC\u{00A0}4321]", "[LOCAL]"])
+    #expect(xrefs.first?.text == nil)
+  }
+
+  /// A legacy conversion writes a numbered section that follows the references into
+  /// `<back>`, with a section's `pn`. It is announced as the section it is, and so are
+  /// its subsections; a section without a `pn` there is still an appendix (#683).
+  @Test func `a section in the back with a section's part number is no appendix`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Legacy</title></front>
+        <middle><section pn="section-1"><name>Introduction</name></section></middle>
+        <back>
+          <references pn="section-2"><name>References</name></references>
+          <section pn="section-3"><name>Security Considerations</name>
+            <section pn="section-3.1"><name>Threats</name></section>
+          </section>
+          <section pn="section-appendix.a"><name>Examples</name></section>
+          <section><name>Unprepped</name></section>
+        </back>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let security = try #require(document.section(anchor: "section-3"))
+    #expect(!security.isAppendix)
+    #expect(security.displayTitle == "3. Security Considerations")
+    #expect(security.subsections.map(\.isAppendix) == [false])
+    #expect(document.section(anchor: "section-appendix.a")?.isAppendix == true)
+    #expect(document.sections.last?.isAppendix == true)
+  }
+
   /// Two anchorless reference lists -- normative and informative, in unprepped XML --
   /// would otherwise share one fallback anchor, and a link to the second would land on
   /// the first.

@@ -29,8 +29,13 @@ final class ReaderLayoutEngine: PinSurface {
 
   func scroll(toContainerY target: CGFloat) {
     guard let textView else { return }
-    textView.scroll(toY: target + textView.containerTop)
+    textView.scroll(toY: target + textView.containerTop, knowsEnd: knowsDocumentEnd)
   }
+
+  /// Whether the text view's height is the laid-out document's, so a scroll can be
+  /// held to its end: once the completion has laid all of it out, or a refold has laid
+  /// out what the folding shows. Until then the end is an estimate.
+  private var knowsDocumentEnd = false
 
   /// Not during a live resize: there AppKit's own display pass lays the viewport out.
   /// Forced on every step, it made `NSTextView` lay out a large range of the document
@@ -95,6 +100,47 @@ final class ReaderLayoutEngine: PinSurface {
     case .line(let anchor):
       line(anchor, layout)
     }
+  }
+
+  /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
+  /// and the reader's line kept, at the shown paragraph nearest it where it was
+  /// folded, or put at `place`, a jump's target the folding has just shown.
+  func refold(_ hidden: HiddenText, placeAt place: Int? = nil) {
+    guard let layout = textView?.textLayoutManager else { return }
+    if let place {
+      keeper.jumped(to: ReaderAnchor(characterOffset: place))
+    } else if case .line(let anchor) = keeper.place, hidden.contains(anchor.characterOffset) {
+      if let shown = hidden.shownOffset(near: anchor.characterOffset) {
+        keeper.jumped(to: ReaderAnchor(characterOffset: shown))
+      } else {
+        // Nothing is shown at all: the top is all there is.
+        keeper.userScrolledAboveText()
+      }
+    }
+    layout.invalidateLayout(for: layout.documentRange)
+    // With paragraphs skipped, TextKit's usage bounds stay at height 0 until the whole
+    // document is laid out, and the text view sizes itself from them: a probe run
+    // showed the view 943 pt tall over a viewport laid out to 1,219 pt, and what fell
+    // below its bottom stayed blank. Laid out first, so the view is its full height
+    // before the place is settled. Only what the folding shows is laid out, which in
+    // a mode that folds is a part of the document; with nothing folded, the background
+    // completion does it as after any change.
+    let laidOut = !hidden.isEmpty
+    if laidOut, let textView {
+      layout.ensureLayout(for: layout.documentRange)
+      #if !canImport(UIKit)
+        textView.sizeToFit()
+      #endif
+    }
+    knowsDocumentEnd = laidOut
+    putBack()
+    startCompletion(knowingEnd: laidOut)
+  }
+
+  /// The character the reader's line is on; nil at the top, above the text.
+  var placeOffset: Int? {
+    guard case .line(let anchor) = keeper.place else { return nil }
+    return anchor.characterOffset
   }
 
   func jump(toOffset offset: Int) {
@@ -167,8 +213,9 @@ final class ReaderLayoutEngine: PinSurface {
   /// above the place is laid out already, and the scroll view keeps the place where
   /// it is as the rest arrives. Paused through a live resize, whose every step
   /// re-wraps it, until the text view says the resize ended.
-  private func startCompletion() {
+  private func startCompletion(knowingEnd: Bool = false) {
     stop()
+    knowsDocumentEnd = knowingEnd
     planner = SlicePlanner(length: built?.text.length ?? 0)
     // An ID of its own, because several text views lay out at once: every window
     // and tab, and a force-click preview.
@@ -189,6 +236,7 @@ final class ReaderLayoutEngine: PinSurface {
           self.layOutSlice()
         }
       }
+      if self?.planner.isComplete == true { self?.knowsDocumentEnd = true }
       self?.endCompletionInterval()
     }
   }

@@ -93,4 +93,26 @@ struct TextLayoutOffsetTests {
 
     #expect(ranges == paragraphs)
   }
+
+  /// Whether a link is on a card, which decides its color (#694), asked of a
+  /// layout manager by location, as TextKit asks: on either side of every
+  /// decorated block's edges, across a whole document, the same answer as the
+  /// built text's.
+  @Test func `a location is on a card where its character is`() throws {
+    let text = try LayoutFixture.built().text
+    let fixture = LayoutFixture(text: text, width: 712)
+    var edges: [Int] = []
+    text.enumerateAttribute(.rfcDecoration, in: NSRange(location: 0, length: text.length)) {
+      value, range, _ in
+      guard value != nil else { return }
+      edges += [range.location - 1, range.location, NSMaxRange(range) - 1, NSMaxRange(range)]
+    }
+    #expect(edges.contains { FragmentGeometry.drawsCard(in: text, at: $0) })
+    for offset in edges where offset >= 0 && offset < text.length {
+      let location = try #require(fixture.layout.location(atOffset: offset))
+      #expect(
+        fixture.layout.drawsCard(at: location)
+          == FragmentGeometry.drawsCard(in: text, at: offset), "offset \(offset)")
+    }
+  }
 }

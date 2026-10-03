@@ -194,6 +194,16 @@ struct InlineLinker: Sendable {
       let raw = String(match.output).trimmingTrailingPunctuation()
       guard let url = URL(string: raw) else { continue }
       let end = text.index(match.range.lowerBound, offsetBy: raw.count)
+      // A URL into the RFC series cites the document it names, whichever site it points
+      // at, as an `<eref>` to one reads (#683); the words the prose spelled it in stay.
+      if let link = RFCLink(citing: url) {
+        let citation = CrossReference(
+          target: .document(link.id, section: link.section),
+          text: CrossReference.isCanonicalTag(raw, for: link.id) ? nil : raw)
+        candidates.append(
+          Candidate(range: match.range.lowerBound..<end, inline: .crossReference(citation)))
+        continue
+      }
       candidates.append(
         Candidate(range: match.range.lowerBound..<end, inline: .link(url, [.text(raw)])))
     }

@@ -26,12 +26,12 @@ struct StatusBanner: View {
         if metadata.isObsolete {
           row(
             "Obsoleted by", metadata.obsoletedBy, term: .obsoletes,
-            symbol: "exclamationmark.triangle.fill", tint: .red)
+            symbol: "exclamationmark.triangle.fill", tint: Self.color(of: .obsoleted))
         }
         if !metadata.updatedBy.isEmpty {
           row(
             "Updated by", metadata.updatedBy, term: .updates,
-            symbol: "arrow.triangle.2.circlepath", tint: .orange)
+            symbol: "arrow.triangle.2.circlepath", tint: Self.color(of: .updated))
         }
         if metadata.hasErrata, let url = metadata.errataURL {
           Link(destination: url) {
@@ -41,6 +41,7 @@ struct StatusBanner: View {
             }
           }
           .font(.subheadline)
+          .foregroundStyle(Self.link)
         }
         if !revisionLines.isEmpty {
           ForEach(revisionLines) { line in
@@ -63,7 +64,7 @@ struct StatusBanner: View {
   /// narrow banner wraps it as a sentence rather than squeezing three columns.
   private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
     let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
-    let title = Text(line.title).foregroundStyle(.tint)
+    let title = Text(line.title).foregroundStyle(Self.link)
     let detail = Text(line.detail).foregroundStyle(.secondary)
     return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -89,12 +90,21 @@ struct StatusBanner: View {
         ForEach(ids, id: \.self) { id in
           Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
             .buttonStyle(.plain)
-            .foregroundStyle(.tint)
+            .foregroundStyle(Self.link)
             .lineLimit(1)
         }
       }
     }
     .font(.subheadline)
+  }
+
+  /// The banner's links, in the reader's link color rather than the accent, which on
+  /// a Mac with a yellow or green accent was far below the minimum contrast (#317).
+  private static let link = Color(RFCColors.readerLink)
+
+  /// A row's symbol, in a color that clears 3:1 on the banner (#317).
+  private static func color(of symbol: AccentContrast.BannerSymbol) -> Color {
+    Color(appearanceDependent: symbol.colors.light, dark: symbol.colors.dark)
   }
 
   /// Hidden from accessibility: the row's text carries the meaning, as a `Label`'s
