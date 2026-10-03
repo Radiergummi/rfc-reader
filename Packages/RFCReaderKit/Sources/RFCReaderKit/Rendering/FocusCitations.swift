@@ -27,4 +27,15 @@ public enum FocusCitations {
     }
     return cited
   }
+
+  /// `groups` with only the entries `cited` names, and without a group left empty:
+  /// what the References tab lists in Focus.
+  public static func groups(_ groups: [ReferenceGroup], citing cited: Set<String>)
+    -> [ReferenceGroup]
+  {
+    groups.compactMap { group in
+      let entries = group.entries.filter { cited.contains($0.anchor) }
+      return entries.isEmpty ? nil : ReferenceGroup(title: group.title, entries: entries)
+    }
+  }
 }

@@ -29,6 +29,23 @@ final class ReaderState {
   /// The window's reading mode and the sections it has expanded in place (#698). The
   /// mode stays from one document to the next; what was expanded does not.
   var folding = Folding()
+  /// What folding needs of the document on screen, for Next and Previous Section.
+  var foldingIndex: FoldingIndex?
+  /// In Focus, the bibliography entries the focused section cites, which the
+  /// References tab lists alone (#699); nil out of Focus.
+  var focusCitations: Set<String>?
+
+  /// Next Section and Previous Section, in Focus (#699).
+  func stepFocus(_ step: Folding.FocusStep) {
+    guard let foldingIndex, let stepped = folding.focusing(step, in: foldingIndex) else { return }
+    folding = stepped
+  }
+
+  /// Whether Next or Previous Section has somewhere to go.
+  func canStepFocus(_ step: Folding.FocusStep) -> Bool {
+    guard let foldingIndex else { return false }
+    return folding.focusing(step, in: foldingIndex) != nil
+  }
   /// What the Info pane shows, derived once per document by `DocumentView` (#25).
   var info: DocumentInfo?
   /// Which pane the inspector shows: the document's navigation, or what is known
@@ -174,6 +191,9 @@ final class ReaderState {
     requirements = nil
     exportFormats = [.pdf]
     folding.expanded = []
+    folding.focused = nil
+    foldingIndex = nil
+    focusCitations = nil
     info = nil
     revealedReference = nil
     currentAnchor = nil

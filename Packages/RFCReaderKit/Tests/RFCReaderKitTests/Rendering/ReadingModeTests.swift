@@ -354,6 +354,17 @@ struct ReadingModeTests {
     #expect(cited.count < everything.count, "one section cites less than the whole document")
   }
 
+  /// The References tab in Focus: the cited entries, in their groups, and no group
+  /// left empty.
+  @Test func `the references are filtered to the cited entries`() throws {
+    let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
+    let first = try #require(groups.first?.entries.first)
+    let filtered = FocusCitations.groups(groups, citing: [first.anchor])
+    #expect(filtered.map(\.title) == [groups[0].title])
+    #expect(filtered[0].entries.map(\.anchor) == [first.anchor])
+    #expect(FocusCitations.groups(groups, citing: []).isEmpty)
+  }
+
   @Test func `the modes are named for the menu`() {
     #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus"])
   }

@@ -38,6 +38,8 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
+  /// The build the reader's folding index was made of (#699).
+  @State private var foldedIdentity: ObjectIdentifier?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
 
@@ -137,6 +139,28 @@ struct DocumentView: View {
   /// rebuilt the document and lost the reader's place. The split item avoids all of
   /// that by a different route: the reader's frame spans the panel, and the inset
   /// it reports is ignored in the representable.
+  /// The build on screen, by identity: a new one is a new folding index.
+  private var builtIdentity: ObjectIdentifier? {
+    session.state.built.map { ObjectIdentifier($0.text) }
+  }
+
+  /// The folding index of the build on screen, and in Focus the entries its section
+  /// cites. Only for the selected document, whose the reader state is.
+  private func updateFolding() {
+    guard navigation.selection == id, let built = session.state.built else { return }
+    if reader.foldingIndex == nil || builtIdentity != foldedIdentity {
+      reader.foldingIndex = FoldingIndex(built)
+      foldedIdentity = builtIdentity
+    }
+    guard reader.folding.mode == .focus, let index = reader.foldingIndex,
+      let anchor = reader.folding.focusedAnchor(in: index)
+    else {
+      reader.focusCitations = nil
+      return
+    }
+    reader.focusCitations = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+  }
+
   var body: some View {
     content
       .navigationTitle(id.displayName)
@@ -157,6 +181,9 @@ struct DocumentView: View {
       }
       // Into the window's reader state, for the panel beside the reader (#325):
       // how a load ends. `startLoad` says it began, after clearing that state.
+      // What folding needs of the build, and in Focus what its section cites (#699).
+      .onChange(of: builtIdentity, initial: true) { updateFolding() }
+      .onChange(of: reader.folding) { updateFolding() }
       .onChange(of: session.state.isLoading) { _, isLoading in
         reader.isLoading = isLoading
       }

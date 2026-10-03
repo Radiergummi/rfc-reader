@@ -191,7 +191,9 @@ struct PanelHost: View {
     if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
-        groups: reader.groups,
+        // In Focus, what the focused section cites, pinned beside it (#699).
+        groups: reader.focusCitations.map { FocusCitations.groups(reader.groups, citing: $0) }
+          ?? reader.groups,
         requirements: reader.requirements,
         info: reader.info,
         hasBody: reader.hasDocument,

@@ -129,6 +129,11 @@ public struct Folding: Sendable, Equatable {
     return Folding(focusingOn: target.anchor)
   }
 
+  /// The section Focus shows: the focused one, or the first where none is yet.
+  public func focusedAnchor(in index: FoldingIndex) -> String? {
+    focusedEntry(in: index)?.anchor
+  }
+
   /// The focused entry, or the first where nothing is focused yet.
   private func focusedEntry(in index: FoldingIndex) -> FoldingIndex.Entry? {
     index.entries.first { $0.anchor == focused } ?? index.entries.first

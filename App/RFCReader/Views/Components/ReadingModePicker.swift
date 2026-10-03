@@ -14,7 +14,9 @@ struct ReadingModePicker: View {
         get: { reader.folding.mode },
         set: { mode in
           guard mode != reader.folding.mode else { return }
-          reader.folding = Folding(mode: mode)
+          // Focus starts on the section being read.
+          reader.folding =
+            mode == .focus ? Folding(focusingOn: reader.currentAnchor) : Folding(mode: mode)
         })
     ) {
       ForEach(ReadingMode.allCases) { mode in
@@ -22,5 +24,19 @@ struct ReadingModePicker: View {
       }
     }
     .pickerStyle(.menu)
+  }
+}
+
+/// Next Section and Previous Section, which move the focus in Focus (#699).
+struct FocusSteps: View {
+  let reader: ReaderState
+
+  var body: some View {
+    if reader.folding.mode == .focus {
+      Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
+        .disabled(!reader.canStepFocus(.next))
+      Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
+        .disabled(!reader.canStepFocus(.previous))
+    }
   }
 }
