@@ -7,7 +7,8 @@ extension FragmentGeometry {
   /// open, it points down, at the section it shows.
   public static func disclosureChevron(open: Bool, firstLine: CGRect) -> [CGPoint] {
     let size = firstLine.height * 0.22
-    let center = CGPoint(x: firstLine.minX - size * 3, y: firstLine.midY)
+    // Close to the heading: an iPhone's gutter is barely wider than the chevron.
+    let center = CGPoint(x: firstLine.minX - size * 1.8, y: firstLine.midY)
     if open {
       return [
         CGPoint(x: center.x - size, y: center.y - size / 2),
