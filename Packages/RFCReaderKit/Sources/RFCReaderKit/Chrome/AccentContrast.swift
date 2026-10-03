@@ -26,10 +26,13 @@ public enum AccentContrast {
   /// The opacity of a chip's accent tint over `page`: ``chipTint`` where the link
   /// stays legible on it, and otherwise the largest, in steps of half a percent,
   /// that keeps it so. The link stays the link color. In light, macOS 27's blue,
-  /// purple, pink and red need less than 15%; in dark, yellow and green do.
+  /// purple, pink and red need less than 15%; in dark, yellow and green do. Where
+  /// the link fails on `page` itself, no tint can help, and the chip keeps
+  /// ``chipTint`` rather than disappearing.
   public static func chipTintOpacity(accent: SRGBColor, link: SRGBColor, page: SRGBColor)
     -> Double
   {
+    guard link.contrast(with: page) >= minimumContrast else { return chipTint }
     var opacity = chipTint
     while opacity > 0,
       link.contrast(with: accent.composited(opacity: opacity, over: page)) < minimumContrast

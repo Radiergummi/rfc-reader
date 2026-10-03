@@ -126,6 +126,18 @@ struct AccentContrastTests {
     #expect(opacity > 0)
   }
 
+  /// Where the link fails on what is behind the chip before any tint, as in a dark
+  /// aside on the Mac (#694), no tint can fix it, and the chip keeps its full tint
+  /// rather than disappearing.
+  @Test func `a chip keeps its tint where the link fails without one`() {
+    let aside = Self.color(0xFF_FFFF).composited(opacity: 0.12, over: Self.color(0x1E_1E1E))
+    let link = AccentContrast.readerLink.dark
+    #expect(link.contrast(with: aside) < AccentContrast.minimumContrast)
+    let opacity = AccentContrast.chipTintOpacity(
+      accent: Self.color(0x00_91FF), link: link, page: aside)
+    #expect(opacity == AccentContrast.chipTint)
+  }
+
   // MARK: - The reader's links
 
   @Test func `the reader's link clears the minimum on every page`() {
