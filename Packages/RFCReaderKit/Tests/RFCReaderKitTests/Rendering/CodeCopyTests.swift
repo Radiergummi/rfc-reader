@@ -70,6 +70,28 @@ struct CodeCopyTests {
     }
   #endif
 
+  /// `rfcfold` sets the header, and under `'\\'` each continuation's backslash, at
+  /// the first column whatever the code's indent, so the folded lines share less
+  /// indent than the unfolded ones.
+  private static let outdentedFolds = Preformatted(
+    kind: .sourceCode,
+    text: Fixtures.doubleBackslashFoldingHeader + "\n\n"
+      + "  {\"key\": \"a long \\\n\\value\"}\n  []",
+    type: "json")
+
+  @Test(arguments: [(CGFloat(4000), false), (CGFloat(120), true)])
+  func `a block folded further left than its code copies without the code's indent`(
+    measure: CGFloat, shownFolded: Bool
+  ) throws {
+    let copied = "{\"key\": \"a long value\"}\n[]"
+    let text = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Self.outdentedFolds)), style: ReadingStyle(measure: measure)
+    ).text
+    #expect(text.string.contains("line wrapping per RFC 8792") == shownFolded)
+    #expect(FigureCopy.pasteboardText(for: Self.outdentedFolds) == copied)
+    #expect(SelectionText.plainText(of: try Self.wholeBlock(of: text)) == copied + "\n")
+  }
+
   // MARK: - A block shown unfolded is not unfolded again
 
   /// The box says whether the text shown is still folded, and how: what a

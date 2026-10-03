@@ -277,13 +277,21 @@ extension DocumentTextBuilder {
   ///
   /// Source code also loses the indent all its lines share, which the XML of a
   /// converted RFC keeps from the text format, and which sat inside the card's
-  /// padding as a second margin. Artwork keeps it, as part of the drawing.
+  /// padding as a second margin. Artwork keeps it, as part of the drawing. Shown
+  /// folded, it loses the indent its unfolded lines share, not the folded ones':
+  /// `rfcfold` sets the header, and a `'\\'` continuation's backslash, at the first
+  /// column whatever the code's indent, and a selection unfolded over the block
+  /// would otherwise keep an indent its copy button does not.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    let shown = { (text: String) in Self.shown(text, kind: content.kind) }
-    guard let unfolded = FoldedLines.unfold(content.text).map(shown),
-      monospaceScale(for: unfolded, indent: indent) == 1
-    else { return shown(content.text) }
-    return unfolded
+    guard let unfolded = FoldedLines.unfold(content.text) else {
+      return Self.shown(content.text, kind: content.kind)
+    }
+    let shownUnfolded = Self.shown(unfolded, kind: content.kind)
+    if monospaceScale(for: shownUnfolded, indent: indent) == 1 { return shownUnfolded }
+    let folded = Self.expandingTabsTrimmingTabbedLines(content.text)
+    guard content.kind == .sourceCode else { return folded }
+    let unfoldedIndent = Self.sharedIndent(of: Self.expandingTabsTrimmingTabbedLines(unfolded))
+    return Self.removingIndent(unfoldedIndent, from: folded)
   }
 
   /// The block as copied, by Copy Figure and by a code block's copy button: what a
@@ -304,15 +312,24 @@ extension DocumentTextBuilder {
   /// `text` less the spaces every line with any text starts with; a line of white
   /// space alone loses as many of its own.
   static func removingSharedIndent(_ text: String) -> String {
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-    let shared =
-      lines
+    removingIndent(sharedIndent(of: text), from: text)
+  }
+
+  /// The number of spaces every line of `text` with any text starts with.
+  private static func sharedIndent(of text: String) -> Int {
+    text.split(separator: "\n", omittingEmptySubsequences: false)
       .filter { line in line.contains { $0 != " " } }
       .map { line in line.prefix { $0 == " " }.count }
       .min() ?? 0
-    guard shared > 0 else { return text }
+  }
+
+  /// `text` with up to `indent` leading spaces taken off each line: a line with
+  /// fewer loses all its own.
+  private static func removingIndent(_ indent: Int, from text: String) -> String {
+    guard indent > 0 else { return text }
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
     return lines.map { line in
-      String(line.dropFirst(min(shared, line.prefix { $0 == " " }.count)))
+      String(line.dropFirst(min(indent, line.prefix { $0 == " " }.count)))
     }
     .joined(separator: "\n")
   }
