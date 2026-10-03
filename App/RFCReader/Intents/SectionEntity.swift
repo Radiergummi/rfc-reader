@@ -27,7 +27,7 @@ nonisolated struct SectionEntity: AppEntity {
   @Property(title: "Document")
   var documentName: String
 
-  init(_ section: Section, in document: DocumentID) {
+  init(_ section: RFCKit.Section, in document: DocumentID) {
     id = SectionIdentifier(document: document, anchor: section.anchor).description
     self.document = document
     anchor = section.anchor

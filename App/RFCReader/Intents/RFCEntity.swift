@@ -67,7 +67,7 @@ nonisolated struct RFCEntityQuery: EntityStringQuery {
   func suggestedEntities() async throws -> [RFCEntity] {
     guard let search = await LibraryModel.shared.settledSearch() else { return [] }
     let read = await LibraryModel.shared.recentlyRead()
-    return read.lazy.compactMap { search.index[$0] }.prefix(Self.suggestionCount)
+    return Array(read.lazy.compactMap { search.index[$0] }.prefix(Self.suggestionCount))
       .map(RFCEntity.init)
   }
 }

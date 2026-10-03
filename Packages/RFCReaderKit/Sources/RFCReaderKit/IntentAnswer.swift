@@ -30,7 +30,10 @@ public enum IntentAnswer {
 /// Something asked of the reader showing one document, which that reader takes once
 /// it can (#192): an App Intent's request to show a tab beside it, made before the
 /// document has loaded, or before a tab has taken the link at all.
-public struct DocumentRequest<Value: Equatable & Sendable>: Equatable, Sendable {
+///
+/// Not bound to `Sendable`: what is asked may be an app type, such as a tab, whose
+/// conformances are the main actor's, and the request never leaves it.
+public struct DocumentRequest<Value: Equatable>: Equatable {
   public let id: DocumentID
   public let value: Value
 
@@ -47,3 +50,5 @@ public struct DocumentRequest<Value: Equatable & Sendable>: Equatable, Sendable 
     return asked.value
   }
 }
+
+extension DocumentRequest: Sendable where Value: Sendable {}
