@@ -444,15 +444,15 @@ $(OVERRIDES_CHECK)/%.txt:
 # text, which a patch on the output cannot do. A snapshot is the converter's output
 # frozen, so a converter change can leave it stale without anything failing. This
 # reruns every script against the current converter and compares. Not part of
-# `check`: it needs the source text, fetched here when it is missing, and Python
-# 3.9 or later. Informational: it reports a stale snapshot and does not fail, and
-# the script's new output is not committed, because it would be a fresh snapshot of
-# RFC text (#243).
-corpus-override-scripts-check: corpus-tool
-	@for script in $(CORPUS)/overrides/rfc*.py; do \
-	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
-	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
-	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
+# `check`: it needs the source text, fetched when it is missing into the overrides
+# check's directory, out of a corpus run's way, and Python 3.9 or later.
+# Informational: it reports a stale snapshot and does not fail, and the script's new
+# output is not committed, because it would be a fresh snapshot of RFC text (#243).
+SCRIPTED := $(basename $(notdir $(wildcard $(CORPUS)/overrides/rfc*.py)))
+
+corpus-override-scripts-check: corpus-tool $(SCRIPTED:%=$(OVERRIDES_CHECK)/%.txt)
+	@for stem in $(SCRIPTED); do \
+	  script=$(CORPUS)/overrides/$$stem.py; source=$(OVERRIDES_CHECK)/$$stem.txt; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- frozen, not regenerated"; fi; rm -f "$$out"; \
