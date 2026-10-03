@@ -171,6 +171,12 @@ public struct Lexer: Highlighter {
   }
 
   public func tokens(in text: String) -> [SyntaxToken] {
+    lex(text).tokens
+  }
+
+  /// `text`'s tokens, and how many UTF-16 code units the lexer handed its regular
+  /// expressions to search: the work lexing does, which the tests bound.
+  func lex(_ text: String) -> (tokens: [SyntaxToken], searched: Int) {
     let source = NSString(string: text)
     let length = source.length
     var output = TokenRun()
@@ -178,14 +184,16 @@ public struct Lexer: Highlighter {
     var position = 0
     var recovering = false
     var emptySteps = 0
+    var searched = 0
     if !root.changesState {
-      return Self.tokens(in: text, length: length, state: root)
+      return (Self.tokens(in: text, length: length, state: root), length)
     }
     while position < length {
       let state = states[stack[stack.count - 1]] ?? root
       let match = state.expression.firstMatch(
         in: text, options: Self.matching,
         range: NSRange(location: position, length: length - position))
+      searched += length
       let found = match?.range.location ?? length
       if found > position {
         // No rule matched these: plain. Inside a state, the state has lost its
@@ -236,7 +244,7 @@ public struct Lexer: Highlighter {
         recovering = false
       }
     }
-    return output.tokens
+    return (output.tokens, searched)
   }
 
   /// A state no rule leaves, lexed in one pass: what lies between two matches is

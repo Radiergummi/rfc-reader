@@ -108,6 +108,25 @@ struct LexerTests {
     #expect(tokens.kind(of: "b", in: text) == .keyword)
   }
 
+  /// However far a match or a lookahead reaches, it is what a search of the whole
+  /// text finds, though the engine may search less of it at a time.
+  @Test func `a long match and a far lookahead are found whole`() throws {
+    let states: [String: [Lexer.Rule]] = [
+      "root": [
+        Lexer.Rule("a(?=[^;]*+;)", .keyword), Lexer.Rule("[a-z]++", .name),
+        Lexer.Rule("<", .punctuation, .push("tag")),
+      ],
+      "tag": [Lexer.Rule("[a-z]++", .string), Lexer.Rule(">", .punctuation, .pop(1))],
+    ]
+    let long = String(repeating: "b", count: 10_000)
+    let text = "<" + long + ">a" + String(repeating: " ", count: 5_000) + "; a"
+    let tokens = try lexer(states).tokens(in: text)
+    #expect(tokens.cover(text))
+    #expect(tokens.text(of: .string, in: text) == [long])
+    #expect(tokens.text(of: .keyword, in: text) == ["a"])
+    #expect(tokens.text(of: .name, in: text) == ["a"])
+  }
+
   @Test func `a caret matches only at the start of a line`() throws {
     let states: [String: [Lexer.Rule]] = [
       "root": [
