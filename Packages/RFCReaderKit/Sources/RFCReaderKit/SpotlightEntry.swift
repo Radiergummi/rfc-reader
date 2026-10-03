@@ -28,10 +28,8 @@ public struct SpotlightEntry: Sendable {
     identifier = id.fileStem
     title = "\(id.displayName): \(metadata.title)"
     var description = metadata.abstract ?? ""
-    if metadata.isObsolete {
-      let successors = metadata.obsoletedBy.map(\.displayName).joined(separator: ", ")
-      description = "Obsoleted by \(successors). \(description)"
-        .trimmingCharacters(in: .whitespaces)
+    if let note = metadata.obsoletionNote {
+      description = "\(note). \(description)".trimmingCharacters(in: .whitespaces)
     }
     self.description = description
     keywords =

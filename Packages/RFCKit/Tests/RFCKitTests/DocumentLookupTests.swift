@@ -48,7 +48,8 @@ struct DocumentLookupTests {
   /// without the ones the index has not got.
   @Test func `identifiers name RFCs in the order given`() throws {
     let index = try Fixtures.sampleIndex()
-    let found = DocumentLookup.rfcs(identifiedBy: ["rfc9110", "rfc1", "RFC2119", "rfc1149"], in: index)
+    let found = DocumentLookup.rfcs(
+      identifiedBy: ["rfc9110", "rfc1", "RFC2119", "rfc1149"], in: index)
     #expect(found.map(\.number) == [9110, 1149])
   }
 }

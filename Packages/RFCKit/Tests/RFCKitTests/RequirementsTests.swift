@@ -228,11 +228,11 @@ struct RequirementsTests {
     let all = Requirements.extract(from: document)
     let section = try #require(document.section(number: "6.1"))
     let within = Requirements.within(section, all)
+    // Told apart by number here, not by anchor as `within` does, and in document
+    // order, as the whole list has them.
+    #expect(within == all.filter { $0.sectionNumber?.hasPrefix("6.1.") == true })
     #expect(
-      Set(within.compactMap(\.sectionNumber))
-        == ["6.1.1", "6.1.1.1", "6.1.1.2.1", "6.1.2", "6.1.2.1", "6.1.3", "6.1.4", "6.1.4.1", "6.1.4.2"])
-    // In document order, as the whole list has them.
-    #expect(within == all.filter(within.contains))
+      Set(within.compactMap(\.sectionNumber)).isSuperset(of: ["6.1.1", "6.1.1.2.1", "6.1.4.2"]))
     let parent = try #require(document.section(number: "6"))
     #expect(Requirements.within(parent, all).contains { $0.sectionNumber == "6" })
     #expect(!Requirements.within(section, all).contains { $0.sectionNumber == "6" })
