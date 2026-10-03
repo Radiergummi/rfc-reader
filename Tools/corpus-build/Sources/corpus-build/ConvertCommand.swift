@@ -182,7 +182,7 @@ struct ConvertCommand: AsyncParsableCommand {
     Self.logger.info(
       "done",
       metadata: [
-        "converted": "\(reports.count(where: { $0.skipped == nil }))",
+        "converted": "\(reports.count(where: { $0.skipped == nil && $0.failure == nil }))",
         "skipped": "\(reports.count(where: { $0.skipped != nil }))",
         "patched": "\(reports.count(where: { $0.override == .patch && $0.failure == nil }))",
         "snapshots": "\(reports.count(where: { $0.override == .snapshot }))",

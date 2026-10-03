@@ -213,12 +213,15 @@ public struct XMLPatch: Sendable {
 
     switch operation.kind {
     case .remove:
-      if target.kind == .attribute, let name = target.name {
-        (target.parent as? XMLElement)?.removeAttribute(forName: name)
-      } else if target.kind == .element, target.parent is XMLDocument {
+      switch target.kind {
+      case .attribute:
+        if let name = target.name { (target.parent as? XMLElement)?.removeAttribute(forName: name) }
+      case .element where target.parent is XMLDocument:
         throw Malformed(message: "the root element cannot be removed")
-      } else {
+      case .element, .text:
         target.detach()
+      default:
+        throw Malformed(message: "only an element, an attribute or a text node is removed")
       }
 
     case .replace:

@@ -146,6 +146,8 @@ struct XMLPatchTests {
     "<replace sel=\"/rfc/@category\"><t>No.</t></replace>",
     "<replace sel=\"//section[@pn='section-7']\">text</replace>",
     "<add sel=\"/rfc/@category\"><t>No.</t></add>",
+    // The document node: detaching it would do nothing without a word said.
+    "<remove sel=\"/\"/>",
   ])
   func `a target that does not suit the operation fails`(operation: String) throws {
     let failure = try Self.failure(operation)

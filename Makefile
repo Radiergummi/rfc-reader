@@ -392,7 +392,7 @@ corpus-fetch-xml: corpus-tool
 # fails the step once the new report is written. That report is the next run's
 # baseline, so rerunning passes: read the documents it names first. A patch that
 # fails fails the step too, after every document is converted; the overrides check
-# before it stops a broken patch in seconds rather than twenty minutes.
+# before it stops a broken patch before the corpus is converted at all.
 corpus-convert: corpus-overrides-check $(CORPUS)/rfc-index.xml
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \

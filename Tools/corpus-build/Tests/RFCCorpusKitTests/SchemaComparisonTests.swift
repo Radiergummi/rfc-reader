@@ -69,6 +69,18 @@ struct SchemaComparisonTests {
     #expect(comparison.startedValidating == 0)
   }
 
+  /// A document whose patch failed has no XML to check either (#197). The run fails on
+  /// its patch already, and listing it as a regression too would send its reader to
+  /// the schema for what is the patch's.
+  @Test func `a document whose patch failed is no regression`() throws {
+    var reports = try Self.reports(["rfc5": []])
+    reports[0].schema = nil
+    reports[0].override = .patch
+    reports[0].failure = "rfc5.xml, operation 1 (remove /rfc/@category): matched 0 nodes"
+    let comparison = SchemaComparison(reports: reports, previouslyValid: ["rfc5"])
+    #expect(!comparison.isRegression)
+  }
+
   @Test func `regressions are listed in report order`() throws {
     let comparison = SchemaComparison(
       reports: try Self.reports([
