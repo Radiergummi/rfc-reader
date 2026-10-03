@@ -33,26 +33,32 @@ struct OpenRFCIntent: OpenIntent {
 }
 
 /// Opens a section of an RFC (#192), chosen from the document's contents.
-struct OpenSectionIntent: OpenIntent {
+///
+/// Not an `OpenIntent`, which may require no parameter but its target: Siri asks
+/// for no optional one, and without the RFC there are no sections to offer, so
+/// "Open a section of an RFC" could not be finished by voice. Opening a Spotlight
+/// result that is a section is #178's, with the passages it indexes.
+struct OpenSectionIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Section"
   static let description = IntentDescription("Opens a section of an RFC.")
   static let openAppWhenRun = true
 
-  /// The sections offered are this RFC's (`SectionEntityQuery`). Optional: a
-  /// section handed over already names its RFC, and opens without one.
-  @Parameter(title: "RFC", default: nil)
-  var document: RFCEntity?
+  /// Asked for first: the sections offered are this RFC's (`SectionEntityQuery`).
+  @Parameter(title: "RFC")
+  var document: RFCEntity
 
   @Parameter(title: "Section")
-  var target: SectionEntity
+  var section: SectionEntity
 
   static var parameterSummary: some ParameterSummary {
-    Summary("Open \(\.$target) of \(\.$document)")
+    Summary("Open \(\.$section) of \(\.$document)")
   }
 
   @MainActor
   func perform() async throws -> some IntentResult {
-    LibraryModel.shared.route(target.link)
+    // The section's own link, which names its RFC: one a shortcut handed over from
+    // another RFC opens where it is.
+    LibraryModel.shared.route(section.link)
     return .result()
   }
 }
