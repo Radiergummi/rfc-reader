@@ -97,6 +97,36 @@ struct ReadingModeTests {
     #expect(Folding(mode: .normal).expanding(toShow: inside, in: built).expanded.isEmpty)
   }
 
+  /// Every heading in the outline has a disclosure, open where its section is
+  /// expanded; Normal has none.
+  @Test func `every heading has a disclosure in the outline`() throws {
+    let built = try Self.rfc8999()
+    let section = built.anchors.sections.entries[2]
+    let disclosures = Folding(mode: .outline, expanded: [section.anchor]).disclosures(in: built)
+    let headings = Self.headingParagraphs(of: built)
+    #expect(Set(disclosures.keys) == headings)
+    let open = disclosures.filter(\.value).keys
+    #expect(Array(open) == [section.offset])
+    #expect(Folding(mode: .normal).disclosures(in: built).isEmpty)
+  }
+
+  /// A click on a heading opens its section, and a second closes it.
+  @Test func `a heading toggles its section`() throws {
+    let built = try Self.rfc8999()
+    let section = built.anchors.sections.entries[2]
+    let opened = Folding(mode: .outline).toggling(heading: section.offset + 2, in: built)
+    #expect(opened?.expanded == [section.anchor])
+    #expect(opened?.toggling(heading: section.offset, in: built)?.expanded == [])
+    // Body text is no heading; nor is anything in Normal.
+    let headings = Self.headingParagraphs(of: built)
+    let body = try #require(
+      Self.paragraphs(of: built).first {
+        !headings.contains($0.location) && $0.location > section.offset
+      })
+    #expect(Folding(mode: .outline).toggling(heading: body.location, in: built) == nil)
+    #expect(Folding(mode: .normal).toggling(heading: section.offset, in: built) == nil)
+  }
+
   @Test func `the modes are named for the menu`() {
     #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline"])
   }
