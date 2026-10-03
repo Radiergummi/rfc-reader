@@ -35,9 +35,13 @@ struct FocusSteps: View {
     // Not over the original text, which nothing folds: there is no folding index
     // then, so nowhere to step (`DocumentView.updateFolding`).
     if reader.folding.mode == .focus {
+      // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
+      // its paragraphs' ends, and leave the two together alone.
       Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
+        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
         .disabled(!reader.canStepFocus(.next))
       Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
+        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
         .disabled(!reader.canStepFocus(.previous))
     }
   }
