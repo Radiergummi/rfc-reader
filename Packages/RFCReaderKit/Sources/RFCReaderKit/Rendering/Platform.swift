@@ -93,6 +93,22 @@ public enum RFCColors {
     #endif
   }
 
+  /// `light` in light appearance and `dark` in dark, drawn as exactly those sRGB
+  /// values and resolved when drawn: for colors whose contrast is measured.
+  public static func byAppearance(light: SRGBColor, dark: SRGBColor) -> PlatformColor {
+    #if canImport(UIKit)
+      UIColor { traits in
+        let color = traits.userInterfaceStyle == .dark ? dark : light
+        return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1)
+      }
+    #else
+      NSColor(name: nil) { appearance in
+        let color = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        return NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+      }
+    #endif
+  }
+
   /// The rule beside a quote or aside: a line, not a fill. macOS's
   /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
   /// the rule used to draw in, which left a rule this thin close to invisible;

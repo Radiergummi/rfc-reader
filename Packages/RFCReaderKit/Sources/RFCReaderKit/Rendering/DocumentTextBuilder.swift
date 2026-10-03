@@ -29,7 +29,6 @@ public final class DocumentTextBuilder {
   /// The scheme of a heading's backlink caption (#183), naming the section: a click
   /// lists the sections that refer to it rather than going anywhere.
   public static let backlinksScheme = "rfc-backlinks"
-
   /// The style the *current* region is emitted in. A `var` because a region can be
   /// set quieter than the body around it — see `emitting(in:color:)`.
   private(set) var style: ReadingStyle
@@ -422,10 +421,13 @@ extension DocumentTextBuilder {
     tabStops: [NSTextTab]? = nil,
     wraps: Bool = true,
     alignment: NSTextAlignment = .natural,
-    lineHeightMultiple: CGFloat? = nil
+    lineHeightMultiple: CGFloat? = nil,
+    trailingIndent: CGFloat = 0
   ) -> NSParagraphStyle {
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = alignment
+    // Negative: measured in from the container's trailing edge.
+    paragraph.tailIndent = -trailingIndent
     paragraph.firstLineHeadIndent = firstLineIndent ?? indent
     paragraph.headIndent = indent
     paragraph.paragraphSpacingBefore = spacingBefore

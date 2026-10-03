@@ -153,13 +153,14 @@ is that way, and what was measured or tried first.
 - [The reader lays out its viewport, and holds the reader's line](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)
 - [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
 - [On iOS, a diagram is said by a pronunciation in the text](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)
+- [Syntax highlighting is one regex lexer engine](decisions/2026-10-02-syntax-highlighting-is-one-regex-lexer-engine.md)
 - [Overrides are RFC 5261 patches on the converter's output](decisions/2026-10-03-overrides-are-rfc-5261-patches.md)
 - [A cited heading has a backlink caption under it](decisions/2026-10-03-a-cited-heading-has-a-backlink-caption-under-it.md)
 
 ## Planned engines
 
 - **Search.** As [the search decision](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md) says, served from SQLite FTS5 (via GRDB), with snippets from `snippet()`. Metadata search moves into the same database.
-- **Highlighting.** A tokenizer per language (ABNF, JSON, HTTP messages, YANG, ASN.1, C-like) in RFCKit producing `[Token]` with kinds; the renderer maps kinds to colors. Heuristic language detection for legacy text (`rulename = ` lines → ABNF).
+- **Highlighting.** Built for JSON, XML and HTTP messages on one regex lexer engine in RFCKit (`Lexer`, `Lexers`), [as decided](decisions/2026-10-02-syntax-highlighting-is-one-regex-lexer-engine.md); further languages are rule tables on it. ABNF's rule links come from the strict `ABNF` parser instead (#185), and untyped blocks are not guessed at.
 - **Diff.** Section alignment by title similarity and position, LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
 - **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.
 

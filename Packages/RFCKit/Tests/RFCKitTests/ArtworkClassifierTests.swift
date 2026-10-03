@@ -38,6 +38,18 @@ struct ArtworkClassifierTests {
     #expect(ArtworkType.canonical("CBORdiag")?.name == "cbor-diag")
   }
 
+  @Test(arguments: [
+    ("application/problem+json", "json"), ("sdf+json", "json"), ("application/atom+xml", "xml"),
+  ])
+  func `a structured suffix is read from the type`(declared: String, suffix: String) {
+    #expect(ArtworkType.canonical(declared)?.suffix == suffix)
+  }
+
+  @Test(arguments: ["json", "cbor-diag", "message/http", "a+"])
+  func `a type without a suffix has none`(declared: String) {
+    #expect(ArtworkType.canonical(declared)?.suffix == nil)
+  }
+
   @Test func `untyped packet art is classified as a packet`() {
     #expect(classify(Preformatted(kind: .artwork, text: Self.packet)) == "packet")
     #expect(

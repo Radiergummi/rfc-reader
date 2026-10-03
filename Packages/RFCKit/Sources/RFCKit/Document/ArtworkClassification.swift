@@ -44,6 +44,15 @@ public struct ArtworkType: Sendable, Hashable {
     }
     return ArtworkType(name: aliases[name] ?? name, parameters: parameters)
   }
+
+  /// The structured syntax suffix of a media type (RFC 6838, Section 4.2.8): `json`
+  /// in `application/problem+json`, and in the RPC's types that borrow the
+  /// convention, `sdf+json`. Nil where there is none.
+  public var suffix: String? {
+    guard let plus = name.lastIndex(of: "+") else { return nil }
+    let suffix = name[name.index(after: plus)...]
+    return suffix.isEmpty ? nil : String(suffix)
+  }
 }
 
 /// Reviewed verdicts on the types of authored artwork, keyed by the RFC and the
