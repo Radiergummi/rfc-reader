@@ -1,7 +1,8 @@
 import Foundation
-import RFCCorpusKit
 import RFCKit
 import Testing
+
+@testable import RFCCorpusKit
 
 /// `DocumentConverter` with a patch: the same call a corpus run, `--only` and these
 /// tests make (#197). Over committed fixtures, so no RFC text is added.
@@ -87,38 +88,37 @@ struct PatchedConversionTests {
     #expect(failure.contains("vanishing"), "\(failure)")
   }
 
+  /// An operation writing undoes is measured against the document written again,
+  /// not against the converter's bytes: where those are not a fixed point of parsing
+  /// and writing, they differ from any written XML, and the undone operation would
+  /// pass. No converted fixture is such a document (each round-trips, as above), so
+  /// one is made of RFC 2119's by a space the writer does not keep.
+  @Test func `an operation that writing undoes fails on a document that does not round-trip`()
+    throws
+  {
+    let converted = try #require(
+      DocumentConverter().convert(
+        text: try Fixtures.text("rfc2119.txt"), stem: "rfc2119", metadata: nil
+      ).xml)
+    let text = String(decoding: converted, as: UTF8.self)
+    let xml = Data(text.replacingOccurrences(of: "<rfc ", with: "<rfc  ").utf8)
+    let serializer = RFCXMLSerializer()
+    #expect(Data(serializer.serialize(try RFCXMLParser.parse(xml)).utf8) != xml)
+    let patch = try XMLPatch(
+      parsing: Data("<diff><remove sel=\"/rfc/@version\"/></diff>".utf8), name: "rfc2119.xml")
+    do {
+      _ = try DocumentConverter.apply(patch, to: xml, serializer: serializer)
+      Issue.record("an operation writing undoes was applied")
+    } catch {
+      #expect(
+        error.message
+          == "rfc2119.xml, operation 1 (remove /rfc/@version): it changes nothing the model holds")
+    }
+  }
+
   @Test func `an unpatched document reports no override`() throws {
     let conversion = DocumentConverter().convert(
       text: try Fixtures.text("rfc2119.txt"), stem: "rfc2119", metadata: nil)
     #expect(conversion.report.override == nil)
-  }
-}
-
-/// A patch on a document whose output is not a fixed point of parsing and writing,
-/// which no committed fixture is: each of them round-trips, as the suite above pins.
-@Suite("Corpus-backed: converting with a patch", .enabled(if: CorpusText.isAvailable))
-struct CorpusBackedPatchedConversionTests {
-  /// RFC 7322 is one of the documents of #686, whose XML written again is not the
-  /// converter's. An operation writing undoes must be measured against the document
-  /// written again, not against the converter's bytes, which writing again changes
-  /// with or without the patch. Once #686 is fixed RFC 7322 round-trips, and this
-  /// test says no more than the fixtures' do.
-  @Test func `an operation that writing undoes fails on a document that does not round-trip`()
-    throws
-  {
-    let text = try CorpusText.text("rfc7322")
-    let unpatched = DocumentConverter().convert(text: text, stem: "rfc7322", metadata: nil)
-    #expect(
-      unpatched.report.warnings.contains { $0.contains("round trip") },
-      "RFC 7322 round-trips (#686), so this shows nothing the fixtures do not")
-    let patch = try XMLPatch(
-      parsing: Data("<diff><remove sel=\"/rfc/@version\"/></diff>".utf8), name: "rfc7322.xml")
-    let patched = DocumentConverter().convert(
-      text: text, stem: "rfc7322", metadata: nil, patch: patch)
-    #expect(patched.xml == nil)
-    #expect(
-      patched.report.failure
-        == "rfc7322.xml, operation 1 (remove /rfc/@version): it changes nothing the model holds",
-      "\(patched.report.failure ?? "")")
   }
 }
