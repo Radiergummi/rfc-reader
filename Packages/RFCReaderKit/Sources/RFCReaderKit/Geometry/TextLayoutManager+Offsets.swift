@@ -23,6 +23,13 @@ extension NSTextLayoutManager {
     offset(from: documentRange.location, to: location)
   }
 
+  /// Whether the character at `location` belongs to a block drawn as a card,
+  /// whose links take the card's link color (#694).
+  public func drawsCard(at location: any NSTextLocation) -> Bool {
+    guard let attributedText else { return false }
+    return FragmentGeometry.drawsCard(in: attributedText, at: offset(of: location))
+  }
+
   /// The inverse: the location `offset` characters into the document.
   public func location(atOffset offset: Int) -> (any NSTextLocation)? {
     location(documentRange.location, offsetBy: offset)

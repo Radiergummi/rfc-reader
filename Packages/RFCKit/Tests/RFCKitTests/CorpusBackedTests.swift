@@ -373,6 +373,63 @@ struct CorpusBackedReferencesSectionTests {
         return paragraph.plainText.hasPrefix("The priority field")
       })
   }
+
+  private static func holdsList(_ section: Section) -> Bool {
+    section.blocks.contains(where: holdsEntries)
+  }
+
+  /// A plain references title is a bibliography whatever the parser makes of it: RFC
+  /// 1716's and 2315's read as one entry each, beside text before it.
+  @Test func `a plain references title stays a bibliography`() throws {
+    for (stem, number) in [("rfc1716", "11"), ("rfc2315", "2")] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let section = try #require(document.section(number: number), "\(stem)")
+      #expect(Self.holdsList(section), "\(stem) \(number)")
+    }
+  }
+
+  /// A section that only mentions references is not a bibliography: RFC 7322's
+  /// advice on writing one, RFC 4511's continuation references, RFC 3275's example
+  /// with references in parentheses. Each was read as one, its text taken for an
+  /// entry's and its subsections lost in the XML (#686).
+  @Test func `a section that mentions references keeps its text`() throws {
+    for (stem, number) in [("rfc7322", "4.8.6"), ("rfc4511", "4.5.3"), ("rfc3275", "2.1")] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let section = try #require(document.section(number: number), "\(stem)")
+      #expect(!Self.holdsList(section), "\(stem) \(number)")
+      #expect(
+        section.blocks.contains { if case .paragraph = $0 { true } else { false } },
+        "\(stem) \(number) has no prose")
+      #expect(!section.subsections.isEmpty, "\(stem) \(number) lost its subsections")
+    }
+  }
+
+  /// A bibliography adopts no section that is not one: RFC 2814's appendix has no
+  /// heading of its own, so its `A.1` was numbered under `9. References`, and RFC
+  /// 2639 numbers its authors' addresses under its references (#686).
+  @Test func `a bibliography holds no section that is not one`() throws {
+    for stem in ["rfc1195", "rfc2639", "rfc2814"] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let bibliographies = document.allSections.filter(Self.holdsList)
+      #expect(!bibliographies.isEmpty, "\(stem) has no bibliography")
+      for bibliography in bibliographies {
+        #expect(
+          bibliography.subsections.allSatisfy(RFCXMLSerializer.isReferences),
+          "\(stem) \(bibliography.anchor)")
+      }
+    }
+  }
+
+  /// What the app reads is what it would write (#683), for the documents whose
+  /// bibliographies held what `<references>` cannot (#686).
+  @Test func `the documents a misread bibliography broke survive a round trip`() throws {
+    let serializer = RFCXMLSerializer()
+    for stem in ["rfc1195", "rfc2639", "rfc2814", "rfc3075", "rfc3275", "rfc4511", "rfc7322"] {
+      let xml = serializer.serialize(LegacyTextParser.parse(try CorpusText.text(stem)))
+      let again = serializer.serialize(try RFCXMLParser.parse(Data(xml.utf8)))
+      #expect(again == xml, "\(stem)")
+    }
+  }
 }
 
 @Suite("Corpus-backed: body layouts", .enabled(if: CorpusText.isAvailable))

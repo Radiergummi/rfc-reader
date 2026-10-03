@@ -594,7 +594,7 @@
         return
       }
       let panel = NSSavePanel()
-      let chooser = ExportFormatChooser(panel: panel, document: id)
+      let chooser = ExportFormatChooser(panel: panel, document: id, offered: reader.exportFormats)
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true

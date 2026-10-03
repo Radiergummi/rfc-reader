@@ -65,10 +65,10 @@ final class RFCTextViewCoordinator: NSObject {
     didSet {
       engine.textView = textView
       #if canImport(UIKit)
-        // UIKit's are a link color only, the tint as it was when asked; the dynamic
-        // tint follows the view's as UIKit's own link coloring does.
+        // The reader's link color, which `makeUIView` sets in place of the system
+        // tint (#317).
         let attributes = LinkAttributes(
-          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
+          attributes: textView?.linkTextAttributes ?? [:], caption: [:])
       #else
         setUpHover()
         // A backlink caption opens a list beside it, as a control does, under the
@@ -89,13 +89,20 @@ final class RFCTextViewCoordinator: NSObject {
   /// may ask off the main thread.
   nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
-  /// A text view's link attributes, and what a backlink caption is drawn with on
-  /// top of them, handed across threads. `@unchecked Sendable` because the
-  /// dictionaries are made once and never written to, and their values, colors and
-  /// cursors, are only read to draw.
+  /// A text view's link attributes, the same for a link on a card (#694), and what
+  /// a backlink caption is drawn with on top of them, handed across threads.
+  /// `@unchecked Sendable` because the dictionaries are made once and never written
+  /// to, and their values, colors and cursors, are only read to draw.
   nonisolated struct LinkAttributes: @unchecked Sendable {
     let attributes: [NSAttributedString.Key: Any]
+    let card: [NSAttributedString.Key: Any]
     let caption: [NSAttributedString.Key: Any]
+
+    init(attributes: [NSAttributedString.Key: Any], caption: [NSAttributedString.Key: Any]) {
+      self.attributes = attributes
+      self.card = DocumentTextBuilder.cardLinkAttributes(attributes)
+      self.caption = caption
+    }
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -214,6 +221,18 @@ final class RFCTextViewCoordinator: NSObject {
   var lastReportedAnchor: String?
   /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
   let engine = ReaderLayoutEngine()
+  /// Skips the paragraphs the reading mode folds; the content storage's delegate.
+  let foldingDelegate = FoldingDelegate()
+  /// The reading mode and expanded sections last applied (#698).
+  var folding = Folding()
+  /// What folding needs of the installed build, made once per build.
+  var foldingIndex: FoldingIndex?
+  /// A folding this coordinator changed itself and reported to the scene, which has
+  /// not caught up yet: the one before, which the scene may still pass, and the one
+  /// after, which it will.
+  var reportedFolding: (before: Folding, after: Folding)?
+  /// Tells the scene that a jump into folded text expanded a section.
+  var onFoldingChange: (Folding) -> Void = { _ in }
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
@@ -311,6 +330,9 @@ final class RFCTextViewCoordinator: NSObject {
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
     // A section of an entry outside the series previews the entry (#473).
     case .anchor(let anchor), .entrySection(let anchor, _, _, _):
+      if let definition = built?.grammar.definition(of: anchor) {
+        return ReferencePreview(reference: reference, library: library, definition: definition)
+      }
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
@@ -506,8 +528,19 @@ final class RFCTextViewCoordinator: NSObject {
       if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-      if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
-        return
+      // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
+      // opens or closes its section (#698); a link in a heading is followed first.
+      if folding.mode == .outline {
+        if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
+          let offset = characterOffset(atContainerPoint: gutter),
+          toggleSection(atHeading: offset)
+        {
+          return
+        }
+      }
+      if let offset = characterOffset(atContainerPoint: containerPoint) {
+        if link(at: offset) != nil { return }
+        if folding.mode == .outline, toggleSection(atHeading: offset) { return }
       }
       chrome.tapped()
       reportChrome()
@@ -663,8 +696,9 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   // TextKit 2's background-layout design permits this delegate to be called off
   // the main thread; `nonisolated` keeps the conformance honest about that rather
   // than binding it to the main actor, which approachable concurrency would infer
-  // for a main-actor type. The body only reads its parameters and
-  // allocates, so it needs no isolation.
+  // for a main-actor type. The bodies read their parameters, the storage as the
+  // fragments do while they lay out, and a locked copy of the text view's link
+  // attributes, so they need no isolation.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     textLayoutFragmentFor location: any NSTextLocation,
@@ -674,8 +708,9 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   }
 
   /// Every link as the text view draws it, over the storage's color, but a
-  /// heading's backlink caption, which keeps the caption's (#584). Not
-  /// `renderingAttributes`, which are TextKit's and not the text view's.
+  /// heading's backlink caption, which keeps the caption's (#584), and a link on a
+  /// card, which takes the card's link color (#694). Not `renderingAttributes`,
+  /// which are TextKit's and not the text view's.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     renderingAttributesForLink link: Any,
@@ -684,6 +719,8 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
     return DocumentTextBuilder.linkRenderingAttributes(
-      for: link, defaults: textView.attributes, caption: textView.caption)
+      for: link,
+      defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
+      caption: textView.caption)
   }
 }

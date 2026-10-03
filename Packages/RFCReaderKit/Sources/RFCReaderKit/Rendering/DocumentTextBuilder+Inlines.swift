@@ -104,7 +104,7 @@ extension DocumentTextBuilder {
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
   /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
   /// the link color with the underline, since nothing else colors it there.
-  private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+  func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }
       return [
@@ -266,6 +266,18 @@ extension DocumentTextBuilder {
     }
   }
 
+  /// A text view's link attributes, `defaults`, for a link on a card: in
+  /// `RFCColors.cardLink`, since the text view's color may fall below the minimum
+  /// contrast on a card's fill in dark (#694). Made once, with the text view's.
+  public static func cardLinkAttributes(
+    _ defaults: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any] {
+    var attributes = defaults
+    attributes[.foregroundColor] = RFCColors.cardLink(
+      over: defaults[.foregroundColor] as? PlatformColor ?? RFCColors.link)
+    return attributes
+  }
+
   /// The attributes a text view draws the link `link` with, given its own
   /// `defaults`: a text view colors every link itself, over the storage's color,
   /// which a backlink caption has to keep to stay in the background. The caption
@@ -273,7 +285,7 @@ extension DocumentTextBuilder {
   /// pointing hand, since it opens a list beside it as a control does. Passed in
   /// rather than made here, because a cursor is AppKit's to make on the main
   /// thread and TextKit may ask from another. Every other link is drawn as the
-  /// text view would.
+  /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
     caption: [NSAttributedString.Key: Any] = [:]

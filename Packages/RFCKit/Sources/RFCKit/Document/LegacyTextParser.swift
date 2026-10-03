@@ -572,7 +572,14 @@ public enum LegacyTextParser {
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
           return
         }
-        lists[index] = Self.parseReferences(sections[index].blocks)
+        let blocks = sections[index].blocks
+        let entries = Self.parseReferences(blocks)
+        guard
+          Self.isBibliography(
+            title: heading.title, entries: entries.count,
+            blocksBefore: Self.blocksBeforeFirstEntry(blocks).count)
+        else { return }
+        lists[index] = entries
       },
       reserved: Self.reservedAnchors(Self.sectionAnchorCandidates(sections))
     )

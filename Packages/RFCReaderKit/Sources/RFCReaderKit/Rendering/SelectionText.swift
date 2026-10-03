@@ -38,7 +38,11 @@ public enum SelectionText {
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
-      guard let box = value as? ReferenceBox else {
+      // A rule link in a grammar is the grammar's own text (#185): a block is copied
+      // as it is set.
+      let isVerbatim =
+        attributed.attribute(.rfcVerbatim, at: range.location, effectiveRange: nil) != nil
+      guard let box = value as? ReferenceBox, !isVerbatim else {
         // A table cell's line break is set as a line separator, to keep its row
         // one paragraph (#506); on the pasteboard it is the newline it stands for.
         let run = attributed.attributedSubstring(from: range)

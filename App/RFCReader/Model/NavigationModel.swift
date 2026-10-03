@@ -173,6 +173,11 @@ final class NavigationModel: Identifiable {
       }
     }
   }
+  /// The document the history holds, shown or not. A collapsed split view that has
+  /// gone back to its list hides the document and still holds it, so a link to it
+  /// belongs in this tab: routing reads this, not `selection` (#256).
+  var heldDocument: DocumentID? { history.current?.id }
+
   private(set) var scrollRequest: ScrollRequest? {
     didSet {
       // A jump waited on is done once the reader has recorded it, which replaces
