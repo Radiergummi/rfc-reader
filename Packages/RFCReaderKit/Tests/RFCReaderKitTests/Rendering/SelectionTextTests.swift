@@ -109,6 +109,84 @@ struct SelectionTextTests {
     #expect(SelectionText.plainText(of: NSAttributedString(string: "")) == "")
   }
 
+  // MARK: - A block shown folded (#212)
+
+  /// A JSON block in RFC 8792's shape, folded once, in a column too narrow to show
+  /// it unfolded, so the storage holds it as published.
+  private static let folded = Preformatted(
+    kind: .sourceCode,
+    text:
+      "=============== NOTE: '\\' line wrapping per RFC 8792 ================\n\n{\"key\": \"a long \\\n      value\"}",
+    type: "json")
+
+  private static func narrowBuild() -> NSAttributedString {
+    DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "Before the figure.")), .preformatted(folded)),
+      style: ReadingStyle(measure: 120)
+    ).text
+  }
+
+  private static func selection(
+    from start: String, through end: String, in text: NSAttributedString
+  )
+    throws -> NSAttributedString
+  {
+    let from = try Fixtures.offset(of: start, in: text)
+    let to = try Fixtures.offset(of: end, in: text) + (end as NSString).length
+    return text.attributedSubstring(from: NSRange(location: from, length: to - from))
+  }
+
+  @Test func `a block too wide for the column is stored folded`() {
+    #expect(Self.narrowBuild().string.contains(Self.folded.text))
+  }
+
+  /// What Copy Figure gives, whatever the window's width.
+  @Test func `a whole folded block is copied unfolded`() throws {
+    let text = Self.narrowBuild()
+    let selection = try Self.selection(from: "====", through: "value\"}", in: text)
+    #expect(SelectionText.plainText(of: selection) == Self.folded.unfoldedText)
+  }
+
+  @Test func `a selection across a fold is copied with the fold undone`() throws {
+    let text = Self.narrowBuild()
+    let selection = try Self.selection(from: "long", through: "value", in: text)
+    #expect(SelectionText.plainText(of: selection) == "long value")
+  }
+
+  /// The prose before a figure is copied as it is, and the figure unfolded after it.
+  @Test func `prose and a folded block are copied together`() throws {
+    let text = Self.narrowBuild()
+    let selection = try Self.selection(from: "Before", through: "value\"}", in: text)
+    #expect(
+      SelectionText.plainText(of: selection)
+        == "Before the figure.\nJSON\n" + Self.folded.unfoldedText)
+  }
+
+  /// On a published RFC: RFC 9985's YANG example in a column too narrow to show it
+  /// unfolded copies as Copy Figure does.
+  @Test func `rfc9985's folded block copies as Copy Figure does`() throws {
+    let built = DocumentTextBuilder.build(
+      try Fixtures.document(named: "rfc9985.xml"), style: ReadingStyle(measure: 300))
+    let text = built.text
+    let locator = try Fixtures.offset(of: "xmlns:bfd-mki=", in: text)
+    var run = NSRange(location: 0, length: 0)
+    let box = try #require(
+      text.attribute(
+        .rfcVerbatim, at: locator, longestEffectiveRange: &run,
+        in: NSRange(location: 0, length: text.length)) as? VerbatimBox)
+    let string = text.string as NSString
+    let header = string.range(of: "NOTE:", range: run)
+    try #require(header.location != NSNotFound, "the block is stored folded")
+    let start = string.lineRange(for: header).location
+    let selection = text.attributedSubstring(
+      from: NSRange(location: start, length: NSMaxRange(run) - start))
+    // The storage ends every block with a newline; the block's own text may not.
+    let figure = FigureCopy.pasteboardText(for: box.content)
+    #expect(
+      SelectionText.plainText(of: selection) == (figure.hasSuffix("\n") ? figure : figure + "\n"))
+  }
+
   #if !canImport(UIKit) && canImport(AppKit)
     /// `NSTextView` asks for each flavor by its legacy name, which never equals the
     /// modern constant: a copy that switched on `.string` alone rewrote nothing.
