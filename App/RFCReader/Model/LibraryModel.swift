@@ -825,7 +825,7 @@ final class LibraryModel {
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     let preferred = preferredScene
-    switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
+    switch sceneRegistry.route(link, showing: \.heldDocument, preferring: { $0 === preferred }) {
     case .deliver(let delivery):
       carryOut(delivery)
     case .openWindow:

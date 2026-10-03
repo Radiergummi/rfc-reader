@@ -15,7 +15,18 @@ enum DocumentExport {
   ) async throws -> Data {
     switch format {
     case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
+    case .abnf: try await grammar(of: id, library: library)
     }
+  }
+
+  /// The document's collected grammar (#185), offered only for a document that has
+  /// one (`ReaderState.exportFormats`).
+  private static func grammar(of id: DocumentID, library: LibraryModel) async throws -> Data {
+    let document = try await library.document(for: id)
+    guard let text = GrammarExport.text(for: document) else {
+      throw CocoaError(.fileWriteUnknown)
+    }
+    return Data(text.utf8)
   }
 }
 

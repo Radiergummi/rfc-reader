@@ -217,6 +217,9 @@ struct ReaderInputs {
       // ends the range. A long press on a chip lifts exactly that range (#431).
       textView.textDragInteraction?.isEnabled = false
       textView.backgroundColor = .clear
+      // The system tint is 3.52:1 on a white page; the reader's link color clears
+      // the minimum contrast in both appearances, on the page and on a chip (#317).
+      textView.linkTextAttributes = [.foregroundColor: RFCColors.readerLink]
       textView.alwaysBounceVertical = true
       // `.never`: the insets for the bars the reader runs under are set by hand, in
       // `ReaderTextView.safeAreaInsetsDidChange`, which keeps the place when they

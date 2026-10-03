@@ -59,24 +59,55 @@ public struct DecoratedText: Equatable, Sendable {
   }
 }
 
+/// A block set as its own text, with places in it that are anchors and runs of it
+/// that are links (#185). Nothing visual: find, selection, copy and VoiceOver read
+/// the block as they do unlinked. Ranges are UTF-16, relative to the block's text.
+public struct LinkedText: Equatable, Sendable {
+  /// A place another link can go to, such as a rule's definition.
+  public struct Definition: Equatable, Sendable {
+    public var range: NSRange
+    public var anchor: String
+  }
+
+  /// A run that goes somewhere, as a cross reference does.
+  public struct Link: Equatable, Sendable {
+    public var range: NSRange
+    public var target: CrossReference.Target
+  }
+
+  public var definitions: [Definition]
+  public var links: [Link]
+
+  public init(definitions: [Definition], links: [Link]) {
+    self.definitions = definitions
+    self.links = links
+  }
+}
+
 /// What a presentation makes of a block. Drawings join as a case when a renderer
 /// first needs them.
 public enum Rendition: Equatable, Sendable {
   case decorated(DecoratedText)
+  case linked(LinkedText)
   /// Code highlighted: the block's own text, unchanged, and the tokens a lexer read
   /// in it, colored by the reader's theme. Ranges are UTF-16, relative to the text
   /// lexed.
   case styled([SyntaxToken])
 }
 
-/// What a presentation may measure against.
+/// What a presentation may measure against, and what the document's blocks gave
+/// before any of them was set.
 public struct RenderContext: Sendable {
   public let style: ReadingStyle
   /// What the measure leaves after the block's indent.
   public let column: CGFloat
+  /// The rules the document's grammar blocks define, collected over all of them
+  /// (#185).
+  public let grammar: DocumentGrammar
 
-  public init(style: ReadingStyle, column: CGFloat) {
+  public init(style: ReadingStyle, column: CGFloat, grammar: DocumentGrammar = DocumentGrammar()) {
     self.style = style
     self.column = column
+    self.grammar = grammar
   }
 }

@@ -16,12 +16,16 @@
     private(set) var format: ExportFormat
     private let panel: NSSavePanel
     private let popUp = NSPopUpButton()
+    /// The formats this document can be saved as (#185).
+    private let offered: [ExportFormat]
 
-    init(panel: NSSavePanel, document: DocumentID) {
+    init(panel: NSSavePanel, document: DocumentID, offered: [ExportFormat]) {
       self.panel = panel
-      format = ExportFormat(remembered: UserDefaults.standard.string(forKey: Self.rememberedKey))
-      popUp.addItems(withTitles: ExportFormat.allCases.map(\.name))
-      popUp.selectItem(at: ExportFormat.allCases.firstIndex(of: format) ?? 0)
+      self.offered = offered
+      format = ExportFormat(
+        remembered: UserDefaults.standard.string(forKey: Self.rememberedKey), offered: offered)
+      popUp.addItems(withTitles: offered.map(\.name))
+      popUp.selectItem(at: offered.firstIndex(of: format) ?? 0)
       let label = NSTextField(labelWithString: "Format:")
       let row = NSStackView(views: [label, popUp])
       row.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
@@ -37,7 +41,7 @@
     }
 
     @objc private func choose() {
-      format = ExportFormat.allCases[popUp.indexOfSelectedItem]
+      format = offered[popUp.indexOfSelectedItem]
       UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
       panel.allowedContentTypes = [format.contentType]
       panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)

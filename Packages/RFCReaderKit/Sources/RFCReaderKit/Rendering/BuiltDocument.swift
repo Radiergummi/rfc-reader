@@ -37,15 +37,19 @@ public struct BuiltDocument: @unchecked Sendable {
   /// Which sections refer to each section, as the headings' captions count them;
   /// empty in a build with no live links, which has no captions.
   public let backlinks: [String: [Backlink]]
+  /// The rules the document's grammar blocks define, for what a rule link previews
+  /// (#185).
+  public let grammar: DocumentGrammar
 
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
-    backlinks: [String: [Backlink]] = [:]
+    backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar()
   ) {
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext
     self.backlinks = backlinks
+    self.grammar = grammar
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the

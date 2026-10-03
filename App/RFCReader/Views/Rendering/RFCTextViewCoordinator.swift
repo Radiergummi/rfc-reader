@@ -65,10 +65,10 @@ final class RFCTextViewCoordinator: NSObject {
     didSet {
       engine.textView = textView
       #if canImport(UIKit)
-        // UIKit's are a link color only, the tint as it was when asked; the dynamic
-        // tint follows the view's as UIKit's own link coloring does.
+        // The reader's link color, which `makeUIView` sets in place of the system
+        // tint (#317).
         let attributes = LinkAttributes(
-          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
+          attributes: textView?.linkTextAttributes ?? [:], caption: [:])
       #else
         setUpHover()
         // A backlink caption opens a list beside it, as a control does, under the
@@ -311,6 +311,9 @@ final class RFCTextViewCoordinator: NSObject {
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
     // A section of an entry outside the series previews the entry (#473).
     case .anchor(let anchor), .entrySection(let anchor, _, _, _):
+      if let definition = built?.grammar.definition(of: anchor) {
+        return ReferencePreview(reference: reference, library: library, definition: definition)
+      }
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }

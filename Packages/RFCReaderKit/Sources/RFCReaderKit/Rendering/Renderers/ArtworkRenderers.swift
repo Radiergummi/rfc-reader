@@ -36,6 +36,7 @@ public struct RendererEntry: Sendable {
 enum ArtworkRenderers {
   static let entries: [RendererEntry] = [
     PacketPresentation.entry,
+    ABNFPresentation.entry,
     SyntaxPresentation.entry,
   ]
 

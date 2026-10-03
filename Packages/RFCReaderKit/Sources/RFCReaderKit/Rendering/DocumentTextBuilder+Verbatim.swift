@@ -26,13 +26,14 @@ extension DocumentTextBuilder {
     let text = displayedText(of: content, indent: fittedIndent)
     let scale = monospaceScale(for: text, indent: fittedIndent)
     let context = RenderContext(
-      style: style, column: max(style.indentStep, style.measure - fittedIndent))
+      style: style, column: max(style.indentStep, style.measure - fittedIndent), grammar: grammar)
     var shownContent = content
     shownContent.text = text
     let rendered = ArtworkRenderers.render(shownContent, classification, context: context)
-    // Tokens are a function of the text alone, so a highlighted block follows the
-    // text shown, unfolded (#64) or not. A decoration's ranges are into the grid of
-    // the block as written, so a block shown other than as written is not decorated.
+    // Tokens and a grammar's links are a function of the text alone, so they follow
+    // the text shown, unfolded (#64) or not. A decoration's ranges are into the grid
+    // of the block as written, so a block shown other than as written is not
+    // decorated.
     let rendition: Rendition? =
       switch rendered {
       case .decorated? where text != content.text: nil
@@ -41,13 +42,16 @@ extension DocumentTextBuilder {
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     // Code is highlighted whatever the choices say: it has no other presentation, and
-    // "Draw diagrams" and "Show as Text" are about drawings.
+    // "Draw diagrams" and "Show as Text" are about drawings. A grammar's links change
+    // nothing that is drawn, so it is plain, with no presentation to switch, and its
+    // links and anchors are there whatever the reader prefers for figures (#185).
     let shown: VerbatimBox.Shown =
       switch rendition {
-      case nil: .plain
+      case nil, .linked?: .plain
       case .styled?: .highlighted
       case .decorated?: showsSource ? .source : .rendered
       }
+    let linked: LinkedText? = if case .linked(let linked)? = rendition { linked } else { nil }
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
     let box = VerbatimBox(
@@ -90,6 +94,9 @@ extension DocumentTextBuilder {
       ])
     if let decorated {
       decorate(decorated, from: bodyStart)
+    }
+    if let linked {
+      link(linked, from: bodyStart)
     }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
@@ -166,6 +173,28 @@ extension DocumentTextBuilder {
     #endif
     line.append(NSAttributedString(string: "\n", attributes: attributes))
     output.append(line)
+  }
+
+  /// Sets a linked block's anchors and links (#185): a rule's definition is an anchor
+  /// in the index, a use is a cross reference to it. Attributes only, and no chip: the
+  /// text and its layout are the block's.
+  func link(_ linked: LinkedText, from bodyStart: Int) {
+    for definition in linked.definitions where definedRules.insert(definition.anchor).inserted {
+      entries.append(
+        AnchorIndex.Entry(
+          anchor: definition.anchor, offset: bodyStart + definition.range.location, heading: nil,
+          place: nil))
+    }
+    for link in linked.links {
+      let reference = CrossReference(target: link.target)
+      var attributes: [NSAttributedString.Key: Any] = [.rfcReference: ReferenceBox(reference)]
+      if let url = url(for: reference) {
+        attributes.merge(linkAttributes(url)) { _, link in link }
+      }
+      output.addAttributes(
+        attributes,
+        range: NSRange(location: bodyStart + link.range.location, length: link.range.length))
+    }
   }
 
   /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in

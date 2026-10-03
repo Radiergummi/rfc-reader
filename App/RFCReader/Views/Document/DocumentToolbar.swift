@@ -115,7 +115,7 @@ import SwiftUI
           perform: perform)
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
-          ForEach(ExportFormat.allCases) { format in
+          ForEach(reader.exportFormats) { format in
             Button(format.name) { exportDocument(format) }
           }
         }
