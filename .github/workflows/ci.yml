@@ -120,14 +120,25 @@ jobs:
         # The release the Makefile pins, checked against its SHA-256 (#165), into
         # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
         run: make xcodegen-install
-      # The newest cache any earlier run saved: entries are keyed on their inputs,
-      # so a stale one is never used, only not hit.
+      # The store is restored and saved whole, so every save is the last one plus
+      # what this build added, and it only grows: 577 MB when measured (#103). The
+      # month in the key starts it afresh each month (#214). Until the month's first
+      # push to main has saved a store, every run, pull requests included, finds
+      # none to restore and compiles cold.
+      - name: Name the cache's month
+        id: cache-month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # The newest cache any earlier run saved this month: entries are keyed on
+      # their inputs, so a stale one is never used, only not hit.
+      # The path is Xcode's default for COMPILATION_CACHE_CAS_PATH, under the default
+      # DerivedData. A -derivedDataPath in the Makefile's builds moves the store, and
+      # every restore would then miss without saying so (#214).
       - name: Restore the compilation cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode-compilation-cache-${{ github.sha }}
-          restore-keys: xcode-compilation-cache-
+          key: xcode-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
+          restore-keys: xcode-compilation-cache-${{ steps.cache-month.outputs.month }}-
       # Compiling is the point, so both builds go unsigned: the runner has no
       # certificate for the team project.yml names.
       - name: Build for macOS
@@ -141,7 +152,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode-compilation-cache-${{ github.sha }}
+          key: xcode-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
 
   app-build-xcode-27:
     name: App build (Xcode 27, preview)
@@ -162,13 +173,17 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_27.app && xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
+      # A month to a store, as in the job above.
+      - name: Name the cache's month
+        id: cache-month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       # Its own kind, so neither Xcode's cache is pruned for the other's.
       - name: Restore the compilation cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode27-compilation-cache-${{ github.sha }}
-          restore-keys: xcode27-compilation-cache-
+          key: xcode27-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
+          restore-keys: xcode27-compilation-cache-${{ steps.cache-month.outputs.month }}-
       - name: Build for macOS
         run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
@@ -178,7 +193,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode27-compilation-cache-${{ github.sha }}
+          key: xcode27-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
 
   rfckit-linux:
     name: RFCKit tests (Linux)
@@ -212,6 +227,10 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
+      # SQLite's headers, for corpus-build's index database (#174): the image has
+      # the library but not them.
+      - name: Install SQLite's headers
+        run: apt-get update -qq && apt-get install -y -qq libsqlite3-dev >/dev/null
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
       - name: Save the SwiftPM builds

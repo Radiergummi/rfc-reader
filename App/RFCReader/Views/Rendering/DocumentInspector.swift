@@ -2,7 +2,8 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-enum InspectorTab: CaseIterable {
+/// Named by its raw value in a tab's `SceneSnapshot`, so a case keeps its name.
+enum InspectorTab: String, CaseIterable {
   case contents
   case references
   /// Every BCP 14 requirement the document states (#180).
