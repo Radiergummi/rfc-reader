@@ -10,6 +10,7 @@ on:
     paths:
       - Packages/RFCKit/**
       - Tools/corpus-build/**
+      - corpus/overrides/**
       - Makefile
       - .github/workflows/corpus-tests.yml
   schedule:

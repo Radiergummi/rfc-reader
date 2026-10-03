@@ -322,14 +322,16 @@ extension LegacyTextParser {
     return result
   }
 
-  /// Each entry of a catalog or of a hanging-indent list, its term as it stands and
-  /// its text as a paragraph.
-  private static func definitionItems(
+  /// Each entry of a catalog or of a hanging-indent list, its term and its text as a
+  /// paragraph, both linked: a term cites a document as prose does (`RFC 2119:`), and
+  /// the XML parser links it when it reads the conversion back (#683).
+  static func definitionItems(
     _ entries: [(term: String, text: String)], linker: InlineLinker
   ) -> [DefinitionItem] {
     entries.map { entry in
       DefinitionItem(
-        term: [.text(entry.term)], definition: [.paragraph(Paragraph(linker.link(entry.text)))])
+        term: linker.link(entry.term),
+        definition: [.paragraph(Paragraph(linker.link(entry.text)))])
     }
   }
 

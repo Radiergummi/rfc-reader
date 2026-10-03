@@ -34,7 +34,7 @@ public enum SelectionText {
   public static func plainText(of selection: NSAttributedString, unfolding: Bool = true)
     -> String
   {
-    let attributed = withoutBacklinkChips(of: selection)
+    let attributed = withoutBacklinkCaptions(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -76,20 +76,23 @@ public enum SelectionText {
     return result
   }
 
-  /// A heading's backlink chip counts what refers to the section (#183): the
-  /// reader's, not the document's words, so a copied heading is the heading alone,
-  /// in the rich flavors as in the plain one.
-  public static func withoutBacklinkChips(of selection: NSAttributedString) -> NSAttributedString {
-    var chips: [NSRange] = []
+  /// A heading's backlink caption counts what refers to the section (#183, #584):
+  /// the reader's, not the document's words, so a copied heading is the heading
+  /// alone, in the rich flavors as in the plain one, with no line where the
+  /// caption was.
+  public static func withoutBacklinkCaptions(of selection: NSAttributedString)
+    -> NSAttributedString
+  {
+    var captions: [NSRange] = []
     selection.enumerateAttribute(
       .rfcBacklinks, in: NSRange(location: 0, length: selection.length)
     ) { value, range, _ in
-      if value != nil { chips.append(range) }
+      if value != nil { captions.append(range) }
     }
-    guard !chips.isEmpty else { return selection }
+    guard !captions.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
-    for chip in chips.reversed() {
-      result.deleteCharacters(in: chip)
+    for caption in captions.reversed() {
+      result.deleteCharacters(in: caption)
     }
     return result
   }

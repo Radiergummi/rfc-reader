@@ -192,4 +192,34 @@ struct RFCLinkTests {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url)?.section == section)
   }
+
+  /// What a citation can say of a URL: the document, or one of its sections. A page
+  /// about the document, or an anchor that names no section, is a link (#683).
+  @Test(arguments: [
+    ("https://www.rfc-editor.org/rfc/rfc4321", RFCLink(id: .rfc(4321))),
+    ("http://www.rfc-editor.org/info/rfc4321", RFCLink(id: .rfc(4321))),
+    (
+      "https://www.rfc-editor.org/rfc/rfc4321.html#section-4.2",
+      RFCLink(id: .rfc(4321), section: "4.2")
+    ),
+    ("https://datatracker.ietf.org/doc/html/rfc4321", RFCLink(id: .rfc(4321))),
+  ])
+  func `a URL to a document or its section can be cited`(address: String, expected: RFCLink)
+    throws
+  {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(citing: url) == expected)
+  }
+
+  @Test(arguments: [
+    "https://www.rfc-editor.org/errata/rfc4321",
+    "https://datatracker.ietf.org/doc/rfc4321/history/",
+    "https://www.rfc-editor.org/rfc/rfc4321.html#name-example-flows",
+  ])
+  func `a URL to a page about a document, or to an anchor, cannot be cited`(address: String)
+    throws
+  {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(citing: url) == nil)
+  }
 }

@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import Synchronization
 
 #if canImport(UIKit)
   import UIKit
@@ -63,11 +64,38 @@ final class RFCTextViewCoordinator: NSObject {
   weak var textView: PlatformTextView? {
     didSet {
       engine.textView = textView
-      #if !canImport(UIKit)
+      #if canImport(UIKit)
+        // UIKit's are a link color only, the tint as it was when asked; the dynamic
+        // tint follows the view's as UIKit's own link coloring does.
+        let attributes = LinkAttributes(
+          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
+      #else
         setUpHover()
+        // A backlink caption opens a list beside it, as a control does, under the
+        // ordinary pointer rather than a link's pointing hand. Made here, on the
+        // main thread, where AppKit makes cursors.
+        let attributes = LinkAttributes(
+          attributes: textView?.linkTextAttributes ?? [:], caption: [.cursor: NSCursor.arrow])
       #endif
+      linkAttributes.withLock { $0 = attributes }
       setUpAccessibilityRotors()
     }
+  }
+
+  /// The text view's own link attributes, taken when it is handed over, after it is
+  /// configured. A layout manager whose delegate answers for a link's rendering
+  /// stops reading them and starts from TextKit's (link-colored and underlined), so
+  /// the delegate starts from these instead (#584). Behind a lock because TextKit
+  /// may ask off the main thread.
+  nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
+
+  /// A text view's link attributes, and what a backlink caption is drawn with on
+  /// top of them, handed across threads. `@unchecked Sendable` because the
+  /// dictionaries are made once and never written to, and their values, colors and
+  /// cursors, are only read to draw.
+  nonisolated struct LinkAttributes: @unchecked Sendable {
+    let attributes: [NSAttributedString.Key: Any]
+    let caption: [NSAttributedString.Key: Any]
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -308,8 +336,8 @@ final class RFCTextViewCoordinator: NSObject {
       // action UIKit opens the menu on a tap, and that took the tap from the bars.
       if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: offset) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: offset) != nil {
         return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
           self?.showBacklinks(at: offset)
         }
@@ -337,9 +365,9 @@ final class RFCTextViewCoordinator: NSObject {
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
       if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
-      // A backlink chip's link is ours alone, and nothing in the default menu —
+      // A backlink caption's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
-      if backlinkChip(at: textItem.range.location) != nil { return nil }
+      if backlinkCaption(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let environment, let documentID,
@@ -537,8 +565,8 @@ final class RFCTextViewCoordinator: NSObject {
       let box = textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box
       let effects = hover.send(.clickedLink(reference: box, pointer: NSEvent.mouseLocation))
       guard !effects.contains(.swallowClick) else { return true }
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: charIndex) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: charIndex) != nil {
         showBacklinks(at: charIndex)
         return true
       }
@@ -558,9 +586,9 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink chip's link is ours alone, and Copy Link would copy a URL
+      // A backlink caption's link is ours alone, and Copy Link would copy a URL
       // nothing else can open; the rest of the menu stays.
-      if backlinkChip(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
+      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
       return menu
     }
 
@@ -643,5 +671,19 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
     RFCTextLayoutFragment.make(for: textElement)
+  }
+
+  /// Every link as the text view draws it, over the storage's color, but a
+  /// heading's backlink caption, which keeps the caption's (#584). Not
+  /// `renderingAttributes`, which are TextKit's and not the text view's.
+  nonisolated func textLayoutManager(
+    _ textLayoutManager: NSTextLayoutManager,
+    renderingAttributesForLink link: Any,
+    at location: any NSTextLocation,
+    defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any]? {
+    let textView = linkAttributes.withLock { $0 }
+    return DocumentTextBuilder.linkRenderingAttributes(
+      for: link, defaults: textView.attributes, caption: textView.caption)
   }
 }
