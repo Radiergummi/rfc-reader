@@ -144,6 +144,23 @@ struct CommandLineTests {
     #expect(try FileManager.default.contentsOfDirectory(atPath: out.path) == ["rfc1149.xml"])
   }
 
+  /// A snapshot that is XML but not a document the model reads fails its document as a
+  /// failed patch does: no output, not even an earlier run's, the rest of the run
+  /// converted, and the run failing at its end, naming the file.
+  @Test func `a snapshot that does not parse fails its document only`() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    try Data("stale".utf8).write(to: out.appending(path: "rfc2119.xml"))
+
+    let result = try Self.convert(
+      only: ["2119", "1149"], into: out, override: "<section><t>x</t></section>")
+    #expect(result.status == 1)
+    #expect(result.standardError.contains("rfc2119.xml"), "\(result.standardError)")
+    #expect(result.standardError.contains("<section>"), "\(result.standardError)")
+    #expect(try FileManager.default.contentsOfDirectory(atPath: out.path) == ["rfc1149.xml"])
+  }
+
   /// `--out` is where both files go; without it there is nowhere to write, and
   /// nothing may be fetched first.
   @Test func `revisions requires out`() throws {
