@@ -149,10 +149,12 @@
       applyMinimumWidth()
     }
 
-    /// Shuts the panel at once, unanimated.
+    /// Shuts the panel at once, unanimated, and puts the window's floor back where it
+    /// is with the panel shut.
     func closePanel() {
       guard isPanelOpen else { return }
       panelItem.isCollapsed = true
+      applyMinimumWidth()
     }
 
     // MARK: - The window's width
