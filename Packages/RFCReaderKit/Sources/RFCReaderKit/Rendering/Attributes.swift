@@ -216,7 +216,7 @@ extension VerbatimBox {
 
 /// Boxes a decorated block's strokes, for the reason `VerbatimBox` boxes its block:
 /// one instance per block, so the attribute's extent is the block.
-public final class StrokeBox: Sendable {
+public final class StrokeBox: NSObject, Sendable {
   public let strokes: [Stroke]
   public init(_ strokes: [Stroke]) { self.strokes = strokes }
 }
@@ -228,15 +228,15 @@ public final class ReferenceBox: NSObject, Sendable {
 }
 
 extension NSAttributedString {
-  /// The whole extent of the boxed value — a `VerbatimBox` or `ReferenceBox` — at
+  /// The whole extent of the boxed value — a `VerbatimBox`, `ReferenceBox` or `StrokeBox` — at
   /// `location`: every character around it carrying that same instance. Nil where
   /// there is no value, or no character.
   ///
   /// The extent is the attribute's run, not the storage run: a chip is three
-  /// storage runs, and `effectiveRange` names only one. The boxes are `NSObject`s
-  /// that leave `isEqual(_:)` as it is, identity, so `longestEffectiveRange` joins
-  /// one box's runs and keeps two boxes apart even when their contents are equal
-  /// (`BoxExtentTests`).
+  /// storage runs, and `effectiveRange` names only one. Every box, `StrokeBox` too,
+  /// is an `NSObject` that leaves `isEqual(_:)` as it is, identity, so
+  /// `longestEffectiveRange` joins one box's runs and keeps two boxes apart even when
+  /// their contents are equal (`BoxExtentTests`).
   ///
   /// The cheap single-run lookup answers "no box" first, which is most characters;
   /// the extent is only walked out on a hit.
