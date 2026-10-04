@@ -22,30 +22,41 @@ Three pull requests, stacked on #752 (`string-catalogs`), bottom first:
 
 A plain `String` shown to the user becomes `String(localized: "…")`: the toolbar (`Window/ReaderToolbar.swift`: item labels, palette labels, `accessibilityDescription`), `InfoView.swift`, the figure menus (`RFCTextViewCoordinator+FigureMenu.swift`, `+Figures.swift`, `+CopyCode.swift`), `ReaderTextView.swift`, `DeveloperCommands.swift`, and the `String` fields of the App Intents and their entities. A `comment:` is added only where the key alone is ambiguous.
 
-### RFCReaderKit's models carry `LocalizedStringResource`
+### RFCReaderKit's models resolve in a locale they are given
 
-Text that RFCReaderKit hands to a renderer becomes `LocalizedStringResource("…", bundle: .module)` rather than a resolved `String`:
+RFCReaderKit's models keep their `String` fields. A model that has words in it takes a `locale: Locale = .interface` and resolves them through one helper:
 
-- `DocumentMenus.Item.title`, the names in `Glossary` and `DocumentInfo`;
-- `WorkingGroupSummary`'s kind, area and state names, and its link titles;
-- `RevisionsSummary`'s labels.
+```swift
+extension String {
+  /// `key` from RFCReaderKit's catalog, in `locale`'s language.
+  init(kit key: String.LocalizationValue, locale: Locale) {
+    var resource = LocalizedStringResource(key, bundle: .atURL(Bundle.module.bundleURL))
+    resource.locale = locale
+    self.init(localized: resource)
+  }
+}
+```
 
-The renderers resolve them where they show them: SwiftUI with `Text(resource)` (`MenuSections`), AppKit and UIKit with `String(localized: resource)`.
+That covers `DocumentMenus` (its item titles), `Glossary`, `DocumentInfo`, `WorkingGroupSummary` (type and state names, link titles, the publications line), `RevisionsSummary` and `BookmarkNotice`. Text that is data stays as given beside the words: a collection's name, a group's area from datatracker, a citation style's name.
 
-Why not resolve to `String` when the model is built: which language a lookup returns follows the preferred languages of the process, so on a Mac set to German the tests' English expectations would fail, and no test could deliberately check German. A resource can be resolved in a pinned language.
+A resource's `locale` decides which language the lookup returns (measured: `de` resolves the German, `en` the English, whatever the process prefers). So tests pass `Locale(identifier: "en")` and keep their English expectations on a Mac whose first language is German, and a test can resolve German on purpose.
 
-`LocalizedStringResource` is `Equatable` and `Codable` but not `Hashable`, so `Item` keeps its `Hashable` conformance with a `hash(into:)` over the resource's key; equality stays synthesized.
+Considered and dropped: models holding `LocalizedStringResource` for the renderer to resolve. They mix words with data — a menu item's title is a collection's name or a word — so every such field would need a type for "a word or text as given", where the locale parameter needs nothing. Resolving with no pinned locale was dropped too: on a Mac whose first language is German, the English assertions fail.
+
+`Locale.interface` is the language RFCReaderKit's catalog resolves to for this process (`Bundle.module.preferredLocalizations.first`), not `Locale.current`: a reader whose languages are French then German gets German, which the catalog has, where `Locale.current` would ask for French and fall back to English. List and date formatting inside a model use the same locale, so a German sentence never gets an English "and".
+
+Whether the compiler records a key passed to the helper's `String.LocalizationValue` parameter is checked first; if it does not, the helper takes a `LocalizedStringResource` built at the call site instead.
 
 ### Notifications
 
-`UNMutableNotificationContent` takes a `String`, so `BookmarkNotice.body` stays a `String`, built from resources in the current language. Its sentences stop being assembled from fragments:
+`BookmarkNotice.body` is built in the locale it is given, like the models above. Its sentences stop being assembled from fragments:
 
 - "Obsoleted by %@." and "Updated by %@." take a list formatted with `.formatted(.list(type: .and))`, replacing the hand-written `", "` / `" and "` join.
 - The revision lines become one whole format per relation and stage, instead of a label, a draft name and a stage name with its first letter lowercased (which is wrong for a German noun).
 
 ### Undo names
 
-`CollectionStore`'s `setActionName("Remove from Collection")` becomes `setActionName(String(localized: "Remove from Collection", bundle: .module))`.
+`CollectionStore`'s `setActionName("Remove from Collection")` becomes `setActionName(String(kit: "Remove from Collection", locale: .current))`.
 
 ### Keys that are not language
 
@@ -57,11 +68,13 @@ The `phrases:` of `RFCReaderShortcuts` (`Intents/OpenRFCIntent.swift`) are local
 
 ### Stays English
 
-`PDFExport` (the outline's "Abstract") and `GrammarExport` are exports of the body.
+- `PDFExport` (the outline's "Abstract"), `GrammarExport` and the requirements CSV are exports of the body.
+- `PacketSummary` and `AccessibleReading` describe the body's figures to VoiceOver, and the body is English.
+- RFCKit's designations — statuses ("Proposed Standard"), streams, series — are the IETF's own terms, and RFCKit stays without a catalog. The two places it has interface words, `CitationStyle.displayName` and the month names of `PublicationDate.formatted`, get localized counterparts in RFCReaderKit (`CitationStyle.title(in:)`, `PublicationDate.formatted(in:)`), which the chrome uses instead.
 
 ### Tests
 
-Suites that assert English titles (`DocumentMenusTests`, `WorkingGroupSummaryTests`, `BookmarkEventsTests`, `DocumentInfoTests`, `SpotlightEntryTests`, and any other the change reaches) compare resolved English through a test helper that sets `resource.locale` to English before resolving. The notice builder takes the locale to resolve in, defaulting to the current one, so its tests pin English.
+Suites that assert English (`DocumentMenusTests`, `WorkingGroupSummaryTests`, `BookmarkEventsTests`, `DocumentInfoTests`, `SpotlightEntryTests`, and any other the change reaches) pass `locale: Locale(identifier: "en")`.
 
 ## 2. The guard (#785)
 
@@ -72,9 +85,9 @@ A `custom_rules` entry in `.swiftlint.yml`, `localized_ui_string`, scoped to `Ap
 - `accessibilityDescription: "`
 - `setActionName("`
 
-Its message names the fix, `String(localized:)`, with `bundle: .module` in RFCReaderKit. It runs under `make lint --strict` and in CI. It does not catch a plain `String` passed through a function first; RFCReaderKit's models carrying resources covers the main such path.
+Its message names the fix: `String(localized:)` in the app, `String(kit:locale:)` in RFCReaderKit. It runs under `make lint --strict` and in CI. It does not catch a plain `String` passed through a function first; RFCReaderKit's models resolving their own words cover the main such path.
 
-CLAUDE.md's Localization section leads with the rule: no text a user sees is a plain `String`; it is a SwiftUI literal, a `LocalizedStringResource` or `String(localized:)`, its key reaches the catalog through `make strings`, and it gets its German translation in the same change.
+CLAUDE.md's Localization section leads with the rule: no text a user sees is a plain `String`; it is a SwiftUI literal, a `LocalizedStringResource`, `String(localized:)`, or in RFCReaderKit `String(kit:locale:)`, its key reaches the catalog through `make strings`, and it gets its German translation in the same change.
 
 ## 3. German (#786)
 
@@ -82,7 +95,7 @@ CLAUDE.md's Localization section leads with the rule: no text a user sees is a p
 - Terminology: Apple's German for the platform's words (Sammlung, Lesezeichen, Teilen, Einstellungen); IETF terms stay English (RFC, Errata, Datatracker, Working Group, Internet-Draft).
 - Translations are drafted in the pull request and reviewed there; later edits are made in Xcode's catalog editor. Keys still come only from the code.
 - **Completeness check**: `Tools/strings/sync.py --check-translations de`, run by `make strings-check` after its diff, fails naming every key not marked `shouldTranslate: false` that lacks a `de` string unit in state `translated`, or a plural variant of one. Standard library only, reading the JSON.
-- **Proof test**: an RFCReaderKit test resolves a few resources with the locale German and expects the German text, failing if `bundle: .module` stops finding the catalog.
+- **Proof test**: an RFCReaderKit test builds a few models with `locale: Locale(identifier: "de")` and expects the German text, failing if `bundle: .module` stops finding the catalog.
 
 ## Verification
 
