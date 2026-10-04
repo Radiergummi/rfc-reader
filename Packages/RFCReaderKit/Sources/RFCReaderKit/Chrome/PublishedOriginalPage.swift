@@ -42,7 +42,7 @@ public struct PublishedOriginalPage: Hashable, Sendable {
     /// why there are none, rather than that the RFC failed to load.
     public func panelExplanation(in locale: Locale = .interface) -> String {
       let id = original.id.displayName
-      let format = original.format.displayName
+      let format = original.format.displayName(in: locale)
       return switch kind {
       case .scan: String(kit: "\(id) is published only as \(format).", locale: locale)
       case .pointer:

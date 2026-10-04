@@ -65,8 +65,8 @@ struct PublishedOriginalPageTests {
   }
 
   @Test func `an original is offered by the name the Info pane gives its format`() {
-    #expect(FileFormat.pdf.displayName == "PDF")
-    #expect(FileFormat.postScript.displayName == "PostScript")
+    #expect(FileFormat.pdf.displayName(in: .english) == "PDF")
+    #expect(FileFormat.postScript.displayName(in: .english) == "PostScript")
   }
 }
 

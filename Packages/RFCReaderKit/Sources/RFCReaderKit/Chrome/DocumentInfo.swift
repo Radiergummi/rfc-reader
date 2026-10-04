@@ -38,13 +38,17 @@ public struct DocumentInfo: Equatable, Sendable {
   /// What the status means, in a sentence, for the header; nil when the index
   /// does not know it. The glossary entry's summary, which its title opens.
   public var statusSummary: String? {
-    status == .unknown ? nil : Glossary.entry(for: .status(status)).summary
+    status == .unknown ? nil : Glossary.entry(for: .status(status), locale: locale).summary
   }
 
   /// The header's second box, for a document a later one replaces.
   public var obsoleteSummary: String? {
-    isObsolete ? "A later RFC replaces it; Relationships names which." : nil
+    isObsolete
+      ? String(kit: "A later RFC replaces it; Relationships names which.", locale: locale) : nil
   }
+
+  /// The language the summaries are in.
+  private let locale: Locale
 
   public struct Section: Equatable, Sendable {
     public let title: String
@@ -104,20 +108,27 @@ public struct DocumentInfo: Equatable, Sendable {
   ///   nil or empty adds no rows.
   public init(
     _ metadata: RFCMetadata, authors: [Author]? = nil, in index: RFCIndex?,
-    revisions: RevisionsSummary? = nil
+    revisions: RevisionsSummary? = nil, locale: Locale = .interface
   ) {
+    self.locale = locale
     number = metadata.id.displayName
     title = metadata.title
     status = metadata.currentStatus
     isObsolete = metadata.isObsolete
-    facts = Self.facts(metadata)
+    facts = Self.facts(metadata, locale: locale)
     sections = [
-      Self.section("Authors", .list, Self.authors(authors, else: metadata.authors)),
       Self.section(
-        "Relationships", .list, Self.relationships(metadata, index: index, revisions: revisions)),
-      Self.section("Links", .card, Self.links(metadata)),
-      Self.section("Formats", .card, Self.formats(metadata)),
-      Self.section("Details", .list, Self.details(metadata)),
+        String(kit: "Authors", locale: locale), .list,
+        Self.authors(authors, else: metadata.authors)),
+      Self.section(
+        String(kit: "Relationships", locale: locale), .list,
+        Self.relationships(metadata, index: index, revisions: revisions, locale: locale)),
+      Self.section(
+        String(kit: "Links", locale: locale), .card, Self.links(metadata, locale: locale)),
+      Self.section(
+        String(kit: "Formats", locale: locale), .card, Self.formats(metadata, locale: locale)),
+      Self.section(
+        String(kit: "Details", locale: locale), .list, Self.details(metadata, locale: locale)),
     ].compactMap { $0 }
   }
 
@@ -125,17 +136,26 @@ public struct DocumentInfo: Equatable, Sendable {
     rows.isEmpty ? nil : Section(title: title, style: style, rows: rows)
   }
 
-  private static func facts(_ metadata: RFCMetadata) -> [Fact] {
-    var facts = [Fact(value: String(metadata.date.year), label: "Published")]
+  private static func facts(_ metadata: RFCMetadata, locale: Locale) -> [Fact] {
+    var facts = [
+      Fact(value: String(metadata.date.year), label: String(kit: "Published", locale: locale))
+    ]
     if let pages = metadata.pageCount {
-      facts.append(Fact(value: String(pages), label: "Pages"))
+      facts.append(Fact(value: String(pages), label: String(kit: "Pages", locale: locale)))
     }
     // "Independent Submission" does not fit a quarter of the panel.
-    let stream = metadata.stream == .independent ? "Independent" : metadata.stream.displayName
-    facts.append(Fact(value: stream, label: "Stream", term: .stream(metadata.stream)))
+    let stream =
+      metadata.stream == .independent
+      ? String(kit: "Independent", locale: locale) : metadata.stream.displayName
+    facts.append(
+      Fact(
+        value: stream, label: String(kit: "Stream", locale: locale), term: .stream(metadata.stream))
+    )
     if let group = metadata.namedWorkingGroup {
       // "Working Group" is wider than a quarter of the panel.
-      facts.append(Fact(value: group, label: "Group", term: .process(.workingGroup)))
+      facts.append(
+        Fact(
+          value: group, label: String(kit: "Group", locale: locale), term: .process(.workingGroup)))
     }
     return facts
   }
@@ -149,14 +169,16 @@ public struct DocumentInfo: Equatable, Sendable {
   /// 7232, 7233, 7234, 7235" needs the room. A series lists its other members, as
   /// the index records them, and not this document again.
   private static func relationships(
-    _ metadata: RFCMetadata, index: RFCIndex?, revisions: RevisionsSummary?
+    _ metadata: RFCMetadata, index: RFCIndex?, revisions: RevisionsSummary?, locale: Locale
   ) -> [Row] {
     var rows: [Row] = []
     for (label, documents, term) in [
-      ("Obsoletes", metadata.obsoletes, Glossary.ProcessTerm.obsoletes),
-      ("Obsoleted by", metadata.obsoletedBy, .obsoletes),
-      ("Updates", metadata.updates, .updates),
-      ("Updated by", metadata.updatedBy, .updates),
+      (
+        String(kit: "Obsoletes", locale: locale), metadata.obsoletes, Glossary.ProcessTerm.obsoletes
+      ),
+      (String(kit: "Obsoleted by", locale: locale), metadata.obsoletedBy, .obsoletes),
+      (String(kit: "Updates", locale: locale), metadata.updates, .updates),
+      (String(kit: "Updated by", locale: locale), metadata.updatedBy, .updates),
     ] where !documents.isEmpty {
       rows.append(Row(label: label, value: .documents(documents), term: .process(term)))
     }
@@ -175,7 +197,8 @@ public struct DocumentInfo: Equatable, Sendable {
       if !others.isEmpty {
         rows.append(
           Row(
-            label: "Part of \(series.displayName)", value: .documents(others),
+            label: String(kit: "Part of \(series.displayName)", locale: locale),
+            value: .documents(others),
             term: .series(series.series)))
       }
     }
@@ -183,18 +206,23 @@ public struct DocumentInfo: Equatable, Sendable {
   }
 
   /// The pages the More menu opens, from the same `RFCEditorEndpoints`, and the DOI.
-  private static func links(_ metadata: RFCMetadata) -> [Row] {
+  private static func links(_ metadata: RFCMetadata, locale: Locale) -> [Row] {
     var rows: [Row] = []
     if let errata = metadata.errataURL {
-      rows.append(Row(label: "Errata", value: .link(errata), symbol: "exclamationmark.bubble"))
+      rows.append(
+        Row(
+          label: String(kit: "Errata", locale: locale), value: .link(errata),
+          symbol: "exclamationmark.bubble"))
     }
     rows.append(
       Row(
-        label: "RFC Editor", value: .link(RFCEditorEndpoints.infoPage(metadata.id)),
+        label: String(kit: "RFC Editor", locale: locale),
+        value: .link(RFCEditorEndpoints.infoPage(metadata.id)),
         symbol: "globe"))
     rows.append(
       Row(
-        label: "Datatracker", value: .link(RFCEditorEndpoints.datatracker(metadata.id)),
+        label: String(kit: "Datatracker", locale: locale),
+        value: .link(RFCEditorEndpoints.datatracker(metadata.id)),
         symbol: "chart.bar.doc.horizontal"))
     if let doi = metadata.doi {
       rows.append(Row(label: "DOI", value: .copyable(doi), symbol: "link"))
@@ -204,7 +232,7 @@ public struct DocumentInfo: Equatable, Sendable {
 
   /// Each format the RFC Editor publishes, set as the links are: the file where it
   /// is hosted, which the reader already keeps its own copy of the text of.
-  private static func formats(_ metadata: RFCMetadata) -> [Row] {
+  private static func formats(_ metadata: RFCMetadata, locale: Locale) -> [Row] {
     metadata.formats.map { format in
       let symbol =
         switch format {
@@ -213,24 +241,31 @@ public struct DocumentInfo: Equatable, Sendable {
         case .xml: "chevron.left.forwardslash.chevron.right"
         case .pdf, .postScript: "doc.text"
         }
-      return Row(label: format.displayName, value: .file(metadata.id, format), symbol: symbol)
+      return Row(
+        label: format.displayName(in: locale), value: .file(metadata.id, format), symbol: symbol)
     }
   }
 
   /// What the header and the strip leave out. The status it was published with
   /// only where it differs from today's: that is the interesting case, a Proposed
   /// Standard since advanced, or a document since made historic.
-  private static func details(_ metadata: RFCMetadata) -> [Row] {
-    var rows = [Row(label: "Published", value: .text(metadata.date.formatted))]
+  private static func details(_ metadata: RFCMetadata, locale: Locale) -> [Row] {
+    var rows = [
+      Row(
+        label: String(kit: "Published", locale: locale),
+        value: .text(metadata.date.formatted(in: locale)))
+    ]
     let original = metadata.publicationStatus
     if original != .unknown, original != metadata.currentStatus {
-      rows.append(Row(label: "Published as", value: .text(original.displayName)))
+      rows.append(
+        Row(label: String(kit: "Published as", locale: locale), value: .text(original.displayName)))
     }
     if let area = metadata.area {
-      rows.append(Row(label: "Area", value: .text(areaName(area))))
+      rows.append(Row(label: String(kit: "Area", locale: locale), value: .text(areaName(area))))
     }
     if !metadata.keywords.isEmpty {
-      rows.append(Row(label: "Keywords", value: .keywords(metadata.keywords)))
+      rows.append(
+        Row(label: String(kit: "Keywords", locale: locale), value: .keywords(metadata.keywords)))
     }
     return rows
   }
@@ -259,9 +294,9 @@ public struct DocumentInfo: Equatable, Sendable {
 extension FileFormat {
   /// The format's name, as the Info pane lists it and the page of an RFC that is its
   /// original offers it.
-  public var displayName: String {
+  public func displayName(in locale: Locale = .interface) -> String {
     switch self {
-    case .text: "Plain Text"
+    case .text: String(kit: "Plain Text", locale: locale)
     case .html: "HTML"
     case .xml: "XML"
     case .pdf: "PDF"
