@@ -12,12 +12,16 @@ adds the strings it finds there to a catalog and marks the ones it does not find
 stale; xcodebuild never does this itself, only Xcode's editor does. Both
 platforms' builds are read, so a string inside `#if os(iOS)` is found too.
 
+The App Shortcuts' phrases are not the compiler's: the App Intents metadata step
+records them in a file of its own, ExtractedAppShortcutsMetadata.stringsdata, in
+an AppShortcuts table that `xcstringstool sync` puts in AppShortcuts.xcstrings,
+along with the intents' parameter summaries, which go in Localizable.xcstrings.
+The sync reads it with the rest; each catalog takes the table it is named for.
+
 Only the given configuration's files are read, and only those named after a
-source file that still exists: DerivedData keeps the .stringsdata of a deleted
-file, and of every other configuration ever built, and either would keep a
-removed string from going stale. Of one platform's files for the same source,
-only the newest is read: an architecture an earlier build had and the latest
-did not keeps its old file too.
+source file that still exists (and the App Shortcuts' file): DerivedData keeps
+the .stringsdata of a deleted file, and of every other configuration ever built,
+and either would keep a removed string from going stale.
 
 Python 3.9 or later, standard library only.
 """
@@ -29,6 +33,7 @@ from pathlib import Path
 # Each catalog, the target whose strings it holds, and that target's sources.
 CATALOGS = [
     ("App/RFCReader/Localizable.xcstrings", "RFCReader", "App/RFCReader"),
+    ("App/RFCReader/AppShortcuts.xcstrings", "RFCReader", "App/RFCReader"),
     (
         "Packages/RFCReaderKit/Sources/RFCReaderKit/Resources/Localizable.xcstrings",
         "RFCReaderKit",
@@ -36,13 +41,16 @@ CATALOGS = [
     ),
 ]
 
+# What the App Intents metadata step names its record of the App Shortcuts.
+APP_SHORTCUTS_STRINGS = "ExtractedAppShortcutsMetadata"
+
 # The platforms `make strings` builds, as the suffix of a configuration's
 # directory: none for macOS.
 PLATFORM_SUFFIXES = ["", "-iphonesimulator"]
 
 
 def strings_data(objroot: Path, configuration: str, target: str, sources: Path) -> list[Path]:
-    source_names = {path.stem for path in sources.rglob("*.swift")}
+    source_names = {path.stem for path in sources.rglob("*.swift")} | {APP_SHORTCUTS_STRINGS}
     found = []
     for suffix in PLATFORM_SUFFIXES:
         directory = objroot / f"{target}.build" / f"{configuration}{suffix}"

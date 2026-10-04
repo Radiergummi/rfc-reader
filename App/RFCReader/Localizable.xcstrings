@@ -248,6 +248,9 @@
     "Find Requirements" : {
 
     },
+    "Find the requirements in ${document}" : {
+
+    },
     "Find…" : {
 
     },
@@ -315,6 +318,9 @@
 
     },
     "Look Up Identifier" : {
+
+    },
+    "Look up ${entry}" : {
 
     },
     "Looks up a protocol identifier, such as HTTP status 425, TLS alert 70 or the Retry-After field, and finds the RFC section that defines it." : {
@@ -408,6 +414,12 @@
 
     },
     "Open" : {
+
+    },
+    "Open ${section} of ${document}" : {
+
+    },
+    "Open ${target}" : {
 
     },
     "Open %@ on rfc-editor.org. Option-click to download it." : {
