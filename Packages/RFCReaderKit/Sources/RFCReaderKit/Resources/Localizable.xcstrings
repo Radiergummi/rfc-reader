@@ -38,7 +38,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ %2$@, Revision %3$@ von %4$@, %5$@"
+            "value" : "%1$@ %2$@, Revision %3$@ vom %4$@, %5$@"
           }
         },
         "en" : {
@@ -138,7 +138,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@, Revision von %2$@"
+            "value" : "%1$@, Revision vom %2$@"
           }
         },
         "en" : {

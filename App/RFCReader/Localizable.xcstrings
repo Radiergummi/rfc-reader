@@ -33,7 +33,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ sagt nicht, welche seiner Referenzen normativ sind, daher wird keiner von ihnen gefolgt."
+            "value" : "%@ sagt nicht, welche seiner Referenzen normativ sind, daher wird keine von ihnen weiterverfolgt."
           }
         }
       }
@@ -1109,7 +1109,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Offline behalten"
+            "value" : "Offline verfügbar"
           }
         }
       }
@@ -1369,7 +1369,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nicht offline behalten"
+            "value" : "Nicht offline verfügbar"
           }
         }
       }

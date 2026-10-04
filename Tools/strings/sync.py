@@ -84,11 +84,11 @@ def untranslated(catalog: Path, language: str) -> list[str]:
         localizations = entry.get("localizations", {})
         translation = localizations.get(language)
         units = units_of(translation) if translation else []
-        pluralized = "variations" in localizations.get(source, {})
+        pluralized = "plural" in localizations.get(source, {}).get("variations", {})
         if (
             not units
             or any(unit.get("state") != "translated" for unit in units)
-            or (pluralized and "variations" not in translation)
+            or (pluralized and "plural" not in translation.get("variations", {}))
         ):
             missing.append(key)
     return missing
