@@ -26,7 +26,15 @@ extension LegacyTextParser {
     }
   }
 
-  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
+  private static let footerPattern = Pattern(#/\[Page (?<number>[0-9ivx]+)\]\s*$/#)
+
+  /// Whether a line ends in a page footer: `[Page 12]`, or `[Page ii]` on a front
+  /// section numbered in roman numerals (#549).
+  private static func endsInFooter(_ line: String) -> Bool {
+    guard let match = line.firstMatch(of: footerPattern) else { return false }
+    return match.number.allSatisfy { $0.isASCII && $0.isNumber } || isRomanPageNumber(match.number)
+  }
+
   private static let runningHeaderPattern = Pattern(
     #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
@@ -115,7 +123,7 @@ extension LegacyTextParser {
       line = line.expandingTabs()
       let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-      if firstContentSeen, trimmed.contains(footerPattern) {
+      if firstContentSeen, endsInFooter(trimmed) {
         lines.append(.pageBreak)
         expectingHeader = true
         continue
