@@ -46,6 +46,11 @@ public enum ABNF {
     public var range: NSRange
   }
 
+  /// How deep groups and options may nest. The parser recurses once per level, so a
+  /// block nested without bound would exhaust the stack (#757); no grammar nests more
+  /// than a handful.
+  static let maximumNesting = 64
+
   /// Whether `text` is a grammar: it parses, and a rule uses syntax only a grammar has,
   /// or there are two rules or more and one refers to another. `token = 1*tchar` is one;
   /// `count = max;` is not, although it parses, and neither is a list of assignments in
@@ -166,6 +171,8 @@ public enum ABNF {
     /// Where each character is in the text as given; nil for a joining space.
     private let offsets: [Int?]
     private var position = 0
+    /// How many groups and options enclose `position`.
+    private var nesting = 0
     private var references: [String] = []
     private var uses: [Use] = []
     private var usesGrammarSyntax = false
@@ -343,6 +350,9 @@ public enum ABNF {
     }
 
     private mutating func enclosedAlternation(closing: Character) -> Bool {
+      guard nesting < ABNF.maximumNesting else { return false }
+      nesting += 1
+      defer { nesting -= 1 }
       skipSpace()
       guard alternation() else { return false }
       skipSpace()
