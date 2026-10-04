@@ -387,15 +387,18 @@ public enum LegacyTextParser {
     return parenthesisNumbers.allSatisfy { follows($0, in: numbers) }
   }
 
-  private static let standardSectionTitles = [
-    "status of this memo", "abstract", "introduction", "security considerations",
-    "references", "acknowledgment", "acknowledgement", "author's address",
-    "authors' addresses",
+  /// Titles every RFC has a section of. Matched whole, a colon after them allowed, so
+  /// that prose opening with `Abstraction` or `References to` names none.
+  private static let standardSectionTitles: Set<String> = [
+    "status of this memo", "status of memo", "abstract", "introduction",
+    "security considerations", "references", "acknowledgment", "acknowledgement",
+    "author's address", "authors' addresses",
   ]
 
   private static func namesAStandardSection(_ title: String) -> Bool {
-    let lowered = title.trimmingCharacters(in: .whitespaces).lowercased()
-    return standardSectionTitles.contains { lowered.hasPrefix($0) }
+    var lowered = title.trimmingCharacters(in: .whitespaces).lowercased()
+    if lowered.hasSuffix(":") { lowered.removeLast() }
+    return standardSectionTitles.contains(lowered)
   }
 
   /// Whether heading `number` follows from one of `numbers`: the one before it at its

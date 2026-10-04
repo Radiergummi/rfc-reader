@@ -275,6 +275,10 @@ struct LegacyTextParserHeadingsTests {
       !LegacyTextParser.numbersHeadingsWithAParenthesis(Array(sectioned.dropFirst(4))),
       "no other sign of sections")
     #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(
+        ["Abstractions come first.", ""] + sectioned.dropFirst(4)),
+      "a line that only starts like a section's title")
+    #expect(
       !LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned + ["", "1)  Overview again"]),
       "a number repeated")
     #expect(
