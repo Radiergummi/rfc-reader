@@ -54,8 +54,8 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   public static func == (lhs: ReaderPalette, rhs: ReaderPalette) -> Bool { lhs.id == rhs.id }
   public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-  /// The system's colors, as the reader has always drawn them, and what a print
-  /// draws with: its light appearance resolves them to a white page's.
+  /// The system's colors, and what a print draws with: its light appearance
+  /// resolves them to a white page's.
   public static let automatic = ReaderPalette(
     id: "automatic",
     cardFill: RFCColors.cardFill,

@@ -31,7 +31,7 @@ struct ReaderSettingsTests {
     #expect(settings.palette.id == ReaderPreferences.defaultPalette)
   }
 
-  /// What a reader stored before the settings were one value still reads.
+  /// Every key user defaults hold reads into the one value.
   @Test func `every stored key decodes`() throws {
     try withDefaults { defaults in
       defaults.set(21.0, forKey: ReaderPreferences.fontSizeKey)
@@ -63,8 +63,7 @@ struct ReaderSettingsTests {
     }
   }
 
-  /// A size stored outside the range, by an older slider or by hand, reads as the
-  /// nearest end of it.
+  /// A size stored outside the range reads as the nearest end of it.
   @Test func `a size outside the range is clamped`() throws {
     try withDefaults { defaults in
       defaults.set(99.0, forKey: ReaderPreferences.fontSizeKey)

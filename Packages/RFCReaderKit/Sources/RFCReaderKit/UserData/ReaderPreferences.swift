@@ -4,8 +4,8 @@ import Foundation
 ///
 /// Read through `ReaderSettings`, which decodes them all into one value, and in a
 /// view through `@ReaderSettingsValue`, rather than through an `@AppStorage` of each
-/// key in every view that needs one: a key misspelled in one of those was a setting
-/// that silently did nothing there. The keys are what user defaults hold, so
+/// key in every view that needs one, where a misspelled key would be a setting that
+/// silently does nothing. The keys are what user defaults hold, so
 /// renaming one resets everyone's choice.
 public enum ReaderPreferences {
   /// The reader's body size, as it reads at the system's default text size.
