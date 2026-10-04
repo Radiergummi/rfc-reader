@@ -52,22 +52,12 @@ public struct LinkCopy: Equatable, Sendable {
 
   /// The label as a link, for a pasteboard's HTML.
   public var html: String {
-    "<a href=\"\(Self.escaped(url.absoluteString))\">\(Self.escaped(label))</a>"
+    let href = PasteboardMarkup.escaped(url.absoluteString)
+    return PasteboardMarkup.html("<a href=\"\(href)\">\(PasteboardMarkup.escaped(label))</a>")
   }
 
   /// The label as a link, for a pasteboard's RTF.
   public var rtf: Data? {
-    let text = NSAttributedString(string: label, attributes: [.link: url])
-    return try? text.data(
-      from: NSRange(location: 0, length: text.length),
-      documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-  }
-
-  private static func escaped(_ text: String) -> String {
-    text
-      .replacingOccurrences(of: "&", with: "&amp;")
-      .replacingOccurrences(of: "<", with: "&lt;")
-      .replacingOccurrences(of: ">", with: "&gt;")
-      .replacingOccurrences(of: "\"", with: "&quot;")
+    PasteboardMarkup.rtf(NSAttributedString(string: label, attributes: [.link: url]))
   }
 }
