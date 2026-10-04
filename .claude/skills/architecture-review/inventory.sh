@@ -154,7 +154,63 @@ done | sort -rn | head -25
 rm -f "${TMPDIR:-/tmp}/arch-review-types.$$"
 echo '```'
 
+app_sources() {
+  find App Packages/RFCReaderKit/Sources -name '*.swift' | sort
+}
+# signal LABEL PATTERN: the number of matching lines, then the files with the most.
+signal() {
+  printf '### %s\n\n```\n' "$1"
+  app_sources | xargs grep -cE "$2" | grep -v ':0$' | sort -t: -k2 -rn > "${TMPDIR:-/tmp}/arch-review-signal.$$" || true
+  printf '%d lines in %d files\n' \
+    "$(awk -F: '{ s += $2 } END { print s + 0 }' "${TMPDIR:-/tmp}/arch-review-signal.$$")" \
+    "$(wc -l < "${TMPDIR:-/tmp}/arch-review-signal.$$" | tr -d ' ')"
+  head -8 "${TMPDIR:-/tmp}/arch-review-signal.$$"
+  rm -f "${TMPDIR:-/tmp}/arch-review-signal.$$"
+  printf '```\n\n'
+}
+
 echo
+echo "## Platform signals (App and RFCReaderKit)"
+echo
+echo "### Files"
+echo
+echo '```'
+for name in '*.xcprivacy' '*.xcstrings' '*.strings' '*.stringsdict' '*.entitlements' '*.xctestplan'; do
+  printf '%-16s %s\n' "$name" "$(find . -name "$name" -not -path '*/.build/*' -not -path './corpus/*' | tr '\n' ' ')"
+done
+printf '%-16s %s\n' 'UI test target' "$(grep -nE 'bundle\.ui-testing|UITests' project.yml | tr '\n' ' ')"
+printf '%-16s %s\n' 'entitlements' "$(grep -nE 'com\.apple\.(security|developer)' project.yml | sed 's/^ *//' | tr '\n' ' ')"
+echo '```'
+echo
+signal 'Required-reason APIs: UserDefaults' 'UserDefaults|@AppStorage'
+signal 'Required-reason APIs: file timestamps' 'contentModificationDate|creationDate|modificationDate|attributesOfItem|fileModificationDate'
+signal 'Required-reason APIs: disk space, boot time' 'volumeAvailableCapacity|systemUptime|mach_absolute_time'
+signal 'Interface string literals (SwiftUI takes a literal as a localization key; without a String Catalog none is translated)' '(Text|Button|Label|Toggle|Picker|Section|Menu)\("[^"]*[A-Za-z][^"]*"|Text\(verbatim:'
+signal 'Localized lookups' 'String\(localized:|LocalizedStringKey|LocalizedStringResource|NSLocalizedString'
+signal 'Fixed formats (dates, numbers, plurals)' 'DateFormatter|dateFormat *=|String\(format:|== 1 \?|count == 1'
+signal 'Logging' 'Logger\(|os_log|OSSignposter|\bprint\('
+signal 'MetricKit' 'MetricKit|MXMetricManager'
+signal 'Memory pressure' 'didReceiveMemoryWarning|makeMemoryPressureSource|NSCache'
+signal 'State restoration and Handoff' '@SceneStorage|NSUserActivity|userActivity\(|onContinueUserActivity|restorationIdentifier'
+signal 'Undo' 'UndoManager|undoManager'
+signal 'Swallowed errors' 'try\?|catch *\{ *\}'
+signal 'Network conditions' 'NWPathMonitor|isConstrained|isExpensive|allowsExpensiveNetworkAccess'
+signal 'Schema versions and migration' 'VersionedSchema|SchemaMigrationPlan|MigrationStage'
+
+echo "## Interface signals (App and RFCReaderKit)"
+echo
+signal 'Keyboard shortcuts' 'keyboardShortcut\(|UIKeyCommand|keyEquivalent'
+signal 'Menu commands' 'CommandMenu|CommandGroup|NSMenuItem\('
+signal 'Tooltips' '\.help\(|toolTip'
+signal 'Context menus and swipe actions' 'contextMenu|swipeActions|UIContextMenuInteraction|menuForEvent'
+signal 'Empty and unavailable states' 'ContentUnavailableView|overlay.*isEmpty|if .*isEmpty'
+signal 'Accessibility modifiers' 'accessibility(Label|Hint|Value|Action|AddTraits|Element|RotorEntry|Rotor|SortPriority|Hidden)|isAccessibilityElement'
+signal 'Fixed font sizes' '\.system\(size:|Font\.system\(size:|NSFont\(name:|UIFont\(name:|systemFont\(ofSize:|\.font\(\.custom'
+signal 'Literal colors' 'Color\((red|white|hue):|UIColor\((red|white):|NSColor\((red|white|calibrated|srgb)|Color\(#'
+signal 'Custom controls (ButtonStyle, gestures)' 'ButtonStyle|onTapGesture|onLongPressGesture|DragGesture|MagnifyGesture'
+signal 'TipKit' 'import TipKit|TipView|popoverTip'
+signal 'Animation and Reduce Motion' 'withAnimation|\.animation\(|accessibilityReduceMotion|reduceMotion'
+
 echo "## Source files no test names (by file name's type)"
 echo
 echo '```'
