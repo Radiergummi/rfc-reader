@@ -16,11 +16,12 @@ struct BuilderCompletenessTests {
 
   /// The guard on the central decision. An attachment character outside a chip's
   /// own run means a block kind quietly became a hosted view, which is the hole
-  /// in the storage this design exists to avoid. There are two sanctioned
+  /// in the storage this design exists to avoid. There are three sanctioned
   /// exceptions, each a symbol inside its own run: a chip's leading doc.text, in
-  /// its `.rfcChip` run, and a heading's backlink caption's arrow, in its
-  /// `.rfcBacklinks` run (#584).
-  @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml"])
+  /// its `.rfcChip` run, a heading's backlink caption's arrow, in its
+  /// `.rfcBacklinks` run (#584), and a code block's copy button on macOS, in its
+  /// `.rfcCopyCode` run. RFC 9290's code is typed, so it has copy buttons.
+  @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml", "rfc9290.xml"])
   func `nothing becomes an attachment`(fixture: String) throws {
     let document = try Fixtures.document(named: fixture)
     let number = try #require(Int(fixture.dropFirst(3).prefix(while: \.isNumber)))
@@ -38,9 +39,10 @@ struct BuilderCompletenessTests {
       let sanctioned =
         built.text.attribute(.rfcChip, at: found.location, effectiveRange: nil) != nil
         || built.text.attribute(.rfcBacklinks, at: found.location, effectiveRange: nil) != nil
+        || built.text.attribute(.rfcCopyCode, at: found.location, effectiveRange: nil) != nil
       #expect(
         sanctioned,
-        "\(fixture) has an attachment character outside a chip or caption at offset \(found.location)"
+        "\(fixture) has an attachment character outside a chip, caption or copy button at offset \(found.location)"
       )
       searchStart = NSMaxRange(found)
     }

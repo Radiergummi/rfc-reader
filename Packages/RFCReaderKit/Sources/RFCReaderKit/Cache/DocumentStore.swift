@@ -69,11 +69,13 @@ public actor DocumentStore {
     directory.appending(path: "Packs", directoryHint: .isDirectory)
   }
 
-  /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
-  /// is installed.
+  /// The converted legacy RFCs, the one pack the app reads documents from. Nil
+  /// until one is installed.
   private lazy var legacyPack: InstalledPack? = Self.installedPack(
     in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
+  /// The corpus's index database (#174), which reading paths read (#189).
+  private static let indexesPackName = "indexes"
   /// One install at a time: two would unpack into one destination and race to
   /// swap it in.
   private var isInstallingPack = false
@@ -223,6 +225,22 @@ public actor DocumentStore {
 
   public func storeRevisions(_ data: Data) throws {
     try data.write(to: revisionsURL, options: .atomic)
+  }
+
+  // MARK: - Bookmark baseline
+
+  private var bookmarkBaselineURL: URL { directory.appending(path: "bookmark-baseline.json") }
+
+  /// What the bookmarked RFCs looked like at the last comparison (#191). Nil when
+  /// there is none, or it no longer decodes, which the next comparison takes as a
+  /// first one: it reports nothing and starts again from what it sees.
+  public func bookmarkBaseline() -> BookmarkBaseline? {
+    guard let data = try? Data(contentsOf: bookmarkBaselineURL) else { return nil }
+    return try? BookmarkBaseline.decode(data)
+  }
+
+  public func storeBookmarkBaseline(_ baseline: BookmarkBaseline) throws {
+    try baseline.encoded().write(to: bookmarkBaselineURL, options: .atomic)
   }
 
   // MARK: - Working groups
@@ -465,16 +483,40 @@ public actor DocumentStore {
   /// verified. Documents already parsed are parsed again on their next open, so
   /// they come from the pack.
   public func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    let pack = try await installPack(source, as: Self.legacyPackName)
+    legacyPack = pack
+    // Parsed again on their next open, from the pack; nothing else it could serve.
+    parsed.removeAll { pack.file(for: $0) != nil }
+    return pack
+  }
+
+  /// Installs the `indexes` pack, as `installLegacyPack(from:)` installs the legacy
+  /// one. A reader opens its database afresh for each question, so nothing here
+  /// holds the one it replaces.
+  public func installIndexesPack(from source: URL) async throws -> InstalledPack {
+    try await installPack(source, as: Self.indexesPackName)
+  }
+
+  /// One install at a time, whichever pack.
+  private func installPack(_ source: URL, as name: String) async throws -> InstalledPack {
     // Checked and set without a suspension between them, so a second install
     // arriving while the first is off the actor is refused rather than raced.
     guard !isInstallingPack else { throw AlreadyInstalling() }
     isInstallingPack = true
     defer { isInstallingPack = false }
-    let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
-    legacyPack = pack
-    // Parsed again on their next open, from the pack; nothing else it could serve.
-    parsed.removeAll { pack.file(for: $0) != nil }
-    return pack
+    return try await Self.install(source, as: name, in: packsDirectory)
+  }
+
+  /// The installed `indexes` pack's citation database, or nil when no pack is
+  /// installed or its manifest does not list one. Read from the disk on each call:
+  /// it is asked once per reading path.
+  public func citationIndexURL() -> URL? {
+    let directory = packsDirectory.appending(
+      path: Self.indexesPackName, directoryHint: .isDirectory)
+    guard let pack = Self.installedPack(in: directory),
+      pack.manifest.files.contains(where: { $0.path == CitationIndex.fileName })
+    else { return nil }
+    return directory.appending(path: CitationIndex.fileName)
   }
 
   /// The RFCs the installed legacy pack lists as text that only points to its
