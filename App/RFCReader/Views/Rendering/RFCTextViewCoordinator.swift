@@ -635,10 +635,7 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink caption's link is ours alone, and Copy Link would copy a URL
-      // nothing else can open; the rest of the menu stays.
-      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
-      return menu
+      return linkMenu(menu, at: charIndex)
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
