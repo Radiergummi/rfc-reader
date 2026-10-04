@@ -41,6 +41,7 @@
           var item: [String: Any] = [UTType.plainText.identifier: text]
           if let png = drawing?.pngData() { item[UTType.png.identifier] = png }
           UIPasteboard.general.setItems([item])
+          Clipboard.announce(.figure)
         })
       children.append(
         UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) {

@@ -30,7 +30,8 @@ public enum DocumentMenus {
 
   /// What an `Action` comes to, on either platform.
   public enum Effect: Equatable, Sendable {
-    case copy(String)
+    /// The text, and what it is, which the copy announces.
+    case copy(String, CopyFeedback)
     case open(URL)
     case toggleOriginalText
   }
@@ -117,8 +118,10 @@ extension DocumentMenus.Action {
   ) -> DocumentMenus.Effect? {
     switch self {
     case .copyCitation(let style):
-      metadata.map { .copy(DocumentActions.citation($0, section: section, style: style)) }
-    case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section))
+      metadata.map {
+        .copy(DocumentActions.citation($0, section: section, style: style), .citation)
+      }
+    case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section), .link)
     case .toggleOriginalText: .toggleOriginalText
     case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
     case .openErrata(let url), .openPrecedingDraft(let url): .open(url)

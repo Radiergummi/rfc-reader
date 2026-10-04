@@ -21,7 +21,7 @@
       if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(
           UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
-            UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
+            Clipboard.copy(FigureCopy.pasteboardText(for: box.content), announcing: .figure)
           })
         if let action = presentationAction(for: box) { extra.append(action) }
       }
