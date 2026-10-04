@@ -142,7 +142,7 @@ public struct RFCEditorClient: Sendable {
 
   @concurrent
   public func fetchIndex() async throws -> RFCIndex {
-    let data = try await fetch(RFCEditorEndpoints.index)
+    let data = try await fetch(RFCEditorEndpoints.index, accepting: Self.xmlMediaTypes)
     do {
       return try RFCIndexParser.parse(data)
     } catch {
@@ -152,7 +152,9 @@ public struct RFCEditorClient: Sendable {
 
   /// Raw bytes of a document in the given format, for caching.
   public func fetchDocumentData(_ id: DocumentID, format: FileFormat) async throws -> Data {
-    try await fetch(RFCEditorEndpoints.document(id, format: format), notFoundAs: id)
+    try await fetch(
+      RFCEditorEndpoints.document(id, format: format), accepting: Self.mediaTypes(of: format),
+      notFoundAs: id)
   }
 
   /// A document fetched in the best format it has, with the bytes it came as.
@@ -246,6 +248,7 @@ public struct RFCEditorClient: Sendable {
     case 304:
       return .unchanged
     case 200..<300:
+      try Self.check(response, to: request, accepting: Self.xmlMediaTypes)
       return .changed(data, CacheValidators(response: response))
     default:
       throw ClientError.httpStatus(response.statusCode, RFCEditorEndpoints.index)
@@ -257,7 +260,7 @@ public struct RFCEditorClient: Sendable {
   /// never be answered 304.
   @concurrent
   public func fetchRevisions() async throws -> (revisions: RFCRevisions, data: Data) {
-    let data = try await fetch(RFCEditorEndpoints.revisions)
+    let data = try await fetch(RFCEditorEndpoints.revisions, accepting: nil)
     return (try RFCRevisions.decode(data), data)
   }
 
@@ -265,13 +268,14 @@ public struct RFCEditorClient: Sendable {
   /// A plain GET, for the reason `fetchRevisions()` gives.
   @concurrent
   public func fetchWorkingGroups() async throws -> (groups: WorkingGroups, data: Data) {
-    let data = try await fetch(RFCEditorEndpoints.workingGroups)
+    let data = try await fetch(RFCEditorEndpoints.workingGroups, accepting: nil)
     return (try WorkingGroups.decode(data), data)
   }
 
   @concurrent
   public func fetchRecent() async throws -> [RecentRFC] {
-    let data = try await fetch(RFCEditorEndpoints.recentFeed)
+    let data = try await fetch(
+      RFCEditorEndpoints.recentFeed, accepting: Self.xmlMediaTypes.union(["application/rss+xml"]))
     return try RecentFeedParser.parse(data)
   }
 
@@ -289,7 +293,7 @@ public struct RFCEditorClient: Sendable {
       request.allowsExpensiveNetworkAccess = onExpensiveNetworks
       request.allowsConstrainedNetworkAccess = onExpensiveNetworks
     #endif
-    let data = try await fetch(request)
+    let data = try await fetch(request, accepting: Self.xmlMediaTypes)
     do {
       return (try IANARegistry.parse(data, as: registry), data)
     } catch {
@@ -305,15 +309,50 @@ public struct RFCEditorClient: Sendable {
     return request
   }
 
-  private func fetch(_ url: URL, notFoundAs id: DocumentID? = nil) async throws -> Data {
-    try await fetch(Self.request(url), notFoundAs: id)
+  private static let xmlMediaTypes: Set<String> = ["application/xml", "text/xml"]
+
+  /// The `Content-Type`s the RFC Editor serves a document in `format` as.
+  private static func mediaTypes(of format: FileFormat) -> Set<String> {
+    switch format {
+    case .text: ["text/plain"]
+    case .xml: xmlMediaTypes
+    case .html: ["text/html"]
+    case .pdf: ["application/pdf"]
+    case .postScript: ["application/postscript"]
+    }
   }
 
-  private func fetch(_ request: URLRequest, notFoundAs id: DocumentID? = nil) async throws -> Data {
+  /// Refuses a successful response that is not what was asked for (#757): one of
+  /// another type, such as a proxy's or a captive portal's HTML page served in place
+  /// of `rfcNNNN.txt`, or one from another host. A document body is kept for good, so
+  /// such a page would otherwise become that RFC until Remove Offline Copy.
+  private static func check(
+    _ response: HTTPURLResponse, to request: URLRequest, accepting mediaTypes: Set<String>
+  ) throws {
+    let url = request.url!
+    guard let mediaType = response.mimeType?.lowercased(), mediaTypes.contains(mediaType),
+      response.url?.host() == url.host()
+    else { throw ClientError.invalidResponse(url) }
+  }
+
+  /// `mediaTypes` nil accepts any body from any host: the JSON published on the
+  /// repository's release, which GitHub serves from its own storage host as
+  /// `application/octet-stream`, and which a strict decoder refuses if it is anything
+  /// else.
+  private func fetch(
+    _ url: URL, accepting mediaTypes: Set<String>?, notFoundAs id: DocumentID? = nil
+  ) async throws -> Data {
+    try await fetch(Self.request(url), accepting: mediaTypes, notFoundAs: id)
+  }
+
+  private func fetch(
+    _ request: URLRequest, accepting mediaTypes: Set<String>?, notFoundAs id: DocumentID? = nil
+  ) async throws -> Data {
     let url = request.url!
     let (data, response) = try await transport.response(for: request)
     switch response.statusCode {
     case 200..<300:
+      if let mediaTypes { try Self.check(response, to: request, accepting: mediaTypes) }
       return data
     case 404:
       if let id { throw ClientError.notFound(id) }

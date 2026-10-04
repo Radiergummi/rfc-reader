@@ -66,8 +66,7 @@ struct ClientFormatsTests {
       func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = request.url!
         let status = url.pathExtension == "xml" ? 404 : 200
-        let response = HTTPURLResponse(
-          url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+        let response = HTTPURLResponse.served(from: url, statusCode: status)
         return (status == 200 ? text : Data(), response)
       }
     }
