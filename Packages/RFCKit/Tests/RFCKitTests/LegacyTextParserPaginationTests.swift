@@ -219,7 +219,7 @@ struct SectionHeaderTests {
   private func headsNearby(_ lines: [Line]) -> Bool {
     let index = lines.firstIndex(where: \.isSectionHeader)!
     return LegacyTextParser.headsNearby(
-      at: index, in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)
+      at: index, in: lines, from: 0, bodyIsIndented: true, separators: [])
   }
 
   /// The section starts at the head of one page, whose header still names the last
@@ -319,6 +319,6 @@ struct SectionHeaderTests {
     #expect(
       !LegacyTextParser.headsNearby(
         at: index, in: lines, from: contents.count, bodyIsIndented: true,
-        colonNumbered: false))
+        separators: []))
   }
 }

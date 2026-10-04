@@ -223,6 +223,28 @@ struct CorpusBackedAppendixHeadingTests {
   }
 }
 
+@Suite("Corpus-backed: headings numbered with a parenthesis", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedParenthesisHeadingTests {
+  /// RFC 1136 and 2122 head their sections `1)` and on, as RFC 1927 does, and had none
+  /// of them (#199).
+  @Test func `sections numbered with a parenthesis are sections`() throws {
+    let routing = LegacyTextParser.parse(try CorpusText.text("rfc1136"))
+    #expect(routing.sections.compactMap(\.number) == (1...11).map(String.init))
+    let vemmi = LegacyTextParser.parse(try CorpusText.text("rfc2122"))
+    #expect(vemmi.sections.compactMap(\.number) == (1...11).map(String.init))
+    #expect(vemmi.section(number: "8")?.titleText.hasPrefix("Security Considerations") == true)
+  }
+
+  /// RFC 3116 numbers its sections `1.`, and a list of test cases `1)` to `8)` inside
+  /// the second. Those repeat its section numbers, and stay list items.
+  @Test func `a list numbered like the sections stays a list`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc3116"))
+    #expect(document.section(number: "3")?.titleText == "Performance Metrics")
+    #expect(document.section(number: "8") == nil)
+    #expect(!document.allSections.contains { $0.titleText.hasPrefix("PCR=") })
+  }
+}
+
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedCatalogTests {
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
