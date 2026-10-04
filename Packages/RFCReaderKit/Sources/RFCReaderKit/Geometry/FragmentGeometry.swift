@@ -9,9 +9,8 @@ import Foundation
 /// Where the decorations a text layout fragment draws actually go.
 ///
 /// Pure geometry over an attributed string and a fragment's lines (`FragmentLines`)
-/// — no `NSTextLayoutFragment`, no drawing context, no state. The
-/// app's fragment subclass is the shell that owns drawing; this is the arithmetic
-/// it draws by.
+/// — no `NSTextLayoutFragment`, no drawing context, no state. The app's fragment
+/// subclass is the shell that owns drawing; this is the arithmetic it draws by.
 ///
 /// It lives in this package on purpose. The reader's two hardest bugs were both in
 /// these few lines — an index taken relative to a *line* where TextKit 2 wanted it
