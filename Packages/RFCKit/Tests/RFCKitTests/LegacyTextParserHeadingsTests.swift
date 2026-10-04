@@ -149,11 +149,11 @@ struct LegacyTextParserHeadingsTests {
   /// prose cites that one, never the appendix.
   @Test func `an appendix numbered like a section is anchored as an appendix`() throws {
     let heading = try #require(
-      LegacyTextParser.heading(from: "APPENDIX 3  Worked Examples", colonNumbered: false))
+      LegacyTextParser.heading(from: "APPENDIX 3  Worked Examples", separators: []))
     #expect(heading.isAppendix)
     #expect(heading.anchor == "appendix-3")
     let lettered = try #require(
-      LegacyTextParser.heading(from: "Appendix B. Examples", colonNumbered: false))
+      LegacyTextParser.heading(from: "Appendix B. Examples", separators: []))
     #expect(lettered.anchor == "appendix-B")
   }
 
@@ -250,6 +250,61 @@ struct LegacyTextParserHeadingsTests {
     #expect(!LegacyTextParser.numbersHeadingsWithAColon(["3. Three", "2.4.12: Orphan"]))
   }
 
+  /// `1)` numbers RFC 1927's sections, and is a list item in most of the forty-odd
+  /// documents that set it at column 0 (#199). RFC 234's agenda has the same shape and
+  /// no other sign of sections, and stays a list.
+  @Test func `a parenthesis numbers headings only in a sectioned document`() throws {
+    #expect(
+      LegacyTextParser.numbersHeadingsWithAParenthesis(
+        try Fixtures.string("rfc1927.txt").components(separatedBy: "\n")))
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(
+        try Fixtures.string("rfc234.txt").components(separatedBy: "\n")))
+
+    let sectioned = [
+      "Status of this Memo", "", "   Some text.", "",
+      "1)  Overview", "", "   Some text.", "",
+      "2)  Model", "", "   Some text.",
+    ]
+    #expect(LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned))
+    #expect(
+      LegacyTextParser.numbersHeadingsWithAParenthesis(
+        ["Status of this Memo", "", "1)  A title that wraps", "    onto a second line"]),
+      "a wrapped title")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(Array(sectioned.dropFirst(4))),
+      "no other sign of sections")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned + ["", "1)  Overview again"]),
+      "a number repeated")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned + ["", "2.  Model"]),
+      "a number shared with a heading, as in RFC 3116")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis([
+        "Status of this Memo", "", "1)  an item that runs on", "    over a second line",
+        "    and a third", "", "2)  the next item",
+      ]),
+      "a list item that runs on")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis([
+        "Status of this Memo", "", "   The steps:", "1)  First", "", "2)  Second",
+      ]),
+      "an item that does not start its block")
+    #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(["Status of this Memo", "", "3)  Three"]),
+      "a number that follows from none")
+  }
+
+  /// RFC 1927 heads its seven sections `1)` to `7)`, and they were list items in the
+  /// section before them (#199).
+  @Test func `sections numbered with a parenthesis are sections`() throws {
+    let document = try Fixtures.document("rfc1927.txt")
+    #expect(document.sections.compactMap(\.number) == ["1", "2", "3", "4", "5", "6", "7"])
+    #expect(document.section(number: "1")?.titleText.hasPrefix("New MIME Types") == true)
+    #expect(document.section(number: "1")?.anchor == "section-1")
+  }
+
   /// The stricter rule applies only to documents whose body is not indented: where the
   /// body *is* indented, a heading followed immediately by text is still a heading.
   @Test func `a heading in an indented body needs no blank line after it`() {
@@ -258,11 +313,11 @@ struct LegacyTextParserHeadingsTests {
       .text("   Text that follows the heading directly, with no blank line between."),
     ]
     let indented = LegacyTextParser.heading(
-      at: 0, in: lines, bodyIsIndented: true, colonNumbered: false, startsBlock: true)
+      at: 0, in: lines, bodyIsIndented: true, separators: [], startsBlock: true)
     #expect(indented?.title == "Introduction")
     #expect(
       LegacyTextParser.heading(
-        at: 0, in: lines, bodyIsIndented: false, colonNumbered: false, startsBlock: true) == nil)
+        at: 0, in: lines, bodyIsIndented: false, separators: [], startsBlock: true) == nil)
   }
 
   /// A tab is indentation too: a contents listing indented with tabs (RFC 1142's) had
@@ -271,7 +326,7 @@ struct LegacyTextParserHeadingsTests {
     let lines = LegacyTextParser.depaginate("\t1 \tScope of This Document\t1\n")
     #expect(
       LegacyTextParser.heading(
-        at: 0, in: lines, bodyIsIndented: true, colonNumbered: false, startsBlock: true) == nil)
+        at: 0, in: lines, bodyIsIndented: true, separators: [], startsBlock: true) == nil)
   }
 
   /// A couple of dozen documents (RFC 817, 813, 888) are typeset double spaced: a
@@ -406,7 +461,7 @@ struct LegacyTextParserHeadingsTests {
     ]
     func heading(_ lines: [LegacyTextParser.Line], at index: Int = 1) -> String? {
       LegacyTextParser.centeredHeadings(
-        in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)[index]?.title
+        in: lines, from: 0, bodyIsIndented: true, separators: [])[index]?.title
     }
     #expect(heading(lines) == "WIDGET RULES")
     var nextIsNotItsSubsection = lines
