@@ -83,6 +83,12 @@
       #expect(!items.opensInNewTab)
     }
 
+    /// A link to the web is anyone's already, even one that names an RFC: its errata
+    /// page is not the RFC's info page.
+    @Test func `a web link that names an RFC keeps the text view's Copy Link`() {
+      #expect(items("https://www.rfc-editor.org/errata/rfc9110").copyLink == .system)
+    }
+
     @Test func `the added items go above Copy Link, which is replaced in place`() {
       let menu = textViewMenu()
       let copy = NSMenuItem(title: "Copy Link", action: nil, keyEquivalent: "")

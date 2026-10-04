@@ -36,7 +36,7 @@
       let destination = LinkDestination.resolve(
         link, from: currentDocument, activation: .newTab(inBackground: false))
       let copyLink: CopyLink
-      if destination == .unhandled {
+      if !LinkCopy.isReaders(link) {
         copyLink = .system
       } else if let shared = LinkCopy.forLink(
         link, from: currentDocument, in: index, bibliography: bibliography)
