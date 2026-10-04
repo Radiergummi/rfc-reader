@@ -177,7 +177,7 @@ public struct BookmarkNotice: Equatable, Sendable {
       "Updated by \(list(documents))."
     case .revisionStarted(_, let draft, let relation, let stage, let stream):
       "\(RevisionsSummary.relationLabel(relation)) \(draft), "
-        + RevisionsSummary.lowercasingFirst(RevisionsSummary.stageName(stage, stream: stream))
+        + RevisionsSummary.stagePhrase(stage, stream: stream)
         + "."
     case .revisionQueued(_, let draft, let relation):
       "\(RevisionsSummary.relationLabel(relation)) \(draft), in the RFC Editor queue."

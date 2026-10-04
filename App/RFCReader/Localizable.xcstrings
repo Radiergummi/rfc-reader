@@ -285,6 +285,9 @@
     "Keep Offline" : {
 
     },
+    "Keep a copy to read offline." : {
+
+    },
     "Kept offline" : {
 
     },
@@ -385,6 +388,9 @@
 
     },
     "Obsoleted by" : {
+
+    },
+    "Offline" : {
 
     },
     "Open" : {
@@ -493,6 +499,9 @@
 
     },
     "Remove from Collection" : {
+
+    },
+    "Remove the offline copy. It stays open here, and is downloaded again the next time you open it." : {
 
     },
     "Remove this filter" : {

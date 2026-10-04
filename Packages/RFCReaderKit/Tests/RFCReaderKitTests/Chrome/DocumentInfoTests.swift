@@ -241,7 +241,7 @@ struct DocumentInfoTests {
           revision("draft-ietf-example-ext", .updates),
         ]
       ])
-    return RevisionsSummary(file, for: metadata.id, now: .now)
+    return RevisionsSummary(file, for: metadata.id, now: .now, locale: .english)
   }
 
   @Test func `drafts revising the document follow Updated by`() {
@@ -267,7 +267,7 @@ struct DocumentInfoTests {
 
   /// A summary with nothing in it adds no row.
   @Test func `no drafts add no rows`() {
-    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now)
+    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now, locale: .english)
     #expect(section("Relationships", of: bare) == nil)
     #expect(
       DocumentInfo(bare, in: index, revisions: empty, locale: .english).sections.first {

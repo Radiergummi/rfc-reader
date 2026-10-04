@@ -187,7 +187,7 @@ public struct DocumentInfo: Equatable, Sendable {
       if !lines.isEmpty {
         rows.append(
           Row(
-            label: RevisionsSummary.relationLabel(relation), value: .drafts(lines),
+            label: RevisionsSummary.relationLabel(relation, locale: locale), value: .drafts(lines),
             term: .process(.internetDraft)))
       }
     }
