@@ -298,6 +298,7 @@
         splitController.removeSplitViewItem(item)
         besideItem = nil
         if let window { applyMinimumWidth(to: window) }
+        trackPanelEdge()
       }
       guard let reading = reader.sideBySide,
         let readerIndex = splitController.splitViewItems.firstIndex(of: readerItem)
@@ -315,6 +316,17 @@
       splitController.insertSplitViewItem(item, at: readerIndex + 1)
       besideItem = item
       if let window { applyMinimumWidth(to: window) }
+      trackPanelEdge()
+    }
+
+    /// Keeps the toolbar's panel section over the contents panel, whose divider moves
+    /// along one as the reader beside is inserted in front of it or removed.
+    private func trackPanelEdge() {
+      let divider = ReaderWindowDividers.panel(comparing: besideItem != nil)
+      for case let separator as NSTrackingSeparatorToolbarItem in window?.toolbar?.items ?? []
+      where separator.itemIdentifier == .rfcPanelSeparator {
+        separator.dividerIndex = divider
+      }
     }
 
     // MARK: - Title
