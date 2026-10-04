@@ -93,7 +93,7 @@ You review the app as someone using it, on PLATFORM. Build and launch it: `make 
 Walk the tasks in lens 16 first, counting the steps and noting every place you had to know something the interface did not tell you; then apply the other lenses to what you saw. Compare against Apple's Human Interface Guidelines for PLATFORM and against the system apps that do the same job (Books, Preview, Notes, Safari's Reader, Xcode's documentation viewer): a deviation from them is a finding only when it costs the person something, and the finding says what.
 </experience-prompt>
 
-Subagents cannot write files, so each area's findings arrive as its final reply. Keep them in the conversation, and start the next queued area as each one reports. A rate or usage limit stops agents mid-review: resume each with `SendMessage` to its id once the limit resets, rather than starting a new one, so it keeps what it has read.
+Subagents cannot write files, so each area's findings arrive as its final reply. Keep them in the conversation, and start the next queued area as each one reports. A rate or usage limit stops agents mid-review: resume each with `SendMessage` to its id once the limit resets, rather than starting a new one, so it keeps what it has read. This is only for an agent the limit stopped. One that went idle without reporting gets a single `SendMessage`, as `CLAUDE.md` says, and then its area is reviewed directly.
 
 While they run, do the cross-cutting pass yourself (step 5).
 
