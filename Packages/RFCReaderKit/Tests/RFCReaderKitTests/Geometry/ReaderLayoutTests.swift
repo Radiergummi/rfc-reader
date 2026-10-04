@@ -125,19 +125,22 @@ struct ReaderLayoutTests {
   /// AppKit restores a saved frame without checking it against the minimum, so one
   /// saved narrower than the floor has to be widened by hand.
   @Test func `a restored window narrower than the floor is widened to it`() {
-    let restored = ReaderLayout.windowSize(
-      fitting: CGSize(width: 700, height: 300), panelIsOpen: false)
+    let restored = ReaderLayout.windowSize(fitting: CGSize(width: 700, height: 300))
     #expect(restored == CGSize(width: 900, height: 480))
   }
 
   @Test func `a window wider than the floor keeps its size`() {
     let size = CGSize(width: 1400, height: 900)
-    #expect(ReaderLayout.windowSize(fitting: size, panelIsOpen: false) == size)
+    #expect(ReaderLayout.windowSize(fitting: size) == size)
   }
 
-  @Test func `with the panel open a restored window is widened to the floor less the panel`() {
-    let restored = ReaderLayout.windowSize(
-      fitting: CGSize(width: 500, height: 600), panelIsOpen: true)
-    #expect(restored == CGSize(width: 580, height: 600))
+  /// With the panel open AppKit enforces the content minimum plus the panel, which is
+  /// the shut floor, so a window restored with its tab group's panel open is widened
+  /// to that and not to the content minimum alone.
+  @Test func `a restored window is widened to the floor AppKit enforces open or shut`() {
+    let restored = ReaderLayout.windowSize(fitting: CGSize(width: 600, height: 600))
+    let enforcedWithPanelOpen =
+      ReaderLayout.minimumWindowWidth(panelIsOpen: true) + ReaderLayout.panelWidth
+    #expect(restored.width == enforcedWithPanelOpen)
   }
 }

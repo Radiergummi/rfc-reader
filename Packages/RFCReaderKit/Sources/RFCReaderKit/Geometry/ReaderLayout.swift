@@ -49,9 +49,13 @@ public enum ReaderLayout {
   /// `size`, grown to the window's floor where it falls short of it. AppKit checks a
   /// window the user drags against its minimum, but not a frame it restores, so a
   /// window saved narrower than the floor comes back narrower unless widened.
-  public static func windowSize(fitting size: CGSize, panelIsOpen: Bool) -> CGSize {
+  ///
+  /// The floor is the one with the panel shut whether it is open or not: that is
+  /// what AppKit enforces either way, an open panel's width being added back on top
+  /// of `minimumWindowWidth(panelIsOpen: true)`.
+  public static func windowSize(fitting size: CGSize) -> CGSize {
     CGSize(
-      width: max(size.width, minimumWindowWidth(panelIsOpen: panelIsOpen)),
+      width: max(size.width, minimumWindowWidth(panelIsOpen: false)),
       height: max(size.height, minimumWindowHeight))
   }
 

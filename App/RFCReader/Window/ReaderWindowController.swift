@@ -293,8 +293,8 @@
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
       if reader.canDescribe {
-        // The panel may have been opened by the tab group rather than by a toggle,
-        // so the floor follows whatever state it is in now.
+        // The panel may have been opened or shut by the tab group rather than by a
+        // toggle, so the floor follows whatever state it is in now.
         splitController.applyMinimumWidth()
       } else {
         splitController.closePanel()
@@ -570,14 +570,11 @@
       // inside `makeKeyAndOrderFront(_:)`, which is still running; see
       // `closePanelWithoutDocument()`.
       //
-      // The window's floor is put right here too: AppKit gave the window its saved
+      // That puts the window's floor right too: AppKit gave the window its saved
       // frame after it was made, without checking it against the minimum.
       if correctsPanelOnFirstKey {
         correctsPanelOnFirstKey = false
-        Task { [weak self] in
-          self?.closePanelWithoutDocument()
-          self?.splitController.applyMinimumWidth()
-        }
+        Task { [weak self] in self?.closePanelWithoutDocument() }
       }
     }
 

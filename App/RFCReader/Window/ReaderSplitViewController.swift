@@ -150,9 +150,9 @@
     }
 
     /// Shuts the panel at once, unanimated, and puts the window's floor back where it
-    /// is with the panel shut.
+    /// is with the panel shut — also when the panel was already shut, since a tab group
+    /// may have shut it without the floor following.
     func closePanel() {
-      guard isPanelOpen else { return }
       panelItem.isCollapsed = true
       applyMinimumWidth()
     }
@@ -162,15 +162,14 @@
     /// Holds the window's minimum *constant* as the panel opens and closes
     /// (`ReaderLayout.minimumWindowWidth(panelIsOpen:)`), and widens a window that is
     /// narrower than it. Called again once a saved frame has been put back, which
-    /// AppKit does not check against the minimum
-    /// (`ReaderLayout.windowSize(fitting:panelIsOpen:)`).
+    /// AppKit does not check against the minimum (`ReaderLayout.windowSize(fitting:)`).
     func applyMinimumWidth() {
       guard let window = view.window else { return }
       window.contentMinSize = NSSize(
         width: ReaderLayout.minimumWindowWidth(panelIsOpen: isPanelOpen),
         height: ReaderLayout.minimumWindowHeight)
       var frame = window.frame
-      frame.size = ReaderLayout.windowSize(fitting: frame.size, panelIsOpen: isPanelOpen)
+      frame.size = ReaderLayout.windowSize(fitting: frame.size)
       if frame != window.frame { window.setFrame(frame, display: false) }
     }
   }
