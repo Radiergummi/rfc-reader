@@ -26,7 +26,7 @@ struct LookUpIdentifierIntent: AppIntent {
     let answer = IntentAnswer.definition(
       of: entry.heading, name: entry.name, definedIn: entry.definedIn)
     return .result(
-      value: entry, dialog: IntentDialog(stringLiteral: answer),
+      value: entry, dialog: IntentDialog(.verbatim(answer)),
       view: RegistryEntrySnippet(entry: entry))
   }
 }

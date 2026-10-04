@@ -46,7 +46,7 @@ struct RequirementsIntent: AppIntent {
       section.map { String(localized: "\($0.title) of \(id.displayName)") } ?? id.displayName
     let answer = IntentAnswer.requirements(lines.count, in: place)
     return .result(
-      value: lines, dialog: IntentDialog(stringLiteral: answer),
+      value: lines, dialog: IntentDialog(.verbatim(answer)),
       view: RequirementsSnippet(lines: lines, document: document, section: section))
   }
 

@@ -119,7 +119,7 @@ import SwiftUI
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
-            Button(format.name) { exportDocument(format) }
+            Button(format.name()) { exportDocument(format) }
           }
         }
         // Not for a document read as its PDF or PostScript original (#207).

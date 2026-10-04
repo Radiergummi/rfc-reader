@@ -84,6 +84,28 @@
         }
       }
     },
+    "%lld Documents" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Document"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Documents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld RFCs" : {
       "localizations" : {
         "en" : {
@@ -143,6 +165,9 @@
 
     },
     "A working document, not yet an RFC." : {
+
+    },
+    "ABNF Grammar" : {
 
     },
     "Abandoned" : {

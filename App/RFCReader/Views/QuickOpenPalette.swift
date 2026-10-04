@@ -76,8 +76,8 @@
     private var message: String? {
       let query = results.query
       guard !query.isEmpty, !results.isSearching else { return nil }
-      if library.index == nil { return "The RFC index is still loading." }
-      return "Nothing in the index matches “\(query)”."
+      if library.index == nil { return String(localized: "The RFC index is still loading.") }
+      return String(localized: "Nothing in the index matches “\(query)”.")
     }
 
     private var field: some View {
