@@ -109,21 +109,9 @@ public enum RFCColors {
   /// translucent, so it tints the page or a card under it.
   public static var requirementBand: PlatformColor {
     let tint = RequirementBands.tint
-    #if canImport(UIKit)
-      return UIColor { traits in
-        let band = traits.userInterfaceStyle == .dark ? tint.dark : tint.light
-        return UIColor(
-          red: band.color.red, green: band.color.green, blue: band.color.blue, alpha: band.opacity)
-      }
-    #else
-      return NSColor(name: nil) { appearance in
-        let band =
-          appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? tint.dark : tint.light
-        return NSColor(
-          srgbRed: band.color.red, green: band.color.green, blue: band.color.blue,
-          alpha: band.opacity)
-      }
-    #endif
+    return byAppearance(
+      light: tint.light.color, dark: tint.dark.color,
+      opacity: (light: tint.light.opacity, dark: tint.dark.opacity))
   }
 
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
@@ -150,17 +138,26 @@ public enum RFCColors {
   }
 
   /// `light` in light appearance and `dark` in dark, drawn as exactly those sRGB
-  /// values and resolved when drawn: for colors whose contrast is measured.
-  public static func byAppearance(light: SRGBColor, dark: SRGBColor) -> PlatformColor {
+  /// values, at `opacity` in each, and resolved when drawn: for colors whose
+  /// contrast is measured.
+  public static func byAppearance(
+    light: SRGBColor, dark: SRGBColor, opacity: (light: CGFloat, dark: CGFloat) = (1, 1)
+  ) -> PlatformColor {
     #if canImport(UIKit)
       UIColor { traits in
-        let color = traits.userInterfaceStyle == .dark ? dark : light
-        return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1)
+        let isDark = traits.userInterfaceStyle == .dark
+        let color = isDark ? dark : light
+        return UIColor(
+          red: color.red, green: color.green, blue: color.blue,
+          alpha: isDark ? opacity.dark : opacity.light)
       }
     #else
       NSColor(name: nil) { appearance in
-        let color = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-        return NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let color = isDark ? dark : light
+        return NSColor(
+          srgbRed: color.red, green: color.green, blue: color.blue,
+          alpha: isDark ? opacity.dark : opacity.light)
       }
     #endif
   }

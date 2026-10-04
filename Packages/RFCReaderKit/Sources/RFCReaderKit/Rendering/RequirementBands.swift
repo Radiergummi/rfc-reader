@@ -97,16 +97,14 @@ public struct RequirementBands: Sendable, Equatable {
     _ sentence: [ArraySlice<UInt16>], in units: [UInt16], words: [NSRange], from start: Int,
     to end: Int
   ) -> NSRange? {
-    guard let first = sentence.first else { return nil }
+    guard !sentence.isEmpty else { return nil }
     var index = words.partitioningIndex { $0.location >= start }
     while index + sentence.count <= words.count,
       NSMaxRange(words[index + sentence.count - 1]) <= end
     {
-      if units[range: words[index]] == first,
-        zip(sentence, words[index..<(index + sentence.count)]).allSatisfy({
-          units[range: $1] == $0
-        })
-      {
+      if zip(sentence, words[index..<(index + sentence.count)]).allSatisfy({
+        units[range: $1] == $0
+      }) {
         let last = words[index + sentence.count - 1]
         return NSRange(
           location: words[index].location, length: NSMaxRange(last) - words[index].location)
