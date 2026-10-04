@@ -37,6 +37,21 @@ struct PlanTests {
     #expect(try ConversionPlan.files(in: names) == ["rfc1.txt", "rfc9.txt", "rfc10.txt"])
   }
 
+  /// A file names an RFC as `DocumentID.fileStem` writes it, and a number of another
+  /// series is not an RFC's: a `bcp14.txt` would otherwise take RFC 14's index entry.
+  @Test func `a file of another series names no RFC number`() {
+    #expect(ConversionPlan.rfcNumber(of: "rfc2119.txt") == 2119)
+    #expect(ConversionPlan.rfcNumber(of: "rfc2119") == 2119)
+    #expect(ConversionPlan.rfcNumber(of: "bcp14.txt") == nil)
+    #expect(ConversionPlan.rfcNumber(of: "std1") == nil)
+    #expect(ConversionPlan.rfcNumber(of: "RFC2119.txt") == nil)
+  }
+
+  @Test func `only does not take another series' document of the number`() throws {
+    let names = ["rfc14.txt", "bcp14.txt"]
+    #expect(try ConversionPlan.files(in: names, only: [14]) == ["rfc14.txt"])
+  }
+
   @Test func `only takes the named numbers`() throws {
     let names = ["rfc10.txt", "rfc9.txt", "rfc1.txt"]
     #expect(try ConversionPlan.files(in: names, only: [10, 1]) == ["rfc1.txt", "rfc10.txt"])

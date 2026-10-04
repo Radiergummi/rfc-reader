@@ -49,7 +49,7 @@ public enum LegacyTextParser {
   }
 
   static let numberedHeadingPattern = Pattern(
-    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
+    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:)])?\s+(?<title>\S.*)$/#)
   /// An appendix heading that names itself one (#201): `Appendix` or `Annex` in any case
   /// after its capital, then its number -- a letter, a Roman or an Arabic numeral, with
   /// any subsections -- and the title, set off by a full stop, a colon, dashes, or by
@@ -188,7 +188,7 @@ public enum LegacyTextParser {
     var header = parseFrontMatter(prelude.front)
     var sections = rawSections(
       in: lines, from: prelude.bodyStart, bodyIsIndented: prelude.bodyIsIndented,
-      colonNumbered: prelude.colonNumbered)
+      separators: prelude.separators)
     if let title, !title.isEmpty {
       // The title page is the front matter's runs and the lead-in's blocks up to the
       // one that opens the body, which is where a title set over several runs leaves
@@ -317,16 +317,14 @@ public enum LegacyTextParser {
   /// number also has to follow from one: the number before it (`2.4.11` for `2.4.12`,
   /// `10` for `11`) or one it is under (`2.4`) must be a heading number too, however it
   /// is set. Only `0` and `1` open a numbering on their own.
-  private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
-    numbersHeadingsWithAColon(lines.compactMap(\.string))
-  }
-
   static func numbersHeadingsWithAColon(_ lines: [String]) -> Bool {
     var colonNumbers: Set<Substring> = []
     var fullStopNumbers: Set<Substring> = []
     var numbers: Set<Substring> = []
     for string in lines where string.startsAtColumnZero {
-      guard let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+      // `1)` is the weaker sign: a colon number vetoes it, never the other way round.
+      guard let match = string.firstMatch(of: numberedHeadingPattern), match.separator != ")"
+      else { continue }
       numbers.insert(match.number)
       switch match.separator {
       case ":": colonNumbers.insert(match.number)
@@ -338,6 +336,64 @@ public enum LegacyTextParser {
       return false
     }
     return colonNumbers.allSatisfy { follows($0, in: numbers) }
+  }
+
+  /// Whether `1)` at column 0 is a heading in this document. RFC 1136, 1927 and 2122
+  /// number their sections that way (#199), and some forty documents set the same shape
+  /// as list items: RFC 77's run on past their first line, RFC 751 starts two lists at
+  /// `1)`, and RFC 3116's eight test cases repeat its `1.` headings' numbers.
+  ///
+  /// So, as with the colon, a parenthesis number has to follow from another, and may not
+  /// be another heading's too, `1.`, `1:` or `1` with no separator. And each is a title: it starts its block, which
+  /// is two lines at most, a title wrapped once. No number may come twice.
+  ///
+  /// That still passes RFC 234, a one-page agenda whose six items carry a paragraph
+  /// each. What it lacks is any other sign of sections, which the three have: a column-0
+  /// line, or a parenthesis title, that names a section every RFC has, `Status of this
+  /// Memo` or `Security Considerations`. Across the corpus RFC 234 is the only document
+  /// this test decides, but an override cannot take its place: a patch has no operation
+  /// that makes a section a list item without restating the section's text.
+  static func numbersHeadingsWithAParenthesis(_ lines: [String]) -> Bool {
+    var parenthesisNumbers: [Substring] = []
+    var otherHeadingNumbers: Set<Substring> = []
+    var numbers: Set<Substring> = []
+    var namesASection = false
+    for (index, string) in lines.enumerated() where string.startsAtColumnZero {
+      guard let match = string.firstMatch(of: numberedHeadingPattern) else {
+        namesASection = namesASection || namesAStandardSection(string)
+        continue
+      }
+      numbers.insert(match.number)
+      guard match.separator == ")" else {
+        otherHeadingNumbers.insert(match.number)
+        continue
+      }
+      let startsBlock = index == 0 || lines[index - 1].isBlank
+      guard startsBlock, lines[index...].prefix(while: { !$0.isBlank }).count <= 2 else {
+        return false
+      }
+      parenthesisNumbers.append(match.number)
+      namesASection = namesASection || namesAStandardSection(String(match.title))
+    }
+    guard !parenthesisNumbers.isEmpty, namesASection,
+      Set(parenthesisNumbers).count == parenthesisNumbers.count,
+      otherHeadingNumbers.isDisjoint(with: parenthesisNumbers)
+    else { return false }
+    return parenthesisNumbers.allSatisfy { follows($0, in: numbers) }
+  }
+
+  /// Titles every RFC has a section of. Matched whole, a colon after them allowed, so
+  /// that prose opening with `Abstraction` or `References to` names none.
+  private static let standardSectionTitles: Set<String> = [
+    "status of this memo", "status of memo", "abstract", "introduction",
+    "security considerations", "references", "acknowledgment", "acknowledgement",
+    "acknowledgments", "acknowledgements", "author's address", "authors' addresses",
+  ]
+
+  private static func namesAStandardSection(_ title: String) -> Bool {
+    var lowered = title.trimmingCharacters(in: .whitespaces).lowercased()
+    if lowered.hasSuffix(":") { lowered.removeLast() }
+    return standardSectionTitles.contains(lowered)
   }
 
   /// Whether heading `number` follows from one of `numbers`: the one before it at its
@@ -363,7 +419,7 @@ public enum LegacyTextParser {
   /// one would drift, and a diagnosis of blocks the parser never saw is worse than
   /// none.
   private static func rawSections(
-    in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool, colonNumbered: Bool
+    in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool, separators: HeadingSeparators
   ) -> [RawSection] {
     var sections: [RawSection] = [RawSection(heading: nil)]
     var current: [String] = []
@@ -371,7 +427,7 @@ public enum LegacyTextParser {
     // The numbers headings have taken, which a centered heading may not take again.
     var numbers: Set<String> = []
     let centered = centeredHeadings(
-      in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered)
+      in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented, separators: separators)
 
     func flushBlock() {
       if !current.isEmpty {
@@ -398,7 +454,7 @@ public enum LegacyTextParser {
         if string.isBlank {
           flushBlock()
         } else if let heading = Self.heading(
-          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+          at: index, in: lines, bodyIsIndented: bodyIsIndented, separators: separators,
           startsBlock: current.isEmpty), !isContentsEntry(at: index, in: lines)
         {
           if heading.number == nil, refusesUnnumberedHeading(heading.title) {
@@ -426,13 +482,23 @@ public enum LegacyTextParser {
     return sections
   }
 
+  /// The separators after a heading's number that head sections in some documents and
+  /// are something else in the rest, `1:` and `1)`, as far as a document numbers its
+  /// headings with them. The full stop, and no separator at all, head sections in any.
+  struct HeadingSeparators: OptionSet {
+    let rawValue: Int
+
+    static let colon = HeadingSeparators(rawValue: 1 << 0)
+    static let parenthesis = HeadingSeparators(rawValue: 1 << 1)
+  }
+
   /// What every reading of the depaginated lines starts from: the lines, double
   /// spacing collapsed, and what the front matter's end and the headings are judged
   /// by. `prepared` goes on from here, and `stripPagination` and the corpus report ask
   /// it which section running headers the document heads itself, so all three agree.
   struct Prelude {
     let lines: [Line]
-    let colonNumbered: Bool
+    let separators: HeadingSeparators
     let proseIndent: Int
     let front: [String]
     let bodyStart: Int
@@ -440,10 +506,10 @@ public enum LegacyTextParser {
 
     init(_ depaginated: [Line]) {
       lines = collapsingDoubleSpacing(depaginated)
-      colonNumbered = numbersHeadingsWithAColon(lines)
+      separators = HeadingSeparators(lines)
       proseIndent = LegacyTextParser.proseIndent(lines)
       (front, bodyStart) = splitFrontMatter(
-        lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
+        lines, separators: separators, proseIndent: proseIndent)
       bodyIsIndented = LegacyTextParser.bodyIsIndented(lines[bodyStart...])
     }
 
@@ -455,7 +521,7 @@ public enum LegacyTextParser {
         guard case .sectionHeader(_, let sighting) = lines[index],
           headsNearby(
             at: index, in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented,
-            colonNumbered: colonNumbered)
+            separators: separators)
         else { continue }
         headed.insert(sighting)
       }
@@ -490,7 +556,7 @@ public enum LegacyTextParser {
   /// header at the other (#57).
   static func headsNearby(
     at index: Int, in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool,
-    colonNumbered: Bool
+    separators: HeadingSeparators
   ) -> Bool {
     guard let header = lines[index].string else { return false }
     func isBreak(_ line: Line) -> Bool {
@@ -507,7 +573,7 @@ public enum LegacyTextParser {
     while end < lines.endIndex, !isBreak(lines[end]) { end += 1 }
 
     let stated = header.trimmingCharacters(in: .whitespaces)
-    let headerHeading = heading(from: stated, colonNumbered: colonNumbered)
+    let headerHeading = heading(from: stated, separators: separators)
     let title = headingText(headerHeading?.title ?? stated)
     // The same words, and the same number where both have one: `5.  Retry Handling`
     // is not `4.  Retry Handling`. A header with no title, `Appendix B`, is told by
@@ -528,7 +594,7 @@ public enum LegacyTextParser {
         candidate == bodyStart || isBlankOrEnd(lines, at: previous)
         || lines[previous].isSectionHeader
       if let heading = Self.heading(
-        at: candidate, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+        at: candidate, in: lines, bodyIsIndented: bodyIsIndented, separators: separators,
         startsBlock: startsBlock),
         heading.number != nil || !refusesUnnumberedHeading(heading.title)
       {
@@ -537,7 +603,7 @@ public enum LegacyTextParser {
       }
       let indented = string.drop { $0 == " " }
       if indented.first?.isNumber == true,
-        let heading = Self.heading(from: String(indented), colonNumbered: colonNumbered),
+        let heading = Self.heading(from: String(indented), separators: separators),
         heading.number != nil, names(heading)
       {
         return true
@@ -716,5 +782,15 @@ public enum LegacyTextParser {
 
   static func isBoilerplateTitle(_ lowered: String) -> Bool {
     boilerplateTitles.contains { lowered.hasPrefix($0) }
+  }
+}
+
+extension LegacyTextParser.HeadingSeparators {
+  init(_ lines: [LegacyTextParser.Line]) {
+    // A page break reads as a blank line, which ends a `1)` heading's block.
+    let strings = lines.map { $0.string ?? "" }
+    self = []
+    if LegacyTextParser.numbersHeadingsWithAColon(strings) { insert(.colon) }
+    if LegacyTextParser.numbersHeadingsWithAParenthesis(strings) { insert(.parenthesis) }
   }
 }

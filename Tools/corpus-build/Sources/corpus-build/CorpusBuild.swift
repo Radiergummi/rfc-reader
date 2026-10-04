@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import Logging
+import RFCCorpusKit
 
 // corpus-build: the offline half of RFC Reader's data pipeline.
 //
@@ -40,6 +41,27 @@ extension Logger {
   init(command: String) {
     self.init(label: "corpus-build.\(command)") { label in
       StreamLogHandler.standardError(label: label)
+    }
+  }
+
+  /// Logs each file reading `ConvertedCorpus` passed over or could not parse.
+  func report(_ reading: ConvertedCorpus.Reading) {
+    for file in reading.passedOver {
+      info("not an RFC", metadata: ["file": "\(file.url.lastPathComponent)"])
+    }
+    for (file, error) in reading.unreadable {
+      self.error(
+        "unreadable", metadata: ["file": "\(file.url.lastPathComponent)", "error": "\(error)"])
+    }
+  }
+
+  /// Fails the run when reading the corpus could not parse an RFC, naming each: called
+  /// once the rest is written, for the files to be looked at.
+  func failOnLeftOut(_ reading: ConvertedCorpus.Reading) throws {
+    guard reading.unreadable.isEmpty else {
+      let stems = reading.unreadable.map(\.file.stem)
+      self.error("RFCs left out", metadata: ["documents": "\(stems.joined(separator: " "))"])
+      throw ExitCode.failure
     }
   }
 }

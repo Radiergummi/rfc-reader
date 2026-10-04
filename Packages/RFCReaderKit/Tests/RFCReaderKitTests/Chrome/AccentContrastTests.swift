@@ -174,6 +174,44 @@ struct AccentContrastTests {
     }
   }
 
+  // MARK: - Requirement bands
+
+  /// Implementer's band behind a requirement (#700) is drawn on the page or on a
+  /// card, and the link on it has to clear the minimum on either, as the text does.
+  @Test func `the link and the text clear the minimum on a requirement band`() {
+    let band = RequirementBands.tint
+    for backdrop in Self.lightPages.map(Self.color) + Self.lightCards {
+      let banded = band.light.color.composited(opacity: band.light.opacity, over: backdrop)
+      #expect(AccentContrast.readerLink.light.contrast(with: banded) >= 4.5, "\(banded)")
+      #expect(AccentContrast.cardLink.light.contrast(with: banded) >= 4.5, "\(banded)")
+      #expect(Self.color(0x00_0000).contrast(with: banded) >= 7, "\(banded)")
+    }
+    for backdrop in Self.darkPages.map(Self.color) {
+      let banded = band.dark.color.composited(opacity: band.dark.opacity, over: backdrop)
+      #expect(AccentContrast.readerLink.dark.contrast(with: banded) >= 4.5, "\(banded)")
+    }
+    for backdrop in Self.darkCards {
+      let banded = band.dark.color.composited(opacity: band.dark.opacity, over: backdrop)
+      #expect(AccentContrast.cardLink.dark.contrast(with: banded) >= 4.5, "\(banded)")
+    }
+    for backdrop in Self.darkPages.map(Self.color) + Self.darkCards {
+      let banded = band.dark.color.composited(opacity: band.dark.opacity, over: backdrop)
+      #expect(Self.color(0xFF_FFFF).contrast(with: banded) >= 7, "\(banded)")
+    }
+  }
+
+  /// Faint, but there: a band no one can see bands nothing.
+  @Test func `a requirement band is visible on the page`() {
+    let band = RequirementBands.tint
+    let light = band.light.color.composited(opacity: band.light.opacity, over: .white)
+    #expect(light != .white)
+    #expect(SRGBColor.white.contrast(with: light) >= 1.05)
+    for page in Self.darkPages.map(Self.color) {
+      let dark = band.dark.color.composited(opacity: band.dark.opacity, over: page)
+      #expect(dark.contrast(with: page) >= 1.05)
+    }
+  }
+
   // MARK: - The status banner
 
   /// The banner's fill is the quaternary label color at half its opacity over the

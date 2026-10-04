@@ -77,14 +77,21 @@ public enum FragmentGeometry {
   /// (the common single-fragment case), or neither (a middle fragment, which draws
   /// no cap and must not repeat the run's outer padding or its rounding, or the
   /// band would show a seam at every fragment boundary).
-  public static func decorationSpan(in text: NSAttributedString, fragment: NSRange)
-    -> DecorationSpan?
-  {
+  ///
+  /// A run whose rest a reading mode folds away, an aside closed under its caption
+  /// (#700), ends where what is shown of it ends, and the run after it meets no card
+  /// there: `hidden` is what the mode hides.
+  public static func decorationSpan(
+    in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
+  ) -> DecorationSpan? {
     // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
     // depends on that as much as a table does: its last line carries the block's
     // spacing alone (#31), which is a storage run of its own.
     guard let run = text.decorationRun(at: fragment.location) else { return nil }
-    let effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
+    var effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
+    let shownEnd = hidden.shownEnd(of: effective)
+    let isFolded = shownEnd < NSMaxRange(effective)
+    effective.length = shownEnd - effective.location
     let paragraph =
       text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
       as? NSParagraphStyle
@@ -98,8 +105,10 @@ public enum FragmentGeometry {
       indent: indent(in: text, over: effective)
         - (text.attribute(.rfcCardInset, at: effective.location, effectiveRange: nil) as? CGFloat
           ?? 0),
-      meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
-      meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective)),
+      // A card the mode has folded away above this one is not met either.
+      meetsCardAbove: !hidden.contains(effective.location - 1)
+        && drawsCard(in: text, at: effective.location - 1),
+      meetsCardBelow: !isFolded && drawsCard(in: text, at: NSMaxRange(effective)),
       contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
         as? CGFloat,
       spacingBefore: paragraph?.paragraphSpacingBefore ?? 0,

@@ -28,8 +28,15 @@ extension NSAttributedString.Key {
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on every character of an aside, its "Note" caption first (#700): the
+  /// aside's ordinal among the document's asides, which Implementer folds its body
+  /// by (`FoldingIndex`). Only in a build with live links, which alone has the
+  /// caption. A `String`, so the runs of one aside merge and two asides stay two;
+  /// a nested aside keeps its own.
+  public static let rfcAside = NSAttributedString.Key("rfcAside")
   /// Set on what the reader adds to the document's words: a heading's backlink
-  /// caption, its line break included, a code block's language and its copy button. A copied
+  /// caption, its line break included, an aside's "Note" caption, a code block's
+  /// language and its copy button. A copied
   /// selection leaves these runs out (`SelectionText`). A `String`, so the runs
   /// merge; only its presence is meaningful.
   public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")

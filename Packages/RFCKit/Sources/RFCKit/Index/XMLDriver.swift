@@ -38,6 +38,14 @@ protocol XMLEvents: AnyObject {
 /// deliberately ignored, not a bug to fix. Anything that goes wrong before the root
 /// closes is an `XMLSyntaxError`.
 enum XMLDriver {
+  /// How deep elements may nest. The tree builder, its teardown and `RFCXMLParser`'s
+  /// block walk each recurse once per level, so a document nested without bound would
+  /// exhaust a thread's stack before any parser saw it as wrong (#757). Published
+  /// RFCXML, the index, the feed and IANA's registries nest well under half as deep;
+  /// at this cap a debug build of `RFCXMLParser` still has room on a 512 KiB thread,
+  /// the smallest it runs on, for any shape of nesting.
+  static let maximumDepth = 48
+
   static func run(_ data: Data, into events: any XMLEvents) throws(XMLSyntaxError) {
     let delegate = Delegate(events: events)
     let parser = XMLParser(data: data)
@@ -188,6 +196,9 @@ enum XMLDriver {
     private(set) var depth = 0
     private(set) var rootClosed = false
     private(set) var failure: XMLSyntaxError?
+    /// Set once nesting passes the cap: whatever the parser reports after it aborts
+    /// reaches no parser.
+    private var aborted = false
 
     init(events: any XMLEvents) {
       self.events = events
@@ -197,6 +208,15 @@ enum XMLDriver {
       _ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
       qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]
     ) {
+      guard !aborted else { return }
+      if depth == XMLDriver.maximumDepth {
+        aborted = true
+        failure = XMLSyntaxError(
+          line: parser.lineNumber, column: parser.columnNumber,
+          message: "elements nested deeper than \(XMLDriver.maximumDepth) levels")
+        parser.abortParsing()
+        return
+      }
       depth += 1
       events.start(elementName, attributes: attributeDict)
     }
@@ -205,16 +225,19 @@ enum XMLDriver {
       _ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
       qualifiedName qName: String?
     ) {
+      guard !aborted else { return }
       events.end(elementName)
       depth -= 1
       if depth == 0 { rootClosed = true }
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
+      guard !aborted else { return }
       events.text(string)
     }
 
     func parser(_ parser: XMLParser, foundCDATA cdataBlock: Data) {
+      guard !aborted else { return }
       events.text(String(decoding: cdataBlock, as: UTF8.self))
     }
 
