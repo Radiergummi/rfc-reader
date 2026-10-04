@@ -90,14 +90,10 @@
     }
 
     private func build(in window: NSWindow) {
-      // The reader's hosted root refuses the safe area, for the panel's width; see
-      // `ReaderSplitViewController`.
-      let readerHost = host(ReaderHost())
-      readerHost.safeAreaRegions = []
       splitController = ReaderSplitViewController(
         sidebar: host(SidebarView()),
         list: host(RFCListView()),
-        reader: readerHost,
+        reader: host(ReaderHost()),
         // The glass is the window's business, not the panel's: without this the list
         // draws its own opaque sidebar background over the inspector and the panel
         // stops being translucent at all. Applied here rather than inside
@@ -296,8 +292,13 @@
     /// second later. `AppDelegate` makes it there, which is why nothing here has to
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
-      guard !reader.canDescribe else { return }
-      splitController.closePanel()
+      if reader.canDescribe {
+        // The panel may have been opened by the tab group rather than by a toggle,
+        // so the floor follows whatever state it is in now.
+        splitController.applyMinimumWidth()
+      } else {
+        splitController.closePanel()
+      }
     }
 
     // MARK: - The sidebar

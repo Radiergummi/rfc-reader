@@ -28,7 +28,7 @@ Verified by measurement rather than by eye, on RFC 9110 in a 1500 pt window with
 
 The decision stands only as long as SwiftUI can't reach the window's chrome. What it costs is everything `WindowGroup` gives for free: state restoration, `@FocusedValue`, `.searchable`, focus between columns, Edit ▸ Find and `openWindow(value:)`. So on each new macOS major, the spike is built again, time-boxed to a day, and measured against the criteria the decision was taken on (#142).
 
-**The spike:** a standalone app with a `WindowGroup(for: RFCLink.self)` whose root is a three-column `NavigationSplitView` (sidebar, list, a text view under a `GeometryReader`), and an `.inspector` on the detail column. It is built with the new SDK and run on the new release.
+**The spike:** a standalone app with a `WindowGroup(for: RFCLink.self)` whose root is a three-column `NavigationSplitView` (sidebar, list, a text view under a `GeometryReader`), and an `.inspector` on the detail column. `WindowGroup(for:)` needs a `Codable` value, which `RFCLink` is not, so the spike declares the conformance itself. It is built with the new SDK and run on the new release.
 
 **What it must do, all of it,** for the window layer to go back to SwiftUI:
 
@@ -37,10 +37,12 @@ The decision stands only as long as SwiftUI can't reach the window's chrome. Wha
 3. The window's tab bar ends at the inspector's leading edge, rather than running under it.
 4. Opening the inspector changes neither the window's width nor the width the detail column's `GeometryReader` reports. It must be the same number shut and open, or the reader re-wraps and loses its place.
 5. The split view controller AppKit sees is the window's `contentViewController`, with the inspector as a real `NSSplitViewItem` (probed on the running app).
+6. It opens a window at launch. On macOS 26 `WindowGroup(for:)` left the app running with no interface at all (`2026-09-22-per-tab-navigation-and-how-a-tab-gets-opened.md`); a spike that shows no window has measured none of the above, and is recorded as failing this one.
 
 Any one missing keeps the window AppKit's. Record each run below, dated, with the release, the build and what each criterion measured.
 
 **Runs**
 
-- **macOS 26, 22 September 2026:** the decision's own measurements, above and in `2026-09-22-window-hijack-probe-results.md`. `.inspector` isn't a split item (the controller reports three items with it showing), so 1, 2, 3 and 5 fail, and an item added to SwiftUI's controller is reconciled away. Stays AppKit's.
+- **macOS 26, 22 September 2026:** the decision's own measurements, above and in `2026-09-22-window-hijack-probe-results.md`. `.inspector` isn't a split item (the controller reports three items with it showing), so 1, 2, 3 and 5 fail, and an item added to SwiftUI's controller is reconciled away. `WindowGroup(for:)` opened no window at launch, so 6 fails too. Stays AppKit's.
+- **macOS 27:** not yet run.
 

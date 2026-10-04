@@ -1,6 +1,7 @@
 #if os(macOS)
   import AppKit
   import RFCReaderKit
+  import SwiftUI
 
   /// The window's four columns, sidebar, list, reader and contents panel, and the
   /// rules that keep the reader's text where it is as they open and close.
@@ -19,10 +20,8 @@
     private let readerItem: NSSplitViewItem
     private let panelItem: NSSplitViewItem
 
-    /// `reader` has refused the safe area already (`safeAreaRegions = []`); see the
-    /// comment where its item is made.
     init(
-      sidebar: NSViewController, list: NSViewController, reader: NSViewController,
+      sidebar: NSViewController, list: NSViewController, reader: NSHostingController<some View>,
       panel: NSViewController
     ) {
       sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
@@ -38,7 +37,7 @@
       // What the panel overlaps, it covers.
       //
       // Two layers have to refuse it, because they are two different measurements
-      // of two different things. The first is SwiftUI's: the width `DocumentView`
+      // of two different things. This one is SwiftUI's: the width `DocumentView`
       // derives its column from comes from a `GeometryReader` in the reader's hosted
       // root, and a root that honors the inset reports 919 pt shut and 599 pt open.
       // Clearing `safeAreaRegions` on it holds it at 919 both ways — measured, with
@@ -50,6 +49,7 @@
       // the same inset to the scroll view, which turns it into content insets the
       // text view tracks — 1019 → 699 pt there, separately measured. That one is
       // `ReaderScrollView`'s to refuse.
+      reader.safeAreaRegions = []
       readerItem = NSSplitViewItem(viewController: reader)
       // On the *content* item, never on the panel: this is what makes the reader's
       // frame span the panel and hands the panel's width back as a right safe-area
