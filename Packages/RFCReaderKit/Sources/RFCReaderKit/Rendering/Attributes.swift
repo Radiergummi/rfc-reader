@@ -132,14 +132,14 @@ extension NSAttributedString {
 
   /// The decoration at `location` and the whole of its run, across storage runs.
   /// Two adjacent blocks with the same decoration share one run, so it is a block's
-  /// extent only where no such block follows; a verbatim block is cut out of it by
-  /// its box (`FragmentGeometry.verbatimBlock`).
+  /// extent only where no such block borders it; a verbatim block is cut out of it
+  /// by its box (`FragmentGeometry.verbatimBlock`).
   ///
   /// Through `longestEffectiveRange`, the only way the reader's geometry asks for a
-  /// decoration's extent. `effectiveRange` returns the *storage* run, which ends at any attribute
-  /// change at all: a stacked table's bold label and regular value are different
-  /// runs, and each line that saw a decoration begin and end with itself drew a
-  /// fully rounded card at its own indent, a staircase (#122).
+  /// decoration's extent. `effectiveRange` returns the *storage* run, which ends at
+  /// any attribute change at all: a stacked table's bold label and regular value are
+  /// different runs, and each line that saw a decoration begin and end with itself
+  /// drew a fully rounded card at its own indent, a staircase (#122).
   ///
   /// Probed with `decoration(at:)` first, because `longestEffectiveRange` coalesces
   /// the *absent* value just as eagerly as a present one: on the plain prose that is
