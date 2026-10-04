@@ -36,9 +36,13 @@ The pull request's status says where the issue stands, so that the next session,
 | Waiting for the maintainer | draft | `agent-pr`, `agent-blocked` |
 | Done | ready for review | `agent-pr` |
 
+**An issue built in several pull requests**, by an agreed plan of steps outside an epic, is the one exception to "nothing is left". Each step's pull request says `Part of #N`, and only the last says `Closes #N`. When you mark a step ready, post a marked comment on the issue naming what it delivered and what remains, and narrow the issue's title to what remains if the title no longer says it. An issue whose title still describes work that has shipped reads as undone to the next session.
+
 **Ready for review means done**: every question you asked has been answered, everything the issue asks for is built (nothing is left for a follow-up), and step 6 passed. Anything short of that stays a draft. A draft therefore always means that a session is working on it or that it waits for an answer. Going back to work on a ready pull request, turn it into a draft first (`gh pr ready N --undo`), and mark it ready again only when it is done again.
 
 ## 1. Pick the issue
+
+**Clear stale claims first.** An issue with `agent-pr` that no open pull request closes or names as `Part of #N` has lost its claim, usually because a step of it merged (above). Remove `agent-pr` from it, so the queue can take what remains. Name each one in your report.
 
 If you were given a number, take that issue, whatever its labels. If you were given a label instead, such as `/work-issue bug`, it narrows every item in the list below to issues that carry it: in item 1, a pull request counts only when the issue it closes has the label, and an epic counts when the epic itself has it. Otherwise go down this list and take the first match:
 
@@ -146,6 +150,8 @@ Never leave a rebase to GitHub, and never use its "Rebase stack" button: commits
 If `sync` reports that the stack on GitHub has diverged from yours, don't resolve it by choosing a side. Stop, and ask on the epic.
 
 **Handing over the epic.** When every sub-issue has a ready pull request, run step 6 once more on the top branch, which holds the whole stack. Post a marked comment on the epic listing the stack's pull requests, bottom first, with any question left open. The maintainer merges the stack and closes the epic.
+
+`Closes #M` closes a sub-issue only when its pull request merges into `main`. One merged into the branch below it closes nothing: #682 merged into #685's branch and left #197 open. So the handover comment asks for the stack to be merged bottom first, each pull request into `main` (GitHub retargets the next one as the one below merges). When you later find an open sub-issue whose pull request merged into another branch and whose commits are on `main`, name it in your report for the maintainer to close; you never close issues yourself.
 
 ## Never
 
