@@ -694,16 +694,18 @@ public struct CrossReference: Sendable, Hashable, Codable {
     case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
-      return sectionLabel(section, of: name)
+      return Self.sectionLabel(section, of: name, format: sectionFormat)
     case .entrySection(_, let tag, let section, _):
-      return sectionLabel(section, of: Self.nonBreakingLabel(tag))
+      return Self.sectionLabel(section, of: Self.nonBreakingLabel(tag), format: sectionFormat)
     }
   }
 
-  /// `section` of the document or entry called `name`, worded by `sectionFormat`.
-  private func sectionLabel(_ section: String, of name: String) -> String {
+  /// `section` of the document or entry called `name`, worded by `format`. Also how
+  /// the XML parser words a section of an RFC cited by its entry's tag, whose label
+  /// is the source's (#552).
+  static func sectionLabel(_ section: String, of name: String, format: SectionFormat) -> String {
     let sectionLabel = PlaceName.spelledOut(section, separator: "\u{00A0}")
-    switch sectionFormat {
+    switch format {
     case .of: return "\(sectionLabel) of [\(name)]"
     case .comma: return "[\(name)], \(sectionLabel)"
     case .parens: return "[\(name)] (\(sectionLabel))"
