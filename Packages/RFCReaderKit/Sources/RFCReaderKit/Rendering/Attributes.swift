@@ -108,9 +108,48 @@ extension RFCDecoration {
   }
 }
 
+/// A decorated block's decoration and the whole of its extent in the text.
+public struct DecorationRun: Equatable, Sendable {
+  public var decoration: RFCDecoration
+  public var range: NSRange
+}
+
+extension NSAttributedString {
+  /// The decoration at `location`, read from its storage run alone: whether there is
+  /// one, and which. Nil outside the text.
+  public func decoration(at location: Int) -> RFCDecoration? {
+    guard location >= 0, location < length else { return nil }
+    return RFCDecoration(
+      attributeValue: attribute(.rfcDecoration, at: location, effectiveRange: nil))
+  }
+
+  /// The decoration at `location` and the whole block it decorates.
+  ///
+  /// Through `longestEffectiveRange`, the only way this type asks for a decoration's
+  /// extent. `effectiveRange` returns the *storage* run, which ends at any attribute
+  /// change at all: a stacked table's bold label and regular value are different
+  /// runs, and each line that saw a decoration begin and end with itself drew a
+  /// fully rounded card at its own indent, a staircase (#122).
+  ///
+  /// Probed with `decoration(at:)` first, because `longestEffectiveRange` coalesces
+  /// the *absent* value just as eagerly as a present one: on the plain prose that is
+  /// most of an RFC it would run from the previous decorated block to the next.
+  public func decorationRun(at location: Int) -> DecorationRun? {
+    guard decoration(at: location) != nil else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    guard
+      let decoration = RFCDecoration(
+        attributeValue: attribute(
+          .rfcDecoration, at: location, longestEffectiveRange: &range,
+          in: NSRange(location: 0, length: length)))
+    else { return nil }
+    return DecorationRun(decoration: decoration, range: range)
+  }
+}
+
 /// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
 /// what the build decided about it.
-public final class VerbatimBox: Sendable {
+public final class VerbatimBox: NSObject, Sendable {
   /// Whether the block is set as its source, rendered, or highlighted, and whether a
   /// rendering exists to switch to: its menu offers "Show as Text" on a rendered
   /// block and "Show as Figure" on one shown as its source.
@@ -183,7 +222,7 @@ public final class StrokeBox: Sendable {
 }
 
 /// Boxes a `CrossReference` for the same reason.
-public final class ReferenceBox: Sendable {
+public final class ReferenceBox: NSObject, Sendable {
   public let reference: CrossReference
   public init(_ reference: CrossReference) { self.reference = reference }
 }
@@ -194,10 +233,10 @@ extension NSAttributedString {
   /// there is no value, or no character.
   ///
   /// The extent is the attribute's run, not the storage run: a chip is three
-  /// storage runs, and `effectiveRange` names only one. The boxes are Swift classes
-  /// with no `Equatable` conformance, which bridge to `isEqual:` by identity, so
-  /// `longestEffectiveRange` joins one box's runs and keeps two boxes apart even
-  /// when their contents are equal (`BoxExtentTests`).
+  /// storage runs, and `effectiveRange` names only one. The boxes are `NSObject`s
+  /// that leave `isEqual(_:)` as it is, identity, so `longestEffectiveRange` joins
+  /// one box's runs and keeps two boxes apart even when their contents are equal
+  /// (`BoxExtentTests`).
   ///
   /// The cheap single-run lookup answers "no box" first, which is most characters;
   /// the extent is only walked out on a hit.
