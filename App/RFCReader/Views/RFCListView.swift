@@ -283,7 +283,8 @@ struct RFCListView: View {
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .filterSearchable(
-        navigation: navigation, prompt: "Search \(library.title(for: navigation.filter))"
+        navigation: navigation,
+        prompt: String(localized: "Search \(library.title(for: navigation.filter))")
       )
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {

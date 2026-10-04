@@ -77,7 +77,7 @@ struct SidebarView: View {
       }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
-      .filterSearchable(navigation: navigation, prompt: "Search")
+      .filterSearchable(navigation: navigation, prompt: String(localized: "Search"))
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
