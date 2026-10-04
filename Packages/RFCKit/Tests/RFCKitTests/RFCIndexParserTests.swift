@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import RFCKit
@@ -54,5 +55,24 @@ struct RFCIndexParserTests {
     let index = try Fixtures.sampleIndex()
     let bcp14 = try #require(index.series(DocumentID(series: .bcp, number: 14)))
     #expect(bcp14.members == [.rfc(2119), .rfc(8174)])
+  }
+
+  /// The schema allows a `doc-id` under elements this parser does not read, such as
+  /// `<see-also>`. Only the one directly under the entry is the entry's own number
+  /// (#757).
+  @Test func `a doc-id under another element is not the entry's own`() throws {
+    let index = try RFCIndexParser.parse(
+      Data(
+        """
+        <rfc-index>
+          <rfc-entry>
+            <doc-id>RFC9999</doc-id>
+            <title>An Entry</title>
+            <date><month>June</month><year>2026</year></date>
+            <see-also><doc-id>RFC1000</doc-id></see-also>
+          </rfc-entry>
+        </rfc-index>
+        """.utf8))
+    #expect(index.rfcs.map(\.id) == [.rfc(9999)])
   }
 }

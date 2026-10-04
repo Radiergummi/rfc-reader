@@ -17,8 +17,9 @@ public struct DocumentReport: Codable, Sendable {
   public var furniture: Int?
   /// How the document was corrected by hand, nil when it was not.
   public var override: Override?
-  /// Why its patch could not be applied, nil when it has none or it applied. A
-  /// document whose patch failed has no output, and the run fails at its end.
+  /// Why its override could not be used, a patch applied or a snapshot parsed; nil when
+  /// it has none or it was used. A document whose override failed has no output, and
+  /// the run fails at its end.
   public var failure: String?
   public var warnings: [String]
   /// Why the output is not RFCXML: `[]` when it validates, nil when the run was not

@@ -195,13 +195,13 @@ struct ConvertCommand: AsyncParsableCommand {
           "document": "\(entry.id)", "warnings": .array(entry.warnings.map { .string($0) }),
         ])
     }
-    // Every failed patch, not only the first: each is its own fix.
+    // Every failed override, not only the first: each is its own fix.
     let failed = reports.compactMap(\.failure)
     for failure in failed {
-      Self.logger.error("patch failed", metadata: ["failure": "\(failure)"])
+      Self.logger.error("override failed", metadata: ["failure": "\(failure)"])
     }
     if !failed.isEmpty {
-      Self.logger.error("patches failed", metadata: ["documents": "\(failed.count)"])
+      Self.logger.error("overrides failed", metadata: ["documents": "\(failed.count)"])
     }
     let isRegression = comparison?.isRegression ?? false
     if let comparison, isRegression {
@@ -214,13 +214,16 @@ struct ConvertCommand: AsyncParsableCommand {
   }
 
   /// Converts one document and writes its XML. A snapshot is published as it is, and
-  /// never diagnosed; a patch is applied to the converter's output.
+  /// never diagnosed; a patch is applied to the converter's output. An override that
+  /// cannot be used, a patch that does not apply or a snapshot that does not parse,
+  /// is recorded as the document's failure and leaves it no output.
   static func convert(_ file: String, offset: Int, job: Job) async throws -> Converted {
     let stem = String(file.dropLast(4))
     let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
     var patch: XMLPatch?
-    var unreadablePatch: String?
+    // An override that cannot be used fails its document, not the run, whichever kind.
+    var unusableOverride: (kind: DocumentReport.Override, failure: String)?
     if let overrideURL = job.overrides?.appending(path: "\(stem).xml"),
       FileManager.default.fileExists(atPath: overrideURL.path)
     {
@@ -230,14 +233,19 @@ struct ConvertCommand: AsyncParsableCommand {
         do {
           patch = try XMLPatch(parsing: data, name: "\(stem).xml")
         } catch {
-          unreadablePatch = error.description
+          unusableOverride = (.patch, error.description)
         }
       } else {
-        let document = try RFCXMLParser.parse(data)  // a snapshot must at least parse
-        try data.write(to: outputURL, options: .atomic)
-        var entry = DocumentReport(document: document, id: stem, override: .snapshot)
-        try await checkSchema(outputURL, job: job, into: &entry)
-        return Converted(offset: offset, report: entry, prose: nil)
+        do {
+          let document = try RFCXMLParser.parse(data)  // a snapshot must at least parse
+          try data.write(to: outputURL, options: .atomic)
+          var entry = DocumentReport(document: document, id: stem, override: .snapshot)
+          try await checkSchema(outputURL, job: job, into: &entry)
+          return Converted(offset: offset, report: entry, prose: nil)
+        } catch let error as RFCXMLParser.ParseError {
+          let reason = error.errorDescription ?? "\(error)"
+          unusableOverride = (.snapshot, "\(stem).xml: the snapshot does not parse: \(reason)")
+        }
       }
     }
 
@@ -250,10 +258,10 @@ struct ConvertCommand: AsyncParsableCommand {
     }
     let conversion = job.converter.convert(
       text: text, stem: stem, metadata: metadata, patch: patch)
-    if let unreadablePatch {
+    if let unusableOverride {
       var entry = conversion.report
-      entry.override = .patch
-      entry.failure = unreadablePatch
+      entry.override = unusableOverride.kind
+      entry.failure = unusableOverride.failure
       try removeStaleOutput(outputURL)
       return Converted(offset: offset, report: entry, prose: nil)
     }

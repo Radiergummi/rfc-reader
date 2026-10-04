@@ -18,6 +18,39 @@ struct LegacyTextParserPaginationTests {
     #expect(stripped.contains("6. Guidance in the use of these Imperatives"))
   }
 
+  /// RFC 793 numbers its front matter's pages in roman numerals, `[Page i]` to
+  /// `[Page iii]`. Those footers are page furniture like any other, not artwork or
+  /// paragraphs in its lead-in (#549).
+  @Test func `a footer numbered in roman numerals is page furniture`() throws {
+    let text = try Fixtures.string("rfc793.txt")
+    let footers = ["[Page i]", "[Page ii]", "[Page iii]"]
+    let published = LegacyTextParser.stripPagination(text)
+    for footer in footers {
+      #expect(!published.contains(footer))
+    }
+    let document = try Fixtures.document("rfc793.txt")
+    let parsed = document.nestedParagraphs.map(\.plainText) + document.artworkText
+    for footer in footers {
+      #expect(!parsed.contains { $0.contains(footer) }, "\(footer) is still in the document")
+    }
+  }
+
+  /// A footer ends its line, `[Page 7]` after the author, or on mirrored pages
+  /// starts it, the author after a wide gap (#796). A bracketed page in running text
+  /// is neither. Lines in the shape of an RFC's, quoted from none.
+  @Test(arguments: [
+    ("Ostrander                                                    [Page 7]", true),
+    ("[Page 7]                                                    Ostrander", true),
+    ("[Page xi]                                          Ostrander & Weld", true),
+    ("Ostrander                                                   [Page iv]", true),
+    ("[Page 7] of the manual says otherwise", false),
+    ("Ostrander                                                   [Page 1i]", false),
+    ("see the manual, Page 7", false),
+  ])
+  func `a footer is recognized at either margin`(line: String, isFooter: Bool) {
+    #expect(LegacyTextParser.isFooter(line) == isFooter)
+  }
+
   /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
   /// indented with one read as indent 0 (#40). RFC 717 indents a list with tabs
   /// under prose indented six spaces: the block's indent came out as 0, the four
@@ -186,7 +219,7 @@ struct SectionHeaderTests {
   private func headsNearby(_ lines: [Line]) -> Bool {
     let index = lines.firstIndex(where: \.isSectionHeader)!
     return LegacyTextParser.headsNearby(
-      at: index, in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)
+      at: index, in: lines, from: 0, bodyIsIndented: true, separators: [])
   }
 
   /// The section starts at the head of one page, whose header still names the last
@@ -286,6 +319,6 @@ struct SectionHeaderTests {
     #expect(
       !LegacyTextParser.headsNearby(
         at: index, in: lines, from: contents.count, bodyIsIndented: true,
-        colonNumbered: false))
+        separators: []))
   }
 }
