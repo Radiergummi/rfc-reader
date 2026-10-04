@@ -350,7 +350,9 @@ public enum LegacyTextParser {
   /// That still passes RFC 234, a one-page agenda whose six items carry a paragraph
   /// each. What it lacks is any other sign of sections, which the three have: a column-0
   /// line, or a parenthesis title, that names a section every RFC has, `Status of this
-  /// Memo` or `Security Considerations`.
+  /// Memo` or `Security Considerations`. Across the corpus RFC 234 is the only document
+  /// this test decides, but an override cannot take its place: a patch has no operation
+  /// that makes a section a list item without restating the section's text.
   static func numbersHeadingsWithAParenthesis(_ lines: [String]) -> Bool {
     var parenthesisNumbers: [Substring] = []
     var separatedNumbers: Set<Substring> = []
