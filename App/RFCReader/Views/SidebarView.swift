@@ -191,7 +191,7 @@ struct SidebarView: View {
   /// gray, and it sat inset from the cards' edge, where Notes' is level with it.
   @ViewBuilder
   private func group<Content: View>(
-    _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
+    _ title: LocalizedStringKey, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
   ) -> some View {
     #if os(macOS)
       Section(title, isExpanded: isExpanded, content: content)

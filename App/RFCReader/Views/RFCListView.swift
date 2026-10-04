@@ -345,9 +345,9 @@ struct ListViewOptions: View {
   @Bindable var navigation: NavigationModel
 
   #if os(macOS)
-    private let sortTitle = "Sort By"
+    private let sortTitle: LocalizedStringKey = "Sort By"
   #else
-    private let sortTitle = "Sort"
+    private let sortTitle: LocalizedStringKey = "Sort"
   #endif
 
   private var canReorder: Bool {

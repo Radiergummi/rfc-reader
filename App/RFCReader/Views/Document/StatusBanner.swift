@@ -79,7 +79,8 @@ struct StatusBanner: View {
   /// many others flows onto as many lines as it takes, indented under the title
   /// (#439). The title opens its glossary entry (#362).
   private func row(
-    _ title: String, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String, tint: Color
+    _ title: LocalizedStringKey, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String,
+    tint: Color
   ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       self.symbol(symbol).foregroundStyle(tint)

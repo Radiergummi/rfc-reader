@@ -12,9 +12,9 @@ enum InspectorTab: String, CaseIterable {
   /// Named once, for both platforms' tab bars (#258).
   var title: String {
     switch self {
-    case .contents: "Contents"
-    case .references: "References"
-    case .requirements: "Requirements"
+    case .contents: String(localized: "Contents")
+    case .references: String(localized: "References")
+    case .requirements: String(localized: "Requirements")
     }
   }
 }

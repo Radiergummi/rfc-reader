@@ -122,6 +122,9 @@
     "Bookmark" : {
 
     },
+    "Browse" : {
+
+    },
     "Browse the sidebar, search, or jump straight to a number." : {
 
     },
@@ -143,10 +146,16 @@
     "Collapsed" : {
 
     },
+    "Collections" : {
+
+    },
     "Contents" : {
 
     },
     "Continue" : {
+
+    },
+    "Copied" : {
 
     },
     "Copy" : {
@@ -185,6 +194,9 @@
     "Couldn’t Load %@" : {
 
     },
+    "Create" : {
+
+    },
     "Defined In" : {
 
     },
@@ -216,6 +228,9 @@
 
     },
     "Draw diagrams" : {
+
+    },
+    "Edit Collection" : {
 
     },
     "Edit…" : {
@@ -306,6 +321,9 @@
 
     },
     "Key Word" : {
+
+    },
+    "Library" : {
 
     },
     "Lists the BCP 14 requirements an RFC states, in one section and its subsections or in the whole RFC, each with its section's number." : {
@@ -479,6 +497,9 @@
     "Published as %@" : {
 
     },
+    "Quit" : {
+
+    },
     "RFC" : {
 
     },
@@ -504,6 +525,9 @@
 
     },
     "Reading font size: %lld" : {
+
+    },
+    "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched." : {
 
     },
     "References" : {
@@ -537,6 +561,9 @@
 
     },
     "Retry" : {
+
+    },
+    "Save" : {
 
     },
     "Save as Collection" : {
@@ -599,7 +626,16 @@
     "Show the original text rendering by default" : {
 
     },
+    "Sidebar" : {
+
+    },
     "Smaller" : {
+
+    },
+    "Sort" : {
+
+    },
+    "Sort By" : {
 
     },
     "Text Size" : {
@@ -638,6 +674,9 @@
     "Updated %@" : {
 
     },
+    "Updated by" : {
+
+    },
     "Use System Size" : {
 
     },
@@ -654,6 +693,12 @@
 
     },
     "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it." : {
+
+    },
+    "Working Groups" : {
+
+    },
+    "Your bookmarks couldn't be loaded" : {
 
     },
     "and %lld more" : {

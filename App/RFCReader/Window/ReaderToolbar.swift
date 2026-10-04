@@ -315,10 +315,12 @@
 
     private func button(
       _ identifier: NSToolbarItem.Identifier,
-      _ label: String,
+      _ label: String.LocalizationValue,
       _ symbol: String,
       _ action: Selector
     ) -> NSToolbarItem {
+      // A LocalizationValue rather than a String, so the compiler records each label.
+      let label = String(localized: label)
       let item = NSToolbarItem(itemIdentifier: identifier)
       item.label = label
       item.toolTip = label

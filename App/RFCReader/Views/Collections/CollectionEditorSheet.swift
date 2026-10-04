@@ -13,11 +13,15 @@ struct CollectionEditorSheet: View {
   @FocusState private var isNameFocused: Bool
 
   private var title: String {
-    if case .edit = mode { "Edit Collection" } else { "New Collection" }
+    if case .edit = mode {
+      String(localized: "Edit Collection")
+    } else {
+      String(localized: "New Collection")
+    }
   }
 
   private var confirmation: String {
-    if case .edit = mode { "Save" } else { "Create" }
+    if case .edit = mode { String(localized: "Save") } else { String(localized: "Create") }
   }
 
   /// Deleted elsewhere while being edited — another window, a script, sync.
