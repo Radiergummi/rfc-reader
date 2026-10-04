@@ -594,15 +594,14 @@ missing is an error, not a guess.
 - **Distribution outside the Mac app** (Homebrew, Linux packages). The Linux build exists and is
   tested; packaging it waits for someone who needs it.
 
-## Open questions
+## Decided
 
-1. **The background launch** that exports an agent's change with the app closed: should it be on
-   by default? Or should agent changes wait for the next time the app is opened, with the launch
-   behind a setting? Recommendation: on. A bookmark made on the Mac should be on the iPhone
-   without anyone opening the app first.
-2. **`requiresUserInteraction` on destructive tools.** It would force a prompt on every delete,
-   even for a person who has allowed it. Recommendation: no. The split by name already lets each
-   person choose.
-3. **Provenance.** Should rows an agent made (a collection now, an annotation later) record
-   that? The highlights design has no authorship field. Recommendation: no field now; decide it
-   with the annotation tools.
+Settled by the maintainer on 2026-10-02:
+
+1. **The background launch** that exports an agent's change with the app closed is on by default.
+   A bookmark made on the Mac should be on the iPhone without anyone opening the app first.
+2. **Destructive tools don't set `requiresUserInteraction`.** It would force a prompt on every
+   delete, even for a person who has allowed it, and the split by name already lets each person
+   choose.
+3. **Provenance** (whether rows an agent made record that) is decided with the annotation tools,
+   #649. The highlights design has no authorship field, and none is added now.
