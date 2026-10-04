@@ -196,21 +196,9 @@ struct DocumentView: View {
     reader.focusGroups = groups.isEmpty ? nil : groups
   }
 
-  /// The reader, and on macOS only the reader.
-  ///
-  /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
-  /// window. The toolbar is an `NSToolbar` with our own delegate (`ReaderToolbar`),
-  /// because only a delegate-owned toolbar can carry the tracking separator that
-  /// splits it at the panel's edge; the panel is an `NSSplitViewItem`, because only
-  /// a real split item makes AppKit confine the tab bar and draw the glass.
-  ///
-  /// The overlay this replaces is worth remembering: `.inspector` put the reader
-  /// beside the panel, and `.safeAreaBar` reserved layout space — so opening it
-  /// widened the window, which widened the pane, which changed the column, which
-  /// rebuilt the document and lost the reader's place. The split item avoids all of
-  /// that by a different route: the reader's frame spans the panel, and the inset
-  /// it reports is ignored in the representable.
-  var body: some View {
+  /// The body's first half: the reader, and when the window's reader state is its.
+  /// Apart from the rest, which the type checker cannot take in one expression.
+  private var readerStateTracking: some View {
     requestingContent
       .navigationTitle(id.displayName)
       #if !os(macOS)
@@ -266,6 +254,24 @@ struct DocumentView: View {
         guard isShown else { return }
         reader.isLoading = isLoading
       }
+  }
+
+  /// The reader, and on macOS only the reader.
+  ///
+  /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
+  /// window. The toolbar is an `NSToolbar` with our own delegate (`ReaderToolbar`),
+  /// because only a delegate-owned toolbar can carry the tracking separator that
+  /// splits it at the panel's edge; the panel is an `NSSplitViewItem`, because only
+  /// a real split item makes AppKit confine the tab bar and draw the glass.
+  ///
+  /// The overlay this replaces is worth remembering: `.inspector` put the reader
+  /// beside the panel, and `.safeAreaBar` reserved layout space — so opening it
+  /// widened the window, which widened the pane, which changed the column, which
+  /// rebuilt the document and lost the reader's place. The split item avoids all of
+  /// that by a different route: the reader's frame spans the panel, and the inset
+  /// it reports is ignored in the representable.
+  var body: some View {
+    readerStateTracking
       .onChange(of: buildInputs, initial: true) {
         session.requestBuild(
           for: buildInputs, resizeIsLive: resize.isLive, into: reader, navigation: navigation)

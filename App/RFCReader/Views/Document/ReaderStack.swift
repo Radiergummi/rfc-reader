@@ -1,4 +1,5 @@
 #if !os(macOS)
+  import RFCKit
   import RFCReaderKit
   import SwiftUI
 
