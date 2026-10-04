@@ -95,11 +95,14 @@ def untranslated(catalog: Path, language: str) -> list[str]:
 
 
 def units_of(localization: dict) -> list[dict]:
-    """A localization's units: its string or string set, or every variant's."""
+    """A localization's units: its string or string set, every variant's, and every
+    substitution's."""
     units = [localization[kind] for kind in ("stringUnit", "stringSet") if kind in localization]
     for variants in localization.get("variations", {}).values():
         for variant in variants.values():
             units += units_of(variant)
+    for substitution in localization.get("substitutions", {}).values():
+        units += units_of(substitution)
     return units
 
 
