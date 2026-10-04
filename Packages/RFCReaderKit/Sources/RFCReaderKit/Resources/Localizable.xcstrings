@@ -948,7 +948,14 @@
       }
     },
     "Implementer" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Implementierung"
+          }
+        }
+      }
     },
     "In IETF Last Call" : {
       "localizations" : {
