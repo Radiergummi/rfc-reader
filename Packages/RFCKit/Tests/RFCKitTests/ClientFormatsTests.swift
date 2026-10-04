@@ -29,6 +29,14 @@ struct ClientFormatsTests {
     #expect(first.summary.hasPrefix("This document defines"))
   }
 
+  /// An HTML page that happens to parse as XML is not an empty feed: Just Published
+  /// would read as nothing new, rather than as a failure (#757).
+  @Test func `a feed whose root is not rss is refused`() {
+    #expect(throws: RecentFeedParser.ParseError.notAFeed(rootElement: "html")) {
+      _ = try RecentFeedParser.parse(Data("<html><body><p>Sign in</p></body></html>".utf8))
+    }
+  }
+
   /// RFC 822 dates, pinned before the parse moved from a `DateFormatter` to a
   /// `Date.ParseStrategy` (#148): every item has one, and they are the feed's instants.
   @Test func `every recent RFC has the date the feed gives`() throws {
