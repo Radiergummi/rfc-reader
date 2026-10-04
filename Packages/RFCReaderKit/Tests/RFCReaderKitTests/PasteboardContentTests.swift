@@ -93,6 +93,29 @@ struct PasteboardContentTests {
     #expect(text(content, .html) == "<meta charset=\"utf-8\">\n<p>[RFC 9110]</p>")
   }
 
+  @Test func `a selection's HTML sets a figure as its lines, in a pre`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "First paragraph.")),
+        .preformatted(Preformatted(kind: .artwork, text: "+--+\n  |  |\n\n+--+")),
+        .paragraph(Paragraph(text: "Second paragraph."))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "First", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    #expect(
+      text(.selection(selection, publicURL: publicURL), .html)
+        == """
+        <meta charset="utf-8">
+        <p>First paragraph.</p>
+        <pre>+--+
+          |  |
+
+        +--+</pre>
+        <p>Second paragraph.</p>
+        """)
+  }
+
   // MARK: - A figure
 
   /// A diagram pasted as an image from one gesture and as ASCII from the others
@@ -124,7 +147,7 @@ struct PasteboardContentTests {
     let content = PasteboardContent.quote(quote)
     #expect(
       types(content) == [
-        .utf8PlainText, UTType(QuoteCitation.Quote.markdownType)!, .html, .rtf,
+        .utf8PlainText, UTType(importedAs: QuoteCitation.Quote.markdownType), .html, .rtf,
       ])
     #expect(text(content, .utf8PlainText) == quote.markdown)
   }

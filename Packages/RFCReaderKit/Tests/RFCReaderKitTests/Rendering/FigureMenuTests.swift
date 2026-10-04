@@ -49,6 +49,17 @@ struct FigureMenuTests {
     #expect(FigureMenu.itemRange(at: field, in: built.text) == whole)
   }
 
+  /// Copy Figure from a selection draws the figure the selection touches, whole,
+  /// wherever the selection starts (#778).
+  @Test func `a selection into a drawn block is for the whole block`() throws {
+    let built = build()
+    let field = try Fixtures.offset(of: "Length", in: built.text)
+    let box = try #require(FigureCopy.box(at: field, in: built.text))
+    let whole = try #require(built.text.extent(ofBox: .rfcVerbatim, at: field))
+    let intoIt = NSRange(location: 0, length: field + 1)
+    #expect(FigureMenu.itemRange(of: box, touching: intoIt, in: built.text) == whole)
+  }
+
   @Test func `a press outside a block is for no item`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),

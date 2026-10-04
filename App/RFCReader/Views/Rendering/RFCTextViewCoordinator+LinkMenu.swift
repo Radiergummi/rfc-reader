@@ -37,18 +37,10 @@
         title: "", options: defaultMenu.options, children: replaced(defaultMenu.children))
     }
 
-    /// One pasteboard item in every form an app might take: the URL as text and as
-    /// a URL, and the label linked to it as HTML and RTF.
+    /// The link in every form an app might take (`PasteboardContent.link`).
     private static func copyAction(like action: UIAction, link: LinkCopy) -> UIAction {
       UIAction(title: action.title, image: action.image) { _ in
-        var item: [String: Any] = [
-          UTType.plainText.identifier: link.url.absoluteString,
-          UTType.url.identifier: link.url,
-          UTType.html.identifier: link.html,
-        ]
-        if let rtf = link.rtf { item[UTType.rtf.identifier] = rtf }
-        UIPasteboard.general.setItems([item])
-        Clipboard.announce(.link)
+        Clipboard.write(.link(link), announcing: .link)
       }
     }
 
@@ -173,18 +165,10 @@
       }
     }
 
-    /// The URL as text and as a URL, and the label linked to it as HTML and RTF, as
-    /// the iOS menu's Copy writes them.
+    /// As the iOS menu's Copy writes it (`PasteboardContent.link`).
     @objc private func copyLink(_ sender: NSMenuItem) {
       guard let link = sender.representedObject as? LinkCopy else { return }
-      let item = NSPasteboardItem()
-      item.setString(link.url.absoluteString, forType: .URL)
-      item.setString(link.url.absoluteString, forType: .string)
-      item.setString(link.html, forType: .html)
-      if let rtf = link.rtf { item.setData(rtf, forType: .rtf) }
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.writeObjects([item])
-      Clipboard.announce(.link)
+      Clipboard.write(.link(link), announcing: .link)
     }
   }
 #endif
