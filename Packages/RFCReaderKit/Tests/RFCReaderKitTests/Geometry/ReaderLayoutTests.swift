@@ -121,4 +121,23 @@ struct ReaderLayoutTests {
     let open = ReaderLayout.minimumWindowWidth(panelIsOpen: true) + ReaderLayout.panelWidth
     #expect(open == shut)
   }
+
+  /// AppKit restores a saved frame without checking it against the minimum, so one
+  /// saved narrower than the floor has to be widened by hand.
+  @Test func `a restored window narrower than the floor is widened to it`() {
+    let restored = ReaderLayout.windowSize(
+      fitting: CGSize(width: 700, height: 300), panelIsOpen: false)
+    #expect(restored == CGSize(width: 900, height: 480))
+  }
+
+  @Test func `a window wider than the floor keeps its size`() {
+    let size = CGSize(width: 1400, height: 900)
+    #expect(ReaderLayout.windowSize(fitting: size, panelIsOpen: false) == size)
+  }
+
+  @Test func `with the panel open a restored window is widened to the floor less the panel`() {
+    let restored = ReaderLayout.windowSize(
+      fitting: CGSize(width: 500, height: 600), panelIsOpen: true)
+    #expect(restored == CGSize(width: 580, height: 600))
+  }
 }

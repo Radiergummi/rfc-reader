@@ -160,16 +160,17 @@
     // MARK: - The window's width
 
     /// Holds the window's minimum *constant* as the panel opens and closes
-    /// (`ReaderLayout.minimumWindowWidth(panelIsOpen:)`).
+    /// (`ReaderLayout.minimumWindowWidth(panelIsOpen:)`), and widens a window that is
+    /// narrower than it. Called again once a saved frame has been put back, which
+    /// AppKit does not check against the minimum
+    /// (`ReaderLayout.windowSize(fitting:panelIsOpen:)`).
     func applyMinimumWidth() {
       guard let window = view.window else { return }
       window.contentMinSize = NSSize(
-        width: ReaderLayout.minimumWindowWidth(panelIsOpen: isPanelOpen), height: 480)
-      // A restored frame is not re-checked against the minimum, so a window saved
-      // narrower than the floor comes back narrower than the floor.
+        width: ReaderLayout.minimumWindowWidth(panelIsOpen: isPanelOpen),
+        height: ReaderLayout.minimumWindowHeight)
       var frame = window.frame
-      frame.size.width = max(frame.width, window.contentMinSize.width)
-      frame.size.height = max(frame.height, window.contentMinSize.height)
+      frame.size = ReaderLayout.windowSize(fitting: frame.size, panelIsOpen: isPanelOpen)
       if frame != window.frame { window.setFrame(frame, display: false) }
     }
   }

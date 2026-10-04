@@ -569,9 +569,15 @@
       // On the next turn, since the group's inspector state is copied onto a window
       // inside `makeKeyAndOrderFront(_:)`, which is still running; see
       // `closePanelWithoutDocument()`.
+      //
+      // The window's floor is put right here too: AppKit gave the window its saved
+      // frame after it was made, without checking it against the minimum.
       if correctsPanelOnFirstKey {
         correctsPanelOnFirstKey = false
-        Task { [weak self] in self?.closePanelWithoutDocument() }
+        Task { [weak self] in
+          self?.closePanelWithoutDocument()
+          self?.splitController.applyMinimumWidth()
+        }
       }
     }
 

@@ -125,6 +125,8 @@
       // belongs to one window, and sharing it across tabs mangles all of them.
       if controllers.isEmpty {
         controller.window?.setFrameAutosaveName("ReaderWindow")
+        // Naming it puts the saved frame back, unchecked against the floor.
+        controller.splitController.applyMinimumWidth()
       }
       controllers.append(controller)
 

@@ -43,6 +43,18 @@ public enum ReaderLayout {
     sidebarMinimum + listMinimum + minimumPaneWidth - (panelIsOpen ? panelWidth : 0)
   }
 
+  /// The shortest the Mac's window may be.
+  public static let minimumWindowHeight: CGFloat = 480
+
+  /// `size`, grown to the window's floor where it falls short of it. AppKit checks a
+  /// window the user drags against its minimum, but not a frame it restores, so a
+  /// window saved narrower than the floor comes back narrower unless widened.
+  public static func windowSize(fitting size: CGSize, panelIsOpen: Bool) -> CGSize {
+    CGSize(
+      width: max(size.width, minimumWindowWidth(panelIsOpen: panelIsOpen)),
+      height: max(size.height, minimumWindowHeight))
+  }
+
   /// Both the build and the text view's inset ask this, with the same two inputs;
   /// the column is only ever what the gutters leave, so the two cannot drift.
   public static func gutter(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
