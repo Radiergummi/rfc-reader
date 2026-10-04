@@ -28,17 +28,4 @@ public struct HistoryEntry: Hashable, Sendable, Codable {
     self.section = section
     self.arrival = arrival
   }
-
-  private enum CodingKeys: String, CodingKey {
-    case id, section, arrival
-  }
-
-  /// A place kept before arrivals were (#263) was arrived at from outside, as far
-  /// as anyone can tell: its tab comes back with one reader.
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(DocumentID.self, forKey: .id)
-    section = try container.decodeIfPresent(String.self, forKey: .section)
-    arrival = try container.decodeIfPresent(Arrival.self, forKey: .arrival) ?? .root
-  }
 }

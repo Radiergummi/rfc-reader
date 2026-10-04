@@ -103,38 +103,6 @@ struct SceneSnapshotTests {
     #expect(SceneSnapshot.decoded(from: Data(#"{"version": 1}"#.utf8)) == nil)
   }
 
-  /// How each place was arrived at decides the readers stacked on iOS (#263). A
-  /// snapshot written before it was kept reads each place as arrived at from
-  /// outside: the tab comes back with its history, and one reader.
-  @Test func `a snapshot that kept no arrivals reads each place as arrived at from outside`()
-    throws
-  {
-    var navigation = NavigationHistory()
-    navigation.go(to: place(9110))
-    navigation.go(to: HistoryEntry(id: .rfc(9111), arrival: .citation))
-    let data = try #require(SceneSnapshot(history: navigation.snapshot(), filter: .all).encoded())
-    let older = try JSONSerialization.data(
-      withJSONObject: withoutArrivals(try JSONSerialization.jsonObject(with: data)))
-    #expect(String(decoding: data, as: UTF8.self).contains("arrival"))
-    #expect(!String(decoding: older, as: UTF8.self).contains("arrival"))
-    let snapshot = try #require(SceneSnapshot.decoded(from: older))
-    let restored = NavigationHistory(snapshot.history)
-    #expect(restored.current == place(9111))
-    #expect(ReaderPath(restored).readers.map(\.id) == [.rfc(9111)])
-  }
-
-  /// `object` with every `arrival` key taken out, at any depth.
-  private func withoutArrivals(_ object: Any) -> Any {
-    switch object {
-    case let dictionary as [String: Any]:
-      dictionary.filter { $0.key != "arrival" }.mapValues(withoutArrivals)
-    case let array as [Any]:
-      array.map(withoutArrivals)
-    default:
-      object
-    }
-  }
-
   @Test func `every filter survives the trip`() throws {
     let filters: [LibraryFilter] = [
       .all, .recent, .bookmarks, .downloaded, .standards, .bestCurrentPractice,
