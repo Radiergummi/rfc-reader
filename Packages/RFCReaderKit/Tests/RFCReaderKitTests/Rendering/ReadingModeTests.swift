@@ -499,8 +499,11 @@ struct ReadingModeTests {
   // MARK: - Implementer (#700)
 
   /// Implementer reads the whole document, its requirements banded: the band is
-  /// drawn, so nothing is folded for it and nothing has a disclosure.
-  @Test func `implementer folds nothing and bands the requirements`() throws {
+  /// drawn, so nothing is folded for it, and in a document with no aside nothing
+  /// has a disclosure.
+  @Test func `implementer folds nothing in a document without asides and bands the requirements`()
+    throws
+  {
     let index = FoldingIndex(try Self.rfc8999())
     let implementer = Folding(mode: .implementer)
     #expect(implementer.hidden(in: index).isEmpty)
@@ -528,5 +531,76 @@ struct ReadingModeTests {
     // An outline already opened is the reader's own, and stays as it is.
     let opened = Folding(mode: .outline, expanded: [parent.anchor])
     #expect(opened.keepingLine(at: line, after: Folding(mode: .implementer), in: index) == opened)
+  }
+
+  /// rfc9271.xml, whose asides each open with "Note:".
+  private static func rfc9271() throws -> BuiltDocument {
+    DocumentTextBuilder.build(try Fixtures.document(named: "rfc9271.xml"), style: ReadingStyle())
+  }
+
+  /// Implementer folds every aside's body and nothing else, under its caption, which
+  /// has the disclosure; with every aside open it folds nothing.
+  @Test func `implementer folds only the asides' bodies, under their captions`() throws {
+    let built = try Self.rfc9271()
+    let index = FoldingIndex(built)
+    let asides = index.asides
+    #expect(asides.count >= 3)
+    let implementer = Folding(mode: .implementer)
+    let hidden = implementer.hidden(in: index)
+    for paragraph in Self.paragraphs(of: built) {
+      let inBody = asides.contains { $0.body.contains(paragraph.location) }
+      #expect(hidden.contains(paragraph.location) == inBody)
+    }
+    #expect(
+      implementer.disclosures(in: index)
+        == Dictionary(uniqueKeysWithValues: asides.map { ($0.caption, false) }))
+    let open = Folding(mode: .implementer, openAsides: Set(asides.map(\.ordinal)))
+    #expect(open.hidden(in: index).isEmpty)
+    #expect(Set(open.disclosures(in: index).values) == [true])
+    // Every other mode leaves the asides as they are.
+    #expect(Folding(mode: .normal).hidden(in: index).isEmpty)
+    #expect(
+      Folding(mode: .outline).disclosures(in: index).keys.allSatisfy { caption in
+        !asides.contains { $0.caption == caption }
+      })
+  }
+
+  /// A click on an aside's caption opens it, and again closes it; one on its body
+  /// or anywhere else toggles nothing.
+  @Test func `an aside's caption toggles it`() throws {
+    let index = FoldingIndex(try Self.rfc9271())
+    let aside = try #require(index.asides.first)
+    let opened = try #require(
+      Folding(mode: .implementer).toggling(heading: aside.caption + 1, in: index))
+    #expect(opened.openAsides == [aside.ordinal])
+    #expect(!opened.hidden(in: index).contains(aside.body.lowerBound))
+    #expect(opened.toggling(heading: aside.caption, in: index) == Folding(mode: .implementer))
+    #expect(Folding(mode: .implementer).toggling(heading: aside.body.lowerBound, in: index) == nil)
+    #expect(Folding(mode: .normal).toggling(heading: aside.caption, in: index) == nil)
+  }
+
+  /// A jump into a closed aside opens it; entering Implementer with the reader's
+  /// line in an aside starts with that aside open, so the line stays shown.
+  @Test func `a jump or the line inside an aside opens it`() throws {
+    let index = FoldingIndex(try Self.rfc9271())
+    let aside = try #require(index.asides.last)
+    let inside = aside.body.lowerBound + 1
+    let jumped = Folding(mode: .implementer).expanding(toShow: inside, in: index)
+    #expect(jumped.openAsides == [aside.ordinal])
+    let entered = Folding(mode: .implementer).keepingLine(
+      at: inside, after: Folding(mode: .normal), in: index)
+    #expect(entered == Folding(mode: .implementer, openAsides: [aside.ordinal]))
+    #expect(!entered.hidden(in: index).contains(inside))
+    // Outside every aside, or with an aside already opened, nothing changes.
+    let outside = try #require(index.asides.first).caption - 1
+    #expect(
+      Folding(mode: .implementer).keepingLine(at: outside, after: Folding(mode: .normal), in: index)
+        == Folding(mode: .implementer))
+    #expect(jumped.keepingLine(at: inside, after: Folding(mode: .normal), in: index) == jumped)
+  }
+
+  /// Only the outline and Implementer have something to click open.
+  @Test func `the outline and implementer disclose`() {
+    #expect(ReadingMode.allCases.filter(\.discloses) == [.outline, .implementer])
   }
 }

@@ -301,6 +301,18 @@ final class RFCTextViewCoordinator: NSObject {
     )
   }
 
+  /// Where the paragraph laid out at the height of `containerPoint` starts: what a
+  /// click or tap in the gutter beside a disclosure toggles. By its layout fragment,
+  /// not a character, since an aside's caption is set in from the column's edge the
+  /// gutter point is on (#700).
+  func paragraphStart(atContainerPoint containerPoint: CGPoint) -> Int? {
+    guard let layout = textView?.textLayoutManager,
+      let fragment = layout.textLayoutFragment(for: containerPoint)
+    else { return nil }
+    let start = layout.offset(of: fragment.rangeInElement.location)
+    return start >= 0 ? start : nil
+  }
+
   // MARK: - References
 
   /// The cross reference at this absolute character offset, and its whole
@@ -536,10 +548,12 @@ final class RFCTextViewCoordinator: NSObject {
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
       // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
-      // opens or closes its section (#698); a link in a heading is followed first.
-      if folding.mode == .outline {
+      // opens or closes its section (#698), and in Implementer one on an aside's
+      // caption opens or closes the aside (#700); a link in a heading is followed
+      // first.
+      if folding.mode.discloses {
         if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-          let offset = characterOffset(atContainerPoint: gutter),
+          let offset = paragraphStart(atContainerPoint: gutter),
           toggleSection(atHeading: offset)
         {
           return
@@ -547,7 +561,7 @@ final class RFCTextViewCoordinator: NSObject {
       }
       if let offset = characterOffset(atContainerPoint: containerPoint) {
         if link(at: offset) != nil { return }
-        if folding.mode == .outline, toggleSection(atHeading: offset) { return }
+        if folding.mode.discloses, toggleSection(atHeading: offset) { return }
       }
       chrome.tapped()
       reportChrome()

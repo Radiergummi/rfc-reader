@@ -19,7 +19,7 @@ struct RequirementBandsTests {
     DocumentTextBuilder.build(document, style: ReadingStyle())
   }
 
-  @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
+  @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9271.xml", "rfc9197.xml", "rfc9631.xml"])
   func `every requirement is banded, and its band says its sentence`(name: String) throws {
     let document = try Fixtures.document(named: name)
     let requirements = Requirements.extract(from: document)

@@ -123,7 +123,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     guard let text = textLayoutManager?.attributedText, let range = documentRange else {
       return nil
     }
-    let span = FragmentGeometry.decorationSpan(in: text, fragment: range)
+    // The reading mode's folding: a card whose rest it hides ends with what it shows.
+    let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate
+    let span = FragmentGeometry.decorationSpan(
+      in: text, fragment: range, hidden: folding?.hidden ?? HiddenText())
     cachedDecorationSpan = .some(span)
     return span
   }
@@ -272,8 +275,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let text: FragmentGeometry.HeadingText
   }
 
-  /// Whether this fragment is a heading the outline discloses, and if so its
-  /// disclosure: from the folding its layout manager's content holds (#698).
+  /// Whether this fragment is a heading the outline discloses, or an aside's caption
+  /// Implementer does, and if so its disclosure: from the folding its layout
+  /// manager's content holds (#698, #700).
   private var disclosure: Disclosure? {
     guard let range = documentRange,
       let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
@@ -290,7 +294,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let capHeight = font?.capHeight ?? bounds.height * 0.5
     let text = FragmentGeometry.HeadingText(
       baseline: bounds.minY + line.glyphOrigin.y, capHeight: capHeight)
-    return Disclosure(open: open, firstLine: bounds, text: text)
+    // Measured from the column's edge, not the line's: an aside's caption is set in
+    // from it, and its chevron belongs in the gutter as a heading's does (#700).
+    var firstLine = bounds
+    firstLine.origin.x = -layoutFragmentFrame.minX
+    return Disclosure(open: open, firstLine: firstLine, text: text)
   }
 
   private func drawDisclosure(at point: CGPoint, in context: CGContext) {

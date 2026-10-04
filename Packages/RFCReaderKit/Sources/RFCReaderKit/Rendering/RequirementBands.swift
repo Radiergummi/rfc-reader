@@ -48,6 +48,9 @@ public struct RequirementBands: Sendable, Equatable {
       guard
         let found = Self.find(
           sentence, in: units, words: words, from: max(anchor, cursor), to: end)
+          ?? Self.find(
+            Self.droppingAsideLabel(sentence), in: units, words: words,
+            from: max(anchor, cursor), to: end)
       else { continue }
       let band = Self.widened(found, to: requirement.sentence, in: units)
       ranges.append(band)
@@ -111,6 +114,18 @@ public struct RequirementBands: Sendable, Equatable {
       index += 1
     }
     return nil
+  }
+
+  /// `sentence` without the "Note" or "Notes" it opens with, which an aside's caption
+  /// takes the place of in the build (#700); empty where it opens with neither, which
+  /// finds nothing.
+  private static func droppingAsideLabel(_ sentence: [ArraySlice<UInt16>])
+    -> [ArraySlice<UInt16>]
+  {
+    guard let first = sentence.first,
+      ["Note", "NOTE", "Notes", "NOTES"].contains(String(decoding: first, as: UTF16.self))
+    else { return [] }
+    return Array(sentence.dropFirst())
   }
 
   /// `found` taken out to what `sentence` has before its first word and after its
