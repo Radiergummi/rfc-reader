@@ -128,7 +128,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     if let cachedChipRects { return cachedChipRects }
     guard let text = textLayoutManager?.attributedText, let range = documentRange else { return [] }
     let rects = FragmentGeometry.chipRects(
-      in: text, lines: textLineFragments, fragment: range, origin: .zero)
+      in: text, fragment: FragmentLines(range: range, lines: textLineFragments), origin: .zero)
     cachedChipRects = rects
     return rects
   }

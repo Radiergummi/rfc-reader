@@ -25,7 +25,8 @@ struct LinePinTests {
     let fragment = try #require(fixture.fragment(at: 0))
     let third = fragment.textLineFragments[2]
     let (anchor, line) = LinePin.anchor(
-      atFragmentY: third.typographicBounds.midY, in: fragment.textLineFragments, fragmentStart: 0)
+      atFragmentY: third.typographicBounds.midY,
+      in: try #require(FragmentLines(fragment, in: fixture.layout)))
     #expect(anchor.characterOffset == third.characterRange.location)
     #expect(abs(anchor.fraction - 0.5) < 0.01)
     #expect(line == third.characterRange)
@@ -35,19 +36,19 @@ struct LinePinTests {
     let fixture = LayoutFixture(text: text, width: 400)
     let fragment = try #require(fixture.fragment(at: 0))
     let (anchor, _) = LinePin.anchor(
-      atFragmentY: 0, in: fragment.textLineFragments, fragmentStart: 0)
+      atFragmentY: 0, in: try #require(FragmentLines(fragment, in: fixture.layout)))
     #expect(anchor == ReaderAnchor(characterOffset: 0, fraction: 0))
   }
 
   @Test func `an anchor round-trips through its y`() throws {
     let fixture = LayoutFixture(text: text, width: 400)
     let fragment = try #require(fixture.fragment(at: 0))
-    let lines = fragment.textLineFragments
+    let lines = try #require(FragmentLines(fragment, in: fixture.layout))
     for tenth in 0..<Int(fragment.layoutFragmentFrame.height / 10) {
       let height = CGFloat(tenth) * 10
-      let (anchor, _) = LinePin.anchor(atFragmentY: height, in: lines, fragmentStart: 0)
-      let back = LinePin.fragmentY(of: anchor, in: lines, fragmentStart: 0)
-      #expect(abs(back - min(height, lines.last!.typographicBounds.maxY)) < 0.5)
+      let (anchor, _) = LinePin.anchor(atFragmentY: height, in: lines)
+      let back = LinePin.fragmentY(of: anchor, in: lines)
+      #expect(abs(back - min(height, lines.lines.last!.typographicBounds.maxY)) < 0.5)
     }
   }
 
@@ -59,12 +60,13 @@ struct LinePinTests {
     var fragment = try #require(fixture.fragment(at: 0))
     let (anchor, _) = LinePin.anchor(
       atFragmentY: fragment.textLineFragments[5].typographicBounds.minY + 3,
-      in: fragment.textLineFragments, fragmentStart: 0)
+      in: try #require(FragmentLines(fragment, in: fixture.layout)))
     fixture.setWidth(width)
     fragment = try #require(fixture.fragment(at: 0))
-    let height = LinePin.fragmentY(of: anchor, in: fragment.textLineFragments, fragmentStart: 0)
+    let height = LinePin.fragmentY(
+      of: anchor, in: try #require(FragmentLines(fragment, in: fixture.layout)))
     let (_, line) = LinePin.anchor(
-      atFragmentY: height, in: fragment.textLineFragments, fragmentStart: 0)
+      atFragmentY: height, in: try #require(FragmentLines(fragment, in: fixture.layout)))
     #expect(NSLocationInRange(anchor.characterOffset, line))
   }
 }

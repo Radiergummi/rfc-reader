@@ -281,17 +281,12 @@ final class RFCTextViewCoordinator: NSObject {
     guard let layout = textView?.textLayoutManager,
       let fragment = layout.textLayoutFragment(for: containerPoint)
     else { return nil }
-    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-    guard fragmentStart >= 0 else { return nil }
+    guard let lines = FragmentLines(fragment, in: layout) else { return nil }
     let pointInFragment = CGPoint(
       x: containerPoint.x - fragment.layoutFragmentFrame.minX,
       y: containerPoint.y - fragment.layoutFragmentFrame.minY
     )
-    return FragmentGeometry.characterOffset(
-      in: fragment.textLineFragments,
-      fragmentStart: fragmentStart,
-      at: pointInFragment
-    )
+    return FragmentGeometry.characterOffset(in: lines, at: pointInFragment)
   }
 
   // MARK: - References
