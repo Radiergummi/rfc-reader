@@ -3,6 +3,12 @@
   "strings" : {
     "Remove from Collection" : {
 
+    },
+    "Show as Figure" : {
+
+    },
+    "Show as Text" : {
+
     }
   },
   "version" : "1.0"

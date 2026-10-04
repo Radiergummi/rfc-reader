@@ -121,7 +121,7 @@ public enum CollectionStore {
           in: context)
       }
     }
-    undoManager?.setActionName(String(localized: "Remove from Collection", bundle: .module))
+    undoManager?.setActionName(String(kit: "Remove from Collection", locale: .interface))
   }
 
   /// Undoing a removal: the item back where it was, and the removal again as the
@@ -145,7 +145,7 @@ public enum CollectionStore {
         try? remove(document, from: identifier, undoManager: undoManager, in: context)
       }
     }
-    undoManager?.setActionName(String(localized: "Remove from Collection", bundle: .module))
+    undoManager?.setActionName(String(kit: "Remove from Collection", locale: .interface))
   }
 
   /// Removes the document if it is in the collection, adds it otherwise. Answers
