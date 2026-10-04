@@ -179,6 +179,13 @@ struct PublicURLTests {
     #expect(publicURL("https://www.iana.org/")?.absoluteString == "https://www.iana.org/")
   }
 
+  /// `RFCLink` reads it as the RFC it names, but the errata page is not the RFC's.
+  @Test func `a link to the web that names an RFC is itself`() {
+    #expect(
+      publicURL("https://www.rfc-editor.org/errata/rfc9110")?.absoluteString
+        == "https://www.rfc-editor.org/errata/rfc9110")
+  }
+
   @Test func `a reader's link with nothing to hand out has none`() {
     #expect(publicURL("\(DocumentTextBuilder.referenceScheme):Unlinked") == nil)
   }

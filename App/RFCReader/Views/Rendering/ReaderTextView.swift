@@ -313,7 +313,11 @@ import RFCReaderKit
         return super.writeSelection(to: pboard, type: type)
       }
       if flavor == .plain {
-        return pboard.setString(SelectionText.plainText(of: selectedSubstring), forType: type)
+        // Every range, as AppKit joins them: a line apart.
+        let text = attributedString()
+        let ranges = selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
+        let plain = ranges.map { SelectionText.plainText(of: text.attributedSubstring(from: $0)) }
+        return pboard.setString(plain.joined(separator: "\n"), forType: type)
       }
       guard selectedRanges.count == 1 else {
         return super.writeSelection(to: pboard, type: type)

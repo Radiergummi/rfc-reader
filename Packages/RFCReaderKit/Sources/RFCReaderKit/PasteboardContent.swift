@@ -100,9 +100,7 @@ extension LinkCopy {
     for link: URL, from currentDocument: DocumentID, in index: RFCIndex?,
     bibliography: [ReferenceGroup]
   ) -> URL? {
-    if LinkDestination.resolve(link, from: currentDocument, activation: .here) == .unhandled {
-      return link
-    }
+    guard isReaders(link) else { return link }
     return forLink(link, from: currentDocument, in: index, bibliography: bibliography)?.url
   }
 }
