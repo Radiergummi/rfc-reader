@@ -10,9 +10,9 @@
   /// an iPad beside other columns alike.
   ///
   /// The path is the tab's history, projected (`ReaderPath`), and the stack's own
-  /// back is handed to it (`NavigationModel.popReaders(to:)`): the history stays the
-  /// one record, which Back and Forward, "Back to §…" and the tab's snapshot all
-  /// read. Anything from outside a reader — a row in the list, Go to RFC, a link
+  /// back is handed to it (`NavigationModel.popReaders(toPushed:)`): the history
+  /// stays the one record, which Back and Forward, "Back to §…" and the tab's
+  /// snapshot all read. Anything from outside a reader — a row in the list, Go to RFC, a link
   /// from another app — starts the stack again.
   ///
   /// The readers below the top stay, each with its build, so going back costs

@@ -404,11 +404,12 @@ final class NavigationModel: Identifiable {
   }
 
   func goBack() {
-    let path = readerPath
-    guard let place = history.goBack(leaving: visiblePosition) else { return }
     #if os(macOS)
+      guard let place = history.goBack(leaving: visiblePosition) else { return }
       arrive(at: place)
     #else
+      let path = readerPath
+      guard let place = history.goBack(leaving: visiblePosition) else { return }
       // A step back to the reader below pops the one on top, and shows that reader
       // where it was left (#263).
       if path.pops(to: readerPath) {

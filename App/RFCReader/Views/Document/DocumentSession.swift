@@ -201,8 +201,9 @@ final class DocumentSession {
   /// Builds for `inputs`, as `BuildRequest` decides, and lists the sections the
   /// build holds into `reader` once it is the state's: unless the reader is not the
   /// one on screen, which a replaced reader's rebuild through its fade is not
-  /// (`ReaderHost`), nor one the stack keeps below its top on iOS (#263). `resizeIsLive` is whether a new column comes from a resize
-  /// still under way; see `ReaderResize`.
+  /// (`ReaderHost`), nor one the stack keeps below its top on iOS (#263).
+  /// `resizeIsLive` is whether a new column comes from a resize still under way; see
+  /// `ReaderResize`.
   func requestBuild(
     for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState,
     navigation: NavigationModel

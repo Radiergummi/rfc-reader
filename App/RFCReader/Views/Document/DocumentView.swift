@@ -57,6 +57,9 @@ struct DocumentView: View {
   /// Whether the text view went from view under a reader pushed over it, rather than
   /// going: it stays where it was, and coming back into view is not arriving.
   @State private var isCovered = false
+  /// Whether the text view first appeared under the top of the stack, as a swipe
+  /// back began: it goes where it arrives once it is on top (#263).
+  @State private var arrivesOnTop = false
 
   #if os(macOS)
     init(id: DocumentID) {
@@ -242,6 +245,10 @@ struct DocumentView: View {
         guard depth != nil else { return }
         if shown {
           takeReaderState()
+          if arrivesOnTop {
+            arrivesOnTop = false
+            arrive()
+          }
         } else {
           ownsReader = false
         }
@@ -431,8 +438,9 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        // Not while fading out over the next document's reader, as the load's
-        // and the build's callbacks guard: the title is the selected document's.
+        // Not while fading out over the next document's reader, nor under the top
+        // of the stack, as the load's and the build's callbacks guard: the title is
+        // the reader on screen's.
         onToolbarTitle: { state, source in
           guard isShown else { return }
           reader.report(title: state, from: source)
@@ -481,30 +489,13 @@ struct DocumentView: View {
           isCovered = false
           return
         }
-        // Deep link or restored reading position — or, when the text view is made
-        // again, where the reader was (#449).
-        let arrival = ReaderArrival.onAppear(
-          pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
-          request: navigation.scrollRequest,
-          // Any anchor, not only a section's: a place is saved at the nearest anchor
-          // of any kind (`ReadingPlace`), a paragraph's as often as not.
-          stored: positions.stored()?.place.flatMap { saved in
-            saved.anchor.flatMap(built.anchors.offset(of:)) != nil ? saved : nil
-          })
-        switch arrival {
-        case .place(let anchor):
-          scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
-        case .request(let request) where request.isUnrecorded:
-          follow(request, animated: false)
-        case .request(let request):
-          jump(toSection: request.section, animated: false)
-        case .stored(let saved):
-          if let anchor = saved.anchor {
-            scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false, offset: saved.offset)
-          }
-        case .stay:
-          break
+        // Under the top of the stack, as a swipe back to this reader begins: the
+        // request is the top reader's, and this one arrives once it is on top (#263).
+        guard isShown else {
+          arrivesOnTop = true
+          return
         }
+        arrive()
       }
       .onDisappear {
         // Covered by a reader pushed over it, the text view stays (#263).
@@ -605,9 +596,10 @@ struct DocumentView: View {
   /// and shows it once the panel has something to describe. Taken at once and kept
   /// here, so a document that never loads, or is left first, takes the request with
   /// it rather than leaving it for the next reader of that RFC. Not while fading out
-  /// over the next document's reader: the request would be taken by the wrong one.
+  /// over the next document's reader, nor under the top of the stack, which may be a
+  /// reader of the same RFC (#263): the request would be taken by the wrong one.
   private func showRequestedTab() {
-    guard navigation.selection == id else { return }
+    guard isShown else { return }
     if let tab = library.takeInspectorRequest(for: id, in: navigation) { requestedTab = tab }
     guard reader.canDescribe, let tab = requestedTab else { return }
     requestedTab = nil
@@ -661,6 +653,35 @@ struct DocumentView: View {
   private func follow(_ request: NavigationModel.ScrollRequest, animated: Bool) {
     if follow(request.section, animated: animated) {
       navigation.settle(request)
+    }
+  }
+
+  /// Where the text view opens as it first appears.
+  private func arrive() {
+    guard let built = session.state.built else { return }
+    // Deep link or restored reading position — or, when the text view is made
+    // again, where the reader was (#449).
+    let arrival = ReaderArrival.onAppear(
+      pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
+      request: navigation.scrollRequest,
+      // Any anchor, not only a section's: a place is saved at the nearest anchor
+      // of any kind (`ReadingPlace`), a paragraph's as often as not.
+      stored: positions.stored()?.place.flatMap { saved in
+        saved.anchor.flatMap(built.anchors.offset(of:)) != nil ? saved : nil
+      })
+    switch arrival {
+    case .place(let anchor):
+      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+    case .request(let request) where request.isUnrecorded:
+      follow(request, animated: false)
+    case .request(let request):
+      jump(toSection: request.section, animated: false)
+    case .stored(let saved):
+      if let anchor = saved.anchor {
+        scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false, offset: saved.offset)
+      }
+    case .stay:
+      break
     }
   }
 
