@@ -35,6 +35,22 @@ struct LegacyTextParserPaginationTests {
     }
   }
 
+  /// A footer ends its line, `[Page 7]` after the author, or on mirrored pages
+  /// starts it, the author after a wide gap (#796). A bracketed page in running text
+  /// is neither. Lines in the shape of an RFC's, quoted from none.
+  @Test(arguments: [
+    ("Ostrander                                                    [Page 7]", true),
+    ("[Page 7]                                                    Ostrander", true),
+    ("[Page xi]                                          Ostrander & Weld", true),
+    ("Ostrander                                                   [Page iv]", true),
+    ("[Page 7] of the manual says otherwise", false),
+    ("Ostrander                                                   [Page 1i]", false),
+    ("see the manual, Page 7", false),
+  ])
+  func `a footer is recognized at either margin`(line: String, isFooter: Bool) {
+    #expect(LegacyTextParser.isFooter(line) == isFooter)
+  }
+
   /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
   /// indented with one read as indent 0 (#40). RFC 717 indents a list with tabs
   /// under prose indented six spaces: the block's indent came out as 0, the four
