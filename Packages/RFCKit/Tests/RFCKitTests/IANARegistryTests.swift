@@ -266,8 +266,7 @@ struct IANARegistryTests {
       lock.withLock { sent = request }
       let url = request.url!
       let found = url == registry.url
-      let response = HTTPURLResponse(
-        url: url, statusCode: found ? status : 404, httpVersion: nil, headerFields: nil)!
+      let response = HTTPURLResponse.served(from: url, statusCode: found ? status : 404)
       return (found ? Data(body.utf8) : Data(), response)
     }
   }
