@@ -3,15 +3,15 @@
   "strings" : {
     "%@ %@, %@." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@, %3$@."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "%1$@ %2$@, %3$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
             "value" : "%1$@ %2$@, %3$@."
           }
         }
@@ -19,64 +19,64 @@
     },
     "%@ %@, in the RFC Editor queue." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@, in the RFC Editor queue."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ %2$@, in der Warteschlange des RFC Editor."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, in the RFC Editor queue."
           }
         }
       }
     },
     "%@ %@, revision %@ from %@, %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@, revision %3$@ from %4$@, %5$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ %2$@, Revision %3$@ von %4$@, %5$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, revision %3$@ from %4$@, %5$@"
           }
         }
       }
     },
     "%@ %@, revision %@, %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@, revision %3$@, %4$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ %2$@, Revision %3$@, %4$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, revision %3$@, %4$@"
           }
         }
       }
     },
     "%@ is defined in %@." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ is defined in %2$@."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ ist in %2$@ definiert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is defined in %2$@."
           }
         }
       }
@@ -93,16 +93,16 @@
     },
     "%@ is published only as %@." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ is published only as %2$@."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ ist nur als %2$@ veröffentlicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is published only as %2$@."
           }
         }
       }
@@ -119,32 +119,32 @@
     },
     "%@, as of %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, as of %2$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, Stand %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, as of %2$@"
           }
         }
       }
     },
     "%@, revision of %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, revision of %2$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, Revision von %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, revision of %2$@"
           }
         }
       }
@@ -173,7 +173,7 @@
     },
     "%lld RFCs" : {
       "localizations" : {
-        "en" : {
+        "de" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -191,7 +191,7 @@
             }
           }
         },
-        "de" : {
+        "en" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -1799,16 +1799,16 @@
     },
     "The text of %@ only says where its %@ original is." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "The text of %1$@ only says where its %2$@ original is."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Text von %1$@ verweist nur auf sein Original als %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The text of %1$@ only says where its %2$@ original is."
           }
         }
       }
@@ -1835,24 +1835,6 @@
     },
     "There are %lld requirements in %@." : {
       "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "There is one requirement in %2$@."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "There are %1$lld requirements in %2$@."
-                }
-              }
-            }
-          }
-        },
         "de" : {
           "variations" : {
             "plural" : {
@@ -1866,6 +1848,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "Es gibt %1$lld Anforderungen in %2$@."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There is one requirement in %2$@."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There are %1$lld requirements in %2$@."
                 }
               }
             }

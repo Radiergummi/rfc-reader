@@ -14,16 +14,16 @@
     },
     "%@ didn't load: %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ didn't load: %2$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ wurde nicht geladen: %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ didn't load: %2$@"
           }
         }
       }
@@ -40,16 +40,16 @@
     },
     "%@ has no section %@." : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ has no section %2$@."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ hat keinen Abschnitt %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ has no section %2$@."
           }
         }
       }
@@ -76,16 +76,16 @@
     },
     "%@ of %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of %2$@"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ von %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@"
           }
         }
       }
@@ -102,7 +102,7 @@
     },
     "%lld RFCs" : {
       "localizations" : {
-        "en" : {
+        "de" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -120,7 +120,7 @@
             }
           }
         },
-        "de" : {
+        "en" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -142,24 +142,6 @@
     },
     "%lld documents." : {
       "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld document."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld documents."
-                }
-              }
-            }
-          }
-        },
         "de" : {
           "variations" : {
             "plural" : {
@@ -177,29 +159,29 @@
               }
             }
           }
-        }
-      }
-    },
-    "%lld identifiers" : {
-      "localizations" : {
+        },
         "en" : {
           "variations" : {
             "plural" : {
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld identifier"
+                  "value" : "%lld document."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld identifiers"
+                  "value" : "%lld documents."
                 }
               }
             }
           }
-        },
+        }
+      }
+    },
+    "%lld identifiers" : {
+      "localizations" : {
         "de" : {
           "variations" : {
             "plural" : {
@@ -217,29 +199,29 @@
               }
             }
           }
-        }
-      }
-    },
-    "%lld sections" : {
-      "localizations" : {
+        },
         "en" : {
           "variations" : {
             "plural" : {
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld section"
+                  "value" : "%lld identifier"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld sections"
+                  "value" : "%lld identifiers"
                 }
               }
             }
           }
-        },
+        }
+      }
+    },
+    "%lld sections" : {
+      "localizations" : {
         "de" : {
           "variations" : {
             "plural" : {
@@ -257,29 +239,29 @@
               }
             }
           }
-        }
-      }
-    },
-    "%lld times" : {
-      "localizations" : {
+        },
         "en" : {
           "variations" : {
             "plural" : {
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld time"
+                  "value" : "%lld section"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld times"
+                  "value" : "%lld sections"
                 }
               }
             }
           }
-        },
+        }
+      }
+    },
+    "%lld times" : {
+      "localizations" : {
         "de" : {
           "variations" : {
             "plural" : {
@@ -293,6 +275,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld-mal"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld times"
                 }
               }
             }

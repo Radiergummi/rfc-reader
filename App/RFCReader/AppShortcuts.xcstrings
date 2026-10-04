@@ -4,15 +4,6 @@
     "Find the requirements in ${document} with ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
-              "Find the requirements in ${document} with ${applicationName}",
-              "Find requirements in an RFC with ${applicationName}"
-            ]
-          }
-        },
         "de" : {
           "stringSet" : {
             "state" : "translated",
@@ -21,21 +12,21 @@
               "Finde Anforderungen in einem RFC mit ${applicationName}"
             ]
           }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Find the requirements in ${document} with ${applicationName}",
+              "Find requirements in an RFC with ${applicationName}"
+            ]
+          }
         }
       }
     },
     "Look up an identifier in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
-              "Look up an identifier in ${applicationName}",
-              "Look up a protocol identifier in ${applicationName}"
-            ]
-          }
-        },
         "de" : {
           "stringSet" : {
             "state" : "translated",
@@ -44,23 +35,21 @@
               "Schlage eine Protokollkennung in ${applicationName} nach"
             ]
           }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Look up an identifier in ${applicationName}",
+              "Look up a protocol identifier in ${applicationName}"
+            ]
+          }
         }
       }
     },
     "Open ${target} in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
-              "Open ${target} in ${applicationName}",
-              "Show ${target} in ${applicationName}",
-              "Open an RFC in ${applicationName}",
-              "Show an RFC in ${applicationName}"
-            ]
-          }
-        },
         "de" : {
           "stringSet" : {
             "state" : "translated",
@@ -71,25 +60,36 @@
               "Zeige einen RFC in ${applicationName}"
             ]
           }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Open ${target} in ${applicationName}",
+              "Show ${target} in ${applicationName}",
+              "Open an RFC in ${applicationName}",
+              "Show an RFC in ${applicationName}"
+            ]
+          }
         }
       }
     },
     "Open a section of an RFC in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
-        "en" : {
-          "stringSet" : {
-            "state" : "new",
-            "values" : [
-              "Open a section of an RFC in ${applicationName}"
-            ]
-          }
-        },
         "de" : {
           "stringSet" : {
             "state" : "translated",
             "values" : [
               "Öffne einen Abschnitt eines RFC in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Open a section of an RFC in ${applicationName}"
             ]
           }
         }
