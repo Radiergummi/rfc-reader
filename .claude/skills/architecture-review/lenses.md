@@ -198,10 +198,11 @@ For each: where did it stall, take more steps than the platform's own apps would
 - **Effect**: what it makes harder, slower or riskier to change, with the change scenario or issue that shows it; or what someone using the app cannot do, cannot find, or does wrong, and who (VoiceOver, keyboard, iPhone, a first launch)
 - **Alternative**: the specific structure, API, package or HIG pattern; where it is available (Linux, the 26 target, Swift 6); what it would and would not replace
 - **Cost and risk of the change**: S | M | L; what could break; which tests guard it
+- **Size**: one commit (a focused fix a few files wide) | project (needs design or several steps), with one line why
 - **Conflicts**: the `CLAUDE.md` constraint, decision record or `VISION.md` principle it touches and how the finding answers its reasoning, or "none"
 ```
 
-And, once per findings file:
+And, once per area:
 
 ```markdown
 ## Considered, not a finding
