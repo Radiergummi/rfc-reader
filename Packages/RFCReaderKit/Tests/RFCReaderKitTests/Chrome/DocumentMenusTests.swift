@@ -100,7 +100,7 @@ struct DocumentMenuEffectsTests {
   func `a citation copies the citation of the section being read`(style: CitationStyle) {
     #expect(
       effect(.copyCitation(style))
-        == .copy(DocumentActions.citation(metadata, section: "4.2", style: style)))
+        == .copy(DocumentActions.citation(metadata, section: "4.2", style: style), .citation))
   }
 
   @Test func `a citation without the document's metadata does nothing`() {
@@ -112,7 +112,7 @@ struct DocumentMenuEffectsTests {
   @Test func `the section link copies the link to where the reader is`() {
     #expect(
       effect(.copySectionLink)
-        == .copy(DocumentActions.sectionLink(id: .rfc(9110), section: "4.2")))
+        == .copy(DocumentActions.sectionLink(id: .rfc(9110), section: "4.2"), .link))
   }
 
   @Test func `the pages elsewhere open`() {
