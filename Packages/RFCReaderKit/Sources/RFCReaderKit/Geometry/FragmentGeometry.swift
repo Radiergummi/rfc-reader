@@ -72,7 +72,7 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// `effectiveRange` names that whole run; comparing the fragment's own start and
+  /// `decorationRun(at:)` names that whole run; comparing the fragment's own start and
   /// end against it says whether this fragment is the run's first, its last, both
   /// (the common single-fragment case), or neither (a middle fragment, which draws
   /// no cap and must not repeat the run's outer padding or its rounding, or the
@@ -84,41 +84,11 @@ public enum FragmentGeometry {
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
-    guard fragment.location >= 0, fragment.location < text.length else { return nil }
-    // Probed before the walk below, because `longestEffectiveRange` coalesces
-    // the *absent* value just as eagerly as a present one: on the plain prose
-    // that is most of an RFC it would run from the previous decorated block to
-    // the next — most of the document, for every fragment in it. This lookup
-    // stops at the first storage run.
-    guard
-      RFCDecoration(
-        attributeValue: text.attribute(.rfcDecoration, at: fragment.location, effectiveRange: nil))
-        != nil
-    else {
-      return nil
-    }
-
-    // `longestEffectiveRange`, not `effectiveRange`: the latter returns the
-    // *storage* run, which ends at any attribute change at all — a stacked
-    // table's bold label and regular value are different runs, as are an
-    // authors' block's affiliation and address lines. Each fragment then saw a
-    // decoration that began and ended with itself, so it drew a fully rounded
-    // card at its own indent and the block came out as a staircase. Artwork
-    // hid this while its attributes were uniform; its last line now carries the
-    // block's spacing alone (#31), so it depends on this as much as a table does.
-    var effective = NSRange(location: 0, length: 0)
-    guard
-      let decoration = RFCDecoration(
-        attributeValue: text.attribute(
-          .rfcDecoration,
-          at: fragment.location,
-          longestEffectiveRange: &effective,
-          in: NSRange(location: 0, length: text.length)
-        ))
-    else {
-      return nil
-    }
-    effective = verbatimBlock(in: text, at: fragment.location, within: effective)
+    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
+    // depends on that as much as a table does: its last line carries the block's
+    // spacing alone (#31), which is a storage run of its own.
+    guard let run = text.decorationRun(at: fragment.location) else { return nil }
+    var effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
     let shownEnd = hidden.shownEnd(of: effective)
     let isFolded = shownEnd < NSMaxRange(effective)
     effective.length = shownEnd - effective.location
@@ -126,7 +96,7 @@ public enum FragmentGeometry {
       text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
       as? NSParagraphStyle
     return DecorationSpan(
-      decoration: decoration,
+      decoration: run.decoration,
       isFirst: fragment.location <= effective.location,
       isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
       runRange: effective,
@@ -150,9 +120,7 @@ public enum FragmentGeometry {
   /// quote is decorated too, but draws a rule beside its text, which no card's cap
   /// can stack on.
   static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
-    guard location >= 0, location < text.length else { return false }
-    let decoration = RFCDecoration(
-      attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
+    let decoration = text.decoration(at: location)
     return decoration != nil && decoration != .blockQuote
   }
 
