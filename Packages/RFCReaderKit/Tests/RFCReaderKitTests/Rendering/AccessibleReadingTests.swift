@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// What VoiceOver is given for a range of the reader's text (#12): prose as it is,
 /// a diagram as one spoken label instead of its box drawing.
 @Suite("Accessible reading")
@@ -152,11 +158,24 @@ struct AccessibleReadingTests {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
     )
-    // Read as its words, not as a diagram: the only label is the copy button's.
+    // Read as its words, not as a diagram.
     let labels = AccessibleReading.pieces(of: whole(text), in: text).compactMap { piece in
       if case .label(let label) = piece { label } else { nil }
     }
-    #expect(labels.allSatisfy { $0 == "Copy code" })
+    #expect(labels.isEmpty)
+    #expect(reading(whole(text), in: text).contains("a = b"))
+  }
+
+  /// The copy button is a pointer's control VoiceOver cannot press, so it is said
+  /// neither as a label nor as the object-replacement character it is set as.
+  @Test func `a code block's copy button is not read`() {
+    let text = built(
+      Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
+    )
+    let reading = reading(whole(text), in: text)
+    #expect(!reading.contains("\u{FFFC}"))
+    #expect(!reading.contains("["))
+    #expect(reading.contains("ABNF"), "the language is still read")
   }
 
   /// Artwork that is not a drawing reads perfectly well as words, and legacy
@@ -225,8 +244,19 @@ struct AccessibleReadingTests {
       chips += 1
       unread.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
     }
-    // Only diagrams and chips go unread, and all of them are under a label.
-    #expect(covered.union(unread).count == text.length)
+    // The reader's own controls go unread with no label at all.
+    var controls = IndexSet()
+    text.enumerateAttribute(.attachment, in: whole(text)) { value, range, _ in
+      guard value != nil,
+        text.attribute(.rfcReaderOnly, at: range.location, effectiveRange: nil) != nil,
+        text.attribute(.rfcSpoken, at: range.location, effectiveRange: nil) == nil
+      else { return }
+      controls.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
+    }
+    // Only diagrams, chips and controls go unread, and all but the controls are
+    // under a label.
+    #expect(covered.isDisjoint(with: controls))
+    #expect(covered.union(unread).union(controls).count == text.length)
     #expect(labels == diagrams + chips)
   }
 

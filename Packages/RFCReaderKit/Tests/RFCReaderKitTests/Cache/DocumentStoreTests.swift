@@ -207,4 +207,22 @@ struct DocumentStoreTests {
     #expect(fetcher.documentFetches == 0)
     #expect(await store.isCached(id))
   }
+
+  /// Kept in Application Support, where the next launch's comparison reads it (#191).
+  @Test func `a bookmark baseline is read back as it was stored`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(8999), title: "An Example", date: PublicationDate(year: 2021),
+        obsoletedBy: [.rfc(9999)])
+    ])
+    let baseline = BookmarkBaseline(
+      bookmarks: [.rfc(8999)], index: index, revisions: nil, carryingOver: nil)
+
+    #expect(await store.bookmarkBaseline() == nil)
+    try await store.storeBookmarkBaseline(baseline)
+    #expect(await store.bookmarkBaseline() == baseline)
+  }
 }
