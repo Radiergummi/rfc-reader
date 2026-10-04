@@ -18,6 +18,23 @@ struct LegacyTextParserPaginationTests {
     #expect(stripped.contains("6. Guidance in the use of these Imperatives"))
   }
 
+  /// RFC 793 numbers its front matter's pages in roman numerals, `[Page i]` to
+  /// `[Page iii]`. Those footers are page furniture like any other, not artwork or
+  /// paragraphs in its lead-in (#549).
+  @Test func `a footer numbered in roman numerals is page furniture`() throws {
+    let text = try Fixtures.string("rfc793.txt")
+    let footers = ["[Page i]", "[Page ii]", "[Page iii]"]
+    let published = LegacyTextParser.stripPagination(text)
+    for footer in footers {
+      #expect(!published.contains(footer))
+    }
+    let document = try Fixtures.document("rfc793.txt")
+    let parsed = document.nestedParagraphs.map(\.plainText) + document.artworkText
+    for footer in footers {
+      #expect(!parsed.contains { $0.contains(footer) }, "\(footer) is still in the document")
+    }
+  }
+
   /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
   /// indented with one read as indent 0 (#40). RFC 717 indents a list with tabs
   /// under prose indented six spaces: the block's indent came out as 0, the four
