@@ -26,8 +26,13 @@ public enum ConversionPlan {
     return files
   }
 
-  /// The RFC number of a corpus file name: 2119 for `rfc2119.txt` or `rfc2119`.
+  /// The RFC number of a corpus file name: 2119 for `rfc2119.txt` or `rfc2119`. The
+  /// name must be the stem `DocumentID.fileStem` writes, and of an RFC: `bcp14.txt`
+  /// names no RFC number, where its number alone would take RFC 14's index entry.
   public static func rfcNumber(of fileName: String) -> Int? {
-    DocumentID(parsing: String(fileName.split(separator: ".").first ?? ""))?.number
+    guard let id = DocumentID(fileStem: String(fileName.split(separator: ".").first ?? "")),
+      id.series == .rfc
+    else { return nil }
+    return id.number
   }
 }
