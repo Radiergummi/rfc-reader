@@ -18,6 +18,13 @@ struct IntentAnswerTests {
         == "There are 12 requirements in RFC 9110.")
   }
 
+  @Test func `the place is the section of the RFC, or the RFC alone`() {
+    #expect(
+      IntentAnswer.place("4.2. Retries", of: .rfc(9110), locale: .english)
+        == "4.2. Retries of RFC 9110")
+    #expect(IntentAnswer.place(nil, of: .rfc(9110), locale: .english) == "RFC 9110")
+  }
+
   @Test func `a definition names the identifier, its name and where it is defined`() {
     #expect(
       IntentAnswer.definition(

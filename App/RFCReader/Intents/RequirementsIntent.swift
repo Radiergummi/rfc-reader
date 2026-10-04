@@ -42,8 +42,7 @@ struct RequirementsIntent: AppIntent {
       scope = found
     }
     let lines = await Self.requirements(in: loaded, within: scope).map(\.line)
-    let place =
-      section.map { String(localized: "\($0.title) of \(id.displayName)") } ?? id.displayName
+    let place = IntentAnswer.place(section?.title, of: id)
     let answer = IntentAnswer.requirements(lines.count, in: place)
     return .result(
       value: lines, dialog: IntentDialog(.verbatim(answer)),

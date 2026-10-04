@@ -39,7 +39,8 @@ extension Locale {
 
   /// `current` itself when it is in the catalog's language, so a variant keeps its
   /// own ways and the reader's settings stay: British English lists "RFC 1, RFC 2
-  /// and RFC 3". Otherwise the catalog's language, in `current`'s region.
+  /// and RFC 3". Otherwise `current` with the catalog's language, keeping its region
+  /// and settings, such as a 12-hour clock.
   static func interface(localization: String, current: Locale) -> Locale {
     let language = Locale.Language(identifier: localization)
     if current.language.languageCode == language.languageCode,
@@ -47,7 +48,8 @@ extension Locale {
     {
       return current
     }
-    var components = Locale.Components(identifier: localization)
+    var components = Locale.Components(locale: current)
+    components.languageComponents = Locale.Language.Components(identifier: localization)
     components.region = current.region
     return Locale(components: components)
   }

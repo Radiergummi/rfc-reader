@@ -69,7 +69,10 @@ struct StatusBanner: View {
     return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         symbol("doc.badge.clock").foregroundStyle(.secondary)
-        Text(verbatim: "\(relation) \(title) \(detail)")
+        // A key, not verbatim: only a LocalizedStringKey interpolates a styled Text;
+        // a String would hold each one's debug description.
+        Text(
+          "\(relation) \(title) \(detail)", comment: "A draft's relation, its name and its stage")
       }
     }
     .font(.subheadline)

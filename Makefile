@@ -72,7 +72,7 @@ build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
-	swift build --package-path $(RFCREADERKIT)
+	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -127,7 +127,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real

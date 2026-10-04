@@ -1,6 +1,17 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ %@ %@" : {
+      "comment" : "A draft's relation, its name and its stage",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ %3$@"
+          }
+        }
+      }
+    },
     "%@ didn't load: %@" : {
       "localizations" : {
         "en" : {
@@ -29,16 +40,6 @@
     },
     "%@ isn't available offline. Connect to the internet, or keep it offline in RFC Reader, then try again." : {
 
-    },
-    "%@ of %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of %2$@"
-          }
-        }
-      }
     },
     "%@: searched as text" : {
 

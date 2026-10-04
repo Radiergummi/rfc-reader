@@ -33,6 +33,15 @@ struct LocalizationTests {
     #expect(interface.region?.identifier == "FR")
   }
 
+  /// The reader's own settings stay when the language gives way: a 12-hour clock
+  /// and a week that starts on Monday.
+  @Test func `a language the catalog lacks keeps the reader's settings`() {
+    let interface = Locale.interface(
+      localization: "de", current: Locale(identifier: "fr_FR@hours=h12;fw=mon"))
+    #expect(interface.hourCycle == .oneToTwelve)
+    #expect(interface.firstDayOfWeek == .monday)
+  }
+
   /// British English is the catalog's English, and keeps its own lists.
   @Test func `a variant of the catalog's language is kept as it is`() {
     let interface = Locale.interface(localization: "en", current: Locale(identifier: "en_GB"))

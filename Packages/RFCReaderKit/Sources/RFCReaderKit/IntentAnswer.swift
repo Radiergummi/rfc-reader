@@ -16,6 +16,15 @@ public enum IntentAnswer {
       : String(kit: "There are \(count) requirements in \(place).", locale: locale)
   }
 
+  /// Where requirements are counted: `4.2. Retries of RFC 9110`, or `RFC 9110` when
+  /// no section is asked for.
+  public static func place(
+    _ section: String?, of document: DocumentID, locale: Locale = .interface
+  ) -> String {
+    guard let section else { return document.displayName }
+    return String(kit: "\(section) of \(document.displayName)", locale: locale)
+  }
+
   /// `TLS alert 70, protocol_version, is defined in RFC 8446, Section 6.2.`
   ///
   /// - Parameters:
