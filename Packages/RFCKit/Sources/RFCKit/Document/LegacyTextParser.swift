@@ -317,15 +317,12 @@ public enum LegacyTextParser {
   /// number also has to follow from one: the number before it (`2.4.11` for `2.4.12`,
   /// `10` for `11`) or one it is under (`2.4`) must be a heading number too, however it
   /// is set. Only `0` and `1` open a numbering on their own.
-  private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
-    numbersHeadingsWithAColon(lines.compactMap(\.string))
-  }
-
   static func numbersHeadingsWithAColon(_ lines: [String]) -> Bool {
     var colonNumbers: Set<Substring> = []
     var fullStopNumbers: Set<Substring> = []
     var numbers: Set<Substring> = []
     for string in lines where string.startsAtColumnZero {
+      // `1)` is the weaker sign: a colon number vetoes it, never the other way round.
       guard let match = string.firstMatch(of: numberedHeadingPattern), match.separator != ")"
       else { continue }
       numbers.insert(match.number)
@@ -354,10 +351,6 @@ public enum LegacyTextParser {
   /// each. What it lacks is any other sign of sections, which the three have: a column-0
   /// line, or a parenthesis title, that names a section every RFC has, `Status of this
   /// Memo` or `Security Considerations`.
-  private static func numbersHeadingsWithAParenthesis(_ lines: [Line]) -> Bool {
-    numbersHeadingsWithAParenthesis(lines.map { $0.string ?? "" })
-  }
-
   static func numbersHeadingsWithAParenthesis(_ lines: [String]) -> Bool {
     var parenthesisNumbers: [Substring] = []
     var separatedNumbers: Set<Substring> = []
@@ -495,16 +488,6 @@ public enum LegacyTextParser {
 
     static let colon = HeadingSeparators(rawValue: 1 << 0)
     static let parenthesis = HeadingSeparators(rawValue: 1 << 1)
-
-    init(rawValue: Int) {
-      self.rawValue = rawValue
-    }
-
-    init(_ lines: [Line]) {
-      self = []
-      if numbersHeadingsWithAColon(lines) { insert(.colon) }
-      if numbersHeadingsWithAParenthesis(lines) { insert(.parenthesis) }
-    }
   }
 
   /// What every reading of the depaginated lines starts from: the lines, double
@@ -797,5 +780,15 @@ public enum LegacyTextParser {
 
   static func isBoilerplateTitle(_ lowered: String) -> Bool {
     boilerplateTitles.contains { lowered.hasPrefix($0) }
+  }
+}
+
+extension LegacyTextParser.HeadingSeparators {
+  init(_ lines: [LegacyTextParser.Line]) {
+    // A page break reads as a blank line, which ends a `1)` heading's block.
+    let strings = lines.map { $0.string ?? "" }
+    self = []
+    if LegacyTextParser.numbersHeadingsWithAColon(strings) { insert(.colon) }
+    if LegacyTextParser.numbersHeadingsWithAParenthesis(strings) { insert(.parenthesis) }
   }
 }
