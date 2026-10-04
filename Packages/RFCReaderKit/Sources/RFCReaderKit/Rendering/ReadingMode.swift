@@ -29,6 +29,7 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
     case .normal: String(kit: "Normal", locale: locale)
     case .outline: String(kit: "Outline", locale: locale)
     case .focus: String(kit: "Focus", locale: locale)
+    case .implementer: String(kit: "Implementer", locale: locale)
     }
   }
 }

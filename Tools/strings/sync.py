@@ -21,7 +21,9 @@ The sync reads it with the rest; each catalog takes the table it is named for.
 Only the given configuration's files are read, and only those named after a
 source file that still exists (and the App Shortcuts' file): DerivedData keeps
 the .stringsdata of a deleted file, and of every other configuration ever built,
-and either would keep a removed string from going stale.
+and either would keep a removed string from going stale. Of one platform's files
+for the same source, only the newest is read: an architecture an earlier build
+had and the latest did not keeps its old file too.
 
 Python 3.9 or later, standard library only.
 """
