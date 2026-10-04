@@ -109,3 +109,27 @@ extension AsideCaptionTests {
     #expect(open.isFirst && !open.isLast)
   }
 }
+
+extension AsideCaptionTests {
+  /// A card straight after a closed aside starts on its own, capped and rounded,
+  /// rather than as the continuation of the aside's card, whose folded body is all
+  /// that touched it.
+  @Test func `a card after a closed aside does not meet it`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .aside([.paragraph(Paragraph(text: "aside"))]),
+        .preformatted(Preformatted(kind: .artwork, text: "AAAA"))),
+      style: ReadingStyle())
+    let closed = Folding(mode: .implementer).hidden(in: FoldingIndex(built))
+    let offset = try Fixtures.offset(of: "AAAA", in: built.text)
+    let span = try #require(
+      FragmentGeometry.decorationSpan(
+        in: built.text, fragment: NSRange(location: offset, length: 1), hidden: closed))
+    #expect(span.decoration == .artwork)
+    #expect(!span.meetsCardAbove)
+    let open = try #require(
+      FragmentGeometry.decorationSpan(
+        in: built.text, fragment: NSRange(location: offset, length: 1)))
+    #expect(open.meetsCardAbove)
+  }
+}

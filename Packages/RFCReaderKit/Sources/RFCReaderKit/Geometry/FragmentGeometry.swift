@@ -79,7 +79,8 @@ public enum FragmentGeometry {
   /// band would show a seam at every fragment boundary).
   ///
   /// A run whose rest a reading mode folds away, an aside closed under its caption
-  /// (#700), ends where what is shown of it ends: `hidden` is what the mode hides.
+  /// (#700), ends where what is shown of it ends, and the run after it meets no card
+  /// there: `hidden` is what the mode hides.
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
@@ -134,7 +135,9 @@ public enum FragmentGeometry {
       indent: indent(in: text, over: effective)
         - (text.attribute(.rfcCardInset, at: effective.location, effectiveRange: nil) as? CGFloat
           ?? 0),
-      meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
+      // A card the mode has folded away above this one is not met either.
+      meetsCardAbove: !hidden.contains(effective.location - 1)
+        && drawsCard(in: text, at: effective.location - 1),
       meetsCardBelow: !isFolded && drawsCard(in: text, at: NSMaxRange(effective)),
       contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
         as? CGFloat,
