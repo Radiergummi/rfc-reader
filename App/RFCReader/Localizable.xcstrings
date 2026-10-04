@@ -4,6 +4,12 @@
     "%@ %@ %@" : {
       "comment" : "A draft's relation, its name and its stage",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ %3$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -70,22 +76,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ ist offline nicht verfügbar. Stelle eine Internetverbindung her oder bewahre es in RFC Reader offline auf und versuche es dann erneut."
-          }
-        }
-      }
-    },
-    "%@ of %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ von %2$@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of %2$@"
           }
         }
       }
@@ -1294,22 +1284,22 @@
         }
       }
     },
-    "No %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Einträge in „%@“"
-          }
-        }
-      }
-    },
     "No Citation Index" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kein Zitationsindex"
+          }
+        }
+      }
+    },
+    "No Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Inhalt"
           }
         }
       }
@@ -1850,16 +1840,6 @@
         }
       }
     },
-    "Remove Bookmark" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lesezeichen entfernen"
-          }
-        }
-      }
-    },
     "Remove Offline Copy" : {
       "localizations" : {
         "de" : {
@@ -1966,16 +1946,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suchen"
-          }
-        }
-      }
-    },
-    "Search %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In „%@“ suchen"
           }
         }
       }

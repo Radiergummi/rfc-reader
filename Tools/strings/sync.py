@@ -49,6 +49,9 @@ CATALOGS = [
     ),
 ]
 
+# Catalogs no build extracts, kept by hand: checked for translations, never synced.
+HAND_KEPT_CATALOGS = ["App/RFCReader/InfoPlist.xcstrings"]
+
 # What the App Intents metadata step names its record of the App Shortcuts.
 APP_SHORTCUTS_STRINGS = "ExtractedAppShortcutsMetadata"
 
@@ -116,7 +119,7 @@ def main() -> None:
     if arguments.check_translations:
         missing = [
             f"{catalog}: {key}"
-            for catalog, _, _ in CATALOGS
+            for catalog in [catalog for catalog, _, _ in CATALOGS] + HAND_KEPT_CATALOGS
             for key in untranslated(Path(catalog), arguments.check_translations)
         ]
         for line in missing:

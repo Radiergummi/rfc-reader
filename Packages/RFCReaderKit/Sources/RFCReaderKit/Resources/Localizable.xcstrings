@@ -290,7 +290,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein neuerer RFC, der einen älteren obsolet macht, ersetzt ihn vollständig."
+            "value" : "Ein neuerer RFC, der einen älteren ersetzt, löst ihn vollständig ab."
           }
         }
       }
@@ -571,16 +571,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Best Current Practices"
-          }
-        }
-      }
-    },
-    "BibTeX" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BibTeX"
           }
         }
       }
@@ -917,16 +907,6 @@
         }
       }
     },
-    "IAB" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "IAB"
-          }
-        }
-      }
-    },
     "IAB Program" : {
       "localizations" : {
         "de" : {
@@ -953,16 +933,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "IETF-Stream"
-          }
-        }
-      }
-    },
-    "IRTF" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "IRTF"
           }
         }
       }
@@ -1214,19 +1184,54 @@
       }
     },
     "No Best Current Practices" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Best Current Practices"
+          }
+        }
+      }
     },
     "No Bookmarks" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Lesezeichen"
+          }
+        }
+      }
     },
     "No Internet Standards" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Internet Standards"
+          }
+        }
+      }
     },
     "No RFCs" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine RFCs"
+          }
+        }
+      }
     },
     "No RFCs in %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine RFCs in %@"
+          }
+        }
+      }
     },
     "Normal" : {
       "localizations" : {
@@ -1259,10 +1264,24 @@
       }
     },
     "Nothing Available Offline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts offline verfügbar"
+          }
+        }
+      }
     },
     "Nothing Read Recently" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nichts gelesen"
+          }
+        }
+      }
     },
     "Now has errata." : {
       "localizations" : {
@@ -1628,25 +1647,74 @@
       }
     },
     "Search %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ durchsuchen"
+          }
+        }
+      }
     },
     "Search All RFCs" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs durchsuchen"
+          }
+        }
+      }
     },
     "Search Available Offline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbare durchsuchen"
+          }
+        }
+      }
     },
     "Search Best Current Practices" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best Current Practices durchsuchen"
+          }
+        }
+      }
     },
     "Search Bookmarks" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen durchsuchen"
+          }
+        }
+      }
     },
     "Search Internet Standards" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet Standards durchsuchen"
+          }
+        }
+      }
     },
     "Search Recently Read" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt gelesene durchsuchen"
+          }
+        }
+      }
     },
     "Short" : {
       "localizations" : {
@@ -1970,16 +2038,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versuche es erneut oder öffne das Dokument auf rfc-editor.org."
-          }
-        }
-      }
-    },
-    "URL" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "URL"
           }
         }
       }
