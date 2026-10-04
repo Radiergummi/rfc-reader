@@ -28,8 +28,15 @@ extension NSAttributedString.Key {
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on every character of an aside, its "Note" caption first (#700): the
+  /// aside's ordinal among the document's asides, which Implementer folds its body
+  /// by (`FoldingIndex`). Only in a build with live links, which alone has the
+  /// caption. A `String`, so the runs of one aside merge and two asides stay two;
+  /// a nested aside keeps its own.
+  public static let rfcAside = NSAttributedString.Key("rfcAside")
   /// Set on what the reader adds to the document's words: a heading's backlink
-  /// caption, its line break included, a code block's language and its copy button. A copied
+  /// caption, its line break included, an aside's "Note" caption, a code block's
+  /// language and its copy button. A copied
   /// selection leaves these runs out (`SelectionText`). A `String`, so the runs
   /// merge; only its presence is meaningful.
   public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
@@ -108,25 +115,28 @@ extension RFCDecoration {
   }
 }
 
-/// A decorated block's decoration and the whole of its extent in the text.
-public struct DecorationRun: Equatable, Sendable {
-  public var decoration: RFCDecoration
-  public var range: NSRange
+/// A decoration and the whole of its run in the text.
+struct DecorationRun: Equatable, Sendable {
+  let decoration: RFCDecoration
+  let range: NSRange
 }
 
 extension NSAttributedString {
   /// The decoration at `location`, read from its storage run alone: whether there is
   /// one, and which. Nil outside the text.
-  public func decoration(at location: Int) -> RFCDecoration? {
+  func decoration(at location: Int) -> RFCDecoration? {
     guard location >= 0, location < length else { return nil }
     return RFCDecoration(
       attributeValue: attribute(.rfcDecoration, at: location, effectiveRange: nil))
   }
 
-  /// The decoration at `location` and the whole block it decorates.
+  /// The decoration at `location` and the whole of its run, across storage runs.
+  /// Two adjacent blocks with the same decoration share one run, so it is a block's
+  /// extent only where no such block follows; a verbatim block is cut out of it by
+  /// its box (`FragmentGeometry.verbatimBlock`).
   ///
-  /// Through `longestEffectiveRange`, the only way this type asks for a decoration's
-  /// extent. `effectiveRange` returns the *storage* run, which ends at any attribute
+  /// Through `longestEffectiveRange`, the only way the reader's geometry asks for a
+  /// decoration's extent. `effectiveRange` returns the *storage* run, which ends at any attribute
   /// change at all: a stacked table's bold label and regular value are different
   /// runs, and each line that saw a decoration begin and end with itself drew a
   /// fully rounded card at its own indent, a staircase (#122).
@@ -134,15 +144,12 @@ extension NSAttributedString {
   /// Probed with `decoration(at:)` first, because `longestEffectiveRange` coalesces
   /// the *absent* value just as eagerly as a present one: on the plain prose that is
   /// most of an RFC it would run from the previous decorated block to the next.
-  public func decorationRun(at location: Int) -> DecorationRun? {
-    guard decoration(at: location) != nil else { return nil }
+  func decorationRun(at location: Int) -> DecorationRun? {
+    guard let decoration = decoration(at: location) else { return nil }
     var range = NSRange(location: 0, length: 0)
-    guard
-      let decoration = RFCDecoration(
-        attributeValue: attribute(
-          .rfcDecoration, at: location, longestEffectiveRange: &range,
-          in: NSRange(location: 0, length: length)))
-    else { return nil }
+    _ = attribute(
+      .rfcDecoration, at: location, longestEffectiveRange: &range,
+      in: NSRange(location: 0, length: length))
     return DecorationRun(decoration: decoration, range: range)
   }
 }

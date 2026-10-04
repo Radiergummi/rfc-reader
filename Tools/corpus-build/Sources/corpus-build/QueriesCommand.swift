@@ -30,28 +30,21 @@ struct QueriesCommand: ParsableCommand {
   var minWords = 8
 
   func run() throws {
-    let files = try FileManager.default.contentsOfDirectory(
-      at: URL(fileURLWithPath: input), includingPropertiesForKeys: nil
-    )
-    .filter { $0.pathExtension == "xml" }
-    .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    Self.logger.info("reading", metadata: ["documents": "\(files.count)"])
+    let corpus = try ConvertedCorpus(directory: URL(fileURLWithPath: input))
+    Self.logger.info("reading", metadata: ["documents": "\(corpus.files.count)"])
 
     var querySet = QuerySet()
-    var unparseable = 0
-    for (index, file) in files.enumerated() {
-      guard let data = try? Data(contentsOf: file), let document = try? RFCXMLParser.parse(data)
-      else {
-        unparseable += 1
-        continue
-      }
-      let id = document.header.id?.description ?? file.deletingPathExtension().lastPathComponent
-      querySet.collect(document, id: id)
-      if (index + 1) % 2000 == 0 {
+    // A file that does not parse costs the set its sentences, not the run: the set is
+    // a sample.
+    let reading = try corpus.read { offset, _, id, document in
+      querySet.collect(document, id: id.description)
+      if (offset + 1) % 2000 == 0 {
         Self.logger.info(
-          "progress", metadata: ["completed": "\(index + 1)", "total": "\(files.count)"])
+          "progress", metadata: ["completed": "\(offset + 1)", "total": "\(corpus.files.count)"])
       }
     }
+    Self.logger.report(reading)
+    let unparseable = reading.unreadable.count
     Self.logger.info(
       "recovered citing sentences",
       metadata: ["sentences": "\(querySet.citingSentences)", "unparseable": "\(unparseable)"])

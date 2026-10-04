@@ -7,7 +7,8 @@ import RFCReaderKit
 #endif
 
 /// Draws what attributed text cannot express: the card behind artwork and tables,
-/// the rule beside a block quote, the tint behind an aside, and the reference chip.
+/// the rule beside a block quote, the tint behind an aside, Implementer's band behind
+/// a requirement, and the reference chip.
 ///
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
@@ -53,6 +54,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
+    }
+    for band in bandRects {
+      bounds = bounds.union(band.rect)
     }
     if let disclosure {
       bounds = bounds.union(
@@ -119,7 +123,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     guard let text = textLayoutManager?.attributedText, let range = documentRange else {
       return nil
     }
-    let span = FragmentGeometry.decorationSpan(in: text, fragment: range)
+    // The reading mode's folding: a card whose rest it hides ends with what it shows.
+    let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate
+    let span = FragmentGeometry.decorationSpan(
+      in: text, fragment: range, hidden: folding?.hidden ?? HiddenText())
     cachedDecorationSpan = .some(span)
     return span
   }
@@ -131,6 +138,20 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       in: text, fragment: FragmentLines(range: range, lines: textLineFragments), origin: .zero)
     cachedChipRects = rects
     return rects
+  }
+
+  /// Where Implementer's requirement bands go on this fragment's lines (#700), from
+  /// the bands its layout manager's content holds. Not cached: a change of mode
+  /// changes them without changing the fragment's text.
+  private var bandRects: [FragmentGeometry.BandRect] {
+    guard let range = documentRange,
+      let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
+      let text = textLayoutManager?.attributedText
+    else { return [] }
+    let bands = folding.bands(meeting: range)
+    guard !bands.isEmpty else { return [] }
+    return FragmentGeometry.bandRects(
+      bands, in: text, lines: textLineFragments, fragment: range, origin: .zero)
   }
 
   /// Where this fragment sits in the column, for whatever is drawn around it.
@@ -167,7 +188,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       }
       context.restoreGState()
     }
-    drawChips(at: point, on: card, in: context)
+    let banded = drawBands(at: point, in: context)
+    drawChips(at: point, on: card, banded: banded, in: context)
     drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
     drawDisclosure(at: point, in: context)
@@ -207,10 +229,27 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
+  /// Implementer's bands behind this fragment's requirement sentences (#700), over
+  /// a card where there is one and under the chips; answers whether there were any.
+  private func drawBands(at point: CGPoint, in context: CGContext) -> Bool {
+    let bands = bandRects
+    guard !bands.isEmpty else { return false }
+    context.saveGState()
+    let color = RFCColors.requirementBand.cgColor
+    for band in bands {
+      fill(
+        band.rect.offsetBy(dx: point.x, dy: point.y), radius: FragmentGeometry.chipRadius,
+        corners: band.corners, color: color, in: context)
+    }
+    context.restoreGState()
+    return true
+  }
+
   /// The chip tint's opacity for the accent as it resolves now, on the page or on
-  /// `card` over it: lighter than 15% where the link would not clear the minimum
-  /// contrast on it (#317). On a card the link is the card's link color (#694).
-  private static func chipTintOpacity(on card: PlatformColor?) -> Double {
+  /// `card` over it, and under a requirement band where the fragment has one:
+  /// lighter than 15% where the link would not clear the minimum contrast on it
+  /// (#317). On a card the link is the card's link color (#694).
+  private static func chipTintOpacity(on card: PlatformColor?, banded: Bool) -> Double {
     guard let accent = SRGBColor(resolving: RFCColors.accent),
       let link = SRGBColor(
         resolving: card == nil
@@ -219,6 +258,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     else { return AccentContrast.chipTint }
     if let card, let fill = SRGBColor.resolvingWithOpacity(card) {
       backdrop = fill.color.composited(opacity: fill.opacity, over: backdrop)
+    }
+    if banded, let band = SRGBColor.resolvingWithOpacity(RFCColors.requirementBand) {
+      backdrop = band.color.composited(opacity: band.opacity, over: backdrop)
     }
     return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
   }
@@ -233,8 +275,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let text: FragmentGeometry.HeadingText
   }
 
-  /// Whether this fragment is a heading the outline discloses, and if so its
-  /// disclosure: from the folding its layout manager's content holds (#698).
+  /// Whether this fragment is a heading the outline discloses, or an aside's caption
+  /// Implementer does, and if so its disclosure: from the folding its layout
+  /// manager's content holds (#698, #700).
   private var disclosure: Disclosure? {
     guard let range = documentRange,
       let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
@@ -251,7 +294,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let capHeight = font?.capHeight ?? bounds.height * 0.5
     let text = FragmentGeometry.HeadingText(
       baseline: bounds.minY + line.glyphOrigin.y, capHeight: capHeight)
-    return Disclosure(open: open, firstLine: bounds, text: text)
+    // Measured from the column's edge, not the line's: an aside's caption is set in
+    // from it, and its chevron belongs in the gutter as a heading's does (#700).
+    var firstLine = bounds
+    firstLine.origin.x = -layoutFragmentFrame.minX
+    return Disclosure(open: open, firstLine: firstLine, text: text)
   }
 
   private func drawDisclosure(at point: CGPoint, in context: CGContext) {
@@ -272,13 +319,15 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
-  private func drawChips(at point: CGPoint, on card: PlatformColor?, in context: CGContext) {
+  private func drawChips(
+    at point: CGPoint, on card: PlatformColor?, banded: Bool, in context: CGContext
+  ) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
-    let opacity = Self.chipTintOpacity(on: card)
+    let opacity = Self.chipTintOpacity(on: card, banded: banded)
     let tint = RFCColors.accent.withAlphaComponent(opacity).cgColor
     // An informative citation is background to the specification rather than part
     // of it, and reads so beside a normative one (#184). Half the tint, not a
