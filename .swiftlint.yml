@@ -75,7 +75,7 @@ custom_rules:
     included:
       - App/.*\.swift
       - Packages/RFCReaderKit/Sources/.*\.swift
-    regex: '(?:(?:NSMenuItem|UIAction|UIMenu)\(\s*title\s*:|addButton\(\s*withTitle\s*:|labelWithString\s*:|accessibilityDescription\s*:|\.(?:label|paletteLabel|toolTip|placeholderString|message|messageText|informativeText|secondaryTitle)\s*=|setActionName\()\s*"(?:\\\([^()"\n]*\)|\\u\{[0-9A-Fa-f]+\}|\\.|[^"\\\nA-Za-z])*+[A-Za-z]'
+    regex: '(?:(?:NSMenuItem|UIAction|UIMenu)\(\s*title\s*:|[Ww]ithTitle\s*:|[Ll]abelWithString\s*:|accessibilityDescription\s*:|\.(?:label|paletteLabel|toolTip|placeholder|placeholderString|accessibilityLabel|message|messageText|informativeText|secondaryTitle)\s*=|setActionName\()\s*"(?:\\\([^()"\n]*\)|\\u\{[0-9A-Fa-f]+\}|\\.|[^"\\\nA-Za-z])*+[A-Za-z]'
     excluded_match_kinds:
       - comment
       - doccomment
