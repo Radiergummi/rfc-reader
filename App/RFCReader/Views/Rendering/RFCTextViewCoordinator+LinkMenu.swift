@@ -161,9 +161,15 @@
       _ = onLink(url, .newTab(inBackground: true))
     }
 
+    /// A card stays, as a force click's need not: the pointer is on the menu item,
+    /// not on the reference it would leave.
     @objc private func preview(_ sender: NSMenuItem) {
       guard let forceClick = sender.representedObject as? ReferenceHover.Event else { return }
-      hover.send(forceClick)
+      if case .forceClickCard(let target) = forceClick {
+        hover.send(.cardChosen(target))
+      } else {
+        hover.send(forceClick)
+      }
     }
 
     /// The URL as text and as a URL, and the label linked to it as HTML and RTF, as
