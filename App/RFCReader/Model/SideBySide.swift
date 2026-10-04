@@ -37,8 +37,12 @@ final class SideBySide {
     coupling = ScrollCoupling(leader: pair.reading, follower: pair.other)
     reader.coupling = coupling
     coupling.onUnaligned = { [weak self] leader, section in
-      guard let self else { return }
-      holdsStill = section == nil ? nil : coupling.other(than: leader)
+      // Deferred, as the coordinator's own reports are: this is told from inside
+      // SwiftUI's update of either reader, when it installs a build or jumps.
+      Task { [weak self] in
+        guard let self else { return }
+        holdsStill = section == nil ? nil : coupling.other(than: leader)
+      }
     }
   }
 

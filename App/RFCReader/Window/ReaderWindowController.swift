@@ -297,24 +297,23 @@
       if let item = besideItem {
         splitController.removeSplitViewItem(item)
         besideItem = nil
-        if let window { applyMinimumWidth(to: window) }
-        trackPanelEdge()
       }
-      guard let reading = reader.sideBySide,
+      if let reading = reader.sideBySide,
         let readerIndex = splitController.splitViewItems.firstIndex(of: readerItem)
-      else { return }
-      let besideHost = host(
-        BesideReader(reading: reading, main: reader, mainNavigation: navigation),
-        in: ReaderEnvironment(
-          library: library, navigation: reading.navigation, reader: reading.reader))
-      // As the reader's own, and for the same reason: the panel opens over this item
-      // now, and its width must not re-wrap the text. `ReaderScrollView` refuses
-      // the scroll view's half of it, as it does for the reader.
-      besideHost.safeAreaRegions = []
-      let item = NSSplitViewItem(viewController: besideHost)
-      item.automaticallyAdjustsSafeAreaInsets = true
-      splitController.insertSplitViewItem(item, at: readerIndex + 1)
-      besideItem = item
+      {
+        let besideHost = host(
+          BesideReader(reading: reading, main: reader, mainNavigation: navigation),
+          in: ReaderEnvironment(
+            library: library, navigation: reading.navigation, reader: reading.reader))
+        // As the reader's own, and for the same reason: the panel opens over this item
+        // now, and its width must not re-wrap the text. `ReaderScrollView` refuses
+        // the scroll view's half of it, as it does for the reader.
+        besideHost.safeAreaRegions = []
+        let item = NSSplitViewItem(viewController: besideHost)
+        item.automaticallyAdjustsSafeAreaInsets = true
+        splitController.insertSplitViewItem(item, at: readerIndex + 1)
+        besideItem = item
+      }
       if let window { applyMinimumWidth(to: window) }
       trackPanelEdge()
     }
