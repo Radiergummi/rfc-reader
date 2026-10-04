@@ -125,6 +125,8 @@
       // belongs to one window, and sharing it across tabs mangles all of them.
       if controllers.isEmpty {
         controller.window?.setFrameAutosaveName("ReaderWindow")
+        // Naming it puts the saved frame back, unchecked against the floor.
+        controller.splitController.applyMinimumWidth()
       }
       controllers.append(controller)
 
@@ -212,12 +214,12 @@
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func sidebarChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func willClose(_ controller: ReaderWindowController) {

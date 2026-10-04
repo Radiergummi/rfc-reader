@@ -46,10 +46,9 @@ public enum PinRecipe {
       // zero: scrolling to it sent the reader to the top of the document.
       layout.ensureLayout(for: fragment.rangeInElement)
       guard fragment.layoutFragmentFrame.height > 0 else { break }
-      let start = layout.offset(of: fragment.rangeInElement.location)
+      guard let lines = FragmentLines(fragment, in: layout) else { break }
       let wanted =
-        fragment.layoutFragmentFrame.minY
-        + LinePin.fragmentY(of: anchor, in: fragment.textLineFragments, fragmentStart: start)
+        fragment.layoutFragmentFrame.minY + LinePin.fragmentY(of: anchor, in: lines)
       if abs(surface.containerTop - wanted) < settleTolerance { break }
       surface.scroll(toContainerY: wanted)
       surface.layOutViewport()
@@ -111,9 +110,8 @@ public enum PinRecipe {
       let frame = fragment.layoutFragmentFrame
       guard frame.maxY > top else { return true }
       guard frame.minY <= top else { return false }
-      found = LinePin.anchor(
-        atFragmentY: max(0, top - frame.minY), in: fragment.textLineFragments,
-        fragmentStart: layout.offset(of: fragment.rangeInElement.location))
+      guard let lines = FragmentLines(fragment, in: layout) else { return false }
+      found = LinePin.anchor(atFragmentY: max(0, top - frame.minY), in: lines)
       return false
     }
     return found

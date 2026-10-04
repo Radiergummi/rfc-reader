@@ -217,7 +217,8 @@
         return NSTrackingSeparatorToolbarItem(
           identifier: identifier,
           splitView: controller.splitController.splitView,
-          dividerIndex: ReaderWindowDividers.panel(comparing: controller.besideItem != nil)
+          dividerIndex: ReaderWindowDividers.panel(
+            comparing: controller.splitController.isComparing)
         )
 
       case .rfcNavigation:
