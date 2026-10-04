@@ -212,12 +212,12 @@
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func sidebarChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func willClose(_ controller: ReaderWindowController) {

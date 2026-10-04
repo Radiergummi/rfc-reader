@@ -25,6 +25,24 @@ public enum ReaderLayout {
   /// three columns showing.
   public static let minimumPaneWidth: CGFloat = 420
 
+  /// The narrowest the Mac's sidebar and list columns may be dragged to.
+  public static let sidebarMinimum: CGFloat = 200
+  public static let listMinimum: CGFloat = 280
+  /// How wide the Mac's contents panel is drawn, and the most and least it can be.
+  public static let panelWidth: CGFloat = 320
+
+  /// The narrowest the Mac's window may be: the two fixed columns plus a readable
+  /// pane, so dragging a column's floor cannot leave the window's behind.
+  ///
+  /// Less the panel's width while it shows. AppKit adds an open inspector's thickness
+  /// on top of `contentMinSize`, so a fixed 900 pt minimum became 1222 the moment the
+  /// panel appeared and the window grew to meet it — which widens the pane, changes
+  /// the column, rebuilds the document and loses the reader's place. Taken off, the
+  /// floor AppKit enforces is the same open or shut, and the window never moves.
+  public static func minimumWindowWidth(panelIsOpen: Bool) -> CGFloat {
+    sidebarMinimum + listMinimum + minimumPaneWidth - (panelIsOpen ? panelWidth : 0)
+  }
+
   /// Both the build and the text view's inset ask this, with the same two inputs;
   /// the column is only ever what the gutters leave, so the two cannot drift.
   public static func gutter(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
