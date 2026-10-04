@@ -73,6 +73,17 @@ struct CorpusBackedPageJoinTests {
   }
 }
 
+@Suite("Corpus-backed: page footers", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPageFooterTests {
+  /// RFC 821 sets its even pages' footers mirrored, the page number at the left margin
+  /// and the author on the right; none of them is left in the text (#796).
+  @Test func `a footer with its page number on the left is page furniture`() throws {
+    let published = LegacyTextParser.stripPagination(try CorpusText.text("rfc821"))
+    let footers = published.split(separator: "\n").filter { $0.hasPrefix("[Page ") }
+    #expect(footers.isEmpty, "\(footers.count) footers left in the text")
+  }
+}
+
 @Suite("Corpus-backed: the title page", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedTitlePageTests {
   /// Since the front matter ends at the first paragraph (#74), whatever the title page
