@@ -13,7 +13,7 @@ GitHub is the only state. Nothing about the queue is remembered between sessions
 |---|---|---|
 | `agent-ready` | the maintainer | Queued for you. Never add it yourself. |
 | `agent-blocked` | you | You asked on the issue and are waiting for an answer. |
-| `agent-pr` | you | A pull request of yours closes it, draft or ready. Added when you claim the issue (step 2). |
+| `agent-pr` | you | A pull request of yours closes it, or is one step of it (`Part of #N`), draft or ready. Added when you claim the issue (step 2). |
 | `epic` | the maintainer | Its sub-issues are one deliverable, worked as one stack. See [Epics](#epics). An unlabeled parent, such as #117–#121 or #173, is only a bucket: its children are worked one by one. |
 
 ## Comments
@@ -36,13 +36,18 @@ The pull request's status says where the issue stands, so that the next session,
 | Waiting for the maintainer | draft | `agent-pr`, `agent-blocked` |
 | Done | ready for review | `agent-pr` |
 
-**An issue built in several pull requests**, by an agreed plan of steps outside an epic, is the one exception to "nothing is left". Each step's pull request says `Part of #N`, and only the last says `Closes #N`. When you mark a step ready, post a marked comment on the issue naming what it delivered and what remains, and narrow the issue's title to what remains if the title no longer says it. An issue whose title still describes work that has shipped reads as undone to the next session.
-
 **Ready for review means done**: every question you asked has been answered, everything the issue asks for is built (nothing is left for a follow-up), and step 6 passed. Anything short of that stays a draft. A draft therefore always means that a session is working on it or that it waits for an answer. Going back to work on a ready pull request, turn it into a draft first (`gh pr ready N --undo`), and mark it ready again only when it is done again.
+
+**An issue built in several pull requests**, by an agreed plan of steps outside an epic, is the one exception to "nothing is left for a follow-up": a step is done when everything it was to deliver is built. Each step's pull request says `Part of #N`, and only the last says `Closes #N`, so once the plan has steps, change the claim draft's `Closes #N` (step 2) to `Part of #N`. When you mark a step ready, post a marked comment on the issue naming what it delivered and what remains, and narrow the issue's title to what remains if the title no longer says it. An issue whose title still describes work that has shipped reads as undone to the next session.
 
 ## 1. Pick the issue
 
-**Clear stale claims first.** An issue with `agent-pr` that no open pull request closes or names as `Part of #N` has lost its claim, usually because a step of it merged (above). Remove `agent-pr` from it, so the queue can take what remains. Name each one in your report.
+**Clear stale claims first.** An open issue with `agent-pr` that no open pull request closes or names as `Part of #N` (the `gh pr list --state open` command below lists them) has lost its claim, usually because a step of it merged (above). Remove `agent-pr` from it, so the queue can take what remains, and name each one in your report. The exception is an issue whose `Closes #N` pull request merged into a branch other than `main`: its work has shipped, but the merge didn't close it (see [Epics](#epics)). Leave its label, and name it in your report for the maintainer to close. This finds that pull request:
+
+```sh
+gh pr list --state merged --search '"Closes #N" in:body' --json number,baseRefName \
+  --jq '.[] | select(.baseRefName != "main") | "#\(.number) into \(.baseRefName)"'
+```
 
 If you were given a number, take that issue, whatever its labels. If you were given a label instead, such as `/work-issue bug`, it narrows every item in the list below to issues that carry it: in item 1, a pull request counts only when the issue it closes has the label, and an epic counts when the epic itself has it. Otherwise go down this list and take the first match:
 
@@ -50,11 +55,11 @@ If you were given a number, take that issue, whatever its labels. If you were gi
 2. **An `agent-blocked` issue that has been answered.** It counts as answered when the newest comment has no marker, or when your newest marked comment has a 👍 reaction (`gh api repos/{owner}/{repo}/issues/comments/ID/reactions`). Remove `agent-blocked` and pick up where you asked. When it is a sub-issue of an `epic`, or the epic itself, remove the label from both and resume the epic.
 3. **The oldest `agent-ready` issue** with neither `agent-blocked` nor `agent-pr`. An `agent-ready` epic counts while one of its open sub-issues has no pull request and none of them has a draft. A sub-issue of an `agent-ready` epic is never taken alone: it is worked in its epic's stack.
 
-**Skip any issue someone is already on**, in 2 and 3 alike. An issue that an open pull request closes is taken, whatever its labels and whichever session or branch the pull request came from. A draft is being worked on right now, or waits for an answer (item 2 resumes those). A ready one is done and waits for review (item 1 resumes those). A draft whose last commit and last comment are both more than a day old, on an issue without `agent-blocked`, may be abandoned, or may wait for an answer given outside GitHub (`pr-review-fix` leaves a draft that way). Don't resume it; name it in your report so the maintainer decides. This lists the open pull requests with the issues they close:
+**Skip any issue someone is already on**, in 2 and 3 alike. An issue that an open pull request closes or names as `Part of #N` is taken, whatever its labels and whichever session or branch the pull request came from. A draft is being worked on right now, or waits for an answer (item 2 resumes those). A ready one is done and waits for review (item 1 resumes those). A draft whose last commit and last comment are both more than a day old, on an issue without `agent-blocked`, may be abandoned, or may wait for an answer given outside GitHub (`pr-review-fix` leaves a draft that way). Don't resume it; name it in your report so the maintainer decides. This lists the open pull requests with the issues they close or are part of. It reads their bodies, because GitHub links a pull request to the issues it closes only when it targets `main`, which a stacked one doesn't:
 
 ```sh
-gh pr list --state open --limit 100 --json number,isDraft,headRefName,closingIssuesReferences \
-  --jq '.[] | "#\(.number) draft=\(.isDraft) \(.headRefName) closes \([.closingIssuesReferences[].number] | join(","))"'
+gh pr list --state open --limit 100 --json number,isDraft,headRefName,body \
+  --jq '.[] | "#\(.number) draft=\(.isDraft) \(.headRefName) names \([.body | scan("(?i)\\b(?:closes|part of) #([0-9]+)") | .[0]] | unique | join(","))"'
 ```
 
 **Skip any issue that is blocked by an open issue**, in 2 and 3 alike: GitHub's blocked-by relationship, not the prose. An epic counts as blocked when the next sub-issue it would work is blocked by an open issue outside the epic. It becomes pickable when its last blocker closes, with no label change. This lists the `agent-ready` issues that are still blocked:
@@ -72,7 +77,7 @@ Claim the issue before you read any further, so no other session takes it while 
 
 1. Make a worktree off the latest `origin/main` with `EnterWorktree` (name `issue-N`), then rename its branch to `issue/N-short-slug`. When resuming an issue that already has a branch, enter that branch's worktree instead, or check the branch out into a fresh one, and skip the rest of this step: its draft is already open.
 2. Make an empty commit, signed like every other (`git commit --allow-empty -m "Start on #N"`), push the branch, and open a **draft** pull request: `gh pr create --draft`. Its title is the issue's, and its body says `Closes #N`, with a line that the work has started and the plan follows. Add `agent-pr` to the issue.
-3. List the open pull requests that close the issue again (the command in step 1). If an older one appeared while you claimed it, another session got there first: close yours with `gh pr close --delete-branch`, leave the labels alone, and go back to step 1.
+3. List the open pull requests that close or name the issue again (the `gh pr list --state open` command in step 1). If an older one appeared while you claimed it, another session got there first: close yours with `gh pr close --delete-branch`, leave the labels alone, and go back to step 1.
 
 ## 3. Understand it before touching code
 
@@ -115,7 +120,7 @@ Then run `/code-review` on the branch's diff against `origin/main`, and fix what
 
 ## 7. Hand over
 
-Hand over only when the pull request is done (see [Pull request status](#pull-request-status)): every question you asked is answered, everything the issue asks for is built, and step 6 passed. If something is still open, it is a question (step 3), and the pull request stays a draft.
+Hand over only when the pull request is done (see [Pull request status](#pull-request-status)): every question you asked is answered, everything the issue asks for is built (or, for one step of an issue built in several, everything the step was to deliver), and step 6 passed. If something is still open, it is a question (step 3), and the pull request stays a draft.
 
 1. Push, and rewrite the pull request body in the repository's style (see recent merged pull requests): a `Why` section, a `What` section, and how it was verified, including what was *not* verified.
 2. `gh pr ready`.
@@ -151,7 +156,7 @@ If `sync` reports that the stack on GitHub has diverged from yours, don't resolv
 
 **Handing over the epic.** When every sub-issue has a ready pull request, run step 6 once more on the top branch, which holds the whole stack. Post a marked comment on the epic listing the stack's pull requests, bottom first, with any question left open. The maintainer merges the stack and closes the epic.
 
-`Closes #M` closes a sub-issue only when its pull request merges into `main`. One merged into the branch below it closes nothing: #682 merged into #685's branch and left #197 open. So the handover comment asks for the stack to be merged bottom first, each pull request into `main` (GitHub retargets the next one as the one below merges). When you later find an open sub-issue whose pull request merged into another branch and whose commits are on `main`, name it in your report for the maintainer to close; you never close issues yourself.
+`Closes #M` closes a sub-issue only when its pull request merges into `main`. One merged into the branch below it closes nothing: #682 merged into #685's branch and left #197 open. So the handover comment asks for the stack to be merged bottom first, each pull request into `main` (GitHub retargets the next one as the one below merges). A sub-issue left open that way is named in your report for the maintainer to close, as [step 1](#1-pick-the-issue) says; you never close issues yourself.
 
 ## Never
 

@@ -10,7 +10,8 @@
 #
 # Colors are quoted: unquoted, one like 5319e7 is read as a number in exponent notation.
 #
-# The agent-* labels are the queue the work-issue skill reads (.claude/skills/work-issue).
+# Besides those, epic marks an issue whose sub-issues are worked as one stack, and the
+# agent-* labels are the queue; the work-issue skill reads both (.claude/skills/work-issue).
 
 # Type
 - name: bug
