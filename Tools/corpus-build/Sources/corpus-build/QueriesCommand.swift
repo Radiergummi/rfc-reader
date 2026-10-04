@@ -43,6 +43,7 @@ struct QueriesCommand: ParsableCommand {
           "progress", metadata: ["completed": "\(offset + 1)", "total": "\(corpus.files.count)"])
       }
     }
+    Self.logger.report(reading)
     let unparseable = reading.unreadable.count
     Self.logger.info(
       "recovered citing sentences",
