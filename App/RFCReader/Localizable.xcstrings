@@ -45,7 +45,26 @@
 
     },
     "%lld RFCs" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld documents." : {
       "localizations" : {
@@ -70,13 +89,70 @@
       }
     },
     "%lld identifiers" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld identifier"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld identifiers"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld sections" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld section"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sections"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld times" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld times"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link." : {
 
