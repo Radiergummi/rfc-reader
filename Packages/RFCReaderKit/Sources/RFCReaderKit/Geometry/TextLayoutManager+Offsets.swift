@@ -36,11 +36,15 @@ extension NSTextLayoutManager {
   }
 
   /// The document-relative character range of `textRange`, which is what every
-  /// `FragmentGeometry` call is expressed in.
+  /// `FragmentGeometry` call is expressed in. Nil when `textRange` is not within the
+  /// document: a range that outlived its text, or an offset TextKit answers with
+  /// `NSNotFound`, which is past every document's end.
   public func range(of textRange: NSTextRange) -> NSRange? {
     let start = offset(of: textRange.location)
     let end = offset(of: textRange.endLocation)
-    guard start >= 0, end >= start else { return nil }
+    guard start >= 0, end >= start, end <= offset(of: documentRange.endLocation) else {
+      return nil
+    }
     return NSRange(location: start, length: end - start)
   }
 
