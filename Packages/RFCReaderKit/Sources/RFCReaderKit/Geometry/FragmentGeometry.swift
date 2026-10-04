@@ -72,7 +72,7 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// `effectiveRange` names that whole run; comparing the fragment's own start and
+  /// `decorationRun(at:)` names that whole run; comparing the fragment's own start and
   /// end against it says whether this fragment is the run's first, its last, both
   /// (the common single-fragment case), or neither (a middle fragment, which draws
   /// no cap and must not repeat the run's outer padding or its rounding, or the

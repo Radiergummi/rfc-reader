@@ -42,7 +42,7 @@ struct DecorationAccessTests {
     #expect(run?.range == NSRange(location: 7, length: 12))
   }
 
-  @Test func `a decoration is read without walking its run`() {
+  @Test func `a decoration is read from the character alone`() {
     let text = Self.text()
     #expect(text.decoration(at: 7) == .table)
     #expect(text.decoration(at: 0) == nil)
