@@ -25,7 +25,8 @@ struct SideBySidePairTests {
   }
 
   @Test func `either document can be the one read`() {
-    let fromOld = SideBySidePair(reading: Self.metadata(7231, obsoletedBy: [9110]), with: .rfc(9110))
+    let fromOld = SideBySidePair(
+      reading: Self.metadata(7231, obsoletedBy: [9110]), with: .rfc(9110))
     #expect(fromOld?.old == .rfc(7231))
     #expect(fromOld?.new == .rfc(9110))
     let fromNew = SideBySidePair(reading: Self.metadata(9110, obsoletes: [7231]), with: .rfc(7231))
@@ -41,7 +42,8 @@ struct SideBySidePairTests {
   @Test func `the other edges of the two are aligned alongside where they are available`() {
     let pair = SideBySidePair(reading: Self.metadata(7230, obsoletedBy: [9110]), with: .rfc(9110))
     let among = pair?.alignedAmong(
-      oldSuccessors: [.rfc(9110), .rfc(9112)], newPredecessors: [.rfc(7230), .rfc(7231), .rfc(2818)],
+      oldSuccessors: [.rfc(9110), .rfc(9112)],
+      newPredecessors: [.rfc(7230), .rfc(7231), .rfc(2818)],
       available: [.rfc(9112), .rfc(7231)])
     #expect(among == [.rfc(7230), .rfc(9110), .rfc(7231), .rfc(9112)])
   }

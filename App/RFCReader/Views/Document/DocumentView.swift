@@ -34,6 +34,10 @@ struct DocumentView: View {
   @Environment(\.legibilityWeight) private var legibilityWeight
 
   let id: DocumentID
+  /// Whether this is the reader opened beside another one (#187): its toolbar and
+  /// panel are the other's, and it opens where the other reader's counterpart is,
+  /// not at its own saved place.
+  let isBeside: Bool
 
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
@@ -43,8 +47,9 @@ struct DocumentView: View {
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
 
-  init(id: DocumentID) {
+  init(id: DocumentID, isBeside: Bool = false) {
     self.id = id
+    self.isBeside = isBeside
     _session = State(initialValue: DocumentSession(id: id))
   }
   #if !os(macOS)
@@ -170,15 +175,7 @@ struct DocumentView: View {
   /// that by a different route: the reader's frame spans the panel, and the inset
   /// it reports is ignored in the representable.
   var body: some View {
-    requestingContent
-      .navigationTitle(id.displayName)
-      #if !os(macOS)
-        .modifier(
-          IOSDocumentChrome(
-            id: id, metadata: metadata, document: session.state.document, library: library,
-            navigation: navigation, reader: reader, showsInspector: $showsInspector,
-            barsHidden: $barsHidden, output: output))
-      #endif
+    chromed
       .onAppear {
         if !session.hasStartedLoading { startLoad() }
         #if !os(macOS)
@@ -223,6 +220,8 @@ struct DocumentView: View {
         // Not while fading out over the next document's reader: the request is
         // the selected document's.
         guard navigation.selection == id, let request else { return }
+        // Sent somewhere, the reader leads a side-by-side reading (#187).
+        reader.coupling?.lead(id)
         if request.isUnrecorded {
           follow(request, animated: true)
         } else {
@@ -259,6 +258,26 @@ struct DocumentView: View {
         lastVisibleAnchor.placeDidChange = {}
         saveNow()
       }
+  }
+
+  /// The reader with its title, and on iOS its toolbar and panel, which a reader
+  /// beside another one leaves to that one (#187).
+  @ViewBuilder
+  private var chromed: some View {
+    let titled = requestingContent.navigationTitle(id.displayName)
+    #if os(macOS)
+      titled
+    #else
+      if isBeside {
+        titled
+      } else {
+        titled.modifier(
+          IOSDocumentChrome(
+            id: id, metadata: metadata, document: session.state.document, library: library,
+            navigation: navigation, reader: reader, showsInspector: $showsInspector,
+            barsHidden: $barsHidden, output: output))
+      }
+    #endif
   }
 
   private func saveNow() {
@@ -378,6 +397,7 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.folding = $0
         },
+        coupling: navigation.selection == id ? reader.coupling : nil,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
@@ -406,10 +426,13 @@ struct DocumentView: View {
           pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
           request: navigation.scrollRequest,
           // Any anchor, not only a section's: a place is saved at the nearest anchor
-          // of any kind (`ReadingPlace`), a paragraph's as often as not.
-          stored: positions.stored()?.place.flatMap { saved in
-            saved.anchor.flatMap(built.anchors.offset(of:)) != nil ? saved : nil
-          })
+          // of any kind (`ReadingPlace`), a paragraph's as often as not. Beside
+          // another reader, it opens where that one's counterpart is instead.
+          stored: isBeside
+            ? nil
+            : positions.stored()?.place.flatMap { saved in
+              saved.anchor.flatMap(built.anchors.offset(of:)) != nil ? saved : nil
+            })
         switch arrival {
         case .place(let anchor):
           scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)

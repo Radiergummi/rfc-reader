@@ -1,4 +1,5 @@
 #if os(macOS)
+  import RFCReaderKit
   import SwiftUI
 
   /// What the detail column of `NavigationSplitView` used to hold, and the scene's
@@ -22,6 +23,12 @@
         }
       }
       .readerScene(library: library, navigation: navigation, reader: reader)
+      // Another document read leaves the comparison with this one (#187).
+      .onChange(of: navigation.selection) { _, selection in
+        if let beside = reader.sideBySide, beside.pair.reading != selection {
+          reader.endComparison()
+        }
+      }
     }
   }
 #endif

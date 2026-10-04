@@ -39,6 +39,7 @@ struct RFCTextView: View {
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
+    coupling: ScrollCoupling? = nil,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -47,6 +48,7 @@ struct RFCTextView: View {
       built: built,
       folding: folding,
       onFoldingChange: onFoldingChange,
+      coupling: coupling,
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
@@ -102,6 +104,9 @@ struct ReaderInputs {
   /// text view has, as a reader fading out does while the scene has moved on.
   let folding: Folding?
   let onFoldingChange: (Folding) -> Void
+  /// The side-by-side reading this reader scrolls together in (#187), nil when it
+  /// is read alone.
+  let coupling: ScrollCoupling?
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
@@ -176,11 +181,13 @@ struct ReaderInputs {
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
     coordinator.layOut(width: width, measure: measure)
-    if coordinator.built?.text !== built.text {
+    let installs = coordinator.built?.text !== built.text
+    if installs {
       coordinator.install(built, folding: folding ?? coordinator.folding)
     } else if let folding {
       coordinator.apply(folding)
     }
+    coordinator.couple(to: coupling, installed: installs)
     if let scrollTarget {
       coordinator.scroll(
         to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
@@ -201,12 +208,20 @@ struct ReaderInputs {
   /// view. Only the trailing edge is refused, because zeroing the insets outright puts
   /// the first lines of the document behind the toolbar.
   final class ReaderScrollView: NSScrollView {
+    /// Told of a scroll the reader makes with a wheel or a trackpad, before it moves
+    /// anything: in a side-by-side reading, that side leads (#187).
+    var willScrollWheel: () -> Void = {}
+
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
       insets.right = 0
       return insets
     }
 
+    override func scrollWheel(with event: NSEvent) {
+      willScrollWheel()
+      super.scrollWheel(with: event)
+    }
   }
 #endif
 
@@ -290,6 +305,7 @@ struct ReaderInputs {
       // the Mac.
       coordinator.engine.stop()
       coordinator.setChromeEnabled(false)
+      coordinator.couple(to: nil, installed: false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not
       // reported yet.
@@ -382,6 +398,9 @@ struct ReaderInputs {
       scroll.documentView = textView
       scroll.hasVerticalScroller = true
       scroll.drawsBackground = false
+      scroll.willScrollWheel = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
+      }
 
       // AppKit has no scroll delegate. The selector-based observer unregisters
       // itself with the coordinator, which the block-based one would not.

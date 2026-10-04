@@ -25,6 +25,7 @@ import SwiftUI
 
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openURL) private var openURL
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -116,6 +117,9 @@ import SwiftUI
         Divider()
         ReadingModePicker(reader: reader)
         FocusSteps(reader: reader)
+        if SideBySide.isOffered(in: horizontalSizeClass) {
+          CompareItems(id: id, library: library, reader: reader)
+        }
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in

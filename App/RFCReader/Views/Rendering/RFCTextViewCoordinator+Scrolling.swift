@@ -46,8 +46,11 @@ extension RFCTextViewCoordinator {
       }
     #endif
     guard let built, textView?.textLayoutManager != nil else { return }
-    let offset = engine.userScrolled() ?? 0
+    let line = engine.userScrolled()
+    let offset = line ?? 0
     lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
+    // The other reader of a side-by-side reading follows, if this one leads (#187).
+    if let documentID { coupling?.moved(documentID, to: line) }
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.

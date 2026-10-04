@@ -44,9 +44,9 @@ public struct AlignedScrolling: Sendable, Equatable {
   public init(rows: [AlignedSection], between first: DocumentID, and second: DocumentID) {
     let pair = Set([first, second])
     var best: [DocumentID: [String: (anchor: String, score: Double)]] = [:]
-    func keep(_ from: DocumentID, _ section: String, _ to: String, _ score: Double) {
-      if let kept = best[from]?[section], kept.score >= score { return }
-      best[from, default: [:]][section] = (to, score)
+    func keep(_ document: DocumentID, _ section: String, _ counterpart: String, _ score: Double) {
+      if let kept = best[document]?[section], kept.score >= score { return }
+      best[document, default: [:]][section] = (counterpart, score)
     }
     for row in rows where pair == Set([row.old, row.new]) {
       keep(row.old, row.oldSection, row.newSection, row.score)

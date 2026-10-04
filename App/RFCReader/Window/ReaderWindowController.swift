@@ -37,6 +37,9 @@
     private(set) var listItem: NSSplitViewItem!
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
+    /// The reader opened beside the window's own (#187): a fifth item, between the
+    /// reader and the panel, only while the two are compared.
+    private(set) var besideItem: NSSplitViewItem?
 
     /// The library this window was made with, which its toolbar reads too.
     let library: LibraryModel
@@ -218,6 +221,9 @@
       let canDescribe = Observations { [weak self] in self?.reader.canDescribe }
       let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
       let snapshots = Observations { [weak self] in self?.sceneSnapshot }
+      let besides = Observations { [weak self] in
+        self?.reader.sideBySide.map(ObjectIdentifier.init)
+      }
       observations = [
         Task(name: "Observe window title") { [weak self] in
           for await title in titles { if let title { self?.apply(title) } }
@@ -234,6 +240,9 @@
         // AppKit asks for the window's state again only once told it changed (#155).
         Task(name: "Observe scene snapshot") { [weak self] in
           for await _ in snapshots { self?.window?.invalidateRestorableState() }
+        },
+        Task(name: "Observe side by side") { [weak self] in
+          for await _ in besides { self?.showBeside() }
         },
       ]
     }
@@ -252,6 +261,12 @@
     /// it updates on every section crossing while scrolling — and an erased root
     /// gives SwiftUI nothing to diff against.
     private func host(_ view: some View) -> NSHostingController<some View> {
+      host(view, in: environment)
+    }
+
+    private func host(_ view: some View, in environment: ReaderEnvironment)
+      -> NSHostingController<some View>
+    {
       let controller = NSHostingController(rootView: view.readerEnvironment(environment))
       // The hosted view must not size the window. By default a hosting controller
       // reports its content's preferred size, and as a split view item that reaches
@@ -266,6 +281,38 @@
     /// this, and the column is draggable, so it is read rather than remembered.
     var listWidth: CGFloat {
       listItem.viewController.view.frame.width
+    }
+
+    // MARK: - Side by side
+
+    /// Adds the reader beside the window's own while a document is compared with
+    /// another (#187), and takes it away after.
+    ///
+    /// A fifth item rather than a second reader inside the reader's hosted root: each
+    /// reader keeps a hosted root of its own, given its own navigation and reader
+    /// state, so what the one beside reports reaches neither the toolbar nor the
+    /// panel, which stay the window's reader's. See
+    /// `docs/decisions/2026-10-04-a-document-read-beside-another-is-a-fifth-split-item.md`.
+    private func showBeside() {
+      if let item = besideItem {
+        splitController.removeSplitViewItem(item)
+        besideItem = nil
+      }
+      guard let reading = reader.sideBySide,
+        let readerIndex = splitController.splitViewItems.firstIndex(of: readerItem)
+      else { return }
+      let besideHost = host(
+        BesideReader(reading: reading, main: reader, mainNavigation: navigation),
+        in: ReaderEnvironment(
+          library: library, navigation: reading.navigation, reader: reading.reader))
+      // As the reader's own, and for the same reason: the panel opens over this item
+      // now, and its width must not re-wrap the text. `ReaderScrollView` refuses
+      // the scroll view's half of it, as it does for the reader.
+      besideHost.safeAreaRegions = []
+      let item = NSSplitViewItem(viewController: besideHost)
+      item.automaticallyAdjustsSafeAreaInsets = true
+      splitController.insertSplitViewItem(item, at: readerIndex + 1)
+      besideItem = item
     }
 
     // MARK: - Title

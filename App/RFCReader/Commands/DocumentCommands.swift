@@ -163,6 +163,12 @@ struct DocumentCommands: Commands {
           FocusSteps(reader: reader)
             .disabled(!showsDocument)
         }
+        // View ▸ Compare Side by Side (#187), beside the other ways of reading it.
+        if let controller = active.controller, let reader,
+          let document = controller.navigation.selection, showsDocument
+        {
+          CompareItems(id: document, library: controller.library, reader: reader)
+        }
       #endif
     }
     CommandGroup(before: .sidebar) {

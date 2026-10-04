@@ -148,6 +148,12 @@ final class ReaderLayoutEngine: PinSurface {
     settle()
   }
 
+  /// Puts the top of the document, above its text, at the top of the viewport.
+  func jumpToTop() {
+    keeper.userScrolledAboveText()
+    settle()
+  }
+
   /// A scroll happened; if the reader made it, it moves their place. Answers the
   /// place's character, which is what section tracking reads (see the spec), or nil
   /// above the text.

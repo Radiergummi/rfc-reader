@@ -62,13 +62,32 @@ import SwiftUI
         // here it would bound the reader and its panel together, which is how the
         // contents panel came to leave the text 190 pt wide.
         if let selection = navigation.selection {
-          DocumentView(id: selection)
-            .id(selection)
+          HStack(spacing: 0) {
+            DocumentView(id: selection)
+              .id(selection)
+            // A document compared with another reads beside it, the column split in
+            // two (#187). Not in a compact width, where neither half is a column.
+            if let beside = reader.sideBySide, beside.pair.reading == selection,
+              SideBySide.isOffered(in: horizontalSizeClass)
+            {
+              Divider()
+              BesideReader(reading: beside, main: reader, mainNavigation: navigation)
+                .readerEnvironment(
+                  ReaderEnvironment(
+                    library: library, navigation: beside.navigation, reader: beside.reader))
+            }
+          }
         } else {
           EmptyDetailView()
         }
       }
       .environment(\.sceneChrome, chrome)
+      // Another document read leaves the comparison with this one (#187).
+      .onChange(of: navigation.selection) { _, selection in
+        if let beside = reader.sideBySide, beside.pair.reading != selection {
+          reader.endComparison()
+        }
+      }
       // The scene's title, for the app switcher and iPad's window controls. It
       // reaches no column's bar: each column titles itself, the list included
       // (#246).
