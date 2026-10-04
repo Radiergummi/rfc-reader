@@ -206,7 +206,8 @@ final class ReaderState {
   @ObservationIgnored var openPanel: () -> Void = {}
 
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
-  /// (`DocumentTextBuilder.referenceScheme`).
+  /// (`DocumentTextBuilder.referenceScheme`). The reader beside a compared document
+  /// has no panel, and `BesideReader` shows the entry in a popover instead (#187).
   func reveal(reference anchor: String) {
     pane = .navigation
     tab = .references

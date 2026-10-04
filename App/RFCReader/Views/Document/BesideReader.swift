@@ -13,13 +13,36 @@ struct BesideReader: View {
   let main: ReaderState
   let mainNavigation: NavigationModel
   @Environment(LibraryModel.self) private var library
+  /// The bibliography entry a citation clicked in this reader names, shown in a
+  /// popover from its bar: the panel is the window's reader's, and shows that
+  /// document's bibliography, not this one's.
+  @State private var citedEntry: Reference?
 
   var body: some View {
     DocumentView(id: reading.pair.other, isBeside: true)
       .id(reading.pair.other)
       .overlay(alignment: .bottom) {
         BesideBar(reading: reading, close: main.endComparison)
+          .popover(item: $citedEntry, arrowEdge: .top) { entry in
+            ReferenceRow(
+              entry: entry,
+              open: { id in
+                citedEntry = nil
+                // As a link to it: the document opens in the window's reader.
+                reading.navigation.open(id, in: library.index)
+              },
+              openInNewWindow: nil
+            )
+            .padding(12)
+            .frame(width: ReferencePreview.width, alignment: .leading)
+            .presentationCompactAdaptation(.popover)
+          }
           .padding(.bottom, 16)
+      }
+      // What `reveal(reference:)` asks of a reader with no panel of its own.
+      .onChange(of: reading.reader.revealedReference) { _, revealed in
+        guard let revealed else { return }
+        citedEntry = reading.reader.groups.entry(anchor: revealed.anchor)
       }
       // A link followed to another document leaves the comparison: the document
       // opens in the window's reader, as from a reader read alone.
