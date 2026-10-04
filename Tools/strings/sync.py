@@ -2,9 +2,14 @@
 """Syncs the string catalogs with the strings the code uses.
 
     Tools/strings/sync.py --objroot <OBJROOT> --configuration Debug
+    Tools/strings/sync.py --check-translations de
 
 `make strings` is the usual way in: it builds for macOS and the iOS Simulator
-first, and passes the build's OBJROOT.
+first, and passes the build's OBJROOT. `make strings-check` then runs the second
+form, which syncs nothing and fails, naming each one, on a key without a
+translation into that language: one that has none, one whose translation is not
+yet in state "translated", and one with plural variants in English but not in
+the translation.
 
 The compiler records every localizable string it type-checks in a .stringsdata
 file per source file (SWIFT_EMIT_LOC_STRINGS, project.yml). `xcstringstool sync`
@@ -29,6 +34,7 @@ Python 3.9 or later, standard library only.
 """
 
 import argparse
+import json
 import subprocess
 from pathlib import Path
 
@@ -67,11 +73,59 @@ def strings_data(objroot: Path, configuration: str, target: str, sources: Path) 
     return sorted(found)
 
 
+def untranslated(catalog: Path, language: str) -> list[str]:
+    """The keys of `catalog` without a finished `language` translation."""
+    document = json.loads(catalog.read_text())
+    source = document["sourceLanguage"]
+    missing = []
+    for key, entry in document["strings"].items():
+        if entry.get("shouldTranslate") is False or entry.get("extractionState") == "stale":
+            continue
+        localizations = entry.get("localizations", {})
+        translation = localizations.get(language)
+        units = units_of(translation) if translation else []
+        pluralized = "variations" in localizations.get(source, {})
+        if (
+            not units
+            or any(unit.get("state") != "translated" for unit in units)
+            or (pluralized and "variations" not in translation)
+        ):
+            missing.append(key)
+    return missing
+
+
+def units_of(localization: dict) -> list[dict]:
+    """A localization's units: its string or string set, or every variant's."""
+    units = [localization[kind] for kind in ("stringUnit", "stringSet") if kind in localization]
+    for variants in localization.get("variations", {}).values():
+        for variant in variants.values():
+            units += units_of(variant)
+    return units
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--objroot", type=Path, required=True)
+    parser.add_argument("--objroot", type=Path)
     parser.add_argument("--configuration", default="Debug")
+    parser.add_argument("--check-translations", metavar="LANGUAGE")
     arguments = parser.parse_args()
+
+    if arguments.check_translations:
+        missing = [
+            f"{catalog}: {key}"
+            for catalog, _, _ in CATALOGS
+            for key in untranslated(Path(catalog), arguments.check_translations)
+        ]
+        for line in missing:
+            print(line)
+        if missing:
+            raise SystemExit(
+                f"{len(missing)} strings have no {arguments.check_translations} translation:"
+                " translate them in the catalog."
+            )
+        return
+    if arguments.objroot is None:
+        parser.error("--objroot is required to sync")
 
     for catalog, target, sources in CATALOGS:
         files = strings_data(arguments.objroot, arguments.configuration, target, Path(sources))
