@@ -143,10 +143,10 @@ public struct RevisionsSummary: Equatable, Sendable {
       if let status = revision.intendedStatus {
         parts.append(String(kit: "intended \(status)", locale: locale))
       }
-      parts.append(asOf(stage))
+      parts.append(dated(stage))
       detail = parts.joined(separator: " · ")
     } else {
-      detail = asOf(
+      detail = dated(
         dormant.map { String(kit: "\(stage), revision of \($0)", locale: locale) } ?? stage)
     }
 
@@ -163,12 +163,12 @@ public struct RevisionsSummary: Equatable, Sendable {
     return Line(
       relation: relation, title: "\(revision.draft)-\(revision.revision)",
       url: RFCEditorEndpoints.datatrackerDraft(revision.draft), detail: detail,
-      accessibilityLabel: asOf(sentence))
+      accessibilityLabel: dated(sentence))
   }
 
   /// `text`, dated by the file when it is stale: "In the RFC Editor queue, as of 17
   /// September".
-  private func asOf(_ text: String) -> String {
+  private func dated(_ text: String) -> String {
     asOf.map { String(kit: "\(text), as of \($0)", locale: locale) } ?? text
   }
 

@@ -19,11 +19,7 @@ extension LocalizedStringResource {
   /// Intent's display representation: looked up in a table no catalog has, so a
   /// section titled "Acknowledgements" is never translated as the About window's.
   public static func verbatim(_ text: String) -> LocalizedStringResource {
-    verbatim(text, bundle: .main)
-  }
-
-  static func verbatim(_ text: String, bundle: BundleDescription) -> LocalizedStringResource {
-    LocalizedStringResource(String.LocalizationValue(text), table: "Verbatim", bundle: bundle)
+    LocalizedStringResource(String.LocalizationValue(text), table: "Verbatim", bundle: .main)
   }
 }
 
