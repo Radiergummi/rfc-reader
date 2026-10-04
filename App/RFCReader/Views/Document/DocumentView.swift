@@ -232,6 +232,10 @@ struct DocumentView: View {
       // takes the reader with no `onDisappear` (#155). So the place is saved once
       // the reader stops, and when the app goes.
       .onAppear {
+        // Beside another reader, its place is that reader's counterpart, not one of
+        // its own: it saves none, so the document opened alone later is where it was
+        // last read (#187).
+        guard !isBeside else { return }
         // Not the view, and the box weakly: the box holds this.
         let box = lastVisibleAnchor
         box.placeDidChange = { [positions, placeSaver, weak box] in
@@ -264,24 +268,26 @@ struct DocumentView: View {
   /// beside another one leaves to that one (#187).
   @ViewBuilder
   private var chromed: some View {
-    let titled = requestingContent.navigationTitle(id.displayName)
-    #if os(macOS)
-      titled
-    #else
-      if isBeside {
-        titled
-      } else {
-        titled.modifier(
-          IOSDocumentChrome(
-            id: id, metadata: metadata, document: session.state.document, library: library,
-            navigation: navigation, reader: reader, showsInspector: $showsInspector,
-            barsHidden: $barsHidden, output: output))
-      }
-    #endif
+    if isBeside {
+      requestingContent
+    } else {
+      #if os(macOS)
+        requestingContent.navigationTitle(id.displayName)
+      #else
+        requestingContent
+          .navigationTitle(id.displayName)
+          .modifier(
+            IOSDocumentChrome(
+              id: id, metadata: metadata, document: session.state.document, library: library,
+              navigation: navigation, reader: reader, showsInspector: $showsInspector,
+              barsHidden: $barsHidden, output: output))
+      #endif
+    }
   }
 
   private func saveNow() {
     placeSaver.cancel()
+    guard !isBeside else { return }
     positions.save(lastVisibleAnchor)
   }
 

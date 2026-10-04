@@ -148,6 +148,14 @@ final class ReaderLayoutEngine: PinSurface {
     settle()
   }
 
+  /// Puts `offset`'s line on top as another reader scrolls (#187): on every tick of
+  /// that reader's scroll. Pinned where it is laid out once the completion has laid
+  /// out the whole document, and settled before that, as a jump is.
+  func follow(toOffset offset: Int) {
+    keeper.jumped(to: ReaderAnchor(characterOffset: offset))
+    if planner.isComplete { pin() } else { settle() }
+  }
+
   /// Puts the top of the document, above its text, at the top of the viewport.
   func jumpToTop() {
     keeper.userScrolledAboveText()

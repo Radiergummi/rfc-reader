@@ -208,9 +208,21 @@ struct ReaderInputs {
   /// view. Only the trailing edge is refused, because zeroing the insets outright puts
   /// the first lines of the document behind the toolbar.
   final class ReaderScrollView: NSScrollView {
-    /// Told of a scroll the reader makes with a wheel or a trackpad, before it moves
-    /// anything: in a side-by-side reading, that side leads (#187).
-    var willScrollWheel: () -> Void = {}
+    /// Told of a scroll the reader makes with a wheel, a trackpad or the scroller,
+    /// before it moves anything: in a side-by-side reading, that side leads (#187).
+    var willScroll: () -> Void = {} {
+      didSet { (verticalScroller as? LeadingScroller)?.willTrack = willScroll }
+    }
+
+    override init(frame frameRect: NSRect) {
+      super.init(frame: frameRect)
+      verticalScroller = LeadingScroller()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the reader's scroll view is made in code")
+    }
 
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
@@ -219,8 +231,19 @@ struct ReaderInputs {
     }
 
     override func scrollWheel(with event: NSEvent) {
-      willScrollWheel()
+      willScroll()
       super.scrollWheel(with: event)
+    }
+  }
+
+  /// A scroller that says when it is dragged or clicked, which reaches neither the
+  /// scroll view's `scrollWheel(with:)` nor the text view.
+  final class LeadingScroller: NSScroller {
+    var willTrack: () -> Void = {}
+
+    override func mouseDown(with event: NSEvent) {
+      willTrack()
+      super.mouseDown(with: event)
     }
   }
 #endif
@@ -398,7 +421,7 @@ struct ReaderInputs {
       scroll.documentView = textView
       scroll.hasVerticalScroller = true
       scroll.drawsBackground = false
-      scroll.willScrollWheel = { [weak coordinator = context.coordinator] in
+      scroll.willScroll = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
 

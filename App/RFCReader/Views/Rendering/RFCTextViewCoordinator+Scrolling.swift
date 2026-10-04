@@ -34,8 +34,12 @@ extension RFCTextViewCoordinator {
   }
 
   /// Reads the reader's place from the engine, which reads it from the viewport's
-  /// own fragments, and reports the section it is in.
-  func reportVisibleAnchor() {
+  /// own fragments, and reports the section it is in. `placed` when the engine has
+  /// just put the line where it is, so that its place is the line and there is
+  /// nothing to read: following the other reader of a side-by-side reading (#187),
+  /// where reading it walks the fragments from where the viewport was, on every
+  /// tick of the other reader's scroll.
+  func reportVisibleAnchor(placed: Bool = false) {
     // Everything that reports where the viewport is comes through here — scrolls,
     // jumps, restored places — which is every time the title's position can move.
     updateToolbarTitle()
@@ -46,7 +50,7 @@ extension RFCTextViewCoordinator {
       }
     #endif
     guard let built, textView?.textLayoutManager != nil else { return }
-    let line = engine.userScrolled()
+    let line = placed ? engine.placeOffset : engine.userScrolled()
     let offset = line ?? 0
     lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
     // The other reader of a side-by-side reading follows, if this one leads (#187).

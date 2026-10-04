@@ -212,6 +212,9 @@ final class RFCTextViewCoordinator: NSObject {
   /// The reading this reader scrolls together with another one in, side by side
   /// (#187); see `RFCTextViewCoordinator+Coupling`.
   var coupling: ScrollCoupling?
+  /// Set while this reader follows the other one; its scroll reports wait for
+  /// `follow(_:)` to report the place it was put at.
+  var isFollowing = false
 
   var built: BuiltDocument?
   /// The anchors tracking may report. The full index covers *every* anchor —
@@ -459,7 +462,7 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       followChrome(scrollView)
     }
 
@@ -642,7 +645,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// `ReferenceHover.linkClickPointer`.
     @objc
     func viewportDidScroll(_ notification: Notification) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       hover.send(.scrolled)
     }
 
