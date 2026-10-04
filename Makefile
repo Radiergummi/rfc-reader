@@ -239,13 +239,14 @@ IOS_DESTINATION ?= generic/platform=iOS
 # `xcrun simctl list devices available` shows.
 IOS_SIMULATOR ?= iPhone 18 Pro
 
-# Where xcodebuild left RFCReader.app for a destination. Asked for rather than
-# spelled out: the DerivedData directory carries a hash of the project's own
-# path, so it differs per checkout. Recursively expanded (`=`, not `:=`) so only
-# the targets that need it pay for the xcodebuild call.
-built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+# A build setting of a destination, such as where xcodebuild left RFCReader.app.
+# Asked for rather than spelled out: the DerivedData directory carries a hash of
+# the project's own path, so it differs per checkout. Recursively expanded (`=`,
+# not `:=`) so only the targets that need it pay for the xcodebuild call.
+build_setting = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(1)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
-	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
+	  | sed -n 's/^ *$(2) = //p' | head -1)
+built_app = $(call build_setting,$(1),BUILT_PRODUCTS_DIR)/$(SCHEME).app
 
 ## Build the app for macOS
 # No -derivedDataPath, here or in ios-sim: CI restores its compilation cache to
@@ -270,10 +271,8 @@ ios-app: xcodeproj
 # found either way, then adds new strings to the catalogs and marks removed ones
 # stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
 strings: build-app ios-sim
-	@objroot=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
-	  -destination '$(MAC_DESTINATION)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
-	  | sed -n 's/^ *OBJROOT = //p' | head -1); \
-	  Tools/strings/sync.py --objroot "$$objroot" --configuration $(CONFIGURATION)
+	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
+	  --configuration $(CONFIGURATION)
 
 ## Fail when a string catalog is out of date with the code
 # What CI runs: a string added to the code without `make strings` fails here.

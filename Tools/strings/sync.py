@@ -15,7 +15,9 @@ platforms' builds are read, so a string inside `#if os(iOS)` is found too.
 Only the given configuration's files are read, and only those named after a
 source file that still exists: DerivedData keeps the .stringsdata of a deleted
 file, and of every other configuration ever built, and either would keep a
-removed string from going stale.
+removed string from going stale. Of one platform's files for the same source,
+only the newest is read: an architecture an earlier build had and the latest
+did not keeps its old file too.
 
 Python 3.9 or later, standard library only.
 """
@@ -44,11 +46,14 @@ def strings_data(objroot: Path, configuration: str, target: str, sources: Path) 
     found = []
     for suffix in PLATFORM_SUFFIXES:
         directory = objroot / f"{target}.build" / f"{configuration}{suffix}"
-        found += [
-            path
-            for path in directory.glob("*.build/Objects-normal/*/*.stringsdata")
-            if path.stem in source_names
-        ]
+        newest: dict[str, Path] = {}
+        for path in directory.glob("*.build/Objects-normal/*/*.stringsdata"):
+            if path.stem not in source_names:
+                continue
+            kept = newest.get(path.name)
+            if kept is None or path.stat().st_mtime > kept.stat().st_mtime:
+                newest[path.name] = path
+        found += newest.values()
     return sorted(found)
 
 
