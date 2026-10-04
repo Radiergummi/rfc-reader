@@ -29,6 +29,13 @@ struct BesideReader: View {
         mainNavigation.open(
           selection, section: reading.navigation.scrollRequest?.section, in: library.index)
       }
+      #if os(iOS)
+        // Its header's glossary terms, which the window's `readerScene` presents only
+        // for the window's own navigation; see `GlossaryPresentation`.
+        .sheet(item: Bindable(reading.navigation).glossaryTerm) { term in
+          GlossarySheet(term: term)
+        }
+      #endif
   }
 }
 
@@ -39,7 +46,7 @@ private struct BesideBar: View {
 
   var body: some View {
     HStack(spacing: 10) {
-      Text(status)
+      Text(reading.pair.status(reading.alignment, holdingStill: reading.holdsStill))
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .lineLimit(2)
@@ -51,22 +58,6 @@ private struct BesideBar: View {
     .padding(.horizontal, 14)
     .padding(.vertical, 8)
     .glassEffect(.regular, in: .capsule)
-  }
-
-  private var status: String {
-    let pair = reading.pair
-    if let still = reading.holdsStill {
-      let leading = still == pair.old ? pair.new : pair.old
-      return "This section of \(leading.displayName) has no counterpart in \(still.displayName)"
-    }
-    switch reading.alignment {
-    case .aligning:
-      return "Aligning sections with \(pair.reading.displayName)…"
-    case .failed:
-      return "Couldn't align the sections; the two scroll apart"
-    case .aligned:
-      return "Scrolling with \(pair.reading.displayName)"
-    }
   }
 }
 

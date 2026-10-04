@@ -35,9 +35,11 @@ extension RFCTextViewCoordinator: CoupledReader {
     if coupling !== self.coupling {
       self.coupling?.detach(self, showing: documentID)
       self.coupling = coupling
-      coupling?.attach(self, showing: documentID)
+      guard let coupling else { return }
+      coupling.attach(self, showing: documentID)
       // Its line, which it reported before it joined: a reader that leads and has
-      // not moved since would otherwise leave the other where it opened.
+      // not moved since would otherwise leave the other where it opened. Not on
+      // leaving, which a released reader does after its title was taken back.
       reportVisibleAnchor()
     } else if installed {
       coupling?.attach(self, showing: documentID)

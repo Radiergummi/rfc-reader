@@ -31,7 +31,8 @@ struct StatusBanner: View {
           row(
             "Obsoleted by", metadata.obsoletedBy, term: .obsoletes,
             symbol: "exclamationmark.triangle.fill", tint: Self.color(of: .obsoleted),
-            comparesWith: offersComparison ? metadata.obsoletedBy : [])
+            comparesWith: offersComparison
+              ? metadata.obsoletedBy.filter { $0 != metadata.id } : [])
         }
         if !metadata.updatedBy.isEmpty {
           row(

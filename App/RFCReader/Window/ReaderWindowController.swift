@@ -297,6 +297,7 @@
       if let item = besideItem {
         splitController.removeSplitViewItem(item)
         besideItem = nil
+        if let window { applyMinimumWidth(to: window) }
       }
       guard let reading = reader.sideBySide,
         let readerIndex = splitController.splitViewItems.firstIndex(of: readerItem)
@@ -313,6 +314,7 @@
       item.automaticallyAdjustsSafeAreaInsets = true
       splitController.insertSplitViewItem(item, at: readerIndex + 1)
       besideItem = item
+      if let window { applyMinimumWidth(to: window) }
     }
 
     // MARK: - Title
@@ -404,7 +406,10 @@
     /// the effective floor where it was, and the window never moves.
     private func applyMinimumWidth(to window: NSWindow) {
       let panelAllowance = panelItem.isCollapsed ? 0 : Self.panelWidth
-      window.contentMinSize = NSSize(width: Self.minimumContentWidth - panelAllowance, height: 480)
+      // A reader beside the window's own needs a readable measure of its own (#187).
+      let besideAllowance = besideItem == nil ? 0 : ReaderLayout.minimumPaneWidth
+      window.contentMinSize = NSSize(
+        width: Self.minimumContentWidth + besideAllowance - panelAllowance, height: 480)
       // A restored frame is not re-checked against the minimum, so a window saved
       // narrower than the floor comes back narrower than the floor.
       var frame = window.frame
@@ -557,9 +562,11 @@
         let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
       else { return }
       // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
-      // has to leave focus there.
+      // has to leave focus there. The reader beside a compared document finds in its
+      // own text (#187).
       if let focused = window.firstResponder as? NSView,
         focused.isDescendant(of: text.enclosingScrollView ?? text)
+          || besideItem.map({ focused.isDescendant(of: $0.viewController.view) }) == true
       {
         return
       }
@@ -571,8 +578,20 @@
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
     /// the text view, not a child.
     func copyAsQuote() {
-      let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
+    /// The reader whose selection Copy as Quote copies: the one beside a compared
+    /// document (#187) when the selection in its text is the only one, or the focus is
+    /// in it; the window's own otherwise.
+    private var quotedReaderView: NSView {
+      guard let beside = besideItem?.viewController.view,
+        reader.sideBySide?.reader.hasSelection == true
+      else { return readerItem.viewController.view }
+      let focused = window?.firstResponder as? NSView
+      if !reader.hasSelection || focused?.isDescendant(of: beside) == true { return beside }
+      return readerItem.viewController.view
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two

@@ -69,9 +69,11 @@ public final class ScrollCoupling {
     readers[document] = nil
   }
 
-  /// The reader of `document` was used.
+  /// The reader of `document` was used. A section the old leader was in, with no
+  /// counterpart, is no longer what the two are doing.
   public func lead(_ document: DocumentID) {
     guard documents.contains(document), !isFollowing, leader != document else { return }
+    report(unaligned: nil)
     leader = document
   }
 

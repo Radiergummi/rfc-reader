@@ -81,7 +81,8 @@ struct DocumentCommands: Commands {
         }
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(
-          !showsDocument || reader?.showOriginal == true || reader?.hasSelection != true)
+          !showsDocument || reader?.showOriginal == true
+            || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
       #endif
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the

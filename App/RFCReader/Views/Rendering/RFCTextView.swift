@@ -288,11 +288,16 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // Found or sent to its end, this side leads a side-by-side reading (#187).
+        coordinator.takeLead()
         // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
         _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
+      }
+      textView.willHandleKey = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
       }
 
       let host = UIHostingController(
@@ -402,11 +407,16 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // Found or sent to its end, this side leads a side-by-side reading (#187).
+        coordinator.takeLead()
         // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
         _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
+      }
+      textView.willHandleKey = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false

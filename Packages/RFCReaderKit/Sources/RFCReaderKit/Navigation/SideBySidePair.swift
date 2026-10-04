@@ -18,8 +18,9 @@ public struct SideBySidePair: Sendable, Hashable {
   public let new: DocumentID
 
   /// Nil when neither of the two obsoletes the other, according to `metadata`, the
-  /// reading document's entry in the index.
+  /// reading document's entry in the index, or when the two are one document.
   public init?(reading metadata: RFCMetadata, with other: DocumentID) {
+    guard other != metadata.id else { return nil }
     reading = metadata.id
     self.other = other
     if metadata.obsoletedBy.contains(other) {
@@ -53,5 +54,29 @@ public struct SideBySidePair: Sendable, Hashable {
     let others = Set(oldSuccessors + newPredecessors).subtracting([old, new])
       .intersection(available)
     return [old, new] + others.sorted()
+  }
+
+  /// How far the two documents' sections are in being aligned.
+  public enum Alignment: Sendable, Equatable {
+    case aligning
+    case aligned
+    case failed
+  }
+
+  /// What the bar under the reader beside says the two readers are doing, given
+  /// how far their alignment is and which of them holds still, if one does.
+  public func status(_ alignment: Alignment, holdingStill still: DocumentID?) -> String {
+    if let still {
+      let leading = still == old ? new : old
+      return "This section of \(leading.displayName) has no counterpart in \(still.displayName)"
+    }
+    switch alignment {
+    case .aligning:
+      return "Aligning sections with \(reading.displayName)…"
+    case .failed:
+      return "Couldn't align the sections; the two scroll apart"
+    case .aligned:
+      return "Scrolling with \(reading.displayName)"
+    }
   }
 }

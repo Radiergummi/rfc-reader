@@ -18,18 +18,12 @@ import os
 /// table can replace this later.
 @Observable
 final class SideBySide {
-  enum Alignment: Equatable {
-    case aligning
-    case aligned
-    case failed
-  }
-
   let pair: SideBySidePair
   /// The reader beside: its own place in the documents, and its own reader state.
   let navigation: NavigationModel
   let reader = ReaderState()
   @ObservationIgnored let coupling: ScrollCoupling
-  private(set) var alignment = Alignment.aligning
+  private(set) var alignment = SideBySidePair.Alignment.aligning
   /// The document whose reader holds still, while the other is in a section with no
   /// counterpart in it.
   private(set) var holdsStill: DocumentID?
@@ -38,7 +32,7 @@ final class SideBySide {
 
   init(_ pair: SideBySidePair, library: LibraryModel) {
     self.pair = pair
-    navigation = NavigationModel(library: library)
+    navigation = NavigationModel(library: library, listsDocuments: false)
     navigation.open(pair.other, in: library.index)
     coupling = ScrollCoupling(leader: pair.reading, follower: pair.other)
     reader.coupling = coupling
@@ -61,20 +55,17 @@ final class SideBySide {
     alignment = .aligning
     aligning = Task(name: "Align \(pair.old.displayName) with \(pair.new.displayName)") {
       [weak self, pair] in
+      let oldSuccessors = library.metadata(pair.old)?.obsoletedBy ?? []
+      let newPredecessors = library.metadata(pair.new)?.obsoletes ?? []
       var available: Set<DocumentID> = []
-      let candidates =
-        (library.metadata(pair.old)?.obsoletedBy ?? [])
-        + (library.metadata(pair.new)?.obsoletes ?? [])
-      for id in candidates where await library.isDownloaded(id) {
+      for id in oldSuccessors + newPredecessors where await library.isDownloaded(id) {
         available.insert(id)
       }
       let ids = pair.alignedAmong(
-        oldSuccessors: library.metadata(pair.old)?.obsoletedBy ?? [],
-        newPredecessors: library.metadata(pair.new)?.obsoletes ?? [],
-        available: available)
+        oldSuccessors: oldSuccessors, newPredecessors: newPredecessors, available: available)
       var documents: [RFCDocument] = []
       do {
-        for id in ids {
+        for id in [pair.old, pair.new] {
           documents.append(try await library.document(for: id))
         }
       } catch {
@@ -82,6 +73,11 @@ final class SideBySide {
           "aligning failed: \(String(describing: error), privacy: .public)")
         if !Task.isCancelled { self?.alignment = .failed }
         return
+      }
+      // The others only sharpen the pair's counterparts: one that fails to load is
+      // left out, and the two are aligned without it.
+      for id in ids.dropFirst(2) {
+        if let document = try? await library.document(for: id) { documents.append(document) }
       }
       let rows = await Self.pairs(among: documents)
       guard let self, !Task.isCancelled else { return }

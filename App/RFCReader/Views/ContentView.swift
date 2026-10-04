@@ -82,12 +82,6 @@ import SwiftUI
         }
       }
       .environment(\.sceneChrome, chrome)
-      // Another document read leaves the comparison with this one (#187).
-      .onChange(of: navigation.selection) { _, selection in
-        if let beside = reader.sideBySide, beside.pair.reading != selection {
-          reader.endComparison()
-        }
-      }
       // The scene's title, for the app switcher and iPad's window controls. It
       // reaches no column's bar: each column titles itself, the list included
       // (#246).

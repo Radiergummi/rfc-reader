@@ -55,10 +55,6 @@ public struct AlignedScrolling: Sendable, Equatable {
     counterparts = best.mapValues { $0.mapValues(\.anchor) }
   }
 
-  public static func == (lhs: AlignedScrolling, rhs: AlignedScrolling) -> Bool {
-    lhs.counterparts == rhs.counterparts
-  }
-
   /// The section of the other document that `section`, of `document`, became or came
   /// from; nil when it has none.
   public func counterpart(of section: String, in document: DocumentID) -> String? {

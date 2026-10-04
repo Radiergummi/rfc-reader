@@ -99,6 +99,15 @@ struct ScrollCouplingTests {
     #expect(told == ["section-3", nil])
   }
 
+  @Test func `a section the old leader held still in is forgotten when the other leads`() {
+    var told: [String?] = []
+    coupling.onUnaligned = { _, section in told.append(section) }
+    coupling.scrolling = AlignedScrolling(rows: Self.rows, between: Self.old, and: Self.new)
+    coupling.moved(Self.old, to: 210)
+    coupling.lead(Self.new)
+    #expect(told == ["section-3", nil])
+  }
+
   @Test func `a reader that went is not the one a newer reader replaced`() {
     let replacement = FakeReader(Self.new, sections: 3)
     coupling.attach(replacement, showing: Self.new)
