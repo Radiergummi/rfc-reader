@@ -163,7 +163,7 @@ struct DocumentView: View {
   /// that by a different route: the reader's frame spans the panel, and the inset
   /// it reports is ignored in the representable.
   var body: some View {
-    content
+    requestingContent
       .navigationTitle(id.displayName)
       #if !os(macOS)
         .modifier(
@@ -260,6 +260,20 @@ struct DocumentView: View {
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
+  /// The tab an App Intent asked to show beside this document, taken and waiting for
+  /// the panel to have something to describe; see `showRequestedTab()`.
+  @State private var requestedTab: InspectorTab?
+
+  /// `content`, taking a tab an App Intent asked to show beside this document (#192)
+  /// once there is a document to describe: the macOS panel refuses to open over
+  /// nothing. Apart from `body`, whose chain of modifiers is as long as the compiler
+  /// type-checks in time.
+  private var requestingContent: some View {
+    content.modifier(
+      RequestedTab(
+        request: library.inspectorRequest, canDescribe: reader.canDescribe,
+        show: showRequestedTab))
+  }
 
   /// The width channel. It wraps everything, including the loading state, so the
   /// column is known before there is a document to build.
@@ -357,6 +371,8 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.folding = $0
         },
+        // None until they are extracted, rather than the last document's.
+        requirements: navigation.selection == id ? reader.requirements ?? [] : nil,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
@@ -489,6 +505,19 @@ struct DocumentView: View {
       showsOriginal: settings.preferOriginalText)
   }
 
+  /// Takes the tab an App Intent asked for beside this document in this tab (#192),
+  /// and shows it once the panel has something to describe. Taken at once and kept
+  /// here, so a document that never loads, or is left first, takes the request with
+  /// it rather than leaving it for the next reader of that RFC. Not while fading out
+  /// over the next document's reader: the request would be taken by the wrong one.
+  private func showRequestedTab() {
+    guard navigation.selection == id else { return }
+    if let tab = library.takeInspectorRequest(for: id, in: navigation) { requestedTab = tab }
+    guard reader.canDescribe, let tab = requestedTab else { return }
+    requestedTab = nil
+    reader.show(tab)
+  }
+
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
   ///
   /// An anchor the body does not hold scrolls nowhere: a document already open stays
@@ -604,3 +633,17 @@ struct DocumentView: View {
     }
   }
 #endif
+
+/// Calls `show` when an App Intent's request arrives, and when the reader comes to
+/// have a document it could show it beside; see `DocumentView.requestingContent`.
+private struct RequestedTab: ViewModifier {
+  let request: DocumentRequest<InspectorTab>?
+  let canDescribe: Bool
+  let show: () -> Void
+
+  func body(content: Content) -> some View {
+    content
+      .onChange(of: request, initial: true) { show() }
+      .onChange(of: canDescribe) { show() }
+  }
+}

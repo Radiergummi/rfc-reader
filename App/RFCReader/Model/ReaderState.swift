@@ -191,6 +191,14 @@ final class ReaderState {
     openPanel()
   }
 
+  /// Shows a tab of the navigation pane, opening the panel: what an App Intent asks
+  /// for beside a document (#192).
+  func show(_ tab: InspectorTab) {
+    pane = .navigation
+    self.tab = tab
+    openPanel()
+  }
+
   func clear() {
     titleOwnership.close()
     sections = []
@@ -198,6 +206,7 @@ final class ReaderState {
     requirements = nil
     exportFormats = [.pdf]
     folding.expanded = []
+    folding.openAsides = []
     folding.focused = nil
     foldingIndex = nil
     focusGroups = nil

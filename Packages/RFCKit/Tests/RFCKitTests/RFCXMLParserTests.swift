@@ -532,6 +532,47 @@ struct RFCXMLParserTests {
     #expect(cors.display == CrossReference.Display(text: cors.label, isChip: false))
   }
 
+  /// RFC 9220 cites appendix A.3 of RFC 9114 by its entry's tag, `HTTP3`, whose
+  /// `derivedContent` is "HTTP/3". The tag survives and the section is worded around
+  /// it, as for a canonical citation, rather than the label reading as the tag alone
+  /// (#552). The target is still the RFC's own section.
+  @Test func `a section citation of a tagged entry words the section around the tag`() throws {
+    let xrefs = try Fixtures.document("rfc9220.xml").everyCrossReference
+    let appendix = try #require(
+      xrefs.first { $0.target == .document(.rfc(9114), section: "A.3", entry: "HTTP3") })
+    #expect(appendix.label == "Appendix\u{00A0}A.3 of [HTTP/3]")
+    #expect(appendix.display == CrossReference.Display(text: appendix.label, isChip: false))
+    let section = try #require(
+      xrefs.first { $0.target == .document(.rfc(9114), section: "4.4", entry: "HTTP3") })
+    #expect(section.label == "Section\u{00A0}4.4 of [HTTP/3]")
+  }
+
+  /// Each `sectionFormat` words a tagged citation as it does a canonical one; `bare`
+  /// leaves the document unsaid. In RFCXML's shape, quoted from none.
+  @Test(arguments: [
+    ("of", "Section\u{00A0}3.2 of [WIDGETS]"),
+    ("comma", "[WIDGETS], Section\u{00A0}3.2"),
+    ("parens", "[WIDGETS] (Section\u{00A0}3.2)"),
+    ("bare", "3.2"),
+  ])
+  func `a tagged section citation is worded by its section format`(
+    format: String, expected: String
+  ) throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGETS" section="3.2" sectionFormat="\(format)" format="default"
+        derivedContent="WIDGETS"/>.</t>
+      </section></middle>
+      <back><references><name>References</name>
+        <reference anchor="WIDGETS"><front><title>Widgets</title></front>
+          <seriesInfo name="RFC" value="9998"/></reference>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(xrefs.map(\.label) == [expected])
+    #expect(xrefs.map(\.target) == [.document(.rfc(9998), section: "3.2", entry: "WIDGETS")])
+  }
+
   /// RFC 9220 cites RFC 8441 with `format="title"`, whose `derivedContent` is the
   /// entry's title. A title is not a tag, so it reads as the title, not in brackets.
   @Test func `a citation by title reads as the title, unbracketed`() throws {

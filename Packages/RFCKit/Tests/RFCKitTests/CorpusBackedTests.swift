@@ -73,6 +73,17 @@ struct CorpusBackedPageJoinTests {
   }
 }
 
+@Suite("Corpus-backed: page footers", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPageFooterTests {
+  /// RFC 821 sets its even pages' footers mirrored, the page number at the left margin
+  /// and the author on the right; none of them is left in the text (#796).
+  @Test func `a footer with its page number on the left is page furniture`() throws {
+    let published = LegacyTextParser.stripPagination(try CorpusText.text("rfc821"))
+    let footers = published.split(separator: "\n").filter { $0.hasPrefix("[Page ") }
+    #expect(footers.isEmpty, "\(footers.count) footers left in the text")
+  }
+}
+
 @Suite("Corpus-backed: the title page", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedTitlePageTests {
   /// Since the front matter ends at the first paragraph (#74), whatever the title page
@@ -209,6 +220,28 @@ struct CorpusBackedAppendixHeadingTests {
         })
     }
     #expect(document.allSections.contains { $0.titleText.hasPrefix("REFERENCES") })
+  }
+}
+
+@Suite("Corpus-backed: headings numbered with a parenthesis", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedParenthesisHeadingTests {
+  /// RFC 1136 and 2122 head their sections `1)` and on, as RFC 1927 does, and had none
+  /// of them (#199).
+  @Test func `sections numbered with a parenthesis are sections`() throws {
+    let routing = LegacyTextParser.parse(try CorpusText.text("rfc1136"))
+    #expect(routing.sections.compactMap(\.number) == (1...11).map(String.init))
+    let vemmi = LegacyTextParser.parse(try CorpusText.text("rfc2122"))
+    #expect(vemmi.sections.compactMap(\.number) == (1...11).map(String.init))
+    #expect(vemmi.section(number: "8")?.titleText.hasPrefix("Security Considerations") == true)
+  }
+
+  /// RFC 3116 numbers its sections `1.`, and a list of test cases `1)` to `8)` inside
+  /// the second. Those repeat its section numbers, and stay list items.
+  @Test func `a list numbered like the sections stays a list`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc3116"))
+    #expect(document.section(number: "3")?.titleText == "Performance Metrics")
+    #expect(document.section(number: "8") == nil)
+    #expect(!document.allSections.contains { $0.titleText.hasPrefix("PCR=") })
   }
 }
 

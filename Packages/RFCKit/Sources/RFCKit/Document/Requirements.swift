@@ -43,6 +43,13 @@ public struct Requirement: Sendable, Hashable {
     self.sectionTitle = sectionTitle
     self.isHeuristic = isHeuristic
   }
+
+  /// The requirement as a line of plain text, where it is and then what it says:
+  /// `4.2: A client MUST retry.`, or the section's title where it has no number. What
+  /// the requirements intent returns one of per requirement (#192).
+  public var line: String {
+    "\(sectionNumber ?? sectionTitle): \(sentence)"
+  }
 }
 
 /// Every BCP 14 requirement a document states (#180), in document order.
@@ -58,6 +65,19 @@ public enum Requirements {
   static let bcp14: Set<DocumentID> = [
     .rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14),
   ]
+
+  /// The requirements of `requirements` that `section` states, in its own blocks or
+  /// any of its subsections', in the order given: "the requirements in Section 4"
+  /// (#192).
+  public static func within(_ section: Section, _ requirements: [Requirement]) -> [Requirement] {
+    var anchors: Set<String> = []
+    func collect(_ section: Section) {
+      anchors.insert(section.anchor)
+      section.subsections.forEach(collect)
+    }
+    collect(section)
+    return requirements.filter { anchors.contains($0.sectionAnchor) }
+  }
 
   public static func extract(from document: RFCDocument) -> [Requirement] {
     // A part of BCP 14 need not cite itself, and could not: a document is never among

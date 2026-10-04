@@ -54,11 +54,12 @@ extension LegacyTextParser {
   /// lost: RFC 783's summary. Omitted boilerplate ends at a refused line too, for the
   /// same reason.
   static func heading(
-    at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
+    at index: Int, in lines: [Line], bodyIsIndented: Bool, separators: HeadingSeparators,
+    startsBlock: Bool
   ) -> HeadingInfo? {
     guard let string = lines[index].string, string.startsAtColumnZero else { return nil }
     guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-    return heading(from: string, colonNumbered: colonNumbered)
+    return heading(from: string, separators: separators)
   }
 
   /// A contents entry's end: a leader of four dots or more, run on or spaced, or of
@@ -140,7 +141,7 @@ extension LegacyTextParser {
   /// directly above would need a blank line under it in a body at column 0, and in an
   /// indented body the position is not asked.
   static func centeredHeadings(
-    in lines: [Line], from start: Int, bodyIsIndented: Bool, colonNumbered: Bool
+    in lines: [Line], from start: Int, bodyIsIndented: Bool, separators: HeadingSeparators
   ) -> [Int: HeadingInfo] {
     var headings: [Int: HeadingInfo] = [:]
     var next: (index: Int, number: String?)?
@@ -149,7 +150,7 @@ extension LegacyTextParser {
       guard let string = lines[index].string, !string.isBlank else { continue }
       if string.startsAtColumnZero {
         if let heading = Self.heading(
-          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+          at: index, in: lines, bodyIsIndented: bodyIsIndented, separators: separators,
           startsBlock: isBlankOrEnd(lines, at: index - 1)),
           heading.number != nil || !refusesUnnumberedHeading(heading.title),
           !isContentsEntry(at: index, in: lines)
@@ -159,7 +160,7 @@ extension LegacyTextParser {
         continue
       }
       guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
-        let heading = heading(from: string, colonNumbered: colonNumbered),
+        let heading = heading(from: string, separators: separators),
         let number = heading.number, !isContentsEntry(at: index, in: lines)
       else { continue }
       let nearest = nearestOfNumber[number, default: .max]
@@ -208,11 +209,15 @@ extension LegacyTextParser {
     return result
   }
 
-  static func heading(from line: String, colonNumbered: Bool) -> HeadingInfo? {
+  static func heading(from line: String, separators: HeadingSeparators) -> HeadingInfo? {
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty, trimmed.count < 120 else { return nil }
     if let match = trimmed.firstMatch(of: numberedHeadingPattern) {
-      guard colonNumbered || match.separator != ":" else { return nil }
+      switch match.separator {
+      case ":": guard separators.contains(.colon) else { return nil }
+      case ")": guard separators.contains(.parenthesis) else { return nil }
+      default: break
+      }
       let number = String(match.number)
       let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(

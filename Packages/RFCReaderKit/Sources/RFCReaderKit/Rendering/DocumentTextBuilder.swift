@@ -99,6 +99,8 @@ public final class DocumentTextBuilder {
   var documentID: DocumentID?
   /// The ordinal the next verbatim block gets.
   var nextVerbatimOrdinal = 0
+  /// The ordinal the next aside gets (`.rfcAside`).
+  var nextAsideOrdinal = 0
 
   /// The color of a character a decorated block draws over instead of showing.
   public static let hiddenColor = PlatformColor.clear
@@ -354,7 +356,7 @@ extension DocumentTextBuilder {
       case .blockQuote(let inner):
         appendDecorated(inner, decoration: .blockQuote, indent: indent)
       case .aside(let inner):
-        appendDecorated(inner, decoration: .aside, indent: indent)
+        appendAside(inner, indent: indent)
       case .references:
         // Skipped: see `holdsOnlyReferences`. A `.references` block outside a
         // bibliography section would land here, and is still not body prose.

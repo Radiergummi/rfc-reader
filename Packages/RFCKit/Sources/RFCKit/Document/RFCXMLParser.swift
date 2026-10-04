@@ -882,10 +882,16 @@ public enum RFCXMLParser {
         }
         // "RFC9110" is the canonical number; anything else is a tag the author
         // chose ("QUIC-TRANSPORT") and is the name the document uses
-        // throughout, so it survives verbatim, brackets and all.
+        // throughout, so it survives verbatim, brackets and all, with a section
+        // worded around it as `sectionFormat` asks: "Appendix A.3 of [HTTP/3]" (#552).
         let raw = derived ?? targetAnchor
         if !CrossReference.isCanonicalTag(raw, for: id) {
-          return CrossReference(target: target, text: "[\(raw)]", sectionFormat: sectionFormat)
+          let text =
+            section.map { section in
+              CrossReference.sectionLabel(
+                section, of: CrossReference.nonBreakingLabel(raw), format: sectionFormat)
+            } ?? "[\(raw)]"
+          return CrossReference(target: target, text: text, sectionFormat: sectionFormat)
         }
         // `counter` asks for something the target cannot supply -- a number -- so
         // the tooling's own rendering is the label.

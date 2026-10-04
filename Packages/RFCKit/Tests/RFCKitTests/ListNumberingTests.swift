@@ -131,10 +131,11 @@ struct ListNumberingTests {
     #expect(numbering == ListNumbering(counter: .lowerAlpha, prefix: "(", suffix: ")", start: 1))
   }
 
-  /// RFC 1927 numbers with a closing parenthesis, `1)`, which is not `1.`.
+  /// RFC 1927 numbers its lists with a closing parenthesis, `1)`, which is not `1.`.
   @Test func `a legacy list keeps its punctuation`() throws {
     let document = try Fixtures.document("rfc1927.txt")
-    let numbering = try #require(Self.numbering(ofListStarting: "New MIME Types", in: document))
+    let numbering = try #require(
+      Self.numbering(ofListStarting: "indicates the degree", in: document))
     #expect(numbering == ListNumbering(suffix: ")", start: 1))
   }
 

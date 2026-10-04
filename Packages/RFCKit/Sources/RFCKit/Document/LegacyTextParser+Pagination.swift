@@ -26,7 +26,22 @@ extension LegacyTextParser {
     }
   }
 
-  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
+  private static let footerPattern = Pattern(#/\[Page (?<number>[0-9ivx]+)\]\s*$/#)
+  /// A footer mirrored on an even page: the page number at the left margin, the author
+  /// after a wide gap (#796).
+  private static let leftFooterPattern = Pattern(#/^\[Page (?<number>[0-9ivx]+)\] {2,}\S/#)
+
+  /// Whether a line, its indent trimmed, is a page footer: `[Page 12]` at the end of the
+  /// line, or at its start on a mirrored page, numbered in arabic or, on a front section,
+  /// in roman numerals (#549).
+  static func isFooter(_ line: String) -> Bool {
+    guard
+      let number = line.firstMatch(of: footerPattern)?.number
+        ?? line.firstMatch(of: leftFooterPattern)?.number
+    else { return false }
+    return number.allSatisfy { $0.isASCII && $0.isNumber } || isRomanPageNumber(number)
+  }
+
   private static let runningHeaderPattern = Pattern(
     #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
@@ -115,7 +130,7 @@ extension LegacyTextParser {
       line = line.expandingTabs()
       let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-      if firstContentSeen, trimmed.contains(footerPattern) {
+      if firstContentSeen, isFooter(trimmed) {
         lines.append(.pageBreak)
         expectingHeader = true
         continue
