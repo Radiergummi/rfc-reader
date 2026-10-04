@@ -38,7 +38,10 @@ struct SectionEntity: AppEntity {
   }
 
   var displayRepresentation: DisplayRepresentation {
-    DisplayRepresentation(title: "\(title)", subtitle: "\(documentName)")
+    // Data, not language: no key for the catalog.
+    DisplayRepresentation(
+      title: LocalizedStringResource(stringLiteral: title),
+      subtitle: LocalizedStringResource(stringLiteral: documentName))
   }
 }
 

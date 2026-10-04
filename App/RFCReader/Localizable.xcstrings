@@ -1,29 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
-
-    },
-    "%@ %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@"
-          }
-        }
-      }
-    },
-    "%@ %@ %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@ %3$@"
-          }
-        }
-      }
-    },
     "%@ didn't load: %@" : {
       "localizations" : {
         "en" : {
@@ -63,16 +40,6 @@
         }
       }
     },
-    "%@: %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@: %2$@"
-          }
-        }
-      }
-    },
     "%@: searched as text" : {
 
     },
@@ -108,9 +75,6 @@
 
     },
     "%lld times" : {
-
-    },
-    "%lld×" : {
 
     },
     "A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link." : {
@@ -633,6 +597,9 @@
 
     },
     "The RFC index isn't available. Open RFC Reader to load it, then try again." : {
+
+    },
+    "The document hasn't loaded." : {
 
     },
     "The documents this one cites normatively, in the order to read them." : {

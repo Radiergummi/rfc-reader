@@ -37,8 +37,10 @@ nonisolated struct RFCEntity: AppEntity, IndexedEntity {
   }
 
   var displayRepresentation: DisplayRepresentation {
+    // Data, not language: no key for the catalog.
     DisplayRepresentation(
-      title: "\(documentID.displayName): \(title)", subtitle: "\(obsoletedBy ?? status)")
+      title: LocalizedStringResource(stringLiteral: "\(documentID.displayName): \(title)"),
+      subtitle: LocalizedStringResource(stringLiteral: obsoletedBy ?? status))
   }
 }
 

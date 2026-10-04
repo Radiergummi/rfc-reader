@@ -47,7 +47,10 @@ struct RegistryEntryEntity: AppEntity {
 
   var displayRepresentation: DisplayRepresentation {
     let subtitle = [name, definedIn].compactMap { $0 }.joined(separator: " · ")
-    return DisplayRepresentation(title: "\(heading)", subtitle: "\(subtitle)")
+    // Data, not language: no key for the catalog.
+    return DisplayRepresentation(
+      title: LocalizedStringResource(stringLiteral: heading),
+      subtitle: LocalizedStringResource(stringLiteral: subtitle))
   }
 }
 

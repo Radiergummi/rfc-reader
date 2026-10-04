@@ -69,7 +69,7 @@ struct StatusBanner: View {
     return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         symbol("doc.badge.clock").foregroundStyle(.secondary)
-        Text("\(relation) \(title) \(detail)")
+        Text(verbatim: "\(relation) \(title) \(detail)")
       }
     }
     .font(.subheadline)

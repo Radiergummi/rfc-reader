@@ -65,7 +65,7 @@ import SwiftUI
             }
             ShareLink(
               item: RFCEditorEndpoints.infoPage(rfc.id),
-              subject: Text("\(rfc.id.displayName): \(rfc.title)"))
+              subject: Text(verbatim: "\(rfc.id.displayName): \(rfc.title)"))
           }
           if library.opensNewWindows {
             Button {

@@ -114,7 +114,9 @@ struct DocumentInspector: View {
       // An empty list beside a failure reads as a second failure; this says why.
       ContentUnavailableView(
         "No \(tab.title)", systemImage: "doc.text.magnifyingglass",
-        description: Text("\(document?.displayName ?? "The document") hasn't loaded."))
+        description: Text(
+          verbatim: document.map { String(localized: "\($0.displayName) hasn't loaded.") }
+            ?? String(localized: "The document hasn't loaded.")))
     case .publishedOriginal:
       ContentUnavailableView(
         "No \(tab.title)", systemImage: "doc.richtext",

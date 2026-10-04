@@ -129,7 +129,7 @@
         if let entry = row.entry {
           // What was looked up, then where it is defined: "HTTP status 425 · Too
           // Early", RFC 8470.
-          Text("\(entry.registry.displayName) \(entry.value)")
+          Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
             .fontWeight(.semibold)
             .monospacedDigit()
             .lineLimit(1)

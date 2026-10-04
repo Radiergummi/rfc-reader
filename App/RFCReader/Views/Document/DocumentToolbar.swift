@@ -142,7 +142,7 @@ import SwiftUI
     private func shareLink(_ metadata: RFCMetadata) -> some View {
       ShareLink(
         item: RFCEditorEndpoints.infoPage(id),
-        subject: Text("\(id.displayName): \(metadata.title)"))
+        subject: Text(verbatim: "\(id.displayName): \(metadata.title)"))
     }
 
     private func toggleBookmark() {
