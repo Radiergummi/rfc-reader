@@ -93,6 +93,7 @@ The app's chrome is localized through string catalogs, and the reader body is no
 - Interpolate a count, not a sentence fragment: `"\(count) RFCs"` becomes a `%lld` key whose plural variants live in the catalog. A list goes through `.formatted(.list(type: .and).locale(locale))`. Never assemble a sentence from translated pieces, or change a translated piece's case: write the whole sentence as one key, or give the mid-sentence form a key of its own, as `RevisionsSummary.stagePhrase` does. Text that is not language, such as an identifier or `"\(a) \(b)"`, is `Text(verbatim:)`, so it never becomes a key.
 - The reader body and its exports stay English: `DocumentTextBuilder`, `PDFExport`, `GrammarExport`, the requirements CSV, and the VoiceOver descriptions of figures. So do RFCKit's designations (statuses, streams, series) and the IETF's area names; RFCKit has no catalog.
 - The App Shortcuts' phrases are in `App/RFCReader/AppShortcuts.xcstrings`, from what the App Intents metadata step records, not the compiler.
+- The one exception to the code being the source is `App/RFCReader/InfoPlist.xcstrings`, keyed by an Info.plist key such as `NSContactsUsageDescription`: no build extracts Info.plist, so a new user-facing value in `project.yml`'s `info:` gets its key and English there by hand.
 - Look a string up with `grep` on the catalog, or `xcrun xcstringstool print`.
 
 ## Generated files
