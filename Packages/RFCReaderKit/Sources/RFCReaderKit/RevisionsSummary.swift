@@ -100,9 +100,11 @@ public struct RevisionsSummary: Equatable, Sendable {
     case .lastCall: String(kit: "In working group last call", locale: locale)
     // The Independent stream has no group to be in.
     case .inGroup:
-      stream == "ise"
-        ? String(kit: "Under review", locale: locale)
-        : String(kit: "In the working group", locale: locale)
+      if stream == "ise" {
+        String(kit: "Under review", locale: locale)
+      } else {
+        String(kit: "In the working group", locale: locale)
+      }
     }
   }
 
@@ -119,9 +121,11 @@ public struct RevisionsSummary: Equatable, Sendable {
     case .submitted: String(kit: "submitted for publication", locale: locale)
     case .lastCall: String(kit: "in working group last call", locale: locale)
     case .inGroup:
-      stream == "ise"
-        ? String(kit: "under review", locale: locale)
-        : String(kit: "in the working group", locale: locale)
+      if stream == "ise" {
+        String(kit: "under review", locale: locale)
+      } else {
+        String(kit: "in the working group", locale: locale)
+      }
     }
   }
 
