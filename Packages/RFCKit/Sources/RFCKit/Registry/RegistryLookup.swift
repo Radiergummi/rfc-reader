@@ -46,6 +46,15 @@ public enum RegistryLookup {
     }
   }
 
+  /// The entries `identifiers` name, each an entry's `identifier`, in the order
+  /// given. One that names no entry is left out.
+  public static func entries(identifiedBy identifiers: [String], in entries: [RegistryEntry])
+    -> [RegistryEntry]
+  {
+    let byIdentifier = Dictionary(entries.map { ($0.identifier, $0) }) { first, _ in first }
+    return identifiers.compactMap { byIdentifier[$0] }
+  }
+
   private struct Number {
     var value: Int
     var isHexadecimal: Bool
@@ -76,4 +85,11 @@ public enum RegistryLookup {
     else { return nil }
     return (low.value...high.value, low.isHexadecimal)
   }
+}
+
+extension RegistryEntry {
+  /// What names the entry across launches, `tlsAlerts:70`: its registry and its value,
+  /// which no two entries share. What an App Intent's registry entry is identified by
+  /// (#192).
+  public var identifier: String { "\(registry.rawValue):\(value)" }
 }

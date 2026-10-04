@@ -19,6 +19,9 @@ public struct SpotlightEntry: Sendable {
   public var title: String
   /// The abstract, after "Obsoleted by RFC …." where it applies.
   public var description: String
+  /// `Proposed Standard`: not indexed as text, but shown by the RFC's App Intents
+  /// entity, which each item carries (#192), so a change is indexed again.
+  public var status: String
   /// The number as it is written (`9110`, `RFC 9110`, `RFC9110`), the working group,
   /// the authors and the index's keywords.
   public var keywords: [String]
@@ -28,12 +31,11 @@ public struct SpotlightEntry: Sendable {
     identifier = id.fileStem
     title = "\(id.displayName): \(metadata.title)"
     var description = metadata.abstract ?? ""
-    if metadata.isObsolete {
-      let successors = metadata.obsoletedBy.map(\.displayName).joined(separator: ", ")
-      description = "Obsoleted by \(successors). \(description)"
-        .trimmingCharacters(in: .whitespaces)
+    if let note = metadata.obsoletionNote {
+      description = "\(note). \(description)".trimmingCharacters(in: .whitespaces)
     }
     self.description = description
+    status = metadata.currentStatus.displayName
     keywords =
       ["\(id.number)", id.displayName, id.description]
       + [metadata.namedWorkingGroup].compactMap { $0 }
@@ -54,10 +56,15 @@ public struct SpotlightEntry: Sendable {
   /// that stays offline, is still renewed before its items reach their `lifetime`.
   public static func clientState(for entries: [SpotlightEntry], now: Date) -> Data {
     var digest = SHA256()
+    // What else an item carries: from #192, the RFC's App Intents entity, which
+    // items indexed before then lack, so they are indexed again once.
+    digest.update(data: Data(format.utf8))
     // Each field ends with a unit separator and each entry with a record
     // separator, so text moved from one field into the next is a change.
     for entry in entries {
-      for field in [entry.identifier, entry.title, entry.description] + entry.keywords {
+      for field in [entry.identifier, entry.title, entry.description, entry.status]
+        + entry.keywords
+      {
         digest.update(data: Data(field.utf8))
         digest.update(data: Data([0x1F]))
       }
@@ -73,6 +80,10 @@ public struct SpotlightEntry: Sendable {
   public static func isRecheckDue(lastCheckedAt: Date, now: Date) -> Bool {
     week(of: now) != week(of: lastCheckedAt)
   }
+
+  /// Changed whenever what an item carries beside its entry changes, so the items
+  /// indexed before are indexed again.
+  static let format = "app-entity"
 
   private static func week(of date: Date) -> Int {
     Int(date.timeIntervalSince1970) / (7 * 86_400)

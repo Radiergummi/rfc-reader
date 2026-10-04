@@ -85,6 +85,28 @@ struct CollectionStoreTests {
     #expect(members(of: id, in: context) == [.rfc(9000), .rfc(9114)])
   }
 
+  /// A reading path saved as a collection (#189).
+  @Test func `a collection is created with its documents in their order, in one save`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let saves = SaveCount()
+    let observer = NotificationCenter.default.addObserver(
+      forName: ModelContext.didSave, object: context, queue: nil
+    ) { _ in MainActor.assumeIsolated { saves.count += 1 } }
+    defer { NotificationCenter.default.removeObserver(observer) }
+
+    let id = try CollectionStore.create(
+      named: "Reading Path: RFC 9114", color: .blue,
+      documents: [
+        .rfc(9000), DocumentID(series: .bcp, number: 14), .rfc(9110), .rfc(9000), .rfc(9114),
+      ],
+      in: context
+    ).identifier
+
+    #expect(members(of: id, in: context) == [.rfc(9000), .rfc(9110), .rfc(9114)])
+    #expect(saves.count == 1)
+  }
+
   @Test func `adding to a collection that is gone is an error`() throws {
     let container = try makeContainer()
     let context = container.mainContext
