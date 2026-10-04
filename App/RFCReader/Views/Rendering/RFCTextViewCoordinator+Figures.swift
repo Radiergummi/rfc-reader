@@ -14,14 +14,17 @@
       var extra: [UIMenuElement] = []
       if range.length > 0, let reader = textView as? ReaderTextView {
         extra.append(
-          UIAction(title: "Copy as Quote", image: UIImage(systemName: "text.quote")) { _ in
+          UIAction(
+            title: String(localized: "Copy as Quote"), image: UIImage(systemName: "text.quote")
+          ) { _ in
             reader.copyAsQuote()
           })
       }
       if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(
-          UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) {
-            [weak self, weak textView] _ in
+          UIAction(
+            title: String(localized: "Copy Figure"), image: UIImage(systemName: "doc.on.doc")
+          ) { [weak self, weak textView] _ in
             // The drawing too, where it shows, as the figure's own menu copies it (#778).
             let drawn =
               box.presentation == .figure

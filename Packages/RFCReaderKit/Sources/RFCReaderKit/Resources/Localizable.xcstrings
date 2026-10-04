@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ %@, %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, %3$@."
+          }
+        }
+      }
+    },
+    "%@ %@, in the RFC Editor queue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, in the RFC Editor queue."
+          }
+        }
+      }
+    },
     "%@ %@, revision %@ from %@, %@" : {
       "localizations" : {
         "en" : {
@@ -380,10 +400,16 @@
     "Not in the index" : {
 
     },
+    "Now has errata." : {
+
+    },
     "Obsolete" : {
 
     },
     "Obsoleted by" : {
+
+    },
+    "Obsoleted by %@." : {
 
     },
     "Obsoletes" : {
@@ -605,6 +631,9 @@
 
     },
     "Updated by" : {
+
+    },
+    "Updated by %@." : {
 
     },
     "Updates" : {

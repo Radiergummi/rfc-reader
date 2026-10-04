@@ -53,6 +53,16 @@
     "%@ isn't available offline. Connect to the internet, or keep it offline in RFC Reader, then try again." : {
 
     },
+    "%@ of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@"
+          }
+        }
+      }
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -68,6 +78,28 @@
     },
     "%lld RFCs" : {
 
+    },
+    "%lld documents." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld document."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld documents."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld identifiers" : {
 
@@ -135,6 +167,9 @@
     "Chairs: %@" : {
 
     },
+    "Choose a legacy XML pack: an .aar archive, or a folder with its manifest." : {
+
+    },
     "Cite" : {
 
     },
@@ -150,6 +185,9 @@
     "Continue" : {
 
     },
+    "Copy" : {
+
+    },
     "Copy %@" : {
 
     },
@@ -157,6 +195,9 @@
 
     },
     "Copy Checklist as Markdown" : {
+
+    },
+    "Copy Figure" : {
 
     },
     "Copy as Quote" : {
@@ -172,6 +213,9 @@
 
     },
     "Couldn't load the original text" : {
+
+    },
+    "Couldn’t Install the Data Pack" : {
 
     },
     "Couldn’t Load %@" : {
@@ -196,7 +240,7 @@
 
     },
     "Document" : {
-
+      "comment" : "Toolbar item that shows the open document"
     },
     "Done" : {
 
@@ -276,6 +320,9 @@
     "Install Data Pack…" : {
 
     },
+    "Installed Data Pack %@" : {
+
+    },
     "It holds ^[%lld document](inflect: true). Only the collection is removed; the documents stay in the library." : {
 
     },
@@ -319,6 +366,9 @@
 
     },
     "Name" : {
+
+    },
+    "Navigation" : {
 
     },
     "New Collection" : {
@@ -519,6 +569,9 @@
     "Saved as Collection" : {
 
     },
+    "Search" : {
+
+    },
     "Search Library" : {
 
     },
@@ -528,6 +581,9 @@
     "Search the library for “%@”" : {
 
     },
+    "Searched as text" : {
+
+    },
     "Searches the library for it" : {
 
     },
@@ -535,6 +591,9 @@
 
     },
     "See also" : {
+
+    },
+    "Share" : {
 
     },
     "Share Checklist…" : {
@@ -589,7 +648,7 @@
 
     },
     "Title" : {
-
+      "comment" : "Toolbar item that shows the document's title"
     },
     "Try Again" : {
 
