@@ -25,7 +25,6 @@ struct ChipLineGeometryTests {
   private struct Fixture {
     let text: NSAttributedString
     let lines: [NSTextLineFragment]
-    let fragmentStart: Int
     let fragmentRange: NSRange
     /// A chip piece that starts strictly inside a line *after* the fragment's
     /// first — the only shape where the two index bases disagree.
@@ -90,7 +89,6 @@ struct ChipLineGeometryTests {
           fixture = Fixture(
             text: attributed,
             lines: fragment.textLineFragments,
-            fragmentStart: fragmentStart,
             fragmentRange: NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart),
             laterLine: line,
             laterPiece: piece
@@ -295,8 +293,8 @@ struct ChipLineGeometryTests {
     let piece = fixture.laterPiece
 
     // A point over the middle of the chip, in fragment coordinates.
-    let startX = line.locationForCharacter(at: piece.location - fixture.fragmentStart).x
-    let endX = line.locationForCharacter(at: NSMaxRange(piece) - fixture.fragmentStart).x
+    let startX = line.locationForCharacter(at: piece.location - fixture.fragmentRange.location).x
+    let endX = line.locationForCharacter(at: NSMaxRange(piece) - fixture.fragmentRange.location).x
     let point = CGPoint(
       x: line.typographicBounds.minX + (startX + endX) / 2,
       y: line.typographicBounds.midY
