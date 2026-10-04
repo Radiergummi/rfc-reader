@@ -935,7 +935,14 @@
       }
     },
     "Format:" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format:"
+          }
+        }
+      }
     },
     "Forward" : {
       "localizations" : {
