@@ -17,6 +17,15 @@ enum InspectorTab: String, CaseIterable {
     case .requirements: String(localized: "Requirements")
     }
   }
+
+  /// What the tab says when it has nothing to list.
+  var emptyTitle: String {
+    switch self {
+    case .contents: String(localized: "No Contents")
+    case .references: String(localized: "No References")
+    case .requirements: String(localized: "No Requirements")
+    }
+  }
 }
 
 /// The inspector beside the reader: the document's two navigational views, or what
@@ -113,13 +122,13 @@ struct DocumentInspector: View {
     case .notLoaded:
       // An empty list beside a failure reads as a second failure; this says why.
       ContentUnavailableView(
-        "No \(tab.title)", systemImage: "doc.text.magnifyingglass",
+        tab.emptyTitle, systemImage: "doc.text.magnifyingglass",
         description: Text(
           verbatim: document.map { String(localized: "\($0.displayName) hasn't loaded.") }
             ?? String(localized: "The document hasn't loaded.")))
     case .publishedOriginal:
       ContentUnavailableView(
-        "No \(tab.title)", systemImage: "doc.richtext",
+        tab.emptyTitle, systemImage: "doc.richtext",
         description: Text(verbatim: publishedOriginal?.panelExplanation() ?? ""))
     }
   }

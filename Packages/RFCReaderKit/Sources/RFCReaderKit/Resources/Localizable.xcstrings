@@ -417,6 +417,21 @@
     "Newest First" : {
 
     },
+    "No Best Current Practices" : {
+
+    },
+    "No Bookmarks" : {
+
+    },
+    "No Internet Standards" : {
+
+    },
+    "No RFCs" : {
+
+    },
+    "No RFCs in %@" : {
+
+    },
     "Normal" : {
 
     },
@@ -424,6 +439,12 @@
 
     },
     "Not in the index" : {
+
+    },
+    "Nothing Available Offline" : {
+
+    },
+    "Nothing Read Recently" : {
 
     },
     "Now has errata." : {
@@ -532,6 +553,27 @@
 
     },
     "STD Series" : {
+
+    },
+    "Search %@" : {
+
+    },
+    "Search All RFCs" : {
+
+    },
+    "Search Available Offline" : {
+
+    },
+    "Search Best Current Practices" : {
+
+    },
+    "Search Bookmarks" : {
+
+    },
+    "Search Internet Standards" : {
+
+    },
+    "Search Recently Read" : {
 
     },
     "Short" : {

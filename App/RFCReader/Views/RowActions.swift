@@ -26,7 +26,7 @@ import SwiftUI
         .swipeActions(edge: .leading) {
           Button(action: toggleBookmark) {
             Label(
-              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
               systemImage: isBookmarked ? "bookmark.slash" : "bookmark")
           }
           .tint(.accentColor)
@@ -49,7 +49,7 @@ import SwiftUI
         .contextMenu {
           Button(action: toggleBookmark) {
             Label(
-              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
               systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
           }
           if let rfc {

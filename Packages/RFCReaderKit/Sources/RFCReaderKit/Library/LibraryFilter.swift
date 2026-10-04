@@ -37,6 +37,39 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
     }
   }
 
+  /// What the list says when it holds nothing: one sentence per list, rather than
+  /// "No" put before `title(in:)`, which a language cannot inflect.
+  public func emptyTitle(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
+    switch self {
+    case .all: String(kit: "No RFCs", locale: locale)
+    case .recent: String(kit: "Nothing Read Recently", locale: locale)
+    case .bookmarks: String(kit: "No Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Nothing Available Offline", locale: locale)
+    case .standards: String(kit: "No Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "No Best Current Practices", locale: locale)
+    case .stream, .workingGroup, .series, .collection:
+      String(kit: "No RFCs in \(title(in: collections, locale: locale))", locale: locale)
+    }
+  }
+
+  /// The prompt of the list's search field, which narrows what this list shows.
+  public func searchPrompt(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
+    switch self {
+    case .all: String(kit: "Search All RFCs", locale: locale)
+    case .recent: String(kit: "Search Recently Read", locale: locale)
+    case .bookmarks: String(kit: "Search Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Search Available Offline", locale: locale)
+    case .standards: String(kit: "Search Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "Search Best Current Practices", locale: locale)
+    case .stream, .workingGroup, .series, .collection:
+      String(kit: "Search \(title(in: collections, locale: locale))", locale: locale)
+    }
+  }
+
   public var systemImage: String {
     switch self {
     case .all: "books.vertical"

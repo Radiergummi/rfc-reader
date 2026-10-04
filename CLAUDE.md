@@ -89,6 +89,7 @@ The app's chrome is localized through string catalogs, and the reader body is no
 - In the app, a SwiftUI literal (`Text("…")`, `Button("…")`) and a `LocalizedStringResource` are localizable as they are. A plain `String` is not: AppKit and UIKit titles need `String(localized:)`.
 - In RFCReaderKit, every localizable string names its bundle — `String(localized: "…", bundle: .module)`, `Text("…", bundle: .module)` — because a literal is looked up in the app's bundle by default. `make strings` files it in RFCReaderKit's catalog either way, so a string without the bundle is synced there and never found at run time.
 - Interpolate a count, not a sentence fragment: `"\(count) sections"` becomes a `%lld` key that can take plural variants; a list of names goes through `.formatted(.list(type: .and))`. Text that is not language, such as an identifier or `"\(a) \(b)"`, is `Text(verbatim:)`, so it never becomes a key.
+- The one exception to the code being the source is `App/RFCReader/InfoPlist.xcstrings`, keyed by an Info.plist key such as `NSContactsUsageDescription`: no build extracts Info.plist, so a new user-facing value in `project.yml`'s `info:` gets its key and English there by hand.
 - Look a string up with `grep` on the catalog, or `xcrun xcstringstool print`.
 
 ## Generated files

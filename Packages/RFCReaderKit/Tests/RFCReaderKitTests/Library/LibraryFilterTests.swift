@@ -55,4 +55,22 @@ struct LibraryFilterTests {
     #expect(LibraryFilter.all.title(in: snapshot, locale: .english) == "All RFCs")
     #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty, locale: .english) == "HTTPBIS")
   }
+
+  /// Each built-in list says it is empty in words of its own, so a language need
+  /// not fit "No" before a title that is a noun in one list and a phrase in another.
+  @Test func `an empty list says so in its own words`() {
+    #expect(LibraryFilter.bookmarks.emptyTitle(in: .empty, locale: .english) == "No Bookmarks")
+    #expect(
+      LibraryFilter.recent.emptyTitle(in: .empty, locale: .english) == "Nothing Read Recently")
+    #expect(
+      LibraryFilter.workingGroup("httpbis").emptyTitle(in: .empty, locale: .english)
+        == "No RFCs in HTTPBIS")
+  }
+
+  @Test func `a list's search field names the list`() {
+    #expect(LibraryFilter.all.searchPrompt(in: .empty, locale: .english) == "Search All RFCs")
+    #expect(
+      LibraryFilter.workingGroup("httpbis").searchPrompt(in: .empty, locale: .english)
+        == "Search HTTPBIS")
+  }
 }

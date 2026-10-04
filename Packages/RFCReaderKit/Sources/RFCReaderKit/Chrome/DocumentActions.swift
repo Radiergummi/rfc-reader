@@ -34,8 +34,9 @@ public enum DocumentActions {
       ? String(kit: "Bookmarked", locale: locale) : String(kit: "Not bookmarked", locale: locale)
   }
 
-  /// What the ⌘D command is called: what it will do, on the Mac's Edit menu and the
-  /// iPad's alike, where the button's label stays "Bookmark" (#278).
+  /// What the ⌘D command and a row's bookmark action are called: what they will do,
+  /// on the Mac's Edit menu and the iPad's alike, where the button's label stays
+  /// "Bookmark" (#278).
   public static func bookmarkCommand(isBookmarked: Bool, locale: Locale = .interface) -> String {
     isBookmarked
       ? String(kit: "Remove Bookmark", locale: locale) : String(kit: "Bookmark", locale: locale)
