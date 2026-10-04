@@ -94,4 +94,21 @@ struct RegistryLookupTests {
     #expect(lookup("tls alert") == [])
     #expect(lookup("  ") == [])
   }
+
+  // MARK: - Identifiers
+
+  /// What an App Intent's registry entry is identified by (#192): the registry and
+  /// the value, which together name one entry.
+  @Test func `an entry is identified by its registry and value`() throws {
+    let tls = try #require(Self.entries.first { $0.registry == .tlsAlerts })
+    #expect(tls.identifier == "tlsAlerts:70")
+    let found = RegistryLookup.entries(
+      identifiedBy: ["tlsAlerts:70", "httpStatusCodes:999", "mediaTypes:application/dns-message"],
+      in: Self.entries)
+    #expect(found.map(\.identifier) == ["tlsAlerts:70", "mediaTypes:application/dns-message"])
+  }
+
+  @Test func `an identifier of no registry names nothing`() {
+    #expect(RegistryLookup.entries(identifiedBy: ["dns:70", "70", ""], in: Self.entries).isEmpty)
+  }
 }

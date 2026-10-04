@@ -14,8 +14,10 @@ import Foundation
 /// Pygments recovers, so one stray quote does not color the rest of a block.
 ///
 /// Matching uses transparent and non-anchoring bounds, so a lookbehind or `\b` sees
-/// the characters before the current position, and `^` matches only where a line
-/// starts. Patterns compile with `anchorsMatchLines`, as Pygments' and Chroma's do.
+/// the characters before the current position, as far back as `lookbehind`, and `^`
+/// matches only where a line starts. Patterns compile with `anchorsMatchLines`, as
+/// Pygments' and Chroma's do. A state that changes state is searched a window of
+/// the text at a time (`WindowedText`), which finds what a search of all of it would.
 public struct Lexer: Highlighter {
   public enum Transition: Sendable, Hashable {
     case push(String)
@@ -91,6 +93,11 @@ public struct Lexer: Highlighter {
   /// character is given up as plain: two states that hand over to each other on a
   /// lookahead would otherwise trade places forever.
   static let emptyStepLimit = 8
+
+  /// How much of the text after the current position a search is first handed, in
+  /// UTF-16 code units, and how much before it, for a lookbehind, `\b` and `^`.
+  static let window = 128
+  static let lookbehind = 128
 
   public init(
     states definitions: [String: [Rule]], options: NSRegularExpression.Options = []
@@ -171,6 +178,12 @@ public struct Lexer: Highlighter {
   }
 
   public func tokens(in text: String) -> [SyntaxToken] {
+    lex(text).tokens
+  }
+
+  /// `text`'s tokens, and how many UTF-16 code units the lexer handed its regular
+  /// expressions to search: the work lexing does, which the tests bound.
+  func lex(_ text: String) -> (tokens: [SyntaxToken], searched: Int) {
     let source = NSString(string: text)
     let length = source.length
     var output = TokenRun()
@@ -179,13 +192,12 @@ public struct Lexer: Highlighter {
     var recovering = false
     var emptySteps = 0
     if !root.changesState {
-      return Self.tokens(in: text, length: length, state: root)
+      return (Self.tokens(in: text, length: length, state: root), length)
     }
+    var windows = WindowedText(text)
     while position < length {
       let state = states[stack[stack.count - 1]] ?? root
-      let match = state.expression.firstMatch(
-        in: text, options: Self.matching,
-        range: NSRange(location: position, length: length - position))
+      let match = windows.firstMatch(of: state.expression, from: position)
       let found = match?.range.location ?? length
       if found > position {
         // No rule matched these: plain. Inside a state, the state has lost its
@@ -236,7 +248,7 @@ public struct Lexer: Highlighter {
         recovering = false
       }
     }
-    return output.tokens
+    return (output.tokens, windows.searched)
   }
 
   /// A state no rule leaves, lexed in one pass: what lies between two matches is
@@ -289,6 +301,68 @@ public struct Lexer: Highlighter {
     case .pop(let depth):
       stack.removeLast(min(max(depth, 0), stack.count - 1))
     }
+  }
+}
+
+/// A text searched a window at a time. `NSRegularExpression` takes a `String` and
+/// hands ICU all of it on every search, which swift-corelibs-foundation copies to
+/// UTF-16 each time, so a search per token over the whole text costs the square of
+/// its length; the `XMLLexer` cases of `the work of lexing grows linearly with the
+/// text` show it. A window from just before the position is enough wherever ICU
+/// says more text could not have changed what it found (`hitEnd`, which covers
+/// every attempt the search made, its lookaheads and a `$` included); where it
+/// could, or nothing was found, the window doubles, until it reaches the end.
+struct WindowedText {
+  private let text: String
+  private let length: Int
+  /// How many code units the searches were handed, all told.
+  private(set) var searched = 0
+
+  init(_ text: String) {
+    self.text = text
+    self.length = text.utf16.count
+  }
+
+  /// The first match of `expression` at or after `position`, as a search of the
+  /// whole text would find it, in the whole text's ranges.
+  mutating func firstMatch(
+    of expression: NSRegularExpression, from position: Int
+  ) -> NSTextCheckingResult? {
+    let start = boundary(max(0, position - Lexer.lookbehind))
+    var size = Lexer.window
+    while true {
+      let end = boundary(min(length, position + size))
+      // Sliced rather than decoded from UTF-16, which costs many times more on
+      // swift-corelibs-foundation.
+      let window = String(text.unicodeScalars[start.index..<end.index])
+      searched += end.offset - start.offset
+      var match: NSTextCheckingResult?
+      var hitEnd = false
+      // Unsafe only in the pointer the block is handed to stop the search at its
+      // first match, which it writes and does not keep.
+      unsafe expression.enumerateMatches(
+        in: window, options: Lexer.matching,
+        range: NSRange(location: position - start.offset, length: end.offset - position)
+      ) { result, flags, stop in
+        match = result
+        hitEnd = flags.contains(.hitEnd)
+        unsafe stop.pointee = true
+      }
+      if end.offset == length || (match != nil && !hitEnd) {
+        return match?.adjustingRanges(offset: start.offset)
+      }
+      size *= 2
+    }
+  }
+
+  /// The UTF-16 offset `offset`, moved back off the second half of a surrogate
+  /// pair, so a window never splits a character, and its index.
+  private func boundary(_ offset: Int) -> (offset: Int, index: String.Index) {
+    let index = String.Index(utf16Offset: offset, in: text)
+    guard offset > 0, offset < length, UTF16.isTrailSurrogate(text.utf16[index]) else {
+      return (offset, index)
+    }
+    return (offset - 1, String.Index(utf16Offset: offset - 1, in: text))
   }
 }
 

@@ -63,6 +63,10 @@ enum Fixtures {
   static let foldingHeader =
     "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
 
+  /// The header of RFC 8792's other strategy, `'\\'`, whose continuations also
+  /// begin with a backslash: `foldingHeader` with the strategy's name doubled.
+  static let doubleBackslashFoldingHeader = foldingHeader.replacingOccurrences(
+    of: "'\\'", with: "'\\\\'")
   /// A source block folded per RFC 8792 to fit the page, whose single unfolded line
   /// is `unfolded`: the header, a blank line, and the line cut every 60 characters.
   static func folded(

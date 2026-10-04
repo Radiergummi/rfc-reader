@@ -10,6 +10,12 @@ struct RFCReaderApp: App {
     /// The one library. The app is a composition root, where `.shared` is reached
     /// for; what it makes hands the library on.
     @State private var library = LibraryModel.shared
+
+    init() {
+      // Before the app has finished launching, which is when a tap on a
+      // notification that launched it is delivered.
+      BookmarkNotifications.install()
+    }
   #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
     /// contents panel has to be a real `NSSplitViewItem` in the window's own split
@@ -63,6 +69,11 @@ struct RFCReaderApp: App {
       }
       .commands {
         DocumentCommands(library: library)
+      }
+      // The daily check of the bookmarked RFCs (#191), which
+      // `BookmarkNotifications` schedules while notifications are on.
+      .backgroundTask(.appRefresh(BookmarkNotifications.refreshIdentifier)) {
+        await BookmarkNotifications.refreshInBackground()
       }
     #endif
   }

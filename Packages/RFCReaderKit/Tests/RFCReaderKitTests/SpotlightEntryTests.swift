@@ -78,6 +78,15 @@ struct SpotlightEntryTests {
         != SpotlightEntry.clientState(for: [SpotlightEntry(obsoleted)], now: Self.now))
   }
 
+  /// The status is not searched, but each item's App Intents entity shows it (#192).
+  @Test func `a changed status is indexed again`() {
+    var promoted = Self.semantics
+    promoted.currentStatus = .internetStandard
+    #expect(
+      SpotlightEntry.clientState(for: Self.entries, now: Self.now)
+        != SpotlightEntry.clientState(for: [SpotlightEntry(promoted)], now: Self.now))
+  }
+
   /// Where one field ends and the next begins is part of what is compared.
   @Test func `moving text between fields is a change`() {
     var first = SpotlightEntry(Self.semantics)

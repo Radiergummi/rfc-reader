@@ -28,6 +28,12 @@ import SwiftUI
               document: row.id, library: library, navigation: navigation,
               undoManager: undoManager)
           }
+          Button {
+            navigation.readingPath = ReadingPathRequest(root: row.id)
+          } label: {
+            Label("Reading Path", systemImage: "list.number")
+          }
+          .labelStyle(.titleAndIcon)
         }
         if collection != nil {
           Button("Remove from Collection") { remove(row.id) }

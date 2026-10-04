@@ -350,7 +350,7 @@ struct ReaderInputs {
         coordinator?.referenceLink(under: event)
       }
       textView.isOverCopyButton = { [weak coordinator = context.coordinator] event in
-        coordinator?.copyButton(under: event) != nil
+        coordinator?.isOverCopyButton(event) ?? false
       }
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
