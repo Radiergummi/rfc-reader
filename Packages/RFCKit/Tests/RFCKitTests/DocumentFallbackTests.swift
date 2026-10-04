@@ -42,7 +42,7 @@ struct DocumentFallbackTests {
       switch answer {
       case .body(let data):
         return (
-          data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          data, HTTPURLResponse.served(from: url, statusCode: 200)
         )
       case .status(let status):
         return (

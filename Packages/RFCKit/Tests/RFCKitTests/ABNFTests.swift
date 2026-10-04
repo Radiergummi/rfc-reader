@@ -86,6 +86,26 @@ struct ABNFTests {
     #expect(rules.map(\.isIncremental) == [false, true])
   }
 
+  /// The parser recurses once per group, and `recognizes` runs on every candidate
+  /// block of the legacy corpus, so a group nested deeper than any grammar's is not
+  /// ABNF, rather than a stack overflow (#757).
+  @Test func `groups nested past the cap are not ABNF`() {
+    let depth = ABNF.maximumNesting + 1
+    let text =
+      "rule = " + String(repeating: "(", count: depth) + "element"
+      + String(repeating: ")", count: depth)
+    #expect(ABNF.parse(text) == nil)
+    #expect(!ABNF.recognizes(text))
+  }
+
+  @Test func `groups nested up to the cap parse`() {
+    let depth = ABNF.maximumNesting
+    let text =
+      "rule = " + String(repeating: "[", count: depth) + "element"
+      + String(repeating: "]", count: depth)
+    #expect(ABNF.parse(text) != nil)
+  }
+
   /// A grammar defines each rule once and adds to it only with `=/`. Pseudocode and
   /// listings of settings assign one name twice, which ABNF does not, so such a
   /// block is not recognized as a grammar. It still parses: a block its author typed
