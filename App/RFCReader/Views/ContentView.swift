@@ -15,6 +15,9 @@ import SwiftUI
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// The reader's panel, the tab's rather than each reader's, so that an open panel
+    /// stays open from one reader in the stack to the next (#263).
+    @State private var showsInspector = false
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
     /// selection, filter, search text and back/forward stack. Shared library state —
@@ -63,7 +66,20 @@ import SwiftUI
         // contents panel came to leave the text 190 pt wide.
         //
         // A stack of readers, which a citation of another RFC pushes onto (#263).
-        ReaderStack()
+        ReaderStack(showsInspector: $showsInspector)
+      }
+      // The panel, a column beside the reader where there is room for one; in
+      // compact width the reader on top presents it as a sheet (`IOSDocumentChrome`).
+      // Here rather than on a reader or on the stack, both measured (#679): on the
+      // root view of a `NavigationStack`, `.inspector` takes away that view's whole
+      // navigation bar, its title and its toolbar; on the stack, it stops the stack
+      // from popping when its path is shortened, so Back left the reader on screen.
+      .inspector(isPresented: chrome.isCollapsed ? .constant(false) : $showsInspector) {
+        PanelHost(
+          isPresented: $showsInspector, closesAfterChoice: false,
+          readingPathAfterClosing: .constant(nil)
+        )
+        .inspectorColumnWidth(min: 260, ideal: 320)
       }
       .environment(\.sceneChrome, chrome)
       // The scene's title, for the app switcher and iPad's window controls. It

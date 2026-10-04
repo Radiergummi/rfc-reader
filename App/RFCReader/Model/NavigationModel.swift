@@ -181,6 +181,24 @@ final class NavigationModel: Identifiable {
       }
     }
   }
+
+  /// The document list's selection: `selection`, except that on iOS it is the root of
+  /// the stack of readers rather than the reader on top (#263). A citation pushes a
+  /// reader and leaves the row that opened the stack selected: a collapsed split
+  /// view that saw its list's selection change took it for a new row tapped and
+  /// emptied the stack's path as it pushed, so the cited RFC never slid in and Back
+  /// went to the list (measured, #679).
+  var listSelection: DocumentID? {
+    get {
+      #if os(macOS)
+        selection
+      #else
+        selection == nil ? nil : readerPath.root?.id
+      #endif
+    }
+    set { selection = newValue }
+  }
+
   /// The document the history holds, shown or not. A collapsed split view that has
   /// gone back to its list hides the document and still holds it, so a link to it
   /// belongs in this tab: routing reads this, not `selection` (#256).

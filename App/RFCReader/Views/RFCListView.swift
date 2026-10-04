@@ -137,7 +137,7 @@ struct RFCListView: View {
       perform: collection == nil
         ? nil
         : { offsets in offsets.map { visible[$0].id }.forEach(remove) })
-    List(selection: $navigation.selection) {
+    List(selection: $navigation.listSelection) {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
       if let acronym = workingGroupCardAcronym {
@@ -272,7 +272,7 @@ struct RFCListView: View {
     // `NavigationModel.open` resets the filter to `.all` precisely so nothing
     // hides it. Narrowing here instead would throw away a window the reader has
     // already scrolled down through.
-    .onChange(of: navigation.selection) {
+    .onChange(of: navigation.listSelection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
     #if !os(macOS)
@@ -329,7 +329,7 @@ struct RFCListView: View {
   /// A linear scan, but only on the three changes above rather than per body pass,
   /// and it compares two `Int`s per row.
   private func selectedRow() -> Int? {
-    guard let selection = navigation.selection else { return nil }
+    guard let selection = navigation.listSelection else { return nil }
     return rows.firstIndex { $0.id == selection }
   }
 }

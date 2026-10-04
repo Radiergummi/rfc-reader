@@ -22,9 +22,9 @@
   /// The Mac has one reader, `ReaderHost`, in a window of its own making.
   struct ReaderStack: View {
     @Environment(NavigationModel.self) private var navigation
-    /// The panel, the stack's rather than each reader's, so that an open panel stays
+    /// The panel, the tab's rather than each reader's, so that an open panel stays
     /// open from one reader to the next.
-    @State private var showsInspector = false
+    @Binding var showsInspector: Bool
 
     var body: some View {
       let path = navigation.readerPath
