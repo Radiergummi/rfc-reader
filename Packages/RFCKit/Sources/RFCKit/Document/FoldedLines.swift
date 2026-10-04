@@ -24,8 +24,18 @@ public enum FoldedLines {
   }
 
   /// The strategy `text` announces, or nil when it is not a folded block.
+  ///
+  /// Only the first line that is not blank can be the header, so the lines after it
+  /// are never split: the reader asks this of every verbatim block it builds.
   public static func strategy(of text: String) -> Strategy? {
-    header(in: lines(of: text))?.strategy
+    var start = text.startIndex
+    while start < text.endIndex {
+      let end = text[start...].firstIndex(of: "\n") ?? text.endIndex
+      let line = text[start..<end]
+      if !line.allSatisfy(\.isWhitespace) { return announced(by: line) }
+      start = end < text.endIndex ? text.index(after: end) : end
+    }
+    return nil
   }
 
   /// `text` with its folding undone, or nil when it does not announce RFC 8792

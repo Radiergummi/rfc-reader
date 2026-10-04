@@ -22,6 +22,8 @@
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
+    @State private var readingPathAfterPanel: ReadingPathRequest?
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { chrome.isCollapsed }
@@ -85,12 +87,22 @@
         // The panel is the stack's, and only the reader on top presents it (#263):
         // the readers below would present it too, out of sight.
         .inspector(isPresented: isCompact || !isShown ? .constant(false) : $showsInspector) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
-            .inspectorColumnWidth(min: 260, ideal: 320)
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: false,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .inspectorColumnWidth(min: 260, ideal: 320)
         }
         .sheet(isPresented: isCompact && isShown ? $showsInspector : .constant(false)) {
-          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
-            .presentationDetents([.medium, .large])
+          guard let request = readingPathAfterPanel else { return }
+          readingPathAfterPanel = nil
+          navigation.readingPath = request
+        } content: {
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .presentationDetents([.medium, .large])
         }
         .fileExporter(
           isPresented: Binding(

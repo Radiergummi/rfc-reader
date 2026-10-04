@@ -202,10 +202,7 @@ public enum FragmentGeometry {
       guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
 
       text.enumerateAttribute(.rfcChip, in: lineRange) { value, piece, _ in
-        // A copy button is a chip for its attachment's sake, and has no tint.
-        guard value != nil,
-          text.attribute(.rfcCopyCode, at: piece.location, effectiveRange: nil) == nil
-        else { return }
+        guard value != nil else { return }
 
         // The piece `enumerateAttribute` hands back is already clipped to
         // this line; the run's own full extent — which may start before or

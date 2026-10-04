@@ -61,6 +61,12 @@ public enum ReaderPreferences {
   public static let drawDiagramsKey = "drawDiagrams"
   public static let defaultDrawDiagrams = true
 
+  /// Notify when a bookmarked RFC is obsoleted or updated, a draft starts to revise
+  /// it or reaches the RFC Editor queue, or errata are listed for it (#191). Off
+  /// until the reader turns it on, which is when permission is asked for.
+  public static let notifyAboutBookmarksKey = "notifyAboutBookmarks"
+  public static let defaultNotifyAboutBookmarks = false
+
   /// The preference, for what reads it outside a view and so has no `@AppStorage`:
   /// a print and an export.
   public static func drawsDiagrams(in defaults: UserDefaults) -> Bool {

@@ -55,13 +55,16 @@ struct DocumentInspector: View {
   let openDocument: (DocumentID) -> Void
   /// Searches the library, for a keyword chosen in the Info pane.
   let search: (String) -> Void
+  /// Shows the document's reading path (#189), from the Info pane.
+  let showReadingPath: (DocumentID) -> Void
 
   var body: some View {
     switch pane {
     case .navigation: navigation
     case .info:
       InfoView(
-        info: info, document: document, library: library, open: openDocument, search: search)
+        info: info, document: document, library: library, open: openDocument, search: search,
+        showReadingPath: showReadingPath)
     }
   }
 
@@ -182,6 +185,10 @@ struct PanelHost: View {
     /// class inside the panel is the panel's, which as a narrow column may be
     /// compact while the reader is not.
     let closesAfterChoice: Bool
+    /// A reading path asked for while the panel is a sheet, which the reader
+    /// presents once the panel's sheet is gone: UIKit presents nothing while a
+    /// dismissal is under way, and a request it refused would stay set.
+    @Binding var readingPathAfterClosing: ReadingPathRequest?
   #endif
 
   var body: some View {
@@ -226,6 +233,17 @@ struct PanelHost: View {
               if closesAfterChoice { navigation.selection = nil }
             #endif
           }
+        },
+        showReadingPath: { id in
+          let request = ReadingPathRequest(root: id)
+          #if !os(macOS)
+            if closesAfterChoice {
+              readingPathAfterClosing = request
+              isPresented = false
+              return
+            }
+          #endif
+          navigation.readingPath = request
         }
       )
     } else {
