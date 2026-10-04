@@ -43,16 +43,16 @@ struct LibraryFilterTests {
   @Test func `a collection is titled by its name in the snapshot`() {
     let entry = CollectionSnapshot.Entry(id: UUID(), name: "HTTP/3", color: .blue, members: [])
     let snapshot = CollectionSnapshot(collections: [entry])
-    #expect(LibraryFilter.collection(entry.id).title(in: snapshot) == "HTTP/3")
-    #expect(LibraryFilter.collection(UUID()).title(in: snapshot) == "")
+    #expect(LibraryFilter.collection(entry.id).title(in: snapshot, locale: .english) == "HTTP/3")
+    #expect(LibraryFilter.collection(UUID()).title(in: snapshot, locale: .english) == "")
   }
 
   /// Every other filter's title is its own, whatever collections there are.
   @Test func `a built-in filter's title does not depend on the collections`() {
     let entry = CollectionSnapshot.Entry(id: UUID(), name: "Bookmarks", color: .red, members: [])
     let snapshot = CollectionSnapshot(collections: [entry])
-    #expect(LibraryFilter.bookmarks.title(in: snapshot) == "Bookmarks")
-    #expect(LibraryFilter.all.title(in: snapshot) == "All RFCs")
-    #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty) == "HTTPBIS")
+    #expect(LibraryFilter.bookmarks.title(in: snapshot, locale: .english) == "Bookmarks")
+    #expect(LibraryFilter.all.title(in: snapshot, locale: .english) == "All RFCs")
+    #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty, locale: .english) == "HTTPBIS")
   }
 }

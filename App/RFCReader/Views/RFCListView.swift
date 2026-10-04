@@ -357,7 +357,7 @@ struct ListViewOptions: View {
   var body: some View {
     if case .collection = navigation.filter {
       Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
-        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text(verbatim: $0.title()) }
       }
     } else {
       #if os(macOS)
@@ -371,7 +371,7 @@ struct ListViewOptions: View {
 
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
-      ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
     }
   }
 }

@@ -8,24 +8,29 @@ import Testing
 struct IntentAnswerTests {
   @Test func `a count of requirements is said in words`() {
     #expect(
-      IntentAnswer.requirements(0, in: "RFC 9110")
+      IntentAnswer.requirements(0, in: "RFC 9110", locale: .english)
         == "There are no BCP 14 requirements in RFC 9110.")
-    #expect(IntentAnswer.requirements(1, in: "RFC 9110") == "There is one requirement in RFC 9110.")
     #expect(
-      IntentAnswer.requirements(12, in: "RFC 9110") == "There are 12 requirements in RFC 9110.")
+      IntentAnswer.requirements(1, in: "RFC 9110", locale: .english)
+        == "There is one requirement in RFC 9110.")
+    #expect(
+      IntentAnswer.requirements(12, in: "RFC 9110", locale: .english)
+        == "There are 12 requirements in RFC 9110.")
   }
 
   @Test func `a definition names the identifier, its name and where it is defined`() {
     #expect(
       IntentAnswer.definition(
-        of: "TLS alert 70", name: "protocol_version", definedIn: "RFC 8446, Section 6.2")
+        of: "TLS alert 70", name: "protocol_version", definedIn: "RFC 8446, Section 6.2",
+        locale: .english)
         == "TLS alert 70, protocol_version, is defined in RFC 8446, Section 6.2.")
     #expect(
       IntentAnswer.definition(
-        of: "HTTP field Retry-After", name: nil, definedIn: "RFC 9110, Section 10.2.3")
+        of: "HTTP field Retry-After", name: nil, definedIn: "RFC 9110, Section 10.2.3",
+        locale: .english)
         == "HTTP field Retry-After is defined in RFC 9110, Section 10.2.3.")
     #expect(
-      IntentAnswer.definition(of: "HTTP status 499", name: nil, definedIn: nil)
+      IntentAnswer.definition(of: "HTTP status 499", name: nil, definedIn: nil, locale: .english)
         == "HTTP status 499 is in IANA's registry, which names no RFC for it.")
   }
 

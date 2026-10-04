@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// The rows under the Go to RFC palette's field, and which one ↵ would open.
@@ -44,9 +45,13 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// - Parameters:
   ///   - title: The index's title for the row's document, if it has one.
   ///   - isIndexLoaded: Whether the index has loaded.
-  public static func title(_ title: String?, isIndexLoaded: Bool) -> String {
+  public static func title(
+    _ title: String?, isIndexLoaded: Bool, locale: Locale = .interface
+  ) -> String {
     if let title { return title }
-    return isIndexLoaded ? "Not in the index" : "The index is still loading"
+    return isIndexLoaded
+      ? String(kit: "Not in the index", locale: locale)
+      : String(kit: "The index is still loading", locale: locale)
   }
 
   /// What is typed now.

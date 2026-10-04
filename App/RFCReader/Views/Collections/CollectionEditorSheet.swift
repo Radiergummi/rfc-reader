@@ -91,7 +91,7 @@ struct CollectionEditorSheet: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(swatch.title)
+        .accessibilityLabel(swatch.title())
         .accessibilityAddTraits(swatch == color ? .isSelected : [])
       }
     }

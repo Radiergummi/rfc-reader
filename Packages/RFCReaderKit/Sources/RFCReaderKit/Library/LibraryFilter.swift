@@ -20,14 +20,16 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
 
   /// What the sidebar, the list and scripts call this filter. A collection is
   /// called by its name in `collections`, and one that has gone since by nothing.
-  public func title(in collections: CollectionSnapshot) -> String {
+  public func title(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
     switch self {
-    case .all: "All RFCs"
-    case .recent: "Recently Read"
-    case .bookmarks: "Bookmarks"
-    case .downloaded: "Available Offline"
-    case .standards: "Internet Standards"
-    case .bestCurrentPractice: "Best Current Practices"
+    case .all: String(kit: "All RFCs", locale: locale)
+    case .recent: String(kit: "Recently Read", locale: locale)
+    case .bookmarks: String(kit: "Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Available Offline", locale: locale)
+    case .standards: String(kit: "Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "Best Current Practices", locale: locale)
     case .stream(let stream): stream.displayName
     case .workingGroup(let group): group.uppercased()
     case .series(let id): id.displayName
@@ -104,7 +106,9 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
     ]
     let streams = PublicationStream.allCases.map(LibraryFilter.stream)
     if let match = (fixed + streams).first(where: {
-      $0.title(in: .empty).caseInsensitiveCompare(name) == .orderedSame
+      // In English whatever the interface's language, so a script means the same
+      // everywhere: Scripting reads the names back in English too.
+      $0.title(in: .empty, locale: .english).caseInsensitiveCompare(name) == .orderedSame
     }) {
       self = match
     } else if let id = DocumentID(parsing: name), id.series != .rfc {

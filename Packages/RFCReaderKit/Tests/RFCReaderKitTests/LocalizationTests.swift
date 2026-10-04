@@ -4,8 +4,8 @@ import Testing
 @testable import RFCReaderKit
 
 extension Locale {
-  /// What tests resolve in, whatever the machine running them prefers.
-  static let english = Locale(identifier: "en")
+  /// What tests resolve German in, whatever the machine running them prefers;
+  /// `.english` is RFCReaderKit's own.
   static let german = Locale(identifier: "de")
 }
 

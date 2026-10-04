@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// What the App Intents say back (#192), worded here so it is under test: the App
@@ -6,12 +7,13 @@ public enum IntentAnswer {
   /// `There are 12 requirements in 4.2. Retries of RFC 9110.`
   ///
   /// - Parameter place: The section, `4.2. Retries of RFC 9110`, or the RFC.
-  public static func requirements(_ count: Int, in place: String) -> String {
-    switch count {
-    case 0: "There are no BCP 14 requirements in \(place)."
-    case 1: "There is one requirement in \(place)."
-    default: "There are \(count) requirements in \(place)."
-    }
+  public static func requirements(
+    _ count: Int, in place: String, locale: Locale = .interface
+  ) -> String {
+    // One key for every count: the catalog says "one requirement" for 1.
+    count == 0
+      ? String(kit: "There are no BCP 14 requirements in \(place).", locale: locale)
+      : String(kit: "There are \(count) requirements in \(place).", locale: locale)
   }
 
   /// `TLS alert 70, protocol_version, is defined in RFC 8446, Section 6.2.`
@@ -20,10 +22,15 @@ public enum IntentAnswer {
   ///   - heading: The registry and the value, `TLS alert 70`.
   ///   - name: What the registry calls it, nil where the value is its own name.
   ///   - definedIn: The citation of the defining section, nil where IANA names none.
-  public static func definition(of heading: String, name: String?, definedIn: String?) -> String {
+  public static func definition(
+    of heading: String, name: String?, definedIn: String?, locale: Locale = .interface
+  ) -> String {
     let named = name.map { "\(heading), \($0)," } ?? heading
-    guard let definedIn else { return "\(named) is in IANA's registry, which names no RFC for it." }
-    return "\(named) is defined in \(definedIn)."
+    guard let definedIn else {
+      return String(
+        kit: "\(named) is in IANA's registry, which names no RFC for it.", locale: locale)
+    }
+    return String(kit: "\(named) is defined in \(definedIn).", locale: locale)
   }
 }
 

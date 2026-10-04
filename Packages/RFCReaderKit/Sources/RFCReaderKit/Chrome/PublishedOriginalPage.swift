@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// The page the reader shows for an RFC that is its PDF or PostScript original
@@ -39,12 +40,13 @@ public struct PublishedOriginalPage: Hashable, Sendable {
 
     /// What the panel says in place of its contents, references and requirements:
     /// why there are none, rather than that the RFC failed to load.
-    public var panelExplanation: String {
+    public func panelExplanation(in locale: Locale = .interface) -> String {
       let id = original.id.displayName
       let format = original.format.displayName
       return switch kind {
-      case .scan: "\(id) is published only as \(format)."
-      case .pointer: "The text of \(id) only says where its \(format) original is."
+      case .scan: String(kit: "\(id) is published only as \(format).", locale: locale)
+      case .pointer:
+        String(kit: "The text of \(id) only says where its \(format) original is.", locale: locale)
       }
     }
   }
@@ -59,16 +61,18 @@ public struct PublishedOriginalPage: Hashable, Sendable {
   /// here, without its formats.
   public init?(
     _ id: DocumentID, formats: [FileFormat], showsOriginal: Bool, text document: RFCDocument?,
-    pointerInPack: Bool = false
+    pointerInPack: Bool = false, locale: Locale = .interface
   ) {
     if let scan = PublishedOriginal(id, formats: formats) {
       original = scan
-      explanation = "The RFC Editor publishes \(id.displayName) only as a scan."
+      explanation = String(
+        kit: "The RFC Editor publishes \(id.displayName) only as a scan.", locale: locale)
     } else if !showsOriginal,
       let pointer = Self.pointer(id, formats: formats, text: document, inPack: pointerInPack)
     {
       original = pointer
-      explanation = "The text of \(id.displayName) only says where its original is."
+      explanation = String(
+        kit: "The text of \(id.displayName) only says where its original is.", locale: locale)
     } else {
       return nil
     }

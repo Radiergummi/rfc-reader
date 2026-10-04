@@ -118,7 +118,7 @@ struct DocumentInspector: View {
     case .publishedOriginal:
       ContentUnavailableView(
         "No \(tab.title)", systemImage: "doc.richtext",
-        description: Text(publishedOriginal?.panelExplanation ?? ""))
+        description: Text(verbatim: publishedOriginal?.panelExplanation() ?? ""))
     }
   }
 

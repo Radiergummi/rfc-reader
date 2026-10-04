@@ -24,12 +24,11 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
   public var discloses: Bool { self == .outline || self == .implementer }
 
   /// What the Reading Mode menu calls it.
-  public var name: String {
+  public func name(in locale: Locale = .interface) -> String {
     switch self {
-    case .normal: "Normal"
-    case .outline: "Outline"
-    case .focus: "Focus"
-    case .implementer: "Implementer"
+    case .normal: String(kit: "Normal", locale: locale)
+    case .outline: String(kit: "Outline", locale: locale)
+    case .focus: String(kit: "Focus", locale: locale)
     }
   }
 }

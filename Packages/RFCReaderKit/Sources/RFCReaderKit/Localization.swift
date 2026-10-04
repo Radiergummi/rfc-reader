@@ -21,4 +21,8 @@ extension Locale {
   public static var interface: Locale {
     Locale(identifier: Bundle.module.preferredLocalizations.first ?? "en")
   }
+
+  /// English, for what must not change with the interface's language: the names a
+  /// script reads and sets filters by, and what tests expect.
+  public static let english = Locale(identifier: "en")
 }

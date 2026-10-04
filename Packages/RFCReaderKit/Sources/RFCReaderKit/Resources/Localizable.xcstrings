@@ -1,13 +1,233 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ is defined in %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is defined in %2$@."
+          }
+        }
+      }
+    },
+    "%@ is in IANA's registry, which names no RFC for it." : {
+
+    },
+    "%@ is published only as %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is published only as %2$@."
+          }
+        }
+      }
+    },
+    "All RFCs" : {
+
+    },
+    "Available Offline" : {
+
+    },
+    "Back" : {
+
+    },
+    "Back to %@" : {
+
+    },
+    "Back to Top" : {
+
+    },
+    "Best Current Practices" : {
+
+    },
+    "BibTeX" : {
+
+    },
+    "Blue" : {
+
+    },
+    "Bookmark" : {
+
+    },
+    "Bookmarked" : {
+
+    },
+    "Bookmarks" : {
+
+    },
+    "Check your internet connection, then try again." : {
+
+    },
+    "Copy Link to Current Section" : {
+
+    },
+    "Datatracker" : {
+
+    },
+    "Editor" : {
+
+    },
+    "Errata" : {
+
+    },
+    "Focus" : {
+
+    },
+    "Full citation" : {
+
+    },
+    "Gray" : {
+
+    },
+    "Green" : {
+
+    },
+    "Internet Standards" : {
+
+    },
+    "Manual" : {
+
+    },
+    "Markdown link" : {
+
+    },
+    "New Collection…" : {
+
+    },
+    "Newest First" : {
+
+    },
+    "Normal" : {
+
+    },
+    "Not bookmarked" : {
+
+    },
+    "Not in the index" : {
+
+    },
+    "Obsolete" : {
+
+    },
+    "Oldest First" : {
+
+    },
+    "Open on rfc-editor.org" : {
+
+    },
+    "Orange" : {
+
+    },
+    "Original Text" : {
+
+    },
+    "Outline" : {
+
+    },
+    "Pink" : {
+
+    },
+    "Preceding Draft" : {
+
+    },
+    "Purple" : {
+
+    },
+    "Reading Path: %@" : {
+
+    },
+    "Recently Read" : {
+
+    },
+    "Red" : {
+
+    },
+    "Remove Bookmark" : {
+
+    },
     "Remove from Collection" : {
+
+    },
+    "Short" : {
 
     },
     "Show as Figure" : {
 
     },
     "Show as Text" : {
+
+    },
+    "Teal" : {
+
+    },
+    "The RFC Editor doesn't have this document." : {
+
+    },
+    "The RFC Editor isn't responding right now. Try again later." : {
+
+    },
+    "The RFC Editor publishes %@ only as a scan." : {
+
+    },
+    "The index is still loading" : {
+
+    },
+    "The text of %@ only says where its %@ original is." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The text of %1$@ only says where its %2$@ original is."
+          }
+        }
+      }
+    },
+    "The text of %@ only says where its original is." : {
+
+    },
+    "There are %lld requirements in %@." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There is one requirement in %2$@."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There are %1$lld requirements in %2$@."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "There are no BCP 14 requirements in %@." : {
+
+    },
+    "This RFC has no plain-text version." : {
+
+    },
+    "This document couldn't be read. It may open on rfc-editor.org." : {
+
+    },
+    "Try again, or open the document on rfc-editor.org." : {
+
+    },
+    "URL" : {
+
+    },
+    "Working group %@" : {
+
+    },
+    "Yellow" : {
 
     }
   },
