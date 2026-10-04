@@ -40,6 +40,7 @@ struct RFCTextView: View {
     folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
     coupling: ScrollCoupling? = nil,
+    requirements: [Requirement]? = nil,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -49,6 +50,7 @@ struct RFCTextView: View {
       folding: folding,
       onFoldingChange: onFoldingChange,
       coupling: coupling,
+      requirements: requirements,
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
@@ -107,6 +109,9 @@ struct ReaderInputs {
   /// The side-by-side reading this reader scrolls together in (#187), nil when it
   /// is read alone.
   let coupling: ScrollCoupling?
+  /// The document's requirements, which Implementer bands (#700); nil to keep what
+  /// the text view has, as `folding` is.
+  let requirements: [Requirement]?
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
@@ -181,6 +186,7 @@ struct ReaderInputs {
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
     coordinator.layOut(width: width, measure: measure)
+    if let requirements { coordinator.setRequirements(requirements) }
     let installs = coordinator.built?.text !== built.text
     if installs {
       coordinator.install(built, folding: folding ?? coordinator.folding)

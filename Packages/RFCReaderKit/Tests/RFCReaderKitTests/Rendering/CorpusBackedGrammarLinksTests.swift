@@ -13,7 +13,7 @@ import Testing
 /// The RFCs authored in RFCXML that a corpus-backed suite reads, from the directory
 /// `RFC_CORPUS_XML` names, as RFCKit's `CorpusText` reads them: `make test-corpus`
 /// fetches them and points it there, on a Mac, where this package builds.
-private enum CorpusXML {
+enum CorpusXML {
   static var directory: URL? {
     guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_XML"], !path.isEmpty
     else { return nil }

@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 import SwiftUI
 import os
@@ -32,7 +33,8 @@ extension RFCTextViewCoordinator {
     self.foldingIndex = foldingIndex
     self.folding = folding
     reportedFolding = nil
-    foldingDelegate.fold(foldingIndex, by: folding)
+    forgetBands()
+    foldingDelegate.fold(foldingIndex, by: folding, bands: RequirementBands())
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
@@ -43,6 +45,7 @@ extension RFCTextViewCoordinator {
     reportSelection()
     engine.installed(built, document: documentID)
     reportVisibleAnchor()
+    findBands()
   }
 
   // MARK: - Reading modes
@@ -60,10 +63,13 @@ extension RFCTextViewCoordinator {
       if folding == reported.after { reportedFolding = nil }
     }
     guard folding != self.folding, let foldingIndex else { return }
-    // Focus with no section yet: the one the reader's line is in, told to the scene
-    // as a change of the coordinator's own. Unless there is none, which leaves
-    // nothing to tell, and nothing to clear the report.
-    let resolved = folding.focusingOnLine(at: engine.placeOffset ?? 0, in: foldingIndex)
+    // Focus with no section yet: the one the reader's line is in; Implementer
+    // becoming the outline: with the line's section open. Told to the scene as a
+    // change of the coordinator's own. Unless there is none, which leaves nothing
+    // to tell, and nothing to clear the report.
+    let line = engine.placeOffset ?? 0
+    let resolved = folding.focusingOnLine(at: line, in: foldingIndex)
+      .keepingLine(at: line, after: self.folding, in: foldingIndex)
     if resolved != folding {
       reportedFolding = (folding, resolved)
       Task { self.onFoldingChange(resolved) }
@@ -71,15 +77,64 @@ extension RFCTextViewCoordinator {
     let folding = resolved
     let place = place ?? folding.placeOfFocus(after: self.folding, in: foldingIndex)
     self.folding = folding
-    // A new layout even when only a disclosure turned: its chevron is drawn by the
-    // heading's fragment, which has to be drawn again.
-    foldingDelegate.fold(foldingIndex, by: folding)
+    // A new layout even when only a disclosure turned, or the bands came or went:
+    // the chevron and the bands are drawn by the fragments, which have to be drawn
+    // again.
+    foldingDelegate.fold(foldingIndex, by: folding, bands: requirementBands ?? RequirementBands())
     engine.refold(foldingDelegate.hidden, placeAt: place)
+    findBands()
     #if !canImport(UIKit)
       // Leaving the outline too, whose arrows go with it.
       if let textView { textView.window?.invalidateCursorRects(for: textView) }
     #endif
     reportVisibleAnchor()
+  }
+
+  /// The document's requirements, which come after its build (#700): their bands
+  /// are found again, if Implementer is drawing them.
+  func setRequirements(_ requirements: [Requirement]) {
+    // Usually the same array, which compares by its storage first.
+    guard requirements != self.requirements else { return }
+    self.requirements = requirements
+    forgetBands()
+    findBands()
+  }
+
+  /// In a mode that bands the requirements, finds where they are in the installed
+  /// build, off the main actor, and draws them once found, with the reader's line
+  /// kept. Once per build and requirements, and only when asked for.
+  private func findBands() {
+    guard folding.mode.bandsRequirements, requirementBands == nil, bandsTask == nil,
+      let built, !requirements.isEmpty
+    else { return }
+    let requirements = requirements
+    bandsTask = Task {
+      let bands = await Self.bands(of: requirements, in: built)
+      // A later build or requirements have forgotten this task and started their own.
+      guard self.built?.text === built.text, self.requirements == requirements else { return }
+      bandsTask = nil
+      requirementBands = bands
+      guard folding.mode.bandsRequirements, let foldingIndex else { return }
+      foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
+      engine.refold(foldingDelegate.hidden)
+    }
+  }
+
+  /// Off the main actor, as the requirements are extracted: every sentence is looked
+  /// for by its words, over the whole build.
+  @concurrent
+  private static func bands(of requirements: [Requirement], in built: BuiltDocument) async
+    -> RequirementBands
+  {
+    RequirementBands(requirements, in: built)
+  }
+
+  /// Drops the bands of the build or requirements being replaced, and stops finding
+  /// them.
+  private func forgetBands() {
+    bandsTask?.cancel()
+    bandsTask = nil
+    requirementBands = nil
   }
 
   /// A click or tap on a heading in the outline opens its section, or closes it;

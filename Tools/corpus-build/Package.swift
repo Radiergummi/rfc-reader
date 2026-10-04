@@ -9,15 +9,17 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
-// The command line is built unoptimized by a Swift 6.4 compiler, in every build: that
-// compiler crashes while LLVM splits the commands' async `run`s into their coroutine
+// The command line is built unoptimized by a Swift 6.3 or 6.4 compiler, in every
+// build. 6.4 crashes while LLVM splits the commands' async `run`s into their coroutine
 // parts, and `@_optimize(none)` on them compiles but gives every document of a fetch
-// the ID 0 (#371). The work is RFCKit's and RFCCorpusKit's, which stay optimized. By
-// the compiler, not the platform, because the crash is the toolchain's; #490 tracks
-// dropping this once a toolchain fixes the crash. 6.4 only: a later compiler builds
-// optimized again, so one that fixed the crash is not left unoptimized, and one that
-// still has it crashes where it can be seen rather than being silently worked around.
-#if compiler(>=6.4) && !compiler(>=6.5)
+// the ID 0 (#371). 6.3, the Linux toolchain, builds them but miscompiles the same way
+// without a word: a fetch saves the documents under garbage names, losing most of them,
+// and reports success. The work is RFCKit's and RFCCorpusKit's, which stay optimized.
+// By the compiler, not the platform, because the bug is the toolchain's; #490 tracks
+// dropping this once a toolchain fixes it. A later compiler builds optimized again, so
+// one that fixed it is not left unoptimized; #490's check of each new toolchain is what
+// says whether it did.
+#if compiler(>=6.3) && !compiler(>=6.5)
   let commandLineSettings = swiftSettings + [.unsafeFlags(["-Onone"])]
 #else
   let commandLineSettings = swiftSettings

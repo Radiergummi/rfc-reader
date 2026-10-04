@@ -393,7 +393,7 @@ extension LegacyTextParser {
   /// paragraph indents its first line and sets its second at the margin, and ending at the
   /// second line left the first behind in the front matter. So the front matter ends where
   /// it used to or sooner, never later.
-  static func splitFrontMatter(_ lines: [Line], colonNumbered: Bool, proseIndent: Int)
+  static func splitFrontMatter(_ lines: [Line], separators: HeadingSeparators, proseIndent: Int)
     -> (front: [String], bodyStart: Int)
   {
     var front: [String] = []
@@ -439,7 +439,7 @@ extension LegacyTextParser {
       // Street` for a section, and an appendix would not do either, since `A
       // Standard for ...` reads as appendix A.
       if run - skipped == 2, !startsRun, string.startsAtColumnZero,
-        let heading = heading(from: string, colonNumbered: colonNumbered), !heading.isAppendix,
+        let heading = heading(from: string, separators: separators), !heading.isAppendix,
         heading.number?.split(separator: ".").first == "1"
       {
         return (front, offset)
@@ -450,7 +450,7 @@ extension LegacyTextParser {
         // body's indent, which is not known until this scan has finished. Stopping
         // early only leaves a line in the body that turns out not to be a heading;
         // stopping late would swallow it into the front matter and lose it.
-        if string.startsAtColumnZero, heading(from: string, colonNumbered: colonNumbered) != nil {
+        if string.startsAtColumnZero, heading(from: string, separators: separators) != nil {
           return split(firstParagraph ?? start)
         }
       }

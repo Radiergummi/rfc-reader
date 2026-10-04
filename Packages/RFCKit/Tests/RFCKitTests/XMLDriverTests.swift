@@ -148,6 +148,30 @@ struct XMLDriverTests {
     }
   }
 
+  /// Every parser on the driver recurses once per level of nesting, so a document
+  /// nested deeper than any real one is refused before it can exhaust the stack
+  /// (#757).
+  @Test func `elements nested past the cap are malformed`() throws {
+    let depth = XMLDriver.maximumDepth + 1
+    let nested = Data(
+      (String(repeating: "<a>", count: depth) + String(repeating: "</a>", count: depth)).utf8)
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(nested)
+    }
+    #expect(error.message == "elements nested deeper than \(XMLDriver.maximumDepth) levels")
+    #expect(throws: RFCIndexParser.ParseError.malformed(error)) {
+      _ = try RFCIndexParser.parse(nested)
+    }
+  }
+
+  @Test func `elements nested up to the cap parse`() throws {
+    let depth = XMLDriver.maximumDepth
+    let nested = Data(
+      (String(repeating: "<a>", count: depth) + String(repeating: "</a>", count: depth)).utf8)
+    let tree = try XMLTree.parse(nested)
+    #expect(tree.name == "a")
+  }
+
   @Test func `a well-formed document that is not an RFC says so`() {
     #expect(throws: RFCXMLParser.ParseError.notAnRFC(rootElement: "html")) {
       _ = try RFCXMLParser.parse(Data("<html/>".utf8))

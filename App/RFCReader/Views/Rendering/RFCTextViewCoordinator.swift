@@ -239,6 +239,13 @@ final class RFCTextViewCoordinator: NSObject {
   var reportedFolding: (before: Folding, after: Folding)?
   /// Tells the scene that a jump into folded text expanded a section.
   var onFoldingChange: (Folding) -> Void = { _ in }
+  /// The document's requirements, which Implementer bands (#700).
+  var requirements: [Requirement] = []
+  /// Where the requirements are in the installed build: found in Implementer only,
+  /// once per build and requirements.
+  var requirementBands: RequirementBands?
+  /// Finding the bands, off the main actor.
+  var bandsTask: Task<Void, Never>?
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
@@ -298,6 +305,18 @@ final class RFCTextViewCoordinator: NSObject {
       fragmentStart: fragmentStart,
       at: pointInFragment
     )
+  }
+
+  /// Where the paragraph laid out at the height of `containerPoint` starts: what a
+  /// click or tap in the gutter beside a disclosure toggles. By its layout fragment,
+  /// not a character, since an aside's caption is set in from the column's edge the
+  /// gutter point is on (#700).
+  func paragraphStart(atContainerPoint containerPoint: CGPoint) -> Int? {
+    guard let layout = textView?.textLayoutManager,
+      let fragment = layout.textLayoutFragment(for: containerPoint)
+    else { return nil }
+    let start = layout.offset(of: fragment.rangeInElement.location)
+    return start >= 0 ? start : nil
   }
 
   // MARK: - References
@@ -536,10 +555,12 @@ final class RFCTextViewCoordinator: NSObject {
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
       // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
-      // opens or closes its section (#698); a link in a heading is followed first.
-      if folding.mode == .outline {
+      // opens or closes its section (#698), and in Implementer one on an aside's
+      // caption opens or closes the aside (#700); a link in a heading is followed
+      // first.
+      if folding.mode.discloses {
         if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-          let offset = characterOffset(atContainerPoint: gutter),
+          let offset = paragraphStart(atContainerPoint: gutter),
           toggleSection(atHeading: offset)
         {
           return
@@ -547,7 +568,7 @@ final class RFCTextViewCoordinator: NSObject {
       }
       if let offset = characterOffset(atContainerPoint: containerPoint) {
         if link(at: offset) != nil { return }
-        if folding.mode == .outline, toggleSection(atHeading: offset) { return }
+        if folding.mode.discloses, toggleSection(atHeading: offset) { return }
       }
       chrome.tapped()
       reportChrome()
