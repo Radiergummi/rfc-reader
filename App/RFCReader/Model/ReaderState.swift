@@ -206,6 +206,7 @@ final class ReaderState {
     requirements = nil
     exportFormats = [.pdf]
     folding.expanded = []
+    folding.openAsides = []
     folding.focused = nil
     foldingIndex = nil
     focusGroups = nil

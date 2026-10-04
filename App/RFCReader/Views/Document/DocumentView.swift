@@ -378,6 +378,8 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.folding = $0
         },
+        // None until they are extracted, rather than the last document's.
+        requirements: navigation.selection == id ? reader.requirements ?? [] : nil,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
