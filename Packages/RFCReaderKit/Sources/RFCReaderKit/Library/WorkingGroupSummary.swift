@@ -96,8 +96,8 @@ public struct WorkingGroupSummary: Sendable, Equatable {
     case "team": String(kit: "Team", locale: locale)
     case "dir": String(kit: "Directorate", locale: locale)
     case "program": String(kit: "IAB Program", locale: locale)
-    case "iab": String(kit: "IAB", locale: locale)
-    case "irtf": String(kit: "IRTF", locale: locale)
+    case "iab": "IAB"
+    case "irtf": "IRTF"
     case "ise": String(kit: "Independent Submissions", locale: locale)
     case "unknown": nil
     default: slug.capitalized

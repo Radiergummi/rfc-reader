@@ -324,7 +324,7 @@ struct PrintFurnitureTests {
       id: .rfc(9999), title: "Index Title", date: PublicationDate(year: 2025, month: 6))
     let header = DocumentHeader(title: "A Protocol")
     #expect(
-      HeaderSummary(header: header, metadata: metadata, locale: Locale(identifier: "de")).date
+      HeaderSummary(header: header, metadata: metadata, locale: .german).date
         == "Juni 2025")
     #expect(PrintFurniture(header: header, metadata: metadata).headerTrailing == "June 2025")
   }

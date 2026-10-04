@@ -190,5 +190,4 @@ public struct RevisionsSummary: Equatable, Sendable {
     style.timeZone = timeZone
     return date.formatted(style)
   }
-
 }

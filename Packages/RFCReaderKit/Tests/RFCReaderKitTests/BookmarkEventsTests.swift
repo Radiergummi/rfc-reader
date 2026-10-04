@@ -206,8 +206,7 @@ struct BookmarkEventsTests {
         == "Updated by RFC 9997 and RFC 9998.\nBeing replaced by draft-a, in the working group.")
   }
 
-  /// The list is the locale's: in English with a serial comma, and in German with
-  /// its own "und".
+  /// The list is the locale's: in English, with a serial comma.
   @Test func `three newer RFCs are listed as the language lists them`() {
     let notice = BookmarkNotice.notices(
       for: [.obsoleted(.rfc(9990), newer: [.rfc(9996), .rfc(9997), .rfc(9998)])], index: nil,

@@ -32,11 +32,27 @@ extension Locale {
   /// for this process. Not `Locale.current`, whose language can be one the app does
   /// not have: French first and German second gives German here, and English there.
   /// The region stays the reader's, so dates and numbers are written as it writes
-  /// them: English in Germany dates "17 September".
+  /// them: English in Britain dates "17 September", not "September 17".
   public static var interface: Locale {
-    var components = Locale.Components(
-      identifier: Bundle.module.preferredLocalizations.first ?? "en")
-    components.region = Locale.current.region
+    interface(localization: catalogLocalization, current: .current)
+  }
+
+  /// The localization RFCReaderKit's catalog resolves to for this process, found
+  /// once: the languages it chooses from change only with a relaunch.
+  private static let catalogLocalization = Bundle.module.preferredLocalizations.first ?? "en"
+
+  /// `current` itself when it is in the catalog's language, so a variant keeps its
+  /// own ways and the reader's settings stay: British English lists "RFC 1, RFC 2
+  /// and RFC 3". Otherwise the catalog's language, in `current`'s region.
+  static func interface(localization: String, current: Locale) -> Locale {
+    let language = Locale.Language(identifier: localization)
+    if current.language.languageCode == language.languageCode,
+      current.language.script == language.script
+    {
+      return current
+    }
+    var components = Locale.Components(identifier: localization)
+    components.region = current.region
     return Locale(components: components)
   }
 
