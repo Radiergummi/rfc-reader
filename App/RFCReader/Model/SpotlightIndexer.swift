@@ -1,3 +1,4 @@
+import AppIntents
 import CoreSpotlight
 import Foundation
 import RFCKit
@@ -9,7 +10,8 @@ nonisolated private let spotlightLog = Logger(
 
 /// Keeps every RFC in the index in Spotlight (#178), so system search finds one by
 /// number, title or abstract. What an item says is `SpotlightEntry`'s; this only
-/// hands it to CoreSpotlight.
+/// hands it to CoreSpotlight, with the RFC's `RFCEntity` (#192), so a result is the
+/// RFC Shortcuts and Siri act on.
 enum SpotlightIndexer {
   /// Items per batch: enough that 9,842 RFCs are twenty batches, few enough that
   /// none holds much at once.
@@ -33,7 +35,10 @@ enum SpotlightIndexer {
         // the client state is left for it to write.
         guard !Task.isCancelled else { return }
         let end = min(start + batchSize, entries.count)
-        let items = entries[start..<end].map { item($0, expiring: expiration) }
+        // The entities only here, past the check that most launches stop at.
+        let items = (start..<end).map {
+          item(entries[$0], for: RFCEntity(rfcs[$0]), expiring: expiration)
+        }
         index.beginBatch()
         add(items, to: index)
         // The state only with the last batch: an indexing cut short is done again
@@ -54,9 +59,9 @@ enum SpotlightIndexer {
     index.indexSearchableItems(items, completionHandler: nil)
   }
 
-  nonisolated private static func item(_ entry: SpotlightEntry, expiring expiration: Date)
-    -> CSSearchableItem
-  {
+  nonisolated private static func item(
+    _ entry: SpotlightEntry, for entity: RFCEntity, expiring expiration: Date
+  ) -> CSSearchableItem {
     let attributes = CSSearchableItemAttributeSet(contentType: .text)
     attributes.title = entry.title
     attributes.contentDescription = entry.description
@@ -65,6 +70,7 @@ enum SpotlightIndexer {
       uniqueIdentifier: entry.identifier, domainIdentifier: SpotlightEntry.domain,
       attributeSet: attributes)
     item.expirationDate = expiration
+    item.associateAppEntity(entity)
     return item
   }
 }

@@ -1,22 +1,23 @@
 import AppIntents
 import RFCKit
 
-/// "Open an RFC in RFC Reader" from Siri, Spotlight, Shortcuts and the Action button,
-/// which then asks for the number: a phrase can only carry one once there is an
-/// `RFCEntity` (#192).
-struct OpenRFCIntent: AppIntent {
+/// "Open RFC 9110 in RFC Reader" from Siri, Spotlight, Shortcuts and the Action
+/// button. An open intent, so a Spotlight result, which is an `RFCEntity`, opens
+/// through it too.
+struct OpenRFCIntent: OpenIntent {
   static let title: LocalizedStringResource = "Open RFC"
-  static let description = IntentDescription("Opens an RFC by number.")
+  static let description = IntentDescription("Opens an RFC, at a section if one is given.")
   static let openAppWhenRun = true
 
-  @Parameter(title: "RFC number")
-  var number: Int
+  @Parameter(title: "RFC")
+  var target: RFCEntity
 
+  /// A section's number, `4.2`, or an anchor.
   @Parameter(title: "Section", default: nil)
   var section: String?
 
   static var parameterSummary: some ParameterSummary {
-    Summary("Open RFC \(\.$number)") {
+    Summary("Open \(\.$target)") {
       \.$section
     }
   }
@@ -26,7 +27,38 @@ struct OpenRFCIntent: AppIntent {
     // Routed rather than assigned: the intent has no scene of its own, so the
     // library decides which open tab answers it. `.shared`, because App Intents
     // makes the intent and has no way to hand it anything.
-    LibraryModel.shared.route(RFCLink(id: .rfc(number), section: section))
+    LibraryModel.shared.route(RFCLink(id: target.documentID, section: section))
+    return .result()
+  }
+}
+
+/// Opens a section of an RFC (#192), chosen from the document's contents.
+///
+/// Not an `OpenIntent`, which may require no parameter but its target: Siri asks
+/// for no optional one, and without the RFC there are no sections to offer, so
+/// "Open a section of an RFC" could not be finished by voice. Opening a Spotlight
+/// result that is a section is #178's, with the passages it indexes.
+struct OpenSectionIntent: AppIntent {
+  static let title: LocalizedStringResource = "Open Section"
+  static let description = IntentDescription("Opens a section of an RFC.")
+  static let openAppWhenRun = true
+
+  /// Asked for first: the sections offered are this RFC's (`SectionEntityQuery`).
+  @Parameter(title: "RFC")
+  var document: RFCEntity
+
+  @Parameter(title: "Section")
+  var section: SectionEntity
+
+  static var parameterSummary: some ParameterSummary {
+    Summary("Open \(\.$section) of \(\.$document)")
+  }
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    // The section's own link, which names its RFC: one a shortcut handed over from
+    // another RFC opens where it is.
+    LibraryModel.shared.route(section.link)
     return .result()
   }
 }
@@ -35,15 +67,49 @@ struct RFCReaderShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
       intent: OpenRFCIntent(),
-      // Phrases may only interpolate AppEntity/AppEnum parameters, so the number
-      // is asked for after the phrase matches. An RFC AppEntity would let Siri
-      // hear it directly; that belongs with Spotlight indexing.
+      // A phrase can name only the RFCs `RFCEntityQuery` suggests, the ones read
+      // recently; any other is asked for after a phrase without one matches.
       phrases: [
+        "Open \(\.$target) in \(.applicationName)",
+        "Show \(\.$target) in \(.applicationName)",
         "Open an RFC in \(.applicationName)",
         "Show an RFC in \(.applicationName)",
       ],
       shortTitle: "Open RFC",
       systemImageName: "doc.text"
     )
+    AppShortcut(
+      intent: OpenSectionIntent(),
+      phrases: [
+        "Open a section of an RFC in \(.applicationName)"
+      ],
+      shortTitle: "Open Section",
+      systemImageName: "text.line.first.and.arrowtriangle.forward"
+    )
+    AppShortcut(
+      intent: LookUpIdentifierIntent(),
+      phrases: [
+        "Look up an identifier in \(.applicationName)",
+        "Look up a protocol identifier in \(.applicationName)",
+      ],
+      shortTitle: "Look Up Identifier",
+      systemImageName: "number"
+    )
+    AppShortcut(
+      intent: RequirementsIntent(),
+      phrases: [
+        "Find the requirements in \(\.$document) with \(.applicationName)",
+        "Find requirements in an RFC with \(.applicationName)",
+      ],
+      shortTitle: "Find Requirements",
+      systemImageName: "checklist"
+    )
+  }
+
+  /// Tells the system the RFCs a phrase can name have changed: once the index has
+  /// loaded, since the suggestions are looked up in it. A wrapper, so the library
+  /// does not import App Intents for one call.
+  static func refreshParameters() {
+    updateAppShortcutParameters()
   }
 }

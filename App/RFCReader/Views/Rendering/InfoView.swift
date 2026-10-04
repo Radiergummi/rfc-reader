@@ -17,6 +17,7 @@ struct InfoView: View {
   let library: LibraryModel
   let open: (DocumentID) -> Void
   let search: (String) -> Void
+  let showReadingPath: (DocumentID) -> Void
 
   var body: some View {
     if let info {
@@ -27,6 +28,14 @@ struct InfoView: View {
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
               SectionRows(section: section, library: library, open: open, search: search)
+            }
+          }
+          if let document, document.series == .rfc {
+            InfoSection(title: "Reading Path") {
+              Button("What to Read First", systemImage: "list.number") {
+                showReadingPath(document)
+              }
+              .help("The documents this one cites normatively, in the order to read them.")
             }
           }
           if let document {

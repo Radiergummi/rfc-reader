@@ -6,19 +6,21 @@ import Foundation
 /// through callbacks, nor Chroma's, which is code, is a table, and both expect a
 /// message that starts with a start line, which 221 of the corpus's 520 do not.
 enum HTTPLexer {
-  // Only what takes a kind is a group: the rest of a match is plain.
+  // Only what takes a kind is a group: the rest of a match is plain. A line's rest
+  // stops short of a CR, so a line that ends in CRLF, as HTTP/1.1's do on the wire,
+  // still ends at its `$`.
 
   /// RFC 9112's request line, set in from the margin or not: method, target, version.
   static let requestLine =
     #"^[ \t]*+([A-Z][A-Z-]*+)[ \t]++([^\s]++)[ \t]++(HTTP/[0-9](?:\.[0-9])?)[ \t]*+$"#
   /// RFC 9112's status line: version, code.
-  static let statusLine = #"^[ \t]*+(HTTP/[0-9](?:\.[0-9])?)[ \t]++([0-9]{3})[^\n]*+$"#
+  static let statusLine = #"^[ \t]*+(HTTP/[0-9](?:\.[0-9])?)[ \t]++([0-9]{3})[^\r\n]*+$"#
   /// A status line without its version, as some RFCs abbreviate one.
-  static let bareStatusLine = #"^[ \t]*+([1-5][0-9]{2})[ \t]++[^\n]*+$"#
+  static let bareStatusLine = #"^[ \t]*+([1-5][0-9]{2})[ \t]++[^\r\n]*+$"#
   /// An HTTP/2 or HTTP/3 pseudo-header field, as RFCs list them: `:method = GET`.
-  static let pseudoHeaderLine = #"^[ \t]*+(:[a-z]++)([ \t]*+[:=])[^\n]*+$"#
+  static let pseudoHeaderLine = #"^[ \t]*+(:[a-z]++)([ \t]*+[:=])[^\r\n]*+$"#
   /// A field line: a token, a colon, a value.
-  static let fieldLine = #"^[ \t]*+([!#$%&'*+.^_`|~0-9A-Za-z-]++)(:)[^\n]*+$"#
+  static let fieldLine = #"^[ \t]*+([!#$%&'*+.^_`|~0-9A-Za-z-]++)(:)[^\r\n]*+$"#
 
   static let headStates: [String: [Lexer.Rule]] = [
     "root": [
@@ -43,7 +45,7 @@ enum HTTPLexer {
   }
 
   static let contentType = Lexer.expression(
-    #"^[ \t]*+content-type[ \t]*+:[ \t]*+([^\n]*+)$"#,
+    #"^[ \t]*+content-type[ \t]*+:[ \t]*+([^\r\n]*+)$"#,
     options: [.anchorsMatchLines, .caseInsensitive])
 }
 

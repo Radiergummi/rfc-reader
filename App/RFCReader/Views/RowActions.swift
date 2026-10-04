@@ -58,6 +58,11 @@ import SwiftUI
                 document: rfc.id, library: library, navigation: navigation,
                 undoManager: undoManager)
             }
+            Button {
+              navigation.readingPath = ReadingPathRequest(root: rfc.id)
+            } label: {
+              Label("Reading Path", systemImage: "list.number")
+            }
             ShareLink(
               item: RFCEditorEndpoints.infoPage(rfc.id),
               subject: Text("\(rfc.id.displayName): \(rfc.title)"))

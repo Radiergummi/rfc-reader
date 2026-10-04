@@ -88,6 +88,24 @@ struct HTTPMessageHighlighterTests {
     #expect(tokens.kind(of: #""a""#, in: text) == .name)
   }
 
+  @Test func `a message with CRLF line endings is read as one with LF`() {
+    let text =
+      "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n\r\n{\"a\": 1}\r\n"
+    let tokens = tokens(text)
+    #expect(tokens.cover(text))
+    #expect(tokens.kind(of: "200", in: text) == .number)
+    #expect(tokens.text(of: .name, in: text) == ["Content-Type", "Cache-Control", #""a""#])
+  }
+
+  @Test func `every kind of head line is read with CRLF line endings`() {
+    let text = "GET / HTTP/1.1\r\nHost: example.com\r\n:path = /\r\n206 Partial Content\r\n"
+    let tokens = tokens(text)
+    #expect(tokens.cover(text))
+    #expect(tokens.kind(of: "GET", in: text) == .keyword)
+    #expect(tokens.text(of: .name, in: text) == ["Host", ":path"])
+    #expect(tokens.kind(of: "206", in: text) == .number)
+  }
+
   @Test func `consecutive status lines are two messages`() {
     let source = NSString(string: "HTTP/1.1 100 Continue\nHTTP/1.1 200 OK\n")
     #expect(HTTPMessageHighlighter.messages(in: source).count == 2)

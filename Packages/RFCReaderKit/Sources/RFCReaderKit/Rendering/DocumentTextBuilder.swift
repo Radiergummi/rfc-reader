@@ -57,12 +57,13 @@ public final class DocumentTextBuilder {
   /// See the chip case in `run(_:base:)`.
   var nextChipID = 0
 
-  /// Rendering an SF Symbol is the expensive part and depends only on which symbol
-  /// and the point size, of which a build sees a few — but there is a chip per cross
-  /// reference, and RFCs are full of them.
+  /// Rendering an SF Symbol is the expensive part and depends only on which symbol,
+  /// its point size and its color, of which a build sees a few — but there is a chip
+  /// per cross reference, and RFCs are full of them.
   var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
 
-  /// A symbol is one of two: a reference chip's, or a backlink caption's.
+  /// A symbol is one of three: a reference chip's, a backlink caption's arrow, or a
+  /// code block's copy button.
   struct ChipSymbolKey: Hashable {
     let name: String
     let pointSize: CGFloat
@@ -78,7 +79,7 @@ public final class DocumentTextBuilder {
   /// `referenceAnchors` is.
   var referenceKinds = ReferenceKinds([])
 
-  /// Which sections refer to each section, for the headings' chips. Collected before
+  /// Which sections refer to each section, for the headings' backlink captions. Collected before
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
