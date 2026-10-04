@@ -154,12 +154,14 @@ public struct BookmarkNotice: Equatable, Sendable {
   public let url: URL
 
   /// One notice per document, in the order `events` first names them.
-  public static func notices(for events: [BookmarkEvent], index: RFCIndex?) -> [BookmarkNotice] {
+  public static func notices(
+    for events: [BookmarkEvent], index: RFCIndex?, locale: Locale = .interface
+  ) -> [BookmarkNotice] {
     var order: [DocumentID] = []
     var lines: [DocumentID: [String]] = [:]
     for event in events {
       if lines[event.document] == nil { order.append(event.document) }
-      lines[event.document, default: []].append(line(event))
+      lines[event.document, default: []].append(line(event, locale: locale))
     }
     return order.map { document in
       BookmarkNotice(
@@ -169,27 +171,34 @@ public struct BookmarkNotice: Equatable, Sendable {
     }
   }
 
-  private static func line(_ event: BookmarkEvent) -> String {
+  private static func line(_ event: BookmarkEvent, locale: Locale) -> String {
     switch event {
     case .obsoleted(_, let documents):
-      "Obsoleted by \(list(documents))."
+      String(kit: "Obsoleted by \(list(documents, locale: locale)).", locale: locale)
     case .updated(_, let documents):
-      "Updated by \(list(documents))."
+      String(kit: "Updated by \(list(documents, locale: locale)).", locale: locale)
     case .revisionStarted(_, let draft, let relation, let stage, let stream):
-      "\(RevisionsSummary.relationLabel(relation)) \(draft), "
-        + RevisionsSummary.stagePhrase(stage, stream: stream)
-        + "."
+      String(
+        kit: """
+          \(RevisionsSummary.relationLabel(relation, locale: locale)) \(draft), \
+          \(RevisionsSummary.stagePhrase(stage, stream: stream, locale: locale)).
+          """,
+        locale: locale)
     case .revisionQueued(_, let draft, let relation):
-      "\(RevisionsSummary.relationLabel(relation)) \(draft), in the RFC Editor queue."
+      String(
+        kit: """
+          \(RevisionsSummary.relationLabel(relation, locale: locale)) \(draft), in the RFC Editor \
+          queue.
+          """,
+        locale: locale)
     case .errataListed:
-      "Now has errata."
+      String(kit: "Now has errata.", locale: locale)
     }
   }
 
-  /// "RFC 9997", "RFC 9997 and RFC 9998", "RFC 9996, RFC 9997 and RFC 9998".
-  private static func list(_ documents: [DocumentID]) -> String {
-    let names = documents.map(\.displayName)
-    guard let last = names.last, names.count > 1 else { return names.first ?? "" }
-    return names.dropLast().joined(separator: ", ") + " and " + last
+  /// "RFC 9997", "RFC 9997 and RFC 9998", "RFC 9996, RFC 9997, and RFC 9998", as
+  /// `locale`'s language lists them.
+  private static func list(_ documents: [DocumentID], locale: Locale) -> String {
+    documents.map(\.displayName).formatted(.list(type: .and).locale(locale))
   }
 }

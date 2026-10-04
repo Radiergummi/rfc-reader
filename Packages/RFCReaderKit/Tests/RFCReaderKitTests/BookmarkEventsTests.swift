@@ -185,7 +185,7 @@ struct BookmarkEventsTests {
         .obsoleted(.rfc(9990), newer: [.rfc(9999)]),
         .errataListed(.rfc(9990)),
         .revisionQueued(.rfc(9991), draft: "draft-b", relation: .updates),
-      ], index: Self.index())
+      ], index: Self.index(), locale: .english)
     #expect(notices.map(\.document) == [.rfc(9990), .rfc(9991)])
     #expect(notices[0].title == "RFC 9990")
     #expect(notices[0].subtitle == "An Example Protocol")
@@ -200,14 +200,26 @@ struct BookmarkEventsTests {
         .revisionStarted(
           .rfc(9990), draft: "draft-a", relation: .obsoletes, stage: .inGroup,
           stream: "ietf"),
-      ], index: Self.index())
+      ], index: Self.index(), locale: .english)
     #expect(
       notices.first?.body
         == "Updated by RFC 9997 and RFC 9998.\nBeing replaced by draft-a, in the working group.")
   }
 
+  /// The list is the locale's: in English with a serial comma, and in German with
+  /// its own "und".
+  @Test func `three newer RFCs are listed as the language lists them`() {
+    let notice = BookmarkNotice.notices(
+      for: [.obsoleted(.rfc(9990), newer: [.rfc(9996), .rfc(9997), .rfc(9998)])], index: nil,
+      locale: .english
+    ).first
+    #expect(notice?.body == "Obsoleted by RFC 9996, RFC 9997, and RFC 9998.")
+  }
+
   @Test func `a notice opens its RFC`() {
-    let notice = BookmarkNotice.notices(for: [.errataListed(.rfc(9990))], index: nil).first
+    let notice = BookmarkNotice.notices(
+      for: [.errataListed(.rfc(9990))], index: nil, locale: .english
+    ).first
     #expect(notice?.url == URL(string: "rfc://9990"))
     #expect(notice?.subtitle == nil)
   }
