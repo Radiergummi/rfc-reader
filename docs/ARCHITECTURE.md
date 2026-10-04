@@ -117,7 +117,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient ──────────byt
 
 The App target has no test bundle of its own, so **nothing that can be tested is allowed to live there**. The rule that keeps this honest: anything in the reader that is a pure function of its inputs belongs in `RFCReaderKit`, and the App target keeps only what genuinely needs UIKit/AppKit object graphs — the two representables, the coordinator's view wiring, and drawing. Where a decoration goes (`FragmentGeometry`), how wide the column is (`ReaderLayout`) and what the text says (`DocumentTextBuilder`) are all in the package, under test. This is not cosmetic: both of the reader's hardest bugs were index arithmetic that had been written in the App target, where the only thing a test could do was re-implement it and check the copy.
 
-CI runs `Packages/RFCKit`'s tests on both macOS (`.github/workflows/ci-macos.yml`) and in a Linux Swift container (`.github/workflows/ci.yml`); the macOS job also runs `make test-app` for `RFCReaderKit`. A third job builds the app itself, unsigned, for macOS and the iOS Simulator with Xcode 26.6, and a fourth does the same with Xcode 27 on GitHub's preview image, reported without failing the run. The macOS jobs are a workflow of their own so that a draft pull request skips them; marking it ready for review runs them, without re-running the Linux checks of the same commit. The corpus-backed suites run in their own workflow (`corpus-tests.yml`), on every pull request that touches `Packages/RFCKit`, `Tools/corpus-build` or the Makefile, and weekly.
+CI runs `Packages/RFCKit`'s tests on both macOS (`.github/workflows/ci-macos.yml`) and in a Linux Swift container (`.github/workflows/ci.yml`); the macOS job also runs `make test-app` for `RFCReaderKit`. A third job builds the app itself, unsigned, for macOS and the iOS Simulator with Xcode 26.6, and checks that the string catalogs hold what those builds found (`make strings-check`), and a fourth does the same with Xcode 27 on GitHub's preview image, reported without failing the run. The macOS jobs are a workflow of their own so that a draft pull request skips them; marking it ready for review runs them, without re-running the Linux checks of the same commit. The corpus-backed suites run in their own workflow (`corpus-tests.yml`), on every pull request that touches `Packages/RFCKit`, `Tools/corpus-build` or the Makefile, and weekly.
 
 ## Decisions
 
@@ -163,6 +163,7 @@ is that way, and what was measured or tried first.
 - [A grammar's rule names are links](decisions/2026-10-03-a-grammars-rule-names-are-links.md)
 - [A reading mode folds paragraphs out of the layout, not out of the storage](decisions/2026-10-03-a-reading-mode-folds-paragraphs-out-of-the-layout.md)
 - [App Intents act on entities whose queries are RFCKit's](decisions/2026-10-03-app-intents-act-on-entities-whose-queries-are-rfckits.md)
+- [The app's chrome is localized, the reader body is not](decisions/2026-10-04-the-apps-chrome-is-localized-the-reader-body-is-not.md)
 
 ## Planned engines
 

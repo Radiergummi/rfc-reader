@@ -1,0 +1,617 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@" : {
+
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ %3$@"
+          }
+        }
+      }
+    },
+    "%@ didn't load: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ didn't load: %2$@"
+          }
+        }
+      }
+    },
+    "%@ doesn't say which of its references are normative, so none of them are followed." : {
+
+    },
+    "%@ has no section %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ has no section %2$@."
+          }
+        }
+      }
+    },
+    "%@ hasn't loaded." : {
+
+    },
+    "%@ isn't available offline. Connect to the internet, or keep it offline in RFC Reader, then try again." : {
+
+    },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@: searched as text" : {
+
+    },
+    "%lld RFCs" : {
+
+    },
+    "%lld identifiers" : {
+
+    },
+    "%lld sections" : {
+
+    },
+    "%lld times" : {
+
+    },
+    "%lld×" : {
+
+    },
+    "A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link." : {
+
+    },
+    "A reading path is computed from the citation index, which is a data pack of its own and isn't installed." : {
+
+    },
+    "About RFC Reader" : {
+
+    },
+    "Acknowledgements" : {
+
+    },
+    "Actual Size" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add RFCs from the reader, from any list, or here." : {
+
+    },
+    "Add RFCs…" : {
+
+    },
+    "Add to %@" : {
+
+    },
+    "Add to Collection" : {
+
+    },
+    "All Key Words" : {
+
+    },
+    "Assumed" : {
+
+    },
+    "Back" : {
+
+    },
+    "Bigger" : {
+
+    },
+    "Bookmark" : {
+
+    },
+    "Browse the sidebar, search, or jump straight to a number." : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Chairs: %@" : {
+
+    },
+    "Cite" : {
+
+    },
+    "Cited normatively across so much of the series that they're listed once here, not followed." : {
+
+    },
+    "Collapsed" : {
+
+    },
+    "Contents" : {
+
+    },
+    "Continue" : {
+
+    },
+    "Copy %@" : {
+
+    },
+    "Copy Checklist as CSV" : {
+
+    },
+    "Copy Checklist as Markdown" : {
+
+    },
+    "Copy as Quote" : {
+
+    },
+    "Couldn't Read the Citation Index" : {
+
+    },
+    "Couldn't download" : {
+
+    },
+    "Couldn't load %@" : {
+
+    },
+    "Couldn't load the original text" : {
+
+    },
+    "Couldn’t Load %@" : {
+
+    },
+    "Defined In" : {
+
+    },
+    "Defined in %@" : {
+
+    },
+    "Delete Collection" : {
+
+    },
+    "Delete “%@”?" : {
+
+    },
+    "Delete…" : {
+
+    },
+    "Developer" : {
+
+    },
+    "Document" : {
+
+    },
+    "Done" : {
+
+    },
+    "Download" : {
+
+    },
+    "Draw Diagrams" : {
+
+    },
+    "Draw diagrams" : {
+
+    },
+    "Edit…" : {
+
+    },
+    "Expanded" : {
+
+    },
+    "Explains %@" : {
+
+    },
+    "Export" : {
+
+    },
+    "Export Checklist" : {
+
+    },
+    "Export…" : {
+
+    },
+    "Filter" : {
+
+    },
+    "Find Next" : {
+
+    },
+    "Find Previous" : {
+
+    },
+    "Find Requirements" : {
+
+    },
+    "Find…" : {
+
+    },
+    "Forward" : {
+
+    },
+    "General" : {
+
+    },
+    "Go to RFC" : {
+
+    },
+    "Go to RFC…" : {
+
+    },
+    "Goes back to the system's size" : {
+
+    },
+    "Hide Sidebar" : {
+
+    },
+    "Identifier" : {
+
+    },
+    "In Order" : {
+
+    },
+    "Info" : {
+
+    },
+    "Informative reference" : {
+
+    },
+    "Install Data Pack…" : {
+
+    },
+    "It holds ^[%lld document](inflect: true). Only the collection is removed; the documents stay in the library." : {
+
+    },
+    "Just Published" : {
+
+    },
+    "Keep Offline" : {
+
+    },
+    "Kept offline" : {
+
+    },
+    "Key Word" : {
+
+    },
+    "Lists the BCP 14 requirements an RFC states, in one section and its subsections or in the whole RFC, each with its section's number." : {
+
+    },
+    "Loading %@…" : {
+
+    },
+    "Loading index…" : {
+
+    },
+    "Look Up Identifier" : {
+
+    },
+    "Looks up a protocol identifier, such as HTTP status 425, TLS alert 70 or the Retry-After field, and finds the RFC section that defines it." : {
+
+    },
+    "More" : {
+
+    },
+    "Move Down" : {
+
+    },
+    "Move Up" : {
+
+    },
+    "Name" : {
+
+    },
+    "New Collection" : {
+
+    },
+    "New Collection…" : {
+
+    },
+    "New Tab" : {
+
+    },
+    "New Window" : {
+
+    },
+    "Next Section" : {
+
+    },
+    "No %@" : {
+
+    },
+    "No Citation Index" : {
+
+    },
+    "No Documents" : {
+
+    },
+    "No References" : {
+
+    },
+    "No Requirements" : {
+
+    },
+    "Normative reference" : {
+
+    },
+    "Not available in the library." : {
+
+    },
+    "Not kept offline" : {
+
+    },
+    "Not read" : {
+
+    },
+    "Not saved in this session" : {
+
+    },
+    "Nothing in the index matches “%@”." : {
+
+    },
+    "Notifications" : {
+
+    },
+    "Notifications for RFC Reader are turned off in System Settings." : {
+
+    },
+    "Notify me about bookmarked RFCs" : {
+
+    },
+    "Number" : {
+
+    },
+    "OK" : {
+
+    },
+    "Obsolete" : {
+
+    },
+    "Obsoleted by" : {
+
+    },
+    "Open" : {
+
+    },
+    "Open %@ on rfc-editor.org. Option-click to download it." : {
+
+    },
+    "Open Definition" : {
+
+    },
+    "Open RFC" : {
+
+    },
+    "Open Section" : {
+
+    },
+    "Open in New Window" : {
+
+    },
+    "Open in RFC Reader" : {
+
+    },
+    "Open on rfc-editor.org" : {
+
+    },
+    "Open the Original (%@)" : {
+
+    },
+    "Opens a section of an RFC." : {
+
+    },
+    "Opens an RFC, at a section if one is given." : {
+
+    },
+    "Opens the document" : {
+
+    },
+    "Otherwise lines stop at a comfortable reading length, and the text is centered." : {
+
+    },
+    "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it." : {
+
+    },
+    "Page Setup…" : {
+
+    },
+    "Panel" : {
+
+    },
+    "Pick an RFC" : {
+
+    },
+    "Previous Section" : {
+
+    },
+    "Print…" : {
+
+    },
+    "Published as %@" : {
+
+    },
+    "RFC" : {
+
+    },
+    "RFC number, BCP 14, or a link" : {
+
+    },
+    "RFC number, title words, or link" : {
+
+    },
+    "RFCs" : {
+
+    },
+    "Read" : {
+
+    },
+    "Reading" : {
+
+    },
+    "Reading Mode" : {
+
+    },
+    "Reading Path" : {
+
+    },
+    "Reading font size: %lld" : {
+
+    },
+    "References" : {
+
+    },
+    "Referred to from" : {
+
+    },
+    "Registry" : {
+
+    },
+    "Remove Bookmark" : {
+
+    },
+    "Remove Offline Copy" : {
+
+    },
+    "Remove filter %@" : {
+
+    },
+    "Remove from Collection" : {
+
+    },
+    "Remove this filter" : {
+
+    },
+    "Requirements" : {
+
+    },
+    "Retry" : {
+
+    },
+    "Save as Collection" : {
+
+    },
+    "Saved as Collection" : {
+
+    },
+    "Search Library" : {
+
+    },
+    "Search RFCs" : {
+
+    },
+    "Search the library for “%@”" : {
+
+    },
+    "Searches the library for it" : {
+
+    },
+    "Section" : {
+
+    },
+    "See also" : {
+
+    },
+    "Share Checklist…" : {
+
+    },
+    "Show All %@ Results" : {
+
+    },
+    "Show Deeper" : {
+
+    },
+    "Show Obsolete" : {
+
+    },
+    "Show Requirements" : {
+
+    },
+    "Show Sidebar" : {
+
+    },
+    "Show contact details" : {
+
+    },
+    "Show in RFC Reader" : {
+
+    },
+    "Show the original text rendering by default" : {
+
+    },
+    "Smaller" : {
+
+    },
+    "Text Size" : {
+
+    },
+    "The RFC index is still loading." : {
+
+    },
+    "The RFC index isn't available. Open RFC Reader to load it, then try again." : {
+
+    },
+    "The documents this one cites normatively, in the order to read them." : {
+
+    },
+    "The installed index pack couldn't be read." : {
+
+    },
+    "This RFC has errata" : {
+
+    },
+    "This document does not use the BCP 14 key words." : {
+
+    },
+    "Title" : {
+
+    },
+    "Try Again" : {
+
+    },
+    "Underline links" : {
+
+    },
+    "Updated %@" : {
+
+    },
+    "Use System Size" : {
+
+    },
+    "Use the full window width for text" : {
+
+    },
+    "Value" : {
+
+    },
+    "View Options" : {
+
+    },
+    "What to Read First" : {
+
+    },
+    "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it." : {
+
+    },
+    "and %lld more" : {
+
+    }
+  },
+  "version" : "1.0"
+}

@@ -8,6 +8,9 @@ options:
     iOS: "26.0"
     macOS: "26.0"
   createIntermediateGroups: true
+  # The language the strings in the code are written in, and the string
+  # catalogs' source language.
+  developmentLanguage: en
   xcodeVersion: "26.4"
 
 settings:
@@ -17,6 +20,10 @@ settings:
     # Swift 6's default, so it is not spelled out.
     SWIFT_VERSION: "6.0"
     CODE_SIGN_STYLE: Automatic
+    # The compiler records every localizable string it sees in a .stringsdata
+    # file, which `make strings` syncs into the string catalogs.
+    SWIFT_EMIT_LOC_STRINGS: "YES"
+    LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
     DEVELOPMENT_TEAM: TH593VRB6W
 
 packages:

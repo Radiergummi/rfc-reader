@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -264,6 +264,22 @@ ios-sim: xcodeproj
 ios-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(IOS_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Sync the string catalogs with the strings in the code
+# Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
+# found either way, then adds new strings to the catalogs and marks removed ones
+# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+strings: build-app ios-sim
+	@objroot=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+	  -destination '$(MAC_DESTINATION)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
+	  | sed -n 's/^ *OBJROOT = //p' | head -1); \
+	  Tools/strings/sync.py --objroot "$$objroot" --configuration $(CONFIGURATION)
+
+## Fail when a string catalog is out of date with the code
+# What CI runs: a string added to the code without `make strings` fails here.
+strings-check: strings
+	@git diff --exit-code -- '*.xcstrings' || \
+	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
 
 ## Build, install and launch the app on an attached iPhone
 # Built for that one device rather than for any, so automatic signing registers
