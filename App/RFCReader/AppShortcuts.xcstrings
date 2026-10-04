@@ -12,6 +12,15 @@
               "Find requirements in an RFC with ${applicationName}"
             ]
           }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Finde die Anforderungen in ${document} mit ${applicationName}",
+              "Finde Anforderungen in einem RFC mit ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -24,6 +33,15 @@
             "values" : [
               "Look up an identifier in ${applicationName}",
               "Look up a protocol identifier in ${applicationName}"
+            ]
+          }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Schlage eine Kennung in ${applicationName} nach",
+              "Schlage eine Protokollkennung in ${applicationName} nach"
             ]
           }
         }
@@ -42,6 +60,17 @@
               "Show an RFC in ${applicationName}"
             ]
           }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Öffne ${target} in ${applicationName}",
+              "Zeige ${target} in ${applicationName}",
+              "Öffne einen RFC in ${applicationName}",
+              "Zeige einen RFC in ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -53,6 +82,14 @@
             "state" : "new",
             "values" : [
               "Open a section of an RFC in ${applicationName}"
+            ]
+          }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Öffne einen Abschnitt eines RFC in ${applicationName}"
             ]
           }
         }
