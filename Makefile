@@ -96,9 +96,10 @@ endif
 ## Run the app-side test suite (RFCReaderKit)
 # Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
 # SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
-# it on a Mac.
+# it on a Mac. Swift Build, not Swift 6.3's default native build system, which
+# copies the string catalog into the bundle uncompiled, so no plural resolves.
 test-app:
-	swift test --package-path $(RFCREADERKIT)
+	swift test --package-path $(RFCREADERKIT) --build-system swiftbuild
 
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
