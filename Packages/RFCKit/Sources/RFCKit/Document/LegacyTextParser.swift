@@ -344,7 +344,7 @@ public enum LegacyTextParser {
   /// `1)`, and RFC 3116's eight test cases repeat its `1.` headings' numbers.
   ///
   /// So, as with the colon, a parenthesis number has to follow from another, and may not
-  /// be a `1.` or `1:` heading's too. And each is a title: it starts its block, which
+  /// be another heading's too, `1.`, `1:` or `1` with no separator. And each is a title: it starts its block, which
   /// is two lines at most, a title wrapped once. No number may come twice.
   ///
   /// That still passes RFC 234, a one-page agenda whose six items carry a paragraph
@@ -355,7 +355,7 @@ public enum LegacyTextParser {
   /// that makes a section a list item without restating the section's text.
   static func numbersHeadingsWithAParenthesis(_ lines: [String]) -> Bool {
     var parenthesisNumbers: [Substring] = []
-    var separatedNumbers: Set<Substring> = []
+    var otherHeadingNumbers: Set<Substring> = []
     var numbers: Set<Substring> = []
     var namesASection = false
     for (index, string) in lines.enumerated() where string.startsAtColumnZero {
@@ -365,7 +365,7 @@ public enum LegacyTextParser {
       }
       numbers.insert(match.number)
       guard match.separator == ")" else {
-        if match.separator != nil { separatedNumbers.insert(match.number) }
+        otherHeadingNumbers.insert(match.number)
         continue
       }
       let startsBlock = index == 0 || lines[index - 1].isBlank
@@ -377,7 +377,7 @@ public enum LegacyTextParser {
     }
     guard !parenthesisNumbers.isEmpty, namesASection,
       Set(parenthesisNumbers).count == parenthesisNumbers.count,
-      separatedNumbers.isDisjoint(with: parenthesisNumbers)
+      otherHeadingNumbers.isDisjoint(with: parenthesisNumbers)
     else { return false }
     return parenthesisNumbers.allSatisfy { follows($0, in: numbers) }
   }
@@ -387,7 +387,7 @@ public enum LegacyTextParser {
   private static let standardSectionTitles: Set<String> = [
     "status of this memo", "status of memo", "abstract", "introduction",
     "security considerations", "references", "acknowledgment", "acknowledgement",
-    "author's address", "authors' addresses",
+    "acknowledgments", "acknowledgements", "author's address", "authors' addresses",
   ]
 
   private static func namesAStandardSection(_ title: String) -> Bool {

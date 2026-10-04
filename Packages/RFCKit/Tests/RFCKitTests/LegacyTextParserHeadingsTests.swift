@@ -285,6 +285,13 @@ struct LegacyTextParserHeadingsTests {
       !LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned + ["", "2.  Model"]),
       "a number shared with a heading, as in RFC 3116")
     #expect(
+      !LegacyTextParser.numbersHeadingsWithAParenthesis(sectioned + ["", "2  Model"]),
+      "a number shared with a heading set with no separator")
+    #expect(
+      LegacyTextParser.numbersHeadingsWithAParenthesis(
+        ["Acknowledgments", ""] + sectioned.dropFirst(4)),
+      "a plural acknowledgment")
+    #expect(
       !LegacyTextParser.numbersHeadingsWithAParenthesis([
         "Status of this Memo", "", "1)  an item that runs on", "    over a second line",
         "    and a third", "", "2)  the next item",
