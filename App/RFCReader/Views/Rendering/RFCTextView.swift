@@ -40,6 +40,7 @@ struct RFCTextView: View {
     folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
     isShown: Bool = true,
+    coupling: ScrollCoupling? = nil,
     requirements: [Requirement]? = nil,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
@@ -49,6 +50,7 @@ struct RFCTextView: View {
       built: built,
       folding: folding,
       onFoldingChange: onFoldingChange,
+      coupling: coupling,
       requirements: requirements,
       bibliography: bibliography,
       measure: measure,
@@ -106,6 +108,9 @@ struct ReaderInputs {
   /// text view has, as a reader fading out does while the scene has moved on.
   let folding: Folding?
   let onFoldingChange: (Folding) -> Void
+  /// The side-by-side reading this reader scrolls together in (#187), nil when it
+  /// is read alone.
+  let coupling: ScrollCoupling?
   /// The document's requirements, which Implementer bands (#700); nil to keep what
   /// the text view has, as `folding` is.
   let requirements: [Requirement]?
@@ -188,11 +193,13 @@ struct ReaderInputs {
     }
     coordinator.layOut(width: width, measure: measure)
     if let requirements { coordinator.setRequirements(requirements) }
-    if coordinator.built?.text !== built.text {
+    let installs = coordinator.built?.text !== built.text
+    if installs {
       coordinator.install(built, folding: folding ?? coordinator.folding)
     } else if let folding {
       coordinator.apply(folding)
     }
+    coordinator.couple(to: coupling, installed: installs)
     if let scrollTarget {
       coordinator.scroll(
         to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
@@ -215,12 +222,44 @@ struct ReaderInputs {
   /// view. Only the trailing edge is refused, because zeroing the insets outright puts
   /// the first lines of the document behind the toolbar.
   final class ReaderScrollView: NSScrollView {
+    /// Told of a scroll the reader makes with a wheel, a trackpad or the scroller,
+    /// before it moves anything: in a side-by-side reading, that side leads (#187).
+    var willScroll: () -> Void = {}
+
+    override init(frame frameRect: NSRect) {
+      super.init(frame: frameRect)
+      // A drag of the scroller reaches neither `scrollWheel(with:)` nor the text
+      // view, but starts a live scroll. Observed rather than taken from a scroller
+      // subclass, which AppKit would show as a legacy, always-visible scroller.
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(liveScrollWillStart),
+        name: NSScrollView.willStartLiveScrollNotification, object: self)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the reader's scroll view is made in code")
+    }
+
+    /// The override of `scrollWheel(with:)` only says who leads before handing the
+    /// event on, so it keeps AppKit's responsive scrolling, which an override of it
+    /// otherwise turns off.
+    override static var isCompatibleWithResponsiveScrolling: Bool { true }
+
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
       insets.right = 0
       return insets
     }
 
+    override func scrollWheel(with event: NSEvent) {
+      willScroll()
+      super.scrollWheel(with: event)
+    }
+
+    @objc private func liveScrollWillStart() {
+      willScroll()
+    }
   }
 #endif
 
@@ -267,11 +306,16 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // Found or sent to its end, this side leads a side-by-side reading (#187).
+        coordinator.takeLead()
         // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
         _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
+      }
+      textView.willHandleKey = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
       }
 
       let host = UIHostingController(
@@ -307,6 +351,7 @@ struct ReaderInputs {
       // the Mac.
       coordinator.engine.stop()
       coordinator.setChromeEnabled(false)
+      coordinator.couple(to: nil, installed: false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not
       // reported yet.
@@ -383,11 +428,16 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
+        // Found or sent to its end, this side leads a side-by-side reading (#187).
+        coordinator.takeLead()
         // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
         _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
+      }
+      textView.willHandleKey = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
@@ -402,6 +452,9 @@ struct ReaderInputs {
       scroll.documentView = textView
       scroll.hasVerticalScroller = true
       scroll.drawsBackground = false
+      scroll.willScroll = { [weak coordinator = context.coordinator] in
+        coordinator?.takeLead()
+      }
 
       // AppKit has no scroll delegate. The selector-based observer unregisters
       // itself with the coordinator, which the block-based one would not.

@@ -39,8 +39,14 @@ public enum ReaderLayout {
   /// panel appeared and the window grew to meet it — which widens the pane, changes
   /// the column, rebuilds the document and loses the reader's place. Taken off, the
   /// floor AppKit enforces is the same open or shut, and the window never moves.
-  public static func minimumWindowWidth(panelIsOpen: Bool) -> CGFloat {
-    sidebarMinimum + listMinimum + minimumPaneWidth - (panelIsOpen ? panelWidth : 0)
+  ///
+  /// While two documents are compared (#187), two readable panes and nothing else:
+  /// the sidebar and the list are collapsed then (`ColumnSetAside`), so the window
+  /// fits a 1280 pt screen, half of a wider one, or full screen.
+  public static func minimumWindowWidth(panelIsOpen: Bool, comparing: Bool) -> CGFloat {
+    let columns =
+      comparing ? 2 * minimumPaneWidth : sidebarMinimum + listMinimum + minimumPaneWidth
+    return columns - (panelIsOpen ? panelWidth : 0)
   }
 
   /// The shortest the Mac's window may be.
@@ -52,10 +58,10 @@ public enum ReaderLayout {
   ///
   /// The floor is the one with the panel shut whether it is open or not: that is
   /// what AppKit enforces either way, an open panel's width being added back on top
-  /// of `minimumWindowWidth(panelIsOpen: true)`.
-  public static func windowSize(fitting size: CGSize) -> CGSize {
+  /// of `minimumWindowWidth(panelIsOpen: true, comparing:)`.
+  public static func windowSize(fitting size: CGSize, comparing: Bool) -> CGSize {
     CGSize(
-      width: max(size.width, minimumWindowWidth(panelIsOpen: false)),
+      width: max(size.width, minimumWindowWidth(panelIsOpen: false, comparing: comparing)),
       height: max(size.height, minimumWindowHeight))
   }
 

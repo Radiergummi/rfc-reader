@@ -211,7 +211,7 @@ public enum FragmentGeometry {
         // box had room above the label and none below its descenders.
         let font =
           text.attribute(.font, at: piece.location, effectiveRange: nil) as? PlatformFont
-          ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
+          ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize, weight: .regular)
         let baseline = line.typographicBounds.minY + line.glyphOrigin.y
         let top = baseline - font.ascender - chipVerticalPadding
         let bottom = baseline - font.descender + chipVerticalPadding

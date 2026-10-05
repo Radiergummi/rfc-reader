@@ -57,6 +57,15 @@ import RFCReaderKit
       super.scrollRangeToVisible(range)
     }
 
+    /// Told of a key pressed on a hardware keyboard, before it scrolls anything: in
+    /// a side-by-side reading, that side leads (#187).
+    var willHandleKey: () -> Void = {}
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      willHandleKey()
+      super.pressesBegan(presses, with: event)
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
@@ -139,6 +148,16 @@ import RFCReaderKit
       if revealRange?(range) == true { return }
       super.scrollRangeToVisible(range)
     }
+
+    /// Told of a key pressed in the text, before it scrolls anything: in a
+    /// side-by-side reading, that side leads (#187).
+    var willHandleKey: () -> Void = {}
+
+    override func keyDown(with event: NSEvent) {
+      willHandleKey()
+      super.keyDown(with: event)
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the

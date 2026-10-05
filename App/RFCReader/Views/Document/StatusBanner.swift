@@ -8,6 +8,10 @@ struct StatusBanner: View {
   /// inset, which `ReaderEnvironment` makes sure it was given.
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
+  @Environment(ReaderState.self) private var reader
+  #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  #endif
   let metadata: RFCMetadata
   /// From the header's identity, so a new `revisions.json` re-measures the header.
   let revisionLines: [RevisionsSummary.Line]
@@ -26,7 +30,9 @@ struct StatusBanner: View {
         if metadata.isObsolete {
           row(
             "Obsoleted by", metadata.obsoletedBy, term: .obsoletes,
-            symbol: "exclamationmark.triangle.fill", tint: Self.color(of: .obsoleted))
+            symbol: "exclamationmark.triangle.fill", tint: Self.color(of: .obsoleted),
+            comparesWith: offersComparison
+              ? metadata.obsoletedBy.filter { $0 != metadata.id } : [])
         }
         if !metadata.updatedBy.isEmpty {
           row(
@@ -83,7 +89,7 @@ struct StatusBanner: View {
   /// (#439). The title opens its glossary entry (#362).
   private func row(
     _ title: LocalizedStringKey, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String,
-    tint: Color
+    tint: Color, comparesWith successors: [DocumentID] = []
   ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       self.symbol(symbol).foregroundStyle(tint)
@@ -99,9 +105,45 @@ struct StatusBanner: View {
           .foregroundStyle(Self.link)
           .lineLimit(1)
         }
+        compare(with: successors)
       }
     }
     .font(.subheadline)
+  }
+
+  /// Whether this reader can open a successor beside it (#187): a reader read alone,
+  /// where there is room for two.
+  private var offersComparison: Bool {
+    guard reader.coupling == nil else { return false }
+    #if os(macOS)
+      return true
+    #else
+      return SideBySide.isOffered(in: horizontalSizeClass)
+    #endif
+  }
+
+  /// Reads the successor beside this document, the two scrolling together (#187).
+  @ViewBuilder
+  private func compare(with successors: [DocumentID]) -> some View {
+    if successors.count == 1, let successor = successors.first {
+      Button("Compare Side by Side") {
+        reader.compare(metadata, with: successor, library: library)
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(Self.link)
+    } else if !successors.isEmpty {
+      Menu("Compare Side by Side") {
+        ForEach(successors, id: \.self) { successor in
+          Button(successor.displayName) {
+            reader.compare(metadata, with: successor, library: library)
+          }
+        }
+      }
+      .menuStyle(.button)
+      .buttonStyle(.plain)
+      .foregroundStyle(Self.link)
+      .fixedSize()
+    }
   }
 
   /// The banner's links, in the reader's link color rather than the accent, which on

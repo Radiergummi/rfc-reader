@@ -219,6 +219,12 @@ final class RFCTextViewCoordinator: NSObject {
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
   /// main-actor hop, which `onDisappear` cannot afford to wait for.
   var lastVisibleAnchor: VisibleAnchorBox?
+  /// The reading this reader scrolls together with another one in, side by side
+  /// (#187); see `RFCTextViewCoordinator+Coupling`.
+  var coupling: ScrollCoupling?
+  /// Set while this reader follows the other one; its scroll reports wait for
+  /// `follow(_:)` to report the place it was put at.
+  var isFollowing = false
 
   var built: BuiltDocument?
   /// The anchors tracking may report. The full index covers *every* anchor —
@@ -482,11 +488,12 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       followChrome(scrollView)
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+      takeLead()
       drag = ReaderChrome.Drag(
         offset: scrollView.contentOffset.y,
         finger: scrollView.panGestureRecognizer.translation(in: scrollView).y)
@@ -663,13 +670,14 @@ final class RFCTextViewCoordinator: NSObject {
     /// `ReferenceHover.linkClickPointer`.
     @objc
     func viewportDidScroll(_ notification: Notification) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       hover.send(.scrolled)
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
     /// ends any dwell. In a link preview's reader it commits the preview.
     func mouseDownInText() -> Bool {
+      takeLead()
       let withControl = NSEvent.modifierFlags.contains(.control)
       guard hover.send(.mouseDown(withControl: withControl)).contains(.commitPreview),
         let commitsOnClick
@@ -710,6 +718,7 @@ final class RFCTextViewCoordinator: NSObject {
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
       onToolbarTitleReleased(self)
+      couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil
     }

@@ -21,13 +21,14 @@ struct DecorationAccessTests {
         string: "Label ",
         attributes: [
           .rfcDecoration: RFCDecoration.table.rawValue,
-          .font: PlatformFont.boldSystemFont(ofSize: 12),
+          .font: PlatformFont.systemFont(ofSize: 12, weight: .bold),
         ]))
     text.append(
       NSAttributedString(
         string: "value\n",
         attributes: [
-          .rfcDecoration: RFCDecoration.table.rawValue, .font: PlatformFont.systemFont(ofSize: 12),
+          .rfcDecoration: RFCDecoration.table.rawValue,
+          .font: PlatformFont.systemFont(ofSize: 12, weight: .regular),
         ]))
     text.append(NSAttributedString(string: "After"))
     return text

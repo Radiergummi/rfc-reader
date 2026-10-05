@@ -25,7 +25,7 @@ struct BandGeometryTests {
   private func layOut(width: CGFloat) throws -> Laid {
     let words = (0..<60).map { "word\($0)" }.joined(separator: " ")
     let text = NSAttributedString(
-      string: words, attributes: [.font: PlatformFont.systemFont(ofSize: 17)])
+      string: words, attributes: [.font: PlatformFont.systemFont(ofSize: 17, weight: .regular)])
     let storage = NSTextContentStorage()
     storage.textStorage?.setAttributedString(text)
     let layout = NSTextLayoutManager()
@@ -90,7 +90,7 @@ struct BandGeometryTests {
       [band], in: laid.text, lines: laid.lines, fragment: laid.fragment, origin: .zero)
     try #require(rows.count == 1)
     #expect(rows[0].corners == [.left, .right])
-    let font = PlatformFont.systemFont(ofSize: 17)
+    let font = PlatformFont.systemFont(ofSize: 17, weight: .regular)
     let baseline = line.typographicBounds.minY + line.glyphOrigin.y
     #expect(rows[0].rect.minY == baseline - font.ascender - FragmentGeometry.chipVerticalPadding)
     #expect(rows[0].rect.maxY == baseline - font.descender + FragmentGeometry.chipVerticalPadding)
