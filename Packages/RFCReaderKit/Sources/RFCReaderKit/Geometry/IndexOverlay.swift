@@ -124,3 +124,48 @@ public struct IndexRail: Equatable {
     return viewWidth - trailingObstruction - room / 2
   }
 }
+
+/// Typing to an index, as one types to a list in the Finder: the characters typed in
+/// quick succession select the first entry they start, or the entry where the
+/// typed term would be.
+public struct IndexTypeSelect {
+  /// How long a pause starts a new buffer, as `NSTableView`'s does.
+  public static let timeout: TimeInterval = 1
+
+  public private(set) var buffer = ""
+  private var lastKey = -TimeInterval.infinity
+
+  public init() {}
+
+  /// Takes `characters` typed at `time` (seconds, any clock that only moves on),
+  /// answering whether they are type-select's. A letter or digit always is; a space
+  /// or punctuation only extends a buffer that holds something, so a space with
+  /// nothing typed still pages; a control or function key never is.
+  public mutating func type(_ characters: String, at time: TimeInterval) -> Bool {
+    if time - lastKey > Self.timeout { buffer = "" }
+    guard let first = characters.first,
+      characters.allSatisfy({ !$0.isNewline && $0 != "\t" && !Self.isFunctionKey($0) })
+    else { return false }
+    guard !buffer.isEmpty || first.isLetter || first.isNumber else { return false }
+    buffer += characters
+    lastKey = time
+    return true
+  }
+
+  /// The entry the buffer selects among `keys`, the entries' keys (`IndexMap.key`)
+  /// in index order: the first the buffer starts, or else the first that sorts after
+  /// it, or else the last. Nil with nothing typed or no entries.
+  public func match(in keys: [String]) -> Int? {
+    let typed = IndexMap.key(buffer)
+    guard !typed.isEmpty, !keys.isEmpty else { return nil }
+    return keys.firstIndex { $0.hasPrefix(typed) }
+      ?? keys.firstIndex { $0 > typed }
+      ?? keys.count - 1
+  }
+
+  /// AppKit's arrow and function keys arrive as characters in the private use area,
+  /// U+F700 to U+F8FF.
+  private static func isFunctionKey(_ character: Character) -> Bool {
+    character.unicodeScalars.contains { (0xF700...0xF8FF).contains($0.value) }
+  }
+}
