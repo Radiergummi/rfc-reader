@@ -282,6 +282,38 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.scrolled).isEmpty)
   }
 
+  // MARK: - Preview, from a link's menu (#776)
+
+  /// The pointer is on the menu item, not the reference, when Preview is chosen: a
+  /// card that closed as it left the reference would close at its first move.
+  @Test func `a card chosen from the menu stays as the pointer moves and leaves`() {
+    var hover = ReferenceHover()
+    #expect(hover.handle(.cardChosen(first)) == [.showCard(first)])
+    _ = hover.handle(.cardShown)
+    #expect(hover.presentation == .chosenCard)
+    #expect(!hover.wantsTarget(at: elsewhere))
+    #expect(hover.handle(.pointerMoved(location: elsewhere, target: nil)).isEmpty)
+    #expect(hover.handle(.pointerExited).isEmpty)
+  }
+
+  @Test func `a card chosen from the menu closes on a click, and its link then follows`() {
+    var hover = ReferenceHover()
+    _ = hover.handle(.cardChosen(first))
+    _ = hover.handle(.cardShown)
+    #expect(hover.handle(.mouseDown(withControl: false)) == [.closePopover])
+    #expect(hover.handle(.clickedLink(reference: first.box, pointer: here)) == [.followLink])
+  }
+
+  @Test func `a card shown after a chosen one closes as a hover card does`() {
+    var hover = ReferenceHover()
+    _ = hover.handle(.cardChosen(first))
+    _ = hover.handle(.cardShown)
+    _ = hover.handle(.popoverClosedItself)
+    _ = hover.handle(.forceClickCard(second))
+    _ = hover.handle(.cardShown)
+    #expect(hover.presentation == .card)
+  }
+
   // MARK: - A heading's backlinks
 
   /// A backlink caption's list on screen, opened by a click on the caption, which is
