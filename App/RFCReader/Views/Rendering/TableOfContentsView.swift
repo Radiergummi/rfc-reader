@@ -16,20 +16,25 @@ struct TableOfContentsView: View {
   @AppStorage(ReaderPreferences.contentsOrderKey) private var order = ContentsOutline.Order.document
 
   var body: some View {
-    let groups = ContentsOutline.groups(of: sections, filter: filter, order: order)
     VStack(spacing: 0) {
       controls
-      Group {
-        switch order {
-        case .document: documentList(groups.flatMap(\.rows))
-        case .alphabetical: alphabeticalList(groups)
-        }
+      switch order {
+      case .document:
+        let rows = ContentsOutline.rows(of: sections, filter: filter)
+        documentList(rows)
+          .overlay { noResults(when: rows.isEmpty) }
+      case .alphabetical:
+        let groups = ContentsOutline.groups(of: sections, filter: filter)
+        alphabeticalList(groups)
+          .overlay { noResults(when: groups.isEmpty) }
       }
-      .overlay {
-        if groups.isEmpty, !sections.isEmpty {
-          ContentUnavailableView.search
-        }
-      }
+    }
+  }
+
+  @ViewBuilder
+  private func noResults(when isEmpty: Bool) -> some View {
+    if isEmpty, !sections.isEmpty {
+      ContentUnavailableView.search
     }
   }
 
@@ -51,7 +56,7 @@ struct TableOfContentsView: View {
   private func documentList(_ rows: [ContentsOutline.Row]) -> some View {
     List {
       ForEach(rows) { row in
-        button(row) {
+        button(anchor: row.anchor, isContext: row.isContext) {
           Text(row.title)
             .lineLimit(2)
             .padding(.leading, CGFloat(max(0, row.depth - 1)) * 12)
@@ -70,13 +75,13 @@ struct TableOfContentsView: View {
       LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
         ForEach(groups) { group in
           SwiftUI.Section {
-            ForEach(group.rows) { row in
-              button(row) {
+            ForEach(group.entries) { entry in
+              button(anchor: entry.anchor, isContext: false) {
                 HStack(alignment: .firstTextBaseline) {
-                  Text(row.title)
+                  Text(entry.title)
                     .lineLimit(2)
                   Spacer(minLength: 8)
-                  if let caption = row.caption {
+                  if let caption = entry.caption {
                     Text(caption)
                       .font(.caption)
                       .monospacedDigit()
@@ -88,7 +93,7 @@ struct TableOfContentsView: View {
               }
             }
           } header: {
-            Text(group.label ?? "")
+            Text(group.label)
               .font(.caption.weight(.semibold))
               .foregroundStyle(.secondary)
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,23 +109,23 @@ struct TableOfContentsView: View {
   }
 
   private func button(
-    _ row: ContentsOutline.Row, @ViewBuilder label: () -> some View
+    anchor: String, isContext: Bool, @ViewBuilder label: () -> some View
   ) -> some View {
     Button {
-      select(row.anchor)
+      select(anchor)
     } label: {
       label()
-        .fontWeight(row.anchor == current ? .semibold : .regular)
-        .foregroundStyle(row.isContext ? .secondary : .primary)
+        .fontWeight(anchor == current ? .semibold : .regular)
+        .foregroundStyle(isContext ? .secondary : .primary)
         .contentShape(.rect)
     }
     .buttonStyle(.plain)
     // Weight alone marks the current section only for someone who can see it
     // (#156).
-    .accessibilityAddTraits(row.anchor == current ? .isSelected : [])
+    .accessibilityAddTraits(anchor == current ? .isSelected : [])
     // Dimming alone sets an ancestor apart from a match only for someone who can
     // see it, as weight does the current section.
-    .accessibilityHint(row.isContext ? Text("Contains a match") : Text(verbatim: ""))
-    .id(row.anchor)
+    .accessibilityHint(isContext ? Text("Contains a match") : Text(verbatim: ""))
+    .id(anchor)
   }
 }

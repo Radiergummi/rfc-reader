@@ -21,17 +21,15 @@ struct ContentsOutlineTests {
   ]
 
   static func rows(_ filter: String) -> [ContentsOutline.Row] {
-    ContentsOutline.groups(of: sections, filter: filter, order: .document).flatMap(\.rows)
+    ContentsOutline.rows(of: sections, filter: filter)
   }
 
   @Test func `with no filter, document order lists every section at its depth`() {
-    let groups = ContentsOutline.groups(of: Self.sections, filter: "", order: .document)
-    #expect(groups.count == 1)
-    #expect(groups[0].label == nil)
-    #expect(groups[0].rows.map(\.anchor) == Self.sections.map(\.anchor))
-    #expect(groups[0].rows.map(\.depth) == [1, 2, 1, 2, 3, 1, 2, 1, 1])
-    #expect(groups[0].rows.map(\.title)[3] == "4.2. Caching")
-    #expect(groups[0].rows.allSatisfy { !$0.isContext && $0.caption == nil })
+    let rows = Self.rows("")
+    #expect(rows.map(\.anchor) == Self.sections.map(\.anchor))
+    #expect(rows.map(\.depth) == [1, 2, 1, 2, 3, 1, 2, 1, 1])
+    #expect(rows.map(\.title)[3] == "4.2. Caching")
+    #expect(rows.allSatisfy { !$0.isContext })
   }
 
   @Test func `a filter keeps a match's ancestors, as context`() {
@@ -64,6 +62,7 @@ struct ContentsOutlineTests {
     #expect(Self.rows("4.2.").map(\.anchor) == ["section-4", "section-4.2", "section-4.2.1"])
     #expect(Self.rows("appendix a").map(\.anchor) == ["appendix-A"])
     #expect(Self.rows("Appendix A.").map(\.anchor) == ["appendix-A"])
+    #expect(Self.rows("4.2. cach").map(\.anchor) == ["section-4", "section-4.2"])
   }
 
   @Test func `whitespace around the filter is ignored`() {
@@ -71,26 +70,25 @@ struct ContentsOutlineTests {
     #expect(Self.rows("   ").count == Self.sections.count)
   }
 
-  @Test func `a filter that matches nothing leaves no group`() {
-    #expect(ContentsOutline.groups(of: Self.sections, filter: "zzz", order: .document).isEmpty)
+  @Test func `a filter that matches nothing lists nothing`() {
+    #expect(Self.rows("zzz").isEmpty)
   }
 
   static func alphabetical(
     _ sections: [Section] = sections, _ filter: String = ""
   ) -> [ContentsOutline.Group] {
-    ContentsOutline.groups(of: sections, filter: filter, order: .alphabetical)
+    ContentsOutline.groups(of: sections, filter: filter)
   }
 
   @Test func `alphabetical order sorts by title and sets the number aside as a caption`() {
-    let rows = Self.alphabetical().flatMap(\.rows)
+    let entries = Self.alphabetical().flatMap(\.entries)
     #expect(
-      rows.map(\.title) == [
+      entries.map(\.title) == [
         "Acknowledgments", "Cache Poisoning", "Caching", "Collected ABNF", "Freshness",
         "Introduction", "Requirements Language", "Résumé Handling", "Security Considerations",
       ])
     #expect(
-      rows.map(\.caption) == [nil, "14.2", "4.2", "Appendix A", "4.2.1", "1", "1.1", "4", "14"])
-    #expect(rows.allSatisfy { $0.depth == 1 && !$0.isContext })
+      entries.map(\.caption) == [nil, "14.2", "4.2", "Appendix A", "4.2.1", "1", "1.1", "4", "14"])
   }
 
   @Test func `alphabetical order groups by first letter, folding diacritics`() {
@@ -100,7 +98,7 @@ struct ContentsOutlineTests {
       Section(anchor: "c", number: "3", title: "alpha"),
     ])
     #expect(groups.map(\.label) == ["A", "E"])
-    #expect(groups[1].rows.map(\.title) == ["Echo", "Élan"])
+    #expect(groups[1].entries.map(\.title) == ["Echo", "Élan"])
   }
 
   @Test func `titles that do not start with a Latin letter gather under # at the end`() {
@@ -111,7 +109,7 @@ struct ContentsOutlineTests {
       Section(anchor: "d", number: "4", title: "Alpha"),
     ])
     #expect(groups.map(\.label) == ["A", "Z", "#"])
-    #expect(groups[2].rows.map(\.anchor) == ["c", "a"])
+    #expect(groups[2].entries.map(\.anchor) == ["c", "a"])
   }
 
   @Test func `leading punctuation is set aside for sorting, not for showing`() {
@@ -120,24 +118,24 @@ struct ContentsOutlineTests {
       Section(anchor: "b", number: "2", title: "\"Quoted\" Strings"),
     ])
     #expect(groups.map(\.label) == ["Q", "Z"])
-    #expect(groups[0].rows[0].title == "\"Quoted\" Strings")
+    #expect(groups[0].entries[0].title == "\"Quoted\" Strings")
   }
 
   @Test func `numbers in titles sort by value`() {
-    let rows = Self.alphabetical([
+    let entries = Self.alphabetical([
       Section(anchor: "a", number: "1", title: "Step 10"),
       Section(anchor: "b", number: "2", title: "Step 2"),
-    ]).flatMap(\.rows)
-    #expect(rows.map(\.anchor) == ["b", "a"])
+    ]).flatMap(\.entries)
+    #expect(entries.map(\.anchor) == ["b", "a"])
   }
 
   @Test func `equal titles keep the document's order, told apart by their numbers`() {
-    let rows = Self.alphabetical([
+    let entries = Self.alphabetical([
       Section(anchor: "a", number: "3.1", title: "Overview"),
       Section(anchor: "b", number: "2.1", title: "Overview"),
-    ]).flatMap(\.rows)
-    #expect(rows.map(\.anchor) == ["a", "b"])
-    #expect(rows.map(\.caption) == ["3.1", "2.1"])
+    ]).flatMap(\.entries)
+    #expect(entries.map(\.anchor) == ["a", "b"])
+    #expect(entries.map(\.caption) == ["3.1", "2.1"])
   }
 
   @Test func `a section without words in its title shows by its number, under #`() {
@@ -146,13 +144,13 @@ struct ContentsOutlineTests {
       Section(anchor: "b", number: "5", title: ""),
     ])
     #expect(groups.map(\.label) == ["A", "#"])
-    #expect(groups[1].rows[0].title == "5.")
-    #expect(groups[1].rows[0].caption == nil)
+    #expect(groups[1].entries[0].title == "5.")
+    #expect(groups[1].entries[0].caption == nil)
   }
 
   @Test func `the filter applies in A–Z too, with no context rows`() {
-    let rows = Self.alphabetical(Self.sections, "cach").flatMap(\.rows)
-    #expect(rows.map(\.anchor) == ["section-14.2", "section-4.2"])
+    let entries = Self.alphabetical(Self.sections, "cach").flatMap(\.entries)
+    #expect(entries.map(\.anchor) == ["section-14.2", "section-4.2"])
     #expect(Self.alphabetical(Self.sections, "zzz").isEmpty)
   }
 }

@@ -2,25 +2,22 @@ import Foundation
 import RFCKit
 
 /// What the Contents tab shows: a document's sections in its own order or A–Z,
-/// narrowed by words in a title or the start of a number.
+/// narrowed by words in a title or the start of its heading.
 ///
 /// What is listed is decided here, under test; `TableOfContentsView` only draws it.
 public enum ContentsOutline {
   /// How the tab orders the sections. Remembered app-wide by its raw value.
-  public enum Order: String, CaseIterable, Sendable {
+  public enum Order: String, Sendable {
     case document
     case alphabetical
   }
 
-  /// One section, as the tab lists it.
-  public struct Row: Identifiable, Equatable, Sendable {
+  /// A section in the document's order.
+  public struct Row: Identifiable, Sendable {
     public let anchor: String
-    /// `4.2. Caching` in document order; the title alone in A–Z, where the number
-    /// is the caption.
+    /// `4.2. Caching`.
     public let title: String
-    /// The number, or `Appendix A`, set beside an A–Z title; nil in document order.
-    public let caption: String?
-    /// How far the row is indented: the section's depth in document order, 1 in A–Z.
+    /// How far the row is indented.
     public let depth: Int
     /// An ancestor shown only so a match keeps its place in the hierarchy.
     public let isContext: Bool
@@ -28,114 +25,105 @@ public enum ContentsOutline {
     public var id: String { anchor }
   }
 
-  /// Rows under a letter in A–Z; the single, unlabeled group of document order.
-  public struct Group: Identifiable, Equatable, Sendable {
-    /// `A` to `Z`, or `#` for every title that does not start with a Latin letter;
-    /// nil in document order.
-    public let label: String?
-    public let rows: [Row]
+  /// A section in A–Z.
+  public struct Entry: Identifiable, Sendable {
+    public let anchor: String
+    /// The title alone, or the number it is shown by for a section without words.
+    public let title: String
+    /// `4.2` or `Appendix A`, set beside the title.
+    public let caption: String?
 
-    public var id: String { label ?? "" }
+    public var id: String { anchor }
   }
 
-  /// What the tab lists of `sections`, which are flat and in document order, for
-  /// `filter` and `order`. No group at all when nothing matches.
-  public static func groups(of sections: [Section], filter: String, order: Order) -> [Group] {
-    let text = filter.trimmingCharacters(in: .whitespaces)
-    switch order {
-    case .document:
-      let rows = inDocumentOrder(sections, matching: text)
-      return rows.isEmpty ? [] : [Group(label: nil, rows: rows)]
-    case .alphabetical:
-      return alphabetically(sections, matching: text)
-    }
+  /// The entries under one letter.
+  public struct Group: Identifiable, Sendable {
+    /// `A` to `Z`, or `#` for every title that does not start with a Latin letter.
+    public let label: String
+    public let entries: [Entry]
+
+    public var id: String { label }
   }
 
-  /// Whether `section` matches `text`: words anywhere in its title, ignoring case
-  /// and diacritics, or the start of its number, so `4.2` does not find 14.2. The
-  /// number may be typed as the list shows it, `4.2.` or `Appendix A`.
-  static func matches(_ section: Section, _ text: String) -> Bool {
-    if text.isEmpty { return true }
-    let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-    if section.titleText.range(of: text, options: options) != nil { return true }
-    guard let number = section.number else { return false }
-    var typed = Substring(text)
-    if section.isAppendix,
-      let prefix = typed.range(of: "appendix ", options: options.union(.anchored))
-    {
-      typed = typed[prefix.upperBound...]
-    }
-    if typed.hasSuffix(".") { typed = typed.dropLast() }
-    return !typed.isEmpty && number.range(of: typed, options: options.union(.anchored)) != nil
-  }
-
-  /// Each match, after those of its ancestors not already listed, which are context.
-  private static func inDocumentOrder(_ sections: [Section], matching text: String) -> [Row] {
+  /// `sections`, which are flat and in document order, narrowed by `filter`: each
+  /// match after those of its ancestors not already listed, which are context.
+  public static func rows(of sections: [Section], filter: String) -> [Row] {
+    let text = trimmed(filter)
     var rows: [Row] = []
-    // The open path to the current section: each ancestor, and whether it is listed.
-    var path: [(section: Section, isListed: Bool)] = []
+    // The open path to the current section.
+    var path: [PathStep] = []
     for section in sections {
-      while let last = path.last, last.section.depth >= section.depth { path.removeLast() }
-      let isMatch = matches(section, text)
+      let depth = section.depth
+      while let last = path.last, last.depth >= depth { path.removeLast() }
+      let isMatch = matches(section, title: section.titleText, text)
       if isMatch {
         for index in path.indices where !path[index].isListed {
-          rows.append(documentRow(path[index].section, isContext: true))
+          let ancestor = path[index]
+          rows.append(
+            Row(
+              anchor: ancestor.section.anchor, title: ancestor.section.displayTitle,
+              depth: ancestor.depth, isContext: true))
           path[index].isListed = true
         }
-        rows.append(documentRow(section, isContext: false))
+        rows.append(
+          Row(anchor: section.anchor, title: section.displayTitle, depth: depth, isContext: false))
       }
-      path.append((section, isMatch))
+      path.append(PathStep(section: section, depth: depth, isListed: isMatch))
     }
     return rows
   }
 
-  private static func documentRow(_ section: Section, isContext: Bool) -> Row {
-    Row(
-      anchor: section.anchor, title: section.displayTitle, caption: nil,
-      depth: section.depth, isContext: isContext)
+  /// A section on the path to the one `rows` is at: its depth, and whether it is
+  /// listed yet.
+  private struct PathStep {
+    let section: Section
+    let depth: Int
+    var isListed: Bool
   }
 
-  /// The matches by title, under `A` to `Z` and then `#`. Equal titles keep the
-  /// document's order.
-  private static func alphabetically(_ sections: [Section], matching text: String) -> [Group] {
-    let keyed = sections.filter { matches($0, text) }.map { section in
-      let key = sortKey(section)
-      return (key: key, label: groupLabel(key), section: section)
+  /// The matches of `filter` among `sections` by title, under `A` to `Z` and then
+  /// `#`. Equal titles keep the document's order.
+  public static func groups(of sections: [Section], filter: String) -> [Group] {
+    let text = trimmed(filter)
+    var byLabel: [String: [(key: String, entry: Entry)]] = [:]
+    for section in sections {
+      let title = section.titleText
+      guard matches(section, title: title, text) else { continue }
+      let key = sortKey(section, title: title)
+      byLabel[groupLabel(key), default: []].append((key, entry(section, title: title)))
     }
-    // `sorted` is not documented as stable, so the document's order is the last
-    // comparison.
-    let sorted = keyed.enumerated().sorted { first, second in
-      let (earlier, later) = (first.element, second.element)
-      if (earlier.label == "#") != (later.label == "#") { return later.label == "#" }
-      let order = earlier.key.compare(
-        later.key, options: [.caseInsensitive, .diacriticInsensitive, .numeric])
-      return order == .orderedSame ? first.offset < second.offset : order == .orderedAscending
-    }.map(\.element)
-    var groups: [(label: String, rows: [Row])] = []
-    for item in sorted {
-      let row = alphabeticalRow(item.section)
-      if groups.last?.label == item.label {
-        groups[groups.count - 1].rows.append(row)
-      } else {
-        groups.append((item.label, [row]))
-      }
+    let letters = byLabel.keys.filter { $0 != "#" }.sorted()
+    return (letters + ["#"]).compactMap { label in
+      byLabel[label].map { Group(label: label, entries: sortedByKey($0)) }
     }
-    return groups.map { Group(label: $0.label, rows: $0.rows) }
   }
 
-  private static func alphabeticalRow(_ section: Section) -> Row {
-    let hasWords = !section.titleText.isEmpty
-    let caption = section.number.map { section.isAppendix ? "Appendix \($0)" : $0 }
-    return Row(
-      anchor: section.anchor, title: hasWords ? section.titleText : section.displayTitle,
-      caption: hasWords ? caption : nil, depth: 1, isContext: false)
+  /// Whether `section`, whose title is `title`, matches `text`: words anywhere in
+  /// its title, or the start of its heading as the list shows it (`4.2.`,
+  /// `Appendix A`), ignoring case and diacritics, so `4.2` does not find 14.2.
+  private static func matches(_ section: Section, title: String, _ text: String) -> Bool {
+    if text.isEmpty { return true }
+    let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    return title.range(of: text, options: options) != nil
+      || section.displayTitle.range(of: text, options: options.union(.anchored)) != nil
+  }
+
+  private static func trimmed(_ filter: String) -> String {
+    filter.trimmingCharacters(in: .whitespaces)
+  }
+
+  private static func entry(_ section: Section, title: String) -> Entry {
+    if title.isEmpty {
+      return Entry(anchor: section.anchor, title: section.displayTitle, caption: nil)
+    }
+    return Entry(anchor: section.anchor, title: title, caption: section.numberLabel)
   }
 
   /// What a section sorts by: its title from its first letter or digit, or, with no
   /// words in it, the number it is shown by.
-  private static func sortKey(_ section: Section) -> String {
-    let title = section.titleText.drop { !$0.isLetter && !$0.isNumber }
-    return title.isEmpty ? section.displayTitle : String(title)
+  private static func sortKey(_ section: Section, title: String) -> String {
+    let words = title.drop { !$0.isLetter && !$0.isNumber }
+    return words.isEmpty ? section.displayTitle : String(words)
   }
 
   /// `A` to `Z` for a key that starts with a Latin letter, diacritics folded, and `#`
@@ -145,5 +133,15 @@ public enum ContentsOutline {
       .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
       .uppercased()
     return first.count == 1 && ("A"..."Z").contains(first) ? first : "#"
+  }
+
+  /// The entries in the order of their keys. Equal keys keep the order they were
+  /// collected in, which is the document's.
+  private static func sortedByKey(_ keyed: [(key: String, entry: Entry)]) -> [Entry] {
+    keyed.enumerated().sorted { first, second in
+      let order = first.element.key.compare(
+        second.element.key, options: [.caseInsensitive, .diacriticInsensitive, .numeric])
+      return order == .orderedSame ? first.offset < second.offset : order == .orderedAscending
+    }.map(\.element.entry)
   }
 }
