@@ -97,35 +97,67 @@ Anything outside that shape leaves the whole section as generic blocks, as it re
 
 ## Part 3: The index in the reader
 
+Refined 2026-10-05, after part 2's parser met the corpus: locators are not all sections.
+
 ### Layout, in `DocumentTextBuilder+Index.swift`
 
-- **Group label:** the letter on a line of its own, small, tracked and secondary, not heading chrome. It carries the group's anchor, and is a heading to accessibility, so the rotor steps through letters.
-- **Entry:** the term, then its locators on the same line as in-document section links shortened to `§9.3.1`, the primary first and semibold. A wrapped line hangs under the term. No dot leaders and no right-aligned column: on a phone-width column both wrap badly and add ink, not information. Links, not chips: a chip is another document.
-- **Subentries:** one indent step under their heading entry.
-- **`IndexMap`**, recorded into `BuiltDocument` by the build: each group's label and text range, each entry's folded match key (case- and diacritic-insensitive) and text range. The overlays read it; nothing searches the text.
+It replaces part 2's plain setting (`plainBlocks(of:)`, which then goes; `IndexBlock.definitionList` stays, for the serializer). The paragraph of letter links is dropped: the A–Z rail replaces it.
 
-### Overlays, drawn by the App target from pure functions in RFCReaderKit
+- **Group label:** the letter as a paragraph of its own, small, tracked and secondary, not heading chrome. It carries the group's anchor (`rfc.index.u65`), and is a heading to accessibility, so the rotor steps through letters.
+- **Entry:** one paragraph with a hanging indent. The term, as parsed (a name, `linkBare: false`), then its locators, comma-separated, on the same line; the primary first and semibold, the others in the source's order. A wrapped line hangs one step in, under the term. An entry without locators is its term alone. No dot leaders and no right-aligned column: on a phone-width column both wrap badly and add ink, not information.
+- **Locator:** an in-document cross-reference link set through the builder's existing path, so hover, force-click previews and copying behave as for any other link. Links, not chips: a chip is another document. Only its label changes, by a pure `IndexLocatorLabel.short(_:)`:
 
-All three show only while the index section intersects the visible text, and not while it is folded.
+  | prep's `derivedContent` | label |
+  |---|---|
+  | `Section 9.3.1` | `§9.3.1` |
+  | `Section 3.7, Paragraph 6` | `§3.7 ¶6` |
+  | `Section 14.6, Paragraph 4, Item 2` | `§14.6 ¶4` (the link still targets the item) |
+  | `Appendix A.2.5, Paragraph 1` | `§A.2.5 ¶1` |
+  | `Table 2`, or any other shape | unchanged |
 
-- **Sticky letter.** The current group's letter pinned at the top of the text area, pushed out by the next group's label as Contacts does.
-  - *Current group:* the group whose range holds the top visible text location. It needs no layout of text off screen.
-  - *Offset:* from the next label's fragment frame, when that is on screen.
-- **A–Z rail.** The labels of the groups present. On macOS in the trailing margin beside the column, clear of the scroller; on iOS at the trailing edge, as `UITableView`'s section index. Tapping or dragging scrolls to the group's anchor through the existing scroll request. One adjustable element to VoiceOver.
-  - *Hit-testing:* which label a point falls on.
-- **Type-select.** While the reader's text view is first responder and the index is visible, an unmodified key extends a buffer that resets after about a second, as `NSTableView`'s does, and the reader scrolls to the first entry whose key starts with the buffer, or else to the next entry in order, and flashes it. Space joins only a buffer that holds something; otherwise it pages as it does now. macOS: `ReaderTextView.keyDown`. iOS: hardware keyboards, `pressesBegan`; touch has the rail.
-  - *Matching:* `IndexTypeSelect`, the buffer and the entries' keys to an entry.
+  A no-break space holds `§3.7 ¶6` together. The paragraph is kept because RFC 9114 cites paragraphs: 21 of its 32 entries cite one section at several paragraphs, up to 40 locators on an entry, which shortened to sections would read `§4.1 §4.1 §4.1`.
+- **Subentries:** one indent step under their heading entry, set the same way.
+- **`IndexMap`**, recorded into `BuiltDocument` by the build, as `keepsWithNext` is, in UTF-16 offsets into the text: the index's whole range; each group's label, anchor and label range; each top-level entry's folded key (case- and diacritic-insensitive) and term range. Empty for a document without an index. The overlays read it; nothing searches the text.
+
+Type-select matches top-level entries only: subentries are sorted under their heading entry, not across the index, so including them would break the fallback to the next entry in order.
+
+### Overlays: pure functions in RFCReaderKit
+
+In `IndexOverlay.swift`, beside `FragmentGeometry`; value types the App target calls, none of them touching a view.
+
+- **Visibility:** `IndexMap.isShowing(visible:hidden:)`, whether the index's range meets the visible range outside folded text.
+- **Sticky letter.**
+  - *Current group:* `IndexMap.group(at:)`, the last group whose label starts at or before the top visible character. It needs no layout of text off screen.
+  - *Push-out:* `StickyLetter.offset(nextLabelTop:height:)`, `min(0, nextLabelTop − height)` while the next group's label is on screen, else 0, as Contacts does.
+  - Hidden while the current group's own label is in view, so a letter never shows twice.
+- **A–Z rail.**
+  - *Layout:* `IndexRail.layout(labels:height:)`, a row per group, its spacing shrunk to fit down to a minimum row height; below that every other letter becomes a dot, as `UITableView`'s section index does (an iPhone in landscape, against 9110's 26 groups).
+  - *Hit-testing:* `IndexRail.group(at:)`, over the same layout, clamped to the ends.
+  - *Placement:* `IndexRail.x(viewWidth:column:)`. macOS: centered in the trailing gutter `ReaderLayout` leaves beside the column (at least `ReaderLayout.margin`), clear of the overlay scroller. iOS: the trailing edge inside the safe area.
+- **Type-select:** `IndexTypeSelect`, a buffer and the time of the last key. A character extends the buffer, or starts a new one after a second, as `NSTableView`'s does. A space joins only a buffer that holds something; otherwise it is not type-select's, and pages as now. The match is the first top-level entry whose key starts with the folded buffer, or else the next entry in order after it.
+
+### Overlays: the App target
+
+`RFCTextViewCoordinator+Index.swift` owns the views and updates them from the scroll hooks that already drive the running heading (`viewportDidScroll`, `scrollViewDidScroll`), and after a fold and a relayout. Its own work is making the views, reading the next label's fragment frame, and setting frames and visibility. Platform views, not a SwiftUI overlay: the sticky letter moves with every scroll frame, which an overlay fed through observation would trail by a frame and invalidate SwiftUI for, and the positions are in the text view's coordinates.
+
+- **Sticky letter:** macOS, an `NSTextField` added with `NSScrollView.addFloatingSubview(_:for: .vertical)`; iOS, a `UILabel` moved on scroll. Styled as the labels in the text, on the reader's background. Hidden from accessibility: the labels in the text are headings.
+- **Rail:** an `IndexRailView` per platform, drawn from `IndexRail.layout`. A tap or drag scrolls to the group's anchor with `scroll(to:animated: false)`; on iOS a selection haptic marks each change of group. One accessibility element: adjustable on iOS, a slider on macOS, stepping through the groups, its value the current letter.
+- **Type-select:** macOS, `ReaderTextView.keyDown`; iOS, `pressesBegan`, for hardware keyboards (touch has the rail). Taken only without modifiers other than Shift, for a letter, digit or space, and when the coordinator's `typeSelect` closure accepts it; anything else goes to `super`. A match is scrolled into view and flashed: `showFindIndicator(for:)` on macOS, a highlight fading over the term's frame on iOS.
+- **Not in previews:** the force-click and hover previews show no overlays and take no type-select. Printing and the PDF export set the layout, without overlays.
+- New UI strings (the rail's label, hint and value) get their `de` entries in `Localizable.xcstrings`.
 
 ### Tests
 
-- Builder, over a hand-built `IndexBlock` value: the text, the locator links and their targets, the primary's weight, `IndexMap` ranges against the text.
+- Builder, over a hand-built `IndexBlock` of made-up terms: each line's text, the locator links and their targets, the primary's weight and place, the hanging indent, `IndexMap` ranges against the text.
+- `IndexLocatorLabel` over each shape in the table.
 - `BuilderCompletenessTests` unchanged: no attachments are added.
-- Current group, sticky offset, rail hit-testing, `IndexTypeSelect`: unit tests.
-- The wiring by hand, with RFC 9110, on the Mac and in the Simulator.
+- The overlay functions: the current group at, before and after labels; the push-out at, near and past the boundary; rail layout, the dot threshold and clamped hit-testing; type-select's prefix, fallback, timeout, the space rule and folding (`é` matches `e`).
+- `Corpus-backed: index` extended: each of the six documents builds an `IndexMap` with a group per `IndexBlock` group, and its locators are in-document links to anchors the build declares.
+- The wiring by hand, with RFC 9110 and 9114, on the Mac and in the Simulator.
 
 ### Out of scope
 
-A filter that hides entries in the body, and a sort order for it; ⌘F already searches the document, and an index is in A–Z order by definition. Printing and the PDF export set the layout without overlays.
+A filter that hides entries in the body, and a sort order for it; ⌘F already searches the document, and an index is in A–Z order by definition. The index in the Contents tab.
 
 ---
 
@@ -177,4 +209,4 @@ Resolving "RFC 1034, page 12" citations through `page-N` anchors, which this mak
 
 ## Decision records
 
-Each part records its decision in `docs/decisions/` when it lands, with its measurements: part 2 the index block and why prep's anchor is the recognizer, part 3 why the index has overlays and type-select but no filter, part 4 the page anchors and why legacy indexes are a heuristic and not overrides.
+Each part records its decision in `docs/decisions/` when it lands, with its measurements: part 2 the index block and why prep's anchor is the recognizer, part 3 why the index has overlays and type-select but no filter, why its locators keep their paragraph, why type-select reads top-level entries only, and why the overlays are platform views, part 4 the page anchors and why legacy indexes are a heuristic and not overrides.
