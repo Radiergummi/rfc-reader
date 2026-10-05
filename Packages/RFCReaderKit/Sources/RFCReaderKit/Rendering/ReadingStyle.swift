@@ -76,15 +76,24 @@ public struct ReadingStyle: Sendable, Hashable {
     return scaled
   }
 
-  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
-  public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
-  public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
+  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize, weight: .regular) }
+  /// The weight of the platform's bold system font, which on iOS is semibold. It is
+  /// asked for by weight because the bold system font itself can come back as
+  /// Helvetica 12 pt, the first time it is made on several threads at once (#326).
+  public var boldBodyFont: PlatformFont {
+    #if canImport(UIKit)
+      .systemFont(ofSize: bodySize, weight: .semibold)
+    #else
+      .systemFont(ofSize: bodySize, weight: .bold)
+    #endif
+  }
+  public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88, weight: .regular) }
   /// A source code block's language: a tag on its card, small and tracked, so it
   /// does not read as a heading over a line or two of code.
-  public var codeLabelFont: PlatformFont { .systemFont(ofSize: bodySize * 0.7) }
+  public var codeLabelFont: PlatformFont { .systemFont(ofSize: bodySize * 0.7, weight: .regular) }
   /// A heading's backlink caption (#584): smaller than a caption, because it is the
   /// reader's note about the section and not part of the document.
-  public var backlinksFont: PlatformFont { .systemFont(ofSize: bodySize * 0.76) }
+  public var backlinksFont: PlatformFont { .systemFont(ofSize: bodySize * 0.76, weight: .regular) }
 
   /// Strong text in `surrounding`: bold, or heavy where the surrounding text is
   /// already bold, at its size and slant. A bold trait added to the face is not
