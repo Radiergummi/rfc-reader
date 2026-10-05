@@ -60,6 +60,12 @@ struct IndexOverlayTests {
     #expect(StickyLetter.offset(currentLabelTop: 12, nextLabelTop: 300, height: 20) == nil)
   }
 
+  /// A jump puts the label at the top to within a rounding error, which is not past it.
+  @Test func `the letter hides while its own label is a rounding error above the top`() {
+    #expect(StickyLetter.offset(currentLabelTop: -0.013, nextLabelTop: 600, height: 20) == nil)
+    #expect(StickyLetter.offset(currentLabelTop: -1, nextLabelTop: 600, height: 20) == 0)
+  }
+
   @Test func `the next label pushes the letter up as it rises under it`() {
     #expect(StickyLetter.offset(currentLabelTop: -100, nextLabelTop: 25, height: 20) == 0)
     #expect(StickyLetter.offset(currentLabelTop: -100, nextLabelTop: 20, height: 20) == 0)

@@ -32,6 +32,10 @@ extension IndexMap {
 /// The current group's letter pinned at the top of the text, as Contacts pins a
 /// section's.
 public enum StickyLetter {
+  /// How far above the top a label may sit and still count as at the top: a jump puts
+  /// it there to within a rounding error, which is not past it.
+  static let tolerance: CGFloat = 0.5
+
   /// How far above its place the letter is drawn, 0 or less; nil while it should not
   /// show at all, which is while the current group's own label is in view at or below
   /// the top, so a letter is never on screen twice. The next group's label, rising
@@ -45,7 +49,7 @@ public enum StickyLetter {
   public static func offset(currentLabelTop: CGFloat?, nextLabelTop: CGFloat?, height: CGFloat)
     -> CGFloat?
   {
-    if let currentLabelTop, currentLabelTop >= 0 { return nil }
+    if let currentLabelTop, currentLabelTop > -tolerance { return nil }
     guard let nextLabelTop else { return 0 }
     return min(0, nextLabelTop - height)
   }
