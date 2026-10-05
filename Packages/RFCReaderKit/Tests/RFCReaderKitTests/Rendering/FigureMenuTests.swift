@@ -16,9 +16,9 @@ import Testing
 struct FigureMenuTests {
   /// The item offers the presentation that is not showing.
   @Test func `the menu offers the text of a figure and the figure of a text`() {
-    #expect(FigureMenu.title(offeredFrom: .figure) == "Show as Text")
+    #expect(FigureMenu.title(offeredFrom: .figure, locale: .english) == "Show as Text")
     #expect(FigureMenu.offered(from: .figure) == .text)
-    #expect(FigureMenu.title(offeredFrom: .text) == "Show as Figure")
+    #expect(FigureMenu.title(offeredFrom: .text, locale: .english) == "Show as Figure")
     #expect(FigureMenu.offered(from: .text) == .figure)
     #expect(FigureMenu.symbol(offeredFrom: .figure) != FigureMenu.symbol(offeredFrom: .text))
   }

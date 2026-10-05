@@ -100,7 +100,8 @@ struct AuthorCardTests {
   }
 
   @Test func `an editor is marked as one`() {
-    #expect(AuthorCard.contact(for: author(nil, role: .editor)).jobTitle == "Editor")
+    #expect(
+      AuthorCard.contact(for: author(nil, role: .editor), locale: .english).jobTitle == "Editor")
     #expect(AuthorCard.contact(for: author(nil)).jobTitle == "")
   }
 

@@ -351,14 +351,16 @@ import RFCReaderKit
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
       if quotes {
         let quote = NSMenuItem(
-          title: "Copy as Quote", action: #selector(copyAsQuote(_:)), keyEquivalent: "")
+          title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
+          keyEquivalent: "")
         quote.target = self
         let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
         result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
       }
       if let box, figure != nil {
         let item = NSMenuItem(
-          title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
+          title: String(localized: "Copy Figure"), action: #selector(copyFigure(_:)),
+          keyEquivalent: "")
         item.target = self
         let near = clickedBox != nil ? NSRange(location: clicked, length: 0) : selectedRange()
         item.representedObject = (box, near)

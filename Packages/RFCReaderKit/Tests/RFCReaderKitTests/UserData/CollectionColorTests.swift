@@ -27,6 +27,6 @@ struct CollectionColorTests {
 
   /// The app's strings are American English.
   @Test func `the gray swatch is named gray`() {
-    #expect(CollectionColor.gray.title == "Gray")
+    #expect(CollectionColor.gray.title(in: .english) == "Gray")
   }
 }

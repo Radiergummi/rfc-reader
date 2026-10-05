@@ -120,7 +120,13 @@
     }
 
     @objc var scriptCollection: String {
-      get { controller.map { LibraryModel.shared.title(for: $0.navigation.filter) } ?? "" }
+      get {
+        // In English, whatever the interface's language: the names a script sets a
+        // filter by are (LibraryFilter(scriptName:)).
+        controller.map {
+          $0.navigation.filter.title(in: LibraryModel.shared.collections, locale: .english)
+        } ?? ""
+      }
       set {
         let library = LibraryModel.shared
         let groups = Set(library.index?.rfcs.compactMap(\.workingGroup) ?? [])

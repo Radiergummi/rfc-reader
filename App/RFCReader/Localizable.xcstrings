@@ -1,20 +1,8 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
-
-    },
-    "%@ %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@"
-          }
-        }
-      }
-    },
     "%@ %@ %@" : {
+      "comment" : "A draft's relation, its name and its stage",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53,33 +41,118 @@
     "%@ isn't available offline. Connect to the internet, or keep it offline in RFC Reader, then try again." : {
 
     },
-    "%@: %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@: %2$@"
-          }
-        }
-      }
-    },
     "%@: searched as text" : {
 
     },
     "%lld RFCs" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld documents." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld document."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld documents."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld identifiers" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld identifier"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld identifiers"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld sections" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld section"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sections"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld times" : {
-
-    },
-    "%lld×" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld times"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link." : {
 
@@ -126,6 +199,9 @@
     "Bookmark" : {
 
     },
+    "Browse" : {
+
+    },
     "Browse the sidebar, search, or jump straight to a number." : {
 
     },
@@ -133,6 +209,9 @@
 
     },
     "Chairs: %@" : {
+
+    },
+    "Choose a legacy XML pack: an .aar archive, or a folder with its manifest." : {
 
     },
     "Cite" : {
@@ -144,10 +223,16 @@
     "Collapsed" : {
 
     },
+    "Collections" : {
+
+    },
     "Contents" : {
 
     },
     "Continue" : {
+
+    },
+    "Copy" : {
 
     },
     "Copy %@" : {
@@ -157,6 +242,12 @@
 
     },
     "Copy Checklist as Markdown" : {
+
+    },
+    "Copy Figure" : {
+
+    },
+    "Copy Link" : {
 
     },
     "Copy as Quote" : {
@@ -174,7 +265,13 @@
     "Couldn't load the original text" : {
 
     },
+    "Couldn’t Install the Data Pack" : {
+
+    },
     "Couldn’t Load %@" : {
+
+    },
+    "Create" : {
 
     },
     "Defined In" : {
@@ -196,7 +293,7 @@
 
     },
     "Document" : {
-
+      "comment" : "Toolbar item that shows the open document"
     },
     "Done" : {
 
@@ -208,6 +305,9 @@
 
     },
     "Draw diagrams" : {
+
+    },
+    "Edit Collection" : {
 
     },
     "Edit…" : {
@@ -240,7 +340,13 @@
     "Find Requirements" : {
 
     },
+    "Find the requirements in ${document}" : {
+
+    },
     "Find…" : {
+
+    },
+    "Format:" : {
 
     },
     "Forward" : {
@@ -276,6 +382,9 @@
     "Install Data Pack…" : {
 
     },
+    "Installed Data Pack %@" : {
+
+    },
     "It holds ^[%lld document](inflect: true). Only the collection is removed; the documents stay in the library." : {
 
     },
@@ -285,10 +394,16 @@
     "Keep Offline" : {
 
     },
+    "Keep a copy to read offline." : {
+
+    },
     "Kept offline" : {
 
     },
     "Key Word" : {
+
+    },
+    "Library" : {
 
     },
     "Lists the BCP 14 requirements an RFC states, in one section and its subsections or in the whole RFC, each with its section's number." : {
@@ -301,6 +416,9 @@
 
     },
     "Look Up Identifier" : {
+
+    },
+    "Look up ${entry}" : {
 
     },
     "Looks up a protocol identifier, such as HTTP status 425, TLS alert 70 or the Retry-After field, and finds the RFC section that defines it." : {
@@ -318,6 +436,9 @@
     "Name" : {
 
     },
+    "Navigation" : {
+
+    },
     "New Collection" : {
 
     },
@@ -333,10 +454,10 @@
     "Next Section" : {
 
     },
-    "No %@" : {
+    "No Citation Index" : {
 
     },
-    "No Citation Index" : {
+    "No Contents" : {
 
     },
     "No Documents" : {
@@ -387,7 +508,16 @@
     "Obsoleted by" : {
 
     },
+    "Offline" : {
+
+    },
     "Open" : {
+
+    },
+    "Open ${section} of ${document}" : {
+
+    },
+    "Open ${target}" : {
 
     },
     "Open %@ on rfc-editor.org. Option-click to download it." : {
@@ -400,6 +530,9 @@
 
     },
     "Open Section" : {
+
+    },
+    "Open in New Tab" : {
 
     },
     "Open in New Window" : {
@@ -438,6 +571,9 @@
     "Pick an RFC" : {
 
     },
+    "Preview" : {
+
+    },
     "Previous Section" : {
 
     },
@@ -445,6 +581,9 @@
 
     },
     "Published as %@" : {
+
+    },
+    "Quit" : {
 
     },
     "RFC" : {
@@ -474,6 +613,9 @@
     "Reading font size: %lld" : {
 
     },
+    "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched." : {
+
+    },
     "References" : {
 
     },
@@ -481,9 +623,6 @@
 
     },
     "Registry" : {
-
-    },
-    "Remove Bookmark" : {
 
     },
     "Remove Offline Copy" : {
@@ -495,6 +634,9 @@
     "Remove from Collection" : {
 
     },
+    "Remove the offline copy. It stays open here, and is downloaded again the next time you open it." : {
+
+    },
     "Remove this filter" : {
 
     },
@@ -504,10 +646,16 @@
     "Retry" : {
 
     },
+    "Save" : {
+
+    },
     "Save as Collection" : {
 
     },
     "Saved as Collection" : {
+
+    },
+    "Search" : {
 
     },
     "Search Library" : {
@@ -519,6 +667,9 @@
     "Search the library for “%@”" : {
 
     },
+    "Searched as text" : {
+
+    },
     "Searches the library for it" : {
 
     },
@@ -526,6 +677,9 @@
 
     },
     "See also" : {
+
+    },
+    "Share" : {
 
     },
     "Share Checklist…" : {
@@ -555,7 +709,16 @@
     "Show the original text rendering by default" : {
 
     },
+    "Sidebar" : {
+
+    },
     "Smaller" : {
+
+    },
+    "Sort" : {
+
+    },
+    "Sort By" : {
 
     },
     "Text Size" : {
@@ -565,6 +728,9 @@
 
     },
     "The RFC index isn't available. Open RFC Reader to load it, then try again." : {
+
+    },
+    "The document hasn't loaded." : {
 
     },
     "The documents this one cites normatively, in the order to read them." : {
@@ -580,7 +746,7 @@
 
     },
     "Title" : {
-
+      "comment" : "Toolbar item that shows the document's title"
     },
     "Try Again" : {
 
@@ -589,6 +755,9 @@
 
     },
     "Updated %@" : {
+
+    },
+    "Updated by" : {
 
     },
     "Use System Size" : {
@@ -607,6 +776,12 @@
 
     },
     "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it." : {
+
+    },
+    "Working Groups" : {
+
+    },
+    "Your bookmarks couldn't be loaded" : {
 
     },
     "and %lld more" : {

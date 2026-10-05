@@ -258,12 +258,17 @@ struct QuickOpenResultsTests {
   /// `9110` typed before the index has loaded resolves exactly, but nothing knows
   /// its title yet; saying it is not in the index would be wrong for a moment.
   @Test func `a row with no title says the index is still loading until it has`() {
-    #expect(QuickOpenResults.title(nil, isIndexLoaded: false) == "The index is still loading")
-    #expect(QuickOpenResults.title(nil, isIndexLoaded: true) == "Not in the index")
+    #expect(
+      QuickOpenResults.title(nil, isIndexLoaded: false, locale: .english)
+        == "The index is still loading")
+    #expect(
+      QuickOpenResults.title(nil, isIndexLoaded: true, locale: .english) == "Not in the index")
   }
 
   @Test func `a row with a title shows it`() {
-    #expect(QuickOpenResults.title("HTTP Semantics", isIndexLoaded: true) == "HTTP Semantics")
+    #expect(
+      QuickOpenResults.title("HTTP Semantics", isIndexLoaded: true, locale: .english)
+        == "HTTP Semantics")
   }
 
   // MARK: - Return

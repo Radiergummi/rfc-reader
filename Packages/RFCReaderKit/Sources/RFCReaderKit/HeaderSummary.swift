@@ -14,9 +14,11 @@ public struct HeaderSummary: Equatable, Sendable {
   public let workingGroup: String?
   public let authors: [Author]
 
-  public init(header: DocumentHeader, metadata: RFCMetadata?) {
+  /// - Parameter locale: what the date is written in: the interface's language for
+  ///   the reader's header, English for print and PDF, which frame the English body.
+  public init(header: DocumentHeader, metadata: RFCMetadata?, locale: Locale = .interface) {
     title = header.title
-    date = (header.date ?? metadata?.date)?.formatted
+    date = (header.date ?? metadata?.date)?.formatted(in: locale)
     workingGroup = header.workingGroup ?? metadata?.workingGroup
     authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
   }

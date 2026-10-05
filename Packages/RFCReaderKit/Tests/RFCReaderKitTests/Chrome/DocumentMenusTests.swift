@@ -15,19 +15,21 @@ struct DocumentMenusTests {
   private let draft = URL(string: "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics")!
 
   @Test func `cite offers every style, then the section link on its own`() {
-    let cite = DocumentMenus.cite()
+    let cite = DocumentMenus.cite(locale: .english)
     #expect(cite.count == 2)
     #expect(cite[0].map(\.action) == CitationStyle.allCases.map { .copyCitation($0) })
     #expect(titles(cite)[1] == ["Copy Link to Current Section"])
   }
 
   @Test func `more has the original text apart from the pages elsewhere`() {
-    let more = DocumentMenus.more(showsOriginal: false, errata: nil, precedingDraft: nil)
+    let more = DocumentMenus.more(
+      showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)
     #expect(titles(more) == [["Original Text"], ["Open on rfc-editor.org", "Datatracker"]])
   }
 
   @Test func `errata and the preceding draft appear only where the document has them`() {
-    let more = DocumentMenus.more(showsOriginal: false, errata: errata, precedingDraft: draft)
+    let more = DocumentMenus.more(
+      showsOriginal: false, errata: errata, precedingDraft: draft, locale: .english)
     #expect(
       titles(more)[1] == ["Open on rfc-editor.org", "Errata", "Datatracker", "Preceding Draft"])
     #expect(more[1][1].action == .openErrata(errata))
@@ -36,14 +38,17 @@ struct DocumentMenusTests {
 
   @Test func `original text is a toggle showing whether it is on`() {
     #expect(
-      DocumentMenus.more(showsOriginal: true, errata: nil, precedingDraft: nil)[0][0].isOn == true)
+      DocumentMenus.more(showsOriginal: true, errata: nil, precedingDraft: nil, locale: .english)[
+        0][0].isOn == true)
     #expect(
-      DocumentMenus.more(showsOriginal: false, errata: nil, precedingDraft: nil)[0][0].isOn == false
+      DocumentMenus.more(showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)[
+        0][0].isOn == false
     )
   }
 
   @Test func `with no collections, add to collection offers only a new one`() {
-    let menu = DocumentMenus.addToCollection(.rfc(9110), in: CollectionSnapshot(collections: []))
+    let menu = DocumentMenus.addToCollection(
+      .rfc(9110), in: CollectionSnapshot(collections: []), locale: .english)
     #expect(titles(menu) == [["New Collection…"]])
   }
 
@@ -53,7 +58,7 @@ struct DocumentMenusTests {
     let snapshot = CollectionSnapshot(collections: [
       .init(id: UUID(), name: "HTTP", color: .blue, members: [.rfc(9110)])
     ])
-    let menu = DocumentMenus.addToCollection(nil, in: snapshot)
+    let menu = DocumentMenus.addToCollection(nil, in: snapshot, locale: .english)
     #expect(titles(menu) == [["New Collection…"]])
   }
 
@@ -64,7 +69,7 @@ struct DocumentMenusTests {
       .init(id: http, name: "HTTP", color: .blue, members: [.rfc(9110)]),
       .init(id: dns, name: "DNS", color: .green, members: [.rfc(1035)]),
     ])
-    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot)
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .english)
     #expect(titles(menu) == [["HTTP", "DNS"], ["New Collection…"]])
     #expect(menu[0].map(\.isOn) == [true, false])
     #expect(menu[0].map(\.action) == [.toggleCollection(http), .toggleCollection(dns)])
@@ -72,12 +77,28 @@ struct DocumentMenusTests {
 
   /// Each collection is shown as the sidebar shows it, as a folder in its color, so
   /// the menu and the sidebar name the same collection the same way.
+  /// A collection's name is the user's own text, never a key, even when it is a
+  /// word the catalog has.
+  @Test func `a collection's item is titled with its name as typed`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "Errata", color: .blue, members: [])
+    ])
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .english)
+    #expect(titles(menu)[0] == ["Errata"])
+  }
+
+  @Test func `cite names each style`() {
+    #expect(
+      titles(DocumentMenus.cite(locale: .english))[0]
+        == ["Short", "Full citation", "Markdown link", "BibTeX", "URL"])
+  }
+
   @Test func `a collection's item is its folder in its color`() {
     let snapshot = CollectionSnapshot(collections: [
       .init(id: UUID(), name: "HTTP", color: .blue, members: []),
       .init(id: UUID(), name: "DNS", color: .green, members: []),
     ])
-    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot)
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .english)
     #expect(menu[0].map(\.icon) == [.init("folder", color: .blue), .init("folder", color: .green)])
     #expect(menu[1].map(\.icon) == [nil])
   }

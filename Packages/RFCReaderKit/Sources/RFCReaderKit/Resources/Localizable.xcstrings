@@ -1,7 +1,776 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ %@, %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, %3$@."
+          }
+        }
+      }
+    },
+    "%@ %@, in the RFC Editor queue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, in the RFC Editor queue."
+          }
+        }
+      }
+    },
+    "%@ %@, revision %@ from %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, revision %3$@ from %4$@, %5$@"
+          }
+        }
+      }
+    },
+    "%@ %@, revision %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, revision %3$@, %4$@"
+          }
+        }
+      }
+    },
+    "%@ is defined in %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is defined in %2$@."
+          }
+        }
+      }
+    },
+    "%@ is in IANA's registry, which names no RFC for it." : {
+
+    },
+    "%@ is published only as %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is published only as %2$@."
+          }
+        }
+      }
+    },
+    "%@ of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@"
+          }
+        }
+      }
+    },
+    "%@, as of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, as of %2$@"
+          }
+        }
+      }
+    },
+    "%@, revision of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, revision of %2$@"
+          }
+        }
+      }
+    },
+    "%lld Documents" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Document"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Documents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld RFCs" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld obsolete" : {
+
+    },
+    "A BCP is approved with the same consensus as a standard, but describes a practice rather than a protocol. Each is also given a BCP number." : {
+
+    },
+    "A Proposed Standard reaches it after significant implementation and successful operational experience, and is then also given an STD number." : {
+
+    },
+    "A document is made Historic when a newer specification replaces it or when what it describes has fallen out of use." : {
+
+    },
+    "A later RFC replaces it; Relationships names which." : {
+
+    },
+    "A newer RFC that obsoletes an older one replaces it entirely." : {
+
+    },
+    "A newer RFC that updates an older one changes or extends part of it, and the rest of the older RFC still stands." : {
+
+    },
+    "A number for a Best Current Practice that stays the same when the RFCs behind it are replaced." : {
+
+    },
+    "A number for an Internet Standard that stays the same when the RFCs behind it are replaced." : {
+
+    },
+    "A series of introductory Informational RFCs, for readers new to the Internet." : {
+
+    },
+    "A standard at a maturity level the IETF has since retired, between Proposed and Internet Standard." : {
+
+    },
+    "A standard the IETF has approved. Most of the Internet's standards remain at this level." : {
+
+    },
+    "A working document, not yet an RFC." : {
+
+    },
+    "ABNF Grammar" : {
+
+    },
+    "Abandoned" : {
+
+    },
+    "Active" : {
+
+    },
+    "All RFCs" : {
+
+    },
+    "An IETF group chartered for one piece of work within an area, such as HTTP or QUIC." : {
+
+    },
+    "An Informational RFC can come from any stream and need not reflect any community consensus." : {
+
+    },
+    "An RFC never changes once published: a correction is recorded as an erratum, and a revision is a new RFC." : {
+
+    },
+    "An erratum is verified when the body that approved the document confirms it." : {
+
+    },
+    "Anyone can take part, mostly on its mailing list, and its decisions are made by rough consensus." : {
+
+    },
+    "Approved for publication" : {
+
+    },
+    "Area" : {
+
+    },
+    "Area Group" : {
+
+    },
+    "Authors" : {
+
+    },
+    "Available Offline" : {
+
+    },
+    "BCP Series" : {
+
+    },
+    "Back" : {
+
+    },
+    "Back to %@" : {
+
+    },
+    "Back to Top" : {
+
+    },
+    "Being replaced by" : {
+
+    },
+    "Being updated by" : {
+
+    },
+    "Best Current Practices" : {
+
+    },
+    "Blue" : {
+
+    },
+    "BoF" : {
+
+    },
+    "Bookmark" : {
+
+    },
+    "Bookmarked" : {
+
+    },
+    "Bookmarks" : {
+
+    },
+    "Charter" : {
+
+    },
+    "Check your internet connection, then try again." : {
+
+    },
+    "Checklist copied" : {
+
+    },
+    "Citation copied" : {
+
+    },
+    "Code copied" : {
+
+    },
+    "Concluded" : {
+
+    },
+    "Concluded BoF" : {
+
+    },
+    "Copy Link to Current Section" : {
+
+    },
+    "Datatracker" : {
+
+    },
+    "Details" : {
+
+    },
+    "Directorate" : {
+
+    },
+    "Documents about the policies of the RFC Series itself." : {
+
+    },
+    "Documents from the Internet Architecture Board, which oversees the architecture of the Internet and the IETF's standards process." : {
+
+    },
+    "Documents from the Internet Engineering Task Force, most of them written in its working groups and approved by the IESG." : {
+
+    },
+    "Documents from the research groups of the Internet Research Task Force, which studies longer-term questions than the IETF." : {
+
+    },
+    "Documents published outside the IETF's process, reviewed and approved by the Independent Submissions Editor." : {
+
+    },
+    "Dormant" : {
+
+    },
+    "Drafts expire after six months unless revised, and are not meant to be cited as anything but work in progress. Many are revised until a stream approves them for publication as an RFC." : {
+
+    },
+    "Editor" : {
+
+    },
+    "Editorial Stream" : {
+
+    },
+    "Errata" : {
+
+    },
+    "Errors reported in a published RFC, which the RFC Editor records beside it, since the RFC itself never changes." : {
+
+    },
+    "FYI Series" : {
+
+    },
+    "Figure copied" : {
+
+    },
+    "Focus" : {
+
+    },
+    "Formats" : {
+
+    },
+    "Full citation" : {
+
+    },
+    "Gray" : {
+
+    },
+    "Green" : {
+
+    },
+    "Group" : {
+
+    },
+    "Guidance the IETF recommends, for operating the Internet or for its own processes." : {
+
+    },
+    "IAB Program" : {
+
+    },
+    "IAB Stream" : {
+
+    },
+    "IETF Stream" : {
+
+    },
+    "IRTF Stream" : {
+
+    },
+    "Implementer" : {
+
+    },
+    "In IETF Last Call" : {
+
+    },
+    "In the RFC Editor queue" : {
+
+    },
+    "In the working group" : {
+
+    },
+    "In working group last call" : {
+
+    },
+    "Independent" : {
+
+    },
+    "Independent Submission" : {
+
+    },
+    "Independent Submissions" : {
+
+    },
+    "Internet Standards" : {
+
+    },
+    "Internet-Draft" : {
+
+    },
+    "It asked for at least two independent, interoperable implementations. RFC 6410 removed the level in 2011, and a document still at it stays there until it is reclassified." : {
+
+    },
+    "It is the first level of the standards track: the specification is stable, well understood and reviewed by the community, and many Proposed Standards are deployed widely without ever advancing." : {
+
+    },
+    "It is the only stream that publishes standards and Best Current Practices." : {
+
+    },
+    "It records work that is part of a research or development effort, so that others can try it and report what they learn." : {
+
+    },
+    "It was closed in 2011, by RFC 6360, and no new FYI numbers are given." : {
+
+    },
+    "Keywords" : {
+
+    },
+    "Legacy" : {
+
+    },
+    "Link copied" : {
+
+    },
+    "Links" : {
+
+    },
+    "Mailing List Archive" : {
+
+    },
+    "Manual" : {
+
+    },
+    "Markdown link" : {
+
+    },
+    "Most such documents are early RFCs, published before the IETF defined its statuses." : {
+
+    },
+    "New Collection…" : {
+
+    },
+    "Newest First" : {
+
+    },
+    "No Best Current Practices" : {
+
+    },
+    "No Bookmarks" : {
+
+    },
+    "No Internet Standards" : {
+
+    },
+    "No RFCs" : {
+
+    },
+    "No RFCs in %@" : {
+
+    },
+    "Normal" : {
+
+    },
+    "Not bookmarked" : {
+
+    },
+    "Not in the index" : {
+
+    },
+    "Nothing Available Offline" : {
+
+    },
+    "Nothing Read Recently" : {
+
+    },
+    "Now has errata." : {
+
+    },
+    "Obsolete" : {
+
+    },
+    "Obsoleted by" : {
+
+    },
+    "Obsoleted by %@." : {
+
+    },
+    "Obsoletes" : {
+
+    },
+    "Obsoletes and Obsoleted By" : {
+
+    },
+    "Oldest First" : {
+
+    },
+    "One BCP can consist of several RFCs: BCP 14 is RFC 2119 and RFC 8174 together." : {
+
+    },
+    "One STD can consist of several RFCs, and citing the STD number cites whichever RFCs make it up today." : {
+
+    },
+    "Open on rfc-editor.org" : {
+
+    },
+    "Orange" : {
+
+    },
+    "Original Text" : {
+
+    },
+    "Outline" : {
+
+    },
+    "Pages" : {
+
+    },
+    "Part of %@" : {
+
+    },
+    "Pink" : {
+
+    },
+    "Plain Text" : {
+
+    },
+    "Preceding Draft" : {
+
+    },
+    "Proposed" : {
+
+    },
+    "Published" : {
+
+    },
+    "Published as" : {
+
+    },
+    "Published before the RFC Editor recorded which stream a document came through." : {
+
+    },
+    "Published for experimentation and evaluation. Not a standard." : {
+
+    },
+    "Published for information. Not a standard, and not a recommendation." : {
+
+    },
+    "Purple" : {
+
+    },
+    "Quote copied" : {
+
+    },
+    "RFC Editor" : {
+
+    },
+    "RFC Series" : {
+
+    },
+    "Reading Path: %@" : {
+
+    },
+    "Recently Read" : {
+
+    },
+    "Red" : {
+
+    },
+    "Relationships" : {
+
+    },
+    "Remove Bookmark" : {
+
+    },
     "Remove from Collection" : {
+
+    },
+    "Replaced" : {
+
+    },
+    "Research Group" : {
+
+    },
+    "STD Series" : {
+
+    },
+    "Search %@" : {
+
+    },
+    "Search All RFCs" : {
+
+    },
+    "Search Available Offline" : {
+
+    },
+    "Search Best Current Practices" : {
+
+    },
+    "Search Bookmarks" : {
+
+    },
+    "Search Internet Standards" : {
+
+    },
+    "Search Recently Read" : {
+
+    },
+    "Short" : {
+
+    },
+    "Show as Figure" : {
+
+    },
+    "Show as Text" : {
+
+    },
+    "Stream" : {
+
+    },
+    "Streams were defined in 2007, by RFC 4844, and earlier RFCs carry no stream of their own." : {
+
+    },
+    "Submitted for publication" : {
+
+    },
+    "Superseded or no longer in use, kept for the record." : {
+
+    },
+    "Teal" : {
+
+    },
+    "Team" : {
+
+    },
+    "The IETF's highest maturity level: a stable standard, widely implemented and deployed." : {
+
+    },
+    "The Internet's technical documents, numbered in the order they are published since 1969." : {
+
+    },
+    "The RFC Editor doesn't have this document." : {
+
+    },
+    "The RFC Editor isn't responding right now. Try again later." : {
+
+    },
+    "The RFC Editor publishes %@ only as a scan." : {
+
+    },
+    "The RFC Editor's index records no status for this document." : {
+
+    },
+    "The index is still loading" : {
+
+    },
+    "The older RFC stays published, unchanged, but the newer one is the one to implement and cite." : {
+
+    },
+    "The stream was created in 2022, by RFC 9280: its documents are written in the RFC Series Working Group and approved by the RFC Series Approval Board." : {
+
+    },
+    "The text of %@ only says where its %@ original is." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The text of %1$@ only says where its %2$@ original is."
+          }
+        }
+      }
+    },
+    "The text of %@ only says where its original is." : {
+
+    },
+    "The two have to be read together." : {
+
+    },
+    "There are %lld requirements in %@." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There is one requirement in %2$@."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There are %1$lld requirements in %2$@."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "There are no BCP 14 requirements in %@." : {
+
+    },
+    "They are Informational, Experimental or Historic, and represent no community consensus." : {
+
+    },
+    "They are mostly Informational, giving architectural guidance." : {
+
+    },
+    "They are published as Informational or Experimental, never as standards." : {
+
+    },
+    "This RFC has no plain-text version." : {
+
+    },
+    "This document couldn't be read. It may open on rfc-editor.org." : {
+
+    },
+    "Try again, or open the document on rfc-editor.org." : {
+
+    },
+    "Under IESG review" : {
+
+    },
+    "Under review" : {
+
+    },
+    "Updated by" : {
+
+    },
+    "Updated by %@." : {
+
+    },
+    "Updates" : {
+
+    },
+    "Updates and Updated By" : {
+
+    },
+    "Working Group" : {
+
+    },
+    "Working group %@" : {
+
+    },
+    "Yellow" : {
+
+    },
+    "all obsolete" : {
+
+    },
+    "and %lld more" : {
+
+    },
+    "approved for publication" : {
+
+    },
+    "in IETF Last Call" : {
+
+    },
+    "in the RFC Editor queue" : {
+
+    },
+    "in the working group" : {
+
+    },
+    "in working group last call" : {
+
+    },
+    "intended %@" : {
+
+    },
+    "obsolete" : {
+
+    },
+    "submitted for publication" : {
+
+    },
+    "under IESG review" : {
+
+    },
+    "under review" : {
 
     }
   },

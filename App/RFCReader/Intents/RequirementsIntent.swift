@@ -42,10 +42,10 @@ struct RequirementsIntent: AppIntent {
       scope = found
     }
     let lines = await Self.requirements(in: loaded, within: scope).map(\.line)
-    let place = section.map { "\($0.title) of \(id.displayName)" } ?? id.displayName
+    let place = IntentAnswer.place(section?.title, of: id)
     let answer = IntentAnswer.requirements(lines.count, in: place)
     return .result(
-      value: lines, dialog: "\(answer)",
+      value: lines, dialog: IntentDialog(.verbatim(answer)),
       view: RequirementsSnippet(lines: lines, document: document, section: section))
   }
 

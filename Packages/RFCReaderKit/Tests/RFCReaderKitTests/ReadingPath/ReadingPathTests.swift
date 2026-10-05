@@ -115,7 +115,8 @@ struct ReadingPathTests {
   @Test func `the assumed documents come first in the saved order`() {
     let path = Graph(normative: [1: [9, 2]]).walk(from: 1, assumed: [9])
     #expect(path.documents == [.rfc(9), .rfc(2), .rfc(1)])
-    #expect(path.collectionName == "Reading Path: RFC 1")
+    #expect(path.collectionName == ReadingPath.title(for: .rfc(1)))
+    #expect(ReadingPath.title(for: .rfc(1), locale: .english) == "Reading Path: RFC 1")
   }
 
   @Test func `a row says what the index and the reading positions know`() {

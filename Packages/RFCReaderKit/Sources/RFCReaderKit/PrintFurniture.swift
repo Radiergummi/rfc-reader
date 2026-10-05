@@ -23,7 +23,7 @@ public struct PrintFurniture: Equatable, Sendable {
   ///     The two are merged as the reader's header view merges them
   ///     (`HeaderSummary`), so the page and the screen say the same.
   public init(header: DocumentHeader, metadata: RFCMetadata?) {
-    let summary = HeaderSummary(header: header, metadata: metadata)
+    let summary = HeaderSummary(header: header, metadata: metadata, locale: .english)
     let id = header.id ?? metadata?.id
     let status = metadata?.currentStatus.displayName ?? header.category?.name
 

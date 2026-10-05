@@ -18,7 +18,8 @@ import SwiftUI
 
     private static func chooseAndInstall() {
       let panel = NSOpenPanel()
-      panel.message = "Choose a legacy XML pack: an .aar archive, or a folder with its manifest."
+      panel.message = String(
+        localized: "Choose a legacy XML pack: an .aar archive, or a folder with its manifest.")
       panel.canChooseFiles = true
       panel.canChooseDirectories = true
       panel.allowsMultipleSelection = false
@@ -29,11 +30,11 @@ import SwiftUI
           // `.shared` on the click rather than handed over: the App holds no library
           // on macOS, so that launch makes it where `AppDelegate` does, no earlier.
           let pack = try await LibraryModel.shared.installLegacyPack(from: source)
-          alert.messageText = "Installed Data Pack \(pack.manifest.version)"
-          alert.informativeText = "\(pack.manifest.files.count) documents."
+          alert.messageText = String(localized: "Installed Data Pack \(pack.manifest.version)")
+          alert.informativeText = String(localized: "\(pack.manifest.files.count) documents.")
         } catch {
           alert.alertStyle = .warning
-          alert.messageText = "Couldn’t Install the Data Pack"
+          alert.messageText = String(localized: "Couldn’t Install the Data Pack")
           alert.informativeText = String(describing: error)
         }
         alert.runModal()

@@ -22,7 +22,8 @@ struct PublishedOriginalPageTests {
     for showsOriginal in [false, true] {
       for document in [nil, pointer] {
         let page = PublishedOriginalPage(
-          .rfc(8), formats: [.pdf], showsOriginal: showsOriginal, text: document)
+          .rfc(8), formats: [.pdf], showsOriginal: showsOriginal, text: document,
+          locale: .english)
         #expect(page?.original.format == .pdf)
         #expect(page?.explanation == "The RFC Editor publishes RFC 8 only as a scan.")
       }
@@ -31,7 +32,7 @@ struct PublishedOriginalPageTests {
 
   @Test func `a pointer is its original in place of the rendered text`() {
     let page = PublishedOriginalPage(
-      .rfc(1119), formats: pointerFormats, showsOriginal: false, text: pointer)
+      .rfc(1119), formats: pointerFormats, showsOriginal: false, text: pointer, locale: .english)
     #expect(page?.original.format == .pdf)
     #expect(page?.explanation == "The text of RFC 1119 only says where its original is.")
   }
@@ -53,7 +54,8 @@ struct PublishedOriginalPageTests {
   /// online or off. Original Text still shows the text as published.
   @Test func `a pointer the pack lists is its original without the text`() {
     let page = PublishedOriginalPage(
-      .rfc(1119), formats: pointerFormats, showsOriginal: false, text: nil, pointerInPack: true)
+      .rfc(1119), formats: pointerFormats, showsOriginal: false, text: nil, pointerInPack: true,
+      locale: .english)
     #expect(page?.original.format == .pdf)
     #expect(page?.explanation == "The text of RFC 1119 only says where its original is.")
     #expect(
@@ -63,8 +65,8 @@ struct PublishedOriginalPageTests {
   }
 
   @Test func `an original is offered by the name the Info pane gives its format`() {
-    #expect(FileFormat.pdf.displayName == "PDF")
-    #expect(FileFormat.postScript.displayName == "PostScript")
+    #expect(FileFormat.pdf.displayName(in: .english) == "PDF")
+    #expect(FileFormat.postScript.displayName(in: .english) == "PostScript")
   }
 }
 
@@ -98,14 +100,17 @@ struct PublishedOriginalActionsTests {
   /// RFC failed to load.
   @Test func `the panel says the RFC is its original`() {
     #expect(
-      PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)?.panelExplanation
+      PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)?.panelExplanation(
+        in: .english)
         == "RFC 8 is published only as PDF.")
     #expect(
-      PublishedOriginalPage.Status(.rfc(8), formats: [.postScript], text: nil)?.panelExplanation
+      PublishedOriginalPage.Status(.rfc(8), formats: [.postScript], text: nil)?.panelExplanation(
+        in: .english)
         == "RFC 8 is published only as PostScript.")
     #expect(
       PublishedOriginalPage.Status(.rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)?
-        .panelExplanation == "The text of RFC 1119 only says where its PDF original is.")
+        .panelExplanation(in: .english)
+        == "The text of RFC 1119 only says where its PDF original is.")
   }
 
   /// A scan has no text to fetch; an index that does not know the document yet, or

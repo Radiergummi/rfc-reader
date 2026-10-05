@@ -5,10 +5,12 @@ import Foundation
 /// lifted preview. The App target puts the item in its menu; its words are here.
 public enum FigureMenu {
   /// The item's title when `shown` is showing: it offers the other.
-  public static func title(offeredFrom shown: PresentationChoices.Presentation) -> String {
+  public static func title(
+    offeredFrom shown: PresentationChoices.Presentation, locale: Locale = .interface
+  ) -> String {
     switch shown {
-    case .figure: "Show as Text"
-    case .text: "Show as Figure"
+    case .figure: String(kit: "Show as Text", locale: locale)
+    case .text: String(kit: "Show as Figure", locale: locale)
     }
   }
 

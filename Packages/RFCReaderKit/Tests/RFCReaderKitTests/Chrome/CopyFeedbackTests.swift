@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import RFCReaderKit
@@ -7,11 +8,11 @@ import Testing
 @Suite("Copy feedback")
 struct CopyFeedbackTests {
   @Test func `each copy is announced as what it copied`() {
-    #expect(CopyFeedback.citation.announcement == "Citation copied")
-    #expect(CopyFeedback.link.announcement == "Link copied")
-    #expect(CopyFeedback.figure.announcement == "Figure copied")
-    #expect(CopyFeedback.quote.announcement == "Quote copied")
-    #expect(CopyFeedback.checklist.announcement == "Checklist copied")
-    #expect(CopyFeedback.code.announcement == "Code copied")
+    #expect(CopyFeedback.citation.announcement(in: .english) == "Citation copied")
+    #expect(CopyFeedback.link.announcement(in: .english) == "Link copied")
+    #expect(CopyFeedback.figure.announcement(in: .english) == "Figure copied")
+    #expect(CopyFeedback.quote.announcement(in: .english) == "Quote copied")
+    #expect(CopyFeedback.checklist.announcement(in: .english) == "Checklist copied")
+    #expect(CopyFeedback.code.announcement(in: .english) == "Code copied")
   }
 }

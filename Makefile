@@ -72,7 +72,7 @@ build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
-	swift build --package-path $(RFCREADERKIT)
+	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -96,9 +96,10 @@ endif
 ## Run the app-side test suite (RFCReaderKit)
 # Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
 # SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
-# it on a Mac.
+# it on a Mac. Swift Build, not Swift 6.3's default native build system, which
+# copies the string catalog into the bundle uncompiled, so no plural resolves.
 test-app:
-	swift test --package-path $(RFCREADERKIT)
+	swift test --package-path $(RFCREADERKIT) --build-system swiftbuild
 
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
@@ -126,7 +127,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real

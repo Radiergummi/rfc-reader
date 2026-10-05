@@ -20,18 +20,53 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
 
   /// What the sidebar, the list and scripts call this filter. A collection is
   /// called by its name in `collections`, and one that has gone since by nothing.
-  public func title(in collections: CollectionSnapshot) -> String {
+  public func title(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
     switch self {
-    case .all: "All RFCs"
-    case .recent: "Recently Read"
-    case .bookmarks: "Bookmarks"
-    case .downloaded: "Available Offline"
-    case .standards: "Internet Standards"
-    case .bestCurrentPractice: "Best Current Practices"
+    case .all: String(kit: "All RFCs", locale: locale)
+    case .recent: String(kit: "Recently Read", locale: locale)
+    case .bookmarks: String(kit: "Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Available Offline", locale: locale)
+    case .standards: String(kit: "Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "Best Current Practices", locale: locale)
     case .stream(let stream): stream.displayName
     case .workingGroup(let group): group.uppercased()
     case .series(let id): id.displayName
     case .collection(let identifier): collections[identifier]?.name ?? ""
+    }
+  }
+
+  /// What the list says when it holds nothing: one sentence per list, rather than
+  /// "No" put before `title(in:)`, which a language cannot inflect.
+  public func emptyTitle(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
+    switch self {
+    case .all: String(kit: "No RFCs", locale: locale)
+    case .recent: String(kit: "Nothing Read Recently", locale: locale)
+    case .bookmarks: String(kit: "No Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Nothing Available Offline", locale: locale)
+    case .standards: String(kit: "No Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "No Best Current Practices", locale: locale)
+    case .stream, .workingGroup, .series, .collection:
+      String(kit: "No RFCs in \(title(in: collections, locale: locale))", locale: locale)
+    }
+  }
+
+  /// The prompt of the list's search field, which narrows what this list shows.
+  public func searchPrompt(
+    in collections: CollectionSnapshot, locale: Locale = .interface
+  ) -> String {
+    switch self {
+    case .all: String(kit: "Search All RFCs", locale: locale)
+    case .recent: String(kit: "Search Recently Read", locale: locale)
+    case .bookmarks: String(kit: "Search Bookmarks", locale: locale)
+    case .downloaded: String(kit: "Search Available Offline", locale: locale)
+    case .standards: String(kit: "Search Internet Standards", locale: locale)
+    case .bestCurrentPractice: String(kit: "Search Best Current Practices", locale: locale)
+    case .stream, .workingGroup, .series, .collection:
+      String(kit: "Search \(title(in: collections, locale: locale))", locale: locale)
     }
   }
 
@@ -104,7 +139,9 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
     ]
     let streams = PublicationStream.allCases.map(LibraryFilter.stream)
     if let match = (fixed + streams).first(where: {
-      $0.title(in: .empty).caseInsensitiveCompare(name) == .orderedSame
+      // In English whatever the interface's language, so a script means the same
+      // everywhere: Scripting reads the names back in English too.
+      $0.title(in: .empty, locale: .english).caseInsensitiveCompare(name) == .orderedSame
     }) {
       self = match
     } else if let id = DocumentID(parsing: name), id.series != .rfc {

@@ -54,11 +54,11 @@ enum Clipboard {
       NSAccessibility.post(
         element: NSApp as Any, notification: .announcementRequested,
         userInfo: [
-          .announcement: feedback.announcement,
+          .announcement: feedback.announcement(),
           .priority: NSAccessibilityPriorityLevel.high.rawValue,
         ])
     #else
-      UIAccessibility.post(notification: .announcement, argument: feedback.announcement)
+      UIAccessibility.post(notification: .announcement, argument: feedback.announcement())
       UINotificationFeedbackGenerator().notificationOccurred(.success)
     #endif
   }

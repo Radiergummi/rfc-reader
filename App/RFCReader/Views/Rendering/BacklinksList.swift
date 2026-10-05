@@ -30,7 +30,7 @@ struct BacklinksList: View {
                 Text(entry.heading).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer()
                 if entry.count > 1 {
-                  Text("\(entry.count)×").font(.caption).foregroundStyle(.secondary)
+                  Text(verbatim: "\(entry.count)×").font(.caption).foregroundStyle(.secondary)
                     .accessibilityLabel("\(entry.count) times")
                 }
               }

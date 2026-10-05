@@ -59,8 +59,8 @@
       alert.alertStyle = .warning
       alert.messageText = AppData.storeWarning.title
       alert.informativeText = AppData.storeWarning.message
-      alert.addButton(withTitle: "Continue")
-      alert.addButton(withTitle: "Quit")
+      alert.addButton(withTitle: String(localized: "Continue"))
+      alert.addButton(withTitle: String(localized: "Quit"))
       alert.beginSheetModal(for: window) { response in
         if response == .alertSecondButtonReturn {
           NSApp.terminate(nil)
