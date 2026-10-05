@@ -53,13 +53,11 @@ extension LegacyTextParser {
   /// front matter's end in 41 documents, most of them later, and what it ran on past was
   /// lost: RFC 783's summary. Omitted boilerplate ends at a refused line too, for the
   /// same reason.
-  static func heading(
-    at index: Int, in lines: [Line], bodyIsIndented: Bool, separators: HeadingSeparators,
-    startsBlock: Bool
-  ) -> HeadingInfo? {
-    guard let string = lines[index].string, string.startsAtColumnZero else { return nil }
-    guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-    return heading(from: string, separators: separators)
+  static func heading(at index: Int, in prelude: Prelude, startsBlock: Bool) -> HeadingInfo? {
+    guard let string = prelude.lines[index].string, string.startsAtColumnZero else { return nil }
+    guard prelude.bodyIsIndented || (startsBlock && isBlankOrEnd(prelude.lines, at: index + 1))
+    else { return nil }
+    return heading(from: string, separators: prelude.separators)
   }
 
   /// A contents entry's end: a leader of four dots or more, run on or spaced, or of
@@ -140,18 +138,16 @@ extension LegacyTextParser {
   /// the line starts a block, and that is whether the line above is blank: a heading
   /// directly above would need a blank line under it in a body at column 0, and in an
   /// indented body the position is not asked.
-  static func centeredHeadings(
-    in lines: [Line], from start: Int, bodyIsIndented: Bool, separators: HeadingSeparators
-  ) -> [Int: HeadingInfo] {
+  static func centeredHeadings(in prelude: Prelude) -> [Int: HeadingInfo] {
+    let lines = prelude.lines
     var headings: [Int: HeadingInfo] = [:]
     var next: (index: Int, number: String?)?
     var nearestOfNumber: [String: Int] = [:]
-    for index in lines.indices[start...].reversed() {
+    for index in lines.indices[prelude.bodyStart...].reversed() {
       guard let string = lines[index].string, !string.isBlank else { continue }
       if string.startsAtColumnZero {
         if let heading = Self.heading(
-          at: index, in: lines, bodyIsIndented: bodyIsIndented, separators: separators,
-          startsBlock: isBlankOrEnd(lines, at: index - 1)),
+          at: index, in: prelude, startsBlock: isBlankOrEnd(lines, at: index - 1)),
           heading.number != nil || !refusesUnnumberedHeading(heading.title),
           !isContentsEntry(at: index, in: lines)
         {
@@ -160,7 +156,7 @@ extension LegacyTextParser {
         continue
       }
       guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
-        let heading = heading(from: string, separators: separators),
+        let heading = heading(from: string, separators: prelude.separators),
         let number = heading.number, !isContentsEntry(at: index, in: lines)
       else { continue }
       let nearest = nearestOfNumber[number, default: .max]
