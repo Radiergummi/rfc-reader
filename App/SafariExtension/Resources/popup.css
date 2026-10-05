@@ -28,3 +28,8 @@ label {
   font: -apple-system-footnote;
   color: GrayText;
 }
+
+/* `label`'s display above would otherwise outrank the attribute's. */
+[hidden] {
+  display: none;
+}
