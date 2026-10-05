@@ -67,15 +67,26 @@ struct DocumentStoreTests {
       .appending(path: "DocumentStoreTests-\(UUID().uuidString)", directoryHint: .isDirectory)
 
     var directory: URL { root.appending(path: "Documents", directoryHint: .isDirectory) }
+    var caches: URL { root.appending(path: "Caches", directoryHint: .isDirectory) }
 
-    func store() -> DocumentStore {
-      DocumentStore(
-        directory: directory, caches: root.appending(path: "Caches", directoryHint: .isDirectory))
+    /// A store whose disk has `freeSpace` bytes left for each tier, or as much as
+    /// the real volume has when that is nil.
+    func store(freeSpace: (@Sendable (StorageTier) -> Int?)? = nil) -> DocumentStore {
+      DocumentStore(directory: directory, caches: caches, freeSpace: freeSpace)
     }
 
-    /// Where the store keeps `id`'s body in `format`.
-    func file(_ id: DocumentID, format: FileFormat) -> URL {
-      directory.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
+    /// Where the store keeps `id`'s body in `format`, in `tier`.
+    func file(_ id: DocumentID, format: FileFormat, in tier: StorageTier = .cache) -> URL {
+      let folder =
+        switch tier {
+        case .kept: directory.appending(path: "Offline", directoryHint: .isDirectory)
+        case .cache: caches.appending(path: "Documents", directoryHint: .isDirectory)
+        }
+      return folder.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
+    }
+
+    func exists(_ id: DocumentID, format: FileFormat, in tier: StorageTier) -> Bool {
+      FileManager.default.fileExists(atPath: file(id, format: format, in: tier).path)
     }
 
     func remove() {
@@ -224,5 +235,180 @@ struct DocumentStoreTests {
     #expect(await store.bookmarkBaseline() == nil)
     try await store.storeBookmarkBaseline(baseline)
     #expect(await store.bookmarkBaseline() == baseline)
+  }
+
+  // MARK: - Two tiers (#358)
+
+  @Test func `a read document is written to the cache tier, not the kept one`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+    #expect(!sandbox.exists(id, format: .xml, in: .kept))
+    #expect(await !store.isKept(id))
+    #expect(await store.keptNumbers().isEmpty)
+  }
+
+  /// Marking a document already read moves its body across and fetches nothing.
+  @Test func `keeping a cached document moves its body without a fetch`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    try await store.keep(id, formats: [.xml], client: fetcher)
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(await store.isKept(id))
+    #expect(await store.isCached(id))
+    #expect(await store.keptNumbers() == [8999])
+  }
+
+  @Test func `keeping a document on neither tier fetches it into the kept tier`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    try await store.keep(id, formats: [.xml], client: fetcher)
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(await store.isKept(id))
+  }
+
+  /// Unmarking does not delete: the body goes back to the cache, where eviction
+  /// treats it as any other.
+  @Test func `releasing a kept document moves its body back into the cache`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+
+    await store.release(id)
+
+    #expect(!sandbox.exists(id, format: .xml, in: .kept))
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+    #expect(await !store.isKept(id))
+    #expect(await store.isCached(id))
+  }
+
+  @Test func `a kept body is parsed without a fetch`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    let kept = sandbox.file(id, format: .xml, in: .kept)
+    try FileManager.default.createDirectory(
+      at: kept.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Fixtures.data("rfc8999.xml").write(to: kept)
+
+    let document = try await store.document(id, formats: [.xml], client: fetcher)
+
+    #expect(try document == Fixtures.rfc8999())
+    #expect(fetcher.documentFetches == 0)
+    #expect(await store.isKept(id))
+  }
+
+  /// A kept document's Original Text is part of what is kept, so it is not evicted
+  /// from under the document.
+  @Test func `a kept document's text is written to the kept tier`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+
+    _ = try await store.originalText(id, client: fetcher)
+
+    #expect(sandbox.exists(id, format: .text, in: .kept))
+    #expect(!sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  @Test func `eviction never removes a kept body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let kept = DocumentID.rfc(8999)
+    let read = DocumentID.rfc(9000)
+    try await store.keep(kept, formats: [.xml], client: fetcher)
+    _ = try await store.document(read, formats: [.xml], client: fetcher)
+
+    let evicted = await store.evict(pinned: [], bound: 0)
+
+    #expect(evicted == [read])
+    #expect(sandbox.exists(kept, format: .xml, in: .kept))
+    #expect(await store.isKept(kept))
+    #expect(await !store.isCached(read))
+  }
+
+  /// The kept tier can be downloaded again, so it stays out of backups.
+  @Test func `the kept tier is excluded from backups`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+
+    let folder = sandbox.file(id, format: .xml, in: .kept).deletingLastPathComponent()
+    let values = try folder.resourceValues(forKeys: [.isExcludedFromBackupKey])
+    #expect(values.isExcludedFromBackup == true)
+  }
+
+  /// A disk too full for the cache's reserve still shows the document; it is only
+  /// not written, so it is fetched again next time.
+  @Test func `a read document is not cached when the disk is low`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store(freeSpace: { _ in 0 })
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    let document = try await store.document(id, formats: [.xml], client: fetcher)
+
+    #expect(try document == Fixtures.rfc8999())
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(await !store.isCached(id))
+  }
+
+  /// Keeping is a promise the user asked for, so one that does not fit says so.
+  @Test func `keeping a document the disk has no room for fails`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store(freeSpace: { _ in 0 })
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    await #expect(throws: DocumentStore.NotEnoughSpace.self) {
+      try await store.keep(id, formats: [.xml], client: fetcher)
+    }
+    #expect(await !store.isKept(id))
   }
 }

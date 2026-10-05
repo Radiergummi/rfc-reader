@@ -25,6 +25,19 @@ struct OfflineReconcilerTests {
     #expect(StorageTier.of(.rfc(2), wanted: wanted) == .cache)
   }
 
+  /// A kept body is a promise, written whenever it fits; a cached one is skipped when
+  /// it would leave the disk with less than the reserve. Unknown capacity blocks
+  /// neither.
+  @Test func `a kept body needs only its own room, a cached one the reserve as well`() {
+    let size = 1_000
+    #expect(StorageTier.kept.hasRoom(for: size, available: size))
+    #expect(!StorageTier.kept.hasRoom(for: size, available: size - 1))
+    #expect(StorageTier.cache.hasRoom(for: size, available: size + StorageTier.cacheReserve))
+    #expect(!StorageTier.cache.hasRoom(for: size, available: size + StorageTier.cacheReserve - 1))
+    #expect(StorageTier.kept.hasRoom(for: size, available: nil))
+    #expect(StorageTier.cache.hasRoom(for: size, available: nil))
+  }
+
   /// Marking a document already read moves its body across and fetches nothing.
   @Test func `a wanted body already cached is moved, not fetched`() {
     let plan = OfflineReconciler.plan(wanted: [.rfc(1)], kept: [], cached: [.rfc(1)])
