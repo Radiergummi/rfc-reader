@@ -646,13 +646,34 @@
       }
     },
     "Checklist copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkliste kopiert"
+          }
+        }
+      }
     },
     "Citation copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellenangabe kopiert"
+          }
+        }
+      }
     },
     "Code copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code kopiert"
+          }
+        }
+      }
     },
     "Concluded" : {
       "localizations" : {
@@ -835,7 +856,14 @@
       }
     },
     "Figure copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbildung kopiert"
+          }
+        }
+      }
     },
     "Focus" : {
       "localizations" : {
@@ -1118,7 +1146,14 @@
       }
     },
     "Link copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link kopiert"
+          }
+        }
+      }
     },
     "Links" : {
       "localizations" : {
@@ -1541,7 +1576,14 @@
       }
     },
     "Quote copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitat kopiert"
+          }
+        }
+      }
     },
     "RFC Editor" : {
       "localizations" : {

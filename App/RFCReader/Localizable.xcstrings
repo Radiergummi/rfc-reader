@@ -601,7 +601,14 @@
       }
     },
     "Copy Link" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link kopieren"
+          }
+        }
+      }
     },
     "Copy as Quote" : {
       "localizations" : {
@@ -1545,7 +1552,14 @@
       }
     },
     "Open in New Tab" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In neuem Tab öffnen"
+          }
+        }
+      }
     },
     "Open in New Window" : {
       "localizations" : {
@@ -1668,7 +1682,14 @@
       }
     },
     "Preview" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschau"
+          }
+        }
+      }
     },
     "Previous Section" : {
       "localizations" : {
