@@ -324,11 +324,11 @@ struct LegacyTextParserHeadingsTests {
       .text("   Text that follows the heading directly, with no blank line between."),
     ]
     let indented = LegacyTextParser.heading(
-      at: 0, in: lines, bodyIsIndented: true, separators: [], startsBlock: true)
+      at: 0, in: .init(lines: lines, bodyIsIndented: true), startsBlock: true)
     #expect(indented?.title == "Introduction")
     #expect(
       LegacyTextParser.heading(
-        at: 0, in: lines, bodyIsIndented: false, separators: [], startsBlock: true) == nil)
+        at: 0, in: .init(lines: lines, bodyIsIndented: false), startsBlock: true) == nil)
   }
 
   /// A tab is indentation too: a contents listing indented with tabs (RFC 1142's) had
@@ -337,7 +337,7 @@ struct LegacyTextParserHeadingsTests {
     let lines = LegacyTextParser.depaginate("\t1 \tScope of This Document\t1\n")
     #expect(
       LegacyTextParser.heading(
-        at: 0, in: lines, bodyIsIndented: true, separators: [], startsBlock: true) == nil)
+        at: 0, in: .init(lines: lines, bodyIsIndented: true), startsBlock: true) == nil)
   }
 
   /// A couple of dozen documents (RFC 817, 813, 888) are typeset double spaced: a
@@ -471,8 +471,8 @@ struct LegacyTextParserHeadingsTests {
       .text("   The text."), .text(""), .text("2.1.  Widget Sizes"), .text(""),
     ]
     func heading(_ lines: [LegacyTextParser.Line], at index: Int = 1) -> String? {
-      LegacyTextParser.centeredHeadings(
-        in: lines, from: 0, bodyIsIndented: true, separators: [])[index]?.title
+      LegacyTextParser.centeredHeadings(in: .init(lines: lines, bodyIsIndented: true))[index]?
+        .title
     }
     #expect(heading(lines) == "WIDGET RULES")
     var nextIsNotItsSubsection = lines

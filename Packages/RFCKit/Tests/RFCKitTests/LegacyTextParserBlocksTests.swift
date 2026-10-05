@@ -6,6 +6,11 @@ import Testing
 /// Blocks: prose against artwork, lists, catalogs, and paragraphs across pages.
 @Suite("Legacy text parser: blocks")
 struct LegacyTextParserBlocksTests {
+  /// A body at column 3, with nothing to link.
+  private let classicContext = LegacyTextParser.ParseContext(
+    proseIndent: LegacyTextParser.classicProseIndent,
+    linker: InlineLinker(sectionNumbers: [], referenceTargets: [:]))
+
   @Test func `paragraphs split across pages are rejoined`() throws {
     let document = try Fixtures.document("rfc1149.txt")
     let discussion = try #require(document.sections.first { $0.titleText == "Discussion" })
@@ -109,13 +114,12 @@ struct LegacyTextParserBlocksTests {
   /// space between the entries; a hanging-indent definition keeps its term on a line
   /// of its own, as every definition list was set before (#352).
   @Test func `a catalog is compact and hangs its numbers, a hanging definition does not`() throws {
-    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
     let catalog = LegacyTextParser.RawBlock(lines: [
       "      0 - Reserved",
       "      1 - First Value",
     ])
     let catalogList = try #require(
-      LegacyTextParser.blocks(from: [catalog], proseIndent: 6, linker: linker).first?
+      LegacyTextParser.blocks(from: [catalog], in: classicContext).first?
         .definitionList)
     #expect(catalogList.items.map(\.term.plainText) == ["0", "1"])
     #expect(catalogList.isCompact)
@@ -126,7 +130,7 @@ struct LegacyTextParserBlocksTests {
       "      from one end to the other.",
     ])
     let hangingList = try #require(
-      LegacyTextParser.blocks(from: [hanging], proseIndent: 6, linker: linker).first?
+      LegacyTextParser.blocks(from: [hanging], in: classicContext).first?
         .definitionList)
     #expect(hangingList.items.map(\.term.plainText) == ["Widget:"])
     #expect(!hangingList.isCompact)
@@ -281,8 +285,10 @@ struct LegacyTextParserBlocksTests {
       followedByPageBreak: true)
     let nextPage = LegacyTextParser.RawBlock(lines: ["      3.2 and in the rest of the text."])
     let first = try #require(
-      LegacyTextParser.blocks(from: [endOfPage, nextPage], proseIndent: 6, linker: linker)
-        .first?.definitionItems?.first)
+      LegacyTextParser.blocks(
+        from: [endOfPage, nextPage], in: .init(proseIndent: 6, linker: linker)
+      )
+      .first?.definitionItems?.first)
     let paragraph = try #require(first.definition.first?.paragraph)
     #expect(first.definition.count == 1)
     #expect(paragraph.plainText.contains("point-to-point"))
@@ -298,7 +304,7 @@ struct LegacyTextParserBlocksTests {
     let rest = LegacyTextParser.RawBlock(lines: ["      independent page, and ends there."])
     let second = try #require(
       LegacyTextParser.blocks(
-        from: [definition, secondParagraph, rest], proseIndent: 6, linker: linker
+        from: [definition, secondParagraph, rest], in: .init(proseIndent: 6, linker: linker)
       ).first?.definitionItems?.first)
     #expect(second.definition.count == 2)
     #expect(second.definition.last?.paragraph?.plainText.contains("media-independent") == true)
@@ -328,9 +334,7 @@ struct LegacyTextParserBlocksTests {
       "   2063 - Flow Counting:  The part that sets out how the",
       "          counters are kept and read.",
     ])
-    let blocks = LegacyTextParser.blocks(
-      from: [catalog], proseIndent: 6,
-      linker: InlineLinker(sectionNumbers: [], referenceTargets: [:]))
+    let blocks = LegacyTextParser.blocks(from: [catalog], in: classicContext)
     let items = try #require(blocks.first?.definitionItems)
     #expect(items.map(\.term.plainText) == ["2063"])
   }
@@ -466,12 +470,12 @@ struct LegacyTextParserBlocksTests {
     let bullet = LegacyTextParser.RawBlock(lines: [
       "   o  The last information heard from the neighbor still holds."
     ])
-    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
+    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, in: classicContext))
 
     let restOfSentence = LegacyTextParser.RawBlock(lines: [
       "   the last information heard from the neighbor on that link still"
     ])
-    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
+    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, in: classicContext))
   }
 
   /// Nor is it the rest of a sentence when the line above it has no final punctuation,
@@ -485,12 +489,12 @@ struct LegacyTextParserBlocksTests {
       "   Section 3.2 (1) and (2)).  For example, they send",
     ])
     let bullet = LegacyTextParser.RawBlock(lines: ["   o  Access-Request"])
-    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
+    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, in: classicContext))
 
     let restOfSentence = LegacyTextParser.RawBlock(lines: [
       "   Access-Request, Accounting-Request and Status-Server packets."
     ])
-    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
+    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, in: classicContext))
   }
 
   /// A drawing with blank lines inside it, such as a message ladder, arrives as one
@@ -504,7 +508,7 @@ struct LegacyTextParserBlocksTests {
       ["      Hello(1) ------>"],
       ["                          <------ Ack(1)"],
     ].map { LegacyTextParser.RawBlock(lines: $0) }
-    let blocks = LegacyTextParser.blocks(from: pieces, proseIndent: 3, linker: linker)
+    let blocks = LegacyTextParser.blocks(from: pieces, in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 1)
     let artwork = try #require(blocks.first?.preformatted)
     #expect(artwork.kind == .artwork)
@@ -529,7 +533,7 @@ struct LegacyTextParserBlocksTests {
           "   receiver of every message in this section.",
         ]),
         LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.map { $0.preformatted != nil } == [true, false, true])
   }
 
@@ -557,7 +561,7 @@ struct LegacyTextParserBlocksTests {
           lines: ["      +-------+", "      | Front |", "      +-------+"],
           followedByPageBreak: true),
         LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 2)
   }
 
@@ -577,7 +581,7 @@ struct LegacyTextParserBlocksTests {
       "                    a second line under the first.",
     ])
     let blocks = LegacyTextParser.blocks(
-      from: [entry("alpha"), entry("beta"), hanging], proseIndent: 3, linker: linker)
+      from: [entry("alpha"), entry("beta"), hanging], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 1)
     #expect(try #require(blocks.first?.definitionItems).count == 5)
   }
@@ -590,7 +594,7 @@ struct LegacyTextParserBlocksTests {
       from: [
         LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
         LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 2)
   }
 
@@ -605,7 +609,7 @@ struct LegacyTextParserBlocksTests {
       from: [
         LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
         LegacyTextParser.RawBlock(lines: ["                 \(caption)"]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 2)
   }
 
@@ -618,7 +622,7 @@ struct LegacyTextParserBlocksTests {
         LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
         LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
         LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 3)
   }
 
@@ -636,7 +640,7 @@ struct LegacyTextParserBlocksTests {
           "    |     Kind      |    Width      |",
           "    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
         ]),
-      ], proseIndent: 3, linker: linker)
+      ], in: .init(proseIndent: 3, linker: linker))
     #expect(blocks.count == 2)
     let diagram = try #require(blocks.last?.preformatted)
     #expect(PacketDiagram.recognize(diagram.text) != nil)
