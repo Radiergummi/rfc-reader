@@ -460,6 +460,8 @@ private struct OfflineSection: View {
   @State private var isWorking = false
   /// A warning for a moment after a download that failed, as `LinkRow` shows one.
   @State private var downloadFailed = false
+  /// Whether that was for want of room on the disk rather than a failed fetch.
+  @State private var hadNoRoom = false
 
   private var isKept: Bool {
     document.series == .rfc && library.downloadedNumbers.contains(document.number)
@@ -481,8 +483,12 @@ private struct OfflineSection: View {
         .help(help)
         .accessibilityLabel(isKept ? "Stop Keeping Offline" : "Keep Offline")
         .accessibilityHint(help)
-        Text(downloadFailed ? "Couldn't download" : isKept ? "Kept offline" : "Not kept offline")
-          .foregroundStyle(isKept ? .primary : .secondary)
+        Text(
+          downloadFailed
+            ? (hadNoRoom ? "Not enough space" : "Couldn't download")
+            : isKept ? "Kept offline" : "Not kept offline"
+        )
+        .foregroundStyle(isKept ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))
@@ -521,6 +527,7 @@ private struct OfflineSection: View {
         do {
           try await library.download(document)
         } catch {
+          hadNoRoom = error is DocumentStore.NotEnoughSpace
           downloadFailed = true
         }
       }

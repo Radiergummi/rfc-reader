@@ -44,10 +44,9 @@ public struct DocumentCacheIndex: Sendable {
   /// Scans `directory` for the bodies the store has written there.
   ///
   /// A file counts only when its name is exactly what the store would have named
-  /// it: a document's `fileStem` and a body format's extension. The RFC index
-  /// lives in the same directory as `rfc-index.xml`, and a name the store did not
-  /// write is not something it can answer for. A directory that cannot be read is
-  /// an empty cache.
+  /// it: a document's `fileStem` and a body format's extension. A name the store
+  /// did not write is not something it can answer for. A directory that cannot be
+  /// read is an empty cache.
   public init(scanning directory: URL) {
     let found = Self.scan(directory)
     self.directory = directory

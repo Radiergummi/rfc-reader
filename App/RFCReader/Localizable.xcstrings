@@ -1381,6 +1381,16 @@
         }
       }
     },
+    "Not enough space" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht genug Speicherplatz"
+          }
+        }
+      }
+    },
     "Not kept offline" : {
       "localizations" : {
         "de" : {

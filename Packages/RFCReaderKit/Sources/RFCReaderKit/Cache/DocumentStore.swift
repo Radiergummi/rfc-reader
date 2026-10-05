@@ -51,9 +51,11 @@ public actor DocumentStore {
   private lazy var keptDocuments = DocumentCacheIndex(scanning: keptDirectory)
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: cacheDirectory)
 
-  /// The documents wanted offline, whose bodies belong in the kept tier: what is in
-  /// it at launch, and what `keep(_:formats:client:)` and `release(_:)` change.
-  private lazy var wanted = keptDocuments.documents
+  /// The documents `keep(_:formats:client:)` is fetching, whose bodies go to the
+  /// kept tier when they arrive. With the kept tier's own documents, the documents
+  /// wanted offline: the disk says which are kept, so nothing here can drift from
+  /// it, and a keep that fails promises nothing.
+  private var keeping: Set<DocumentID> = []
 
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
@@ -133,19 +135,19 @@ public actor DocumentStore {
       freeSpace ?? { tier in
         Self.volumeFreeSpace(for: tier, at: tier == .kept ? keptDirectory : cacheDirectory)
       }
-    for folder in [directory, keptDirectory, caches, cacheDirectory] {
+    for folder in [directory, caches] {
       try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     }
-    var excluded = URLResourceValues()
-    excluded.isExcludedFromBackup = true
-    var kept = keptDirectory
-    try? kept.setResourceValues(excluded)
+    try? Self.createFolder(keptDirectory, for: .kept)
+    try? Self.createFolder(cacheDirectory, for: .cache)
     snapshotURL = caches.appending(path: "rfc-index.json")
   }
 
   /// What the volume holding `folder` has free: for important usage for the kept
   /// tier, for opportunistic usage for the cache. Asked afresh each time, since a
-  /// URL may answer from values cached on it.
+  /// URL may answer from values cached on it. Zero is taken for a volume that does
+  /// not say, as some that are not APFS answer, rather than for a full disk, which
+  /// a write would then fail on anyway.
   private static func volumeFreeSpace(for tier: StorageTier, at folder: URL) -> Int? {
     var url = folder
     url.removeAllCachedResourceValues()
@@ -160,7 +162,8 @@ public actor DocumentStore {
         (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForOpportunisticUsageKey]))?
         .volumeAvailableCapacityForOpportunisticUsage
     }
-    return capacity.map { Int(clamping: $0) }
+    guard let capacity, capacity > 0 else { return nil }
+    return Int(clamping: capacity)
   }
 
   // MARK: - Index
@@ -360,13 +363,15 @@ public actor DocumentStore {
   /// them, but one left in both is read from the tier it was kept in.
   private static let tiers: [StorageTier] = [.kept, .cache]
 
+  private func folder(of tier: StorageTier) -> URL {
+    switch tier {
+    case .kept: keptDirectory
+    case .cache: cacheDirectory
+    }
+  }
+
   private func fileURL(_ id: DocumentID, format: FileFormat, in tier: StorageTier) -> URL {
-    let folder =
-      switch tier {
-      case .kept: keptDirectory
-      case .cache: cacheDirectory
-      }
-    return folder.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
+    folder(of: tier).appending(path: DocumentCacheIndex.fileName(for: id, format: format))
   }
 
   /// `id`'s bodies in `format`, in the order they are read.
@@ -397,18 +402,16 @@ public actor DocumentStore {
     return keptDocuments.contains(id)
   }
 
-  /// How much disk the body takes, in whichever tier, or nil when there is none.
+  /// How much disk the body takes, in the tier it is read from, or nil when there is
+  /// none.
   public func downloadedSize(_ id: DocumentID) -> Int? {
-    let sizes = DocumentCacheIndex.bodyFormats.flatMap { fileURLs(id, format: $0) }.compactMap {
-      (try? $0.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+    for tier in Self.tiers {
+      let sizes = DocumentCacheIndex.bodyFormats.compactMap {
+        (try? fileURL(id, format: $0, in: tier).resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+      }
+      if !sizes.isEmpty { return sizes.reduce(0, +) }
     }
-    return sizes.isEmpty ? nil : sizes.reduce(0, +)
-  }
-
-  /// Numbers of every RFC with a body in either tier.
-  public func cachedNumbers() -> Set<Int> {
-    cachedDocuments.revalidate()
-    return keptNumbers().union(cachedDocuments.rfcNumbers)
+    return nil
   }
 
   /// Numbers of every RFC with a body in the kept tier.
@@ -417,11 +420,11 @@ public actor DocumentStore {
     return keptDocuments.rfcNumbers
   }
 
-  /// Removes `id`'s bodies from both tiers, and stops wanting it offline. A body
-  /// that cannot be deleted is left where it is, and stays cached: the index records
-  /// what the removal left on disk, not what it set out to do.
+  /// Removes `id`'s bodies from both tiers. A body that cannot be deleted is left
+  /// where it is, and stays cached: the index records what the removal left on
+  /// disk, not what it set out to do.
   public func remove(_ id: DocumentID) {
-    wanted.remove(id)
+    keeping.remove(id)
     remove(id, from: Self.tiers)
   }
 
@@ -452,24 +455,27 @@ public actor DocumentStore {
   public func keep(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws
   {
-    wanted.insert(id)
     if isKept(id) { return }
     if isCached(id) {
       try move(id, to: .kept)
-    } else if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
+      return
+    }
+    keeping.insert(id)
+    defer { keeping.remove(id) }
+    if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
       _ = try await text(id, client: client)
     } else {
       _ = try await fetchDocument(id, formats: formats, client: client)
     }
     // Released, or removed, while it was fetched: nothing was promised.
-    guard wanted.contains(id) else { return }
+    guard keeping.contains(id) else { return }
     guard isKept(id) else { throw NotEnoughSpace(id: id) }
   }
 
   /// Stops keeping `id` offline: its body goes back into the cache, where eviction
   /// treats it as any other, rather than being deleted.
   public func release(_ id: DocumentID) {
-    wanted.remove(id)
+    keeping.remove(id)
     do {
       try move(id, to: .cache)
     } catch {
@@ -485,6 +491,7 @@ public actor DocumentStore {
   private func move(_ id: DocumentID, to tier: StorageTier) throws {
     let source: StorageTier = tier == .kept ? .cache : .kept
     let files = FileManager.default
+    try createFolder(of: tier)
     try update(id, in: tier) {
       for format in DocumentCacheIndex.bodyFormats {
         let origin = fileURL(id, format: format, in: source)
@@ -503,15 +510,33 @@ public actor DocumentStore {
   /// disk has room for it there; see `StorageTier.hasRoom`. A body with no room is
   /// not written, and the document is fetched again on its next open.
   private func write(_ data: Data, for id: DocumentID, format: FileFormat) throws {
-    let tier = StorageTier.of(id, wanted: wanted)
+    let tier: StorageTier = keeping.contains(id) || isKept(id) ? .kept : .cache
     guard tier.hasRoom(for: data.count, available: freeSpace(tier)) else {
       storeLog.notice(
         "\(id.displayName, privacy: .public): not written, the disk is too full")
       return
     }
     let url = fileURL(id, format: format, in: tier)
+    try createFolder(of: tier)
     try update(id, in: tier) { try data.write(to: url, options: .atomic) }
     if tier == .cache { hasGrown = true }
+  }
+
+  /// Makes `tier`'s folder again when it is gone: the system purges Caches while
+  /// the app runs, the folder with it.
+  private func createFolder(of tier: StorageTier) throws {
+    try Self.createFolder(folder(of: tier), for: tier)
+  }
+
+  /// Makes `folder` for `tier`'s bodies, excluding the kept tier's from backups,
+  /// since its bodies can be downloaded again.
+  private static func createFolder(_ folder: URL, for tier: StorageTier) throws {
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    guard tier == .kept else { return }
+    var excluded = URLResourceValues()
+    excluded.isExcludedFromBackup = true
+    var url = folder
+    try url.setResourceValues(excluded)
   }
 
   public func document(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
@@ -527,6 +552,11 @@ public actor DocumentStore {
     if let cached = try await cachedDocument(id, signpostID: signpostID) { return cached }
     // A fetch another open started may have finished while the disk was read (#324).
     if let cached = parsed.value(for: id) { return cached }
+    // A body moved between the tiers while the parse looked in each in turn is in
+    // the other one now, and a second look finds it.
+    if isCached(id), let cached = try await cachedDocument(id, signpostID: signpostID) {
+      return cached
+    }
 
     // The `.txt` is the document: the download Original Text shares (#324), parsed
     // here once it is on disk. Written by then unless a removal kept it off, even

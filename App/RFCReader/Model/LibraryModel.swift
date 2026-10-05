@@ -1205,7 +1205,8 @@ final class LibraryModel {
 
   // MARK: - Documents
 
-  /// Fetching a document caches it, so the offline set is refreshed after.
+  /// Fetching a document a keep is waiting for keeps it, so the offline set is
+  /// refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()

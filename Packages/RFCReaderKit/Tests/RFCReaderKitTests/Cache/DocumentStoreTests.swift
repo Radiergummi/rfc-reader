@@ -141,7 +141,6 @@ struct DocumentStoreTests {
 
     #expect(try await opening.value == Fixtures.rfc8999())
     #expect(await !store.isCached(id))
-    #expect(await store.cachedNumbers().isEmpty)
     #expect(!FileManager.default.fileExists(atPath: sandbox.file(id, format: .xml).path))
 
     _ = try await store.document(id, formats: [.xml], client: fetcher)
@@ -192,7 +191,6 @@ struct DocumentStoreTests {
 
     #expect(try document == Fixtures.rfc8999())
     #expect(await store.isCached(id))
-    #expect(await store.cachedNumbers() == [8999])
     #expect(try Data(contentsOf: sandbox.file(id, format: .xml)) == Fixtures.data("rfc8999.xml"))
   }
 
@@ -410,5 +408,41 @@ struct DocumentStoreTests {
       try await store.keep(id, formats: [.xml], client: fetcher)
     }
     #expect(await !store.isKept(id))
+  }
+
+  /// A keep that failed promised nothing, so reading the document later caches it
+  /// like any other.
+  @Test func `a document whose keep failed is cached when read`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let roomy = Mutex(false)
+    let store = sandbox.store(freeSpace: { _ in roomy.withLock { $0 } ? nil : 0 })
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    await #expect(throws: DocumentStore.NotEnoughSpace.self) {
+      try await store.keep(id, formats: [.xml], client: fetcher)
+    }
+    roomy.withLock { $0 = true }
+
+    _ = try await store.originalText(id, client: fetcher)
+
+    #expect(sandbox.exists(id, format: .text, in: .cache))
+    #expect(await !store.isKept(id))
+  }
+
+  /// The system purges Caches, the cache's own folder included, while the app runs.
+  @Test func `a read document is cached after the cache folder was purged`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try FileManager.default.removeItem(at: sandbox.caches)
+
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
   }
 }
