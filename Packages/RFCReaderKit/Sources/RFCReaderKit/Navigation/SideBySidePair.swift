@@ -64,19 +64,24 @@ public struct SideBySidePair: Sendable, Hashable {
   }
 
   /// What the bar under the reader beside says the two readers are doing, given
-  /// how far their alignment is and which of them holds still, if one does.
-  public func status(_ alignment: Alignment, holdingStill still: DocumentID?) -> String {
+  /// how far their alignment is and which of them holds still, if one does, in
+  /// `locale`'s language.
+  public func status(
+    _ alignment: Alignment, holdingStill still: DocumentID?, locale: Locale = .interface
+  ) -> String {
     if let still {
       let leading = still == old ? new : old
-      return "This section of \(leading.displayName) has no counterpart in \(still.displayName)"
+      return String(
+        kit: "This section of \(leading.displayName) has no counterpart in \(still.displayName)",
+        locale: locale)
     }
     switch alignment {
     case .aligning:
-      return "Aligning sections with \(reading.displayName)…"
+      return String(kit: "Aligning sections with \(reading.displayName)…", locale: locale)
     case .failed:
-      return "Couldn't align the sections; the two scroll apart"
+      return String(kit: "Couldn't align the sections; the two scroll apart", locale: locale)
     case .aligned:
-      return "Scrolling with \(reading.displayName)"
+      return String(kit: "Scrolling with \(reading.displayName)", locale: locale)
     }
   }
 }

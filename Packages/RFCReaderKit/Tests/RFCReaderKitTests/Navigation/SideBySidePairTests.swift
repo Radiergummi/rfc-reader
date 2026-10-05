@@ -32,13 +32,16 @@ struct SideBySidePairTests {
   @Test func `the bar names the side that leads into a section with no counterpart`() {
     let pair = SideBySidePair(reading: Self.metadata(7231, obsoletedBy: [9110]), with: .rfc(9110))
     #expect(
-      pair?.status(.aligned, holdingStill: .rfc(7231))
+      pair?.status(.aligned, holdingStill: .rfc(7231), locale: .english)
         == "This section of RFC 9110 has no counterpart in RFC 7231")
     #expect(
-      pair?.status(.aligned, holdingStill: .rfc(9110))
+      pair?.status(.aligned, holdingStill: .rfc(9110), locale: .english)
         == "This section of RFC 7231 has no counterpart in RFC 9110")
-    #expect(pair?.status(.aligned, holdingStill: nil) == "Scrolling with RFC 7231")
-    #expect(pair?.status(.aligning, holdingStill: nil) == "Aligning sections with RFC 7231…")
+    #expect(
+      pair?.status(.aligned, holdingStill: nil, locale: .english) == "Scrolling with RFC 7231")
+    #expect(
+      pair?.status(.aligning, holdingStill: nil, locale: .english)
+        == "Aligning sections with RFC 7231…")
   }
 
   @Test func `either document can be the one read`() {

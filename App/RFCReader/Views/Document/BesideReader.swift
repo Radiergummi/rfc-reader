@@ -69,7 +69,7 @@ private struct BesideBar: View {
 
   var body: some View {
     HStack(spacing: 10) {
-      Text(reading.pair.status(reading.alignment, holdingStill: reading.holdsStill))
+      Text(verbatim: reading.pair.status(reading.alignment, holdingStill: reading.holdsStill))
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .lineLimit(2)
