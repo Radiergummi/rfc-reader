@@ -19,6 +19,8 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (actions)
+    # An empty claim pull request has nothing to analyze (ci.yml, job lint).
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
