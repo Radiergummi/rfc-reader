@@ -81,3 +81,19 @@ custom_rules:
       - doccomment
     message: 'Look the string up: String(localized: "…") in the app, String(kit: "…", locale: locale) in RFCReaderKit.'
     severity: error
+  # On macOS, the first `systemFont(ofSize:)` or `boldSystemFont(ofSize:)` a process
+  # makes, made on several threads at once, can come back as Helvetica 12 pt, and
+  # each of the two has its own first use (#326). RFCReaderKit makes its fonts off
+  # the main actor, in a build or a layout fragment, and its tests make them in
+  # parallel. `systemFont(ofSize:weight:)` returns the same font and has no such
+  # first use.
+  system_font_with_weight:
+    name: System font with a weight
+    included:
+      - Packages/RFCReaderKit/.*\.swift
+    regex: '\bboldSystemFont\(|\bsystemFont\(ofSize:(?:[^(),\n]|\([^()\n]*\))*\)'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Make the font with systemFont(ofSize:weight:): the other two can return Helvetica 12 pt when first made on several threads at once (#326).'
+    severity: error
