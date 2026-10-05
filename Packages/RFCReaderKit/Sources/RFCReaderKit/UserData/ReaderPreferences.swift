@@ -29,8 +29,8 @@ public enum ReaderPreferences {
 
   /// `size` as a share of the default, to the nearest whole percent: what the iOS
   /// Aa menu shows between its small and large "A", as Safari's page menu does.
-  /// The default size is "100%", in the reader's own language's notation.
-  public static func percentage(of size: Double, locale: Locale = .current) -> String {
+  /// The default size is "100%", in the interface's notation.
+  public static func percentage(of size: Double, locale: Locale = .interface) -> String {
     (size / defaultFontSize).formatted(.percent.precision(.fractionLength(0)).locale(locale))
   }
 

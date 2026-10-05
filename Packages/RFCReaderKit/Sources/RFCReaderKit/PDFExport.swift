@@ -98,7 +98,7 @@ public enum PDFExport {
     public let keywords: [String]
 
     public init(header: DocumentHeader, metadata: RFCMetadata?) {
-      let summary = HeaderSummary(header: header, metadata: metadata)
+      let summary = HeaderSummary(header: header, metadata: metadata, locale: .english)
       let id = header.id ?? metadata?.id
       title = PrintFurniture.documentTitle(id: id, title: summary.title)
       author = summary.authors.map(\.displayName).joined(separator: ", ")

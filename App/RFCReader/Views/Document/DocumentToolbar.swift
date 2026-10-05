@@ -123,7 +123,7 @@ import SwiftUI
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
-            Button(format.name) { exportDocument(format) }
+            Button(format.name()) { exportDocument(format) }
           }
         }
         // Not for a document read as its PDF or PostScript original (#207).
@@ -146,7 +146,7 @@ import SwiftUI
     private func shareLink(_ metadata: RFCMetadata) -> some View {
       ShareLink(
         item: RFCEditorEndpoints.infoPage(id),
-        subject: Text("\(id.displayName): \(metadata.title)"))
+        subject: Text(verbatim: "\(id.displayName): \(metadata.title)"))
     }
 
     private func toggleBookmark() {

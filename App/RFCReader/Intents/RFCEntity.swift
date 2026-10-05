@@ -1,6 +1,7 @@
 import AppIntents
 import CoreSpotlight
 import RFCKit
+import RFCReaderKit
 
 /// An RFC as Shortcuts, Siri and Spotlight know it (#192): what an intent takes or
 /// returns, and what a Spotlight result is, since `SpotlightIndexer` associates
@@ -37,8 +38,10 @@ nonisolated struct RFCEntity: AppEntity, IndexedEntity {
   }
 
   var displayRepresentation: DisplayRepresentation {
+    // Data, not language: no key for the catalog.
     DisplayRepresentation(
-      title: "\(documentID.displayName): \(title)", subtitle: "\(obsoletedBy ?? status)")
+      title: .verbatim("\(documentID.displayName): \(title)"),
+      subtitle: .verbatim(obsoletedBy ?? status))
   }
 }
 

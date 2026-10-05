@@ -126,7 +126,7 @@
     private func showBookmarkState(on item: NSToolbarItem) {
       item.image = NSImage(
         systemSymbolName: showsBookmarked ? "bookmark.fill" : "bookmark",
-        accessibilityDescription: "Bookmark")
+        accessibilityDescription: String(localized: "Bookmark"))
       item.toolTip = DocumentActions.bookmarkState(isBookmarked: showsBookmarked)
     }
 
@@ -227,14 +227,15 @@
         let back = button(.rfcBack, "Back", "chevron.backward", #selector(goBack))
         let forward = button(.rfcForward, "Forward", "chevron.forward", #selector(goForward))
         let group = NSToolbarItemGroup(itemIdentifier: identifier)
-        group.label = "Navigation"
+        group.label = String(localized: "Navigation")
         group.subitems = [back, forward]
         group.controlRepresentation = .expanded
         return group
 
       case .rfcTitle:
         let item = NSToolbarItem(itemIdentifier: identifier)
-        item.label = "Title"
+        item.label = String(
+          localized: "Title", comment: "Toolbar item that shows the document's title")
         item.view = titleView
         // Text, not a control: without this the toolbar draws the title inside a
         // bordered pill and it reads as a button.
@@ -248,7 +249,8 @@
 
       case .rfcDocumentTitle:
         let item = NSToolbarItem(itemIdentifier: identifier)
-        item.label = "Document"
+        item.label = String(
+          localized: "Document", comment: "Toolbar item that shows the open document")
         item.view = documentTitleView
         // A range, so it flexes; see `FlexibleToolbarItem`.
         (item as any FlexibleToolbarItem).minSize = NSSize(width: 0, height: 32)
@@ -260,7 +262,7 @@
       case .rfcBookmark:
         // A click bookmarks; the indicator opens Add to Collection (#349).
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
-        item.label = "Bookmark"
+        item.label = String(localized: "Bookmark")
         // What `showBookmarked` last chose, which may have come before the item did.
         showBookmarkState(on: item)
         item.showsIndicator = true
@@ -272,22 +274,24 @@
 
       case .rfcCite:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
-        item.label = "Cite"
-        item.image = NSImage(systemSymbolName: "quote.opening", accessibilityDescription: "Cite")
+        item.label = String(localized: "Cite")
+        item.image = NSImage(
+          systemSymbolName: "quote.opening", accessibilityDescription: String(localized: "Cite"))
         item.showsIndicator = false
         item.menu = citeMenu
         return item
 
       case .rfcShare:
         let item = NSSharingServicePickerToolbarItem(itemIdentifier: identifier)
-        item.label = "Share"
+        item.label = String(localized: "Share")
         item.delegate = self
         return item
 
       case .rfcMore:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
-        item.label = "More"
-        item.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "More")
+        item.label = String(localized: "More")
+        item.image = NSImage(
+          systemSymbolName: "ellipsis.circle", accessibilityDescription: String(localized: "More"))
         item.showsIndicator = false
         item.menu = moreMenu
         return item
@@ -313,10 +317,12 @@
 
     private func button(
       _ identifier: NSToolbarItem.Identifier,
-      _ label: String,
+      _ label: String.LocalizationValue,
       _ symbol: String,
       _ action: Selector
     ) -> NSToolbarItem {
+      // A LocalizationValue rather than a String, so the compiler records each label.
+      let label = String(localized: label)
       let item = NSToolbarItem(itemIdentifier: identifier)
       item.label = label
       item.toolTip = label
@@ -355,11 +361,11 @@
       if menu === moreMenu {
         menu.addItem(.separator())
         let exportItem = NSMenuItem(
-          title: "Export…", action: #selector(exportDocument), keyEquivalent: "")
+          title: String(localized: "Export…"), action: #selector(exportDocument), keyEquivalent: "")
         exportItem.target = self
         menu.addItem(exportItem)
         let printItem = NSMenuItem(
-          title: "Print…", action: #selector(printDocument), keyEquivalent: "")
+          title: String(localized: "Print…"), action: #selector(printDocument), keyEquivalent: "")
         printItem.target = self
         menu.addItem(printItem)
       }

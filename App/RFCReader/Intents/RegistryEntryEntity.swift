@@ -1,5 +1,6 @@
 import AppIntents
 import RFCKit
+import RFCReaderKit
 
 /// A protocol identifier in an IANA registry (#175, #192), such as HTTP status 425
 /// or TLS alert 70, with the RFC section that defines it.
@@ -47,7 +48,9 @@ struct RegistryEntryEntity: AppEntity {
 
   var displayRepresentation: DisplayRepresentation {
     let subtitle = [name, definedIn].compactMap { $0 }.joined(separator: " · ")
-    return DisplayRepresentation(title: "\(heading)", subtitle: "\(subtitle)")
+    // Data, not language: no key for the catalog.
+    return DisplayRepresentation(
+      title: .verbatim(heading), subtitle: .verbatim(subtitle))
   }
 }
 

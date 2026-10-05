@@ -136,6 +136,14 @@ final class RFCTextViewCoordinator: NSObject {
     guard let documentID, let built else { return nil }
     return QuoteCitation.quote(of: range, in: built, document: documentID)
   }
+
+  /// The URL a copy links `link` to (#778): one anyone can open, or nil where the
+  /// reader has none to hand out.
+  func publicURL(for link: URL) -> URL? {
+    guard let documentID else { return nil }
+    return LinkCopy.publicURL(
+      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
+  }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onChoosePresentation`.
@@ -325,11 +333,13 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// The link a reference's runs carry. Read from the storage rather than from
   /// what the platform says was pressed: a chip's leading glyph is an attachment,
-  /// which UIKit reports as one, not as the link it is part of.
+  /// which UIKit reports as one, not as the link it is part of. Nil past the end,
+  /// where a right-click below the last line puts the menu's index.
   func link(at offset: Int) -> URL? {
-    let value = textView?.textLayoutManager?.attributedText?.attribute(
-      .link, at: offset, effectiveRange: nil)
-    return value.flatMap(Self.url(fromLink:))
+    guard let text = textView?.textLayoutManager?.attributedText,
+      offset >= 0, offset < text.length
+    else { return nil }
+    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(Self.url(fromLink:))
   }
 
   /// A link attribute's value as a URL: AppKit may hand it over as its string.
@@ -642,10 +652,7 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink caption's link is ours alone, and Copy Link would copy a URL
-      // nothing else can open; the rest of the menu stays.
-      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
-      return menu
+      return linkMenu(menu, at: charIndex)
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.

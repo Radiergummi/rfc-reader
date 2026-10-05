@@ -29,14 +29,17 @@ public enum DocumentActions {
 
   /// Whether the document is bookmarked, in words: what the Bookmark button, whose
   /// label stays "Bookmark", says beside its glyph to VoiceOver (#278).
-  public static func bookmarkState(isBookmarked: Bool) -> String {
-    isBookmarked ? "Bookmarked" : "Not bookmarked"
+  public static func bookmarkState(isBookmarked: Bool, locale: Locale = .interface) -> String {
+    isBookmarked
+      ? String(kit: "Bookmarked", locale: locale) : String(kit: "Not bookmarked", locale: locale)
   }
 
-  /// What the ⌘D command is called: what it will do, on the Mac's Edit menu and the
-  /// iPad's alike, where the button's label stays "Bookmark" (#278).
-  public static func bookmarkCommand(isBookmarked: Bool) -> String {
-    isBookmarked ? "Remove Bookmark" : "Bookmark"
+  /// What the ⌘D command and a row's bookmark action are called: what they will do,
+  /// on the Mac's Edit menu and the iPad's alike, where the button's label stays
+  /// "Bookmark" (#278).
+  public static func bookmarkCommand(isBookmarked: Bool, locale: Locale = .interface) -> String {
+    isBookmarked
+      ? String(kit: "Remove Bookmark", locale: locale) : String(kit: "Bookmark", locale: locale)
   }
 
   /// What the document is called, under its designation in the reader's title.

@@ -23,10 +23,10 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var id: String { rawValue }
 
   /// What menus and the format pop-up call it.
-  public var name: String {
+  public func name(in locale: Locale = .interface) -> String {
     switch self {
     case .pdf: "PDF"
-    case .abnf: "ABNF Grammar"
+    case .abnf: String(kit: "ABNF Grammar", locale: locale)
     }
   }
 

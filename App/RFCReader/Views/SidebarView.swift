@@ -77,7 +77,7 @@ struct SidebarView: View {
       }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
-      .filterSearchable(navigation: navigation, prompt: "Search")
+      .filterSearchable(navigation: navigation, prompt: String(localized: "Search"))
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
@@ -191,7 +191,7 @@ struct SidebarView: View {
   /// gray, and it sat inset from the cards' edge, where Notes' is level with it.
   @ViewBuilder
   private func group<Content: View>(
-    _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
+    _ title: LocalizedStringKey, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
   ) -> some View {
     #if os(macOS)
       Section(title, isExpanded: isExpanded, content: content)

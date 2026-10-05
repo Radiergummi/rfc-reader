@@ -292,6 +292,9 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.publicURL = { [weak coordinator = context.coordinator] link in
+        coordinator?.publicURL(for: link)
+      }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // Found or sent to its end, this side leads a side-by-side reading (#187).
@@ -407,6 +410,9 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link in
+        coordinator?.publicURL(for: link)
       }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation

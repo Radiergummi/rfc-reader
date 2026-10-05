@@ -16,6 +16,10 @@ struct DocumentCountTests {
   /// The whole series, grouped as the reader's locale groups it.
   @Test func `large counts are grouped by locale`() {
     #expect(DocumentCount.label(9842, locale: Locale(identifier: "en_US")) == "9,842 Documents")
-    #expect(DocumentCount.label(9842, locale: Locale(identifier: "de_DE")) == "9.842 Documents")
+    #expect(DocumentCount.label(9842, locale: Locale(identifier: "de_DE")) == "9.842 Dokumente")
+  }
+
+  @Test func `one document is singular in German too`() {
+    #expect(DocumentCount.label(1, locale: Locale(identifier: "de_DE")) == "1 Dokument")
   }
 }
