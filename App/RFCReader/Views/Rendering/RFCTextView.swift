@@ -216,19 +216,27 @@ struct ReaderInputs {
   final class ReaderScrollView: NSScrollView {
     /// Told of a scroll the reader makes with a wheel, a trackpad or the scroller,
     /// before it moves anything: in a side-by-side reading, that side leads (#187).
-    var willScroll: () -> Void = {} {
-      didSet { (verticalScroller as? LeadingScroller)?.willTrack = willScroll }
-    }
+    var willScroll: () -> Void = {}
 
     override init(frame frameRect: NSRect) {
       super.init(frame: frameRect)
-      verticalScroller = LeadingScroller()
+      // A drag of the scroller reaches neither `scrollWheel(with:)` nor the text
+      // view, but starts a live scroll. Observed rather than taken from a scroller
+      // subclass, which AppKit would show as a legacy, always-visible scroller.
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(liveScrollWillStart),
+        name: NSScrollView.willStartLiveScrollNotification, object: self)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
       fatalError("init(coder:) is not used: the reader's scroll view is made in code")
     }
+
+    /// The override of `scrollWheel(with:)` only says who leads before handing the
+    /// event on, so it keeps AppKit's responsive scrolling, which an override of it
+    /// otherwise turns off.
+    override static var isCompatibleWithResponsiveScrolling: Bool { true }
 
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
@@ -240,16 +248,9 @@ struct ReaderInputs {
       willScroll()
       super.scrollWheel(with: event)
     }
-  }
 
-  /// A scroller that says when it is dragged or clicked, which reaches neither the
-  /// scroll view's `scrollWheel(with:)` nor the text view.
-  final class LeadingScroller: NSScroller {
-    var willTrack: () -> Void = {}
-
-    override func mouseDown(with event: NSEvent) {
-      willTrack()
-      super.mouseDown(with: event)
+    @objc private func liveScrollWillStart() {
+      willScroll()
     }
   }
 #endif
