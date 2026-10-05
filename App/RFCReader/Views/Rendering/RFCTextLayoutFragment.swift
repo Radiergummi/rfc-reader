@@ -24,7 +24,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   ///   or for paper the automatic palette, which a print's light appearance
   ///   resolves to a white page's.
   static func make(
-    for textElement: NSTextElement, palette: ReaderPaletteBox = RFCTextLayoutFragment.paper
+    for textElement: NSTextElement, palette: ReaderPaletteBox
   ) -> NSTextLayoutFragment {
     RFCTextLayoutFragment(
       textElement: textElement, range: textElement.elementRange, palette: palette)
