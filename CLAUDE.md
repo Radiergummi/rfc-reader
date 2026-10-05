@@ -16,6 +16,7 @@ Everything goes through the `Makefile`:
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
+| `make strings` / `make strings-check` | sync the string catalogs with the strings in the code (builds for macOS and the iOS Simulator first) / fail when they are out of date, as CI does |
 | `make xcodegen-install` | the pinned XcodeGen release, SHA-256 checked, into `.build/xcodegen`, which `make xcodeproj` then prefers to the `PATH` (what CI runs) |
 | `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |
@@ -79,6 +80,16 @@ A **guard-level** test of a pure function is the exception, and may take a hand-
 The line is the entry point, not the size of the input. If a test calls `parse`, it uses a committed fixture or a corpus document.
 
 **No RFC text is committed to the repository**: no new fixtures, no excerpts or trimmed copies of existing ones, and no override snapshots. The texts are copyrighted, and their licensing is an open question with the IETF Trust. The fixtures already committed on `main` stay and may be read by tests, but they may not be copied or excerpted into new files, another package's fixture directory included. The hand-written lines of a guard-level test are written in the shape of an RFC, never quoted from one, the RFC being fixed included. A test that reads a real RFC at run time, through `CorpusText` or a committed fixture, may find its place with a short locator of a few words — a grammar rule name, a single term, a field name like `message-type=` — since that identifies the text rather than reproducing it, but never with anything sentence-length. A patch in `corpus/overrides/` selects by such locators too, and may carry RFC text as content only where it restores the minimal text of content the converter misclassified, such as the few words of a line that converted inside an artwork the patch removes, never more (`corpus/overrides/README.md`). Any other text a check needs is fetched into the gitignored `corpus/` at run time. Reaching a private classifier from a guard-level test may mean exposing an internal `static` overload over `[String]`, as `numbersHeadingsWithAColon(_: [String])` does.
+
+## Localization
+
+The app's chrome is localized through string catalogs, and the reader body is not: what `DocumentTextBuilder` writes and what is exported from it stays English (decision "The app's chrome is localized, the reader body is not"; translating a document is #749).
+
+- **The code is the source of the keys.** Add, change or remove a string in the Swift, then run `make strings` and commit the catalogs it changed. Never add or delete a key in a `.xcstrings` by hand; `make strings-check` fails in CI when a catalog and the code disagree.
+- In the app, a SwiftUI literal (`Text("…")`, `Button("…")`) and a `LocalizedStringResource` are localizable as they are. A plain `String` is not: AppKit and UIKit titles need `String(localized:)`.
+- In RFCReaderKit, every localizable string names its bundle — `String(localized: "…", bundle: .module)`, `Text("…", bundle: .module)` — because a literal is looked up in the app's bundle by default. `make strings` files it in RFCReaderKit's catalog either way, so a string without the bundle is synced there and never found at run time.
+- Interpolate a count, not a sentence fragment: `"\(count) sections"` becomes a `%lld` key that can take plural variants; a list of names goes through `.formatted(.list(type: .and))`. Text that is not language, such as an identifier or `"\(a) \(b)"`, is `Text(verbatim:)`, so it never becomes a key.
+- Look a string up with `grep` on the catalog, or `xcrun xcstringstool print`.
 
 ## Generated files
 

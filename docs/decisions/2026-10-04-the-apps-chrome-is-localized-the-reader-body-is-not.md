@@ -1,0 +1,9 @@
+# The app's chrome is localized, the reader body is not
+
+*Decided October 2026 (issue #749 for the body).* The app's own text, meaning menus, toolbars, settings, notifications, alerts and App Intents, is localized through string catalogs: `App/RFCReader/Localizable.xcstrings` for the app target, and `Packages/RFCReaderKit/Sources/RFCReaderKit/Resources/Localizable.xcstrings` for RFCReaderKit, which declares `defaultLocalization: "en"` and looks its strings up with `bundle: .module`. RFCKit has no user-facing text and no catalog.
+
+The reader body stays in English, including what `DocumentTextBuilder` writes into it ("Abstract", "Section 7.2", a heading's backlink caption) and what is exported from it (PDF outline, grammar export). The RFCs are English documents, and the app's labels written in another language beside English prose read worse than English throughout. A reader who wants the document in their language gets a translation on demand from the Translation framework instead (#749), not from a catalog.
+
+The catalogs are derived from the code, never edited by hand for their keys. The compiler records every localizable string it type-checks (`SWIFT_EMIT_LOC_STRINGS`). `make strings` builds for macOS and the iOS Simulator, so a string behind `#if os(…)` is found, and runs `xcstringstool sync` over both builds' records (`Tools/strings/sync.py`). xcodebuild never updates a catalog itself; only Xcode's editor does. CI runs `make strings-check`, which fails when a catalog differs from what the code says.
+
+The alternative, `xcstringstool extract`, reads the sources without compiling them. It was rejected because without types it cannot tell a localizable literal from a plain `String`: it extracted AppKit labels that are never looked up, and wrote `%arg` where the compiler knows a placeholder is `%lld` or `%@`.
