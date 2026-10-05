@@ -52,13 +52,21 @@ public enum ContentsOutline {
   }
 
   /// Whether `section` matches `text`: words anywhere in its title, ignoring case
-  /// and diacritics, or the start of its number, so `4.2` does not find 14.2.
+  /// and diacritics, or the start of its number, so `4.2` does not find 14.2. The
+  /// number may be typed as the list shows it, `4.2.` or `Appendix A`.
   static func matches(_ section: Section, _ text: String) -> Bool {
     if text.isEmpty { return true }
     let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
     if section.titleText.range(of: text, options: options) != nil { return true }
     guard let number = section.number else { return false }
-    return number.range(of: text, options: options.union(.anchored)) != nil
+    var typed = Substring(text)
+    if section.isAppendix,
+      let prefix = typed.range(of: "appendix ", options: options.union(.anchored))
+    {
+      typed = typed[prefix.upperBound...]
+    }
+    if typed.hasSuffix(".") { typed = typed.dropLast() }
+    return !typed.isEmpty && number.range(of: typed, options: options.union(.anchored)) != nil
   }
 
   /// Each match, after those of its ancestors not already listed, which are context.

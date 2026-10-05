@@ -60,6 +60,12 @@ struct ContentsOutlineTests {
     #expect(Self.rows("4.2").map(\.anchor) == ["section-4", "section-4.2", "section-4.2.1"])
   }
 
+  @Test func `a number matches as the list shows it, with its period or as an appendix`() {
+    #expect(Self.rows("4.2.").map(\.anchor) == ["section-4", "section-4.2", "section-4.2.1"])
+    #expect(Self.rows("appendix a").map(\.anchor) == ["appendix-A"])
+    #expect(Self.rows("Appendix A.").map(\.anchor) == ["appendix-A"])
+  }
+
   @Test func `whitespace around the filter is ignored`() {
     #expect(Self.rows("  fresh ").map(\.anchor).last == "section-4.2.1")
     #expect(Self.rows("   ").count == Self.sections.count)

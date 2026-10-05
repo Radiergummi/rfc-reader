@@ -540,6 +540,16 @@
         }
       }
     },
+    "Contains a match" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält einen Treffer"
+          }
+        }
+      }
+    },
     "Contents" : {
       "localizations" : {
         "de" : {

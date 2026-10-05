@@ -118,6 +118,9 @@ struct TableOfContentsView: View {
     // Weight alone marks the current section only for someone who can see it
     // (#156).
     .accessibilityAddTraits(row.anchor == current ? .isSelected : [])
+    // Dimming alone sets an ancestor apart from a match only for someone who can
+    // see it, as weight does the current section.
+    .accessibilityHint(row.isContext ? Text("Contains a match") : Text(verbatim: ""))
     .id(row.anchor)
   }
 }
