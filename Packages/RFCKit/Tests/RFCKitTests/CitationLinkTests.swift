@@ -83,6 +83,11 @@ struct CitationLinkTests {
       "RFC 9110, Sections 8.3 and 8.4",
       "RFC 9110 §8.3 and §8.4",
       "Section 8.3 of RFC 9110 and Section 4",
+      "RFC 9110 and 9111",
+      "RFC 9110/9111",
+      "RFC 9110, 9111",
+      "RFC 9110 and rfc 9111",
+      "[RFC9110] and [I-D.ietf-httpbis-semantics]",
       "https://example.com/",
     ])
   func `no single citation makes no link`(selection: String) {
@@ -99,6 +104,9 @@ struct CitationLinkTests {
       ("(RFC 9110, Section 8.3)", "(rfc://9110#section-8.3)"),
       ("per Section 8.3 of [RFC9110], which", "per rfc://9110#section-8.3, which"),
       ("as RFC 9110 (Section 8.3) says", "as rfc://9110#section-8.3 says"),
+      ("RFC 9110 (see [RFC9110])", "rfc://9110"),
+      ("Section 8.3 of RFC 9110 ([RFC9110]).", "rfc://9110#section-8.3."),
+      ("([RFC9110] (RFC 9110))", "(rfc://9110)"),
       ("// BCP 14 ", "// BCP 14 "),
       (" BCP 14\n", " rfc://bcp14\n"),
     ])

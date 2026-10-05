@@ -65,12 +65,15 @@ public enum CitationLink {
     guard let id else { return nil }
 
     let unlinked = [selection[..<start], between[...], selection[end...]]
-    // A plural names more than one place, and the bare number of another series,
-    // `BCP 14` beside `RFC 2119`, which the linker links only in brackets, is a
-    // second document.
+    // A plural names more than one place, and a document the linker does not read
+    // is a second one: the bare number of another series, `BCP 14` beside
+    // `RFC 2119`, which it links only in brackets; a lower-case `rfc 9111`; a number
+    // listed after the first, `RFC 9110 and 9111`; a tag it cannot resolve,
+    // `[I-D.ietf-httpbis-semantics]`.
     guard
-      unlinked.allSatisfy({
-        $0.firstMatch(of: pluralPattern) == nil && $0.firstMatch(of: otherSeriesPattern) == nil
+      unlinked.allSatisfy({ text in
+        [pluralPattern, otherDocumentPattern, listedNumberPattern, unresolvedTagPattern]
+          .allSatisfy { text.firstMatch(of: $0) == nil }
       })
     else { return nil }
 
@@ -96,12 +99,16 @@ public enum CitationLink {
       guard selection[end..<place.range.lowerBound].wholeMatch(of: placeAfter) != nil
       else { return nil }
       range = start..<place.range.upperBound
-      // `RFC 9110 (Section 8.3)`: the parenthesis the citation opened, it closes.
-      if selection[range].contains("("),
-        let close = selection[range.upperBound...].firstMatch(of: closingParenthesis)
-      {
-        range = start..<close.range.upperBound
-      }
+    }
+    // `RFC 9110 (Section 8.3)`, `RFC 9110 (see [RFC9110])`: a parenthesis the
+    // citation opened, it closes.
+    var unclosed =
+      selection[range].count(where: { $0 == "(" }) - selection[range].count(where: { $0 == ")" })
+    while unclosed > 0,
+      let close = selection[range.upperBound...].firstMatch(of: closingParenthesis)
+    {
+      range = range.lowerBound..<close.range.upperBound
+      unclosed -= 1
     }
     return (RFCLink(id: id, section: section), range)
   }
@@ -138,7 +145,10 @@ public enum CitationLink {
   private static let placeBefore = Pattern(#/\s+of\s+/#)
   private static let placeAfter = Pattern(#/[\s,(]*/#)
   private static let closingParenthesis = Pattern(#/^\s*\)/#)
-  private static let otherSeriesPattern = Pattern(#/\b(?:BCP|STD|FYI)[\s\-]?\d+\b/#)
+  private static let otherDocumentPattern = Pattern(
+    #/\b(?:RFC|BCP|STD|FYI)[\s\-]?\d+\b/#.ignoresCase())
+  private static let listedNumberPattern = Pattern(#/^\s*(?:[,\/&]|\band\b|\bor\b)\s*\d+\b/#)
+  private static let unresolvedTagPattern = Pattern(#/\[[A-Za-z][^\s\]]*\]/#)
 }
 
 extension Inline {
