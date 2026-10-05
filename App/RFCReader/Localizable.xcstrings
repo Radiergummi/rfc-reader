@@ -520,6 +520,16 @@
         }
       }
     },
+    "Close" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließen"
+          }
+        }
+      }
+    },
     "Code" : {
       "localizations" : {
         "de" : {
@@ -546,6 +556,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sammlungen"
+          }
+        }
+      }
+    },
+    "Compare Side by Side" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nebeneinander vergleichen"
           }
         }
       }
@@ -1811,6 +1831,16 @@
         }
       }
     },
+    "Read %@ alone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ allein lesen"
+          }
+        }
+      }
+    },
     "Reading" : {
       "localizations" : {
         "de" : {
@@ -2227,6 +2257,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sortieren nach"
+          }
+        }
+      }
+    },
+    "Stop Comparing with %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vergleich mit %@ beenden"
           }
         }
       }

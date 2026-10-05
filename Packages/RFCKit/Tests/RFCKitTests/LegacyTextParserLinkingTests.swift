@@ -30,7 +30,8 @@ struct LegacyTextParserLinkingTests {
   @Test func `a definition's term is linked like its text`() throws {
     let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
     let items = LegacyTextParser.definitionItems(
-      [(term: "RFC 4321:", text: "An example protocol.")], linker: linker)
+      [(term: "RFC 4321:", text: "An example protocol.")],
+      in: .init(proseIndent: LegacyTextParser.classicProseIndent, linker: linker))
     let item = try #require(items.first)
     #expect(
       item.term.compactMap(\.crossReference).map(\.target) == [

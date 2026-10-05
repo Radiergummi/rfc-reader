@@ -34,8 +34,12 @@ extension RFCTextViewCoordinator {
   }
 
   /// Reads the reader's place from the engine, which reads it from the viewport's
-  /// own fragments, and reports the section it is in.
-  func reportVisibleAnchor() {
+  /// own fragments, and reports the section it is in. `placed` when the engine has
+  /// just put the line where it is, so that its place is the line and there is
+  /// nothing to read: following the other reader of a side-by-side reading (#187),
+  /// where reading it walks the fragments from where the viewport was, on every
+  /// tick of the other reader's scroll.
+  func reportVisibleAnchor(placed: Bool = false) {
     // Everything that reports where the viewport is comes through here — scrolls,
     // jumps, restored places — which is every time the title's position can move.
     updateToolbarTitle()
@@ -47,8 +51,11 @@ extension RFCTextViewCoordinator {
       }
     #endif
     guard let built, textView?.textLayoutManager != nil else { return }
-    let offset = engine.userScrolled() ?? 0
+    let line = placed ? engine.placeOffset : engine.userScrolled()
+    let offset = line ?? 0
     lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
+    // The other reader of a side-by-side reading follows, if this one leads (#187).
+    if let documentID { coupling?.moved(documentID, to: line) }
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
@@ -64,6 +71,15 @@ extension RFCTextViewCoordinator {
     // Deferred for the same reason as `onScrollHandled`: installing a document
     // reports from inside SwiftUI's update, where mutating state is illegal.
     Task { self.onVisibleAnchorChange(anchor) }
+  }
+
+  /// Reports where the reader is and where the title is, as if neither had been
+  /// reported: for a reader back on top of the stack on iOS, whose reports the
+  /// readers pushed over it replaced (#263).
+  func reportAgain() {
+    lastToolbarTitle = nil
+    lastReportedAnchor = nil
+    reportVisibleAnchor()
   }
 
   func updateToolbarTitle() {

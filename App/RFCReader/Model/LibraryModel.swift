@@ -1108,14 +1108,23 @@ final class LibraryModel {
   /// same thing on a cross reference in the prose, a reference in the inspector and
   /// a button in the status banner. Every gesture that owns its own click goes
   /// through here; the document list is the exception, and says why at its binding.
-  func open(_ id: DocumentID, activation: LinkActivation, in scene: NavigationModel) {
-    open(RFCLink(id: id), activation: activation, in: scene)
+  ///
+  /// `arrival` is `.citation` for a link followed inside the reader, which on iOS
+  /// pushes a reader over the one it was followed in (#263).
+  func open(
+    _ id: DocumentID, activation: LinkActivation, in scene: NavigationModel,
+    arrival: HistoryEntry.Arrival = .root
+  ) {
+    open(RFCLink(id: id), activation: activation, in: scene, arrival: arrival)
   }
 
-  func open(_ link: RFCLink, activation: LinkActivation, in scene: NavigationModel) {
+  func open(
+    _ link: RFCLink, activation: LinkActivation, in scene: NavigationModel,
+    arrival: HistoryEntry.Arrival = .root
+  ) {
     switch activation {
     case .here:
-      scene.open(link, in: index)
+      scene.open(link, in: index, arrival: arrival)
     case .newTab(let inBackground):
       openInNewScene(link, inBackground: inBackground)
     }

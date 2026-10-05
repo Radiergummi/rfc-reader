@@ -54,6 +54,10 @@ struct BuildInputs: Equatable {
 @Observable
 final class DocumentSession {
   let id: DocumentID
+  /// The reader's place in the tab's stack of readers on iOS (#263), nil on the Mac:
+  /// what says whether the reader is the one on screen (`NavigationModel.shows`),
+  /// and so whether what it loads and builds goes into the window's reader state.
+  let depth: Int?
 
   private(set) var state = LoadState()
   /// Anchor to the section's place (`Section.place`), made once with the document. See
@@ -78,11 +82,13 @@ final class DocumentSession {
   /// where it started does not build it again.
   @ObservationIgnored private var builtInputs: BuildInputs?
 
-  init(id: DocumentID) {
+  init(id: DocumentID, depth: Int?) {
     self.id = id
+    self.depth = depth
   }
 
   deinit {
+    progressDelay?.cancel()
     load?.cancel()
     build?.cancel()
     originalTextLoad?.cancel()
@@ -92,7 +98,23 @@ final class DocumentSession {
   @ObservationIgnored private var skipsLoad = false
 
   var hasStartedLoading: Bool { load != nil || skipsLoad }
+  /// Whether the document is on its way: loading, and not an RFC whose original is
+  /// shown instead.
+  var awaitsDocument: Bool { state.isLoading && !skipsLoad }
+
   var hasStartedOriginalTextLoad: Bool { originalTextLoad != nil }
+
+  /// Whether the reader waits before it says it is loading (`LoadState.progressDelay`,
+  /// #263): on iOS, where a reader is pushed, and not on the Mac.
+  #if os(macOS)
+    private static let delaysProgress = false
+  #else
+    private static let delaysProgress = true
+  #endif
+  /// Whether the reader has had nothing to show for long enough to say it is
+  /// loading.
+  private(set) var isProgressDue = !DocumentSession.delaysProgress
+  @ObservationIgnored private var progressDelay: Task<Void, Never>?
 
   /// Fetches the original text: once per session, the first time it is shown, plus
   /// Try Again after a failure. Holds the session weakly, for the reason `startLoad`
@@ -143,6 +165,7 @@ final class DocumentSession {
   ) {
     load?.cancel()
     state.begin()
+    delayProgress()
     trace("loading")
     load = Task(name: "Load document") { [weak self, id] in
       do {
@@ -166,11 +189,26 @@ final class DocumentSession {
     }
   }
 
+  /// Starts the wait before the reader says it is loading. Held here rather than in
+  /// a `.task`, for the reason `startLoad` gives: a task canceled by a spurious
+  /// disappearance would leave a slow load with nothing on screen at all.
+  private func delayProgress() {
+    progressDelay?.cancel()
+    isProgressDue = !Self.delaysProgress
+    guard Self.delaysProgress else { return }
+    progressDelay = Task(name: "Delay progress") { [weak self] in
+      try? await Task.sleep(for: LoadState.progressDelay)
+      guard let self, !Task.isCancelled else { return }
+      isProgressDue = true
+    }
+  }
+
   /// Builds for `inputs`, as `BuildRequest` decides, and lists the sections the
-  /// build holds into `reader` once it is the state's: unless the document is no
-  /// longer the one selected, which a replaced reader's rebuild through its fade is
-  /// not (`ReaderHost`). `resizeIsLive` is whether a new column comes from a resize
-  /// still under way; see `ReaderResize`.
+  /// build holds into `reader` once it is the state's: unless the reader is not the
+  /// one on screen, which a replaced reader's rebuild through its fade is not
+  /// (`ReaderHost`), nor one the stack keeps below its top on iOS (#263).
+  /// `resizeIsLive` is whether a new column comes from a resize still under way; see
+  /// `ReaderResize`.
   func requestBuild(
     for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState,
     navigation: NavigationModel
@@ -199,7 +237,7 @@ final class DocumentSession {
     let delay = state.buildDelay(
       for: ColumnChange(from: builtInputs?.column, to: inputs.column, isLive: resizeIsLive))
     trace("building")
-    build = Task(name: "Build document") { [weak self, reader, navigation, id] in
+    build = Task(name: "Build document") { [weak self, reader, navigation, id, depth] in
       if delay > .zero {
         try? await Task.sleep(for: delay)
       }
@@ -213,7 +251,7 @@ final class DocumentSession {
       builtInputs = inputs
       buildingFor = nil
       trace("built")
-      guard navigation.selection == id else { return }
+      guard navigation.shows(id, at: depth) else { return }
       reader.sections = rebuilt.reachableSections(of: document)
     }
   }

@@ -42,7 +42,7 @@ extension FragmentGeometry {
         let ends = NSMaxRange(band) <= NSMaxRange(lineRange)
         let font =
           text.attribute(.font, at: piece.location, effectiveRange: nil) as? PlatformFont
-          ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
+          ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize, weight: .regular)
         let startX = line.locationForCharacter(at: piece.location - fragment.location).x
         let endX = line.locationForCharacter(at: NSMaxRange(piece) - fragment.location).x
         let left = bounds.minX + startX - (starts ? chipPadding : 0)

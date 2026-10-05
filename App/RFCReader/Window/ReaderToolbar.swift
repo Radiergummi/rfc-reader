@@ -211,12 +211,14 @@
         )
 
       case .rfcPanelSeparator:
-        // Divider 2 of four items: sidebar | list | reader | panel, so the
-        // dividers are 0, 1, 2 and this is the reader's trailing edge.
+        // The panel's leading edge: divider 2 of sidebar | list | reader | panel, or
+        // 3 while a reader beside is inserted before the panel (#187), where
+        // `showBeside()` moves it.
         return NSTrackingSeparatorToolbarItem(
           identifier: identifier,
           splitView: controller.splitController.splitView,
-          dividerIndex: 2
+          dividerIndex: ReaderWindowDividers.panel(
+            comparing: controller.splitController.isComparing)
         )
 
       case .rfcNavigation:
