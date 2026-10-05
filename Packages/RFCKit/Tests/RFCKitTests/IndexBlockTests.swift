@@ -165,4 +165,14 @@ struct IndexBlockTests {
     let section = try #require(read.allSections.first { $0.anchor == "name-index" })
     #expect(section.blocks == [.index(Self.index)])
   }
+
+  /// A term names something, so an RFC number in it is part of the name, not a
+  /// citation, as in a fetch item named after the format it takes.
+  @Test func `an RFC number in a term is not a citation`() throws {
+    let xml = Self.preppedXML.replacingOccurrences(
+      of: "<dt>gadget</dt>", with: "<dt>RFC1234.LENGTH (widget item)</dt>")
+    #expect(xml != Self.preppedXML)
+    let index = try #require(try Self.readIndex(xml))
+    #expect(index.groups[0].entries[0].term == [.text("RFC1234.LENGTH (widget item)")])
+  }
 }

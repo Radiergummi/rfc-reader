@@ -425,7 +425,9 @@ public enum RFCXMLParser {
         guard term.name == "dt", description.name == "dd",
           let locators = parseIndexLocators(description)
         else { return nil }
-        let words = normalize(parseInlines(term.children))
+        // A term names something: an RFC number in it is part of the name, not a
+        // citation (RFC 9051 indexes fetch items named after a format).
+        let words = normalize(parseInlines(term.children, linkBare: false))
         if words.isEmpty {
           parentLocators += locators
         } else {
