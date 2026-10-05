@@ -1,23 +1,14 @@
 import { redirects, resolve, siteOf } from "./shared.js";
 
-// The opt-in redirect. A navigation to a document's own page, on a site where it is
-// turned on, goes to the app instead, at the same section. A page about the
-// document, such as its errata or history, stays in Safari, as does anything that
-// names no RFC, an Internet-Draft among them.
-//
-// Safari asks before it opens the app, each time; the popup says so.
-browser.webNavigation.onBeforeNavigate.addListener(async ({ tabId, frameId, url }) => {
-  if (frameId !== 0) {
-    return;
-  }
+// The opt-in redirect's question from `redirect.js`: the `rfc://` link to send a
+// page to, or null to leave it in Safari.
+browser.runtime.onMessage.addListener(async ({ redirect: url }) => {
   const site = siteOf(url);
   if (!site || !(await redirects(site))) {
-    return;
+    return null;
   }
   const { link, documentPage } = await resolve(url);
-  if (link && documentPage) {
-    await browser.tabs.update(tabId, { url: link });
-  }
+  return documentPage ? link : null;
 });
 
 // The toolbar button is enabled on a page that names an RFC, and only there.

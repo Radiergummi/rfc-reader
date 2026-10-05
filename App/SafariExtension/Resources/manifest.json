@@ -18,7 +18,18 @@
     "default_popup": "popup.html",
     "default_icon": "images/toolbar-icon.svg"
   },
-  "permissions": ["nativeMessaging", "storage", "webNavigation"],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://rfc-editor.org/rfc/*",
+        "*://www.rfc-editor.org/rfc/*",
+        "*://datatracker.ietf.org/doc/*"
+      ],
+      "js": ["redirect.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "permissions": ["nativeMessaging", "storage"],
   "host_permissions": [
     "*://rfc-editor.org/*",
     "*://www.rfc-editor.org/*",
