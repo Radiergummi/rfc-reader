@@ -645,7 +645,7 @@ struct DocumentView: View {
 
   /// Fetches the document, with the reader's panel made ready for it first.
   private func startLoad() {
-    keptOriginal = preferOriginalText
+    keptOriginal = settings.preferOriginalText
     session.open(
       into: reader, library: library, navigation: navigation, positions: positions,
       showsOriginal: settings.preferOriginalText)
