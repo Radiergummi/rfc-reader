@@ -105,6 +105,8 @@ struct TableOfContentsView: View {
         }
       }
     }
+    // One container, as the `List` is, so the label names it rather than its rows.
+    .accessibilityElement(children: .contain)
     .accessibilityLabel("Contents")
   }
 

@@ -100,12 +100,15 @@ public enum ContentsOutline {
 
   /// Whether `section`, whose title is `title`, matches `text`: words anywhere in
   /// its title, or the start of its heading as the list shows it (`4.2.`,
-  /// `Appendix A`), ignoring case and diacritics, so `4.2` does not find 14.2.
+  /// `Appendix A`) or by its number alone (`A.`), ignoring case and diacritics, so
+  /// `4.2` does not find 14.2.
   private static func matches(_ section: Section, title: String, _ text: String) -> Bool {
     if text.isEmpty { return true }
     let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    let anchored = options.union(.anchored)
     return title.range(of: text, options: options) != nil
-      || section.displayTitle.range(of: text, options: options.union(.anchored)) != nil
+      || section.displayTitle.range(of: text, options: anchored) != nil
+      || section.number.map { "\($0)." }?.range(of: text, options: anchored) != nil
   }
 
   private static func trimmed(_ filter: String) -> String {

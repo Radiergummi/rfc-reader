@@ -65,6 +65,14 @@ struct ContentsOutlineTests {
     #expect(Self.rows("4.2. cach").map(\.anchor) == ["section-4", "section-4.2"])
   }
 
+  @Test func `an appendix matches by its number alone, as a section does`() {
+    #expect(Self.rows("A.").map(\.anchor) == ["appendix-A"])
+    #expect(
+      ContentsOutline.groups(of: Self.sections, filter: "A.").flatMap(\.entries).map(\.anchor) == [
+        "appendix-A"
+      ])
+  }
+
   @Test func `whitespace around the filter is ignored`() {
     #expect(Self.rows("  fresh ").map(\.anchor).last == "section-4.2.1")
     #expect(Self.rows("   ").count == Self.sections.count)
