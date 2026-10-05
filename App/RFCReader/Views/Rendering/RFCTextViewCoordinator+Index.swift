@@ -57,27 +57,30 @@ extension RFCTextViewCoordinator {
           height: rail.height))
     #else
       guard let scrollView = textView.enclosingScrollView else { return }
-      let insetTop = scrollView.contentView.contentInsets.top
       let scroller =
         scrollView.scrollerStyle == .overlay
         ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .overlay) : 0
+      let panel = (scrollView as? ReaderScrollView)?.trailingCover ?? 0
       let centerX = IndexRail.centerX(
-        viewWidth: scrollView.bounds.width, column: column, trailingObstruction: scroller)
-      // Flipped for a scroll view that is not: frames below are measured from its top.
-      func fromTop(_ y: CGFloat, height: CGFloat) -> CGFloat {
-        scrollView.isFlipped ? y : scrollView.bounds.height - y - height
-      }
+        viewWidth: textView.bounds.width, column: column, trailingObstruction: scroller + panel)
+      // Measured in the text view, where the viewport's uncovered top is, and converted:
+      // the scroll view is not flipped, and its clip view moves down for the find bar.
+      let uncoveredTop = textView.unobscuredTop
       indexOverlay.show(
         in: scrollView,
         stickyFrame: offset.map {
-          CGRect(
-            x: textView.textContainerOrigin.x, y: fromTop(insetTop + $0, height: height),
-            width: column, height: height)
+          scrollView.convert(
+            CGRect(
+              x: textView.textContainerOrigin.x, y: uncoveredTop + $0, width: column, height: height
+            ),
+            from: textView)
         },
         group: group, layout: rail,
-        railFrame: CGRect(
-          x: centerX - IndexRail.width / 2, y: fromTop(insetTop + railTop, height: rail.height),
-          width: IndexRail.width, height: rail.height))
+        railFrame: scrollView.convert(
+          CGRect(
+            x: centerX - IndexRail.width / 2, y: uncoveredTop + railTop, width: IndexRail.width,
+            height: rail.height),
+          from: textView))
     #endif
   }
 
@@ -116,7 +119,10 @@ extension RFCTextViewCoordinator {
     guard indexOverlay.typeSelect.type(characters, at: time) else { return false }
     guard let entry = indexOverlay.typeSelect.match(in: indexOverlay.keys) else { return true }
     let range = built.indexMap.entries[entry].termRange
-    textView.scrollRangeToVisible(range)
+    // Not `scrollRangeToVisible`, whose least scroll up puts the term at the top,
+    // under the group's pinned letter.
+    engine.bringIntoView(range.location)
+    reportVisibleAnchor()
     #if canImport(UIKit)
       flash(range, in: textView)
     #else

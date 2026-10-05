@@ -8,7 +8,7 @@ import RFCReaderKit
 
 /// The A–Z rail beside an index: draws `IndexRail`'s rows and says which group a tap
 /// or drag falls on. One adjustable element to VoiceOver, stepping through the groups.
-final class IndexRailView: PlatformView {
+final class IndexRailView: IndexRailBase {
   var labels: [String] = []
   /// The group the reader is in, which VoiceOver reads as the rail's value.
   var currentGroup: Int?
@@ -79,6 +79,17 @@ final class IndexRailView: PlatformView {
       if let touch = touches.first { select(at: touch.location(in: self).y) }
     }
 
+    // Not passed on: the text view never saw these touches begin.
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {}
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {}
+
+    /// Touched further in than it is drawn, as `UITableView`'s section index is: the
+    /// rail is narrow beside the text, a finger is not.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+      bounds.insetBy(dx: -Self.touchMargin, dy: 0).contains(point)
+    }
+    private static let touchMargin: CGFloat = 13
+
     override var isAccessibilityElement: Bool {
       get { true }
       set {}
@@ -139,3 +150,12 @@ final class IndexRailView: PlatformView {
     onSelect(next)
   }
 }
+
+#if canImport(UIKit)
+  /// A control, so that the text view, a scroll view, lets a drag that starts on the
+  /// rail be the rail's (`touchesShouldCancel(in:)` answers false for a control)
+  /// rather than scrolling the text under it.
+  typealias IndexRailBase = UIControl
+#else
+  typealias IndexRailBase = NSView
+#endif

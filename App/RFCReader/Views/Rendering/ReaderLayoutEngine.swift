@@ -178,13 +178,21 @@ final class ReaderLayoutEngine: PinSurface {
       let near = layout.range(of: viewport)
     else { return false }
     if NSLocationInRange(range.location, near) { return false }
-    jump(toOffset: range.location)
+    bringIntoView(range.location)
+    return true
+  }
+
+  /// Puts `offset`'s line a third of the way down the viewport, where it is seen with
+  /// what comes before it and clear of anything pinned at the top: a find match far
+  /// away, or type-select's choice in an index (`RFCTextViewCoordinator+Index`).
+  func bringIntoView(_ offset: Int) {
+    guard let textView else { return }
+    jump(toOffset: offset)
     keeper.beginEngineMove()
     scroll(toContainerY: containerTop - textView.viewportHeight / 3)
     layOutViewport()
     keeper.endEngineMove(top: containerTop)
     userScrolledAfterReveal()
-    return true
   }
 
   /// A reveal is the reader's move: record where it left the top.

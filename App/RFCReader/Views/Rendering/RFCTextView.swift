@@ -207,6 +207,10 @@ struct ReaderInputs {
   /// view. Only the trailing edge is refused, because zeroing the insets outright puts
   /// the first lines of the document behind the toolbar.
   final class ReaderScrollView: NSScrollView {
+    /// The width of the contents panel over the trailing edge, which the text keeps
+    /// running under but a control laid over the reader must stay clear of.
+    var trailingCover: CGFloat { super.safeAreaInsets.right }
+
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
       insets.right = 0
