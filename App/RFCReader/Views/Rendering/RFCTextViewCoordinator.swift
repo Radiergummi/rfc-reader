@@ -231,6 +231,8 @@ final class RFCTextViewCoordinator: NSObject {
   let engine = ReaderLayoutEngine()
   /// Skips the paragraphs the reading mode folds; the content storage's delegate.
   let foldingDelegate = FoldingDelegate()
+  /// The overlays over the document's index, if it has one.
+  let indexOverlay = IndexOverlayController()
   /// The reading mode and expanded sections last applied (#698).
   var folding = Folding()
   /// What folding needs of the installed build, made once per build.

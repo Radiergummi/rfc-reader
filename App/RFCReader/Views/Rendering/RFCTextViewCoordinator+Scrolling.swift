@@ -39,6 +39,7 @@ extension RFCTextViewCoordinator {
     // Everything that reports where the viewport is comes through here — scrolls,
     // jumps, restored places — which is every time the title's position can move.
     updateToolbarTitle()
+    updateIndexOverlay()
     #if !canImport(UIKit)
       // The outline's and Implementer's arrows are cursor rects over the viewport's
       // headings and captions.

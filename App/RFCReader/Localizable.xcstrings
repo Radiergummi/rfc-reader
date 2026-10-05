@@ -1021,6 +1021,16 @@
         }
       }
     },
+    "Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Index"
+          }
+        }
+      }
+    },
     "Info" : {
       "localizations" : {
         "de" : {
@@ -1217,6 +1227,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nach oben"
+          }
+        }
+      }
+    },
+    "Moves through the index by letter." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Springt im Index von Buchstabe zu Buchstabe."
           }
         }
       }
