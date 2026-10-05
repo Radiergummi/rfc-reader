@@ -444,10 +444,10 @@ private struct LinkRow: View {
 /// pane that is the store's rather than the index's.
 ///
 /// One row whose icon is the control, as a download is in Safari's list: the filled
-/// arrow turns to a cross under the pointer and removes the copy, and the outline
-/// arrow of a document not kept downloads it. Removing leaves the document on
-/// screen, since it is already in memory, and deletes the file, so the next open
-/// downloads it again; the tooltip says so. Whether it is kept is the library's set,
+/// arrow turns to a cross under the pointer and stops keeping the copy, and the
+/// outline arrow of a document not kept keeps it, moving a copy already read or
+/// downloading one (#358). A copy no longer kept goes to the reading cache, which
+/// may remove it when it needs the room; the tooltip says so. Whether it is kept is the library's set,
 /// so it is right the moment the pane shows, and a download or a removal re-reads
 /// the size. Only an RFC has a body of its own; a series number the index has not
 /// resolved yet has none.
@@ -479,7 +479,7 @@ private struct OfflineSection: View {
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
-        .accessibilityLabel(isKept ? "Remove Offline Copy" : "Keep Offline")
+        .accessibilityLabel(isKept ? "Stop Keeping Offline" : "Keep Offline")
         .accessibilityHint(help)
         Text(downloadFailed ? "Couldn't download" : isKept ? "Kept offline" : "Not kept offline")
           .foregroundStyle(isKept ? .primary : .secondary)
@@ -507,7 +507,7 @@ private struct OfflineSection: View {
     isKept
       ? String(
         localized:
-          "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
+          "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room."
       )
       : String(localized: "Keep a copy to read offline.")
   }

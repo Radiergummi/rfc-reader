@@ -1891,16 +1891,6 @@
         }
       }
     },
-    "Remove Offline Copy" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline-Kopie entfernen"
-          }
-        }
-      }
-    },
     "Remove filter %@" : {
       "localizations" : {
         "de" : {
@@ -1917,16 +1907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aus Sammlung entfernen"
-          }
-        }
-      }
-    },
-    "Remove the offline copy. It stays open here, and is downloaded again the next time you open it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Offline-Kopie entfernen. Sie bleibt hier geöffnet und wird beim nächsten Öffnen erneut geladen."
           }
         }
       }
@@ -2217,6 +2197,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vergleich mit %@ beenden"
+          }
+        }
+      }
+    },
+    "Stop Keeping Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr offline behalten"
+          }
+        }
+      }
+    },
+    "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr offline behalten. Die Kopie kommt in den Lese-Cache, der sie entfernen kann, wenn er Platz braucht."
           }
         }
       }

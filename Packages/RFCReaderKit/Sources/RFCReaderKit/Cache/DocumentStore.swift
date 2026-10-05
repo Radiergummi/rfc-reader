@@ -487,11 +487,11 @@ public actor DocumentStore {
     let files = FileManager.default
     try update(id, in: tier) {
       for format in DocumentCacheIndex.bodyFormats {
-        let from = fileURL(id, format: format, in: source)
-        guard files.fileExists(atPath: from.path) else { continue }
-        let to = fileURL(id, format: format, in: tier)
-        try? files.removeItem(at: to)
-        try files.moveItem(at: from, to: to)
+        let origin = fileURL(id, format: format, in: source)
+        guard files.fileExists(atPath: origin.path) else { continue }
+        let destination = fileURL(id, format: format, in: tier)
+        try? files.removeItem(at: destination)
+        try files.moveItem(at: origin, to: destination)
       }
     }
     // Records what the source holds afterwards, which the moves above changed.
@@ -736,7 +736,8 @@ public actor DocumentStore {
   public func markOpened(_ id: DocumentID) {
     for format in DocumentCacheIndex.bodyFormats {
       for url in fileURLs(id, format: format) {
-        try? FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: url.path)
+        try? FileManager.default.setAttributes(
+          [.modificationDate: Date.now], ofItemAtPath: url.path)
       }
     }
   }
