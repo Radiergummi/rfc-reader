@@ -585,14 +585,3 @@ struct LegacyTextParserHeadingsTests {
     #expect(titles.contains("OPEN Call"))
   }
 }
-
-extension LegacyTextParser.Prelude {
-  /// A prelude over hand-written lines, its body starting at `bodyStart`, set at column
-  /// 0 or indented as `bodyIsIndented` says, and numbering its headings only with a full
-  /// stop: what the segmentation guards are asked against.
-  init(lines: [LegacyTextParser.Line], bodyStart: Int = 0, bodyIsIndented: Bool) {
-    self.init(
-      lines: lines, separators: [], proseIndent: LegacyTextParser.classicProseIndent, front: [],
-      bodyStart: bodyStart, bodyIsIndented: bodyIsIndented)
-  }
-}

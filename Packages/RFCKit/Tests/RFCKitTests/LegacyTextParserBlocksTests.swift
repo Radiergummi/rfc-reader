@@ -10,6 +10,7 @@ struct LegacyTextParserBlocksTests {
   private let classicContext = LegacyTextParser.ParseContext(
     proseIndent: LegacyTextParser.classicProseIndent,
     linker: InlineLinker(sectionNumbers: [], referenceTargets: [:]))
+
   @Test func `paragraphs split across pages are rejoined`() throws {
     let document = try Fixtures.document("rfc1149.txt")
     let discussion = try #require(document.sections.first { $0.titleText == "Discussion" })
@@ -113,13 +114,12 @@ struct LegacyTextParserBlocksTests {
   /// space between the entries; a hanging-indent definition keeps its term on a line
   /// of its own, as every definition list was set before (#352).
   @Test func `a catalog is compact and hangs its numbers, a hanging definition does not`() throws {
-    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
     let catalog = LegacyTextParser.RawBlock(lines: [
       "      0 - Reserved",
       "      1 - First Value",
     ])
     let catalogList = try #require(
-      LegacyTextParser.blocks(from: [catalog], in: .init(proseIndent: 6, linker: linker)).first?
+      LegacyTextParser.blocks(from: [catalog], in: classicContext).first?
         .definitionList)
     #expect(catalogList.items.map(\.term.plainText) == ["0", "1"])
     #expect(catalogList.isCompact)
@@ -130,7 +130,7 @@ struct LegacyTextParserBlocksTests {
       "      from one end to the other.",
     ])
     let hangingList = try #require(
-      LegacyTextParser.blocks(from: [hanging], in: .init(proseIndent: 6, linker: linker)).first?
+      LegacyTextParser.blocks(from: [hanging], in: classicContext).first?
         .definitionList)
     #expect(hangingList.items.map(\.term.plainText) == ["Widget:"])
     #expect(!hangingList.isCompact)
@@ -334,11 +334,7 @@ struct LegacyTextParserBlocksTests {
       "   2063 - Flow Counting:  The part that sets out how the",
       "          counters are kept and read.",
     ])
-    let blocks = LegacyTextParser.blocks(
-      from: [catalog],
-      in: .init(
-        proseIndent: 6,
-        linker: InlineLinker(sectionNumbers: [], referenceTargets: [:])))
+    let blocks = LegacyTextParser.blocks(from: [catalog], in: classicContext)
     let items = try #require(blocks.first?.definitionItems)
     #expect(items.map(\.term.plainText) == ["2063"])
   }

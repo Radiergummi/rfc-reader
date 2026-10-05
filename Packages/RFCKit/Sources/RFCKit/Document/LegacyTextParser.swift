@@ -546,7 +546,7 @@ public enum LegacyTextParser {
   /// on a number, and let an `Introduction` at one end of a document speak for a running
   /// header at the other (#57).
   static func headsNearby(at index: Int, in prelude: Prelude) -> Bool {
-    let (lines, bodyStart, separators) = (prelude.lines, prelude.bodyStart, prelude.separators)
+    let lines = prelude.lines
     guard let header = lines[index].string else { return false }
     func isBreak(_ line: Line) -> Bool {
       if case .pageBreak = line { true } else { false }
@@ -555,14 +555,14 @@ public enum LegacyTextParser {
     // to the end of this one.
     var start = index
     for page in 0..<3 {
-      if page > 0, start > bodyStart { start -= 1 }
-      while start > bodyStart, !isBreak(lines[start - 1]) { start -= 1 }
+      if page > 0, start > prelude.bodyStart { start -= 1 }
+      while start > prelude.bodyStart, !isBreak(lines[start - 1]) { start -= 1 }
     }
     var end = index + 1
     while end < lines.endIndex, !isBreak(lines[end]) { end += 1 }
 
     let stated = header.trimmingCharacters(in: .whitespaces)
-    let headerHeading = heading(from: stated, separators: separators)
+    let headerHeading = heading(from: stated, separators: prelude.separators)
     let title = headingText(headerHeading?.title ?? stated)
     // The same words, and the same number where both have one: `5.  Retry Handling`
     // is not `4.  Retry Handling`. A header with no title, `Appendix B`, is told by
@@ -580,7 +580,7 @@ public enum LegacyTextParser {
       // after a section running header, which it reads past.
       let previous = candidate - 1
       let startsBlock =
-        candidate == bodyStart || isBlankOrEnd(lines, at: previous)
+        candidate == prelude.bodyStart || isBlankOrEnd(lines, at: previous)
         || lines[previous].isSectionHeader
       if let heading = Self.heading(at: candidate, in: prelude, startsBlock: startsBlock),
         heading.number != nil || !refusesUnnumberedHeading(heading.title)
@@ -590,7 +590,7 @@ public enum LegacyTextParser {
       }
       let indented = string.drop { $0 == " " }
       if indented.first?.isNumber == true,
-        let heading = Self.heading(from: String(indented), separators: separators),
+        let heading = Self.heading(from: String(indented), separators: prelude.separators),
         heading.number != nil, names(heading)
       {
         return true
@@ -638,7 +638,8 @@ public enum LegacyTextParser {
         let isAbstract = lowered == "abstract" && !abstractTaken
         if isAbstract || Self.isBoilerplateTitle(lowered) {
           let omitted = Self.omittingBoilerplate(
-            raw, heading: heading, isAbstract: isAbstract, in: context)
+            raw, heading: heading, isAbstract: isAbstract,
+            isContents: lowered.hasPrefix("table of contents"), in: context)
           if let abstract = omitted.abstract {
             header.abstract = abstract
             abstractTaken = true
@@ -704,11 +705,11 @@ public enum LegacyTextParser {
   /// blocks for the header, and what follows the omitted part as a section of its own,
   /// where anything does.
   private static func omittingBoilerplate(
-    _ raw: RawSection, heading: HeadingInfo, isAbstract: Bool, in context: ParseContext
+    _ raw: RawSection, heading: HeadingInfo, isAbstract: Bool, isContents: Bool,
+    in context: ParseContext
   ) -> (abstract: [Block]?, rest: Section?) {
     var extent = Self.boilerplateExtent(
-      of: raw.blocks, isContents: heading.title.lowercased().hasPrefix("table of contents"),
-      proseIndent: context.proseIndent)
+      of: raw.blocks, isContents: isContents, proseIndent: context.proseIndent)
     // Omitted boilerplate ends where a heading's place is taken, whether or not
     // the line there is a heading: refused as prose, RFC 1198's sentence at column
     // 0 took the list of standards under it into its `Status of this Memo`. Where

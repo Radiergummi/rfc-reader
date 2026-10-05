@@ -140,8 +140,8 @@ extension LegacyTextParser {
   /// the `Prelude` instead.
   struct ParseContext {
     /// The document's prose cap, `proseIndent(_:)`.
-    var proseIndent: Int
-    var linker: InlineLinker
+    let proseIndent: Int
+    let linker: InlineLinker
   }
 
   static func blocks(from rawBlocks: [RawBlock], in context: ParseContext) -> [Block] {
