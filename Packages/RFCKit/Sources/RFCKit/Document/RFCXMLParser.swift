@@ -91,12 +91,6 @@ public enum RFCXMLParser {
     Builder(referencesIn: root).primaryIndexTerms(in: root)
   }
 
-  /// The index `section` holds, read as `parse` reads it: for a test over a section
-  /// written by hand.
-  static func index(in section: XMLTree.Element) -> IndexBlock? {
-    Builder(referencesIn: section).parseIndex(section)
-  }
-
   /// Every `<xref>` below `root`, in document order, resolved the way the parser
   /// resolves it. Resolving one is a pure function of the element and the reference
   /// lists, so the rules are tested over hand-written trees where no committed
@@ -397,14 +391,14 @@ public enum RFCXMLParser {
     private func parseIndexGroup(_ item: XMLTree.Element) -> IndexBlock.Group? {
       let parts = item.elements
       guard item.name == "li", parts.count == 2, parts[0].name == "t", parts[1].name == "ul",
-        let anchor = parts[0]["anchor"], let label = IndexBlock.label(ofGroupAnchor: anchor)
+        let anchor = parts[0]["anchor"], IndexBlock.label(ofGroupAnchor: anchor) != nil
       else { return nil }
       let lists = parts[1].elements
       guard lists.count == 1, lists[0].name == "li", lists[0].elements.count == 1,
         lists[0].elements[0].name == "dl",
         let read = parseIndexEntries(lists[0].elements[0]), read.parentLocators.isEmpty
       else { return nil }
-      return IndexBlock.Group(label: label, anchor: anchor, entries: read.entries)
+      return IndexBlock.Group(anchor: anchor, entries: read.entries)
     }
 
     /// The entries of an index `<dl>`, a `<dt>` and a `<dd>` each, and the locators of
@@ -443,12 +437,14 @@ public enum RFCXMLParser {
     }
 
     /// The locators of an index `<dd>`: each `<xref>` in its `<t>`, primary where
-    /// prep set it in `<strong>`, with nothing but separators between them, which are
-    /// a comma or a semicolon (RFC 9114). Nil for anything else in it.
+    /// prep set it in `<strong>`, with nothing but separators between them, which prep
+    /// writes as a semicolon. Nil for anything else in it, words or a second list of
+    /// subentries, which an index read without would be half of.
     private func parseIndexLocators(_ description: XMLTree.Element) -> [IndexBlock.Locator]? {
+      guard description.all("dl").count <= 1 else { return nil }
       var locators: [IndexBlock.Locator] = []
       for part in description.elements where part.name != "dl" {
-        guard part.name == "t" else { return nil }
+        guard part.name == "t", Self.holdsOnlySeparators(part) else { return nil }
         for element in part.elements {
           switch element.name {
           case "xref":
@@ -468,6 +464,15 @@ public enum RFCXMLParser {
         }
       }
       return locators
+    }
+
+    /// Whether the text directly in `paragraph` is only what separates locators: a
+    /// semicolon or a comma, and white space.
+    private static func holdsOnlySeparators(_ paragraph: XMLTree.Element) -> Bool {
+      paragraph.children.allSatisfy { node in
+        guard case .text(let text) = node else { return true }
+        return text.allSatisfy { $0.isWhitespace || $0 == ";" || $0 == "," }
+      }
     }
 
     /// `position` names an anchorless list, as it does a section in `parseSection`.

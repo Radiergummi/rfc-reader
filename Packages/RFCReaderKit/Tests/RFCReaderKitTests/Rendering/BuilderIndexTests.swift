@@ -10,27 +10,21 @@ import Testing
 struct BuilderIndexTests {
   private let style = ReadingStyle()
 
+  static func locator(primary: Bool) -> IndexBlock.Locator {
+    IndexBlock.Locator(
+      reference: CrossReference(target: .anchor("section-1"), text: "Section 1"),
+      isPrimary: primary)
+  }
+
   static let index = IndexBlock(groups: [
     IndexBlock.Group(
-      label: "C", anchor: "rfc.index.u67",
+      anchor: "rfc.index.u67",
       entries: [
-        IndexBlock.Entry(
-          term: [.text("cache")],
-          locators: [
-            IndexBlock.Locator(
-              reference: CrossReference(target: .anchor("section-1"), text: "Section 1"),
-              isPrimary: true)
-          ]),
+        IndexBlock.Entry(term: [.text("cache")], locators: [locator(primary: true)]),
         IndexBlock.Entry(
           term: [.text("Grammar")],
           subentries: [
-            IndexBlock.Entry(
-              term: [.text("ALPHA")],
-              locators: [
-                IndexBlock.Locator(
-                  reference: CrossReference(target: .anchor("section-1"), text: "Section 1"),
-                  isPrimary: false)
-              ])
+            IndexBlock.Entry(term: [.text("ALPHA")], locators: [locator(primary: false)])
           ]),
       ])
   ])

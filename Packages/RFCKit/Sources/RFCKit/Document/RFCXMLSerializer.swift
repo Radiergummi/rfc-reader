@@ -459,8 +459,8 @@ public struct RFCXMLSerializer: Sendable {
   }
 
   /// An index in the shape prep generates and `RFCXMLParser` reads back: the
-  /// anchored paragraph, then a list item per letter group, each holding a `<dl>` of
-  /// entries.
+  /// anchored paragraph, then a list item per letter group, each holding the `<dl>`
+  /// of its entries that `IndexBlock.definitionList` makes.
   private func writeIndex(_ index: IndexBlock, writer: inout Writer, context: inout Context) {
     writer.empty("t", [("anchor", IndexBlock.anchor)])
     writer.open("ul", [("empty", "true")])
@@ -469,42 +469,14 @@ public struct RFCXMLSerializer: Sendable {
       writer.empty("t", [("anchor", group.anchor)])
       writer.open("ul", [("empty", "true")])
       writer.open("li")
-      writeIndexEntries(group.entries, writer: &writer, context: &context)
+      writeBlock(
+        .definitionList(IndexBlock.definitionList(group.entries)), writer: &writer,
+        context: &context)
       writer.close("li")
       writer.close("ul")
       writer.close("li")
     }
     writer.close("ul")
-  }
-
-  /// A `<dt>` and a `<dd>` per entry, the primary locator in bold as prep sets it,
-  /// and an entry's subentries in a `<dl>` of their own after an empty term, which is
-  /// where prep puts them.
-  private func writeIndexEntries(
-    _ entries: [IndexBlock.Entry], writer: inout Writer, context: inout Context
-  ) {
-    writer.open("dl", [("newline", "false"), ("spacing", "compact")])
-    for entry in entries {
-      writer.line("<dt>\(inlineXML(entry.term, context: &context))</dt>")
-      if entry.locators.isEmpty {
-        writer.empty("dd")
-      } else {
-        let locators = entry.locators.map { locator in
-          let reference = crossReferenceXML(locator.reference, context: &context)
-          return locator.isPrimary ? "<strong><em>\(reference)</em></strong>" : reference
-        }
-        writer.open("dd")
-        writer.line("<t>\(locators.joined(separator: ", "))</t>")
-        writer.close("dd")
-      }
-      if !entry.subentries.isEmpty {
-        writer.empty("dt")
-        writer.open("dd")
-        writeIndexEntries(entry.subentries, writer: &writer, context: &context)
-        writer.close("dd")
-      }
-    }
-    writer.close("dl")
   }
 
   // MARK: - Inlines

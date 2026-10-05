@@ -15,7 +15,7 @@ public struct IndexBlock: Sendable, Hashable, Codable {
 
   /// `A` for `rfc.index.u65`: prep anchors a letter group by its letter's code point.
   /// Nil for an anchor of any other form.
-  public static func label(ofGroupAnchor anchor: String) -> String? {
+  static func label(ofGroupAnchor anchor: String) -> String? {
     guard anchor.hasPrefix(groupAnchorPrefix),
       let value = UInt32(anchor.dropFirst(groupAnchorPrefix.count)),
       let scalar = Unicode.Scalar(value)
@@ -31,15 +31,19 @@ public struct IndexBlock: Sendable, Hashable, Codable {
 
   /// The entries under one letter or digit.
   public struct Group: Sendable, Hashable, Codable {
-    public var label: String
-    /// Prep's own, `rfc.index.u65`: what the index's letters link to.
+    /// Prep's own, `rfc.index.u65`: what the index's letters link to, and what names
+    /// the letter.
     public var anchor: String
     public var entries: [Entry]
 
-    public init(label: String, anchor: String, entries: [Entry]) {
-      self.label = label
+    public init(anchor: String, entries: [Entry]) {
       self.anchor = anchor
       self.entries = entries
+    }
+
+    /// `A`, the letter the anchor names.
+    public var label: String {
+      IndexBlock.label(ofGroupAnchor: anchor) ?? anchor
     }
   }
 
@@ -69,13 +73,41 @@ public struct IndexBlock: Sendable, Hashable, Codable {
     }
   }
 
-  /// Each entry's term, depth first: what a walk over a document's prose finds of
-  /// its index. Not its locators: an index's mention of a section is not a reference
-  /// the text makes, and counted as a backlink it was noise.
-  public var proseRuns: [[Inline]] {
-    func runs(_ entries: [Entry]) -> [[Inline]] {
-      entries.flatMap { [$0.term] + runs($0.subentries) }
+  /// Every entry, depth first, each ahead of its subentries.
+  var allEntries: [Entry] {
+    func flattened(_ entries: [Entry]) -> [Entry] {
+      entries.flatMap { [$0] + flattened($0.subentries) }
     }
-    return groups.flatMap { runs($0.entries) }
+    return groups.flatMap { flattened($0.entries) }
+  }
+
+  /// Each entry's term: what a walk over a document's prose finds of its index. Not
+  /// its locators: an index's mention of a section is not a reference the text
+  /// makes, and counted as a backlink it was noise.
+  public var proseRuns: [[Inline]] {
+    allEntries.map(\.term)
+  }
+
+  /// `entries` as the definition list prep writes them as: a term, then a paragraph
+  /// of its locators separated by semicolons, the primary in bold and italic as prep
+  /// sets it, then its subentries as a list of their own. How the serializer writes
+  /// an index's entries, and how the reader sets them until it sets an index as one.
+  public static func definitionList(_ entries: [Entry]) -> DefinitionList {
+    DefinitionList(entries.map(definitionItem), isCompact: true, hangsTerms: true)
+  }
+
+  private static func definitionItem(_ entry: Entry) -> DefinitionItem {
+    var definition: [Block] = []
+    if !entry.locators.isEmpty {
+      let locators = entry.locators.map { locator -> [Inline] in
+        let reference = Inline.crossReference(locator.reference)
+        return locator.isPrimary ? [.strong([.emphasis([reference])])] : [reference]
+      }
+      definition.append(.paragraph(Paragraph(Array(locators.joined(separator: [.text("; ")])))))
+    }
+    if !entry.subentries.isEmpty {
+      definition.append(.definitionList(definitionList(entry.subentries)))
+    }
+    return DefinitionItem(term: entry.term, definition: definition)
   }
 }

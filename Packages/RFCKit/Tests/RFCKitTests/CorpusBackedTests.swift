@@ -758,10 +758,7 @@ struct CorpusBackedIndexTests {
   static let documents = ["rfc9051", "rfc9110", "rfc9111", "rfc9112", "rfc9114", "rfc9499"]
 
   static func indexes(in document: RFCDocument) -> [IndexBlock] {
-    document.blocks.compactMap { block in
-      if case .index(let index) = block { return index }
-      return nil
-    }
+    document.blocks.compactMap(\.index)
   }
 
   @Test(arguments: documents)
@@ -780,21 +777,17 @@ struct CorpusBackedIndexTests {
   @Test(arguments: documents)
   func `every locator leads to an anchor the document declares`(stem: String) throws {
     let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
-    let declared = Set(document.allSections.map(\.anchor) + document.blocks.flatMap(\.anchors))
+    let declared = AnchorResolutionTests.anchors(in: document)
     let index = try #require(Self.indexes(in: document).first)
-    func check(_ entries: [IndexBlock.Entry]) {
-      for entry in entries {
-        for locator in entry.locators {
-          guard case .anchor(let anchor) = locator.reference.target else {
-            Issue.record("\(stem): \(entry.term.plainText) leads outside the document")
-            continue
-          }
-          #expect(declared.contains(anchor), "\(stem): \(anchor)")
+    for entry in index.allEntries {
+      for locator in entry.locators {
+        guard case .anchor(let anchor) = locator.reference.target else {
+          Issue.record("\(stem): \(entry.term.plainText) leads outside the document")
+          continue
         }
-        check(entry.subentries)
+        #expect(declared.contains(anchor), "\(stem): \(anchor)")
       }
     }
-    for group in index.groups { check(group.entries) }
   }
 
   @Test(arguments: documents)
@@ -810,14 +803,15 @@ struct CorpusBackedIndexTests {
     let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
     let indexSection = try #require(
       document.allSections.first {
-        $0.blocks.contains { if case .index = $0 { true } else { false } }
+        $0.blocks.contains { $0.index != nil }
       })
     let citing = Backlinks.within(document).values.flatMap { $0 }.map(\.section)
     #expect(!citing.contains(indexSection.anchor))
   }
 
   /// RFC 9110 heads its grammar's rule names with `Grammar`, which has no locator of
-  /// its own; RFC 9499 gives every term's locators in a subentry without a term.
+  /// its own, and gives `URI` its own locators beside its subitems; RFC 9499 gives
+  /// every term's locators in a subentry without a term.
   @Test func `both ways prep writes an item's own locators give them to the item`() throws {
     let http = try #require(
       Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9110"))).first)
@@ -825,6 +819,9 @@ struct CorpusBackedIndexTests {
       http.groups.flatMap(\.entries).first { $0.term.plainText == "Grammar" })
     #expect(grammar.locators.isEmpty)
     #expect(grammar.subentries.contains { $0.term.plainText == "ALPHA" })
+    let uri = try #require(http.groups.flatMap(\.entries).first { $0.term.plainText == "URI" })
+    #expect(!uri.locators.isEmpty, "its own locators, in its <dd>")
+    #expect(!uri.subentries.isEmpty, "its subitems, after an entry without a term")
     let dns = try #require(
       Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9499"))).first)
     let entries = dns.groups.flatMap(\.entries)
