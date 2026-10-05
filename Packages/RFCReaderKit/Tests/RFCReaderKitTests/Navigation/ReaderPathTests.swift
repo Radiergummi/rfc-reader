@@ -235,6 +235,16 @@ struct ReaderPathTests {
     #expect(documents(history) == [.rfc(8446)])
   }
 
+  /// A row in the list names no section, so the document on top, cited without one,
+  /// is the same place: still from outside the reader, and it starts the stack
+  /// again as a row naming any other document does.
+  @Test func `a row for the document on top starts the stack again`() {
+    var history = chain()
+    #expect(history.go(to: place(9112)) == nil)
+    #expect(documents(history) == [.rfc(9112)])
+    #expect(history.canGoBack, "the history before it stays")
+  }
+
   @Test func `a restored history keeps its stack`() {
     let history = chain()
     #expect(ReaderPath(NavigationHistory(history.snapshot())) == ReaderPath(history))

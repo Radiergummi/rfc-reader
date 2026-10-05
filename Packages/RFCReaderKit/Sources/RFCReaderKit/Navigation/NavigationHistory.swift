@@ -78,12 +78,17 @@ public struct NavigationHistory: Sendable {
       return nil
     }
     if let current, place.id == current.id, place.section == current.section.map(anchor) {
-      guard let section = place.section else { return nil }
+      // Not a navigation, so not a new way of arriving either: a jump to where the
+      // reader is must not reach back past an arrival from outside. An arrival from
+      // outside is one still, and starts the stack again (#263).
+      let arrival = place.arrival == .root ? .root : current.arrival
+      guard let section = place.section else {
+        self.current = HistoryEntry(id: current.id, section: current.section, arrival: arrival)
+        return nil
+      }
       let reported = places?.section(of: section) ?? section
       if position == nil || position == section || position == reported {
-        // Not a navigation, so not a new way of arriving either: a jump to where
-        // the reader is must not reach back past an arrival from outside (#263).
-        let arrived = HistoryEntry(id: place.id, section: section, arrival: current.arrival)
+        let arrived = HistoryEntry(id: place.id, section: section, arrival: arrival)
         self.current = arrived
         return arrived
       }

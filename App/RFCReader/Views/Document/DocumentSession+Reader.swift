@@ -96,6 +96,7 @@ extension DocumentSession {
     // The mode is the window's, and stays from one document to the next.
     reader.folding.expanded = folding.expanded
     reader.folding.focused = folding.focused
+    reader.folding.openAsides = folding.openAsides
     markPublishedOriginal(into: reader, library: library, navigation: navigation)
     deriveInfo(into: reader, library: library, navigation: navigation)
     switch state.phase {

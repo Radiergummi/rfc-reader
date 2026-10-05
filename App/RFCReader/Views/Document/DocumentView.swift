@@ -461,8 +461,10 @@ struct DocumentView: View {
           reader.folding = $0
         },
         isShown: showsReaderState,
-        // None until they are extracted, rather than the last document's.
-        requirements: showsReaderState ? reader.requirements ?? [] : nil,
+        // None until they are extracted, which a text view made with its document
+        // has; a reader back on top of the stack keeps its bands while they are
+        // extracted again, rather than dropping them for the moment (#263).
+        requirements: showsReaderState ? reader.requirements : nil,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.

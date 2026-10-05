@@ -193,7 +193,7 @@ final class NavigationModel: Identifiable {
       #if os(macOS)
         selection
       #else
-        selection == nil ? nil : readerPath.root?.id
+        readerPath.root?.id
       #endif
     }
     set { selection = newValue }
