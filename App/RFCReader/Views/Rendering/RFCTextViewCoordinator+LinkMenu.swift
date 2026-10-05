@@ -48,6 +48,7 @@
         ]
         if let rtf = link.rtf { item[UTType.rtf.identifier] = rtf }
         UIPasteboard.general.setItems([item])
+        Clipboard.announce(.link)
       }
     }
 
@@ -183,6 +184,7 @@
       if let rtf = link.rtf { item.setData(rtf, forType: .rtf) }
       NSPasteboard.general.clearContents()
       NSPasteboard.general.writeObjects([item])
+      Clipboard.announce(.link)
     }
   }
 #endif

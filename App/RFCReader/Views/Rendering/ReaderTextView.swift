@@ -74,6 +74,7 @@ import RFCReaderKit
         item[UTType.rtf.identifier] = rtf
       }
       UIPasteboard.general.items = [item]
+      Clipboard.announce(.quote)
     }
 
     override func copy(_ sender: Any?) {
@@ -165,6 +166,7 @@ import RFCReaderKit
       if let rtf = quote.rtf {
         pasteboard.setData(rtf, forType: .rtf)
       }
+      Clipboard.announce(.quote)
     }
 
     /// Look Up from the menu or the keyboard: a reference under the selection is
@@ -391,8 +393,7 @@ import RFCReaderKit
 
     @objc private func copyFigure(_ sender: NSMenuItem) {
       guard let figure = sender.representedObject as? Preformatted else { return }
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(FigureCopy.pasteboardText(for: figure), forType: .string)
+      Clipboard.copy(FigureCopy.pasteboardText(for: figure), announcing: .figure)
     }
 
     // MARK: - What VoiceOver reads (#12)
