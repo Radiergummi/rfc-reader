@@ -9,8 +9,8 @@ import RFCKit
 /// keeps this current itself: every body it writes or deletes goes through
 /// `update(_:by:)`, which records what is on disk for that one document afterwards.
 ///
-/// The store is not the only thing that can change the directory — it is in
-/// Application Support, and Finder will delete from it — so each question starts
+/// The store is not the only thing that can change the directory — the system
+/// purges Caches, and Finder will delete from either tier — so each question starts
 /// with `revalidate()`, which compares the directory's modification date with the
 /// one recorded when this last matched it and scans again only when they differ.
 /// That is one `stat` per question instead of an enumeration, and a file removed
@@ -22,7 +22,8 @@ import RFCKit
 /// count as a cached body is exactly the kind of rule that wants tests of its own.
 public struct DocumentCacheIndex: Sendable {
   private let directory: URL
-  private var documents: Set<DocumentID>
+  /// Every document with a body in the directory.
+  public private(set) var documents: Set<DocumentID>
 
   /// The directory's modification date when `documents` last matched it, or `nil`
   /// when it could not be read.
@@ -66,9 +67,6 @@ public struct DocumentCacheIndex: Sendable {
 
   /// Scans again if something other than `update(_:by:)` has changed the directory
   /// since this last matched it. Ask before answering from the index.
-  ///
-  /// Writing the RFC index into the same directory counts as such a change, so the
-  /// question after the daily index refresh pays for one scan.
   public mutating func revalidate() {
     guard Self.modificationDate(of: directory) != directoryDate else {
       return
