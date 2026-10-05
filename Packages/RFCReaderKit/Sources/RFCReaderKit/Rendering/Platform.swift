@@ -233,9 +233,7 @@ extension PlatformFont {
   /// or cannot have them.
   ///
   /// A copy of the font, made by Core Text, rather than a font resolved again from a
-  /// descriptor: `PlatformFont(descriptor:size:)` on a system font's descriptor
-  /// returned a 12 pt font for a 17 pt one, once in a while, under the full parallel
-  /// test run (#326). A strong run in bold text adds nothing, and is this font.
+  /// descriptor. A strong run in bold text adds nothing, and is this font.
   func adding(traits: PlatformFontDescriptor.SymbolicTraits) -> PlatformFont {
     let added = traits.subtracting(fontDescriptor.symbolicTraits)
     guard !added.isEmpty else { return self }

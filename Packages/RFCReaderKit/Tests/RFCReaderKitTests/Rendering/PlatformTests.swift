@@ -66,7 +66,7 @@ struct PlatformTests {
   }
 
   @Test func `adding a trait keeps the size and adds the trait`() {
-    let base = PlatformFont.systemFont(ofSize: 17)
+    let base = PlatformFont.systemFont(ofSize: 17, weight: .regular)
     let bold = base.adding(traits: RFCTraits.bold)
     #expect(bold.pointSize == base.pointSize)
     #expect(
