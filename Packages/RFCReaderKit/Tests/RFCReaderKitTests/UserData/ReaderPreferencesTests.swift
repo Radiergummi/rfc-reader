@@ -13,6 +13,8 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.measureKey == "readerMeasure")
     #expect(ReaderPreferences.preferOriginalTextKey == "preferOriginalText")
     #expect(ReaderPreferences.drawDiagramsKey == "drawDiagrams")
+    #expect(ReaderPreferences.syntaxThemeKey == "syntaxTheme")
+    #expect(ReaderPreferences.paletteKey == "readerPalette")
   }
 
   @Test func `the default size is the style's own default`() {
@@ -57,8 +59,8 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.fontSize(steppingDown: sizes.lowerBound) == sizes.lowerBound)
   }
 
-  /// A size stored outside the range, by an older slider or by hand, steps back
-  /// into it rather than further away.
+  /// A size stored outside the range steps back into it rather than further
+  /// away.
   @Test func `a size outside the range steps into it`() {
     let sizes = ReaderPreferences.fontSizes
     #expect(ReaderPreferences.fontSize(steppingDown: sizes.upperBound + 10) == sizes.upperBound)

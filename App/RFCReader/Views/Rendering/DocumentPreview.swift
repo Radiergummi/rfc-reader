@@ -22,15 +22,12 @@ struct DocumentPreview: View {
   var size = LinkPreview.documentSize
   let commit: () -> Void
 
-  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-    .defaultFontSize
-  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
-    ReaderPreferences.defaultUnderlineLinks
+  /// The reader's own settings, so the preview is set as the reader is, and its
+  /// build and its text view agree on the column, as `DocumentView` and the
+  /// reader's do (#32).
+  @ReaderSettingsValue private var settings
   /// The reader follows Dynamic Type (#331), so the preview of it does too.
   @Environment(\.dynamicTypeSize) private var textSize
-  /// The reader's own preference, so the preview's build and its text view agree
-  /// on the column, as `DocumentView` and the reader's do (#32).
-  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?
@@ -82,7 +79,7 @@ struct DocumentPreview: View {
       RFCTextView(
         built: loaded.built,
         bibliography: loaded.bibliography,
-        measure: measure,
+        measure: settings.measure,
         documentID: id,
         commitsOnClick: commit,
         lastVisibleAnchor: lastVisibleAnchor,
@@ -110,9 +107,8 @@ struct DocumentPreview: View {
   /// fetched if it is not cached, the way the reader fetches it, and built at the
   /// preview's own column.
   private func load() async {
-    let column = ReaderLayout.column(forWidth: size.width, measure: measure)
-    let style = ReadingStyle(
-      bodySize: fontSize, measure: column, underlinesLinks: underlineLinks, textSize: textSize)
+    let column = ReaderLayout.column(forWidth: size.width, measure: settings.measure)
+    let style = settings.style(column: column, textSize: textSize)
     let key = BuildKey(document: id, style: style)
     do {
       let kept = library.keptPreview(for: key)

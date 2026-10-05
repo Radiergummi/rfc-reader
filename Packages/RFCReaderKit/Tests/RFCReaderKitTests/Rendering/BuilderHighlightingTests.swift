@@ -61,6 +61,17 @@ struct BuilderHighlightingTests {
     #expect(try color(of: "2", in: built) == SyntaxTheme.standard.color(for: .number))
   }
 
+  /// The theme is the style's, so a reader's choice of theme (#707) reaches the
+  /// builder.
+  @Test func `tokens take the style's theme`() throws {
+    let name = PlatformColor(red: 1, green: 0, blue: 0, alpha: 1)
+    let string = PlatformColor(red: 0, green: 0, blue: 1, alpha: 1)
+    let theme = SyntaxTheme(id: "test", [.name: name, .string: string])
+    let built = build(Self.listing, style: ReadingStyle(syntaxTheme: theme))
+    #expect(try color(of: #""name""#, in: built) == name)
+    #expect(try color(of: #""value""#, in: built) == string)
+  }
+
   /// White space shows no color, so it joins the run before it: a block has a run
   /// per colored token rather than two, which every later pass over the storage
   /// walks (`Build: RFC 8727` in `make benchmark`).

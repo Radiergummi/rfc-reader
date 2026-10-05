@@ -15,21 +15,26 @@ struct BuildInputs: Equatable {
   /// triggers the build. A session only ever fetches into a state with no
   /// document, so every load arrives as a false → true transition.
   let hasDocument: Bool
-  let fontSize: Double
-  let underlineLinks: Bool
-  let textSize: DynamicTypeSize
   let legibilityWeight: LegibilityWeight?
   let column: CGFloat?
+  /// The build-time half of the reader's settings, for `column`, and nil until
+  /// there is one. Only this half: a draw-time setting (`ReaderSettings.palette`)
+  /// must not be a reason to build again.
+  let style: ReadingStyle?
   /// How the blocks with a rendering are shown: the preference, and the reader's
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
-  var style: ReadingStyle? {
-    column.map {
-      ReadingStyle(
-        bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
-    }
+  init(
+    hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
+    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices
+  ) {
+    self.hasDocument = hasDocument
+    self.legibilityWeight = legibilityWeight
+    self.column = column
+    style = column.map { settings.style(column: $0, textSize: textSize) }
+    self.choices = choices
   }
 }
 
