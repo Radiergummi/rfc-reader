@@ -14,7 +14,7 @@ extension Block {
     case .definitionList(let list): list.items.flatMap(\.definition)
     case .figure(let figure): figure.blocks
     case .blockQuote(let inner), .aside(let inner): inner
-    case .paragraph, .preformatted, .table, .references: []
+    case .paragraph, .preformatted, .table, .references, .index: []
     }
   }
 
@@ -28,6 +28,7 @@ extension Block {
     case .definitionList(let list): list.items.map(\.term)
     case .table(let table): (table.header + table.rows).flatMap(\.cells)
     case .references(let list): list.entries.map(\.annotation)
+    case .index(let index): index.proseRuns
     case .list, .preformatted, .figure, .blockQuote, .aside: []
     }
   }
@@ -45,6 +46,7 @@ extension Block {
       case .table(let table): [table.anchor] + (table.header + table.rows).map(\.anchor)
       case .blockQuote, .aside: []
       case .references(let list): list.entries.map(\.anchor)
+      case .index(let index): [IndexBlock.anchor] + index.groups.map(\.anchor)
       }
     return anchors.compactMap { $0 }
   }

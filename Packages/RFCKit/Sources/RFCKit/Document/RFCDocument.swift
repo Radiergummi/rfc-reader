@@ -284,6 +284,8 @@ public enum Block: Sendable, Hashable, Codable {
   case blockQuote([Block])
   case aside([Block])
   case references(ReferenceList)
+  /// The index prep generates from a document's `<iref>`s.
+  case index(IndexBlock)
 }
 
 public struct Paragraph: Sendable, Hashable, Codable {
