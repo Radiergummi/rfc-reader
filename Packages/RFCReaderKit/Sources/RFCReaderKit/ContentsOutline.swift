@@ -97,10 +97,10 @@ public enum ContentsOutline {
     // `sorted` is not documented as stable, so the document's order is the last
     // comparison.
     let sorted = keyed.enumerated().sorted { first, second in
-      let (a, b) = (first.element, second.element)
-      if (a.label == "#") != (b.label == "#") { return b.label == "#" }
-      let order = a.key.compare(
-        b.key, options: [.caseInsensitive, .diacriticInsensitive, .numeric])
+      let (earlier, later) = (first.element, second.element)
+      if (earlier.label == "#") != (later.label == "#") { return later.label == "#" }
+      let order = earlier.key.compare(
+        later.key, options: [.caseInsensitive, .diacriticInsensitive, .numeric])
       return order == .orderedSame ? first.offset < second.offset : order == .orderedAscending
     }.map(\.element)
     var groups: [(label: String, rows: [Row])] = []

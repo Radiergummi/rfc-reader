@@ -75,7 +75,7 @@ struct ContentsOutlineTests {
     ContentsOutline.groups(of: sections, filter: filter, order: .alphabetical)
   }
 
-  @Test func `A–Z sorts by title and sets the number aside as a caption`() {
+  @Test func `alphabetical order sorts by title and sets the number aside as a caption`() {
     let rows = Self.alphabetical().flatMap(\.rows)
     #expect(
       rows.map(\.title) == [
@@ -87,7 +87,7 @@ struct ContentsOutlineTests {
     #expect(rows.allSatisfy { $0.depth == 1 && !$0.isContext })
   }
 
-  @Test func `A–Z groups by first letter, folding diacritics`() {
+  @Test func `alphabetical order groups by first letter, folding diacritics`() {
     let groups = Self.alphabetical([
       Section(anchor: "a", number: "1", title: "Élan"),
       Section(anchor: "b", number: "2", title: "Echo"),
