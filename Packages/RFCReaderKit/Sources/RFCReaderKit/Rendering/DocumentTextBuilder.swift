@@ -38,6 +38,8 @@ public final class DocumentTextBuilder {
   var entries: [AnchorIndex.Entry] = []
   /// See `BuiltDocument.keepsWithNext`.
   var keepsWithNext: Set<Int> = []
+  /// See `BuiltDocument.indexMap`.
+  var indexMap = IndexMap.empty
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -134,7 +136,8 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
+      indexMap: builder.indexMap)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -362,7 +365,7 @@ extension DocumentTextBuilder {
         // bibliography section would land here, and is still not body prose.
         continue
       case .index(let index):
-        appendBlocks(Self.plainBlocks(of: index), indent: indent)
+        appendIndex(index, indent: indent)
       }
     }
   }

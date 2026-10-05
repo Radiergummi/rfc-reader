@@ -91,7 +91,7 @@ public struct IndexBlock: Sendable, Hashable, Codable {
   /// `entries` as the definition list prep writes them as: a term, then a paragraph
   /// of its locators separated by semicolons, the primary in bold and italic as prep
   /// sets it, then its subentries as a list of their own. How the serializer writes
-  /// an index's entries, and how the reader sets them until it sets an index as one.
+  /// an index's entries.
   public static func definitionList(_ entries: [Entry]) -> DefinitionList {
     DefinitionList(entries.map(definitionItem), isCompact: true, hangsTerms: true)
   }

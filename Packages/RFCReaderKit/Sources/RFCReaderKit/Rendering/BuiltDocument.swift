@@ -40,16 +40,20 @@ public struct BuiltDocument: @unchecked Sendable {
   /// The rules the document's grammar blocks define, for what a rule link previews
   /// (#185).
   public let grammar: DocumentGrammar
+  /// Where the document's index is, for the overlays over it; empty without one.
+  public let indexMap: IndexMap
 
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
-    backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar()
+    backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
+    indexMap: IndexMap = .empty
   ) {
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext
     self.backlinks = backlinks
     self.grammar = grammar
+    self.indexMap = indexMap
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the
