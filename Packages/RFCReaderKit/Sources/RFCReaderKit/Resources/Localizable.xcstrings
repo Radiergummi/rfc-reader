@@ -261,6 +261,15 @@
     "Check your internet connection, then try again." : {
 
     },
+    "Checklist copied" : {
+
+    },
+    "Citation copied" : {
+
+    },
+    "Code copied" : {
+
+    },
     "Concluded" : {
 
     },
@@ -313,6 +322,9 @@
 
     },
     "FYI Series" : {
+
+    },
+    "Figure copied" : {
 
     },
     "Focus" : {
@@ -397,6 +409,9 @@
 
     },
     "Legacy" : {
+
+    },
+    "Link copied" : {
 
     },
     "Links" : {
@@ -523,6 +538,9 @@
 
     },
     "Purple" : {
+
+    },
+    "Quote copied" : {
 
     },
     "RFC Editor" : {
