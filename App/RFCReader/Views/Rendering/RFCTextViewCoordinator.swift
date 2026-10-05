@@ -89,6 +89,29 @@ final class RFCTextViewCoordinator: NSObject {
   /// may ask off the main thread.
   nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
+  /// The colors this reader's fragments draw their decoration in: the reader's
+  /// palette setting (#703). A box the fragments keep, so that `apply(palette:)`
+  /// recolors the ones already laid out rather than laying them out again.
+  nonisolated let paletteBox = ReaderPaletteBox()
+
+  /// Draws the decoration in `palette` from now on, and redraws what is on screen
+  /// if it changed. Never a layout: a palette is the draw-time half of the settings,
+  /// and costs neither a rebuild nor the reader's place.
+  func apply(palette: ReaderPalette) {
+    guard paletteBox.replace(with: palette), let textView,
+      let layoutManager = textView.textLayoutManager
+    else { return }
+    // Asks TextKit to render the laid-out fragments again, which reads the box;
+    // the text view's own redraw covers what it draws itself. Not yet seen on a
+    // device: #703's pull request lists it to check.
+    layoutManager.invalidateRenderingAttributes(for: layoutManager.documentRange)
+    #if canImport(UIKit)
+      textView.setNeedsDisplay()
+    #else
+      textView.needsDisplay = true
+    #endif
+  }
+
   /// A text view's link attributes, the same for a link on a card (#694), and what
   /// a backlink caption is drawn with on top of them, handed across threads.
   /// `@unchecked Sendable` because the dictionaries are made once and never written
@@ -738,7 +761,7 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     textLayoutFragmentFor location: any NSTextLocation,
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment.make(for: textElement)
+    RFCTextLayoutFragment.make(for: textElement, palette: paletteBox)
   }
 
   /// Every link as the text view draws it, over the storage's color, but a
