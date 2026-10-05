@@ -39,6 +39,7 @@ struct RFCTextView: View {
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
+    isShown: Bool = true,
     coupling: ScrollCoupling? = nil,
     requirements: [Requirement]? = nil,
     heading: HeadingBox,
@@ -66,6 +67,7 @@ struct RFCTextView: View {
       onChoosePresentation: onChoosePresentation,
       hidesChrome: hidesChrome,
       onChromeHidden: onChromeHidden,
+      isShown: isShown,
       heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
@@ -142,6 +144,10 @@ struct ReaderInputs {
   /// come back; iOS only, see `ReaderChrome`.
   let hidesChrome: Bool
   let onChromeHidden: (Bool) -> Void
+  /// Whether the window's reader state is this reader's. False for a reader on iOS
+  /// that the stack keeps below its top (#263): what it reported was replaced by
+  /// the readers pushed over it, so it reports again when this comes back.
+  let isShown: Bool
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -198,6 +204,8 @@ struct ReaderInputs {
       coordinator.scroll(
         to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
     }
+    if isShown, !coordinator.isShown { coordinator.reportAgain() }
+    coordinator.isShown = isShown
   }
 }
 

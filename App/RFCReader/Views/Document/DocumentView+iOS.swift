@@ -17,6 +17,8 @@
     @Binding var showsInspector: Bool
     @Binding var barsHidden: Bool
     let output: DocumentOutput
+    /// Whether the window's reader state is this reader's; see `DocumentTitle`.
+    let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -37,8 +39,8 @@
             DocumentTitle(
               title: id.displayName,
               subtitle: DocumentActions.subtitle(
-                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
-              reader: reader)
+                metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
+              reader: reader, isShown: isShown)
           }
         }
         .toolbar {
@@ -76,19 +78,15 @@
           guard !Task.isCancelled else { return }
           navigation.settleReturnOffer()
         }
-        // iOS keeps the inspector as a column beside the reader where there is
-        // room for one. In compact width it is a sheet, and a `.sheet` of our own
-        // rather than the one `.inspector` turns itself into: that one, swiped
-        // away, set the binding back to false but dropped the next request to
-        // show it, so the panel's buttons opened it only on every other tap.
-        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
-          PanelHost(
-            isPresented: $showsInspector, closesAfterChoice: false,
-            readingPathAfterClosing: $readingPathAfterPanel
-          )
-          .inspectorColumnWidth(min: 260, ideal: 320)
-        }
-        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
+        // In compact width the panel is a sheet, and a `.sheet` of our own rather
+        // than the one `.inspector` turns itself into: that one, swiped away, set
+        // the binding back to false but dropped the next request to show it, so the
+        // panel's buttons opened it only on every other tap. Beside other columns
+        // it is the tab's inspector (`ContentView`).
+        //
+        // The panel is the stack's, and only the reader on top presents it (#263):
+        // the readers below would present it too, out of sight.
+        .sheet(isPresented: isCompact && isShown ? $showsInspector : .constant(false)) {
           guard let request = readingPathAfterPanel else { return }
           readingPathAfterPanel = nil
           navigation.readingPath = request
