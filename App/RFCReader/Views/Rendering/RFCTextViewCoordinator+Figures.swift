@@ -20,8 +20,17 @@
       }
       if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(
-          UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
-            Clipboard.copy(FigureCopy.pasteboardText(for: box.content), announcing: .figure)
+          UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) {
+            [weak self, weak textView] _ in
+            // The drawing too, where it shows, as the figure's own menu copies it (#778).
+            let drawn =
+              box.presentation == .figure
+              ? FigureMenu.itemRange(of: box, touching: range, in: textView?.textStorage ?? .init())
+              : nil
+            let png = drawn.flatMap { drawn in
+              textView.flatMap { self?.figureImage(of: drawn, in: $0)?.pngData() }
+            }
+            Clipboard.write(.figure(box.content, png: png), announcing: .figure)
           })
         if let action = presentationAction(for: box) { extra.append(action) }
       }

@@ -136,6 +136,14 @@ final class RFCTextViewCoordinator: NSObject {
     guard let documentID, let built else { return nil }
     return QuoteCitation.quote(of: range, in: built, document: documentID)
   }
+
+  /// The URL a copy links `link` to (#778): one anyone can open, or nil where the
+  /// reader has none to hand out.
+  func publicURL(for link: URL) -> URL? {
+    guard let documentID else { return nil }
+    return LinkCopy.publicURL(
+      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
+  }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onChoosePresentation`.

@@ -43,4 +43,22 @@ public enum FigureMenu {
   public static func itemRange(at location: Int, in text: NSAttributedString) -> NSRange? {
     text.extent(ofBox: .rfcFigureItem, at: location)
   }
+
+  /// The whole of `box`'s item, found from `range`, which touches it: a selection
+  /// Copy Figure copies the block of (`FigureCopy.box(in:of:)`), which may begin
+  /// anywhere before it. An empty range is a location.
+  public static func itemRange(
+    of box: VerbatimBox, touching range: NSRange, in text: NSAttributedString
+  ) -> NSRange? {
+    let searched = NSIntersectionRange(
+      NSRange(location: range.location, length: max(range.length, 1)),
+      NSRange(location: 0, length: text.length))
+    var location: Int?
+    text.enumerateAttribute(.rfcVerbatim, in: searched) { value, run, stop in
+      guard (value as? VerbatimBox) === box else { return }
+      location = run.location
+      stop.pointee = true
+    }
+    return location.flatMap { itemRange(at: $0, in: text) }
+  }
 }

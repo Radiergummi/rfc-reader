@@ -59,24 +59,18 @@ import RFCReaderKit
 
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
+    /// coordinator, which knows the document (#778).
+    var publicURL: (URL) -> URL? = { _ in nil }
 
-    /// Copy as Quote: one item carrying the Markdown as plain text and as Markdown, the
-    /// HTML and the rich flavor as RTF. Offered in the edit menu beside Copy
-    /// (`RFCTextViewCoordinator`).
+    /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
     func copyAsQuote() {
       guard let quote = quoteSelection(selectedRange) else { return }
-      var item: [String: Any] = [
-        UTType.utf8PlainText.identifier: quote.plainText,
-        QuoteCitation.Quote.markdownType: quote.markdown,
-        UTType.html.identifier: quote.html,
-      ]
-      if let rtf = quote.rtf {
-        item[UTType.rtf.identifier] = rtf
-      }
-      UIPasteboard.general.items = [item]
-      Clipboard.announce(.quote)
+      Clipboard.write(.quote(quote), announcing: .quote)
     }
 
+    /// The selection as the Mac copies it (#778): rich text and HTML as well as plain
+    /// text, with a reference's link one that opens outside the reader.
     override func copy(_ sender: Any?) {
       guard let attributed = attributedText, let range = selectedTextRange, !range.isEmpty else {
         super.copy(sender)
@@ -90,8 +84,8 @@ import RFCReaderKit
         super.copy(sender)
         return
       }
-      UIPasteboard.general.string = SelectionText.plainText(
-        of: attributed.attributedSubstring(from: selection))
+      Clipboard.write(
+        .selection(attributed.attributedSubstring(from: selection), publicURL: publicURL))
     }
   }
 
@@ -147,26 +141,19 @@ import RFCReaderKit
     }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
+    /// coordinator, which knows the document (#778).
+    var publicURL: (URL) -> URL? = { _ in nil }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
     var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
       nil
     }
 
-    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
-    /// and as Markdown, the HTML and the rich flavor as RTF (#186).
+    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's (#186).
     @objc func copyAsQuote(_ sender: Any?) {
       guard let quote = quoteSelection(selectedRange()) else { return }
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.setString(quote.plainText, forType: .string)
-      pasteboard.setString(
-        quote.markdown, forType: NSPasteboard.PasteboardType(QuoteCitation.Quote.markdownType))
-      pasteboard.setString(quote.html, forType: .html)
-      if let rtf = quote.rtf {
-        pasteboard.setData(rtf, forType: .rtf)
-      }
-      Clipboard.announce(.quote)
+      Clipboard.write(.quote(quote), announcing: .quote)
     }
 
     /// Look Up from the menu or the keyboard: a reference under the selection is
@@ -297,47 +284,54 @@ import RFCReaderKit
     /// How far, in points, a press on a reference moves before it is a drag.
     private static let dragThreshold: CGFloat = 3
 
-    /// AppKit asks for each declared type in turn, by its legacy name
-    /// (`SelectionText.flavor(of:)`), and the reply is written under the name asked
-    /// for. Only the plain-text flavor is rewritten -- that is the one a terminal, a
-    /// mail body or a code editor reads, and the one the chip's characters are wrong
-    /// for. The rich flavors stay AppKit's, because a rich target receives the
-    /// attachment as an image, which is the chip's symbol and is what it looks like
-    /// on screen. Two exceptions. A heading's backlink caption (#183) is the reader's,
-    /// not the document's, so a selection holding one writes its RTF and RTFD without
-    /// it. A rendered diagram's borders are characters in a clear color that its
-    /// strokes stand in for, and the strokes do not travel, so they are written in
-    /// the text color (`SelectionText.richText`). A selection of several ranges stays
-    /// AppKit's to join, chip and all.
+    /// Copy writes the selection as `PasteboardContent` has it, in one go, as iOS
+    /// does (#778). A selection of several ranges stays AppKit's to join.
+    override func copy(_ sender: Any?) {
+      guard selectedRanges.count == 1, selectedRange().length > 0 else {
+        super.copy(sender)
+        return
+      }
+      Clipboard.write(.selection(selectedSubstring, publicURL: publicURL))
+    }
+
+    /// A drag and a service get the HTML a copy carries too.
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] {
+      let types = super.writablePasteboardTypes
+      return types.contains(.html) ? types : types + [.html]
+    }
+
+    /// For a drag or a service, which AppKit writes a type at a time, asking for each
+    /// by its legacy name (`SelectionText.flavor(of:)`); the reply is written under
+    /// the name asked for. Each is `PasteboardContent`'s, as a copy's is. A selection
+    /// of several ranges stays AppKit's to join, chip and all, but for its plain
+    /// text, which is the one the chip's characters are wrong for.
     override func writeSelection(
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
     ) -> Bool {
-      let flavor = SelectionText.flavor(of: type)
-      switch flavor {
-      case .plain:
-        let selection = attributedString().attributedSubstring(from: selectedRange())
-        return pboard.setString(SelectionText.plainText(of: selection), forType: type)
-      case .rtf, .rtfd:
-        let selection = attributedString().attributedSubstring(from: selectedRange())
-        let withoutReaderText = SelectionText.withoutReaderText(of: selection)
-        let revealed = SelectionText.richText(of: withoutReaderText)
-        guard selectedRanges.count == 1,
-          revealed != nil || withoutReaderText.length != selection.length
-        else {
-          return super.writeSelection(to: pboard, type: type)
-        }
-        let copied = revealed ?? withoutReaderText
-        let whole = NSRange(location: 0, length: copied.length)
-        let data =
-          flavor == .rtf
-          ? copied.rtf(from: whole, documentAttributes: [:])
-          : copied.rtfd(from: whole, documentAttributes: [:])
-        guard let data else { return false }
-        return pboard.setData(data, forType: type)
-      case nil:
+      guard let flavor = SelectionText.flavor(of: type) else {
         return super.writeSelection(to: pboard, type: type)
       }
+      if flavor == .plain {
+        // Every range, as AppKit joins them: a line apart.
+        let text = attributedString()
+        let ranges = selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
+        let plain = ranges.map { SelectionText.plainText(of: text.attributedSubstring(from: $0)) }
+        return pboard.setString(plain.joined(separator: "\n"), forType: type)
+      }
+      guard selectedRanges.count == 1 else {
+        return super.writeSelection(to: pboard, type: type)
+      }
+      let content = PasteboardContent.selection(selectedSubstring, publicURL: publicURL)
+      switch content.value(for: flavor.type) {
+      case .text(let text)?: return pboard.setString(text, forType: type)
+      case .data(let data)?: return pboard.setData(data, forType: type)
+      case nil: return false
+      }
+    }
+
+    private var selectedSubstring: NSAttributedString {
+      attributedString().attributedSubstring(from: selectedRange())
     }
 
     /// "Copy Figure" for the figure under the click, or else the one the selection
@@ -348,8 +342,8 @@ import RFCReaderKit
       let standard = super.menu(for: event)
       let text = attributedString()
       let clicked = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
-      let box =
-        FigureCopy.box(at: clicked, in: text) ?? FigureCopy.box(in: selectedRange(), of: text)
+      let clickedBox = FigureCopy.box(at: clicked, in: text)
+      let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
       let quotes = selectedRange().length > 0
       guard figure != nil || quotes else { return standard }
@@ -362,16 +356,17 @@ import RFCReaderKit
         let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
         result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
       }
-      if let figure {
+      if let box, figure != nil {
         let item = NSMenuItem(
           title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
         item.target = self
-        item.representedObject = figure
+        let near = clickedBox != nil ? NSRange(location: clicked, length: 0) : selectedRange()
+        item.representedObject = (box, near)
         if !result.items.isEmpty {
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
-        if let box, let shown = box.presentation, choosePresentation() != nil {
+        if let shown = box.presentation, choosePresentation() != nil {
           let toggle = NSMenuItem(
             title: FigureMenu.title(offeredFrom: shown),
             action: #selector(choosePresentationItem(_:)), keyEquivalent: "")
@@ -391,9 +386,67 @@ import RFCReaderKit
       choosePresentation()?(key, presentation)
     }
 
+    /// The figure's text, and its drawing where the reader draws it (#778).
     @objc private func copyFigure(_ sender: NSMenuItem) {
-      guard let figure = sender.representedObject as? Preformatted else { return }
-      Clipboard.copy(FigureCopy.pasteboardText(for: figure), announcing: .figure)
+      guard let (box, near) = sender.representedObject as? (VerbatimBox, NSRange) else { return }
+      let drawn =
+        box.presentation == .figure
+        ? FigureMenu.itemRange(of: box, touching: near, in: attributedString())
+        : nil
+      Clipboard.write(
+        .figure(box.content, png: drawn.flatMap(figurePNG(of:))), announcing: .figure)
+    }
+
+    /// The block in `range` as it is drawn: its fragments, card and lines and all, on
+    /// the page's background, in the view's appearance, at the window's scale; as
+    /// the iOS figure menu draws it.
+    private func figurePNG(of range: NSRange) -> Data? {
+      guard let layout = textLayoutManager,
+        let start = layout.location(layout.documentRange.location, offsetBy: range.location),
+        let end = layout.location(start, offsetBy: range.length)
+      else { return nil }
+      var fragments: [NSTextLayoutFragment] = []
+      layout.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
+        guard fragment.rangeInElement.location.compare(end) == .orderedAscending else {
+          return false
+        }
+        fragments.append(fragment)
+        return true
+      }
+      let bounds = fragments.reduce(CGRect.null) { bounds, fragment in
+        let origin = fragment.layoutFragmentFrame.origin
+        return bounds.union(fragment.renderingSurfaceBounds.offsetBy(dx: origin.x, dy: origin.y))
+      }
+      guard !bounds.isNull, !bounds.isEmpty else { return nil }
+      let scale = window?.backingScaleFactor ?? 2
+      guard
+        let bitmap = NSBitmapImageRep(
+          bitmapDataPlanes: nil, pixelsWide: Int((bounds.width * scale).rounded(.up)),
+          pixelsHigh: Int((bounds.height * scale).rounded(.up)), bitsPerSample: 8,
+          samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+          bytesPerRow: 0, bitsPerPixel: 0),
+        let cgContext = NSGraphicsContext(bitmapImageRep: bitmap)?.cgContext
+      else { return nil }
+      // Flipped, as the text view is, at the window's scale; and said to be, for what
+      // AppKit draws itself, such as a chip's image.
+      cgContext.scaleBy(x: scale, y: scale)
+      cgContext.translateBy(x: 0, y: bounds.height)
+      cgContext.scaleBy(x: 1, y: -1)
+      NSGraphicsContext.saveGraphicsState()
+      NSGraphicsContext.current = NSGraphicsContext(cgContext: cgContext, flipped: true)
+      effectiveAppearance.performAsCurrentDrawingAppearance {
+        backgroundColor.setFill()
+        CGRect(origin: .zero, size: bounds.size).fill()
+        for fragment in fragments {
+          let origin = fragment.layoutFragmentFrame.origin
+          fragment.draw(
+            at: CGPoint(x: origin.x - bounds.minX, y: origin.y - bounds.minY), in: cgContext)
+        }
+      }
+      NSGraphicsContext.restoreGraphicsState()
+      // Its size in points, so it pastes at the size it shows, not twice it.
+      bitmap.size = bounds.size
+      return bitmap.representation(using: .png, properties: [:])
     }
 
     // MARK: - What VoiceOver reads (#12)
