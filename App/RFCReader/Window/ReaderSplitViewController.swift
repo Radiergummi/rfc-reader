@@ -23,6 +23,9 @@
     /// The reader opened beside the window's own (#187): a fifth item, between the
     /// reader and the panel, only while the two are compared.
     private var besideItem: NSSplitViewItem?
+    /// The sidebar and the list as they were before a comparison collapsed them, to
+    /// be put back when it ends; nil while not comparing.
+    private var setAside: (sidebar: ColumnSetAside, list: ColumnSetAside)?
 
     init(
       sidebar: NSViewController, list: NSViewController, reader: NSHostingController<some View>,
@@ -167,25 +170,53 @@
     var isComparing: Bool { besideItem != nil }
 
     /// Puts `beside` after the reader, in place of any reader beside it already, and
-    /// widens the window to hold two readable panes.
+    /// collapses the sidebar and the list, so the two readers have the window and its
+    /// floor is theirs alone (`ReaderLayout.minimumWindowWidth(panelIsOpen:comparing:)`).
     func showBeside(_ beside: NSHostingController<some View>) {
       removeBeside()
+      if setAside == nil {
+        setAside = (
+          ColumnSetAside(wasCollapsed: sidebarItem.isCollapsed),
+          ColumnSetAside(wasCollapsed: listItem.isCollapsed)
+        )
+        sidebarItem.isCollapsed = true
+        listItem.isCollapsed = true
+      }
       // As the reader's own, and for the same reason: the panel opens over this item
       // now, and its width must not re-wrap the text. `ReaderScrollView` refuses
       // the scroll view's half of it, as it does for the reader.
       beside.safeAreaRegions = []
       let item = NSSplitViewItem(viewController: beside)
       item.automaticallyAdjustsSafeAreaInsets = true
-      if let readerIndex = splitViewItems.firstIndex(of: readerItem) {
-        insertSplitViewItem(item, at: readerIndex + 1)
-        besideItem = item
-      }
+      guard let readerIndex = splitViewItems.firstIndex(of: readerItem) else { return }
+      insertSplitViewItem(item, at: readerIndex + 1)
+      besideItem = item
       applyMinimumWidth()
+      // Inserted with no width of its own, the reader beside is left with none, and
+      // the reader keeps what the sidebar and the list gave up: the two halve it.
+      // Measured in the split view: each item's view sits in a container of its own.
+      splitView.layoutSubtreeIfNeeded()
+      let reader = readerView.convert(readerView.bounds, to: splitView)
+      let besideFrame = beside.view.convert(beside.view.bounds, to: splitView)
+      splitView.setPosition(
+        ReaderWindowDividers.besidePosition(
+          readerStart: reader.minX, besideEnd: max(reader.maxX, besideFrame.maxX),
+          dividerThickness: splitView.dividerThickness),
+        ofDividerAt: readerIndex)
     }
 
-    /// Takes the reader beside away, and the window's floor back to one reader's.
+    /// Takes the reader beside away, puts the sidebar and the list back as they were,
+    /// unless the reader opened either meanwhile, and the window's floor back to one
+    /// reader's.
     func closeBeside() {
       removeBeside()
+      if let setAside {
+        sidebarItem.isCollapsed = setAside.sidebar.isCollapsedAfterComparing(
+          isCollapsedNow: sidebarItem.isCollapsed)
+        listItem.isCollapsed = setAside.list.isCollapsedAfterComparing(
+          isCollapsedNow: listItem.isCollapsed)
+        self.setAside = nil
+      }
       applyMinimumWidth()
     }
 

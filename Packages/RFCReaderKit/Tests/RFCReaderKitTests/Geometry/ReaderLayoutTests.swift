@@ -131,19 +131,25 @@ struct ReaderLayoutTests {
     #expect(restored == CGSize(width: 900, height: 480))
   }
 
-  /// The reader beside a compared document needs a readable measure of its own
-  /// (#187), with the panel open or shut.
-  @Test func `comparing two documents adds a readable pane to the floor`() {
-    for panelIsOpen in [false, true] {
-      let one = ReaderLayout.minimumWindowWidth(panelIsOpen: panelIsOpen, comparing: false)
-      let two = ReaderLayout.minimumWindowWidth(panelIsOpen: panelIsOpen, comparing: true)
-      #expect(two == one + ReaderLayout.minimumPaneWidth)
-    }
+  /// The sidebar and the list are collapsed while two documents are compared (#187),
+  /// so the floor is two readable panes and nothing else: 840 pt fits a 1280 pt
+  /// screen, half of a wide one, and full screen.
+  @Test func `while comparing the floor is two readable panes`() {
+    #expect(
+      ReaderLayout.minimumWindowWidth(panelIsOpen: false, comparing: true)
+        == 2 * ReaderLayout.minimumPaneWidth)
+  }
+
+  @Test func `while comparing the floor AppKit enforces is the same with the panel open or shut`() {
+    let shut = ReaderLayout.minimumWindowWidth(panelIsOpen: false, comparing: true)
+    let open =
+      ReaderLayout.minimumWindowWidth(panelIsOpen: true, comparing: true) + ReaderLayout.panelWidth
+    #expect(open == shut)
   }
 
   @Test func `a window narrower than two readers while comparing is widened to them`() {
     let restored = ReaderLayout.windowSize(
-      fitting: CGSize(width: 1000, height: 600), comparing: true)
+      fitting: CGSize(width: 700, height: 600), comparing: true)
     #expect(restored.width == ReaderLayout.minimumWindowWidth(panelIsOpen: false, comparing: true))
   }
 

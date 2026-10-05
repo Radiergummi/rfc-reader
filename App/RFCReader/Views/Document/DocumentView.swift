@@ -15,6 +15,7 @@ struct DocumentView: View {
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
@@ -274,7 +275,7 @@ struct DocumentView: View {
       #if os(macOS)
         requestingContent.navigationTitle(id.displayName)
       #else
-        requestingContent
+        withReaderBeside
           .navigationTitle(id.displayName)
           .modifier(
             IOSDocumentChrome(
@@ -284,6 +285,27 @@ struct DocumentView: View {
       #endif
     }
   }
+
+  #if !os(macOS)
+    /// The reader, and the one beside it while its document is compared with another
+    /// (#187), the detail column split in two. Inside the chrome rather than around
+    /// it, so the contents panel opens beside the two readers, not between them.
+    private var withReaderBeside: some View {
+      HStack(spacing: 0) {
+        requestingContent
+        // Not in a compact width, where neither half is a column.
+        if let beside = reader.sideBySide, beside.pair.reading == id,
+          SideBySide.isOffered(in: horizontalSizeClass)
+        {
+          Divider()
+          BesideReader(reading: beside, main: reader, mainNavigation: navigation)
+            .readerEnvironment(
+              ReaderEnvironment(
+                library: library, navigation: beside.navigation, reader: beside.reader))
+        }
+      }
+    }
+  #endif
 
   private func saveNow() {
     placeSaver.cancel()

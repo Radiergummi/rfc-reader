@@ -40,12 +40,13 @@ public enum ReaderLayout {
   /// the column, rebuilds the document and loses the reader's place. Taken off, the
   /// floor AppKit enforces is the same open or shut, and the window never moves.
   ///
-  /// A second readable pane while two documents are compared (#187), for the reader
-  /// beside the window's own.
+  /// While two documents are compared (#187), two readable panes and nothing else:
+  /// the sidebar and the list are collapsed then (`ColumnSetAside`), so the window
+  /// fits a 1280 pt screen, half of a wider one, or full screen.
   public static func minimumWindowWidth(panelIsOpen: Bool, comparing: Bool) -> CGFloat {
-    sidebarMinimum + listMinimum + minimumPaneWidth
-      + (comparing ? minimumPaneWidth : 0)
-      - (panelIsOpen ? panelWidth : 0)
+    let columns =
+      comparing ? 2 * minimumPaneWidth : sidebarMinimum + listMinimum + minimumPaneWidth
+    return columns - (panelIsOpen ? panelWidth : 0)
   }
 
   /// The shortest the Mac's window may be.
