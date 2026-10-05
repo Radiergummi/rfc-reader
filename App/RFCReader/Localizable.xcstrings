@@ -400,6 +400,16 @@
         }
       }
     },
+    "Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung"
+          }
+        }
+      }
+    },
     "Assumed" : {
       "localizations" : {
         "de" : {
@@ -506,6 +516,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In der Reihe so oft normativ zitiert, dass sie hier einmal aufgeführt und nicht weiterverfolgt werden."
+          }
+        }
+      }
+    },
+    "Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
           }
         }
       }
@@ -1651,6 +1671,16 @@
         }
       }
     },
+    "Page" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite"
+          }
+        }
+      }
+    },
     "Page Setup…" : {
       "localizations" : {
         "de" : {
@@ -1807,6 +1837,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesepfad"
+          }
+        }
+      }
+    },
+    "Reading Settings…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen …"
           }
         }
       }
@@ -2037,6 +2077,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Siehe auch"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen"
           }
         }
       }
