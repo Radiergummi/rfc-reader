@@ -78,7 +78,7 @@ public struct RFCLink: Hashable, Sendable {
   /// at the document's top instead (#683).
   public init?(citing url: URL) {
     guard let link = RFCLink(url: url), link.id.series == .rfc, link.anchor == nil,
-      !url.pathComponents.contains("errata"),
+      !url.pathComponents.contains(where: { ["errata", "inline-errata"].contains($0) }),
       DocumentID(parsing: url.deletingPathExtension().lastPathComponent) == link.id
     else { return nil }
     self = link

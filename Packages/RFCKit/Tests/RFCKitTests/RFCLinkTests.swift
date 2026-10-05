@@ -291,6 +291,7 @@ struct RFCLinkTests {
 
   @Test(arguments: [
     "https://www.rfc-editor.org/errata/rfc4321",
+    "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
     "https://datatracker.ietf.org/doc/rfc4321/history/",
     "https://www.rfc-editor.org/rfc/rfc4321.html#name-example-flows",
   ])

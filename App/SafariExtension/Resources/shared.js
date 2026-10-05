@@ -52,9 +52,5 @@ export async function redirects(site) {
 }
 
 export async function setRedirects(site, on) {
-  if (on) {
-    await browser.storage.local.set({ [key(site)]: true });
-  } else {
-    await browser.storage.local.remove(key(site));
-  }
+  await browser.storage.local.set({ [key(site)]: on });
 }

@@ -12,7 +12,7 @@ openButton.addEventListener("click", async () => {
 });
 
 // The per-site opt-in, offered on the sites the extension reads.
-const site = tab?.url ? siteOf(tab.url) : null;
+const site = siteOf(tab?.url);
 if (site) {
   const toggle = document.getElementById("redirect");
   document.getElementById("site").textContent = site;
