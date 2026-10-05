@@ -410,6 +410,16 @@
         }
       }
     },
+    "A–Z" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–Z"
+          }
+        }
+      }
+    },
     "Back" : {
       "localizations" : {
         "de" : {
@@ -757,6 +767,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dokument"
+          }
+        }
+      }
+    },
+    "Document Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumentreihenfolge"
           }
         }
       }
@@ -1627,6 +1647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Öffnet das Dokument"
+          }
+        }
+      }
+    },
+    "Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reihenfolge"
           }
         }
       }

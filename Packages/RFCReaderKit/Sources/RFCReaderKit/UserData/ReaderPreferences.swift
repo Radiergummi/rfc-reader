@@ -67,6 +67,10 @@ public enum ReaderPreferences {
   public static let notifyAboutBookmarksKey = "notifyAboutBookmarks"
   public static let defaultNotifyAboutBookmarks = false
 
+  /// The order the Contents tab lists sections in: a `ContentsOutline.Order`'s raw
+  /// value.
+  public static let contentsOrderKey = "contentsOrder"
+
   /// The preference, for what reads it outside a view and so has no `@AppStorage`:
   /// a print and an export.
   public static func drawsDiagrams(in defaults: UserDefaults) -> Bool {
