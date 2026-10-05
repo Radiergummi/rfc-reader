@@ -24,6 +24,10 @@ struct ReaderScene: ViewModifier {
         // A deselected row leaves nothing on screen, and the panel and the toolbar
         // must not go on describing the document that was.
         if navigation.selection == nil { reader.clear() }
+        // Another document read leaves the comparison with this one (#187).
+        if let beside = reader.sideBySide, beside.pair.reading != navigation.selection {
+          reader.endComparison()
+        }
       }
       // Declared by a view that is in the window, as a presentation has to be.
       .sheet(item: $navigation.collectionEditor) { mode in

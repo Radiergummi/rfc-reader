@@ -133,6 +133,35 @@ struct LoadStateTests {
     #expect(ColumnChange(from: nil, to: 400, isLive: true) == .discrete)
   }
 
+  // MARK: - Whether the reader says it is loading (#263)
+
+  /// A document from the cache normally builds before the delay is up, and slides
+  /// in with its text rather than after a flash of progress.
+  @Test func `a reader says nothing about loading before the delay`() {
+    var state = LoadState()
+    #expect(!state.showsProgress(isDue: false))
+    state.finish(document)
+    #expect(!state.showsProgress(isDue: false))
+  }
+
+  @Test func `a reader with nothing to show says it is loading once the delay is up`() {
+    var state = LoadState()
+    #expect(state.showsProgress(isDue: true))
+    state.finish(document)
+    #expect(state.showsProgress(isDue: true), "fetched and not yet built")
+  }
+
+  @Test func `a built document or a failure is shown instead`() {
+    var built = LoadState()
+    built.finish(document)
+    built.install(self.built())
+    #expect(!built.showsProgress(isDue: true))
+
+    var failed = LoadState()
+    failed.fail(Offline())
+    #expect(!failed.showsProgress(isDue: true))
+  }
+
   // MARK: - Whether a build runs
 
   @Test func `inputs nothing was built for start a build`() {

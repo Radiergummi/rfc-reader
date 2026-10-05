@@ -32,7 +32,7 @@
     /// inside it any more.
     let reader = ReaderState()
 
-    /// The window's four columns; see `ReaderSplitViewController`.
+    /// The window's columns; see `ReaderSplitViewController`.
     private(set) var splitController: ReaderSplitViewController!
 
     /// The library this window was made with, which its toolbar reads too.
@@ -155,6 +155,9 @@
       let canDescribe = Observations { [weak self] in self?.reader.canDescribe }
       let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
       let snapshots = Observations { [weak self] in self?.sceneSnapshot }
+      let besides = Observations { [weak self] in
+        self?.reader.sideBySide.map(ObjectIdentifier.init)
+      }
       observations = [
         Task(name: "Observe window title") { [weak self] in
           for await title in titles { if let title { self?.apply(title) } }
@@ -171,6 +174,9 @@
         // AppKit asks for the window's state again only once told it changed (#155).
         Task(name: "Observe scene snapshot") { [weak self] in
           for await _ in snapshots { self?.window?.invalidateRestorableState() }
+        },
+        Task(name: "Observe side by side") { [weak self] in
+          for await _ in besides { self?.showBeside() }
         },
       ]
     }
@@ -189,6 +195,12 @@
     /// it updates on every section crossing while scrolling — and an erased root
     /// gives SwiftUI nothing to diff against.
     private func host(_ view: some View) -> NSHostingController<some View> {
+      host(view, in: environment)
+    }
+
+    private func host(_ view: some View, in environment: ReaderEnvironment)
+      -> NSHostingController<some View>
+    {
       let controller = NSHostingController(rootView: view.readerEnvironment(environment))
       // The hosted view must not size the window. By default a hosting controller
       // reports its content's preferred size, and as a split view item that reaches
@@ -203,6 +215,39 @@
     /// this, and the column is draggable, so it is read rather than remembered.
     var listWidth: CGFloat {
       splitController.listWidth
+    }
+
+    // MARK: - Side by side
+
+    /// Adds the reader beside the window's own while a document is compared with
+    /// another (#187), and takes it away after.
+    ///
+    /// A fifth item rather than a second reader inside the reader's hosted root: each
+    /// reader keeps a hosted root of its own, given its own navigation and reader
+    /// state, so what the one beside reports reaches neither the toolbar nor the
+    /// panel, which stay the window's reader's. See
+    /// `docs/decisions/2026-10-04-a-document-read-beside-another-is-a-fifth-split-item.md`.
+    private func showBeside() {
+      if let reading = reader.sideBySide {
+        splitController.showBeside(
+          host(
+            BesideReader(reading: reading, main: reader, mainNavigation: navigation),
+            in: ReaderEnvironment(
+              library: library, navigation: reading.navigation, reader: reading.reader)))
+      } else {
+        splitController.closeBeside()
+      }
+      trackPanelEdge()
+    }
+
+    /// Keeps the toolbar's panel section over the contents panel, whose divider moves
+    /// along one as the reader beside is inserted in front of it or removed.
+    private func trackPanelEdge() {
+      let divider = ReaderWindowDividers.panel(comparing: splitController.isComparing)
+      for case let separator as NSTrackingSeparatorToolbarItem in window?.toolbar?.items ?? []
+      where separator.itemIdentifier == .rfcPanelSeparator {
+        separator.dividerIndex = divider
+      }
     }
 
     // MARK: - Title
@@ -400,9 +445,11 @@
         let text = FirstResponderSearch.searchableText(in: splitController.readerView)
       else { return }
       // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
-      // has to leave focus there.
+      // has to leave focus there. The reader beside a compared document finds in its
+      // own text (#187).
       if let focused = window.firstResponder as? NSView,
         focused.isDescendant(of: text.enclosingScrollView ?? text)
+          || splitController.besideView.map({ focused.isDescendant(of: $0) }) == true
       {
         return
       }
@@ -414,8 +461,20 @@
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
     /// the text view, not a child.
     func copyAsQuote() {
-      let text = FirstResponderSearch.searchableText(in: splitController.readerView)
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
+    /// The reader whose selection Copy as Quote copies: the one beside a compared
+    /// document (#187) when the selection in its text is the only one, or the focus is
+    /// in it; the window's own otherwise.
+    private var quotedReaderView: NSView {
+      guard let beside = splitController.besideView,
+        reader.sideBySide?.reader.hasSelection == true
+      else { return splitController.readerView }
+      let focused = window?.firstResponder as? NSView
+      if !reader.hasSelection || focused?.isDescendant(of: beside) == true { return beside }
+      return splitController.readerView
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two

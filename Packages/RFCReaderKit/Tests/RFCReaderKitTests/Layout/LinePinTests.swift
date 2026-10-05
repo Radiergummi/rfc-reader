@@ -18,7 +18,7 @@ struct LinePinTests {
   /// short one after it. Hand-written: nothing here is parsed.
   private let text = NSAttributedString(
     string: String(repeating: "a word that wraps ", count: 120) + "\nA short one.\n",
-    attributes: [.font: PlatformFont.systemFont(ofSize: 17)])
+    attributes: [.font: PlatformFont.systemFont(ofSize: 17, weight: .regular)])
 
   @Test func `a point on a line anchors that line's first character`() throws {
     let fixture = LayoutFixture(text: text, width: 400)
@@ -58,7 +58,7 @@ struct LinePinTests {
   @Test func `a later paragraph's anchor counts from the document's start`() throws {
     let later = NSAttributedString(
       string: "A short one.\n" + String(repeating: "a word that wraps ", count: 120) + "\n",
-      attributes: [.font: PlatformFont.systemFont(ofSize: 17)])
+      attributes: [.font: PlatformFont.systemFont(ofSize: 17, weight: .regular)])
     let fixture = LayoutFixture(text: later, width: 400)
     let start = ("A short one.\n" as NSString).length
     let fragment = try #require(fixture.fragment(at: start))

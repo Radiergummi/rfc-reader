@@ -395,6 +395,16 @@
         }
       }
     },
+    "Aligning sections with %@…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitte werden an %@ ausgerichtet …"
+          }
+        }
+      }
+    },
     "All RFCs" : {
       "localizations" : {
         "de" : {
@@ -701,6 +711,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link zum aktuellen Abschnitt kopieren"
+          }
+        }
+      }
+    },
+    "Couldn't align the sections; the two scroll apart" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Abschnitte ließen sich nicht ausrichten; die beiden scrollen getrennt"
           }
         }
       }
@@ -1695,6 +1715,16 @@
         }
       }
     },
+    "Scrolling with %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrollt mit %@"
+          }
+        }
+      }
+    },
     "Search %@" : {
       "localizations" : {
         "de" : {
@@ -2077,6 +2107,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieses Dokument konnte nicht gelesen werden. Auf rfc-editor.org lässt es sich vielleicht öffnen."
+          }
+        }
+      }
+    },
+    "This section of %@ has no counterpart in %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Abschnitt von %1$@ hat keine Entsprechung in %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This section of %1$@ has no counterpart in %2$@"
           }
         }
       }

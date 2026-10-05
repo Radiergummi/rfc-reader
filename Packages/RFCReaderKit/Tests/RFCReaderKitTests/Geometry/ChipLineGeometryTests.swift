@@ -52,7 +52,7 @@ struct ChipLineGeometryTests {
   }
 
   private func fixture() throws -> Fixture {
-    let font = PlatformFont.systemFont(ofSize: 17)
+    let font = PlatformFont.systemFont(ofSize: 17, weight: .regular)
     var words: [String] = []
     for index in 0..<80 {
       words.append("word\(index)")
@@ -323,7 +323,7 @@ struct ChipLineGeometryTests {
     let (storage, layout) = layOut(
       NSAttributedString(
         string: "A first paragraph.\nA heading\n",
-        attributes: [.font: PlatformFont.systemFont(ofSize: 17)]),
+        attributes: [.font: PlatformFont.systemFont(ofSize: 17, weight: .regular)]),
       width: 600
     )
     defer { withExtendedLifetime(storage) {} }
