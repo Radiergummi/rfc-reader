@@ -259,6 +259,9 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.publicURL = { [weak coordinator = context.coordinator] link in
+        coordinator?.publicURL(for: link)
+      }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // A find hit in folded text, or ⌘↓ to its end, opens its section first (#698).
@@ -370,6 +373,9 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link in
+        coordinator?.publicURL(for: link)
       }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation

@@ -110,14 +110,16 @@ struct DocumentActionsTests {
   /// The Bookmark button keeps its label, and says whether the document is
   /// bookmarked in words VoiceOver reads, which the glyph alone never did (#278).
   @Test func `the bookmark state is said in words`() {
-    #expect(DocumentActions.bookmarkState(isBookmarked: true) == "Bookmarked")
-    #expect(DocumentActions.bookmarkState(isBookmarked: false) == "Not bookmarked")
+    #expect(DocumentActions.bookmarkState(isBookmarked: true, locale: .english) == "Bookmarked")
+    #expect(
+      DocumentActions.bookmarkState(isBookmarked: false, locale: .english) == "Not bookmarked")
   }
 
   /// The ⌘D command says what it will do, on the Mac's Edit menu and the iPad's
   /// alike, where the button beside it says what is (#278).
   @Test func `the bookmark command is titled by what it will do`() {
-    #expect(DocumentActions.bookmarkCommand(isBookmarked: false) == "Bookmark")
-    #expect(DocumentActions.bookmarkCommand(isBookmarked: true) == "Remove Bookmark")
+    #expect(DocumentActions.bookmarkCommand(isBookmarked: false, locale: .english) == "Bookmark")
+    #expect(
+      DocumentActions.bookmarkCommand(isBookmarked: true, locale: .english) == "Remove Bookmark")
   }
 }

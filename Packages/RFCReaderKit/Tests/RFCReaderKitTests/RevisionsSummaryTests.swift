@@ -155,10 +155,24 @@ struct RevisionsSummaryTests {
     (.inGroup, "In the working group"),
   ])
   func `each stage has its words`(stage: RevisionStage, words: String) {
-    #expect(RevisionsSummary.stageName(stage, stream: "ietf") == words)
+    #expect(RevisionsSummary.stageName(stage, stream: "ietf", locale: .english) == words)
   }
 
   @Test func `an Independent draft in no group is under review`() {
-    #expect(RevisionsSummary.stageName(.inGroup, stream: "ise") == "Under review")
+    #expect(RevisionsSummary.stageName(.inGroup, stream: "ise", locale: .english) == "Under review")
+    #expect(
+      RevisionsSummary.stagePhrase(.inGroup, stream: "ise", locale: .english) == "under review")
+  }
+
+  /// The middle of a sentence has its own words, rather than the stage's name with
+  /// its first letter lowered, which would lower a German noun.
+  @Test func `a stage in the middle of a sentence has its own words`() {
+    #expect(
+      RevisionsSummary.stagePhrase(.rfcEditorQueue, stream: "ietf", locale: .english)
+        == "in the RFC Editor queue")
+    #expect(
+      RevisionsSummary.stagePhrase(.ietfLastCall, stream: "ietf", locale: .english)
+        == "in IETF Last Call")
+    #expect(RevisionsSummary.relationLabel(.updates, locale: .english) == "Being updated by")
   }
 }

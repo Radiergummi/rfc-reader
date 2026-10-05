@@ -48,23 +48,37 @@
     /// So does an event from any other window, such as a menu's: its location is
     /// in that window's coordinates, not the text view's.
     func quickLookReference(with event: NSEvent) -> Bool {
-      guard commitsOnClick == nil, event.type != .keyDown,
+      guard event.type != .keyDown,
         let textView, event.window === textView.window,
         let target = reference(atWindowPoint: event.locationInWindow),
-        let documentID,
+        let forceClick = forceClick(on: target)
+      else { return false }
+      hover.send(forceClick)
+      return true
+    }
+
+    /// What a force click on the reference at `characterIndex` shows, or nil where it
+    /// shows nothing of ours; the link menu's Preview offers the same (#776).
+    func forceClick(at characterIndex: Int) -> ReferenceHover.Event? {
+      reference(at: characterIndex).flatMap {
+        forceClick(on: HoverTarget(box: $0.box, range: $0.range))
+      }
+    }
+
+    private func forceClick(on target: HoverTarget) -> ReferenceHover.Event? {
+      guard commitsOnClick == nil, let documentID,
         let url = link(at: target.range.location),
         let resolved = LinkPreview.resolve(
           target.box.reference, linkedTo: url, from: documentID, in: environment?.library.index)
-      else { return false }
+      else { return nil }
       switch resolved {
       case .card:
-        guard preview(for: target.box.reference) != nil else { return false }
-        hover.send(.forceClickCard(target))
+        guard preview(for: target.box.reference) != nil else { return nil }
+        return .forceClickCard(target)
       case .document:
-        guard environment != nil, referenceRect(for: target.range) != nil else { return false }
-        hover.send(.forceClickDocument(target))
+        guard environment != nil, referenceRect(for: target.range) != nil else { return nil }
+        return .forceClickDocument(target)
       }
-      return true
     }
 
     /// The link a click on the reference under `event` follows, and the character

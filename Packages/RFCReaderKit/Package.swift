@@ -11,6 +11,7 @@ let swiftSettings: [SwiftSetting] = [
 
 let package = Package(
   name: "RFCReaderKit",
+  defaultLocalization: "en",
   // The app's floors: nothing else consumes this package (#129). No visionOS until
   // there is a visionOS target.
   platforms: [
@@ -27,6 +28,7 @@ let package = Package(
     .target(
       name: "RFCReaderKit",
       dependencies: [.product(name: "RFCKit", package: "RFCKit")],
+      resources: [.process("Resources")],
       swiftSettings: swiftSettings
     ),
     .testTarget(

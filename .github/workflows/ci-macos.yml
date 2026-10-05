@@ -110,6 +110,10 @@ jobs:
         run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
         run: make ios-sim CODE_SIGNING_ALLOWED=NO
+      # After both builds, whose records of the strings in the code it reads; the
+      # builds it starts first have nothing left to do.
+      - name: Check the string catalogs
+        run: make strings-check CODE_SIGNING_ALLOWED=NO
       # Saved from main only: a pull request restores main's newest cache, and
       # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache

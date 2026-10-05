@@ -73,8 +73,10 @@ enum AppData {
 
   /// What the window tells the reader when the store fell back to memory.
   static let storeWarning = (
-    title: "Your bookmarks couldn't be loaded",
-    message:
-      "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched."
+    title: String(localized: "Your bookmarks couldn't be loaded"),
+    message: String(
+      localized:
+        "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched."
+    )
   )
 }

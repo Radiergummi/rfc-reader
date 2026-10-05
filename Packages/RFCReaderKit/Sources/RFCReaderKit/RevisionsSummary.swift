@@ -34,7 +34,7 @@ public struct RevisionsSummary: Equatable, Sendable {
   /// - Parameter document: only an RFC has revisions, as the file is keyed by RFC
   ///   number: BCP 14 is not RFC 14.
   public init(
-    _ file: RFCRevisions?, for document: DocumentID, now: Date, locale: Locale = .current,
+    _ file: RFCRevisions?, for document: DocumentID, now: Date, locale: Locale = .interface,
     timeZone: TimeZone = .current
   ) {
     let listed = document.series == .rfc ? file?.revisions[document.number] : nil
@@ -70,7 +70,8 @@ public struct RevisionsSummary: Equatable, Sendable {
 
   /// "and 2 more", past the banner's two rows; the inspector lists them all.
   public var moreText: String? {
-    revisions.count > Self.bannerLimit ? "and \(revisions.count - Self.bannerLimit) more" : nil
+    revisions.count > Self.bannerLimit
+      ? String(kit: "and \(revisions.count - Self.bannerLimit) more", locale: locale) : nil
   }
 
   /// Every draft of one relation, in full, for the inspector.
@@ -78,53 +79,97 @@ public struct RevisionsSummary: Equatable, Sendable {
     revisions.filter { $0.relation == relation }.map { line($0, inFull: true) }
   }
 
-  public static func relationLabel(_ relation: RevisionRelation) -> String {
+  public static func relationLabel(
+    _ relation: RevisionRelation, locale: Locale = .interface
+  ) -> String {
     switch relation {
-    case .obsoletes: "Being replaced by"
-    case .updates: "Being updated by"
+    case .obsoletes: String(kit: "Being replaced by", locale: locale)
+    case .updates: String(kit: "Being updated by", locale: locale)
     }
   }
 
-  public static func stageName(_ stage: RevisionStage, stream: String) -> String {
+  public static func stageName(
+    _ stage: RevisionStage, stream: String, locale: Locale = .interface
+  ) -> String {
     switch stage {
-    case .rfcEditorQueue: "In the RFC Editor queue"
-    case .approved: "Approved for publication"
-    case .iesgReview: "Under IESG review"
-    case .ietfLastCall: "In IETF Last Call"
-    case .submitted: "Submitted for publication"
-    case .lastCall: "In working group last call"
+    case .rfcEditorQueue: String(kit: "In the RFC Editor queue", locale: locale)
+    case .approved: String(kit: "Approved for publication", locale: locale)
+    case .iesgReview: String(kit: "Under IESG review", locale: locale)
+    case .ietfLastCall: String(kit: "In IETF Last Call", locale: locale)
+    case .submitted: String(kit: "Submitted for publication", locale: locale)
+    case .lastCall: String(kit: "In working group last call", locale: locale)
     // The Independent stream has no group to be in.
-    case .inGroup: stream == "ise" ? "Under review" : "In the working group"
+    case .inGroup:
+      if stream == "ise" {
+        String(kit: "Under review", locale: locale)
+      } else {
+        String(kit: "In the working group", locale: locale)
+      }
+    }
+  }
+
+  /// The stage in the middle of a sentence: words of its own, not `stageName` with
+  /// its first letter lowered, which would lower a German noun.
+  public static func stagePhrase(
+    _ stage: RevisionStage, stream: String, locale: Locale = .interface
+  ) -> String {
+    switch stage {
+    case .rfcEditorQueue: String(kit: "in the RFC Editor queue", locale: locale)
+    case .approved: String(kit: "approved for publication", locale: locale)
+    case .iesgReview: String(kit: "under IESG review", locale: locale)
+    case .ietfLastCall: String(kit: "in IETF Last Call", locale: locale)
+    case .submitted: String(kit: "submitted for publication", locale: locale)
+    case .lastCall: String(kit: "in working group last call", locale: locale)
+    case .inGroup:
+      if stream == "ise" {
+        String(kit: "under review", locale: locale)
+      } else {
+        String(kit: "in the working group", locale: locale)
+      }
     }
   }
 
   /// A draft's line. Its detail is the stage for the banner, where a dormant draft
   /// also dates its revision, and everything known for the inspector (`inFull`).
   private func line(_ revision: RFCRevisions.Revision, inFull: Bool) -> Line {
-    let relation = Self.relationLabel(revision.relation)
-    let stage = Self.stageName(revision.stage, stream: revision.stream)
+    let relation = Self.relationLabel(revision.relation, locale: locale)
+    let stage = Self.stageName(revision.stage, stream: revision.stream, locale: locale)
     let dormant = dormantMonth(revision)
-    let asOfSuffix = asOf.map { ", as of \($0)" } ?? ""
 
     let detail: String
     if inFull {
       var parts = [format(revision.published, .dateTime.day().month(.wide).year())]
       if let group = revision.group { parts.append(group.uppercased()) }
-      if let status = revision.intendedStatus { parts.append("intended \(status)") }
-      parts.append(stage + asOfSuffix)
+      if let status = revision.intendedStatus {
+        parts.append(String(kit: "intended \(status)", locale: locale))
+      }
+      parts.append(dated(stage))
       detail = parts.joined(separator: " · ")
     } else {
-      detail = stage + (dormant.map { ", revision of \($0)" } ?? "") + asOfSuffix
+      detail = dated(
+        dormant.map { String(kit: "\(stage), revision of \($0)", locale: locale) } ?? stage)
     }
 
     let number = Int(revision.revision).map(String.init) ?? revision.revision
-    var sentence = "\(relation) \(revision.draft), revision \(number)"
-    if let dormant { sentence += " from \(dormant)" }
-    sentence += ", " + Self.lowercasingFirst(stage) + asOfSuffix
+    let phrase = Self.stagePhrase(revision.stage, stream: revision.stream, locale: locale)
+    let sentence =
+      if let dormant {
+        String(
+          kit: "\(relation) \(revision.draft), revision \(number) from \(dormant), \(phrase)",
+          locale: locale)
+      } else {
+        String(kit: "\(relation) \(revision.draft), revision \(number), \(phrase)", locale: locale)
+      }
     return Line(
       relation: relation, title: "\(revision.draft)-\(revision.revision)",
       url: RFCEditorEndpoints.datatrackerDraft(revision.draft), detail: detail,
-      accessibilityLabel: sentence)
+      accessibilityLabel: dated(sentence))
+  }
+
+  /// `text`, dated by the file when it is stale: "In the RFC Editor queue, as of 17
+  /// September".
+  private func dated(_ text: String) -> String {
+    asOf.map { String(kit: "\(text), as of \($0)", locale: locale) } ?? text
   }
 
   /// "May 2014", when the revision is more than a year old.
@@ -144,10 +189,5 @@ public struct RevisionsSummary: Equatable, Sendable {
     style.locale = locale
     style.timeZone = timeZone
     return date.formatted(style)
-  }
-
-  /// "In the RFC Editor queue" → "in the RFC Editor queue", for the middle of a sentence.
-  static func lowercasingFirst(_ string: String) -> String {
-    string.prefix(1).lowercased() + string.dropFirst()
   }
 }

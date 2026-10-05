@@ -8,6 +8,9 @@ options:
     iOS: "26.0"
     macOS: "26.0"
   createIntermediateGroups: true
+  # The language the strings in the code are written in, and the string
+  # catalogs' source language.
+  developmentLanguage: en
   xcodeVersion: "26.4"
 
 settings:
@@ -17,6 +20,10 @@ settings:
     # Swift 6's default, so it is not spelled out.
     SWIFT_VERSION: "6.0"
     CODE_SIGN_STYLE: Automatic
+    # The compiler records every localizable string it sees in a .stringsdata
+    # file, which `make strings` syncs into the string catalogs.
+    SWIFT_EMIT_LOC_STRINGS: "YES"
+    LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
     DEVELOPMENT_TEAM: TH593VRB6W
 
 packages:
@@ -59,6 +66,24 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: org.rfc-editor.document
             CFBundleURLSchemes: [rfc]
+        # Services ▸ Replace with RFC Link and Open in RFC Reader, for selected text in
+        # any app (#195); see Window/CitationServices.swift. Read by macOS only. An
+        # empty NSRequiredContext is what enables a Service without a trip to System
+        # Settings.
+        NSServices:
+          - NSMenuItem:
+              default: Replace with RFC Link
+            NSMessage: replaceWithRFCLink
+            NSPortName: $(PRODUCT_NAME)
+            NSSendTypes: [public.utf8-plain-text]
+            NSReturnTypes: [public.utf8-plain-text]
+            NSRequiredContext: {}
+          - NSMenuItem:
+              default: Open in RFC Reader
+            NSMessage: openInRFCReader
+            NSPortName: $(PRODUCT_NAME)
+            NSSendTypes: [public.utf8-plain-text]
+            NSRequiredContext: {}
         UILaunchScreen: {}
         # The daily check of the bookmarked RFCs on iOS (#191), a `BGAppRefreshTask`
         # (`BookmarkNotifications.refreshIdentifier`). macOS reads neither key.

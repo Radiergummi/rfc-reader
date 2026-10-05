@@ -91,10 +91,8 @@ struct PinRecipeTests {
     /// What the viewport shows at its top.
     func shown() -> ReaderAnchor? {
       guard let remembered, let fragment = fragment(at: remembered.offset) else { return nil }
-      return LinePin.anchor(
-        atFragmentY: containerTop - remembered.y, in: fragment.textLineFragments,
-        fragmentStart: remembered.offset
-      ).anchor
+      guard let lines = FragmentLines(fragment, in: layout) else { return nil }
+      return LinePin.anchor(atFragmentY: containerTop - remembered.y, in: lines).anchor
     }
 
     /// The fragment holding `offset`, laid out, or nil outside the text.

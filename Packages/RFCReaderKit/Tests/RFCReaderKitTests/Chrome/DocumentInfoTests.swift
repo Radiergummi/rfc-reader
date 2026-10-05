@@ -41,7 +41,7 @@ struct DocumentInfoTests {
   }
 
   private func info(_ metadata: RFCMetadata) -> DocumentInfo {
-    DocumentInfo(metadata, in: index)
+    DocumentInfo(metadata, in: index, locale: .english)
   }
 
   private func section(_ title: String, of metadata: RFCMetadata) -> DocumentInfo.Section? {
@@ -114,7 +114,8 @@ struct DocumentInfoTests {
 
   @Test func `a status summary is its glossary entry's`() {
     #expect(
-      info(rich).statusSummary == Glossary.entry(for: .status(.internetStandard)).summary)
+      info(rich).statusSummary
+        == Glossary.entry(for: .status(.internetStandard), locale: .english).summary)
   }
 
   /// A fact is a word or two in a quarter of a narrow panel.
@@ -145,9 +146,9 @@ struct DocumentInfoTests {
   /// they do in the header.
   @Test func `the document's own authors stand in for the index's`() {
     let own = [Author(name: "Roy T. Fielding", role: .editor)]
-    let info = DocumentInfo(rich, authors: own, in: index)
+    let info = DocumentInfo(rich, authors: own, in: index, locale: .english)
     #expect(info.sections.first?.rows.first?.value == .authors(own))
-    let unknown = DocumentInfo(rich, authors: [], in: index)
+    let unknown = DocumentInfo(rich, authors: [], in: index, locale: .english)
     #expect(unknown.sections.first?.rows.first?.value == .authors(rich.authors))
   }
 
@@ -220,7 +221,9 @@ struct DocumentInfoTests {
   }
 
   @Test func `without an index a series has no members to list`() {
-    let relationships = DocumentInfo(rich, in: nil).sections.first { $0.title == "Relationships" }
+    let relationships = DocumentInfo(rich, in: nil, locale: .english).sections.first {
+      $0.title == "Relationships"
+    }
     #expect(relationships?.rows.contains { $0.label.hasPrefix("Part of") } == false)
   }
 
@@ -238,11 +241,11 @@ struct DocumentInfoTests {
           revision("draft-ietf-example-ext", .updates),
         ]
       ])
-    return RevisionsSummary(file, for: metadata.id, now: .now)
+    return RevisionsSummary(file, for: metadata.id, now: .now, locale: .english)
   }
 
   @Test func `drafts revising the document follow Updated by`() {
-    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich))
+    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich), locale: .english)
     let labels = info.sections.first { $0.title == "Relationships" }?.rows.map(\.label)
     #expect(
       labels == [
@@ -251,7 +254,7 @@ struct DocumentInfoTests {
   }
 
   @Test func `a draft row lists the draft in full`() {
-    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich))
+    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich), locale: .english)
     let row = info.sections.first { $0.title == "Relationships" }?.rows.first {
       $0.label == "Being replaced by"
     }
@@ -264,10 +267,12 @@ struct DocumentInfoTests {
 
   /// A summary with nothing in it adds no row.
   @Test func `no drafts add no rows`() {
-    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now)
+    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now, locale: .english)
     #expect(section("Relationships", of: bare) == nil)
     #expect(
-      DocumentInfo(bare, in: index, revisions: empty).sections.first { $0.title == "Relationships" }
+      DocumentInfo(bare, in: index, revisions: empty, locale: .english).sections.first {
+        $0.title == "Relationships"
+      }
         == nil)
   }
 }

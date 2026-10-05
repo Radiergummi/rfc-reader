@@ -24,7 +24,7 @@ struct ReadingModePicker: View {
         })
     ) {
       ForEach(ReadingMode.allCases) { mode in
-        Text(mode.name).tag(mode)
+        Text(verbatim: mode.name()).tag(mode)
       }
     }
     .pickerStyle(.menu)

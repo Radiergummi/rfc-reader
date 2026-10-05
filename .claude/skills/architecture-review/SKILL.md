@@ -72,18 +72,19 @@ Review one area of rfc-reader, read-only: AREA (SCOPE). Do not edit, commit or p
 
 Read first: CLAUDE.md; docs/ARCHITECTURE.md; docs/VISION.md; these decision records: RECORDS; the inventory at INVENTORY; the open issues at ISSUES; the lenses at .claude/skills/architecture-review/lenses.md. Then read every source file in your area in full; skim tests only to see what they pin.
 
-Apply lenses LENSES of lenses.md to your area. This machine can assess: CAPABILITIES. For each problem, write a finding in the schema at the end of lenses.md, to FINDINGS. Rules:
+Apply lenses LENSES of lenses.md to your area. This machine can assess: CAPABILITIES. For each problem, write a finding in the schema at the end of lenses.md. You cannot write files: return every finding in your final reply, keeping each field to three lines or fewer. Rules:
 - Every finding cites file:line, or a screenshot path, and evidence you saw yourself. A number comes from the inventory or a command you ran; say which.
 - Say what it costs: what change it makes harder, what bug it caused or will cause (an issue number where one exists), what it makes slower, or what someone using the app cannot do, cannot find, or does wrong because of it.
 - An alternative names the exact API, type, package or HIG pattern, and whether it is available on Linux (RFCKit is tested there), on the iOS/macOS 26 deployment target, and under Swift 6 strict concurrency.
 - A finding that contradicts CLAUDE.md, a decision record or a VISION.md principle says so in "Conflicts" and engages the reasoning; one a record already measured and rejected is dropped unless what it measured has changed.
 - A performance claim is "measured" only with a benchmark from `make benchmark`, a signpost from `make trace`, an Instruments run or a command you ran; otherwise it is a hypothesis and names the measurement that would settle it.
 - What needs a Mac and this machine is not one: write it from the code, mark it `unassessed: needs a Mac — <what to run>`. Never describe what a screen looks like or how an interaction feels without having seen it.
+- If an open issue in ISSUES already covers a problem exactly, write no finding: list it under "Already tracked" with the issue number and one line. If it covers it only in part, write the finding and say "extends #N".
 - Do not quote RFC text in a finding. A locator of a few words is enough.
 - Something that looks wrong but is deliberate (a comment, a decision or a test says why) goes under "Considered, not a finding" with the reason, in one line.
-- Prefer five well-evidenced findings to twenty impressions. Size or taste alone is not a finding.
+- Report every real problem, small ones included: a small one becomes one commit of a fix PR. Size or taste alone is not a finding.
 
-Report: the path of FINDINGS, the number of findings per severity, and anything in your area you could not assess and why.
+Your final reply is the findings in the schema, then "Already tracked", then "Considered, not a finding", then one line with the count per severity and what you could not assess and why.
 </prompt>
 
 <experience-prompt>
@@ -91,6 +92,8 @@ You review the app as someone using it, on PLATFORM. Build and launch it: `make 
 
 Walk the tasks in lens 16 first, counting the steps and noting every place you had to know something the interface did not tell you; then apply the other lenses to what you saw. Compare against Apple's Human Interface Guidelines for PLATFORM and against the system apps that do the same job (Books, Preview, Notes, Safari's Reader, Xcode's documentation viewer): a deviation from them is a finding only when it costs the person something, and the finding says what.
 </experience-prompt>
+
+Subagents cannot write files, so each area's findings arrive as its final reply. Keep them in the conversation, and start the next queued area as each one reports. A rate or usage limit stops agents mid-review: resume each with `SendMessage` to its id once the limit resets, rather than starting a new one, so it keeps what it has read. This is only for an agent the limit stopped. One that went idle without reporting gets a single `SendMessage`, as `CLAUDE.md` says, and then its area is reviewed directly.
 
 While they run, do the cross-cutting pass yourself (step 5).
 
@@ -110,7 +113,9 @@ Write these findings to the same schema, as area `cross`.
 
 ## 6. Verify, then rank
 
-Every finding is verified before it is reported. For each area's findings file, start one fresh `general-purpose` agent (not the one that wrote it) with the file and this instruction: *"Try to refute each finding. Open the cited lines and screenshots and check the evidence; check whether a decision record, a `CLAUDE.md` constraint, a `VISION.md` principle, a comment or an open issue already covers it; check that the proposed alternative exists, runs on Linux where RFCKit needs it, is what the current Human Interface Guidelines recommend where it claims so, and would not break a standing rule; re-run any command whose number is cited. Mark each finding confirmed, downgraded (with the new severity or confidence) or refuted (with the reason)."* Check the cross-cutting findings the same way yourself.
+Every finding is verified before it is reported. As areas report, write their findings to the scratchpad yourself, condensed to one line each: ID, severity, the claim, `file:line`, and the key evidence. Start one fresh `general-purpose` agent (not the one that wrote them) per batch of about 30, with the file and this instruction: *"Try to refute each finding. Open the cited lines and screenshots and check the evidence; check whether a decision record, a `CLAUDE.md` constraint, a `VISION.md` principle, a comment or an open issue already covers it; check that the proposed alternative exists, runs on Linux where RFCKit needs it, is what the current Human Interface Guidelines recommend where it claims so, and would not break a standing rule; re-run any command whose number is cited. Reply one line per finding, `ID — confirmed | downgraded (new severity or confidence, why) | refuted (why) | duplicate of #N or ID — note`, with the corrected `file:line` where a citation was wrong."* Check the cross-cutting findings the same way yourself.
+
+Expect corrections: area agents cite wrong line numbers often, and verification downgrades a good share of findings once the threat model or a documenting comment is taken into account. Keep a ledger in the scratchpad with each finding's final state and corrected citations; the report and the issues are written from it, not from the area replies.
 
 Drop the refuted ones, but keep a line for each under "Considered, not a finding", so the next review does not spend time on them again. Merge duplicates across areas into one finding with every location.
 
@@ -135,4 +140,12 @@ Write the report to the path you were given, by default `architecture-review-YYY
 
 Relay the summary and the path to the user; do not paste the whole report.
 
-With `--issues`, and only after the maintainer has seen the report and said which findings to file: one issue per accepted finding, titled as the claim, the finding as its body, labeled from `.github/labels.yml`: `enhancement` (or `bug` for one that causes a defect now), the `area:` labels it touches (`area: ux`, `area: accessibility` and `area: performance` included), and `platform:` only when it is specific to one. Never invent a label; that file is the list. Search the open issues for one that already covers it first, and comment there instead. Never apply `agent-ready`; that label is the maintainer's.
+With `--issues`, and only after the maintainer has seen the report and said which findings to file ("all" is an answer), group them rather than filing one issue per finding:
+
+- **A fix issue per theme** for the findings whose size is "one commit": one PR, one commit per numbered problem. Each problem says where, why, the fix, and how to check it, and marks what needs a Mac check first.
+- **An epic** (label `epic`) with one sub-issue per step for project-sized work that needs focus of its own.
+- A fix issue that belongs under an open epic or bucket issue is created as its sub-issue (`parent_issue_number`).
+- A finding an open issue already covers becomes a comment on that issue, with the new evidence, not a new issue.
+- A hypothesis is filed with its measurement as the first step, and "close with the measurement if it doesn't show".
+
+Label every issue from `.github/labels.yml`: `enhancement` (or `bug` for one that causes a defect now), the `area:` labels it touches (`area: ux`, `area: accessibility` and `area: performance` included), and `platform:` only when it is specific to one. Never invent a label; that file is the list. Never apply `agent-ready`; that label is the maintainer's. End with the list of issues filed, grouped as above, and anything that needs the maintainer now (a live exposure, a decision an issue waits on).

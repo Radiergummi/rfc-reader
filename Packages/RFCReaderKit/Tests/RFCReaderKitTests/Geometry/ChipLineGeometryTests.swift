@@ -25,12 +25,13 @@ struct ChipLineGeometryTests {
   private struct Fixture {
     let text: NSAttributedString
     let lines: [NSTextLineFragment]
-    let fragmentStart: Int
     let fragmentRange: NSRange
     /// A chip piece that starts strictly inside a line *after* the fragment's
     /// first — the only shape where the two index bases disagree.
     let laterLine: NSTextLineFragment
     let laterPiece: NSRange
+
+    var fragment: FragmentLines { FragmentLines(range: fragmentRange, lines: lines) }
   }
 
   /// Lays text out in a container of this width. The storage is returned because
@@ -88,7 +89,6 @@ struct ChipLineGeometryTests {
           fixture = Fixture(
             text: attributed,
             lines: fragment.textLineFragments,
-            fragmentStart: fragmentStart,
             fragmentRange: NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart),
             laterLine: line,
             laterPiece: piece
@@ -105,10 +105,7 @@ struct ChipLineGeometryTests {
   @Test func `a chip on a later line draws behind its own text`() throws {
     let fixture = try fixture()
     let chips = FragmentGeometry.chipRects(
-      in: fixture.text,
-      lines: fixture.lines,
-      fragment: fixture.fragmentRange,
-      origin: .zero
+      in: fixture.text, fragment: fixture.fragment, origin: .zero
     )
 
     // The chip on the later line, found by the line its center falls on.
@@ -153,8 +150,8 @@ struct ChipLineGeometryTests {
     let paragraph = try #require(fragment)
     let chips = FragmentGeometry.chipRects(
       in: text,
-      lines: paragraph.textLineFragments,
-      fragment: NSRange(location: 0, length: text.length),
+      fragment: FragmentLines(
+        range: NSRange(location: 0, length: text.length), lines: paragraph.textLineFragments),
       origin: .zero
     )
     try #require(chips.count >= 3, "the chip must wrap across three lines to have a middle one")
@@ -275,16 +272,14 @@ struct ChipLineGeometryTests {
     let lines = fragment.textLineFragments
     return ChipParagraph(
       text: text, storage: storage, range: range, lines: lines,
-      chips: FragmentGeometry.chipRects(in: text, lines: lines, fragment: range, origin: .zero))
+      chips: FragmentGeometry.chipRects(
+        in: text, fragment: FragmentLines(range: range, lines: lines), origin: .zero))
   }
 
   @Test func `every chip rect sits over its own glyphs`() throws {
     let fixture = try fixture()
     let chips = FragmentGeometry.chipRects(
-      in: fixture.text,
-      lines: fixture.lines,
-      fragment: fixture.fragmentRange,
-      origin: .zero
+      in: fixture.text, fragment: fixture.fragment, origin: .zero
     )
     #expect(!chips.isEmpty)
     for chip in chips {
@@ -298,19 +293,15 @@ struct ChipLineGeometryTests {
     let piece = fixture.laterPiece
 
     // A point over the middle of the chip, in fragment coordinates.
-    let startX = line.locationForCharacter(at: piece.location - fixture.fragmentStart).x
-    let endX = line.locationForCharacter(at: NSMaxRange(piece) - fixture.fragmentStart).x
+    let startX = line.locationForCharacter(at: piece.location - fixture.fragmentRange.location).x
+    let endX = line.locationForCharacter(at: NSMaxRange(piece) - fixture.fragmentRange.location).x
     let point = CGPoint(
       x: line.typographicBounds.minX + (startX + endX) / 2,
       y: line.typographicBounds.midY
     )
 
     let resolved = try #require(
-      FragmentGeometry.characterOffset(
-        in: fixture.lines,
-        fragmentStart: fixture.fragmentStart,
-        at: point
-      ))
+      FragmentGeometry.characterOffset(in: fixture.fragment, at: point))
     #expect(
       resolved >= piece.location && resolved < NSMaxRange(piece),
       "must resolve inside the chip under the pointer, not past it")
@@ -321,8 +312,7 @@ struct ChipLineGeometryTests {
     let below = CGPoint(
       x: 10, y: fixture.lines.map(\.typographicBounds.maxY).max().map { $0 + 100 } ?? 1000)
     #expect(
-      FragmentGeometry.characterOffset(
-        in: fixture.lines, fragmentStart: fixture.fragmentStart, at: below) == nil)
+      FragmentGeometry.characterOffset(in: fixture.fragment, at: below) == nil)
   }
 
   /// The empty space right of a heading or a one-line paragraph, and the gutter to
@@ -346,17 +336,15 @@ struct ChipLineGeometryTests {
       return true
     }
     let heading = try #require(fragments.dropFirst().first)
-    let fragmentStart = layout.offset(of: heading.rangeInElement.location)
-    #expect(fragmentStart > 0)
+    let lines = try #require(FragmentLines(heading, in: layout))
+    #expect(lines.start > 0)
     let line = try #require(heading.textLineFragments.first)
     let y = line.typographicBounds.midY
     let right = CGPoint(x: line.typographicBounds.maxX + 50, y: y)
     let left = CGPoint(x: line.typographicBounds.minX - 5, y: y)
     #expect(
-      FragmentGeometry.characterOffset(
-        in: heading.textLineFragments, fragmentStart: fragmentStart, at: right) == nil)
+      FragmentGeometry.characterOffset(in: lines, at: right) == nil)
     #expect(
-      FragmentGeometry.characterOffset(
-        in: heading.textLineFragments, fragmentStart: fragmentStart, at: left) == nil)
+      FragmentGeometry.characterOffset(in: lines, at: left) == nil)
   }
 }

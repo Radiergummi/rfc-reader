@@ -47,6 +47,10 @@ public struct ReferenceHover {
     /// A heading's backlinks (#183), opened by a click on its caption, which the
     /// pointer travels into as it does a document preview: its rows are buttons.
     case backlinks
+    /// A reference's card chosen with Preview from its link's menu (#776). The
+    /// pointer is on the menu item, not the reference, so it stays until it closes
+    /// itself, as a document preview does.
+    case chosenCard
 
     /// The pointer leaving the reference, or the text view, on its way there must
     /// not close it, as it does a card.
@@ -75,6 +79,8 @@ public struct ReferenceHover {
     case forceClickCard(HoverTarget)
     /// A force click on a reference that previews as a document.
     case forceClickDocument(HoverTarget)
+    /// Preview chosen from the link menu of a reference that previews as a card.
+    case cardChosen(HoverTarget)
     /// The card the last `showCard` asked for is on screen.
     case cardShown
     /// The document preview the last `showDocumentPreview` asked for is on screen.
@@ -120,6 +126,8 @@ public struct ReferenceHover {
   public private(set) var forceClicked: ReferenceBox?
   public private(set) var dwell: Dwell?
   public private(set) var presentation: Presentation?
+  /// The card on its way to the screen was chosen from the menu.
+  private var cardIsChosen = false
   /// Where the pointer was, in screen coordinates, when it followed a link. Until it
   /// moves from there, a scroll does not look for a reference under it: the jump the
   /// click caused is not the reader resting on whatever it landed on.
@@ -232,8 +240,18 @@ public struct ReferenceHover {
       effects.append(.showDocumentPreview(target))
       return effects
 
+    case .cardChosen(let target):
+      guard !isPreviewReader else { return [] }
+      // No force click's mouse-up follows it, so nothing is swallowed.
+      var effects = cancel()
+      hovered = target.box
+      cardIsChosen = true
+      effects.append(.showCard(target))
+      return effects
+
     case .cardShown:
-      presentation = .card
+      presentation = cardIsChosen ? .chosenCard : .card
+      cardIsChosen = false
       return []
 
     case .documentPreviewShown:
@@ -289,6 +307,7 @@ public struct ReferenceHover {
     hovered = nil
     forceClicked = nil
     presentation = nil
+    cardIsChosen = false
     return effects
   }
 }

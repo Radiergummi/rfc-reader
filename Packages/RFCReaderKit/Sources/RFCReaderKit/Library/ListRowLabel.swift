@@ -7,19 +7,19 @@ extension RFCMetadata {
   ///
   /// VoiceOver read the row's number, year, title, status and group as separate
   /// stops (#156), so the row hides its children and speaks this instead.
-  public func accessibilityLabel(isBookmarked: Bool) -> String {
+  public func accessibilityLabel(isBookmarked: Bool, locale: Locale = .interface) -> String {
     var parts = [id.displayName, title, currentStatus.displayName]
     if isObsolete {
-      parts.append("Obsolete")
+      parts.append(String(kit: "Obsolete", locale: locale))
     }
     // Prefixed, the index's sentence for no group would be read as "Working group
     // NON WORKING GROUP".
     if let workingGroup = namedWorkingGroup {
-      parts.append("Working group \(workingGroup)")
+      parts.append(String(kit: "Working group \(workingGroup)", locale: locale))
     }
     parts.append(String(date.year))
     if isBookmarked {
-      parts.append("Bookmarked")
+      parts.append(String(kit: "Bookmarked", locale: locale))
     }
     return parts.joined(separator: ", ")
   }
@@ -38,12 +38,12 @@ extension RFCMetadata {
 extension LibraryRow {
   /// What the row is, spoken as one element. A series is spoken with the RFCs it
   /// names, and with no status or group: those belong to its members.
-  public func accessibilityLabel(isBookmarked: Bool) -> String {
-    if let rfc { return rfc.accessibilityLabel(isBookmarked: isBookmarked) }
+  public func accessibilityLabel(isBookmarked: Bool, locale: Locale = .interface) -> String {
+    if let rfc { return rfc.accessibilityLabel(isBookmarked: isBookmarked, locale: locale) }
     guard let memberList else { return id.displayName }
     var parts = [id.displayName, title, memberList, String(date.year)]
     if isBookmarked {
-      parts.append("Bookmarked")
+      parts.append(String(kit: "Bookmarked", locale: locale))
     }
     return parts.joined(separator: ", ")
   }

@@ -448,7 +448,7 @@ struct DocumentView: View {
   /// column, padded as `RFCTextView` pads it, and the notice below it, centered in
   /// the same column.
   private func originalOnly(_ page: PublishedOriginalPage, metadata: RFCMetadata) -> some View {
-    let name = page.original.format.displayName
+    let name = page.original.format.displayName()
     return ScrollView {
       VStack(alignment: .leading, spacing: 0) {
         DocumentHeaderView(

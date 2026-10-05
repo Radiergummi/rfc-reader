@@ -24,9 +24,9 @@
       self.offered = offered
       format = ExportFormat(
         remembered: UserDefaults.standard.string(forKey: Self.rememberedKey), offered: offered)
-      popUp.addItems(withTitles: offered.map(\.name))
+      popUp.addItems(withTitles: offered.map { $0.name() })
       popUp.selectItem(at: offered.firstIndex(of: format) ?? 0)
-      let label = NSTextField(labelWithString: "Format:")
+      let label = NSTextField(labelWithString: String(localized: "Format:"))
       let row = NSStackView(views: [label, popUp])
       row.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
       // The panel sizes its accessory by the view's frame, which a view made in

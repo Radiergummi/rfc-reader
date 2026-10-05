@@ -56,7 +56,7 @@ struct LibraryRowTests {
 
   @Test func `a series row is spoken with its members and no status`() {
     #expect(
-      series.accessibilityLabel(isBookmarked: true)
+      series.accessibilityLabel(isBookmarked: true, locale: .english)
         == "BCP 14, Requirement Levels, RFC 2119, RFC 8174, 2017, Bookmarked")
   }
 }

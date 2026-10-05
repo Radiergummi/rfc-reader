@@ -65,6 +65,20 @@ struct TextLayoutOffsetTests {
     }
   }
 
+  /// A text range that outlived the text it was made for, here by the document
+  /// getting shorter, still converts to offsets, which are past the document's end.
+  /// It has no range in the document: a fragment's lines built over it index text
+  /// that is not there. The same guard turns away the `NSNotFound` that
+  /// `offset(from:to:)` may answer, on which a fragment's arithmetic overflows.
+  @Test func `a text range past the document's end has no range`() throws {
+    let (storage, layout) = layOut()
+    defer { withExtendedLifetime(storage) {} }
+
+    let stale = try #require(layout.textRange(for: NSRange(location: 80, length: 4)))
+    storage.textStorage?.setAttributedString(NSAttributedString(string: "Short.\nTwo"))
+    #expect(layout.range(of: stale) == nil)
+  }
+
   /// What the reader's layout fragment asks for its own span: each fragment's
   /// range is its paragraph's range in the document, including on the paragraphs
   /// after the first.

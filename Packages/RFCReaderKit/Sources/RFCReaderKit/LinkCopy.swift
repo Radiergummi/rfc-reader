@@ -45,6 +45,16 @@ public struct LinkCopy: Equatable, Sendable {
     return LinkCopy(url: reference.webURL, label: label(for: reference.id, in: index))
   }
 
+  /// Whether `link` is the reader's own, which opens nowhere else: `rfc:`, an anchor
+  /// in this document or a bibliography entry. A link to the web is anyone's
+  /// already, and a copy hands it out as it is, even one `RFCLink` can read, whose
+  /// errata or history page is not the document's info page.
+  public static func isReaders(_ link: URL) -> Bool {
+    guard let scheme = link.scheme?.lowercased() else { return false }
+    return [RFCLink.scheme, DocumentTextBuilder.anchorScheme, DocumentTextBuilder.referenceScheme]
+      .contains(scheme)
+  }
+
   private static func label(for id: DocumentID, in index: RFCIndex?) -> String {
     guard let title = index?[id]?.title else { return id.displayName }
     return "\(id.displayName): \(title)"
@@ -52,22 +62,12 @@ public struct LinkCopy: Equatable, Sendable {
 
   /// The label as a link, for a pasteboard's HTML.
   public var html: String {
-    "<a href=\"\(Self.escaped(url.absoluteString))\">\(Self.escaped(label))</a>"
+    let href = PasteboardMarkup.escaped(url.absoluteString)
+    return PasteboardMarkup.html("<a href=\"\(href)\">\(PasteboardMarkup.escaped(label))</a>")
   }
 
   /// The label as a link, for a pasteboard's RTF.
   public var rtf: Data? {
-    let text = NSAttributedString(string: label, attributes: [.link: url])
-    return try? text.data(
-      from: NSRange(location: 0, length: text.length),
-      documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-  }
-
-  private static func escaped(_ text: String) -> String {
-    text
-      .replacingOccurrences(of: "&", with: "&amp;")
-      .replacingOccurrences(of: "<", with: "&lt;")
-      .replacingOccurrences(of: ">", with: "&gt;")
-      .replacingOccurrences(of: "\"", with: "&quot;")
+    PasteboardMarkup.rtf(NSAttributedString(string: label, attributes: [.link: url]))
   }
 }
