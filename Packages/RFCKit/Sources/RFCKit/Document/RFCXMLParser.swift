@@ -393,10 +393,11 @@ public enum RFCXMLParser {
       guard item.name == "li", parts.count == 2, parts[0].name == "t", parts[1].name == "ul",
         let anchor = parts[0]["anchor"], IndexBlock.label(ofGroupAnchor: anchor) != nil
       else { return nil }
-      let lists = parts[1].elements
-      guard lists.count == 1, lists[0].name == "li", lists[0].elements.count == 1,
-        lists[0].elements[0].name == "dl",
-        let read = parseIndexEntries(lists[0].elements[0]), read.parentLocators.isEmpty
+      let items = parts[1].elements
+      guard items.count == 1, let onlyItem = items.first, onlyItem.name == "li" else { return nil }
+      let lists = onlyItem.elements
+      guard lists.count == 1, let list = lists.first, list.name == "dl",
+        let read = parseIndexEntries(list), read.parentLocators.isEmpty
       else { return nil }
       return IndexBlock.Group(anchor: anchor, entries: read.entries)
     }
@@ -416,8 +417,12 @@ public enum RFCXMLParser {
       for start in stride(from: 0, to: parts.count, by: 2) {
         let term = parts[start]
         let description = parts[start + 1]
-        guard term.name == "dt", description.name == "dd",
-          let locators = parseIndexLocators(description)
+        // A `<dd>` holds its locators' paragraphs and at most one list of subentries;
+        // a second would be half an index.
+        let contents = description.elements
+        let nestedLists = contents.filter { $0.name == "dl" }
+        guard term.name == "dt", description.name == "dd", nestedLists.count <= 1,
+          let locators = parseIndexLocators(contents.filter { $0.name != "dl" })
         else { return nil }
         // A term names something: an RFC number in it is part of the name, not a
         // citation (RFC 9051 indexes fetch items named after a format).
@@ -427,7 +432,7 @@ public enum RFCXMLParser {
         } else {
           entries.append(IndexBlock.Entry(term: words, locators: locators))
         }
-        if let nested = description.first("dl") {
+        if let nested = nestedLists.first {
           guard !entries.isEmpty, let read = parseIndexEntries(nested) else { return nil }
           entries[entries.count - 1].locators += read.parentLocators
           entries[entries.count - 1].subentries += read.entries
@@ -436,14 +441,12 @@ public enum RFCXMLParser {
       return (entries, parentLocators)
     }
 
-    /// The locators of an index `<dd>`: each `<xref>` in its `<t>`, primary where
-    /// prep set it in `<strong>`, with nothing but separators between them, which prep
-    /// writes as a semicolon. Nil for anything else in it, words or a second list of
-    /// subentries, which an index read without would be half of.
-    private func parseIndexLocators(_ description: XMLTree.Element) -> [IndexBlock.Locator]? {
-      guard description.all("dl").count <= 1 else { return nil }
+    /// The locators in the paragraphs of an index `<dd>`: each `<xref>` in a `<t>`,
+    /// primary where prep set it in `<strong>`, with nothing but separators between
+    /// them, which prep writes as a semicolon. Nil for anything else, such as words.
+    private func parseIndexLocators(_ paragraphs: [XMLTree.Element]) -> [IndexBlock.Locator]? {
       var locators: [IndexBlock.Locator] = []
-      for part in description.elements where part.name != "dl" {
+      for part in paragraphs {
         guard part.name == "t", Self.holdsOnlySeparators(part) else { return nil }
         for element in part.elements {
           switch element.name {
