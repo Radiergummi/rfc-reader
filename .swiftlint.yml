@@ -91,7 +91,7 @@ custom_rules:
     name: System font with a weight
     included:
       - Packages/RFCReaderKit/.*\.swift
-    regex: '\bboldSystemFont\(|\bsystemFont\(ofSize:(?:[^(),\n]|\([^()\n]*\))*\)'
+    regex: '\b(?:boldSystemFont\(|systemFont\(\s*ofSize:(?:[^(),]|\((?:[^()]|\([^()]*\))*\))*\))'
     excluded_match_kinds:
       - comment
       - doccomment
