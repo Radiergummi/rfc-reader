@@ -20,6 +20,10 @@
 
     private(set) var controllers: [ReaderWindowController] = []
 
+    /// The Services' provider (#195), kept here because `NSApp.servicesProvider` does
+    /// not retain it.
+    private let citationServices = CitationServices()
+
     /// Before AppKit restores the last session's windows (#155), which come back
     /// through `restoredWindow()` between this and `applicationDidFinishLaunching`.
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -30,6 +34,7 @@
       // Before launch finishes, which is when a tap on a notification that launched
       // the app is delivered (#191).
       BookmarkNotifications.install()
+      NSApp.servicesProvider = citationServices
       // The scene's `.task` did this; there is no scene on macOS any more.
       // Immediate, so that the bootstrap has started reading the cached index by
       // the time the first window is made (#367), restored or not. A plain task
@@ -59,8 +64,8 @@
       alert.alertStyle = .warning
       alert.messageText = AppData.storeWarning.title
       alert.informativeText = AppData.storeWarning.message
-      alert.addButton(withTitle: "Continue")
-      alert.addButton(withTitle: "Quit")
+      alert.addButton(withTitle: String(localized: "Continue"))
+      alert.addButton(withTitle: String(localized: "Quit"))
       alert.beginSheetModal(for: window) { response in
         if response == .alertSecondButtonReturn {
           NSApp.terminate(nil)
@@ -125,6 +130,8 @@
       // belongs to one window, and sharing it across tabs mangles all of them.
       if controllers.isEmpty {
         controller.window?.setFrameAutosaveName("ReaderWindow")
+        // Naming it puts the saved frame back, unchecked against the floor.
+        controller.splitController.applyMinimumWidth()
       }
       controllers.append(controller)
 
@@ -212,12 +219,12 @@
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func sidebarChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
-      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+      isSidebarCollapsed = controller.splitController.isSidebarCollapsed
     }
 
     func willClose(_ controller: ReaderWindowController) {

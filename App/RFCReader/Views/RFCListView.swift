@@ -205,7 +205,7 @@ struct RFCListView: View {
         } else if isUnsearched, workingGroupCardAcronym == nil {
           // Not over a working group's card, which says what the group has.
           ContentUnavailableView(
-            "No \(library.title(for: shown.filter))",
+            shown.filter.emptyTitle(in: library.collections),
             systemImage: shown.filter.systemImage)
         } else {
           ContentUnavailableView.search(text: shown.query)
@@ -283,7 +283,8 @@ struct RFCListView: View {
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .filterSearchable(
-        navigation: navigation, prompt: "Search \(library.title(for: navigation.filter))"
+        navigation: navigation,
+        prompt: navigation.filter.searchPrompt(in: library.collections)
       )
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {
@@ -345,9 +346,9 @@ struct ListViewOptions: View {
   @Bindable var navigation: NavigationModel
 
   #if os(macOS)
-    private let sortTitle = "Sort By"
+    private let sortTitle: LocalizedStringKey = "Sort By"
   #else
-    private let sortTitle = "Sort"
+    private let sortTitle: LocalizedStringKey = "Sort"
   #endif
 
   private var canReorder: Bool {
@@ -357,7 +358,7 @@ struct ListViewOptions: View {
   var body: some View {
     if case .collection = navigation.filter {
       Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
-        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text(verbatim: $0.title()) }
       }
     } else {
       #if os(macOS)
@@ -371,7 +372,7 @@ struct ListViewOptions: View {
 
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
-      ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
     }
   }
 }

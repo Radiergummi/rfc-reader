@@ -37,17 +37,10 @@
         title: "", options: defaultMenu.options, children: replaced(defaultMenu.children))
     }
 
-    /// One pasteboard item in every form an app might take: the URL as text and as
-    /// a URL, and the label linked to it as HTML and RTF.
+    /// The link in every form an app might take (`PasteboardContent.link`).
     private static func copyAction(like action: UIAction, link: LinkCopy) -> UIAction {
       UIAction(title: action.title, image: action.image) { _ in
-        var item: [String: Any] = [
-          UTType.plainText.identifier: link.url.absoluteString,
-          UTType.url.identifier: link.url,
-          UTType.html.identifier: link.html,
-        ]
-        if let rtf = link.rtf { item[UTType.rtf.identifier] = rtf }
-        UIPasteboard.general.setItems([item])
+        Clipboard.write(.link(link), announcing: .link)
       }
     }
 
@@ -112,6 +105,72 @@
       metadata.url = link.url
       metadata.title = link.label
       return metadata
+    }
+  }
+#else
+  import AppKit
+  import RFCReaderKit
+
+  extension RFCTextViewCoordinator {
+    /// NSTextView's menu for the link at `characterIndex` (#776): Copy Link hands
+    /// out the URL anyone can open, as iOS's does, and above it Open in New Tab and
+    /// Preview do what a Command-click and a force click do, for whoever doesn't
+    /// know those gestures. Which items a link gets is `LinkMenu`'s.
+    func linkMenu(_ menu: NSMenu, at characterIndex: Int) -> NSMenu {
+      // A backlink caption's link is ours alone, and Copy Link would copy a URL
+      // nothing else can open; the rest of the menu stays.
+      if backlinkCaption(at: characterIndex) != nil {
+        return LinkMenu.adapting(menu, copyLink: .removed, adding: [])
+      }
+      guard let documentID, let url = link(at: characterIndex) else { return menu }
+      let items = LinkMenu.items(
+        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+      var added: [NSMenuItem] = []
+      if items.opensInNewTab {
+        added.append(item("Open in New Tab", #selector(openInNewTab(_:)), url))
+      }
+      if let forceClick = forceClick(at: characterIndex) {
+        added.append(item("Preview", #selector(preview(_:)), forceClick))
+      }
+      let copyLink: LinkMenu.CopyLinkItem =
+        switch items.copyLink {
+        case .system: .system
+        case .none: .removed
+        case .publicLink(let link): .replaced(item("Copy Link", #selector(copyLink(_:)), link))
+        }
+      return LinkMenu.adapting(menu, copyLink: copyLink, adding: added)
+    }
+
+    private func item(
+      _ title: String.LocalizationValue, _ action: Selector, _ value: Any
+    ) -> NSMenuItem {
+      let item = NSMenuItem(title: String(localized: title), action: action, keyEquivalent: "")
+      item.target = self
+      item.representedObject = value
+      return item
+    }
+
+    /// As a Command-click opens it: behind this tab.
+    @objc private func openInNewTab(_ sender: NSMenuItem) {
+      guard let url = sender.representedObject as? URL else { return }
+      _ = onLink(url, .newTab(inBackground: true))
+    }
+
+    /// A card stays, as a force click's need not: the pointer is on the menu item,
+    /// not on the reference it would leave.
+    @objc private func preview(_ sender: NSMenuItem) {
+      guard let forceClick = sender.representedObject as? ReferenceHover.Event else { return }
+      if case .forceClickCard(let target) = forceClick {
+        hover.send(.cardChosen(target))
+      } else {
+        hover.send(forceClick)
+      }
+    }
+
+    /// As the iOS menu's Copy writes it (`PasteboardContent.link`).
+    @objc private func copyLink(_ sender: NSMenuItem) {
+      guard let link = sender.representedObject as? LinkCopy else { return }
+      Clipboard.write(.link(link), announcing: .link)
     }
   }
 #endif

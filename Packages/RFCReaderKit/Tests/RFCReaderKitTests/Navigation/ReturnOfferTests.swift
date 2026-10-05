@@ -19,7 +19,8 @@ struct ReturnOfferTests {
 
   private func title(_ section: String?, in document: RFCDocument? = nil) -> String {
     ReturnOffer.title(
-      for: HistoryEntry(id: .rfc(9110), section: section), in: document ?? self.document)
+      for: HistoryEntry(id: .rfc(9110), section: section), in: document ?? self.document,
+      locale: .english)
   }
 
   /// What the history usually records: the anchor the reader had scrolled to.
@@ -65,6 +66,8 @@ struct ReturnOfferTests {
 
   /// Before the document has loaded there is nothing to name a section by.
   @Test func `a place in a document not yet loaded is plain back`() {
-    #expect(ReturnOffer.title(for: HistoryEntry(id: .rfc(9110), section: "4.2"), in: nil) == "Back")
+    #expect(
+      ReturnOffer.title(
+        for: HistoryEntry(id: .rfc(9110), section: "4.2"), in: nil, locale: .english) == "Back")
   }
 }

@@ -17,7 +17,7 @@ import SwiftUI
 
     func makeNSView(context: Context) -> NSSearchField {
       let field = NSSearchField()
-      field.placeholderString = "Search"
+      field.placeholderString = String(localized: "Search")
       field.delegate = context.coordinator
       field.suggestionsDelegate = context.coordinator
       return field
@@ -62,7 +62,7 @@ import SwiftUI
             var title = AttributedString(suggestion.word)
             title.foregroundColor = .secondaryLabelColor
             item.attributedTitle = title
-            item.secondaryTitle = "Searched as text"
+            item.secondaryTitle = String(localized: "Searched as text")
           }
           return item
         }

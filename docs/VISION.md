@@ -69,8 +69,9 @@ Reference
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
 - **Highlights and notes**, synced, exportable as Markdown with citations attached.
 - **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs; Handoff between iPhone, iPad and Mac.
-- **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open RFC" on selected text), Quick Look-style popover for reference links, printing and PDF export of the rendered document.
+- **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open in RFC Reader" and "Replace with RFC Link" on selected text) *(shipped)*, Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".
+- **Coding agents.** A local MCP server, so the agent beside the code reads the same anchored, status-aware text the reader shows: search, sections, requirements with stable IDs, definitions, citations, and the reader's own library. It answers with sources, never generated text. Design: `docs/superpowers/specs/2026-10-02-mcp-server-design.md`.
 
 ### Tier 2 — beyond RFCs ("later, if it earns its place")
 
@@ -101,6 +102,7 @@ Ideas from the first brainstorm session and where each one lands.
 | Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body is a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See [the preview decision](decisions/2026-09-26-a-reference-previews-on-hover-and-force-click-on-macos-and-on-long-press-on-ios.md). |
 | Handoff between iPhone, iPad and Mac | Tier 1 | `NSUserActivity` carrying the `rfc://` link of the current section. |
 | ⌘-click a reference to open it in a new window (Mac) | Tier 1 | Falls out of navigation being a link. |
+| An MCP server for local coding agents | Tier 1 (#193) | A helper executable in the app bundle, over stdio: the corpus and the iCloud-synced library read straight from the app's shared files, so it works with the app closed. Prompts for the common questions and an agent-run conformance review against a document's requirements. Local, so it is not the "server-side anything" ruled out below. |
 
 ## What the experience should feel like
 

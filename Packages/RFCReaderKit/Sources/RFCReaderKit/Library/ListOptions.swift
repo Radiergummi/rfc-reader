@@ -7,10 +7,10 @@ public struct ListOptions: Hashable, Sendable {
     case newestFirst
     case oldestFirst
 
-    public var title: String {
+    public func title(in locale: Locale = .interface) -> String {
       switch self {
-      case .newestFirst: "Newest First"
-      case .oldestFirst: "Oldest First"
+      case .newestFirst: String(kit: "Newest First", locale: locale)
+      case .oldestFirst: String(kit: "Oldest First", locale: locale)
       }
     }
   }
@@ -23,11 +23,11 @@ public struct ListOptions: Hashable, Sendable {
     case newestFirst
     case oldestFirst
 
-    public var title: String {
+    public func title(in locale: Locale = .interface) -> String {
       switch self {
-      case .manual: "Manual"
-      case .newestFirst: "Newest First"
-      case .oldestFirst: "Oldest First"
+      case .manual: String(kit: "Manual", locale: locale)
+      case .newestFirst: String(kit: "Newest First", locale: locale)
+      case .oldestFirst: String(kit: "Oldest First", locale: locale)
       }
     }
   }

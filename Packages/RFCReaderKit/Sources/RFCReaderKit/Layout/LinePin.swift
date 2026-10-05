@@ -30,17 +30,18 @@ public struct ReaderAnchor: Sendable, Equatable {
 public enum LinePin {
   /// The anchor for the viewport's top at `fragmentY`, in the fragment's own
   /// coordinates, and the range of the line it names, document-relative.
-  public static func anchor(
-    atFragmentY fragmentY: CGFloat, in lines: [NSTextLineFragment], fragmentStart: Int
-  ) -> (anchor: ReaderAnchor, line: NSRange) {
+  public static func anchor(atFragmentY fragmentY: CGFloat, in fragment: FragmentLines)
+    -> (anchor: ReaderAnchor, line: NSRange)
+  {
+    let lines = fragment.lines
     guard let line = lines.first(where: { fragmentY < $0.typographicBounds.maxY }) ?? lines.last
     else {
       return (
-        ReaderAnchor(characterOffset: fragmentStart), NSRange(location: fragmentStart, length: 0)
+        ReaderAnchor(characterOffset: fragment.start),
+        NSRange(location: fragment.start, length: 0)
       )
     }
-    let range = NSRange(
-      location: fragmentStart + line.characterRange.location, length: line.characterRange.length)
+    let range = fragment.documentRange(of: line)
     let span = span(of: line)
     let share = span.height > 0 ? (fragmentY - span.top) / span.height : 0
     let fraction = min(max(share, 0), maximumFraction)
@@ -49,10 +50,9 @@ public enum LinePin {
 
   /// Where the viewport's top goes, in the fragment's own coordinates, to show
   /// `anchor`: the top of the line holding its character, plus its fraction.
-  public static func fragmentY(
-    of anchor: ReaderAnchor, in lines: [NSTextLineFragment], fragmentStart: Int
-  ) -> CGFloat {
-    let index = anchor.characterOffset - fragmentStart
+  public static func fragmentY(of anchor: ReaderAnchor, in fragment: FragmentLines) -> CGFloat {
+    let index = fragment.elementIndex(of: anchor.characterOffset)
+    let lines = fragment.lines
     guard let line = lines.first(where: { index < NSMaxRange($0.characterRange) }) ?? lines.last
     else { return 0 }
     let span = span(of: line)

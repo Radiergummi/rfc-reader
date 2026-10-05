@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import UniformTypeIdentifiers
 
 #if canImport(UIKit)
   import UIKit
@@ -119,6 +120,106 @@ public enum SelectionText {
     return result
   }
 
+  /// The rich text a copy of `selection` carries (#778): without the reader's own
+  /// text, with what a diagram hides shown again, and with every link one anyone
+  /// can open, `publicURL`'s for the reader's links, or none. The chips stay as they
+  /// look on screen, their symbols the images a rich target receives.
+  public static func richCopy(
+    of selection: NSAttributedString, publicURL: (URL) -> URL?
+  ) -> NSAttributedString {
+    let withoutReaderText = withoutReaderText(of: selection)
+    let result = NSMutableAttributedString(
+      attributedString: richText(of: withoutReaderText) ?? withoutReaderText)
+    let whole = NSRange(location: 0, length: result.length)
+    result.enumerateAttribute(.link, in: whole) { value, range, _ in
+      guard let link = linkURL(value) else { return }
+      if let url = publicURL(link) {
+        result.addAttribute(.link, value: url, range: range)
+      } else {
+        result.removeAttribute(.link, range: range)
+      }
+    }
+    return result
+  }
+
+  /// The HTML a copy of `selection` carries (#778): a `p` per paragraph and a `pre`
+  /// per verbatim block, with the text as the plain flavor has it, a reference by
+  /// its label, and links as `richCopy` makes them.
+  public static func html(of selection: NSAttributedString, publicURL: (URL) -> URL?) -> String {
+    let text = withoutReaderText(of: selection)
+    let string = text.string as NSString
+    var parts: [String] = []
+    // The verbatim block being collected: its box, and the range of its lines so
+    // far, copied whole so that its folds are undone as the plain flavor's are.
+    var block: (box: VerbatimBox, range: NSRange)?
+    func endBlock() {
+      guard let current = block else { return }
+      let lines = plainText(of: text.attributedSubstring(from: current.range))
+      parts.append("<pre>\(PasteboardMarkup.escaped(lines))</pre>")
+      block = nil
+    }
+    var paragraphs: [(range: NSRange, enclosingRange: NSRange)] = []
+    string.enumerateSubstrings(
+      in: NSRange(location: 0, length: string.length), options: .byParagraphs
+    ) { _, range, enclosingRange, _ in
+      paragraphs.append((range, enclosingRange))
+    }
+    for (range, enclosingRange) in paragraphs {
+      // An empty line has no character of its own; its line break carries the box.
+      let box =
+        enclosingRange.length > 0
+        ? text.attribute(.rfcVerbatim, at: enclosingRange.location, effectiveRange: nil)
+          as? VerbatimBox
+        : nil
+      if let box {
+        if let current = block, current.box === box {
+          block?.range = NSUnionRange(current.range, range)
+        } else {
+          endBlock()
+          block = (box, range)
+        }
+        continue
+      }
+      endBlock()
+      guard range.length > 0 else { continue }
+      parts.append("<p>\(inlineHTML(of: text.attributedSubstring(from: range), publicURL))</p>")
+    }
+    endBlock()
+    return PasteboardMarkup.html(parts.joined(separator: "\n"))
+  }
+
+  /// A paragraph of prose as HTML: a reference as its label, linked where it has a
+  /// public URL, and any other link as its text, linked the same way.
+  private static func inlineHTML(
+    of paragraph: NSAttributedString, _ publicURL: (URL) -> URL?
+  ) -> String {
+    var result = ""
+    func linked(_ text: String, to link: Any?) -> String {
+      let escaped = PasteboardMarkup.escaped(text)
+      guard let url = linkURL(link).flatMap(publicURL) else { return escaped }
+      return "<a href=\"\(PasteboardMarkup.escaped(url.absoluteString))\">\(escaped)</a>"
+    }
+    let whole = NSRange(location: 0, length: paragraph.length)
+    paragraph.enumerateAttribute(.rfcReference, in: whole) { value, range, _ in
+      if let box = value as? ReferenceBox {
+        let link = paragraph.attribute(.link, at: range.location, effectiveRange: nil)
+        result += linked(pasteboardLabel(for: box.reference), to: link)
+        return
+      }
+      paragraph.enumerateAttribute(.link, in: range) { link, run, _ in
+        let text = paragraph.attributedSubstring(from: run).string
+        result += linked(text, to: link)
+          .replacing(DocumentTextBuilder.cellLineSeparator, with: "<br>")
+      }
+    }
+    return result
+  }
+
+  /// A link attribute's value as a URL: AppKit may hold it as its string.
+  private static func linkURL(_ value: Any?) -> URL? {
+    value as? URL ?? (value as? String).flatMap(URL.init(string:))
+  }
+
   /// A label with its typesetting taken back out.
   ///
   /// The non-breaking spaces are there to stop a reference wrapping mid-label in a
@@ -137,6 +238,17 @@ public enum SelectionText {
       case plain
       case rtf
       case rtfd
+      case html
+
+      /// The type `PasteboardContent` answers this flavor under.
+      public var type: UTType {
+        switch self {
+        case .plain: .utf8PlainText
+        case .rtf: .rtf
+        case .rtfd: .flatRTFD
+        case .html: .html
+        }
+      }
     }
 
     /// The flavor a pasteboard type asks for, or nil for one the reader leaves to
@@ -152,6 +264,8 @@ public enum SelectionText {
         .rtf
       case NSPasteboard.PasteboardType.rtfd.rawValue, "NeXT RTFD pasteboard type":
         .rtfd
+      case NSPasteboard.PasteboardType.html.rawValue, "Apple HTML pasteboard type":
+        .html
       default:
         nil
       }

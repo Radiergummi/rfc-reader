@@ -79,7 +79,7 @@ import RFCReaderKit
         let range = hit.text.copyButton(at: hit.offset),
         let code = hit.text.code(ofCopyButtonAt: hit.offset)
       else { return false }
-      Clipboard.copy(code)
+      Clipboard.copy(code, announcing: .code)
       showCopied(over: range)
       return true
     }
@@ -131,9 +131,6 @@ import RFCReaderKit
       feedback.addSubview(checkmark)
       feedback.alphaValue = 0
       textView.addSubview(feedback)
-      NSAccessibility.post(
-        element: textView, notification: .announcementRequested,
-        userInfo: [.announcement: "Copied"])
 
       // Faded in and out rather than switched, so the change reads as a response to
       // the click and not as a flicker.

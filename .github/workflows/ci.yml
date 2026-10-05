@@ -19,6 +19,10 @@ concurrency:
 jobs:
   lint:
     name: SwiftLint
+    # Not for a pull request opened on an empty commit, as work-issue claims an
+    # issue with: it has nothing to check, and the first real push runs everything.
+    # The same condition stands on every job of this workflow and codeql.yml.
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Same version as `make lint` locally; --strict is clean on the whole tree.
@@ -31,6 +35,7 @@ jobs:
 
   workflows:
     name: Workflow lint
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -42,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
       - name: actionlint
-        uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
+        uses: reviewdog/action-actionlint@13465d022aa41c282f730be17574b5ce692d0186 # v1.78.1
         with:
           # Every finding in every workflow fails the job, not only those in lines
           # a pull request touches.
@@ -60,6 +65,7 @@ jobs:
 
   rfckit-linux:
     name: RFCKit tests (Linux)
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
@@ -154,6 +160,7 @@ jobs:
 
   swift-format:
     name: swift-format
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # 6.3 formats this tree byte for byte as Xcode 27's swift-format does. The image

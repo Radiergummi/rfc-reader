@@ -16,9 +16,9 @@ import Testing
 struct FigureMenuTests {
   /// The item offers the presentation that is not showing.
   @Test func `the menu offers the text of a figure and the figure of a text`() {
-    #expect(FigureMenu.title(offeredFrom: .figure) == "Show as Text")
+    #expect(FigureMenu.title(offeredFrom: .figure, locale: .english) == "Show as Text")
     #expect(FigureMenu.offered(from: .figure) == .text)
-    #expect(FigureMenu.title(offeredFrom: .text) == "Show as Figure")
+    #expect(FigureMenu.title(offeredFrom: .text, locale: .english) == "Show as Figure")
     #expect(FigureMenu.offered(from: .text) == .figure)
     #expect(FigureMenu.symbol(offeredFrom: .figure) != FigureMenu.symbol(offeredFrom: .text))
   }
@@ -47,6 +47,17 @@ struct FigureMenuTests {
     let whole = try #require(built.text.extent(ofBox: .rfcVerbatim, at: field))
     #expect(run != whole)
     #expect(FigureMenu.itemRange(at: field, in: built.text) == whole)
+  }
+
+  /// Copy Figure from a selection draws the figure the selection touches, whole,
+  /// wherever the selection starts (#778).
+  @Test func `a selection into a drawn block is for the whole block`() throws {
+    let built = build()
+    let field = try Fixtures.offset(of: "Length", in: built.text)
+    let box = try #require(FigureCopy.box(at: field, in: built.text))
+    let whole = try #require(built.text.extent(ofBox: .rfcVerbatim, at: field))
+    let intoIt = NSRange(location: 0, length: field + 1)
+    #expect(FigureMenu.itemRange(of: box, touching: intoIt, in: built.text) == whole)
   }
 
   @Test func `a press outside a block is for no item`() throws {

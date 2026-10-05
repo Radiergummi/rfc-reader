@@ -1,5 +1,6 @@
 import AppIntents
 import RFCKit
+import RFCReaderKit
 
 /// A section of an RFC (#192), identified across documents as `rfc9110#section-4.2`
 /// (`SectionIdentifier`): what Open Section opens and Find Requirements narrows to.
@@ -38,7 +39,9 @@ struct SectionEntity: AppEntity {
   }
 
   var displayRepresentation: DisplayRepresentation {
-    DisplayRepresentation(title: "\(title)", subtitle: "\(documentName)")
+    // Data, not language: no key for the catalog.
+    DisplayRepresentation(
+      title: .verbatim(title), subtitle: .verbatim(documentName))
   }
 }
 

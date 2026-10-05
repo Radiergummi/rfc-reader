@@ -37,13 +37,13 @@
       var children: [UIMenuElement] = []
       if let action = presentationAction(for: box) { children.append(action) }
       children.append(
-        UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in
-          var item: [String: Any] = [UTType.plainText.identifier: text]
-          if let png = drawing?.pngData() { item[UTType.png.identifier] = png }
-          UIPasteboard.general.setItems([item])
+        UIAction(title: String(localized: "Copy"), image: UIImage(systemName: "doc.on.doc")) { _ in
+          Clipboard.write(.figure(box.content, png: drawing?.pngData()), announcing: .figure)
         })
       children.append(
-        UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) {
+        UIAction(
+          title: String(localized: "Share"), image: UIImage(systemName: "square.and.arrow.up")
+        ) {
           [weak textView] _ in
           guard let textView else { return }
           Self.share([drawing ?? text], from: textView, at: range)
@@ -61,7 +61,7 @@
 
     /// The block in `range` as it is drawn: its fragments, card and lines and all,
     /// on the page's own background, in the text view's appearance.
-    private func figureImage(of range: NSRange, in textView: UITextView) -> UIImage? {
+    func figureImage(of range: NSRange, in textView: UITextView) -> UIImage? {
       guard let layout = textView.textLayoutManager,
         let start = layout.location(layout.documentRange.location, offsetBy: range.location),
         let end = layout.location(start, offsetBy: range.length)

@@ -71,15 +71,15 @@ struct LoadFailureTests {
     #expect(Set(kinds.map(\.symbol)).count == kinds.count)
     #expect(kinds.filter { $0.symbol.hasPrefix("wifi") } == [.offline])
     #expect(kinds.allSatisfy { PlatformImage(systemName: $0.symbol) != nil })
-    #expect(kinds.allSatisfy { !$0.recoverySuggestion(for: .document).isEmpty })
+    #expect(kinds.allSatisfy { !$0.recoverySuggestion(for: .document, locale: .english).isEmpty })
   }
 
   /// The original text is missing when the RFC has no plain-text version, which is
   /// not the RFC Editor lacking the document; any other failure reads the same.
   @Test func `the original text has its own not found`() {
     for kind in LoadFailure.Kind.allCases {
-      let document = kind.recoverySuggestion(for: .document)
-      let originalText = kind.recoverySuggestion(for: .originalText)
+      let document = kind.recoverySuggestion(for: .document, locale: .english)
+      let originalText = kind.recoverySuggestion(for: .originalText, locale: .english)
       #expect((document == originalText) == (kind != .notFound))
     }
   }

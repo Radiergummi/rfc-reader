@@ -25,7 +25,7 @@ public enum AuthorCard {
     author.contact?.organization == author.name
   }
 
-  public static func contact(for author: Author) -> CNMutableContact {
+  public static func contact(for author: Author, locale: Locale = .interface) -> CNMutableContact {
     let card = CNMutableContact()
     if isOrganization(author) {
       card.contactType = .organization
@@ -43,7 +43,7 @@ public enum AuthorCard {
     }
     // The one role the index and both parsers record.
     if author.isEditor {
-      card.jobTitle = "Editor"
+      card.jobTitle = String(kit: "Editor", locale: locale)
     }
     guard let contact = author.contact else { return card }
 

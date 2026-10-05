@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -72,7 +72,7 @@ build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
-	swift build --package-path $(RFCREADERKIT)
+	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -96,9 +96,10 @@ endif
 ## Run the app-side test suite (RFCReaderKit)
 # Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
 # SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
-# it on a Mac.
+# it on a Mac. Swift Build, not Swift 6.3's default native build system, which
+# copies the string catalog into the bundle uncompiled, so no plural resolves.
 test-app:
-	swift test --package-path $(RFCREADERKIT)
+	swift test --package-path $(RFCREADERKIT) --build-system swiftbuild
 
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
@@ -126,7 +127,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
@@ -239,13 +240,14 @@ IOS_DESTINATION ?= generic/platform=iOS
 # `xcrun simctl list devices available` shows.
 IOS_SIMULATOR ?= iPhone 18 Pro
 
-# Where xcodebuild left RFCReader.app for a destination. Asked for rather than
-# spelled out: the DerivedData directory carries a hash of the project's own
-# path, so it differs per checkout. Recursively expanded (`=`, not `:=`) so only
-# the targets that need it pay for the xcodebuild call.
-built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+# A build setting of a destination, such as where xcodebuild left RFCReader.app.
+# Asked for rather than spelled out: the DerivedData directory carries a hash of
+# the project's own path, so it differs per checkout. Recursively expanded (`=`,
+# not `:=`) so only the targets that need it pay for the xcodebuild call.
+build_setting = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(1)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
-	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
+	  | sed -n 's/^ *$(2) = //p' | head -1)
+built_app = $(call build_setting,$(1),BUILT_PRODUCTS_DIR)/$(SCHEME).app
 
 ## Build the app for macOS
 # No -derivedDataPath, here or in ios-sim: CI restores its compilation cache to
@@ -264,6 +266,22 @@ ios-sim: xcodeproj
 ios-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(IOS_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Sync the string catalogs with the strings in the code
+# Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
+# found either way, then adds new strings to the catalogs and marks removed ones
+# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+strings: build-app ios-sim
+	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
+	  --configuration $(CONFIGURATION)
+
+## Fail when a string catalog is out of date with the code, or lacks German
+# What CI runs: a string added to the code without `make strings` fails here, and
+# so does one without a German translation.
+strings-check: strings
+	@git diff --exit-code -- '*.xcstrings' || \
+	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
+	@Tools/strings/sync.py --check-translations de
 
 ## Build, install and launch the app on an attached iPhone
 # Built for that one device rather than for any, so automatic signing registers

@@ -86,9 +86,10 @@ struct RequirementsView: View {
   private func exportMenu(_ shown: [Requirement], document: DocumentID) -> some View {
     let markdown = RequirementList.markdownChecklist(shown, document: document)
     return Menu {
-      Button("Copy Checklist as Markdown") { Clipboard.copy(markdown) }
+      Button("Copy Checklist as Markdown") { Clipboard.copy(markdown, announcing: .checklist) }
       Button("Copy Checklist as CSV") {
-        Clipboard.copy(RequirementList.csvChecklist(shown, document: document))
+        Clipboard.copy(
+          RequirementList.csvChecklist(shown, document: document), announcing: .checklist)
       }
       ShareLink("Share Checklist…", item: markdown)
     } label: {

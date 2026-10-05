@@ -493,7 +493,10 @@ struct ReadingModeTests {
   }
 
   @Test func `the modes are named for the menu`() {
-    #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus", "Implementer"])
+    #expect(
+      ReadingMode.allCases.map { $0.name(in: .english) } == [
+        "Normal", "Outline", "Focus", "Implementer",
+      ])
   }
 
   // MARK: - Implementer (#700)

@@ -69,7 +69,10 @@ struct StatusBanner: View {
     return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         symbol("doc.badge.clock").foregroundStyle(.secondary)
-        Text("\(relation) \(title) \(detail)")
+        // A key, not verbatim: only a LocalizedStringKey interpolates a styled Text;
+        // a String would hold each one's debug description.
+        Text(
+          "\(relation) \(title) \(detail)", comment: "A draft's relation, its name and its stage")
       }
     }
     .font(.subheadline)
@@ -79,7 +82,8 @@ struct StatusBanner: View {
   /// many others flows onto as many lines as it takes, indented under the title
   /// (#439). The title opens its glossary entry (#362).
   private func row(
-    _ title: String, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String, tint: Color
+    _ title: LocalizedStringKey, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String,
+    tint: Color
   ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       self.symbol(symbol).foregroundStyle(tint)

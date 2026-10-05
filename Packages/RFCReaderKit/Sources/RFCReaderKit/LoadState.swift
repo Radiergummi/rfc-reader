@@ -185,20 +185,23 @@ public struct LoadFailure {
       }
     }
 
-    public func recoverySuggestion(for subject: Subject) -> String {
+    public func recoverySuggestion(
+      for subject: Subject, locale: Locale = .interface
+    ) -> String {
       switch (self, subject) {
       case (.offline, _):
-        "Check your internet connection, then try again."
+        String(kit: "Check your internet connection, then try again.", locale: locale)
       case (.notFound, .document):
-        "The RFC Editor doesn't have this document."
+        String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
-        "This RFC has no plain-text version."
+        String(kit: "This RFC has no plain-text version.", locale: locale)
       case (.server, _):
-        "The RFC Editor isn't responding right now. Try again later."
+        String(kit: "The RFC Editor isn't responding right now. Try again later.", locale: locale)
       case (.unreadable, _):
-        "This document couldn't be read. It may open on rfc-editor.org."
+        String(
+          kit: "This document couldn't be read. It may open on rfc-editor.org.", locale: locale)
       case (.other, _):
-        "Try again, or open the document on rfc-editor.org."
+        String(kit: "Try again, or open the document on rfc-editor.org.", locale: locale)
       }
     }
   }

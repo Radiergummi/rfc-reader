@@ -198,7 +198,9 @@ struct SelectionTextTests {
         ("public.rtf", .rtf),
         ("NeXT RTFD pasteboard type", .rtfd),
         ("com.apple.flat-rtfd", .rtfd),
-        ("public.html", nil),
+        ("Apple HTML pasteboard type", .html),
+        ("public.html", .html),
+        ("public.png", nil),
       ]
       for (name, flavor) in asked {
         #expect(SelectionText.flavor(of: NSPasteboard.PasteboardType(name)) == flavor, "\(name)")

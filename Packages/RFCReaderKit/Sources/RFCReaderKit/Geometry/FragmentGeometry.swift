@@ -8,10 +8,9 @@ import Foundation
 
 /// Where the decorations a text layout fragment draws actually go.
 ///
-/// Pure geometry over an attributed string, its line fragments and the fragment's
-/// own start offset — no `NSTextLayoutFragment`, no drawing context, no state. The
-/// app's fragment subclass is the shell that owns drawing; this is the arithmetic
-/// it draws by.
+/// Pure geometry over an attributed string and a fragment's lines (`FragmentLines`)
+/// — no `NSTextLayoutFragment`, no drawing context, no state. The app's fragment
+/// subclass is the shell that owns drawing; this is the arithmetic it draws by.
 ///
 /// It lives in this package on purpose. The reader's two hardest bugs were both in
 /// these few lines — an index taken relative to a *line* where TextKit 2 wanted it
@@ -72,7 +71,7 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// `effectiveRange` names that whole run; comparing the fragment's own start and
+  /// `decorationRun(at:)` names that whole run; comparing the fragment's own start and
   /// end against it says whether this fragment is the run's first, its last, both
   /// (the common single-fragment case), or neither (a middle fragment, which draws
   /// no cap and must not repeat the run's outer padding or its rounding, or the
@@ -84,41 +83,11 @@ public enum FragmentGeometry {
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
-    guard fragment.location >= 0, fragment.location < text.length else { return nil }
-    // Probed before the walk below, because `longestEffectiveRange` coalesces
-    // the *absent* value just as eagerly as a present one: on the plain prose
-    // that is most of an RFC it would run from the previous decorated block to
-    // the next — most of the document, for every fragment in it. This lookup
-    // stops at the first storage run.
-    guard
-      RFCDecoration(
-        attributeValue: text.attribute(.rfcDecoration, at: fragment.location, effectiveRange: nil))
-        != nil
-    else {
-      return nil
-    }
-
-    // `longestEffectiveRange`, not `effectiveRange`: the latter returns the
-    // *storage* run, which ends at any attribute change at all — a stacked
-    // table's bold label and regular value are different runs, as are an
-    // authors' block's affiliation and address lines. Each fragment then saw a
-    // decoration that began and ended with itself, so it drew a fully rounded
-    // card at its own indent and the block came out as a staircase. Artwork
-    // hid this while its attributes were uniform; its last line now carries the
-    // block's spacing alone (#31), so it depends on this as much as a table does.
-    var effective = NSRange(location: 0, length: 0)
-    guard
-      let decoration = RFCDecoration(
-        attributeValue: text.attribute(
-          .rfcDecoration,
-          at: fragment.location,
-          longestEffectiveRange: &effective,
-          in: NSRange(location: 0, length: text.length)
-        ))
-    else {
-      return nil
-    }
-    effective = verbatimBlock(in: text, at: fragment.location, within: effective)
+    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
+    // depends on that as much as a table does: its last line carries the block's
+    // spacing alone (#31), which is a storage run of its own.
+    guard let run = text.decorationRun(at: fragment.location) else { return nil }
+    var effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
     let shownEnd = hidden.shownEnd(of: effective)
     let isFolded = shownEnd < NSMaxRange(effective)
     effective.length = shownEnd - effective.location
@@ -126,7 +95,7 @@ public enum FragmentGeometry {
       text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
       as? NSParagraphStyle
     return DecorationSpan(
-      decoration: decoration,
+      decoration: run.decoration,
       isFirst: fragment.location <= effective.location,
       isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
       runRange: effective,
@@ -150,9 +119,7 @@ public enum FragmentGeometry {
   /// quote is decorated too, but draws a rule beside its text, which no card's cap
   /// can stack on.
   static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
-    guard location >= 0, location < text.length else { return false }
-    let decoration = RFCDecoration(
-      attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
+    let decoration = text.decoration(at: location)
     return decoration != nil && decoration != .blockQuote
   }
 
@@ -197,17 +164,12 @@ public enum FragmentGeometry {
   /// holding its last character rounds only its right corners, and a middle line (a
   /// chip wrapping across three or more lines) rounds neither.
   public static func chipRects(
-    in text: NSAttributedString,
-    lines: [NSTextLineFragment],
-    fragment: NSRange,
-    origin: CGPoint
+    in text: NSAttributedString, fragment: FragmentLines, origin: CGPoint
   ) -> [ChipRect] {
-    let fragmentStart = fragment.location
-    guard fragmentStart >= 0, hasChips(in: text, fragment: fragment) else { return [] }
+    guard fragment.start >= 0, hasChips(in: text, fragment: fragment.range) else { return [] }
     var result: [ChipRect] = []
-    for line in lines {
-      let lineStart = fragmentStart + line.characterRange.location
-      let lineRange = NSRange(location: lineStart, length: line.characterRange.length)
+    for line in fragment.lines {
+      let lineRange = fragment.documentRange(of: line)
       guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
 
       text.enumerateAttribute(.rfcChip, in: lineRange) { value, piece, _ in
@@ -227,7 +189,7 @@ public enum FragmentGeometry {
         let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
 
         let startX = line.locationForCharacter(
-          at: elementIndex(of: piece.location, fragmentStart: fragmentStart)
+          at: fragment.elementIndex(of: piece.location)
         ).x
         // The chip's last character is kerned by the builder to make room for
         // the tint (`reserveChipPadding`), and the next character starts after
@@ -239,7 +201,7 @@ public enum FragmentGeometry {
           : 0
         let endX =
           line.locationForCharacter(
-            at: elementIndex(of: NSMaxRange(piece), fragmentStart: fragmentStart)
+            at: fragment.elementIndex(of: NSMaxRange(piece))
           ).x - trailingKern
         let padLeft = roundsLeading ? chipPadding : 0
         let padRight = roundsTrailing ? chipPadding : 0
@@ -443,12 +405,10 @@ public enum FragmentGeometry {
   /// The document-relative character offset under `pointInFragment`, or nil when
   /// the point falls outside every line. The inverse of `chipRects`' arithmetic,
   /// and the reader's hit test.
-  public static func characterOffset(
-    in lines: [NSTextLineFragment],
-    fragmentStart: Int,
-    at pointInFragment: CGPoint
-  ) -> Int? {
-    for line in lines
+  public static func characterOffset(in fragment: FragmentLines, at pointInFragment: CGPoint)
+    -> Int?
+  {
+    for line in fragment.lines
     where line.typographicBounds.minY <= pointInFragment.y
       && pointInFragment.y < line.typographicBounds.maxY
     {
@@ -463,24 +423,13 @@ public enum FragmentGeometry {
       guard pointInLine.x >= 0, pointInLine.x < line.typographicBounds.width else { return nil }
       // `characterIndex(for:)` already returns an index relative to the whole
       // paragraph (`line.attributedString`), the same element-relative
-      // convention `elementIndex(of:fragmentStart:)` documents — so it already
+      // convention `FragmentLines.elementIndex(of:)` documents — so it already
       // includes `line.characterRange.location`, and adding that again
       // double-counts.
       let index = line.characterIndex(for: pointInLine)
       guard index != NSNotFound else { return nil }
-      return fragmentStart + index
+      return fragment.documentOffset(ofElementIndex: index)
     }
     return nil
-  }
-
-  /// A document-relative offset as the index `NSTextLineFragment` wants.
-  ///
-  /// `locationForCharacter(at:)` and `characterIndex(for:)` are both indexed
-  /// against `line.attributedString` — the whole paragraph the *fragment* lays
-  /// out, not the line — so the base is the fragment's start, never the line's.
-  /// The two coincide only on a fragment's first line, which is why every
-  /// hand-trace and every single-line fixture looked right while this was wrong.
-  private static func elementIndex(of documentOffset: Int, fragmentStart: Int) -> Int {
-    documentOffset - fragmentStart
   }
 }
