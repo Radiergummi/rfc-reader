@@ -275,11 +275,13 @@ strings: build-app ios-sim
 	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
 	  --configuration $(CONFIGURATION)
 
-## Fail when a string catalog is out of date with the code
-# What CI runs: a string added to the code without `make strings` fails here.
+## Fail when a string catalog is out of date with the code, or lacks German
+# What CI runs: a string added to the code without `make strings` fails here, and
+# so does one without a German translation.
 strings-check: strings
 	@git diff --exit-code -- '*.xcstrings' || \
 	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
+	@Tools/strings/sync.py --check-translations de
 
 ## Build, install and launch the app on an attached iPhone
 # Built for that one device rather than for any, so automatic signing registers

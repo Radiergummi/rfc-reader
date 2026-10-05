@@ -4,6 +4,15 @@
     "Find the requirements in ${document} with ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Finde die Anforderungen in ${document} mit ${applicationName}",
+              "Finde Anforderungen in einem RFC mit ${applicationName}"
+            ]
+          }
+        },
         "en" : {
           "stringSet" : {
             "state" : "new",
@@ -18,6 +27,15 @@
     "Look up an identifier in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Schlage eine Kennung in ${applicationName} nach",
+              "Schlage eine Protokollkennung in ${applicationName} nach"
+            ]
+          }
+        },
         "en" : {
           "stringSet" : {
             "state" : "new",
@@ -32,6 +50,17 @@
     "Open ${target} in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Öffne ${target} in ${applicationName}",
+              "Zeige ${target} in ${applicationName}",
+              "Öffne einen RFC in ${applicationName}",
+              "Zeige einen RFC in ${applicationName}"
+            ]
+          }
+        },
         "en" : {
           "stringSet" : {
             "state" : "new",
@@ -48,6 +77,14 @@
     "Open a section of an RFC in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Öffne einen Abschnitt eines RFC in ${applicationName}"
+            ]
+          }
+        },
         "en" : {
           "stringSet" : {
             "state" : "new",

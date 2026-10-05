@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import Testing
 
 @testable import RFCReaderKit
@@ -18,6 +19,48 @@ struct LocalizationTests {
   /// The language is the catalog's, the region the reader's.
   @Test func `the interface keeps the reader's region`() {
     #expect(Locale.interface.region == Locale.current.region)
+  }
+
+  /// The German is compiled into RFCReaderKit's bundle and found through it.
+  @Test func `RFCReaderKit finds its German catalog`() {
+    #expect(String(kit: "Remove from Collection", locale: .german) == "Aus Sammlung entfernen")
+    let more = DocumentMenus.more(
+      showsOriginal: false, errata: nil, precedingDraft: nil, locale: .german)
+    #expect(
+      more.map { $0.map(\.title) } == [
+        ["Originaltext"], ["Auf rfc-editor.org öffnen", "Datatracker"],
+      ])
+  }
+
+  @Test func `a German notice lists its RFCs in German`() {
+    let notice = BookmarkNotice.notices(
+      for: [.obsoleted(.rfc(9990), newer: [.rfc(9991), .rfc(9992)])], index: nil, locale: .german
+    ).first
+    #expect(notice?.body == "Ersetzt durch RFC 9991 und RFC 9992.")
+  }
+
+  /// A collection's name is the reader's own text: never looked up, even when it is
+  /// a word the catalog translates.
+  @Test func `a collection's name is never translated`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "Errata", color: .blue, members: [])
+    ])
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .german)
+    #expect(menu[0].map(\.title) == ["Errata"])
+  }
+
+  @Test func `one RFC is counted in the singular in German`() {
+    #expect(String(kit: "\(1) RFCs", locale: .german) == "1 RFC")
+    #expect(String(kit: "\(3) RFCs", locale: .german) == "3 RFCs")
+  }
+
+  /// The glossary keeps its shape in German: a summary of a sentence or two, ending
+  /// with a full stop.
+  @Test(arguments: Glossary.Term.allCases)
+  func `a German glossary summary is a sentence or two`(term: Glossary.Term) {
+    let summary = Glossary.entry(for: term, locale: .german).summary
+    #expect((1...2).contains(summary.components(separatedBy: ". ").count), "\(summary)")
+    #expect(summary.hasSuffix("."))
   }
 
   @Test func `the interface language is the one the catalog resolves to, not the region's`() {

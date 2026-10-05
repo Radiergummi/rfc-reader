@@ -6,4 +6,6 @@ The reader body stays in English, including what `DocumentTextBuilder` writes in
 
 The catalogs are derived from the code, never edited by hand for their keys. The compiler records every localizable string it type-checks (`SWIFT_EMIT_LOC_STRINGS`). `make strings` builds for macOS and the iOS Simulator, so a string behind `#if os(…)` is found, and runs `xcstringstool sync` over both builds' records (`Tools/strings/sync.py`). xcodebuild never updates a catalog itself; only Xcode's editor does. CI runs `make strings-check`, which fails when a catalog differs from what the code says.
 
+German is the first shipping localization, and every key ships translated: `make strings-check` also fails on a key without German in state `translated`, naming it.
+
 The alternative, `xcstringstool extract`, reads the sources without compiling them. It was rejected because without types it cannot tell a localizable literal from a plain `String`: it extracted AppKit labels that are never looked up, and wrote `%arg` where the compiler knows a placeholder is `%lld` or `%@`.

@@ -3,6 +3,12 @@
   "strings" : {
     "%@ %@, %@." : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@, %3$@."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -13,6 +19,12 @@
     },
     "%@ %@, in the RFC Editor queue." : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@, in der Warteschlange des RFC Editor."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -23,6 +35,12 @@
     },
     "%@ %@, revision %@ from %@, %@" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@, Revision %3$@ vom %4$@, %5$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -33,6 +51,12 @@
     },
     "%@ %@, revision %@, %@" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@, Revision %3$@, %4$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -43,6 +67,12 @@
     },
     "%@ is defined in %@." : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ ist in %2$@ definiert."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -52,10 +82,23 @@
       }
     },
     "%@ is in IANA's registry, which names no RFC for it." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ steht in der Registry der IANA, die keinen RFC dafür nennt."
+          }
+        }
+      }
     },
     "%@ is published only as %@." : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ ist nur als %2$@ veröffentlicht."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -66,6 +109,12 @@
     },
     "%@ of %@" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ von %2$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -76,6 +125,12 @@
     },
     "%@, as of %@" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, Stand %2$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -86,6 +141,12 @@
     },
     "%@, revision of %@" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, Revision vom %2$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -96,6 +157,24 @@
     },
     "%lld Documents" : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokument"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokumente"
+                }
+              }
+            }
+          }
+        },
         "en" : {
           "variations" : {
             "plural" : {
@@ -118,6 +197,24 @@
     },
     "%lld RFCs" : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs"
+                }
+              }
+            }
+          }
+        },
         "en" : {
           "variations" : {
             "plural" : {
@@ -139,520 +236,1723 @@
       }
     },
     "%lld obsolete" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld veraltet"
+          }
+        }
+      }
     },
     "A BCP is approved with the same consensus as a standard, but describes a practice rather than a protocol. Each is also given a BCP number." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine BCP wird mit demselben Konsens verabschiedet wie ein Standard, beschreibt aber eine Praxis statt eines Protokolls. Jede erhält außerdem eine BCP-Nummer."
+          }
+        }
+      }
     },
     "A Proposed Standard reaches it after significant implementation and successful operational experience, and is then also given an STD number." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Proposed Standard erreicht sie nach umfangreicher Implementierung und erfolgreicher Betriebserfahrung und erhält dann auch eine STD-Nummer."
+          }
+        }
+      }
     },
     "A document is made Historic when a newer specification replaces it or when what it describes has fallen out of use." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Dokument wird Historic, wenn eine neuere Spezifikation es ersetzt oder das, was es beschreibt, nicht mehr verwendet wird."
+          }
+        }
+      }
     },
     "A later RFC replaces it; Relationships names which." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein späterer RFC ersetzt ihn; welcher, steht unter Beziehungen."
+          }
+        }
+      }
     },
     "A newer RFC that obsoletes an older one replaces it entirely." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein neuerer RFC, der einen älteren ersetzt, löst ihn vollständig ab."
+          }
+        }
+      }
     },
     "A newer RFC that updates an older one changes or extends part of it, and the rest of the older RFC still stands." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein neuerer RFC, der einen älteren aktualisiert, ändert oder erweitert einen Teil davon, und der Rest des älteren RFC gilt weiter."
+          }
+        }
+      }
     },
     "A number for a Best Current Practice that stays the same when the RFCs behind it are replaced." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Nummer für eine Best Current Practice, die gleich bleibt, wenn die RFCs dahinter ersetzt werden."
+          }
+        }
+      }
     },
     "A number for an Internet Standard that stays the same when the RFCs behind it are replaced." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Nummer für einen Internet Standard, die gleich bleibt, wenn die RFCs dahinter ersetzt werden."
+          }
+        }
+      }
     },
     "A series of introductory Informational RFCs, for readers new to the Internet." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Reihe einführender Informational RFCs für Leser, die neu im Internet sind."
+          }
+        }
+      }
     },
     "A standard at a maturity level the IETF has since retired, between Proposed and Internet Standard." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Standard auf einer Reifestufe, die die IETF inzwischen abgeschafft hat, zwischen Proposed und Internet Standard."
+          }
+        }
+      }
     },
     "A standard the IETF has approved. Most of the Internet's standards remain at this level." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Standard, den die IETF verabschiedet hat. Die meisten Standards des Internets bleiben auf dieser Stufe."
+          }
+        }
+      }
     },
     "A working document, not yet an RFC." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Arbeitsdokument, noch kein RFC."
+          }
+        }
+      }
     },
     "ABNF Grammar" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ABNF-Grammatik"
+          }
+        }
+      }
     },
     "Abandoned" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgegeben"
+          }
+        }
+      }
     },
     "Active" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiv"
+          }
+        }
+      }
     },
     "All RFCs" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs"
+          }
+        }
+      }
     },
     "An IETF group chartered for one piece of work within an area, such as HTTP or QUIC." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine IETF-Gruppe mit einem Auftrag für eine Aufgabe innerhalb einer Area, etwa HTTP oder QUIC."
+          }
+        }
+      }
     },
     "An Informational RFC can come from any stream and need not reflect any community consensus." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Informational RFC kann aus jedem Stream kommen und muss keinen Konsens der Community wiedergeben."
+          }
+        }
+      }
     },
     "An RFC never changes once published: a correction is recorded as an erratum, and a revision is a new RFC." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein RFC ändert sich nach der Veröffentlichung nie: Eine Korrektur wird als Erratum erfasst, eine Überarbeitung ist ein neuer RFC."
+          }
+        }
+      }
     },
     "An erratum is verified when the body that approved the document confirms it." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Erratum ist bestätigt, wenn die Stelle, die das Dokument verabschiedet hat, es anerkennt."
+          }
+        }
+      }
     },
     "Anyone can take part, mostly on its mailing list, and its decisions are made by rough consensus." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder kann mitmachen, meist über die Mailingliste, und Entscheidungen fallen im Rough Consensus."
+          }
+        }
+      }
     },
     "Approved for publication" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Veröffentlichung freigegeben"
+          }
+        }
+      }
     },
     "Area" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Area"
+          }
+        }
+      }
     },
     "Area Group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Area Group"
+          }
+        }
+      }
     },
     "Authors" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autoren"
+          }
+        }
+      }
     },
     "Available Offline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
     },
     "BCP Series" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BCP-Reihe"
+          }
+        }
+      }
     },
     "Back" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück"
+          }
+        }
+      }
     },
     "Back to %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zu %@"
+          }
+        }
+      }
     },
     "Back to Top" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zum Anfang"
+          }
+        }
+      }
     },
     "Being replaced by" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird ersetzt durch"
+          }
+        }
+      }
     },
     "Being updated by" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird aktualisiert durch"
+          }
+        }
+      }
     },
     "Best Current Practices" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best Current Practices"
+          }
+        }
+      }
     },
     "Blue" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blau"
+          }
+        }
+      }
     },
     "BoF" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BoF"
+          }
+        }
+      }
     },
     "Bookmark" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen hinzufügen"
+          }
+        }
+      }
     },
     "Bookmarked" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Lesezeichen"
+          }
+        }
+      }
     },
     "Bookmarks" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen"
+          }
+        }
+      }
     },
     "Charter" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charter"
+          }
+        }
+      }
     },
     "Check your internet connection, then try again." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überprüfe deine Internetverbindung und versuche es dann erneut."
+          }
+        }
+      }
     },
     "Checklist copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkliste kopiert"
+          }
+        }
+      }
     },
     "Citation copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellenangabe kopiert"
+          }
+        }
+      }
     },
     "Code copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code kopiert"
+          }
+        }
+      }
     },
     "Concluded" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossen"
+          }
+        }
+      }
     },
     "Concluded BoF" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossene BoF"
+          }
+        }
+      }
     },
     "Copy Link to Current Section" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link zum aktuellen Abschnitt kopieren"
+          }
+        }
+      }
     },
     "Datatracker" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datatracker"
+          }
+        }
+      }
     },
     "Details" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        }
+      }
     },
     "Directorate" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Directorate"
+          }
+        }
+      }
     },
     "Documents about the policies of the RFC Series itself." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente über die Regeln der RFC-Reihe selbst."
+          }
+        }
+      }
     },
     "Documents from the Internet Architecture Board, which oversees the architecture of the Internet and the IETF's standards process." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente des Internet Architecture Board, das die Architektur des Internets und den Standardisierungsprozess der IETF beaufsichtigt."
+          }
+        }
+      }
     },
     "Documents from the Internet Engineering Task Force, most of them written in its working groups and approved by the IESG." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente der Internet Engineering Task Force, die meisten in ihren Working Groups geschrieben und von der IESG verabschiedet."
+          }
+        }
+      }
     },
     "Documents from the research groups of the Internet Research Task Force, which studies longer-term questions than the IETF." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente der Research Groups der Internet Research Task Force, die längerfristigen Fragen nachgeht als die IETF."
+          }
+        }
+      }
     },
     "Documents published outside the IETF's process, reviewed and approved by the Independent Submissions Editor." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente, die außerhalb des Prozesses der IETF veröffentlicht werden, geprüft und freigegeben vom Independent Submissions Editor."
+          }
+        }
+      }
     },
     "Dormant" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruhend"
+          }
+        }
+      }
     },
     "Drafts expire after six months unless revised, and are not meant to be cited as anything but work in progress. Many are revised until a stream approves them for publication as an RFC." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drafts verfallen nach sechs Monaten, wenn sie nicht überarbeitet werden, und sind nur als laufende Arbeit zu zitieren. Viele werden überarbeitet, bis ein Stream sie zur Veröffentlichung als RFC freigibt."
+          }
+        }
+      }
     },
     "Editor" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor"
+          }
+        }
+      }
     },
     "Editorial Stream" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editorial-Stream"
+          }
+        }
+      }
     },
     "Errata" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errata"
+          }
+        }
+      }
     },
     "Errors reported in a published RFC, which the RFC Editor records beside it, since the RFC itself never changes." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeldete Fehler in einem veröffentlichten RFC, die der RFC Editor daneben erfasst, da sich der RFC selbst nie ändert."
+          }
+        }
+      }
     },
     "FYI Series" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FYI-Reihe"
+          }
+        }
+      }
     },
     "Figure copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbildung kopiert"
+          }
+        }
+      }
     },
     "Focus" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fokus"
+          }
+        }
+      }
     },
     "Formats" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formate"
+          }
+        }
+      }
     },
     "Full citation" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vollständiges Zitat"
+          }
+        }
+      }
     },
     "Gray" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grau"
+          }
+        }
+      }
     },
     "Green" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grün"
+          }
+        }
+      }
     },
     "Group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe"
+          }
+        }
+      }
     },
     "Guidance the IETF recommends, for operating the Internet or for its own processes." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empfehlungen der IETF für den Betrieb des Internets oder für ihre eigenen Prozesse."
+          }
+        }
+      }
     },
     "IAB Program" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IAB-Programm"
+          }
+        }
+      }
     },
     "IAB Stream" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IAB-Stream"
+          }
+        }
+      }
     },
     "IETF Stream" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IETF-Stream"
+          }
+        }
+      }
     },
     "IRTF Stream" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IRTF-Stream"
+          }
+        }
+      }
     },
     "Implementer" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Implementierung"
+          }
+        }
+      }
     },
     "In IETF Last Call" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im IETF Last Call"
+          }
+        }
+      }
     },
     "In the RFC Editor queue" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In der Warteschlange des RFC Editor"
+          }
+        }
+      }
     },
     "In the working group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In der Working Group"
+          }
+        }
+      }
     },
     "In working group last call" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Working Group Last Call"
+          }
+        }
+      }
     },
     "Independent" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Independent"
+          }
+        }
+      }
     },
     "Independent Submission" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Independent Submission"
+          }
+        }
+      }
     },
     "Independent Submissions" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Independent Submissions"
+          }
+        }
+      }
     },
     "Internet Standards" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet Standards"
+          }
+        }
+      }
     },
     "Internet-Draft" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft"
+          }
+        }
+      }
     },
     "It asked for at least two independent, interoperable implementations. RFC 6410 removed the level in 2011, and a document still at it stays there until it is reclassified." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie verlangte mindestens zwei unabhängige, interoperable Implementierungen. RFC 6410 hat die Stufe 2011 abgeschafft, und ein Dokument auf ihr bleibt dort, bis es neu eingestuft wird."
+          }
+        }
+      }
     },
     "It is the first level of the standards track: the specification is stable, well understood and reviewed by the community, and many Proposed Standards are deployed widely without ever advancing." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er ist die erste Stufe des Standards Track: Die Spezifikation ist stabil, gut verstanden und von der Community geprüft, und viele Proposed Standards sind weit verbreitet, ohne je aufzusteigen."
+          }
+        }
+      }
     },
     "It is the only stream that publishes standards and Best Current Practices." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er ist der einzige Stream, der Standards und Best Current Practices veröffentlicht."
+          }
+        }
+      }
     },
     "It records work that is part of a research or development effort, so that others can try it and report what they learn." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er hält Arbeit fest, die Teil eines Forschungs- oder Entwicklungsvorhabens ist, damit andere sie ausprobieren und berichten können, was sie dabei lernen."
+          }
+        }
+      }
     },
     "It was closed in 2011, by RFC 6360, and no new FYI numbers are given." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie wurde 2011 mit RFC 6360 geschlossen, und es werden keine neuen FYI-Nummern vergeben."
+          }
+        }
+      }
     },
     "Keywords" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlagwörter"
+          }
+        }
+      }
     },
     "Legacy" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legacy"
+          }
+        }
+      }
     },
     "Link copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link kopiert"
+          }
+        }
+      }
     },
     "Links" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links"
+          }
+        }
+      }
     },
     "Mailing List Archive" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiv der Mailingliste"
+          }
+        }
+      }
     },
     "Manual" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuell"
+          }
+        }
+      }
     },
     "Markdown link" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown-Link"
+          }
+        }
+      }
     },
     "Most such documents are early RFCs, published before the IETF defined its statuses." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die meisten solchen Dokumente sind frühe RFCs, veröffentlicht, bevor die IETF ihre Status festlegte."
+          }
+        }
+      }
     },
     "New Collection…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Sammlung …"
+          }
+        }
+      }
     },
     "Newest First" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neueste zuerst"
+          }
+        }
+      }
     },
     "No Best Current Practices" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Best Current Practices"
+          }
+        }
+      }
     },
     "No Bookmarks" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Lesezeichen"
+          }
+        }
+      }
     },
     "No Internet Standards" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Internet Standards"
+          }
+        }
+      }
     },
     "No RFCs" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine RFCs"
+          }
+        }
+      }
     },
     "No RFCs in %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine RFCs in %@"
+          }
+        }
+      }
     },
     "Normal" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        }
+      }
     },
     "Not bookmarked" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ohne Lesezeichen"
+          }
+        }
+      }
     },
     "Not in the index" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht im Index"
+          }
+        }
+      }
     },
     "Nothing Available Offline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts offline verfügbar"
+          }
+        }
+      }
     },
     "Nothing Read Recently" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nichts gelesen"
+          }
+        }
+      }
     },
     "Now has errata." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hat jetzt Errata."
+          }
+        }
+      }
     },
     "Obsolete" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veraltet"
+          }
+        }
+      }
     },
     "Obsoleted by" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt durch"
+          }
+        }
+      }
     },
     "Obsoleted by %@." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt durch %@."
+          }
+        }
+      }
     },
     "Obsoletes" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt"
+          }
+        }
+      }
     },
     "Obsoletes and Obsoleted By" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt und Ersetzt durch"
+          }
+        }
+      }
     },
     "Oldest First" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Älteste zuerst"
+          }
+        }
+      }
     },
     "One BCP can consist of several RFCs: BCP 14 is RFC 2119 and RFC 8174 together." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine BCP kann aus mehreren RFCs bestehen: BCP 14 sind RFC 2119 und RFC 8174 zusammen."
+          }
+        }
+      }
     },
     "One STD can consist of several RFCs, and citing the STD number cites whichever RFCs make it up today." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein STD kann aus mehreren RFCs bestehen, und wer die STD-Nummer zitiert, zitiert die RFCs, aus denen er heute besteht."
+          }
+        }
+      }
     },
     "Open on rfc-editor.org" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf rfc-editor.org öffnen"
+          }
+        }
+      }
     },
     "Orange" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orange"
+          }
+        }
+      }
     },
     "Original Text" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Originaltext"
+          }
+        }
+      }
     },
     "Outline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gliederung"
+          }
+        }
+      }
     },
     "Pages" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seiten"
+          }
+        }
+      }
     },
     "Part of %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teil von %@"
+          }
+        }
+      }
     },
     "Pink" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pink"
+          }
+        }
+      }
     },
     "Plain Text" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiner Text"
+          }
+        }
+      }
     },
     "Preceding Draft" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorheriger Draft"
+          }
+        }
+      }
     },
     "Proposed" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorgeschlagen"
+          }
+        }
+      }
     },
     "Published" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlicht"
+          }
+        }
+      }
     },
     "Published as" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlicht als"
+          }
+        }
+      }
     },
     "Published before the RFC Editor recorded which stream a document came through." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlicht, bevor der RFC Editor festhielt, über welchen Stream ein Dokument kam."
+          }
+        }
+      }
     },
     "Published for experimentation and evaluation. Not a standard." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Experimentieren und Bewerten veröffentlicht. Kein Standard."
+          }
+        }
+      }
     },
     "Published for information. Not a standard, and not a recommendation." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Information veröffentlicht. Kein Standard und keine Empfehlung."
+          }
+        }
+      }
     },
     "Purple" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lila"
+          }
+        }
+      }
     },
     "Quote copied" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitat kopiert"
+          }
+        }
+      }
     },
     "RFC Editor" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC Editor"
+          }
+        }
+      }
     },
     "RFC Series" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Reihe"
+          }
+        }
+      }
     },
     "Reading Path: %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesepfad: %@"
+          }
+        }
+      }
     },
     "Recently Read" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt gelesen"
+          }
+        }
+      }
     },
     "Red" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rot"
+          }
+        }
+      }
     },
     "Relationships" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beziehungen"
+          }
+        }
+      }
     },
     "Remove Bookmark" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen entfernen"
+          }
+        }
+      }
     },
     "Remove from Collection" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Sammlung entfernen"
+          }
+        }
+      }
     },
     "Replaced" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt"
+          }
+        }
+      }
     },
     "Research Group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Research Group"
+          }
+        }
+      }
     },
     "STD Series" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STD-Reihe"
+          }
+        }
+      }
     },
     "Search %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ durchsuchen"
+          }
+        }
+      }
     },
     "Search All RFCs" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs durchsuchen"
+          }
+        }
+      }
     },
     "Search Available Offline" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbare durchsuchen"
+          }
+        }
+      }
     },
     "Search Best Current Practices" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best Current Practices durchsuchen"
+          }
+        }
+      }
     },
     "Search Bookmarks" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen durchsuchen"
+          }
+        }
+      }
     },
     "Search Internet Standards" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet Standards durchsuchen"
+          }
+        }
+      }
     },
     "Search Recently Read" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt gelesene durchsuchen"
+          }
+        }
+      }
     },
     "Short" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurz"
+          }
+        }
+      }
     },
     "Show as Figure" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Abbildung zeigen"
+          }
+        }
+      }
     },
     "Show as Text" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Text zeigen"
+          }
+        }
+      }
     },
     "Stream" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stream"
+          }
+        }
+      }
     },
     "Streams were defined in 2007, by RFC 4844, and earlier RFCs carry no stream of their own." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Streams wurden 2007 mit RFC 4844 festgelegt, und frühere RFCs haben keinen eigenen Stream."
+          }
+        }
+      }
     },
     "Submitted for publication" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Veröffentlichung eingereicht"
+          }
+        }
+      }
     },
     "Superseded or no longer in use, kept for the record." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgelöst oder nicht mehr in Gebrauch, zur Dokumentation aufbewahrt."
+          }
+        }
+      }
     },
     "Teal" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Türkis"
+          }
+        }
+      }
     },
     "Team" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team"
+          }
+        }
+      }
     },
     "The IETF's highest maturity level: a stable standard, widely implemented and deployed." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die höchste Reifestufe der IETF: ein stabiler Standard, weit verbreitet implementiert und im Einsatz."
+          }
+        }
+      }
     },
     "The Internet's technical documents, numbered in the order they are published since 1969." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die technischen Dokumente des Internets, seit 1969 in der Reihenfolge ihrer Veröffentlichung nummeriert."
+          }
+        }
+      }
     },
     "The RFC Editor doesn't have this document." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor hat dieses Dokument nicht."
+          }
+        }
+      }
     },
     "The RFC Editor isn't responding right now. Try again later." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor antwortet gerade nicht. Versuche es später erneut."
+          }
+        }
+      }
     },
     "The RFC Editor publishes %@ only as a scan." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor veröffentlicht %@ nur als Scan."
+          }
+        }
+      }
     },
     "The RFC Editor's index records no status for this document." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Index des RFC Editor verzeichnet keinen Status für dieses Dokument."
+          }
+        }
+      }
     },
     "The index is still loading" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Index wird noch geladen"
+          }
+        }
+      }
     },
     "The older RFC stays published, unchanged, but the newer one is the one to implement and cite." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der ältere RFC bleibt unverändert veröffentlicht, doch der neuere ist der, den man implementiert und zitiert."
+          }
+        }
+      }
     },
     "The stream was created in 2022, by RFC 9280: its documents are written in the RFC Series Working Group and approved by the RFC Series Approval Board." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Stream wurde 2022 mit RFC 9280 geschaffen: Seine Dokumente werden in der RFC Series Working Group geschrieben und vom RFC Series Approval Board verabschiedet."
+          }
+        }
+      }
     },
     "The text of %@ only says where its %@ original is." : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Text von %1$@ verweist nur auf sein Original als %2$@."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -662,13 +1962,45 @@
       }
     },
     "The text of %@ only says where its original is." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Text von %@ verweist nur auf sein Original."
+          }
+        }
+      }
     },
     "The two have to be read together." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die beiden müssen zusammen gelesen werden."
+          }
+        }
+      }
     },
     "There are %lld requirements in %@." : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Es gibt eine Anforderung in %2$@."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Es gibt %1$lld Anforderungen in %2$@."
+                }
+              }
+            }
+          }
+        },
         "en" : {
           "variations" : {
             "plural" : {
@@ -690,88 +2022,284 @@
       }
     },
     "There are no BCP 14 requirements in %@." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In %@ gibt es keine BCP-14-Anforderungen."
+          }
+        }
+      }
     },
     "They are Informational, Experimental or Historic, and represent no community consensus." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie sind Informational, Experimental oder Historic und geben keinen Konsens der Community wieder."
+          }
+        }
+      }
     },
     "They are mostly Informational, giving architectural guidance." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie sind meist Informational und geben Hinweise zur Architektur."
+          }
+        }
+      }
     },
     "They are published as Informational or Experimental, never as standards." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie werden als Informational oder Experimental veröffentlicht, nie als Standards."
+          }
+        }
+      }
     },
     "This RFC has no plain-text version." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser RFC hat keine Fassung als reiner Text."
+          }
+        }
+      }
     },
     "This document couldn't be read. It may open on rfc-editor.org." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Dokument konnte nicht gelesen werden. Auf rfc-editor.org lässt es sich vielleicht öffnen."
+          }
+        }
+      }
     },
     "Try again, or open the document on rfc-editor.org." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche es erneut oder öffne das Dokument auf rfc-editor.org."
+          }
+        }
+      }
     },
     "Under IESG review" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Prüfung durch die IESG"
+          }
+        }
+      }
     },
     "Under review" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Prüfung"
+          }
+        }
+      }
     },
     "Updated by" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiert durch"
+          }
+        }
+      }
     },
     "Updated by %@." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiert durch %@."
+          }
+        }
+      }
     },
     "Updates" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiert"
+          }
+        }
+      }
     },
     "Updates and Updated By" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiert und Aktualisiert durch"
+          }
+        }
+      }
     },
     "Working Group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group"
+          }
+        }
+      }
     },
     "Working group %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group %@"
+          }
+        }
+      }
     },
     "Yellow" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelb"
+          }
+        }
+      }
     },
     "all obsolete" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alle veraltet"
+          }
+        }
+      }
     },
     "and %lld more" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "und %lld weitere"
+          }
+        }
+      }
     },
     "approved for publication" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zur Veröffentlichung freigegeben"
+          }
+        }
+      }
     },
     "in IETF Last Call" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "im IETF Last Call"
+          }
+        }
+      }
     },
     "in the RFC Editor queue" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in der Warteschlange des RFC Editor"
+          }
+        }
+      }
     },
     "in the working group" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in der Working Group"
+          }
+        }
+      }
     },
     "in working group last call" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "im Working Group Last Call"
+          }
+        }
+      }
     },
     "intended %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "angestrebt: %@"
+          }
+        }
+      }
     },
     "obsolete" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "veraltet"
+          }
+        }
+      }
     },
     "submitted for publication" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zur Veröffentlichung eingereicht"
+          }
+        }
+      }
     },
     "under IESG review" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in Prüfung durch die IESG"
+          }
+        }
+      }
     },
     "under review" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in Prüfung"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

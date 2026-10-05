@@ -5,6 +5,12 @@
       "comment" : "Privacy - Contacts Usage Description",
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC Reader fügt einen RFC-Autor zu deinen Kontakten hinzu, wenn du darum bittest."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
