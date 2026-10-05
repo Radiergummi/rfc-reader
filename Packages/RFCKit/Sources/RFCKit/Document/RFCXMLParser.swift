@@ -91,6 +91,12 @@ public enum RFCXMLParser {
     Builder(referencesIn: root).primaryIndexTerms(in: root)
   }
 
+  /// The index `section` holds, read as `parse` reads it: for a test over a section
+  /// written by hand.
+  static func index(in section: XMLTree.Element) -> IndexBlock? {
+    Builder(referencesIn: section).parseIndex(section)
+  }
+
   /// Every `<xref>` below `root`, in document order, resolved the way the parser
   /// resolves it. Resolving one is a pure function of the element and the reference
   /// lists, so the rules are tested over hand-written trees where no committed
@@ -325,7 +331,8 @@ public enum RFCXMLParser {
       let isNumbered = element["numbered"] != "false"
       let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
-      let blocks = parseBlocks(in: element)
+      // Prep's index is one block; a section of any other shape reads as its blocks.
+      let blocks = parseIndex(element).map { [Block.index($0)] } ?? parseBlocks(in: element)
       // A `pn` says which it is. Where there is none, as in unprepped XML, a section is
       // an appendix by where it sits: in `<back>`, or in an appendix. Prepped RFCXML
       // gives every section in `<back>` an appendix's `pn`, but a legacy conversion
@@ -363,6 +370,102 @@ public enum RFCXMLParser {
       case .appendix(let number): (number, true)
       case .figure, .table, nil: (nil, false)
       }
+    }
+
+    // MARK: Index
+
+    /// The index prep generates from a document's `<iref>`s, where `section` is one:
+    /// a `<t>` anchored `rfc.index.index`, which prep writes and nothing else does,
+    /// then a `<ul>` of letter groups. Nil for any other section, and for an index of
+    /// any other shape, which reads as the generic blocks it is made of rather than as
+    /// half an index.
+    func parseIndex(_ section: XMLTree.Element) -> IndexBlock? {
+      let body = section.elements.filter { $0.name != "name" }
+      guard body.count == 2, body[0].name == "t", body[0]["anchor"] == IndexBlock.anchor,
+        body[1].name == "ul"
+      else { return nil }
+      var groups: [IndexBlock.Group] = []
+      for item in body[1].elements {
+        guard let group = parseIndexGroup(item) else { return nil }
+        groups.append(group)
+      }
+      return IndexBlock(groups: groups)
+    }
+
+    /// A letter group: an anchored empty `<t>`, whose anchor names the letter by its
+    /// code point, and a list holding one `<dl>`.
+    private func parseIndexGroup(_ item: XMLTree.Element) -> IndexBlock.Group? {
+      let parts = item.elements
+      guard item.name == "li", parts.count == 2, parts[0].name == "t", parts[1].name == "ul",
+        let anchor = parts[0]["anchor"], let label = IndexBlock.label(ofGroupAnchor: anchor)
+      else { return nil }
+      let lists = parts[1].elements
+      guard lists.count == 1, lists[0].name == "li", lists[0].elements.count == 1,
+        lists[0].elements[0].name == "dl",
+        let read = parseIndexEntries(lists[0].elements[0]), read.parentLocators.isEmpty
+      else { return nil }
+      return IndexBlock.Group(label: label, anchor: anchor, entries: read.entries)
+    }
+
+    /// The entries of an index `<dl>`, a `<dt>` and a `<dd>` each, and the locators of
+    /// those without a term. Prep writes an item's own locators so when it has
+    /// subitems too (RFC 9051, 9499), and they are the enclosing entry's. An entry
+    /// without a term that holds a list holds the subentries of the entry before it
+    /// (RFC 9110's `Grammar`).
+    private func parseIndexEntries(_ list: XMLTree.Element) -> (
+      entries: [IndexBlock.Entry], parentLocators: [IndexBlock.Locator]
+    )? {
+      let parts = list.elements
+      guard parts.count.isMultiple(of: 2) else { return nil }
+      var entries: [IndexBlock.Entry] = []
+      var parentLocators: [IndexBlock.Locator] = []
+      for start in stride(from: 0, to: parts.count, by: 2) {
+        let term = parts[start]
+        let description = parts[start + 1]
+        guard term.name == "dt", description.name == "dd",
+          let locators = parseIndexLocators(description)
+        else { return nil }
+        let words = normalize(parseInlines(term.children))
+        if words.isEmpty {
+          parentLocators += locators
+        } else {
+          entries.append(IndexBlock.Entry(term: words, locators: locators))
+        }
+        if let nested = description.first("dl") {
+          guard !entries.isEmpty, let read = parseIndexEntries(nested) else { return nil }
+          entries[entries.count - 1].locators += read.parentLocators
+          entries[entries.count - 1].subentries += read.entries
+        }
+      }
+      return (entries, parentLocators)
+    }
+
+    /// The locators of an index `<dd>`: each `<xref>` in its `<t>`, primary where
+    /// prep set it in `<strong>`, with nothing but separators between them, which are
+    /// a comma or a semicolon (RFC 9114). Nil for anything else in it.
+    private func parseIndexLocators(_ description: XMLTree.Element) -> [IndexBlock.Locator]? {
+      var locators: [IndexBlock.Locator] = []
+      for part in description.elements where part.name != "dl" {
+        guard part.name == "t" else { return nil }
+        for element in part.elements {
+          switch element.name {
+          case "xref":
+            locators.append(
+              IndexBlock.Locator(reference: parseCrossReference(element), isPrimary: false))
+          case "strong":
+            let references = element.elements.flatMap { $0.name == "em" ? $0.elements : [$0] }
+            guard !references.isEmpty, references.allSatisfy({ $0.name == "xref" }) else {
+              return nil
+            }
+            locators += references.map {
+              IndexBlock.Locator(reference: parseCrossReference($0), isPrimary: true)
+            }
+          default:
+            return nil
+          }
+        }
+      }
+      return locators
     }
 
     /// `position` names an anchorless list, as it does a section in `parseSection`.
