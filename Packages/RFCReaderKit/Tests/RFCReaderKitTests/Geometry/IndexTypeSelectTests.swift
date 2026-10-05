@@ -74,6 +74,21 @@ struct IndexTypeSelectTests {
     #expect(select.match(in: []) == nil)
   }
 
+  @Test func `escape or delete after a letter is not type-select's, and leaves the buffer`() {
+    var select = IndexTypeSelect()
+    #expect(Self.type("c", into: &select) == [true])
+    #expect(Self.type("\u{1B}", into: &select, from: 0.1) == [false])
+    #expect(Self.type("\u{7F}", into: &select, from: 0.2) == [false])
+    #expect(select.buffer == "c")
+  }
+
+  /// UIKit names a key that types nothing (`UIKeyInputEscape`): a name, not text.
+  @Test func `more than one character at once is not type-select's`() {
+    var select = IndexTypeSelect()
+    #expect(select.type("UIKeyInputEscape", at: 0) == false)
+    #expect(select.buffer.isEmpty)
+  }
+
   @Test func `a control character is not type-select's`() {
     var select = IndexTypeSelect()
     #expect(Self.type("\u{F700}", into: &select) == [false])

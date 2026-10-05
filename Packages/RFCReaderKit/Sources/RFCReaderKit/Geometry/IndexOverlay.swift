@@ -141,17 +141,18 @@ public struct IndexTypeSelect {
 
   public init() {}
 
-  /// Takes `characters` typed at `time` (seconds, any clock that only moves on),
-  /// answering whether they are type-select's. A letter or digit always is; a space
-  /// or punctuation only extends a buffer that holds something, so a space with
-  /// nothing typed still pages; a control or function key never is.
+  /// Takes `characters`, one key's, typed at `time` (seconds, any clock that only
+  /// moves on), answering whether they are type-select's. A letter or digit always
+  /// is; a space or punctuation only extends a buffer that holds something, so a
+  /// space with nothing typed still pages; a control or function key never is, nor a
+  /// key's name (UIKit's `UIKeyInputEscape`), which is more than one character.
   public mutating func type(_ characters: String, at time: TimeInterval) -> Bool {
     if time - lastKey > Self.timeout { buffer = "" }
-    guard let first = characters.first,
-      characters.allSatisfy({ !$0.isNewline && $0 != "\t" && !Self.isFunctionKey($0) })
+    guard characters.count == 1, let character = characters.first,
+      !Self.isControl(character), !Self.isFunctionKey(character)
     else { return false }
-    guard !buffer.isEmpty || first.isLetter || first.isNumber else { return false }
-    buffer += characters
+    guard !buffer.isEmpty || character.isLetter || character.isNumber else { return false }
+    buffer.append(character)
     lastKey = time
     return true
   }
@@ -165,6 +166,11 @@ public struct IndexTypeSelect {
     return keys.firstIndex { $0.hasPrefix(typed) }
       ?? keys.firstIndex { $0 > typed }
       ?? keys.count - 1
+  }
+
+  /// Escape, Delete, a tab, a newline: a key that edits or moves, not one that types.
+  private static func isControl(_ character: Character) -> Bool {
+    character.unicodeScalars.contains { $0.properties.generalCategory == .control }
   }
 
   /// AppKit's arrow and function keys arrive as characters in the private use area,
