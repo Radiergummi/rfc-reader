@@ -91,10 +91,11 @@ public struct RFCLink: Hashable, Sendable {
   /// which someone following the link wants to read on the web.
   public init?(documentPage url: URL) {
     let name = url.lastPathComponent
+    let stem = Self.stem(of: name)
     guard url.scheme?.lowercased() != Self.scheme, let link = RFCLink(url: url),
       !url.pathComponents.contains(where: { ["info", "errata", "inline-errata"].contains($0) }),
-      DocumentID(parsing: Self.stem(of: name)) == link.id,
-      Self.documentExtensions.contains(String(name.dropFirst(Self.stem(of: name).count)))
+      DocumentID(parsing: stem) == link.id,
+      Self.documentExtensions.contains(String(name.dropFirst(stem.count)))
     else { return nil }
     self = link
   }
