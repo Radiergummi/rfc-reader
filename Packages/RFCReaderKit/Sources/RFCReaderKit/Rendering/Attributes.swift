@@ -28,8 +28,15 @@ extension NSAttributedString.Key {
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on every character of an aside, its "Note" caption first (#700): the
+  /// aside's ordinal among the document's asides, which Implementer folds its body
+  /// by (`FoldingIndex`). Only in a build with live links, which alone has the
+  /// caption. A `String`, so the runs of one aside merge and two asides stay two;
+  /// a nested aside keeps its own.
+  public static let rfcAside = NSAttributedString.Key("rfcAside")
   /// Set on what the reader adds to the document's words: a heading's backlink
-  /// caption, its line break included, a code block's language and its copy button. A copied
+  /// caption, its line break included, an aside's "Note" caption, a code block's
+  /// language and its copy button. A copied
   /// selection leaves these runs out (`SelectionText`). A `String`, so the runs
   /// merge; only its presence is meaningful.
   public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
@@ -108,9 +115,48 @@ extension RFCDecoration {
   }
 }
 
+/// A decoration and the whole of its run in the text.
+struct DecorationRun: Equatable, Sendable {
+  let decoration: RFCDecoration
+  let range: NSRange
+}
+
+extension NSAttributedString {
+  /// The decoration at `location`, read from its storage run alone: whether there is
+  /// one, and which. Nil outside the text.
+  func decoration(at location: Int) -> RFCDecoration? {
+    guard location >= 0, location < length else { return nil }
+    return RFCDecoration(
+      attributeValue: attribute(.rfcDecoration, at: location, effectiveRange: nil))
+  }
+
+  /// The decoration at `location` and the whole of its run, across storage runs.
+  /// Two adjacent blocks with the same decoration share one run, so it is a block's
+  /// extent only where no such block borders it; a verbatim block is cut out of it
+  /// by its box (`FragmentGeometry.verbatimBlock`).
+  ///
+  /// Through `longestEffectiveRange`, the only way the reader's geometry asks for a
+  /// decoration's extent. `effectiveRange` returns the *storage* run, which ends at
+  /// any attribute change at all: a stacked table's bold label and regular value are
+  /// different runs, and each line that saw a decoration begin and end with itself
+  /// drew a fully rounded card at its own indent, a staircase (#122).
+  ///
+  /// Probed with `decoration(at:)` first, because `longestEffectiveRange` coalesces
+  /// the *absent* value just as eagerly as a present one: on the plain prose that is
+  /// most of an RFC it would run from the previous decorated block to the next.
+  func decorationRun(at location: Int) -> DecorationRun? {
+    guard let decoration = decoration(at: location) else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcDecoration, at: location, longestEffectiveRange: &range,
+      in: NSRange(location: 0, length: length))
+    return DecorationRun(decoration: decoration, range: range)
+  }
+}
+
 /// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
 /// what the build decided about it.
-public final class VerbatimBox: Sendable {
+public final class VerbatimBox: NSObject, Sendable {
   /// Whether the block is set as its source, rendered, or highlighted, and whether a
   /// rendering exists to switch to: its menu offers "Show as Text" on a rendered
   /// block and "Show as Figure" on one shown as its source.
@@ -177,27 +223,27 @@ extension VerbatimBox {
 
 /// Boxes a decorated block's strokes, for the reason `VerbatimBox` boxes its block:
 /// one instance per block, so the attribute's extent is the block.
-public final class StrokeBox: Sendable {
+public final class StrokeBox: NSObject, Sendable {
   public let strokes: [Stroke]
   public init(_ strokes: [Stroke]) { self.strokes = strokes }
 }
 
 /// Boxes a `CrossReference` for the same reason.
-public final class ReferenceBox: Sendable {
+public final class ReferenceBox: NSObject, Sendable {
   public let reference: CrossReference
   public init(_ reference: CrossReference) { self.reference = reference }
 }
 
 extension NSAttributedString {
-  /// The whole extent of the boxed value — a `VerbatimBox` or `ReferenceBox` — at
+  /// The whole extent of the boxed value — a `VerbatimBox`, `ReferenceBox` or `StrokeBox` — at
   /// `location`: every character around it carrying that same instance. Nil where
   /// there is no value, or no character.
   ///
   /// The extent is the attribute's run, not the storage run: a chip is three
-  /// storage runs, and `effectiveRange` names only one. The boxes are Swift classes
-  /// with no `Equatable` conformance, which bridge to `isEqual:` by identity, so
-  /// `longestEffectiveRange` joins one box's runs and keeps two boxes apart even
-  /// when their contents are equal (`BoxExtentTests`).
+  /// storage runs, and `effectiveRange` names only one. Every box, `StrokeBox` too,
+  /// is an `NSObject` that leaves `isEqual(_:)` as it is, identity, so
+  /// `longestEffectiveRange` joins one box's runs and keeps two boxes apart even when
+  /// their contents are equal (`BoxExtentTests`).
   ///
   /// The cheap single-run lookup answers "no box" first, which is most characters;
   /// the extent is only walked out on a hit.

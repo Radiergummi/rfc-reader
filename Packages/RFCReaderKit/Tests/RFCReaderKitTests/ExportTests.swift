@@ -60,7 +60,7 @@ struct ExportFormatTests {
   @Test func `PDF is rendered, and typed as a PDF`() {
     #expect(ExportFormat.pdf.source == .rendered)
     #expect(ExportFormat.pdf.contentType == .pdf)
-    #expect(ExportFormat.pdf.name == "PDF")
+    #expect(ExportFormat.pdf.name(in: .english) == "PDF")
   }
 
   /// The Mac's pop-up remembers the last format by its raw value; one this build

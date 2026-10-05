@@ -63,3 +63,37 @@ opening_brace:
   ignore_multiline_function_signatures: true
   ignore_multiline_type_headers: true
 
+custom_rules:
+  # A string a user sees is looked up in a catalog (decision "The app's chrome is
+  # localized, the reader body is not"). The compiler records a SwiftUI literal or a
+  # LocalizedStringResource on its own; these AppKit and UIKit APIs take a plain
+  # String, which it never records, so a literal here stays English in every
+  # language. A literal with no letter outside an escape or an interpolation, such
+  # as an empty title or "\(name)", is not language and passes.
+  localized_ui_string:
+    name: Localized UI string
+    included:
+      - App/.*\.swift
+      - Packages/RFCReaderKit/Sources/.*\.swift
+    regex: '(?:(?:NSMenuItem|UIAction|UIMenu)\(\s*title\s*:|[Ww]ithTitle\s*:|[Ll]abelWithString\s*:|accessibilityDescription\s*:|\.(?:label|paletteLabel|toolTip|placeholder|placeholderString|accessibilityLabel|message|messageText|informativeText|secondaryTitle)\s*=|setActionName\()\s*"(?:\\\((?:[^()"\n]|"(?:\\.|[^"\\\n])*"|\((?:[^()"\n]|"(?:\\.|[^"\\\n])*")*\))*\)|\\u\{[0-9A-Fa-f]+\}|\\.|[^"\\\nA-Za-z])*+[A-Za-z]'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Look the string up: String(localized: "…") in the app, String(kit: "…", locale: locale) in RFCReaderKit.'
+    severity: error
+  # On macOS, the first `systemFont(ofSize:)` or `boldSystemFont(ofSize:)` a process
+  # makes, made on several threads at once, can come back as Helvetica 12 pt, and
+  # each of the two has its own first use (#326). RFCReaderKit makes its fonts off
+  # the main actor, in a build or a layout fragment, and its tests make them in
+  # parallel. `systemFont(ofSize:weight:)` returns the same font and has no such
+  # first use.
+  system_font_with_weight:
+    name: System font with a weight
+    included:
+      - Packages/RFCReaderKit/.*\.swift
+    regex: '\b(?:boldSystemFont\(|systemFont\(\s*ofSize:(?:[^(),]|\((?:[^()]|\([^()]*\))*\))*\))'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Make the font with systemFont(ofSize:weight:): the other two can return Helvetica 12 pt when first made on several threads at once (#326).'
+    severity: error

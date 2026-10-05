@@ -77,7 +77,9 @@ public struct DocumentConverter: Sendable {
     let prose = diagnosesProse ? ProseReport(diagnosed: blocks, id: stem) : nil
     let boundary =
       samplesBoundary ? BoundarySample.entries(for: blocks, in: text, document: stem) : nil
-    let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
+    let sourceURL = DocumentID(fileStem: stem).map {
+      RFCEditorEndpoints.document($0, format: .text)
+    }
     let source =
       patch.map { "\(stem).txt and patched by corpus/overrides/\($0.name)" } ?? "\(stem).txt"
     let serializer = RFCXMLSerializer(
@@ -137,7 +139,10 @@ public struct DocumentConverter: Sendable {
     do {
       let tree = try XMLDocument(data: xml, options: .nodePreserveWhitespace)
       var document = try RFCXMLParser.parse(xml)
-      var written = xml
+      // Written again before any operation, so an operation is measured against what
+      // writing makes of the document, which is not the converter's bytes where the
+      // output is no fixed point (#686): writing alone would pass for a change.
+      var written = Data(serializer.serialize(document).utf8)
       for index in 0..<patch.operationCount {
         try patch.apply(operation: index + 1, to: tree)
         document = try RFCXMLParser.parse(tree.xmlData)

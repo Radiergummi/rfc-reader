@@ -49,7 +49,7 @@ public enum LegacyTextParser {
   }
 
   static let numberedHeadingPattern = Pattern(
-    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
+    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:)])?\s+(?<title>\S.*)$/#)
   /// An appendix heading that names itself one (#201): `Appendix` or `Annex` in any case
   /// after its capital, then its number -- a letter, a Roman or an Arabic numeral, with
   /// any subsections -- and the title, set off by a full stop, a colon, dashes, or by
@@ -177,18 +177,8 @@ public enum LegacyTextParser {
   /// which is the same drift one level up.
   static func prepared(_ text: String, title: String? = nil) -> Prepared {
     let prelude = Prelude(depaginate(text))
-    // A section running header's first sighting the document heads itself goes, now
-    // that the headings it is judged by are known (#291). Only from the body, so
-    // `bodyStart` still is where it was.
-    let headed = prelude.headedSectionHeaders
-    let lines = prelude.lines.filter { line in
-      guard case .sectionHeader(_, let sighting) = line else { return true }
-      return !headed.contains(sighting)
-    }
     var header = parseFrontMatter(prelude.front)
-    var sections = rawSections(
-      in: lines, from: prelude.bodyStart, bodyIsIndented: prelude.bodyIsIndented,
-      colonNumbered: prelude.colonNumbered)
+    var sections = rawSections(of: prelude.omittingHeadedSectionHeaders)
     if let title, !title.isEmpty {
       // The title page is the front matter's runs and the lead-in's blocks up to the
       // one that opens the body, which is where a title set over several runs leaves
@@ -317,16 +307,14 @@ public enum LegacyTextParser {
   /// number also has to follow from one: the number before it (`2.4.11` for `2.4.12`,
   /// `10` for `11`) or one it is under (`2.4`) must be a heading number too, however it
   /// is set. Only `0` and `1` open a numbering on their own.
-  private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
-    numbersHeadingsWithAColon(lines.compactMap(\.string))
-  }
-
   static func numbersHeadingsWithAColon(_ lines: [String]) -> Bool {
     var colonNumbers: Set<Substring> = []
     var fullStopNumbers: Set<Substring> = []
     var numbers: Set<Substring> = []
     for string in lines where string.startsAtColumnZero {
-      guard let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+      // `1)` is the weaker sign: a colon number vetoes it, never the other way round.
+      guard let match = string.firstMatch(of: numberedHeadingPattern), match.separator != ")"
+      else { continue }
       numbers.insert(match.number)
       switch match.separator {
       case ":": colonNumbers.insert(match.number)
@@ -338,6 +326,64 @@ public enum LegacyTextParser {
       return false
     }
     return colonNumbers.allSatisfy { follows($0, in: numbers) }
+  }
+
+  /// Whether `1)` at column 0 is a heading in this document. RFC 1136, 1927 and 2122
+  /// number their sections that way (#199), and some forty documents set the same shape
+  /// as list items: RFC 77's run on past their first line, RFC 751 starts two lists at
+  /// `1)`, and RFC 3116's eight test cases repeat its `1.` headings' numbers.
+  ///
+  /// So, as with the colon, a parenthesis number has to follow from another, and may not
+  /// be another heading's too, `1.`, `1:` or `1` with no separator. And each is a title: it starts its block, which
+  /// is two lines at most, a title wrapped once. No number may come twice.
+  ///
+  /// That still passes RFC 234, a one-page agenda whose six items carry a paragraph
+  /// each. What it lacks is any other sign of sections, which the three have: a column-0
+  /// line, or a parenthesis title, that names a section every RFC has, `Status of this
+  /// Memo` or `Security Considerations`. Across the corpus RFC 234 is the only document
+  /// this test decides, but an override cannot take its place: a patch has no operation
+  /// that makes a section a list item without restating the section's text.
+  static func numbersHeadingsWithAParenthesis(_ lines: [String]) -> Bool {
+    var parenthesisNumbers: [Substring] = []
+    var otherHeadingNumbers: Set<Substring> = []
+    var numbers: Set<Substring> = []
+    var namesASection = false
+    for (index, string) in lines.enumerated() where string.startsAtColumnZero {
+      guard let match = string.firstMatch(of: numberedHeadingPattern) else {
+        namesASection = namesASection || namesAStandardSection(string)
+        continue
+      }
+      numbers.insert(match.number)
+      guard match.separator == ")" else {
+        otherHeadingNumbers.insert(match.number)
+        continue
+      }
+      let startsBlock = index == 0 || lines[index - 1].isBlank
+      guard startsBlock, lines[index...].prefix(while: { !$0.isBlank }).count <= 2 else {
+        return false
+      }
+      parenthesisNumbers.append(match.number)
+      namesASection = namesASection || namesAStandardSection(String(match.title))
+    }
+    guard !parenthesisNumbers.isEmpty, namesASection,
+      Set(parenthesisNumbers).count == parenthesisNumbers.count,
+      otherHeadingNumbers.isDisjoint(with: parenthesisNumbers)
+    else { return false }
+    return parenthesisNumbers.allSatisfy { follows($0, in: numbers) }
+  }
+
+  /// Titles every RFC has a section of. Matched whole, a colon after them allowed, so
+  /// that prose opening with `Abstraction` or `References to` names none.
+  private static let standardSectionTitles: Set<String> = [
+    "status of this memo", "status of memo", "abstract", "introduction",
+    "security considerations", "references", "acknowledgment", "acknowledgement",
+    "acknowledgments", "acknowledgements", "author's address", "authors' addresses",
+  ]
+
+  private static func namesAStandardSection(_ title: String) -> Bool {
+    var lowered = title.trimmingCharacters(in: .whitespaces).lowercased()
+    if lowered.hasSuffix(":") { lowered.removeLast() }
+    return standardSectionTitles.contains(lowered)
   }
 
   /// Whether heading `number` follows from one of `numbers`: the one before it at its
@@ -362,16 +408,14 @@ public enum LegacyTextParser {
   /// the blocks the parser classifies. A second segmentation written alongside this
   /// one would drift, and a diagnosis of blocks the parser never saw is worse than
   /// none.
-  private static func rawSections(
-    in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool, colonNumbered: Bool
-  ) -> [RawSection] {
+  private static func rawSections(of prelude: Prelude) -> [RawSection] {
+    let lines = prelude.lines
     var sections: [RawSection] = [RawSection(heading: nil)]
     var current: [String] = []
     var pendingBreak = false
     // The numbers headings have taken, which a centered heading may not take again.
     var numbers: Set<String> = []
-    let centered = centeredHeadings(
-      in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered)
+    let centered = centeredHeadings(in: prelude)
 
     func flushBlock() {
       if !current.isEmpty {
@@ -382,7 +426,7 @@ public enum LegacyTextParser {
       pendingBreak = false
     }
 
-    for index in lines.indices[bodyStart...] {
+    for index in lines.indices[prelude.bodyStart...] {
       switch lines[index] {
       case .pageBreak:
         if current.isEmpty, var last = sections[sections.count - 1].blocks.popLast() {
@@ -397,9 +441,8 @@ public enum LegacyTextParser {
       case .text(let string), .sectionHeader(let string, _):
         if string.isBlank {
           flushBlock()
-        } else if let heading = Self.heading(
-          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-          startsBlock: current.isEmpty), !isContentsEntry(at: index, in: lines)
+        } else if let heading = Self.heading(at: index, in: prelude, startsBlock: current.isEmpty),
+          !isContentsEntry(at: index, in: lines)
         {
           if heading.number == nil, refusesUnnumberedHeading(heading.title) {
             let last = sections.count - 1
@@ -426,40 +469,54 @@ public enum LegacyTextParser {
     return sections
   }
 
+  /// The separators after a heading's number that head sections in some documents and
+  /// are something else in the rest, `1:` and `1)`, as far as a document numbers its
+  /// headings with them. The full stop, and no separator at all, head sections in any.
+  struct HeadingSeparators: OptionSet {
+    let rawValue: Int
+
+    static let colon = HeadingSeparators(rawValue: 1 << 0)
+    static let parenthesis = HeadingSeparators(rawValue: 1 << 1)
+  }
+
   /// What every reading of the depaginated lines starts from: the lines, double
   /// spacing collapsed, and what the front matter's end and the headings are judged
   /// by. `prepared` goes on from here, and `stripPagination` and the corpus report ask
   /// it which section running headers the document heads itself, so all three agree.
+  /// Segmentation takes it whole, rather than its fields one by one.
   struct Prelude {
     let lines: [Line]
-    let colonNumbered: Bool
+    let separators: HeadingSeparators
     let proseIndent: Int
     let front: [String]
     let bodyStart: Int
     let bodyIsIndented: Bool
-
-    init(_ depaginated: [Line]) {
-      lines = collapsingDoubleSpacing(depaginated)
-      colonNumbered = numbersHeadingsWithAColon(lines)
-      proseIndent = LegacyTextParser.proseIndent(lines)
-      (front, bodyStart) = splitFrontMatter(
-        lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
-      bodyIsIndented = LegacyTextParser.bodyIsIndented(lines[bodyStart...])
-    }
 
     /// The sightings of the section running headers in the body that the document
     /// heads itself nearby; see `headsNearby`.
     var headedSectionHeaders: Set<Int> {
       var headed: Set<Int> = []
       for index in lines.indices[bodyStart...] {
-        guard case .sectionHeader(_, let sighting) = lines[index],
-          headsNearby(
-            at: index, in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented,
-            colonNumbered: colonNumbered)
+        guard case .sectionHeader(_, let sighting) = lines[index], headsNearby(at: index, in: self)
         else { continue }
         headed.insert(sighting)
       }
       return headed
+    }
+
+    /// The prelude without the section running headers' first sightings the document
+    /// heads itself, now that the headings they are judged by are known (#291): what
+    /// `rawSections` segments. They are only ever in the body, so `bodyStart` still is
+    /// where it was, and the rest is judged by the lines as they were.
+    var omittingHeadedSectionHeaders: Prelude {
+      let headed = headedSectionHeaders
+      return Prelude(
+        lines: lines.filter { line in
+          guard case .sectionHeader(_, let sighting) = line else { return true }
+          return !headed.contains(sighting)
+        },
+        separators: separators, proseIndent: proseIndent, front: front, bodyStart: bodyStart,
+        bodyIsIndented: bodyIsIndented)
     }
   }
 
@@ -488,10 +545,8 @@ public enum LegacyTextParser {
   /// anywhere in the document had the words compared two normalizations that never agreed
   /// on a number, and let an `Introduction` at one end of a document speak for a running
   /// header at the other (#57).
-  static func headsNearby(
-    at index: Int, in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool,
-    colonNumbered: Bool
-  ) -> Bool {
+  static func headsNearby(at index: Int, in prelude: Prelude) -> Bool {
+    let lines = prelude.lines
     guard let header = lines[index].string else { return false }
     func isBreak(_ line: Line) -> Bool {
       if case .pageBreak = line { true } else { false }
@@ -500,14 +555,14 @@ public enum LegacyTextParser {
     // to the end of this one.
     var start = index
     for page in 0..<3 {
-      if page > 0, start > bodyStart { start -= 1 }
-      while start > bodyStart, !isBreak(lines[start - 1]) { start -= 1 }
+      if page > 0, start > prelude.bodyStart { start -= 1 }
+      while start > prelude.bodyStart, !isBreak(lines[start - 1]) { start -= 1 }
     }
     var end = index + 1
     while end < lines.endIndex, !isBreak(lines[end]) { end += 1 }
 
     let stated = header.trimmingCharacters(in: .whitespaces)
-    let headerHeading = heading(from: stated, colonNumbered: colonNumbered)
+    let headerHeading = heading(from: stated, separators: prelude.separators)
     let title = headingText(headerHeading?.title ?? stated)
     // The same words, and the same number where both have one: `5.  Retry Handling`
     // is not `4.  Retry Handling`. A header with no title, `Appendix B`, is told by
@@ -525,11 +580,9 @@ public enum LegacyTextParser {
       // after a section running header, which it reads past.
       let previous = candidate - 1
       let startsBlock =
-        candidate == bodyStart || isBlankOrEnd(lines, at: previous)
+        candidate == prelude.bodyStart || isBlankOrEnd(lines, at: previous)
         || lines[previous].isSectionHeader
-      if let heading = Self.heading(
-        at: candidate, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-        startsBlock: startsBlock),
+      if let heading = Self.heading(at: candidate, in: prelude, startsBlock: startsBlock),
         heading.number != nil || !refusesUnnumberedHeading(heading.title)
       {
         if names(heading) { return true }
@@ -537,7 +590,7 @@ public enum LegacyTextParser {
       }
       let indented = string.drop { $0 == " " }
       if indented.first?.isNumber == true,
-        let heading = Self.heading(from: String(indented), colonNumbered: colonNumbered),
+        let heading = Self.heading(from: String(indented), separators: prelude.separators),
         heading.number != nil, names(heading)
       {
         return true
@@ -560,14 +613,53 @@ public enum LegacyTextParser {
   /// is where the two are told apart.
   public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
-    let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header
+    let bibliographies = Self.bibliographies(in: prepared.sections)
+    let context = ParseContext(
+      proseIndent: prepared.proseIndent,
+      linker: Self.linker(sections: prepared.sections, bibliographies: bibliographies))
 
-    // Collect known section numbers and reference anchors for link resolution.
-    // An appendix numbered like a section, `Appendix 2`, is not what `Section 2` cites.
-    let sectionNumbers = Set(
-      sections.compactMap { $0.heading.flatMap { $0.isAppendix ? nil : $0.number } })
-    let bibliographies = Self.settlingEntryAnchors(
+    var flat: [Section] = []
+    // A document has one abstract, the first: RFC 2371's appendix embeds a second
+    // protocol's, and a catalog (RFC 1292, 1632, 2116) gives every entry one (#72).
+    // A later one is the body's, and stays where it is.
+    var abstractTaken = false
+    for (index, raw) in prepared.sections.enumerated() {
+      guard let heading = raw.heading else {
+        // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
+        let blocks = Self.blocks(from: raw.blocks, in: context)
+        if !blocks.isEmpty {
+          flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
+        }
+        continue
+      }
+      let lowered = heading.title.lowercased()
+      if heading.number == nil {
+        let isAbstract = lowered == "abstract" && !abstractTaken
+        if isAbstract || Self.isBoilerplateTitle(lowered) {
+          let omitted = Self.omittingBoilerplate(
+            raw, heading: heading, isAbstract: isAbstract,
+            isContents: lowered.hasPrefix("table of contents"), in: context)
+          if let abstract = omitted.abstract {
+            header.abstract = abstract
+            abstractTaken = true
+          }
+          if let rest = omitted.rest {
+            flat.append(rest)
+          }
+          continue
+        }
+      }
+      flat.append(
+        Self.section(from: raw, heading: heading, references: bibliographies[index], in: context))
+    }
+    return Self.finished(flat, header: header)
+  }
+
+  /// The entries of each references section that is a bibliography, by the section's
+  /// index, with their anchors settled against each other and against the sections'.
+  private static func bibliographies(in sections: [RawSection]) -> [Int: [Reference]] {
+    Self.settlingEntryAnchors(
       sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
           return
@@ -583,6 +675,16 @@ public enum LegacyTextParser {
       },
       reserved: Self.reservedAnchors(Self.sectionAnchorCandidates(sections))
     )
+  }
+
+  /// The linker for the document's prose: the section numbers it may cite, and the
+  /// labels of its bibliographies' entries.
+  private static func linker(sections: [RawSection], bibliographies: [Int: [Reference]])
+    -> InlineLinker
+  {
+    // An appendix numbered like a section, `Appendix 2`, is not what `Section 2` cites.
+    let sectionNumbers = Set(
+      sections.compactMap { $0.heading.flatMap { $0.isAppendix ? nil : $0.number } })
     var referenceTargets: [String: CrossReference.Target] = [:]
     // Keyed by the label, which is what the prose cites; pointing at the anchor, which
     // is what the entry is declared under. Pointing at `ref-<label>` instead, which no
@@ -596,83 +698,68 @@ public enum LegacyTextParser {
           ?? .anchor(reference.anchor)
       }
     }
-    let linker = InlineLinker(sectionNumbers: sectionNumbers, referenceTargets: referenceTargets)
+    return InlineLinker(sectionNumbers: sectionNumbers, referenceTargets: referenceTargets)
+  }
 
-    // Convert raw sections into structured ones.
-    var flat: [Section] = []
-    // A document has one abstract, the first: RFC 2371's appendix embeds a second
-    // protocol's, and a catalog (RFC 1292, 1632, 2116) gives every entry one (#72).
-    // A later one is the body's, and stays where it is.
-    var abstractTaken = false
-    for (index, raw) in sections.enumerated() {
-      guard let heading = raw.heading else {
-        // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
-        let blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
-        if !blocks.isEmpty {
-          flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
-        }
-        continue
-      }
-      let lowered = heading.title.lowercased()
-      if heading.number == nil {
-        let isAbstract = lowered == "abstract" && !abstractTaken
-        if isAbstract || Self.isBoilerplateTitle(lowered) {
-          var extent = Self.boilerplateExtent(
-            of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
-            proseIndent: proseIndent)
-          // Omitted boilerplate ends where a heading's place is taken, whether or not
-          // the line there is a heading: refused as prose, RFC 1198's sentence at column
-          // 0 took the list of standards under it into its `Status of this Memo`. Where
-          // the line continues a block, the lines before it are the boilerplate's.
-          var blocks = raw.blocks
-          if !isAbstract, let refused = raw.refusedHeadingLine, refused.block < extent {
-            blocks[refused.block].lines.removeFirst(refused.line)
-            extent = refused.block
-          }
-          if isAbstract {
-            header.abstract = Self.blocks(
-              from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
-            abstractTaken = true
-          }
-          if extent < blocks.count {
-            let body = Self.blocks(
-              from: Array(blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
-            if !body.isEmpty {
-              flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
-            }
-          }
-          continue
-        }
-      }
-      var section = Section(
-        anchor: heading.anchor,
-        number: heading.number,
-        // A heading cites like any other prose -- "Changes from RFC 3066",
-        // "Differences from RFC 793" -- and roughly 3,500 headings in the
-        // corpus name a document. The number is not part of the words, so
-        // the linker never sees it and cannot mistake it for a section
-        // cross reference. The words, not the columns they were set in: a classifier
-        // reads a heading's gaps, a title does not (#683).
-        title: linker.link(heading.title.collapsingWhitespace()),
-        isAppendix: heading.isAppendix
-      )
-      if let references = bibliographies[index] {
-        if !references.isEmpty {
-          let leading = Self.blocks(
-            from: Self.blocksBeforeFirstEntry(raw.blocks), proseIndent: proseIndent, linker: linker)
-          section.blocks =
-            leading + [.references(ReferenceList(title: heading.title, entries: references))]
-        } else {
-          section.blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
-        }
-      } else {
-        section.blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
-      }
-      flat.append(section)
+  /// An abstract, or a section of boilerplate the RFCXML path omits too: the abstract's
+  /// blocks for the header, and what follows the omitted part as a section of its own,
+  /// where anything does.
+  private static func omittingBoilerplate(
+    _ raw: RawSection, heading: HeadingInfo, isAbstract: Bool, isContents: Bool,
+    in context: ParseContext
+  ) -> (abstract: [Block]?, rest: Section?) {
+    var extent = Self.boilerplateExtent(
+      of: raw.blocks, isContents: isContents, proseIndent: context.proseIndent)
+    // Omitted boilerplate ends where a heading's place is taken, whether or not
+    // the line there is a heading: refused as prose, RFC 1198's sentence at column
+    // 0 took the list of standards under it into its `Status of this Memo`. Where
+    // the line continues a block, the lines before it are the boilerplate's.
+    var blocks = raw.blocks
+    if !isAbstract, let refused = raw.refusedHeadingLine, refused.block < extent {
+      blocks[refused.block].lines.removeFirst(refused.line)
+      extent = refused.block
     }
+    let abstract =
+      isAbstract ? Self.blocks(from: Array(raw.blocks.prefix(extent)), in: context) : nil
+    guard extent < blocks.count else { return (abstract, nil) }
+    let body = Self.blocks(from: Array(blocks.dropFirst(extent)), in: context)
+    guard !body.isEmpty else { return (abstract, nil) }
+    return (abstract, Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
+  }
 
+  /// An ordinary section: its heading, linked, and its blocks, ending in its entries
+  /// where it is a bibliography.
+  private static func section(
+    from raw: RawSection, heading: HeadingInfo, references: [Reference]?,
+    in context: ParseContext
+  ) -> Section {
+    var section = Section(
+      anchor: heading.anchor,
+      number: heading.number,
+      // A heading cites like any other prose -- "Changes from RFC 3066",
+      // "Differences from RFC 793" -- and roughly 3,500 headings in the
+      // corpus name a document. The number is not part of the words, so
+      // the linker never sees it and cannot mistake it for a section
+      // cross reference. The words, not the columns they were set in: a classifier
+      // reads a heading's gaps, a title does not (#683).
+      title: context.linker.link(heading.title.collapsingWhitespace()),
+      isAppendix: heading.isAppendix
+    )
+    if let references, !references.isEmpty {
+      let leading = Self.blocks(from: Self.blocksBeforeFirstEntry(raw.blocks), in: context)
+      section.blocks =
+        leading + [.references(ReferenceList(title: heading.title, entries: references))]
+    } else {
+      section.blocks = Self.blocks(from: raw.blocks, in: context)
+    }
+    return section
+  }
+
+  /// The document the sections make: nested by their numbers, their anchors made
+  /// unique, and its abbreviations and defined terms collected.
+  private static func finished(_ sections: [Section], header: DocumentHeader) -> RFCDocument {
     var document = RFCDocument(
-      header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
+      header: header, sections: Self.nest(Self.makingAnchorsUnique(sections)), source: .text)
     document.abbreviations = Abbreviations.defined(in: document)
     document.definedTerms = DefinedTerms.defined(in: document)
     return document
@@ -716,5 +803,30 @@ public enum LegacyTextParser {
 
   static func isBoilerplateTitle(_ lowered: String) -> Bool {
     boilerplateTitles.contains { lowered.hasPrefix($0) }
+  }
+}
+
+// In an extension, so that the struct keeps its memberwise initializer, which
+// `omittingHeadedSectionHeaders` and the segmentation guards' tests make one with.
+extension LegacyTextParser.Prelude {
+  init(_ depaginated: [LegacyTextParser.Line]) {
+    let lines = LegacyTextParser.collapsingDoubleSpacing(depaginated)
+    let separators = LegacyTextParser.HeadingSeparators(lines)
+    let proseIndent = LegacyTextParser.proseIndent(lines)
+    let (front, bodyStart) = LegacyTextParser.splitFrontMatter(
+      lines, separators: separators, proseIndent: proseIndent)
+    self.init(
+      lines: lines, separators: separators, proseIndent: proseIndent, front: front,
+      bodyStart: bodyStart, bodyIsIndented: LegacyTextParser.bodyIsIndented(lines[bodyStart...]))
+  }
+}
+
+extension LegacyTextParser.HeadingSeparators {
+  init(_ lines: [LegacyTextParser.Line]) {
+    // A page break reads as a blank line, which ends a `1)` heading's block.
+    let strings = lines.map { $0.string ?? "" }
+    self = []
+    if LegacyTextParser.numbersHeadingsWithAColon(strings) { insert(.colon) }
+    if LegacyTextParser.numbersHeadingsWithAParenthesis(strings) { insert(.parenthesis) }
   }
 }

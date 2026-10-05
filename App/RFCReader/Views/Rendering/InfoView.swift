@@ -31,7 +31,7 @@ struct InfoView: View {
             }
           }
           if let document, document.series == .rfc {
-            InfoSection(title: "Reading Path") {
+            InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)
               }
@@ -74,7 +74,7 @@ struct InfoView: View {
       }
       if let summary = info.obsoleteSummary {
         StandingBox(
-          title: "Obsolete", summary: summary, term: .process(.obsoletes),
+          title: String(localized: "Obsolete"), summary: summary, term: .process(.obsoletes),
           color: StatusBadge.obsoleteColor, fill: StatusBadge.obsoleteFill)
       }
     }
@@ -466,7 +466,7 @@ private struct OfflineSection: View {
   }
 
   var body: some View {
-    InfoSection(title: "Offline") {
+    InfoSection(title: String(localized: "Offline")) {
       HStack(spacing: 10) {
         Button(action: toggle) {
           Image(systemName: symbol)
@@ -505,8 +505,11 @@ private struct OfflineSection: View {
 
   private var help: String {
     isKept
-      ? "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
-      : "Keep a copy to read offline."
+      ? String(
+        localized:
+          "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
+      )
+      : String(localized: "Keep a copy to read offline.")
   }
 
   private func toggle() {

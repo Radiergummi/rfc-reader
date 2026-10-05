@@ -66,6 +66,18 @@ public struct LoadState {
     phase = .loaded(document, built)
   }
 
+  /// How long a reader on iOS has nothing to show before it says it is loading
+  /// (#263). A document in the cache normally builds within it, so a reader pushed
+  /// for a citation slides in with its text rather than after a flash of progress;
+  /// one that has to be fetched says so a moment later.
+  public static let progressDelay = Duration.milliseconds(400)
+
+  /// Whether the reader says it is loading: while there is neither a build nor a
+  /// failure to show, once `isDue`, which the delay passing since it began makes it.
+  public func showsProgress(isDue: Bool) -> Bool {
+    isDue && built == nil && failure == nil
+  }
+
   /// How long a build waits before it starts.
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
@@ -173,20 +185,23 @@ public struct LoadFailure {
       }
     }
 
-    public func recoverySuggestion(for subject: Subject) -> String {
+    public func recoverySuggestion(
+      for subject: Subject, locale: Locale = .interface
+    ) -> String {
       switch (self, subject) {
       case (.offline, _):
-        "Check your internet connection, then try again."
+        String(kit: "Check your internet connection, then try again.", locale: locale)
       case (.notFound, .document):
-        "The RFC Editor doesn't have this document."
+        String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
-        "This RFC has no plain-text version."
+        String(kit: "This RFC has no plain-text version.", locale: locale)
       case (.server, _):
-        "The RFC Editor isn't responding right now. Try again later."
+        String(kit: "The RFC Editor isn't responding right now. Try again later.", locale: locale)
       case (.unreadable, _):
-        "This document couldn't be read. It may open on rfc-editor.org."
+        String(
+          kit: "This document couldn't be read. It may open on rfc-editor.org.", locale: locale)
       case (.other, _):
-        "Try again, or open the document on rfc-editor.org."
+        String(kit: "Try again, or open the document on rfc-editor.org.", locale: locale)
       }
     }
   }

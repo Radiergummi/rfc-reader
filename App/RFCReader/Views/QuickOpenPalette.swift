@@ -76,8 +76,8 @@
     private var message: String? {
       let query = results.query
       guard !query.isEmpty, !results.isSearching else { return nil }
-      if library.index == nil { return "The RFC index is still loading." }
-      return "Nothing in the index matches “\(query)”."
+      if library.index == nil { return String(localized: "The RFC index is still loading.") }
+      return String(localized: "Nothing in the index matches “\(query)”.")
     }
 
     private var field: some View {
@@ -129,7 +129,7 @@
         if let entry = row.entry {
           // What was looked up, then where it is defined: "HTTP status 425 · Too
           // Early", RFC 8470.
-          Text("\(entry.registry.displayName) \(entry.value)")
+          Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
             .fontWeight(.semibold)
             .monospacedDigit()
             .lineLimit(1)

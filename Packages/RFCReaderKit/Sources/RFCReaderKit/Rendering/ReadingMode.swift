@@ -10,22 +10,34 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
   case outline
   /// One section and its subsections (#699).
   case focus
+  /// The whole document, its BCP 14 requirements banded and its asides folded under
+  /// their captions (#700).
+  case implementer
 
   public var id: String { rawValue }
 
+  /// Whether the mode draws a band behind each requirement (`RequirementBands`).
+  public var bandsRequirements: Bool { self == .implementer }
+
+  /// Whether the mode has disclosures to click: the outline's headings, and
+  /// Implementer's asides (`Folding.disclosures(in:)`).
+  public var discloses: Bool { self == .outline || self == .implementer }
+
   /// What the Reading Mode menu calls it.
-  public var name: String {
+  public func name(in locale: Locale = .interface) -> String {
     switch self {
-    case .normal: "Normal"
-    case .outline: "Outline"
-    case .focus: "Focus"
+    case .normal: String(kit: "Normal", locale: locale)
+    case .outline: String(kit: "Outline", locale: locale)
+    case .focus: String(kit: "Focus", locale: locale)
+    case .implementer: String(kit: "Implementer", locale: locale)
     }
   }
 }
 
 /// What folding needs to know of a build, worked out once per build rather than on
-/// every toggle: where each paragraph starts, and the outline's entries, which are
-/// the sections and the abstract, each with where its heading's paragraph starts.
+/// every toggle: where each paragraph starts, the outline's entries, which are the
+/// sections and the abstract, each with where its heading's paragraph starts, and the
+/// asides Implementer folds.
 public struct FoldingIndex: Sendable {
   public struct Entry: Sendable, Equatable {
     public let anchor: String
@@ -37,10 +49,21 @@ public struct FoldingIndex: Sendable {
     public let depth: Int
   }
 
+  /// An aside with a caption (`.rfcAside`, #700): its ordinal, where its caption's
+  /// paragraph starts, which is where its disclosure is, and its body, every
+  /// paragraph after the caption's.
+  public struct Aside: Sendable, Equatable {
+    public let ordinal: Int
+    public let caption: Int
+    public let body: Range<Int>
+  }
+
   /// Every paragraph, in order.
   let paragraphs: [NSRange]
   /// The sections and the abstract, in order.
   let entries: [Entry]
+  /// The asides, in order: an aside nested in another comes after it.
+  let asides: [Aside]
   let length: Int
 
   public init(_ built: BuiltDocument) {
@@ -65,6 +88,35 @@ public struct FoldingIndex: Sendable {
           depth: entry.depth ?? 1
         )
       }
+    asides = Self.asides(in: built.text)
+  }
+
+  /// The asides of `text`, each from the first to the last character carrying its
+  /// ordinal: an aside nested in one cuts it into runs.
+  private static func asides(in text: NSAttributedString) -> [Aside] {
+    var extents: [Int: Range<Int>] = [:]
+    text.enumerateAttribute(.rfcAside, in: NSRange(location: 0, length: text.length)) {
+      value, run, _ in
+      guard let ordinal = (value as? String).flatMap(Int.init) else { return }
+      let range = run.location..<NSMaxRange(run)
+      extents[ordinal] =
+        extents[ordinal].map {
+          min($0.lowerBound, range.lowerBound)..<max($0.upperBound, range.upperBound)
+        } ?? range
+    }
+    let string = text.string as NSString
+    return extents.map { ordinal, extent in
+      let caption = string.paragraphRange(for: NSRange(location: extent.lowerBound, length: 0))
+      return Aside(
+        ordinal: ordinal, caption: caption.location,
+        body: min(NSMaxRange(caption), extent.upperBound)..<extent.upperBound)
+    }
+    .sorted { $0.caption < $1.caption }
+  }
+
+  /// The asides whose body holds `offset`, outermost first.
+  func asides(holding offset: Int) -> [Aside] {
+    asides.filter { $0.body.contains(offset) }
   }
 
   /// The entry whose text `offset` is in: the last at or before it.
@@ -96,10 +148,13 @@ public struct Folding: Sendable, Equatable {
   public var expanded: Set<String>
   /// The section Focus shows, with its subsections (#699).
   public var focused: String?
+  /// The ordinals of the asides Implementer shows the body of (#700).
+  public var openAsides: Set<Int>
 
-  public init(mode: ReadingMode = .normal, expanded: Set<String> = []) {
+  public init(mode: ReadingMode = .normal, expanded: Set<String> = [], openAsides: Set<Int> = []) {
     self.mode = mode
     self.expanded = expanded
+    self.openAsides = openAsides
   }
 
   /// Focus on the section `anchor` names; nil, as before a document has a section on
@@ -166,6 +221,27 @@ public struct Folding: Sendable, Equatable {
       mode: .outline, expanded: Set(index.anchors(enclosing: entry) + [entry.anchor]))
   }
 
+  /// Implementer becoming the outline, which starts with nothing open, opens the
+  /// section the reader's line at `line` is in, and every section it is nested in,
+  /// so the line stays shown, as Focus becoming the outline keeps its section open
+  /// (`switching(to:in:)`). Implementer folds only asides, so the line can be almost
+  /// anywhere. Any mode becoming Implementer, which starts with every aside closed,
+  /// opens the asides the line is in. Anything else is unchanged.
+  public func keepingLine(at line: Int, after previous: Folding, in index: FoldingIndex)
+    -> Folding
+  {
+    if mode == .implementer, previous.mode != .implementer, openAsides.isEmpty {
+      let holding = index.asides(holding: line)
+      guard !holding.isEmpty else { return self }
+      return Folding(mode: .implementer, openAsides: Set(holding.map(\.ordinal)))
+    }
+    guard previous.mode == .implementer, mode == .outline, expanded.isEmpty,
+      let entry = index.entry(covering: line)
+    else { return self }
+    return Folding(
+      mode: .outline, expanded: Set(index.anchors(enclosing: entry) + [entry.anchor]))
+  }
+
   /// The section Focus shows: the focused one, or the first where none is yet.
   public func focusedAnchor(in index: FoldingIndex) -> String? {
     focusedEntry(in: index)?.anchor
@@ -181,6 +257,7 @@ public struct Folding: Sendable, Equatable {
   /// heading only where every section it is nested in is expanded (`outline(in:)`).
   public func hidden(in index: FoldingIndex) -> HiddenText {
     if mode == .focus { return focusHidden(in: index) }
+    if mode == .implementer { return asidesHidden(in: index) }
     guard mode == .outline else { return HiddenText() }
     let outline = outline(in: index)
     let headings = Dictionary(
@@ -212,9 +289,33 @@ public struct Folding: Sendable, Equatable {
     return HiddenText(paragraphs: paragraphs, length: index.length)
   }
 
-  /// The headings that have a disclosure, by where their paragraph starts, each open
-  /// or not: in the outline, every one it shows; in Normal, none.
+  /// Implementer: the body of every aside not open, which an aside nested in a
+  /// closed one is part of.
+  private func asidesHidden(in index: FoldingIndex) -> HiddenText {
+    let closed = closedBodies(in: index)
+    guard !closed.isEmpty else { return HiddenText() }
+    let paragraphs = index.paragraphs.map { paragraph in
+      (range: paragraph, isHidden: closed.contains { $0.contains(paragraph.location) })
+    }
+    return HiddenText(paragraphs: paragraphs, length: index.length)
+  }
+
+  /// The bodies of the asides Implementer has closed.
+  private func closedBodies(in index: FoldingIndex) -> [Range<Int>] {
+    index.asides.filter { !openAsides.contains($0.ordinal) }.map(\.body)
+  }
+
+  /// The headings, or captions, that have a disclosure, by where their paragraph
+  /// starts, each open or not: in the outline, every heading it shows; in
+  /// Implementer, every aside's caption it shows; in Normal and Focus, none.
   public func disclosures(in index: FoldingIndex) -> [Int: Bool] {
+    if mode == .implementer {
+      let closed = closedBodies(in: index)
+      return Dictionary(
+        index.asides.filter { aside in !closed.contains { $0.contains(aside.caption) } }
+          .map { ($0.caption, openAsides.contains($0.ordinal)) },
+        uniquingKeysWith: { first, _ in first })
+    }
     guard mode == .outline else { return [:] }
     return Dictionary(
       zip(index.entries, outline(in: index)).filter(\.1.headingShown).map { entry, _ in
@@ -224,9 +325,21 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// This folding with the section of the heading whose paragraph `offset` is in
-  /// opened, or closed if it was open; nil where `offset` is in no heading this mode
-  /// discloses.
+  /// opened, or closed if it was open, or in Implementer the aside whose caption it
+  /// is in; nil where `offset` is in no heading or caption this mode discloses.
   public func toggling(heading offset: Int, in index: FoldingIndex) -> Folding? {
+    if mode == .implementer {
+      guard
+        let aside = index.asides.first(where: { ($0.caption..<$0.body.lowerBound).contains(offset) }
+        ),
+        disclosures(in: index)[aside.caption] != nil
+      else { return nil }
+      var toggled = self
+      if toggled.openAsides.remove(aside.ordinal) == nil {
+        toggled.openAsides.insert(aside.ordinal)
+      }
+      return toggled
+    }
     guard mode == .outline, let entry = index.entry(covering: offset) else { return nil }
     // In the heading's paragraph: from its start to the paragraph after it. Found by
     // halving, as the pointer asks on every move over the gutter.
@@ -241,8 +354,14 @@ public struct Folding: Sendable, Equatable {
 
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored
   /// place inside a folded section, or in the abstract, expands it and every section
+  /// it is nested in; in Implementer, inside a closed aside, opens it and every aside
   /// it is nested in. Unchanged in a mode that folds nothing.
   public func expanding(toShow offset: Int, in index: FoldingIndex) -> Folding {
+    if mode == .implementer {
+      var expanded = self
+      expanded.openAsides.formUnion(index.asides(holding: offset).map(\.ordinal))
+      return expanded
+    }
     guard mode != .normal, let entry = index.entry(covering: offset) else { return self }
     // Focus moves to where the jump lands, rather than showing a second section.
     if mode == .focus { return Folding(focusingOn: entry.anchor) }
@@ -335,6 +454,16 @@ public struct HiddenText: Sendable, Equatable {
     if let before = runs[index].shownBefore { return before }
     let after = NSMaxRange(runs[index].range)
     return after < length ? after : nil
+  }
+
+  /// Where `range` stops being shown: where the hidden run its last character is in
+  /// starts, if that is inside it, and its end otherwise.
+  public func shownEnd(of range: NSRange) -> Int {
+    guard range.length > 0, let index = run(containing: NSMaxRange(range) - 1) else {
+      return NSMaxRange(range)
+    }
+    let start = runs[index].range.location
+    return start > range.location ? start : NSMaxRange(range)
   }
 
   /// The end of the text counts as in the last paragraph, as TextKit's location for it

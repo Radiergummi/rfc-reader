@@ -25,6 +25,7 @@ import SwiftUI
 
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openURL) private var openURL
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -116,10 +117,13 @@ import SwiftUI
         Divider()
         ReadingModePicker(reader: reader)
         FocusSteps(reader: reader)
+        if SideBySide.isOffered(in: horizontalSizeClass) {
+          CompareItems(id: id, library: library, reader: reader)
+        }
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
-            Button(format.name) { exportDocument(format) }
+            Button(format.name()) { exportDocument(format) }
           }
         }
         // Not for a document read as its PDF or PostScript original (#207).
@@ -142,7 +146,7 @@ import SwiftUI
     private func shareLink(_ metadata: RFCMetadata) -> some View {
       ShareLink(
         item: RFCEditorEndpoints.infoPage(id),
-        subject: Text("\(id.displayName): \(metadata.title)"))
+        subject: Text(verbatim: "\(id.displayName): \(metadata.title)"))
     }
 
     private func toggleBookmark() {

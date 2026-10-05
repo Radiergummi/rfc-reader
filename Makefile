@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -72,7 +72,7 @@ build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
-	swift build --package-path $(RFCREADERKIT)
+	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -96,14 +96,15 @@ endif
 ## Run the app-side test suite (RFCReaderKit)
 # Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
 # SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
-# it on a Mac.
+# it on a Mac. Swift Build, not Swift 6.3's default native build system, which
+# copies the string catalog into the bundle uncompiled, so no plural resolves.
 test-app:
-	swift test --package-path $(RFCREADERKIT)
+	swift test --package-path $(RFCREADERKIT) --build-system swiftbuild
 
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935
 
@@ -126,7 +127,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
@@ -239,13 +240,14 @@ IOS_DESTINATION ?= generic/platform=iOS
 # `xcrun simctl list devices available` shows.
 IOS_SIMULATOR ?= iPhone 18 Pro
 
-# Where xcodebuild left RFCReader.app for a destination. Asked for rather than
-# spelled out: the DerivedData directory carries a hash of the project's own
-# path, so it differs per checkout. Recursively expanded (`=`, not `:=`) so only
-# the targets that need it pay for the xcodebuild call.
-built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+# A build setting of a destination, such as where xcodebuild left RFCReader.app.
+# Asked for rather than spelled out: the DerivedData directory carries a hash of
+# the project's own path, so it differs per checkout. Recursively expanded (`=`,
+# not `:=`) so only the targets that need it pay for the xcodebuild call.
+build_setting = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(1)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
-	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
+	  | sed -n 's/^ *$(2) = //p' | head -1)
+built_app = $(call build_setting,$(1),BUILT_PRODUCTS_DIR)/$(SCHEME).app
 
 ## Build the app for macOS
 # No -derivedDataPath, here or in ios-sim: CI restores its compilation cache to
@@ -264,6 +266,22 @@ ios-sim: xcodeproj
 ios-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(IOS_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Sync the string catalogs with the strings in the code
+# Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
+# found either way, then adds new strings to the catalogs and marks removed ones
+# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+strings: build-app ios-sim
+	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
+	  --configuration $(CONFIGURATION)
+
+## Fail when a string catalog is out of date with the code, or lacks German
+# What CI runs: a string added to the code without `make strings` fails here, and
+# so does one without a German translation.
+strings-check: strings
+	@git diff --exit-code -- '*.xcstrings' || \
+	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
+	@Tools/strings/sync.py --check-translations de
 
 ## Build, install and launch the app on an attached iPhone
 # Built for that one device rather than for any, so automatic signing registers
@@ -447,15 +465,15 @@ $(OVERRIDES_CHECK)/%.txt:
 # text, which a patch on the output cannot do. A snapshot is the converter's output
 # frozen, so a converter change can leave it stale without anything failing. This
 # reruns every script against the current converter and compares. Not part of
-# `check`: it needs the source text, fetched here when it is missing, and Python
-# 3.9 or later. Informational: it reports a stale snapshot and does not fail, and
-# the script's new output is not committed, because it would be a fresh snapshot of
-# RFC text (#243).
-corpus-override-scripts-check: corpus-tool
-	@for script in $(CORPUS)/overrides/rfc*.py; do \
-	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
-	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
-	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
+# `check`: it needs the source text, fetched when it is missing into the overrides
+# check's directory, out of a corpus run's way, and Python 3.9 or later.
+# Informational: it reports a stale snapshot and does not fail, and the script's new
+# output is not committed, because it would be a fresh snapshot of RFC text (#243).
+SCRIPTED := $(basename $(notdir $(wildcard $(CORPUS)/overrides/rfc*.py)))
+
+corpus-override-scripts-check: corpus-tool $(SCRIPTED:%=$(OVERRIDES_CHECK)/%.txt)
+	@for stem in $(SCRIPTED); do \
+	  script=$(CORPUS)/overrides/$$stem.py; source=$(OVERRIDES_CHECK)/$$stem.txt; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- frozen, not regenerated"; fi; rm -f "$$out"; \

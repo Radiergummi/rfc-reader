@@ -41,11 +41,7 @@ public enum QuoteCitation {
     public var rich: NSAttributedString
 
     /// `rich` as RTF, the flavor rich targets read.
-    public var rtf: Data? {
-      try? rich.data(
-        from: NSRange(location: 0, length: rich.length),
-        documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-    }
+    public var rtf: Data? { PasteboardMarkup.rtf(rich) }
   }
 
   /// The place (`Section.place`) of the section a selection starting at `offset` is
@@ -118,33 +114,22 @@ public enum QuoteCitation {
     rich.append(NSAttributedString(string: "— "))
     rich.append(NSAttributedString(string: label, attributes: [.link: url]))
 
-    // The charset, or a target reading the flavor as Latin-1 garbles the dash.
-    let html =
-      (["<meta charset=\"utf-8\">", "<blockquote>"]
-      + blocks.map { block in
-        let content = escapingHTML(block.lines.joined(separator: "\n"))
-        return block.isVerbatim ? "<pre>\(content)</pre>" : "<p>\(content)</p>"
-      }
-      + [
-        "</blockquote>",
-        "<p>— <cite><a href=\"\(escapingHTML(url.absoluteString))\">\(escapingHTML(label))</a></cite></p>",
-      ]).joined(separator: "\n")
+    let escaped = PasteboardMarkup.escaped
+    let html = PasteboardMarkup.html(
+      (["<blockquote>"]
+        + blocks.map { block in
+          let content = escaped(block.lines.joined(separator: "\n"))
+          return block.isVerbatim ? "<pre>\(content)</pre>" : "<p>\(content)</p>"
+        }
+        + [
+          "</blockquote>",
+          "<p>— <cite><a href=\"\(escaped(url.absoluteString))\">\(escaped(label))</a></cite></p>",
+        ]).joined(separator: "\n"))
 
     return Quote(
       markdown: quoted.joined(separator: "\n>\n") + "\n\n— " + citation,
       html: html,
       rich: rich)
-  }
-
-  /// `text` as HTML text or an attribute value: the characters markup is made of, as
-  /// entities.
-  private static func escapingHTML(_ text: String) -> String {
-    text
-      .replacingOccurrences(of: "&", with: "&amp;")
-      .replacingOccurrences(of: "<", with: "&lt;")
-      .replacingOccurrences(of: ">", with: "&gt;")
-      .replacingOccurrences(of: "\"", with: "&quot;")
-      .replacingOccurrences(of: "'", with: "&#39;")
   }
 
   /// A run of the selection that is quoted as one Markdown block: a paragraph, or the

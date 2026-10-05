@@ -304,16 +304,29 @@ struct PrintFurnitureTests {
     let metadata = RFCMetadata(
       id: .rfc(9999), title: "Index Title", authors: [Author(name: "I. Ndex")],
       date: PublicationDate(year: 2025, month: 1), workingGroup: "Index Group")
-    let bare = HeaderSummary(header: DocumentHeader(title: "A Protocol"), metadata: metadata)
+    let bare = HeaderSummary(
+      header: DocumentHeader(title: "A Protocol"), metadata: metadata, locale: .english)
     #expect(bare.title == "A Protocol")
     #expect(bare.date == "January 2025")
     #expect(bare.workingGroup == "Index Group")
     #expect(bare.authors == [Author(name: "I. Ndex")])
     let full = HeaderSummary(
-      header: header(authors: [Author(name: "A. Writer")]), metadata: metadata)
+      header: header(authors: [Author(name: "A. Writer")]), metadata: metadata, locale: .english)
     #expect(full.date == "June 2026")
     #expect(full.workingGroup == "Example Working Group")
     #expect(full.authors == [Author(name: "A. Writer")])
+  }
+
+  /// The reader's header dates the document in the interface's language; a printed
+  /// page, like the body it frames, stays English.
+  @Test func `the header dates in the interface language and print in English`() {
+    let metadata = RFCMetadata(
+      id: .rfc(9999), title: "Index Title", date: PublicationDate(year: 2025, month: 6))
+    let header = DocumentHeader(title: "A Protocol")
+    #expect(
+      HeaderSummary(header: header, metadata: metadata, locale: .german).date
+        == "Juni 2025")
+    #expect(PrintFurniture(header: header, metadata: metadata).headerTrailing == "June 2025")
   }
 
   /// The job title, which the print panel's Save as PDF sheet offers as the file's

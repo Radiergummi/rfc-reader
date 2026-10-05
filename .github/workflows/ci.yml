@@ -19,6 +19,10 @@ concurrency:
 jobs:
   lint:
     name: SwiftLint
+    # Not for a pull request opened on an empty commit, as work-issue claims an
+    # issue with: it has nothing to check, and the first real push runs everything.
+    # The same condition stands on every job of this workflow and codeql.yml.
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Same version as `make lint` locally; --strict is clean on the whole tree.
@@ -31,6 +35,7 @@ jobs:
 
   workflows:
     name: Workflow lint
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -42,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
       - name: actionlint
-        uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
+        uses: reviewdog/action-actionlint@13465d022aa41c282f730be17574b5ce692d0186 # v1.78.1
         with:
           # Every finding in every workflow fails the job, not only those in lines
           # a pull request touches.
@@ -60,6 +65,7 @@ jobs:
 
   rfckit-linux:
     name: RFCKit tests (Linux)
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
@@ -96,6 +102,16 @@ jobs:
         run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
+      # Before the patch check, which needs the network on a cache miss: a fetch that
+      # fails there fails the job, and should not cost main its builds.
+      - name: Save the SwiftPM builds
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/RFCKit/.build
+            Tools/corpus-build/.build
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
       - name: Month
         id: month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
@@ -113,14 +129,6 @@ jobs:
       # FoundationXML's libxml2, so a parser change that breaks a patch fails its own
       # pull request (#197). With the debug build the tests just made.
       - run: make corpus-overrides-check CORPUS_CONFIGURATION=debug
-      - name: Save the SwiftPM builds
-        if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            Packages/RFCKit/.build
-            Tools/corpus-build/.build
-          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
 
   prune-caches:
     name: Prune caches
@@ -128,8 +136,9 @@ jobs:
     # per job, and the repository's 10 GB went to 36 compilation caches with nothing
     # pruned. A restore only ever takes the newest entry of a kind, so the rest are
     # deleted. After the saves, and on main only, where the saves happen. The corpus
-    # workflow's fetched text (corpus-text-, about 450 MB a run) is pruned here too;
-    # ci-macos.yml prunes its own caches.
+    # workflow's fetched text (corpus-text-, about 450 MB a run) and the patch check's
+    # index and texts (corpus-overrides-) are pruned here too; ci-macos.yml prunes its
+    # own caches.
     if: ${{ !cancelled() && github.event_name == 'push' }}
     needs: [rfckit-linux]
     runs-on: ubuntu-24.04
@@ -143,7 +152,7 @@ jobs:
     steps:
       - name: Keep the newest cache of each kind
         run: |
-          for prefix in swiftpm-linux- corpus-text-; do
+          for prefix in swiftpm-linux- corpus-text- corpus-overrides-; do
             gh cache list --key "$prefix" --ref refs/heads/main --sort created_at --order desc \
               --limit 100 --json id --jq '.[1:][].id' |
               xargs -r -n1 gh cache delete
@@ -151,6 +160,7 @@ jobs:
 
   swift-format:
     name: swift-format
+    if: ${{ !(github.event.action == 'opened' && github.event.pull_request.changed_files == 0) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # 6.3 formats this tree byte for byte as Xcode 27's swift-format does. The image

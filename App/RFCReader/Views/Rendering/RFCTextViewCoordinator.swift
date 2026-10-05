@@ -136,6 +136,14 @@ final class RFCTextViewCoordinator: NSObject {
     guard let documentID, let built else { return nil }
     return QuoteCitation.quote(of: range, in: built, document: documentID)
   }
+
+  /// The URL a copy links `link` to (#778): one anyone can open, or nil where the
+  /// reader has none to hand out.
+  func publicURL(for link: URL) -> URL? {
+    guard let documentID else { return nil }
+    return LinkCopy.publicURL(
+      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
+  }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onChoosePresentation`.
@@ -179,6 +187,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
   var heading: HeadingBox?
   var lastToolbarTitle: ToolbarTitleState?
+  /// See `ReaderInputs.isShown`.
+  var isShown = true
 
   #if canImport(UIKit)
     /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by
@@ -209,6 +219,12 @@ final class RFCTextViewCoordinator: NSObject {
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
   /// main-actor hop, which `onDisappear` cannot afford to wait for.
   var lastVisibleAnchor: VisibleAnchorBox?
+  /// The reading this reader scrolls together with another one in, side by side
+  /// (#187); see `RFCTextViewCoordinator+Coupling`.
+  var coupling: ScrollCoupling?
+  /// Set while this reader follows the other one; its scroll reports wait for
+  /// `follow(_:)` to report the place it was put at.
+  var isFollowing = false
 
   var built: BuiltDocument?
   /// The anchors tracking may report. The full index covers *every* anchor —
@@ -233,6 +249,13 @@ final class RFCTextViewCoordinator: NSObject {
   var reportedFolding: (before: Folding, after: Folding)?
   /// Tells the scene that a jump into folded text expanded a section.
   var onFoldingChange: (Folding) -> Void = { _ in }
+  /// The document's requirements, which Implementer bands (#700).
+  var requirements: [Requirement] = []
+  /// Where the requirements are in the installed build: found in Implementer only,
+  /// once per build and requirements.
+  var requirementBands: RequirementBands?
+  /// Finding the bands, off the main actor.
+  var bandsTask: Task<Void, Never>?
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
@@ -281,17 +304,24 @@ final class RFCTextViewCoordinator: NSObject {
     guard let layout = textView?.textLayoutManager,
       let fragment = layout.textLayoutFragment(for: containerPoint)
     else { return nil }
-    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-    guard fragmentStart >= 0 else { return nil }
+    guard let lines = FragmentLines(fragment, in: layout) else { return nil }
     let pointInFragment = CGPoint(
       x: containerPoint.x - fragment.layoutFragmentFrame.minX,
       y: containerPoint.y - fragment.layoutFragmentFrame.minY
     )
-    return FragmentGeometry.characterOffset(
-      in: fragment.textLineFragments,
-      fragmentStart: fragmentStart,
-      at: pointInFragment
-    )
+    return FragmentGeometry.characterOffset(in: lines, at: pointInFragment)
+  }
+
+  /// Where the paragraph laid out at the height of `containerPoint` starts: what a
+  /// click or tap in the gutter beside a disclosure toggles. By its layout fragment,
+  /// not a character, since an aside's caption is set in from the column's edge the
+  /// gutter point is on (#700).
+  func paragraphStart(atContainerPoint containerPoint: CGPoint) -> Int? {
+    guard let layout = textView?.textLayoutManager,
+      let fragment = layout.textLayoutFragment(for: containerPoint)
+    else { return nil }
+    let start = layout.offset(of: fragment.rangeInElement.location)
+    return start >= 0 ? start : nil
   }
 
   // MARK: - References
@@ -305,11 +335,13 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// The link a reference's runs carry. Read from the storage rather than from
   /// what the platform says was pressed: a chip's leading glyph is an attachment,
-  /// which UIKit reports as one, not as the link it is part of.
+  /// which UIKit reports as one, not as the link it is part of. Nil past the end,
+  /// where a right-click below the last line puts the menu's index.
   func link(at offset: Int) -> URL? {
-    let value = textView?.textLayoutManager?.attributedText?.attribute(
-      .link, at: offset, effectiveRange: nil)
-    return value.flatMap(Self.url(fromLink:))
+    guard let text = textView?.textLayoutManager?.attributedText,
+      offset >= 0, offset < text.length
+    else { return nil }
+    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(Self.url(fromLink:))
   }
 
   /// A link attribute's value as a URL: AppKit may hand it over as its string.
@@ -456,11 +488,12 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       followChrome(scrollView)
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+      takeLead()
       drag = ReaderChrome.Drag(
         offset: scrollView.contentOffset.y,
         finger: scrollView.panGestureRecognizer.translation(in: scrollView).y)
@@ -529,10 +562,12 @@ final class RFCTextViewCoordinator: NSObject {
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
       // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
-      // opens or closes its section (#698); a link in a heading is followed first.
-      if folding.mode == .outline {
+      // opens or closes its section (#698), and in Implementer one on an aside's
+      // caption opens or closes the aside (#700); a link in a heading is followed
+      // first.
+      if folding.mode.discloses {
         if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-          let offset = characterOffset(atContainerPoint: gutter),
+          let offset = paragraphStart(atContainerPoint: gutter),
           toggleSection(atHeading: offset)
         {
           return
@@ -540,7 +575,7 @@ final class RFCTextViewCoordinator: NSObject {
       }
       if let offset = characterOffset(atContainerPoint: containerPoint) {
         if link(at: offset) != nil { return }
-        if folding.mode == .outline, toggleSection(atHeading: offset) { return }
+        if folding.mode.discloses, toggleSection(atHeading: offset) { return }
       }
       chrome.tapped()
       reportChrome()
@@ -619,10 +654,7 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink caption's link is ours alone, and Copy Link would copy a URL
-      // nothing else can open; the rest of the menu stays.
-      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
-      return menu
+      return linkMenu(menu, at: charIndex)
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
@@ -638,13 +670,14 @@ final class RFCTextViewCoordinator: NSObject {
     /// `ReferenceHover.linkClickPointer`.
     @objc
     func viewportDidScroll(_ notification: Notification) {
-      reportVisibleAnchor()
+      if !isFollowing { reportVisibleAnchor() }
       hover.send(.scrolled)
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
     /// ends any dwell. In a link preview's reader it commits the preview.
     func mouseDownInText() -> Bool {
+      takeLead()
       let withControl = NSEvent.modifierFlags.contains(.control)
       guard hover.send(.mouseDown(withControl: withControl)).contains(.commitPreview),
         let commitsOnClick
@@ -685,6 +718,7 @@ final class RFCTextViewCoordinator: NSObject {
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
       onToolbarTitleReleased(self)
+      couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil
     }

@@ -17,7 +17,7 @@ import SwiftUI
       content.contextMenu {
         Button(action: toggleBookmark) {
           Label(
-            isBookmarked ? "Remove Bookmark" : "Bookmark",
+            DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
             systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
         }
         // macOS 27 hides a menu item's icon unless the label asks to keep it.

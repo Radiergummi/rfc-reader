@@ -82,10 +82,23 @@ struct LinkCopyTests {
   }
 
   @Test func `the HTML link escapes its label and its URL`() {
-    let link = LinkCopy(url: URL(string: "https://example.com/?a=1&b=2")!, label: "A <b> & \"c\"")
+    let link = LinkCopy(
+      url: URL(string: "https://example.com/?a=1&b=2")!, label: "A <b> & \"c\" 'd'")
     #expect(
       link.html
-        == "<a href=\"https://example.com/?a=1&amp;b=2\">A &lt;b&gt; &amp; &quot;c&quot;</a>")
+        == """
+        <meta charset="utf-8">
+        <a href="https://example.com/?a=1&amp;b=2">A &lt;b&gt; &amp; &quot;c&quot; &#39;d&#39;</a>
+        """)
+  }
+
+  /// A bibliography title is often not ASCII, and a target reading the flavor as
+  /// Latin-1 garbles it without the charset (#775).
+  @Test func `the HTML link of a non-ASCII title declares its charset`() {
+    let link = LinkCopy(
+      url: URL(string: "https://example.com/")!, label: "Zürich — Ångström")
+    #expect(link.html.hasPrefix("<meta charset=\"utf-8\">\n"))
+    #expect(link.html.hasSuffix(">Zürich — Ångström</a>"))
   }
 
   @Test func `the RTF reads back as the label, linked to the URL`() throws {

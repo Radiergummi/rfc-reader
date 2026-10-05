@@ -23,10 +23,11 @@ import RFCReaderKit
       return hit.text.copyButton(at: hit.offset) != nil
     }
 
-    /// Where the pointer is the arrow in the outline (#698): the gutter beside each
-    /// heading with a disclosure in the viewport (`FragmentGeometry.disclosureCursorRect`).
+    /// Where the pointer is the arrow in the outline (#698) and in Implementer (#700):
+    /// the gutter beside each heading or aside caption with a disclosure in the
+    /// viewport (`FragmentGeometry.disclosureCursorRect`).
     func disclosureCursorRects() -> [CGRect] {
-      guard folding.mode == .outline, let textView, let layout = textView.textLayoutManager,
+      guard folding.mode.discloses, let textView, let layout = textView.textLayoutManager,
         let viewport = layout.textViewportLayoutController.viewportRange
       else { return [] }
       let end = layout.offset(of: viewport.endLocation)
@@ -46,11 +47,11 @@ import RFCReaderKit
     }
 
     /// The heading whose disclosure is under the pointer of `event`, in the outline
-    /// (#698): where a click there toggles. Only
-    /// in the gutter beside a heading the outline shows: a click on the heading's
-    /// text is the text view's, for its links, a selection, a double-click on a word.
+    /// (#698), or the aside caption, in Implementer (#700): where a click there
+    /// toggles. Only in the gutter beside one the mode shows: a click on its text is
+    /// the text view's, for its links, a selection, a double-click on a word.
     func disclosureHeading(under event: NSEvent) -> Int? {
-      guard folding.mode == .outline, let foldingIndex, let textView,
+      guard folding.mode.discloses, let foldingIndex, let textView,
         event.window === textView.window
       else { return nil }
       let viewPoint = textView.convert(event.locationInWindow, from: nil)
@@ -58,7 +59,7 @@ import RFCReaderKit
         x: viewPoint.x - textView.textContainerOrigin.x,
         y: viewPoint.y - textView.textContainerOrigin.y)
       guard let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-        let offset = characterOffset(atContainerPoint: gutter),
+        let offset = paragraphStart(atContainerPoint: gutter),
         folding.toggling(heading: offset, in: foldingIndex) != nil
       else { return nil }
       return offset
@@ -78,7 +79,7 @@ import RFCReaderKit
         let range = hit.text.copyButton(at: hit.offset),
         let code = hit.text.code(ofCopyButtonAt: hit.offset)
       else { return false }
-      Clipboard.copy(code)
+      Clipboard.copy(code, announcing: .code)
       showCopied(over: range)
       return true
     }
@@ -130,9 +131,6 @@ import RFCReaderKit
       feedback.addSubview(checkmark)
       feedback.alphaValue = 0
       textView.addSubview(feedback)
-      NSAccessibility.post(
-        element: textView, notification: .announcementRequested,
-        userInfo: [.announcement: "Copied"])
 
       // Faded in and out rather than switched, so the change reads as a response to
       // the click and not as a flicker.

@@ -137,7 +137,7 @@ struct RFCListView: View {
       perform: collection == nil
         ? nil
         : { offsets in offsets.map { visible[$0].id }.forEach(remove) })
-    List(selection: $navigation.selection) {
+    List(selection: $navigation.listSelection) {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
       if let acronym = workingGroupCardAcronym {
@@ -205,7 +205,7 @@ struct RFCListView: View {
         } else if isUnsearched, workingGroupCardAcronym == nil {
           // Not over a working group's card, which says what the group has.
           ContentUnavailableView(
-            "No \(library.title(for: shown.filter))",
+            shown.filter.emptyTitle(in: library.collections),
             systemImage: shown.filter.systemImage)
         } else {
           ContentUnavailableView.search(text: shown.query)
@@ -272,7 +272,7 @@ struct RFCListView: View {
     // `NavigationModel.open` resets the filter to `.all` precisely so nothing
     // hides it. Narrowing here instead would throw away a window the reader has
     // already scrolled down through.
-    .onChange(of: navigation.selection) {
+    .onChange(of: navigation.listSelection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
     #if !os(macOS)
@@ -283,7 +283,8 @@ struct RFCListView: View {
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .filterSearchable(
-        navigation: navigation, prompt: "Search \(library.title(for: navigation.filter))"
+        navigation: navigation,
+        prompt: navigation.filter.searchPrompt(in: library.collections)
       )
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {
@@ -329,7 +330,7 @@ struct RFCListView: View {
   /// A linear scan, but only on the three changes above rather than per body pass,
   /// and it compares two `Int`s per row.
   private func selectedRow() -> Int? {
-    guard let selection = navigation.selection else { return nil }
+    guard let selection = navigation.listSelection else { return nil }
     return rows.firstIndex { $0.id == selection }
   }
 }
@@ -345,9 +346,9 @@ struct ListViewOptions: View {
   @Bindable var navigation: NavigationModel
 
   #if os(macOS)
-    private let sortTitle = "Sort By"
+    private let sortTitle: LocalizedStringKey = "Sort By"
   #else
-    private let sortTitle = "Sort"
+    private let sortTitle: LocalizedStringKey = "Sort"
   #endif
 
   private var canReorder: Bool {
@@ -357,7 +358,7 @@ struct ListViewOptions: View {
   var body: some View {
     if case .collection = navigation.filter {
       Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
-        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text(verbatim: $0.title()) }
       }
     } else {
       #if os(macOS)
@@ -371,7 +372,7 @@ struct ListViewOptions: View {
 
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
-      ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
     }
   }
 }

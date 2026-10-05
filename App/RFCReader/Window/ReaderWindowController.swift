@@ -32,11 +32,8 @@
     /// inside it any more.
     let reader = ReaderState()
 
-    let splitController = ReaderSplitViewController()
-    private(set) var sidebarItem: NSSplitViewItem!
-    private(set) var listItem: NSSplitViewItem!
-    private(set) var readerItem: NSSplitViewItem!
-    private(set) var panelItem: NSSplitViewItem!
+    /// The window's columns; see `ReaderSplitViewController`.
+    private(set) var splitController: ReaderSplitViewController!
 
     /// The library this window was made with, which its toolbar reads too.
     let library: LibraryModel
@@ -55,9 +52,6 @@
     private var isExporting = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
-
-    /// How wide the contents panel is drawn. Unchanged from the overlay it replaces.
-    static let panelWidth: CGFloat = 320
 
     /// `NSWindowController.init(window:)` makes itself the window's controller, so
     /// AppKit already keeps this mapping; a registry of our own would only be a
@@ -96,75 +90,18 @@
     }
 
     private func build(in window: NSWindow) {
-      let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
-      sidebar.minimumThickness = Self.sidebarMinimum
-      sidebar.maximumThickness = 320
-      sidebarItem = sidebar
-
-      let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
-      list.minimumThickness = Self.listMinimum
-      listItem = list
-
-      // The panel's width arrives as a right safe-area inset, and honoring it
-      // would take 320 pt off the reader the moment the panel opened — which
-      // re-wraps the text, rebuilds the document and loses the reader's place.
-      // What the panel overlaps, it covers.
-      //
-      // Two layers have to refuse it, because they are two different measurements
-      // of two different things. This one is SwiftUI's: the width `DocumentView`
-      // derives its column from comes from a `GeometryReader` in this hosted root,
-      // and a root that honors the inset reports 919 pt shut and 599 pt open.
-      // Clearing `safeAreaRegions` holds it at 919 both ways — measured, with the
-      // view's own frame unchanged at 919 and the inset still arriving as 320.
-      // `ignoresSafeArea` inside `NavigationSplitView`'s detail column did not do
-      // this; on the hosted root of a split item it does (issue #34).
-      //
-      // It reaches no further down than SwiftUI, though. Underneath, AppKit hands
-      // the same inset to the scroll view, which turns it into content insets the
-      // text view tracks — 1019 → 699 pt there, separately measured. That one is
-      // `ReaderScrollView`'s to refuse.
-      let readerHost = host(ReaderHost())
-      readerHost.safeAreaRegions = []
-      let reader = NSSplitViewItem(viewController: readerHost)
-      // On the *content* item, never on the panel: this is what makes the reader's
-      // frame span the panel and hands the panel's width back as a right safe-area
-      // inset instead of taking the width away. The reader then ignores that inset
-      // in the representable, which is what keeps the text from re-wrapping.
-      reader.automaticallyAdjustsSafeAreaInsets = true
-      // Deliberately no `minimumThickness`. AppKit adds up the minimum thickness of
-      // every uncollapsed item to get the window's own minimum width, and the
-      // inspector counts even though it overlays rather than displaces — so a
-      // 420 pt floor here plus the panel's 320 grew the window from 901 to 1222 pt
-      // the moment the panel opened. Measured. The floor is the window's instead,
-      // below, where the panel is not part of the sum.
-      readerItem = reader
-
-      // The glass is the window's business, not the panel's: without this the list
-      // draws its own opaque sidebar background over the inspector and the panel
-      // stops being translucent at all. Applied here rather than inside
-      // `PanelHost`, which iOS presents in a sheet that wants its own background.
-      let panel = NSSplitViewItem(
-        inspectorWithViewController: host(PanelHost().scrollContentBackground(.hidden))
-      )
-      panel.allowsFullHeightLayout = true
-      // The window must not grow when the panel opens. By default an inspector
-      // widens the window by its own thickness to keep its siblings' widths —
-      // measured at 900 → 1222 pt, which re-wraps the text and loses the reader's
-      // place. This keeps the window fixed and lets the siblings take the change;
-      // the reader's own frame spans the panel regardless, so what it loses is
-      // covered, not removed.
-      panel.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
-      panel.minimumThickness = Self.panelWidth
-      panel.maximumThickness = Self.panelWidth
-      panel.isCollapsed = true
-      panelItem = panel
-
-      for item in [sidebar, list, reader, panel] {
-        splitController.addSplitViewItem(item)
-      }
+      splitController = ReaderSplitViewController(
+        sidebar: host(SidebarView()),
+        list: host(RFCListView()),
+        reader: host(ReaderHost()),
+        // The glass is the window's business, not the panel's: without this the list
+        // draws its own opaque sidebar background over the inspector and the panel
+        // stops being translucent at all. Applied here rather than inside
+        // `PanelHost`, which iOS presents in a sheet that wants its own background.
+        panel: host(PanelHost().scrollContentBackground(.hidden)))
 
       window.contentViewController = splitController
-      applyMinimumWidth(to: window)
+      splitController.applyMinimumWidth()
 
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
@@ -218,6 +155,9 @@
       let canDescribe = Observations { [weak self] in self?.reader.canDescribe }
       let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
       let snapshots = Observations { [weak self] in self?.sceneSnapshot }
+      let besides = Observations { [weak self] in
+        self?.reader.sideBySide.map(ObjectIdentifier.init)
+      }
       observations = [
         Task(name: "Observe window title") { [weak self] in
           for await title in titles { if let title { self?.apply(title) } }
@@ -234,6 +174,9 @@
         // AppKit asks for the window's state again only once told it changed (#155).
         Task(name: "Observe scene snapshot") { [weak self] in
           for await _ in snapshots { self?.window?.invalidateRestorableState() }
+        },
+        Task(name: "Observe side by side") { [weak self] in
+          for await _ in besides { self?.showBeside() }
         },
       ]
     }
@@ -252,6 +195,12 @@
     /// it updates on every section crossing while scrolling — and an erased root
     /// gives SwiftUI nothing to diff against.
     private func host(_ view: some View) -> NSHostingController<some View> {
+      host(view, in: environment)
+    }
+
+    private func host(_ view: some View, in environment: ReaderEnvironment)
+      -> NSHostingController<some View>
+    {
       let controller = NSHostingController(rootView: view.readerEnvironment(environment))
       // The hosted view must not size the window. By default a hosting controller
       // reports its content's preferred size, and as a split view item that reaches
@@ -265,7 +214,40 @@
     /// How wide the list column is right now. The title drawn over it is capped to
     /// this, and the column is draggable, so it is read rather than remembered.
     var listWidth: CGFloat {
-      listItem.viewController.view.frame.width
+      splitController.listWidth
+    }
+
+    // MARK: - Side by side
+
+    /// Adds the reader beside the window's own while a document is compared with
+    /// another (#187), and takes it away after.
+    ///
+    /// A fifth item rather than a second reader inside the reader's hosted root: each
+    /// reader keeps a hosted root of its own, given its own navigation and reader
+    /// state, so what the one beside reports reaches neither the toolbar nor the
+    /// panel, which stay the window's reader's. See
+    /// `docs/decisions/2026-10-04-a-document-read-beside-another-is-a-fifth-split-item.md`.
+    private func showBeside() {
+      if let reading = reader.sideBySide {
+        splitController.showBeside(
+          host(
+            BesideReader(reading: reading, main: reader, mainNavigation: navigation),
+            in: ReaderEnvironment(
+              library: library, navigation: reading.navigation, reader: reading.reader)))
+      } else {
+        splitController.closeBeside()
+      }
+      trackPanelEdge()
+    }
+
+    /// Keeps the toolbar's panel section over the contents panel, whose divider moves
+    /// along one as the reader beside is inserted in front of it or removed.
+    private func trackPanelEdge() {
+      let divider = ReaderWindowDividers.panel(comparing: splitController.isComparing)
+      for case let separator as NSTrackingSeparatorToolbarItem in window?.toolbar?.items ?? []
+      where separator.itemIdentifier == .rfcPanelSeparator {
+        separator.dividerIndex = divider
+      }
     }
 
     // MARK: - Title
@@ -338,34 +320,6 @@
     /// genuinely long ones stop before the tab's edge.
     private static let subtitleLimit = 64
 
-    private static let sidebarMinimum: CGFloat = 200
-    private static let listMinimum: CGFloat = 280
-
-    /// The narrowest the window may be: the two fixed columns plus a readable
-    /// measure. Named rather than restated, so dragging a column's floor cannot leave
-    /// the window's behind. Nothing here for the panel — deliberately.
-    private static let minimumContentWidth: CGFloat =
-      sidebarMinimum + listMinimum + ReaderLayout.minimumPaneWidth
-
-    /// Holds the window's minimum *constant* as the panel opens and closes.
-    ///
-    /// AppKit adds an uncollapsed inspector's thickness on top of `contentMinSize`,
-    /// so a fixed 900 pt minimum became 1222 the moment the panel appeared and the
-    /// window grew to meet it — which widens the pane, changes the column, rebuilds
-    /// the document and loses the reader's place, the whole chain the overlay existed
-    /// to avoid. Taking the panel's width off the minimum while it is showing leaves
-    /// the effective floor where it was, and the window never moves.
-    private func applyMinimumWidth(to window: NSWindow) {
-      let panelAllowance = panelItem.isCollapsed ? 0 : Self.panelWidth
-      window.contentMinSize = NSSize(width: Self.minimumContentWidth - panelAllowance, height: 480)
-      // A restored frame is not re-checked against the minimum, so a window saved
-      // narrower than the floor comes back narrower than the floor.
-      var frame = window.frame
-      frame.size.width = max(frame.width, window.contentMinSize.width)
-      frame.size.height = max(frame.height, window.contentMinSize.height)
-      if frame != window.frame { window.setFrame(frame, display: false) }
-    }
-
     /// Keeps the panel shut while there is nothing for it to describe: an inspector's
     /// glass over a tab with no document in it is a strip of nothing. `observe()`
     /// applies it whenever `canDescribe` changes, and `AppDelegate` from outside for
@@ -383,8 +337,13 @@
     /// second later. `AppDelegate` makes it there, which is why nothing here has to
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
-      guard !reader.canDescribe, !panelItem.isCollapsed else { return }
-      panelItem.isCollapsed = true
+      if reader.canDescribe {
+        // The panel may have been opened or shut by the tab group rather than by a
+        // toggle, so the floor follows whatever state it is in now.
+        splitController.applyMinimumWidth()
+      } else {
+        splitController.closePanel()
+      }
     }
 
     // MARK: - The sidebar
@@ -396,25 +355,10 @@
       splitController.toggleSidebar(nil)
     }
 
-    /// Slides a collapsed sidebar open and runs `then` once it is: straight away when
-    /// it already was, after the slide when it was not. A sheet has to wait for it,
-    /// because the two cannot move together. AppKit opens a sheet in a run loop of
-    /// its own (`NSSheetMoveHelper openSheet` → `NSMoveHelper _doAnimation`, sampled),
-    /// in a private mode that the split view's animation is not scheduled in, so a
-    /// slide begun beside a sheet held still for the sheet's 300 ms and only then set
-    /// out (measured: the list's leading edge at 0 pt until 0.317 s, at 200 pt by
-    /// 0.548 s).
+    /// Slides a collapsed sidebar open and runs `then` once it is; see
+    /// `ReaderSplitViewController.revealSidebar(then:)`.
     func revealSidebar(then: @escaping @MainActor @Sendable () -> Void) {
-      guard sidebarItem.isCollapsed else {
-        then()
-        return
-      }
-      NSAnimationContext.runAnimationGroup { _ in
-        sidebarItem.animator().isCollapsed = false
-      } completionHandler: {
-        // AppKit calls it on the main thread; the SDK only does not say so.
-        MainActor.assumeIsolated { then() }
-      }
+      splitController.revealSidebar(then: then)
     }
 
     /// An empty collection, from the toolbar's New Collection and File > New
@@ -429,25 +373,16 @@
 
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
-      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
-      guard let field = FirstResponderSearch.searchField(in: sidebarItem.viewController.view)
+      splitController.openSidebar()
+      guard let field = FirstResponderSearch.searchField(in: splitController.sidebarView)
       else { return }
       window?.makeFirstResponder(field)
     }
 
     // MARK: - The panel
 
-    /// Animated, so the panel slides in rather than appearing between frames — which
-    /// is what `.inspector` did for the overlay, and an ordinary `isCollapsed`
-    /// assignment does not.
     func togglePanel() {
-      NSAnimationContext.runAnimationGroup { context in
-        context.allowsImplicitAnimation = true
-        panelItem.animator().isCollapsed.toggle()
-      }
-      // Before AppKit gets a chance to enforce the old minimum against the new
-      // arrangement.
-      if let window { applyMinimumWidth(to: window) }
+      splitController.togglePanel()
     }
 
     /// A pane's toolbar button: opens the panel on that pane, swaps an open panel to
@@ -460,7 +395,7 @@
 
     /// Whether the contents panel is showing.
     var isPanelOpen: Bool {
-      !panelItem.isCollapsed
+      splitController.isPanelOpen
     }
 
     /// Opens or closes the panel, the way the toolbar's toggle does — so only over
@@ -481,10 +416,10 @@
       /// `docs/decisions/2026-09-22-window-hijack-probe-results.md`.
       func logGeometry(_ label: String) {
         guard let window else { return }
-        let readerView = readerItem.viewController.view
+        let readerView = splitController.readerView
         NSLog(
           "RFCGEOM \(label) number=\(window.windowNumber) title=\(window.title) window=\(window.frame.width) reader=\(readerView.frame.width) "
-            + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(panelItem.isCollapsed) "
+            + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(!isPanelOpen) "
             + "toolbarItems=\(window.toolbar?.items.count ?? -1)"
         )
       }
@@ -507,12 +442,14 @@
     /// Focus moves only when Find is asked for, never when the text appears.
     func focusSearchableText() {
       guard let window,
-        let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+        let text = FirstResponderSearch.searchableText(in: splitController.readerView)
       else { return }
       // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
-      // has to leave focus there.
+      // has to leave focus there. The reader beside a compared document finds in its
+      // own text (#187).
       if let focused = window.firstResponder as? NSView,
         focused.isDescendant(of: text.enclosingScrollView ?? text)
+          || splitController.besideView.map({ focused.isDescendant(of: $0) }) == true
       {
         return
       }
@@ -524,8 +461,20 @@
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
     /// the text view, not a child.
     func copyAsQuote() {
-      let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
+    /// The reader whose selection Copy as Quote copies: the one beside a compared
+    /// document (#187) when the selection in its text is the only one, or the focus is
+    /// in it; the window's own otherwise.
+    private var quotedReaderView: NSView {
+      guard let beside = splitController.besideView,
+        reader.sideBySide?.reader.hasSelection == true
+      else { return splitController.readerView }
+      let focused = window?.firstResponder as? NSView
+      if !reader.hasSelection || focused?.isDescendant(of: beside) == true { return beside }
+      return splitController.readerView
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
@@ -679,6 +628,9 @@
       // On the next turn, since the group's inspector state is copied onto a window
       // inside `makeKeyAndOrderFront(_:)`, which is still running; see
       // `closePanelWithoutDocument()`.
+      //
+      // That puts the window's floor right too: AppKit gave the window its saved
+      // frame after it was made, without checking it against the minimum.
       if correctsPanelOnFirstKey {
         correctsPanelOnFirstKey = false
         Task { [weak self] in self?.closePanelWithoutDocument() }
@@ -692,7 +644,7 @@
     /// reading should leave focus wherever the reader left it.
     private func placeInitialFocus() {
       guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
-      hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
+      hasPlacedInitialFocus = window.giveFocus(inside: splitController.listView)
     }
 
     /// Where a palette asked for while the window was minimized is shown.

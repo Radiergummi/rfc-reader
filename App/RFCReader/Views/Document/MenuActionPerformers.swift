@@ -13,7 +13,7 @@ struct DocumentActionPerformer {
 
   func perform(_ action: DocumentMenus.Action) {
     switch action.effect(for: id, metadata: metadata, section: reader.currentSection) {
-    case .copy(let text): Clipboard.copy(text)
+    case .copy(let text, let feedback): Clipboard.copy(text, announcing: feedback)
     case .open(let url): open(url)
     case .toggleOriginalText: reader.showOriginal.toggle()
     case nil: break

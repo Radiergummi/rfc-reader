@@ -27,8 +27,8 @@ struct ConditionalIndexFetchTests {
 
     func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
       lock.withLock { sent = request }
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
+      let response = HTTPURLResponse.served(
+        from: request.url!, statusCode: status, headerFields: headers)
       return (status == 200 ? Data("<rfc-index/>".utf8) : Data(), response)
     }
   }

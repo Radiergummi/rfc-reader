@@ -134,9 +134,17 @@ extension LegacyTextParser {
     byte == 0x20 || (0x09...0x0D).contains(byte)
   }
 
-  static func blocks(from rawBlocks: [RawBlock], proseIndent: Int, linker: InlineLinker)
-    -> [Block]
-  {
+  /// What every block of a document is classified against: the document's prose cap,
+  /// and the linker its references and section numbers made. Built once, in `parse`,
+  /// once the bibliographies are settled; segmentation runs before it exists, and reads
+  /// the `Prelude` instead.
+  struct ParseContext {
+    /// The document's prose cap, `proseIndent(_:)`.
+    let proseIndent: Int
+    let linker: InlineLinker
+  }
+
+  static func blocks(from rawBlocks: [RawBlock], in context: ParseContext) -> [Block] {
     // Re-join paragraphs that a page break cut in half.
     var merged: [RawBlock] = []
     // The column the lines of the hanging-indent definition above hang in, while
@@ -146,7 +154,7 @@ extension LegacyTextParser {
     while index < rawBlocks.count {
       var block = rawBlocks[index]
       while block.followedByPageBreak, index + 1 < rawBlocks.count,
-        shouldJoinAcrossPage(block, rawBlocks[index + 1], proseIndent: proseIndent)
+        shouldJoinAcrossPage(block, rawBlocks[index + 1], in: context)
           || continuesDefinitionAcrossPage(block, rawBlocks[index + 1], hangColumn: hangColumn)
       {
         block.lines += rawBlocks[index + 1].lines
@@ -193,7 +201,7 @@ extension LegacyTextParser {
       openDefinitions = nil
       loneDefinitions = nil
       if let definitions = definitionsAbove, marker == nil,
-        attachContinuation(block, toDefinitions: definitions, in: &result, linker: linker)
+        attachContinuation(block, toDefinitions: definitions, in: &result, context: context)
       {
         openDefinitions = definitions
         continue
@@ -212,7 +220,7 @@ extension LegacyTextParser {
         let continuationColumn = hanging.continuationColumn
           ?? definitionsAbove.flatMap({ $0.indent == hanging.indent ? $0.continuationColumn : nil })
       {
-        var items = definitionItems(hanging.entries, linker: linker)
+        var items = definitionItems(hanging.entries, in: context)
         if definitionsAbove?.indent == hanging.indent,
           case .definitionList(var previous)? = result.last
         {
@@ -221,7 +229,7 @@ extension LegacyTextParser {
         } else {
           if let lone = loneAbove, lone.definitions.indent == hanging.indent {
             result.removeLast(lone.blocks)
-            items = definitionItems(lone.definitions.entries, linker: linker) + items
+            items = definitionItems(lone.definitions.entries, in: context) + items
           }
           result.append(.definitionList(DefinitionList(items)))
         }
@@ -232,19 +240,17 @@ extension LegacyTextParser {
       }
       let countBefore = result.count
       if let indent = openListIndent,
-        attachContinuation(block, toListAt: indent, marker: marker, in: &result, linker: linker)
+        attachContinuation(block, toListAt: indent, marker: marker, in: &result, context: context)
       {
         continue
       }
       if let catalog = openCatalog,
         attachContinuation(
-          block, toCatalog: catalog, marker: marker, in: &result, linker: linker)
+          block, toCatalog: catalog, marker: marker, in: &result, context: context)
       {
         continue
       }
-      for parsed in classify(
-        block, marker: marker, catalogEntries: entries, proseIndent: proseIndent, linker: linker)
-      {
+      for parsed in classify(block, marker: marker, catalogEntries: entries, in: context) {
         // Merge adjacent list blocks of the same style into one list, and adjacent
         // catalog blocks into one catalog: RFC 1012 sets a blank line between
         // every entry, so each arrives as a block of its own. A numbered block
@@ -326,12 +332,12 @@ extension LegacyTextParser {
   /// paragraph, both linked: a term cites a document as prose does (`RFC 2119:`), and
   /// the XML parser links it when it reads the conversion back (#683).
   static func definitionItems(
-    _ entries: [(term: String, text: String)], linker: InlineLinker
+    _ entries: [(term: String, text: String)], in context: ParseContext
   ) -> [DefinitionItem] {
     entries.map { entry in
       DefinitionItem(
-        term: linker.link(entry.term),
-        definition: [.paragraph(Paragraph(linker.link(entry.text)))])
+        term: context.linker.link(entry.term),
+        definition: [.paragraph(Paragraph(context.linker.link(entry.text)))])
     }
   }
 
@@ -343,12 +349,12 @@ extension LegacyTextParser {
     _ block: RawBlock,
     toDefinitions definitions: (indent: Int, continuationColumn: Int),
     in result: inout [Block],
-    linker: InlineLinker
+    context: ParseContext
   ) -> Bool {
     guard continuesHangingDefinition(block.lines, column: definitions.continuationColumn) else {
       return false
     }
-    return appendToLastDefinition(block.lines, in: &result, linker: linker)
+    return appendToLastDefinition(block.lines, in: &result, context: context)
   }
 
   /// A paragraph indented past a catalog entry's number and carrying no marker of
@@ -369,24 +375,24 @@ extension LegacyTextParser {
     toCatalog catalog: (indent: Int, textColumn: Int),
     marker: ListMarker?,
     in result: inout [Block],
-    linker: InlineLinker
+    context: ParseContext
   ) -> Bool {
     guard marker == nil,
       continuesCatalogEntry(
         block.lines, numberIndent: catalog.indent, textColumn: catalog.textColumn)
     else { return false }
-    return appendToLastDefinition(block.lines, in: &result, linker: linker)
+    return appendToLastDefinition(block.lines, in: &result, context: context)
   }
 
   /// `lines` as the next paragraph of the last definition in the list `result`
   /// ends with. False when `result` ends with no list.
   private static func appendToLastDefinition(
-    _ lines: [String], in result: inout [Block], linker: InlineLinker
+    _ lines: [String], in result: inout [Block], context: ParseContext
   ) -> Bool {
     guard case .definitionList(var list)? = result.last, var item = list.items.last else {
       return false
     }
-    let inlines = linker.link(joinWrappedLines(lines))
+    let inlines = context.linker.link(joinWrappedLines(lines))
     guard !inlines.isEmpty else { return false }
     item.definition.append(.paragraph(Paragraph(inlines)))
     list.items[list.items.count - 1] = item
@@ -451,7 +457,7 @@ extension LegacyTextParser {
     toListAt markerIndent: Int,
     marker: ListMarker?,
     in result: inout [Block],
-    linker: InlineLinker
+    context: ParseContext
   ) -> Bool {
     guard case .list(var list)? = result.last, var item = list.items.last else { return false }
     guard block.indent > markerIndent, marker == nil else { return false }
@@ -468,7 +474,7 @@ extension LegacyTextParser {
     // module's text (#55), under an item as anywhere; the sentence share it asks
     // there too has already passed above.
     guard looksLikeProse(block.lines, maxIndent: .max) else { return false }
-    let inlines = linker.link(joinWrappedLines(block.lines))
+    let inlines = context.linker.link(joinWrappedLines(block.lines))
     guard !inlines.isEmpty else { return false }
     item.blocks.append(.paragraph(Paragraph(inlines)))
     list.items[list.items.count - 1] = item
@@ -483,7 +489,7 @@ extension LegacyTextParser {
   /// attachment needs the column, and two copies of "does this line open an item"
   /// drift: a third marker shape added to one of them would leave the other blind
   /// to it, and lists of that shape would quietly lose their second paragraphs.
-  /// `blocks(from:proseIndent:linker:)` asks once per block and hands the answer down.
+  /// `blocks(from:in:)` asks once per block and hands the answer down.
   static func listMarker(of lines: [String]) -> ListMarker? {
     guard let first = lines.first else { return nil }
     // Both patterns want one of these in the first column that is not a space, and
@@ -506,11 +512,11 @@ extension LegacyTextParser {
     return nil
   }
 
-  static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock, proseIndent: Int)
-    -> Bool
-  {
-    guard looksLikeProse(first.lines, maxIndent: proseIndent),
-      looksLikeProse(second.lines, maxIndent: proseIndent)
+  static func shouldJoinAcrossPage(
+    _ first: RawBlock, _ second: RawBlock, in context: ParseContext
+  ) -> Bool {
+    guard looksLikeProse(first.lines, maxIndent: context.proseIndent),
+      looksLikeProse(second.lines, maxIndent: context.proseIndent)
     else { return false }
     guard first.indent == second.indent else { return false }
     let lastLine = first.lines.last?.trimmingCharacters(in: .whitespaces) ?? ""
@@ -782,13 +788,13 @@ extension LegacyTextParser {
 
   private static func classify(
     _ block: RawBlock, marker: ListMarker?, catalogEntries: [(term: String, text: String)]?,
-    proseIndent: Int, linker: InlineLinker
+    in context: ParseContext
   ) -> [Block] {
     let lines = block.lines
     guard !lines.isEmpty else { return [] }
 
     // Lists: the first line carries a marker and every further item shares its indent.
-    if let list = parseList(lines, marker: marker, linker: linker) {
+    if let list = parseList(lines, marker: marker, in: context) {
       return [.list(list)]
     }
 
@@ -801,12 +807,12 @@ extension LegacyTextParser {
       return [
         .definitionList(
           DefinitionList(
-            definitionItems(entries, linker: linker), isCompact: true, hangsTerms: true))
+            definitionItems(entries, in: context), isCompact: true, hangsTerms: true))
       ]
     }
 
-    if looksLikeProse(lines, maxIndent: proseIndent) {
-      let inlines = linker.link(Self.joinWrappedLines(lines))
+    if looksLikeProse(lines, maxIndent: context.proseIndent) {
+      let inlines = context.linker.link(Self.joinWrappedLines(lines))
       return inlines.isEmpty ? [] : [.paragraph(Paragraph(inlines))]
     }
 
@@ -987,7 +993,7 @@ extension LegacyTextParser {
     return line.distance(from: line.startIndex, to: match.text.startIndex)
   }
 
-  private static func parseList(_ lines: [String], marker: ListMarker?, linker: InlineLinker)
+  private static func parseList(_ lines: [String], marker: ListMarker?, in context: ParseContext)
     -> ListBlock?
   {
     guard let (style, items) = listItems(lines, marker: marker) else { return nil }
@@ -998,7 +1004,7 @@ extension LegacyTextParser {
       } else if let match = text.firstMatch(of: numberedItemPattern) {
         text = String(match.text)
       }
-      return ListItem(blocks: [.paragraph(Paragraph(linker.link(text)))])
+      return ListItem(blocks: [.paragraph(Paragraph(context.linker.link(text)))])
     }
     return ListBlock(style: style, items: listItems)
   }

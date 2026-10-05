@@ -43,16 +43,34 @@ struct LibraryFilterTests {
   @Test func `a collection is titled by its name in the snapshot`() {
     let entry = CollectionSnapshot.Entry(id: UUID(), name: "HTTP/3", color: .blue, members: [])
     let snapshot = CollectionSnapshot(collections: [entry])
-    #expect(LibraryFilter.collection(entry.id).title(in: snapshot) == "HTTP/3")
-    #expect(LibraryFilter.collection(UUID()).title(in: snapshot) == "")
+    #expect(LibraryFilter.collection(entry.id).title(in: snapshot, locale: .english) == "HTTP/3")
+    #expect(LibraryFilter.collection(UUID()).title(in: snapshot, locale: .english) == "")
   }
 
   /// Every other filter's title is its own, whatever collections there are.
   @Test func `a built-in filter's title does not depend on the collections`() {
     let entry = CollectionSnapshot.Entry(id: UUID(), name: "Bookmarks", color: .red, members: [])
     let snapshot = CollectionSnapshot(collections: [entry])
-    #expect(LibraryFilter.bookmarks.title(in: snapshot) == "Bookmarks")
-    #expect(LibraryFilter.all.title(in: snapshot) == "All RFCs")
-    #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty) == "HTTPBIS")
+    #expect(LibraryFilter.bookmarks.title(in: snapshot, locale: .english) == "Bookmarks")
+    #expect(LibraryFilter.all.title(in: snapshot, locale: .english) == "All RFCs")
+    #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty, locale: .english) == "HTTPBIS")
+  }
+
+  /// Each built-in list says it is empty in words of its own, so a language need
+  /// not fit "No" before a title that is a noun in one list and a phrase in another.
+  @Test func `an empty list says so in its own words`() {
+    #expect(LibraryFilter.bookmarks.emptyTitle(in: .empty, locale: .english) == "No Bookmarks")
+    #expect(
+      LibraryFilter.recent.emptyTitle(in: .empty, locale: .english) == "Nothing Read Recently")
+    #expect(
+      LibraryFilter.workingGroup("httpbis").emptyTitle(in: .empty, locale: .english)
+        == "No RFCs in HTTPBIS")
+  }
+
+  @Test func `a list's search field names the list`() {
+    #expect(LibraryFilter.all.searchPrompt(in: .empty, locale: .english) == "Search All RFCs")
+    #expect(
+      LibraryFilter.workingGroup("httpbis").searchPrompt(in: .empty, locale: .english)
+        == "Search HTTPBIS")
   }
 }

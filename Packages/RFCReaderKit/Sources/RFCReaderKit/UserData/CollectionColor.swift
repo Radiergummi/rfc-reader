@@ -16,17 +16,17 @@ public enum CollectionColor: String, CaseIterable, Sendable, Identifiable {
 
   public var id: Self { self }
 
-  public var title: String {
+  public func title(in locale: Locale = .interface) -> String {
     switch self {
-    case .blue: "Blue"
-    case .green: "Green"
-    case .orange: "Orange"
-    case .red: "Red"
-    case .purple: "Purple"
-    case .pink: "Pink"
-    case .teal: "Teal"
-    case .yellow: "Yellow"
-    case .gray: "Gray"
+    case .blue: String(kit: "Blue", locale: locale)
+    case .green: String(kit: "Green", locale: locale)
+    case .orange: String(kit: "Orange", locale: locale)
+    case .red: String(kit: "Red", locale: locale)
+    case .purple: String(kit: "Purple", locale: locale)
+    case .pink: String(kit: "Pink", locale: locale)
+    case .teal: String(kit: "Teal", locale: locale)
+    case .yellow: String(kit: "Yellow", locale: locale)
+    case .gray: String(kit: "Gray", locale: locale)
     }
   }
 }

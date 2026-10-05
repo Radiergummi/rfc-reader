@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// The documents to read before a document, in the order to read them (#189): the
@@ -153,8 +154,8 @@ extension ReadingPath {
   public var documents: [DocumentID] { assumed + steps.map(\.document) }
 
   /// The sheet's title for the path from `root`.
-  public static func title(for root: DocumentID) -> String {
-    "Reading Path: \(root.displayName)"
+  public static func title(for root: DocumentID, locale: Locale = .interface) -> String {
+    String(kit: "Reading Path: \(root.displayName)", locale: locale)
   }
 
   /// The name of the collection the path is saved as: the sheet's title.

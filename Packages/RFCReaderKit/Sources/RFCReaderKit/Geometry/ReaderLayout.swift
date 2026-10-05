@@ -25,6 +25,46 @@ public enum ReaderLayout {
   /// three columns showing.
   public static let minimumPaneWidth: CGFloat = 420
 
+  /// The narrowest the Mac's sidebar and list columns may be dragged to.
+  public static let sidebarMinimum: CGFloat = 200
+  public static let listMinimum: CGFloat = 280
+  /// How wide the Mac's contents panel is drawn, and the most and least it can be.
+  public static let panelWidth: CGFloat = 320
+
+  /// The narrowest the Mac's window may be: the two fixed columns plus a readable
+  /// pane, so dragging a column's floor cannot leave the window's behind.
+  ///
+  /// Less the panel's width while it shows. AppKit adds an open inspector's thickness
+  /// on top of `contentMinSize`, so a fixed 900 pt minimum became 1222 the moment the
+  /// panel appeared and the window grew to meet it — which widens the pane, changes
+  /// the column, rebuilds the document and loses the reader's place. Taken off, the
+  /// floor AppKit enforces is the same open or shut, and the window never moves.
+  ///
+  /// While two documents are compared (#187), two readable panes and nothing else:
+  /// the sidebar and the list are collapsed then (`ColumnSetAside`), so the window
+  /// fits a 1280 pt screen, half of a wider one, or full screen.
+  public static func minimumWindowWidth(panelIsOpen: Bool, comparing: Bool) -> CGFloat {
+    let columns =
+      comparing ? 2 * minimumPaneWidth : sidebarMinimum + listMinimum + minimumPaneWidth
+    return columns - (panelIsOpen ? panelWidth : 0)
+  }
+
+  /// The shortest the Mac's window may be.
+  public static let minimumWindowHeight: CGFloat = 480
+
+  /// `size`, grown to the window's floor where it falls short of it. AppKit checks a
+  /// window the user drags against its minimum, but not a frame it restores, so a
+  /// window saved narrower than the floor comes back narrower unless widened.
+  ///
+  /// The floor is the one with the panel shut whether it is open or not: that is
+  /// what AppKit enforces either way, an open panel's width being added back on top
+  /// of `minimumWindowWidth(panelIsOpen: true, comparing:)`.
+  public static func windowSize(fitting size: CGSize, comparing: Bool) -> CGSize {
+    CGSize(
+      width: max(size.width, minimumWindowWidth(panelIsOpen: false, comparing: comparing)),
+      height: max(size.height, minimumWindowHeight))
+  }
+
   /// Both the build and the text view's inset ask this, with the same two inputs;
   /// the column is only ever what the gutters leave, so the two cannot drift.
   public static func gutter(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {

@@ -141,7 +141,10 @@ private final class Reader: XMLEvents {
       case "obsoleted-by": entry.obsoletedBy.append(id)
       case "updates": entry.updates.append(id)
       case "updated-by": entry.updatedBy.append(id)
-      default: entry.docID = id
+      // The entry's own number. Under any other parent, such as the schema's
+      // `<see-also>`, it names another document (#757).
+      case "rfc-entry", "bcp-entry", "std-entry", "fyi-entry": entry.docID = id
+      default: break
       }
     case "title":
       if parent == "author" {
