@@ -141,8 +141,10 @@
       return LinkMenu.adapting(menu, copyLink: copyLink, adding: added)
     }
 
-    private func item(_ title: String, _ action: Selector, _ value: Any) -> NSMenuItem {
-      let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+    private func item(
+      _ title: String.LocalizationValue, _ action: Selector, _ value: Any
+    ) -> NSMenuItem {
+      let item = NSMenuItem(title: String(localized: title), action: action, keyEquivalent: "")
       item.target = self
       item.representedObject = value
       return item

@@ -247,6 +247,9 @@
     "Copy Figure" : {
 
     },
+    "Copy Link" : {
+
+    },
     "Copy as Quote" : {
 
     },
@@ -529,6 +532,9 @@
     "Open Section" : {
 
     },
+    "Open in New Tab" : {
+
+    },
     "Open in New Window" : {
 
     },
@@ -563,6 +569,9 @@
 
     },
     "Pick an RFC" : {
+
+    },
+    "Preview" : {
 
     },
     "Previous Section" : {
