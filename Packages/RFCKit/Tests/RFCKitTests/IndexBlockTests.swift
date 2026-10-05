@@ -146,6 +146,11 @@ struct IndexBlockTests {
       of: "<dt>gadget</dt><dd><t>", with: "<dt>gadget</dt><dd><t>see also ")
     #expect(withWords != Self.preppedXML)
     #expect(try Self.readIndex(withWords) == nil, "words between locators are not separators")
+    let wordsInPrimary = Self.preppedXML.replacingOccurrences(
+      of: "<strong><em><xref target=\"notation\"", with: "<strong>see <em><xref target=\"notation\""
+    )
+    #expect(wordsInPrimary != Self.preppedXML)
+    #expect(try Self.readIndex(wordsInPrimary) == nil, "words in a primary locator are not one")
     let secondList = Self.preppedXML.replacingOccurrences(
       of: "</dl></dd>\n        <dt>Grammar</dt>",
       with: "</dl><dl><dt>lid</dt><dd/></dl></dd>\n        <dt>Grammar</dt>")

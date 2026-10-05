@@ -454,8 +454,11 @@ public enum RFCXMLParser {
             locators.append(
               IndexBlock.Locator(reference: parseCrossReference(element), isPrimary: false))
           case "strong":
+            let emphases = element.elements.filter { $0.name == "em" }
             let references = element.elements.flatMap { $0.name == "em" ? $0.elements : [$0] }
-            guard !references.isEmpty, references.allSatisfy({ $0.name == "xref" }) else {
+            guard !references.isEmpty, references.allSatisfy({ $0.name == "xref" }),
+              ([element] + emphases).allSatisfy(Self.holdsOnlySeparators)
+            else {
               return nil
             }
             locators += references.map {
@@ -469,8 +472,9 @@ public enum RFCXMLParser {
       return locators
     }
 
-    /// Whether the text directly in `paragraph` is only what separates locators: a
-    /// semicolon or a comma, and white space.
+    /// Whether the text directly in `paragraph`, or in the emphasis around a primary
+    /// locator, is only what separates locators: a semicolon or a comma, and white
+    /// space.
     private static func holdsOnlySeparators(_ paragraph: XMLTree.Element) -> Bool {
       paragraph.children.allSatisfy { node in
         guard case .text(let text) = node else { return true }
