@@ -62,6 +62,8 @@ import SwiftUI
         // here it would bound the reader and its panel together, which is how the
         // contents panel came to leave the text 190 pt wide.
         if let selection = navigation.selection {
+          // A document compared with another reads beside it inside `DocumentView`,
+          // under its chrome (#187).
           DocumentView(id: selection)
             .id(selection)
         } else {

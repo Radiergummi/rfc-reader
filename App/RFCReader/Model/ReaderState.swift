@@ -92,6 +92,29 @@ final class ReaderState {
   /// without one, as Copy is (#186). Reported by the text view's coordinator.
   var hasSelection = false
 
+  /// A document read beside this one, scrolling with it (#187); nil when it is
+  /// read alone. Only the window's own reader has one: the reader beside it is
+  /// `SideBySide`'s, and has only the coupling.
+  var sideBySide: SideBySide?
+  /// The side-by-side reading this reader scrolls in, whichever side it is.
+  var coupling: ScrollCoupling?
+
+  /// Opens `other` beside the document read, if one of the two obsoletes the other.
+  func compare(_ metadata: RFCMetadata, with other: DocumentID, library: LibraryModel) {
+    guard let pair = SideBySidePair(reading: metadata, with: other) else { return }
+    guard sideBySide?.pair != pair else { return }
+    let reading = SideBySide(pair, library: library)
+    sideBySide = reading
+    coupling = reading.coupling
+    reading.align(library: library)
+  }
+
+  /// Closes the document beside, and reads this one alone again.
+  func endComparison() {
+    sideBySide = nil
+    coupling = nil
+  }
+
   /// The title the document gives itself, for the one caller the index cannot
   /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
   /// Here for the same reason `currentSection` is — the toolbar needs one string
@@ -183,7 +206,8 @@ final class ReaderState {
   @ObservationIgnored var openPanel: () -> Void = {}
 
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
-  /// (`DocumentTextBuilder.referenceScheme`).
+  /// (`DocumentTextBuilder.referenceScheme`). The reader beside a compared document
+  /// has no panel, and `BesideReader` shows the entry in a popover instead (#187).
   func reveal(reference anchor: String) {
     pane = .navigation
     tab = .references

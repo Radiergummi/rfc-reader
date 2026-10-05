@@ -81,7 +81,8 @@ struct DocumentCommands: Commands {
         }
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(
-          !showsDocument || reader?.showOriginal == true || reader?.hasSelection != true)
+          !showsDocument || reader?.showOriginal == true
+            || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
       #endif
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the
@@ -162,6 +163,12 @@ struct DocumentCommands: Commands {
             .disabled(!showsDocument)
           FocusSteps(reader: reader)
             .disabled(!showsDocument)
+        }
+        // View ▸ Compare Side by Side (#187), beside the other ways of reading it.
+        if let controller = active.controller, let reader,
+          let document = controller.navigation.selection, showsDocument
+        {
+          CompareItems(id: document, library: controller.library, reader: reader)
         }
       #endif
     }

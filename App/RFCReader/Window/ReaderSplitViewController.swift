@@ -3,8 +3,9 @@
   import RFCReaderKit
   import SwiftUI
 
-  /// The window's four columns, sidebar, list, reader and contents panel, and the
-  /// rules that keep the reader's text where it is as they open and close.
+  /// The window's four columns, sidebar, list, reader and contents panel, the reader
+  /// beside the window's own while two documents are compared (#187), and the rules
+  /// that keep the reader's text where it is as they open and close.
   ///
   /// `ReaderWindowController` hands it the four hosted roots and asks it to open and
   /// close things; how the items are set up, when the panel is collapsed and how wide
@@ -19,6 +20,12 @@
     private let listItem: NSSplitViewItem
     private let readerItem: NSSplitViewItem
     private let panelItem: NSSplitViewItem
+    /// The reader opened beside the window's own (#187): a fifth item, between the
+    /// reader and the panel, only while the two are compared.
+    private var besideItem: NSSplitViewItem?
+    /// The sidebar and the list as they were before a comparison collapsed them, to
+    /// be put back when it ends; nil while not comparing.
+    private var setAside: (sidebar: ColumnSetAside, list: ColumnSetAside)?
 
     init(
       sidebar: NSViewController, list: NSViewController, reader: NSHostingController<some View>,
@@ -97,6 +104,7 @@
     var sidebarView: NSView { sidebarItem.viewController.view }
     var listView: NSView { listItem.viewController.view }
     var readerView: NSView { readerItem.viewController.view }
+    var besideView: NSView? { besideItem?.viewController.view }
 
     /// How wide the list column is right now. The title drawn over it is capped to
     /// this, and the column is draggable, so it is read rather than remembered.
@@ -157,19 +165,81 @@
       applyMinimumWidth()
     }
 
+    // MARK: - The reader beside
+
+    var isComparing: Bool { besideItem != nil }
+
+    /// Puts `beside` after the reader, in place of any reader beside it already, and
+    /// collapses the sidebar and the list, so the two readers have the window and its
+    /// floor is theirs alone (`ReaderLayout.minimumWindowWidth(panelIsOpen:comparing:)`).
+    func showBeside(_ beside: NSHostingController<some View>) {
+      removeBeside()
+      if setAside == nil {
+        setAside = (
+          ColumnSetAside(wasCollapsed: sidebarItem.isCollapsed),
+          ColumnSetAside(wasCollapsed: listItem.isCollapsed)
+        )
+        sidebarItem.isCollapsed = true
+        listItem.isCollapsed = true
+      }
+      // As the reader's own, and for the same reason: the panel opens over this item
+      // now, and its width must not re-wrap the text. `ReaderScrollView` refuses
+      // the scroll view's half of it, as it does for the reader.
+      beside.safeAreaRegions = []
+      let item = NSSplitViewItem(viewController: beside)
+      item.automaticallyAdjustsSafeAreaInsets = true
+      guard let readerIndex = splitViewItems.firstIndex(of: readerItem) else { return }
+      insertSplitViewItem(item, at: readerIndex + 1)
+      besideItem = item
+      applyMinimumWidth()
+      // Inserted with no width of its own, the reader beside is left with none, and
+      // the reader keeps what the sidebar and the list gave up: the two halve it.
+      // Measured in the split view: each item's view sits in a container of its own.
+      splitView.layoutSubtreeIfNeeded()
+      let reader = readerView.convert(readerView.bounds, to: splitView)
+      let besideFrame = beside.view.convert(beside.view.bounds, to: splitView)
+      splitView.setPosition(
+        ReaderWindowDividers.besidePosition(
+          readerStart: reader.minX, besideEnd: max(reader.maxX, besideFrame.maxX),
+          dividerThickness: splitView.dividerThickness),
+        ofDividerAt: readerIndex)
+    }
+
+    /// Takes the reader beside away, puts the sidebar and the list back as they were,
+    /// unless the reader opened either meanwhile, and the window's floor back to one
+    /// reader's.
+    func closeBeside() {
+      removeBeside()
+      if let setAside {
+        sidebarItem.isCollapsed = setAside.sidebar.isCollapsedAfterComparing(
+          isCollapsedNow: sidebarItem.isCollapsed)
+        listItem.isCollapsed = setAside.list.isCollapsedAfterComparing(
+          isCollapsedNow: listItem.isCollapsed)
+        self.setAside = nil
+      }
+      applyMinimumWidth()
+    }
+
+    private func removeBeside() {
+      if let item = besideItem {
+        removeSplitViewItem(item)
+        besideItem = nil
+      }
+    }
+
     // MARK: - The window's width
 
     /// Holds the window's minimum *constant* as the panel opens and closes
-    /// (`ReaderLayout.minimumWindowWidth(panelIsOpen:)`), and widens a window that is
+    /// (`ReaderLayout.minimumWindowWidth(panelIsOpen:comparing:)`), and widens a window that is
     /// narrower than it. Called again once a saved frame has been put back, which
-    /// AppKit does not check against the minimum (`ReaderLayout.windowSize(fitting:)`).
+    /// AppKit does not check against the minimum (`ReaderLayout.windowSize(fitting:comparing:)`).
     func applyMinimumWidth() {
       guard let window = view.window else { return }
       window.contentMinSize = NSSize(
-        width: ReaderLayout.minimumWindowWidth(panelIsOpen: isPanelOpen),
+        width: ReaderLayout.minimumWindowWidth(panelIsOpen: isPanelOpen, comparing: isComparing),
         height: ReaderLayout.minimumWindowHeight)
       var frame = window.frame
-      frame.size = ReaderLayout.windowSize(fitting: frame.size)
+      frame.size = ReaderLayout.windowSize(fitting: frame.size, comparing: isComparing)
       if frame != window.frame { window.setFrame(frame, display: false) }
     }
   }

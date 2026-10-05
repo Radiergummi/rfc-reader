@@ -91,9 +91,11 @@ final class NavigationModel: Identifiable {
   /// from on entering a filter.
   @ObservationIgnored private let library: LibraryModel
 
-  init(library: LibraryModel) {
+  /// `listsDocuments` false for a navigation that shows no list: the reader beside a
+  /// compared document (#187), which would otherwise list the library for nothing.
+  init(library: LibraryModel, listsDocuments: Bool = true) {
     self.library = library
-    followListInputs()
+    if listsDocuments { followListInputs() }
   }
 
   isolated deinit {
