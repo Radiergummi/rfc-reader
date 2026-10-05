@@ -87,8 +87,55 @@ public enum ContentsOutline {
       depth: section.depth, isContext: isContext)
   }
 
-  /// Filled in by Task 3.
+  /// The matches by title, under `A` to `Z` and then `#`. Equal titles keep the
+  /// document's order.
   private static func alphabetically(_ sections: [Section], matching text: String) -> [Group] {
-    []
+    let keyed = sections.filter { matches($0, text) }.map { section in
+      let key = sortKey(section)
+      return (key: key, label: groupLabel(key), section: section)
+    }
+    // `sorted` is not documented as stable, so the document's order is the last
+    // comparison.
+    let sorted = keyed.enumerated().sorted { first, second in
+      let (a, b) = (first.element, second.element)
+      if (a.label == "#") != (b.label == "#") { return b.label == "#" }
+      let order = a.key.compare(
+        b.key, options: [.caseInsensitive, .diacriticInsensitive, .numeric])
+      return order == .orderedSame ? first.offset < second.offset : order == .orderedAscending
+    }.map(\.element)
+    var groups: [(label: String, rows: [Row])] = []
+    for item in sorted {
+      let row = alphabeticalRow(item.section)
+      if groups.last?.label == item.label {
+        groups[groups.count - 1].rows.append(row)
+      } else {
+        groups.append((item.label, [row]))
+      }
+    }
+    return groups.map { Group(label: $0.label, rows: $0.rows) }
+  }
+
+  private static func alphabeticalRow(_ section: Section) -> Row {
+    let hasWords = !section.titleText.isEmpty
+    let caption = section.number.map { section.isAppendix ? "Appendix \($0)" : $0 }
+    return Row(
+      anchor: section.anchor, title: hasWords ? section.titleText : section.displayTitle,
+      caption: hasWords ? caption : nil, depth: 1, isContext: false)
+  }
+
+  /// What a section sorts by: its title from its first letter or digit, or, with no
+  /// words in it, the number it is shown by.
+  private static func sortKey(_ section: Section) -> String {
+    let title = section.titleText.drop { !$0.isLetter && !$0.isNumber }
+    return title.isEmpty ? section.displayTitle : String(title)
+  }
+
+  /// `A` to `Z` for a key that starts with a Latin letter, diacritics folded, and `#`
+  /// for anything else.
+  private static func groupLabel(_ key: String) -> String {
+    let first = key.prefix(1)
+      .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+      .uppercased()
+    return first.count == 1 && ("A"..."Z").contains(first) ? first : "#"
   }
 }
