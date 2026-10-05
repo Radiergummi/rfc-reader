@@ -251,6 +251,9 @@ struct ReaderInputs {
       (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
         context.coordinator.foldingDelegate
       textView.delegate = context.coordinator
+      textView.typeSelect = { [weak coordinator = context.coordinator] characters, time in
+        coordinator?.typeSelect(characters, at: time) ?? false
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
@@ -363,6 +366,9 @@ struct ReaderInputs {
       }
       textView.disclosureCursorRects = { [weak coordinator = context.coordinator] in
         coordinator?.disclosureCursorRects() ?? []
+      }
+      textView.typeSelect = { [weak coordinator = context.coordinator] characters, time in
+        coordinator?.typeSelect(characters, at: time) ?? false
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)

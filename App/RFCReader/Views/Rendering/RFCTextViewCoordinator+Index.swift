@@ -104,3 +104,45 @@ extension RFCTextViewCoordinator {
     reportVisibleAnchor()
   }
 }
+
+extension RFCTextViewCoordinator {
+  /// Characters typed to the reader while its index shows: the entry they select is
+  /// scrolled into view and flashed. Answers whether they were type-select's; when
+  /// not, the key does what it did before (a space pages).
+  func typeSelect(_ characters: String, at time: TimeInterval) -> Bool {
+    guard commitsOnClick == nil, indexOverlay.isShowing, let built, let textView else {
+      return false
+    }
+    guard indexOverlay.typeSelect.type(characters, at: time) else { return false }
+    guard let entry = indexOverlay.typeSelect.match(in: indexOverlay.keys) else { return true }
+    let range = built.indexMap.entries[entry].termRange
+    textView.scrollRangeToVisible(range)
+    #if canImport(UIKit)
+      flash(range, in: textView)
+    #else
+      textView.showFindIndicator(for: range)
+    #endif
+    return true
+  }
+
+  #if canImport(UIKit)
+    /// A highlight over `range` that fades, as the Mac's find indicator bounces.
+    private func flash(_ range: NSRange, in textView: UITextView) {
+      guard
+        let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+        let end = textView.position(from: start, offset: range.length),
+        let textRange = textView.textRange(from: start, to: end)
+      else { return }
+      let highlight = UIView(frame: textView.firstRect(for: textRange).insetBy(dx: -3, dy: -2))
+      highlight.backgroundColor = RFCColors.accent.withAlphaComponent(0.3)
+      highlight.layer.cornerRadius = 4
+      highlight.isUserInteractionEnabled = false
+      textView.addSubview(highlight)
+      UIView.animate(withDuration: 0.6, delay: 0.3, options: []) {
+        highlight.alpha = 0
+      } completion: { _ in
+        highlight.removeFromSuperview()
+      }
+    }
+  #endif
+}
