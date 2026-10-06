@@ -67,12 +67,13 @@ fmt:
 	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
-# RFCReaderKit only on a Mac; elsewhere it cannot build.
+# RFCReaderKit and the benchmarks only on a Mac; elsewhere they cannot build.
 build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
 	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
+	$(MAKE) build-benchmarks
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -147,9 +148,9 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 ## Build the benchmarks without running them
-# What CI runs, so an API change in RFCKit or RFCReaderKit that breaks them fails
-# there rather than when someone next wants a baseline (#419). Debug: it checks
-# that they compile, not how fast.
+# Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
+# in RFCKit or RFCReaderKit that breaks them fails there rather than when someone
+# next wants a baseline (#419). Debug: it checks that they compile, not how fast.
 build-benchmarks:
 	swift build --package-path $(BENCHMARKS)
 
