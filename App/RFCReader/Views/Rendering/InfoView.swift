@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import os
 
 /// The Info pane (#25): what the index knows about the document, from
 /// `DocumentInfo`, and whether it is kept offline.
@@ -404,6 +405,9 @@ private struct LinkRow: View {
           try await library.saveToDownloads(document, format: format)
           outcome = .done
         } catch {
+          readerLog.error(
+            "\(document.displayName, privacy: .public): saving to Downloads failed: \(String(describing: error), privacy: .public)"
+          )
           outcome = .failed
         }
       }
@@ -521,6 +525,9 @@ private struct OfflineSection: View {
         do {
           try await library.download(document)
         } catch {
+          readerLog.error(
+            "\(document.displayName, privacy: .public): keeping offline failed: \(String(describing: error), privacy: .public)"
+          )
           downloadFailed = true
         }
       }
