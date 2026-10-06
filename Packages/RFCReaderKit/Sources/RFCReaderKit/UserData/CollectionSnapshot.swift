@@ -88,9 +88,10 @@ public struct CollectionSnapshot: Equatable, Sendable {
   }
 
   /// The store's collections, now. Only the fields a snapshot reads: this runs
-  /// on every save of a collection or an item (`UserDataMirrors`, #603).
+  /// on every save of a collection or an item (`UserDataMirrors`, #603). A failed
+  /// fetch throws rather than reading as no collections (#613).
   @MainActor
-  public static func fetch(in context: ModelContext) -> CollectionSnapshot {
+  public static func fetch(in context: ModelContext) throws -> CollectionSnapshot {
     var collectionFetch = FetchDescriptor<DocumentCollection>()
     collectionFetch.propertiesToFetch = [
       \.identifier, \.name, \.colorName, \.position, \.createdAt,
@@ -99,8 +100,8 @@ public struct CollectionSnapshot: Equatable, Sendable {
     itemFetch.propertiesToFetch = [
       \.collectionIdentifier, \.documentKey, \.position, \.addedAt,
     ]
-    let collections = (try? context.fetch(collectionFetch)) ?? []
-    let items = (try? context.fetch(itemFetch)) ?? []
+    let collections = try context.fetch(collectionFetch)
+    let items = try context.fetch(itemFetch)
     return CollectionSnapshot(collections: collections, items: items)
   }
 }

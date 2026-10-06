@@ -42,7 +42,9 @@ nonisolated enum IntentDocuments {
       return try await LibraryModel.shared.document(for: id)
     } catch {
       let failure = LoadFailure(error: error)
-      if failure.kind == .offline { throw IntentFailure.notAvailableOffline(id) }
+      if [.offline, .cellularDenied].contains(failure.kind) {
+        throw IntentFailure.notAvailableOffline(id)
+      }
       throw IntentFailure.notLoaded(id, reason: failure.message)
     }
   }

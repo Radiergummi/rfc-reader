@@ -573,6 +573,11 @@ struct DocumentView: View {
         Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
+        #if !os(macOS)
+          if failure.kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else if session.state.showsProgress(isDue: session.isProgressDue) {

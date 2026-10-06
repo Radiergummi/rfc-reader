@@ -141,7 +141,7 @@ public enum Requirements {
             for cell in cells { record(cell, anchor) }
           }
         }
-      case .preformatted, .figure, .blockQuote, .references:
+      case .preformatted, .figure, .blockQuote, .references, .index:
         break
       }
     }

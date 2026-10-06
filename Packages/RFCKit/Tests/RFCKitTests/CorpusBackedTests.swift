@@ -576,6 +576,32 @@ struct CorpusBackedUnnumberedHeadingTests {
   }
 }
 
+@Suite("Corpus-backed: centered chapters", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCenteredChapterTests {
+  /// RFC 753 centers its chapters, and its fourth has no numbered subsection to
+  /// confirm it: it heads its chapter all the same, rather than staying a list item
+  /// with its text under chapter 3 (#550).
+  @Test func `a centered chapter with no numbered subsection heads its chapter`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc753"))
+    let chapter = try #require(document.section(number: "4"))
+    #expect(chapter.titleText.hasPrefix("EXAMPLES"))
+    #expect(document.sections.contains { $0.titleText == "REFERENCES" })
+  }
+
+  /// RFC 830 sets three spaces after a chapter's number, centers an appendix's
+  /// label, and centers the appendix's title under it.
+  @Test func `a chapter set with a wide gap and a centered appendix head their own`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc830"))
+    let chapter = try #require(document.section(number: "5"))
+    #expect(chapter.titleText.hasPrefix("NCP TO TCP"))
+    #expect(
+      document.allSections.contains {
+        $0.titleText.hasPrefix("Appendix") || $0.anchor.hasPrefix("appendix")
+      })
+    #expect(!document.allSections.contains { $0.titleText == "CONVENTION ASSIGNMENTS" })
+  }
+}
+
 @Suite("Corpus-backed: omitted boilerplate", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedOmittedBoilerplateTests {
   /// An omitted section, such as `Status of this Memo`, runs to the next heading. A
@@ -749,5 +775,83 @@ struct CorpusBackedJoinedArtworkTests {
     let terms = document.definitionLists.flatMap { $0 }.map(\.term.plainText)
     #expect(terms.filter { $0.hasPrefix("Attribute name") }.count >= 3)
     #expect(!document.artworkText.contains { $0.contains("Attribute name") })
+  }
+}
+
+@Suite("Corpus-backed: index", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedIndexTests {
+  /// Every RFC authored in RFCXML that prep gave an index, when this was written.
+  static let documents = ["rfc9051", "rfc9110", "rfc9111", "rfc9112", "rfc9114", "rfc9499"]
+
+  static func indexes(in document: RFCDocument) -> [IndexBlock] {
+    document.blocks.compactMap(\.index)
+  }
+
+  @Test(arguments: documents)
+  func `prep's index reads as one index block`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let indexes = Self.indexes(in: document)
+    #expect(indexes.count == 1)
+    let groups = try #require(indexes.first).groups
+    #expect(!groups.isEmpty)
+    #expect(Set(groups.map(\.label)).count == groups.count, "one group per letter")
+    #expect(groups.allSatisfy { !$0.entries.isEmpty })
+  }
+
+  /// A locator can point at a paragraph rather than a section (RFC 9499's do); either
+  /// way the document declares the anchor.
+  @Test(arguments: documents)
+  func `every locator leads to an anchor the document declares`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let declared = AnchorResolutionTests.anchors(in: document)
+    let index = try #require(Self.indexes(in: document).first)
+    for entry in index.allEntries {
+      for locator in entry.locators {
+        guard case .anchor(let anchor) = locator.reference.target else {
+          Issue.record("\(stem): \(entry.term.plainText) leads outside the document")
+          continue
+        }
+        #expect(declared.contains(anchor), "\(stem): \(anchor)")
+      }
+    }
+  }
+
+  @Test(arguments: documents)
+  func `an index is a fixed point of writing and reading`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let written = RFCXMLSerializer().serialize(document)
+    let read = try RFCXMLParser.parse(Data(written.utf8))
+    #expect(Self.indexes(in: read) == Self.indexes(in: document))
+  }
+
+  @Test(arguments: documents)
+  func `no backlink comes from the index`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let indexSection = try #require(
+      document.allSections.first {
+        $0.blocks.contains { $0.index != nil }
+      })
+    let citing = Backlinks.within(document).values.flatMap { $0 }.map(\.section)
+    #expect(!citing.contains(indexSection.anchor))
+  }
+
+  /// RFC 9110 heads its grammar's rule names with `Grammar`, which has no locator of
+  /// its own, and gives `URI` its own locators beside its subitems; RFC 9499 gives
+  /// every term's locators in a subentry without a term.
+  @Test func `both ways prep writes an item's own locators give them to the item`() throws {
+    let http = try #require(
+      Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9110"))).first)
+    let grammar = try #require(
+      http.groups.flatMap(\.entries).first { $0.term.plainText == "Grammar" })
+    #expect(grammar.locators.isEmpty)
+    #expect(grammar.subentries.contains { $0.term.plainText == "ALPHA" })
+    let uri = try #require(http.groups.flatMap(\.entries).first { $0.term.plainText == "URI" })
+    #expect(!uri.locators.isEmpty, "its own locators, in its <dd>")
+    #expect(!uri.subentries.isEmpty, "its subitems, after an entry without a term")
+    let dns = try #require(
+      Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9499"))).first)
+    let entries = dns.groups.flatMap(\.entries)
+    #expect(entries.allSatisfy { !$0.locators.isEmpty || !$0.subentries.isEmpty })
+    #expect(entries.contains { !$0.locators.isEmpty })
   }
 }

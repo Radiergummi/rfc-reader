@@ -193,7 +193,8 @@ struct BuilderVerbatimTests {
       let button = (built.text.string as NSString).range(of: "\u{FFFC}").location
       #expect(button != NSNotFound)
       #expect(built.text.code(ofCopyButtonAt: button) == "{\n  \"a\": true\n}")
-      #expect(built.text.copyButton(at: try Fixtures.offset(of: "JSON", in: built.text)) == nil)
+      let label = NSRange(location: try Fixtures.offset(of: "JSON", in: built.text), length: 4)
+      #expect(built.text.copyButtons(in: label).isEmpty)
     }
 
     /// A chip is tinted, and kerned on either side to make room for its tint, which

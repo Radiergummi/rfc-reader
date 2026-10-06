@@ -141,6 +141,9 @@ struct DocumentInspector: View {
       // RFC, the top of the list is a long way from where the reader is.
       ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
+          // A filter typed for one document is not carried to the next, which the
+          // panel stays open for (#325).
+          .id(document)
           // Again when a place first arrives, not on every crossing: a panel left
           // open from the previous document shows this list before the new one
           // has reported where it is (#325).

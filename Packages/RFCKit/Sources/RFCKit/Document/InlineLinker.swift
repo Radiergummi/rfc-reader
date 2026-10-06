@@ -49,8 +49,14 @@ struct InlineLinker: Sendable {
   /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
   /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
   /// larger of the two shapes going unlinked.
+  ///
+  /// A period and a capital after the number make a name, not a citation: an IMAP
+  /// fetch item named after a format (`RFC822.SIZE`), a message field
+  /// (`RFC5322.From`), a file (`RFC1131.PS`). A sentence run on without its space
+  /// reads the same and loses its link; the legacy corpus holds one, where the
+  /// converter joined two paragraphs.
   static let bareRFCPattern = Gated(
-    regex: #/\bRFC[\s\-]?(?<number>\d+)\b/#, gate: \.rfc)
+    regex: #/\bRFC[\s\-]?(?<number>\d+)\b(?!\.[A-Z])/#, gate: \.rfc)
   /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
   /// reference but only the first carries the word, so the numbers are linked where
   /// they stand and the sentence is left to read as it was set.

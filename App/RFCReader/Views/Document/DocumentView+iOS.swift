@@ -107,6 +107,28 @@
         ) { _ in
           output.finishExport()
         }
+        .alert(
+          failureTitle,
+          isPresented: Binding(
+            get: { output.failure != nil },
+            set: { if !$0 { output.failure = nil } }),
+          presenting: output.failure
+        ) { failure in
+          if failure.load.kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+          Button("OK") {}
+        } message: { failure in
+          Text(failure.load.kind.recoverySuggestion(for: failure.subject))
+        }
+    }
+
+    private var failureTitle: Text {
+      let name = id.displayName
+      return switch output.failure {
+      case .print: Text("Couldn't print \(name)")
+      case .export, nil: Text("Couldn't export \(name)")
+      }
     }
 
     /// Where a tap on the return offer goes, while it is on show.

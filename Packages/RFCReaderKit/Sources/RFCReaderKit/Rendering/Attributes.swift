@@ -289,18 +289,16 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
-  /// The extent of the code block's copy button at this character offset, where its
-  /// feedback is shown; nil anywhere but on the button. Asked on every pointer
-  /// move, so it only looks: what the button copies is `code(ofCopyButtonAt:)`.
-  public func copyButton(at offset: Int) -> NSRange? {
-    guard offset >= 0, offset < length,
-      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil
-    else { return nil }
-    var button = NSRange(location: 0, length: 0)
-    _ = attribute(
-      .rfcCopyCode, at: offset, longestEffectiveRange: &button,
-      in: NSRange(location: 0, length: length))
-    return button
+  /// The extent of every code block's copy button in `range`, in order: where the
+  /// pointer is the arrow over the text in view (#724), a click copies, and its
+  /// feedback is shown. It only looks: what a button copies is
+  /// `code(ofCopyButtonAt:)`.
+  public func copyButtons(in range: NSRange) -> [NSRange] {
+    var buttons: [NSRange] = []
+    enumerateAttribute(.rfcCopyCode, in: range) { value, run, _ in
+      if value != nil { buttons.append(run) }
+    }
+    return buttons
   }
 
   /// What the copy button at this character offset copies: its block as Copy

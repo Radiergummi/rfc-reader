@@ -57,6 +57,10 @@ extension Block {
   }
 
   var definitionItems: [DefinitionItem]? { definitionList?.items }
+
+  var index: IndexBlock? {
+    if case .index(let index) = self { index } else { nil }
+  }
 }
 
 extension Inline {
