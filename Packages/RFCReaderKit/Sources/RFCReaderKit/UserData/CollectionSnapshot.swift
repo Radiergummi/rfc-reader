@@ -89,8 +89,7 @@ public struct CollectionSnapshot: Equatable, Sendable {
 
   /// The store's collections, now. Only the fields a snapshot reads: this runs
   /// on every save of a collection or an item (`UserDataMirrors`, #603). A failed
-  /// fetch throws rather than reading as no collections, so the caller keeps the
-  /// last snapshot and tries again (#613).
+  /// fetch throws rather than reading as no collections (#613).
   @MainActor
   public static func fetch(in context: ModelContext) throws -> CollectionSnapshot {
     var collectionFetch = FetchDescriptor<DocumentCollection>()

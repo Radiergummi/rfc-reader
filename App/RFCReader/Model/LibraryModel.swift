@@ -132,7 +132,8 @@ final class LibraryModel {
   }
 
   /// Every collection and its members, fetched again on every save of a collection or
-  /// an item (#603) and published only when it changed (#349). The sidebar, a
+  /// an item (#603), and after a failed fetch on the next save of any kind
+  /// (`failedMirrors`, #613), and published only when it changed (#349). The sidebar, a
   /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts
   /// all read it.
   private(set) var collections = CollectionSnapshot.empty
