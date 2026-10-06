@@ -309,9 +309,9 @@ struct DocumentView: View {
         // Sent somewhere, the reader leads a side-by-side reading (#187).
         reader.coupling?.lead(id)
         if request.isUnrecorded {
-          follow(request, animated: true)
+          follow(request)
         } else {
-          jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
+          jump(toSection: request.section, revealingReferences: true)
         }
       }
       // Not only on the way out: quitting, or iOS ending an app in the background,
@@ -676,13 +676,13 @@ struct DocumentView: View {
   /// where the reader is, and one just opened stays at its top (#276). In a document
   /// already open, a place naming a bibliography entry shows it; see
   /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
-  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
+  private func jump(toSection section: String?, revealingReferences: Bool = false) {
     guard let section else { return }
     switch landing(at: section) {
     case .reference(let anchor) where revealingReferences:
       reader.reveal(reference: anchor)
     case .reference(let anchor), .jump(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+      scrollTarget = ReaderScrollTarget(anchor: anchor)
     case .document, .unhandled, nil:
       break
     }
@@ -693,7 +693,7 @@ struct DocumentView: View {
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
   /// leaves the history as it is. False while there is no build to look in.
   @discardableResult
-  private func follow(_ place: String, animated: Bool = true) -> Bool {
+  private func follow(_ place: String) -> Bool {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
@@ -702,8 +702,7 @@ struct DocumentView: View {
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
-        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors),
-        animated: animated)
+        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:
@@ -713,9 +712,9 @@ struct DocumentView: View {
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there, unanimated.
-  private func follow(_ request: NavigationModel.ScrollRequest, animated: Bool) {
-    if follow(request.section, animated: animated) {
+  /// waits for the text to appear, and is followed there.
+  private func follow(_ request: NavigationModel.ScrollRequest) {
+    if follow(request.section) {
       navigation.settle(request)
     }
   }
@@ -738,14 +737,14 @@ struct DocumentView: View {
         })
     switch arrival {
     case .place(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+      scrollTarget = ReaderScrollTarget(anchor: anchor)
     case .request(let request) where request.isUnrecorded:
-      follow(request, animated: false)
+      follow(request)
     case .request(let request):
-      jump(toSection: request.section, animated: false)
+      jump(toSection: request.section)
     case .stored(let saved):
       if let anchor = saved.anchor {
-        scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false, offset: saved.offset)
+        scrollTarget = ReaderScrollTarget(anchor: anchor, offset: saved.offset)
       }
     case .stay:
       break

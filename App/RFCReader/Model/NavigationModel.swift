@@ -29,9 +29,6 @@ final class NavigationModel: Identifiable {
     /// nothing (#276). Only the reader can tell, having the build, and only it can
     /// say that `4.2` and `section-4.2` are the same place (#482).
     var isUnrecorded = false
-    /// False for a jump the reader makes as its text appears: a document just
-    /// loaded opens at the place rather than animating there from its top.
-    var isAnimated = true
     /// A return to a reader the stack on iOS kept below its top, which is where it
     /// was left (#263): only a reader made again, having been let go, goes there.
     var isToKeptReader = false
@@ -416,11 +413,9 @@ final class NavigationModel: Identifiable {
   /// A place the document on screen holds: its own history entry, so Back undoes
   /// it, unless the reader is already there. Compared in `places`' spelling, so a
   /// section's number and its anchor are one place (#482).
-  func recordJump(to section: String, in places: DocumentPlaces, animated: Bool = true) {
+  func recordJump(to section: String, in places: DocumentPlaces) {
     guard let id = selection else { return }
-    go(
-      to: HistoryEntry(id: id, section: section, arrival: .citation), in: places,
-      animated: animated)
+    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places)
   }
 
   func goBack() {
@@ -445,9 +440,7 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(
-    to place: HistoryEntry, in places: DocumentPlaces? = nil, animated: Bool = true
-  ) {
+  private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
     let reopening = history.shown == nil
     guard let place = history.go(to: place, leaving: visiblePosition, in: places) else {
       // The hidden document reopened from its row: nowhere to move, and nothing to
@@ -457,20 +450,18 @@ final class NavigationModel: Identifiable {
       if reopening { scrollRequest = nil }
       return
     }
-    arrive(at: place, animated: animated)
+    arrive(at: place)
   }
 
-  private func arrive(at place: HistoryEntry, animated: Bool = true) {
-    scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
+  private func arrive(at place: HistoryEntry) {
+    scrollRequest = place.section.map { ScrollRequest(section: $0) }
     visiblePosition = place.section
   }
 
   /// At a place in a reader the stack kept, which is where it was left: nothing to
   /// scroll to, unless the reader was let go and is made again.
   private func arriveKept(at place: HistoryEntry) {
-    scrollRequest = place.section.map {
-      ScrollRequest(section: $0, isAnimated: false, isToKeptReader: true)
-    }
+    scrollRequest = place.section.map { ScrollRequest(section: $0, isToKeptReader: true) }
     visiblePosition = place.section
   }
 

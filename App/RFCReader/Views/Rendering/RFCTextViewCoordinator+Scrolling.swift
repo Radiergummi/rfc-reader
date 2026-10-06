@@ -15,7 +15,7 @@ extension RFCTextViewCoordinator {
   /// everything above it first, which is what makes its y the real one.
   /// `extra` characters past the anchor, as a saved reading position has it; a
   /// stale one stays inside the anchor's block (`ReadingPlace.documentOffset`).
-  func scroll(to anchor: String, offset extra: Int = 0, animated: Bool) {
+  func scroll(to anchor: String, offset extra: Int = 0) {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
     guard let built,

@@ -21,7 +21,7 @@ A plain release follows the link through `clicked(onLink:at:)`, modifiers includ
 A mouse-down anywhere else is `NSTextView`'s, so Look Up keeps working on every other word, and `quickLook(with:)` still takes Look Up from the menu or the keyboard on a reference.
 The link click that ends a force click on a reference is swallowed once, for a force click AppKit does route through `quickLook(with:)`; matching `eventNumber` instead was tried and is a crash: it raises on any event that is not a mouse event, which Look Up from a gesture or the keyboard is.
 A commit closes the popover as the reader moves, not before it.
-A place in the same document scrolls there with the reader's own animated jump.
+A place in the same document scrolls there with the reader's own jump, unanimated since #585.
 Another document cross-fades in over 100 ms (`RFCTextViewCoordinator.documentCrossFade`, an opacity transition on `ReaderHost`'s `DocumentView` that only an animated change triggers); every other open still cuts.
 A control-click in the preview is its context menu, not a commit.
 The preview's reader has no header, and a hosted `EmptyView` measured with an unbounded height answers with that height, 1.8e308: as an inset it made the text view's frame NaN, which AppKit traps on, so a header that answers with the height it was offered counts as no header (`ReaderLayout.headerHeight`).

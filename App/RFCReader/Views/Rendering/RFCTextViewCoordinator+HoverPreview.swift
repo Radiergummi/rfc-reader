@@ -113,7 +113,6 @@
         // whatever lands under the pointer, which is now over the reader.
         self.hover.send(.previewCommitted(pointer: NSEvent.mouseLocation))
         if sameDocument {
-          // The reader's own jump is animated already.
           _ = self.onLink(url, .current)
         } else {
           // Another document replaces this one; `ReaderHost` cross-fades the two.
