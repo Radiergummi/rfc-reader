@@ -68,7 +68,9 @@ struct RFCListView: View {
   private func remove(_ document: DocumentID) {
     guard let collection else { return }
     library.editCollections {
-      try CollectionStore.remove(document, from: collection, undoManager: undoManager, in: $0)
+      try CollectionStore.remove(
+        document, from: collection, undoManager: undoManager,
+        onUndoFailure: library.collectionUndoFailed, in: $0)
     }
     navigation.listNow()
   }

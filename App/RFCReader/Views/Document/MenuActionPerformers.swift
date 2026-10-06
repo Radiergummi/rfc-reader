@@ -36,7 +36,9 @@ struct CollectionActionPerformer {
     switch action {
     case .toggleCollection(let collection):
       library.editCollections {
-        try CollectionStore.toggle(document, in: collection, undoManager: undoManager, in: $0)
+        try CollectionStore.toggle(
+          document, in: collection, undoManager: undoManager,
+          onUndoFailure: library.collectionUndoFailed, in: $0)
       }
     case .newCollection:
       if let onNewCollection {
