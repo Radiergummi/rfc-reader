@@ -56,6 +56,8 @@ nonisolated enum DocumentPDF {
             for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
         PrintFurniture(header: document.header, metadata: library.metadata(id)))
     }
+    // A print whose window closed while the document was fetched builds nothing.
+    try Task.checkCancellation()
     return await render(content, paperSize: paperSize)
   }
 

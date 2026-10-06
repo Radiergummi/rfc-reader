@@ -156,16 +156,24 @@ public struct LoadFailure {
 
   public var message: String { error.localizedDescription }
 
-  /// What was being loaded: the document, or its original text, which has a
-  /// not-found of its own.
+  /// What was being loaded: the document, its original text, which has a not-found
+  /// of its own, or the RFC index, which is not a document and has no page to send
+  /// the reader to.
   public enum Subject: Sendable {
-    case document, originalText
+    case document, originalText, index
   }
 
   /// What failed, as far as the reader can tell from the error.
   public enum Kind: Sendable, Hashable, CaseIterable {
     /// The device's own connection: nothing reached the network.
     case offline
+    /// Cellular data is turned off, for the app or while roaming: a setting to
+    /// change (`FetchPolicy.PathStatus.cellularDenied`). iOS opens the app's page in
+    /// Settings, which has its switch; roaming's is a level up, under Cellular.
+    case cellularDenied
+    /// A secure connection could not be made, as a network's login page or a proxy
+    /// causes by answering in the RFC Editor's place.
+    case secureConnection
     /// The RFC Editor has no such document.
     case notFound
     /// The server did not answer, answered with an error, or sent a web page where
@@ -178,6 +186,8 @@ public struct LoadFailure {
     public var symbol: String {
       switch self {
       case .offline: "wifi.exclamationmark"
+      case .cellularDenied: "antenna.radiowaves.left.and.right.slash"
+      case .secureConnection: "lock.trianglebadge.exclamationmark"
       case .notFound: "questionmark.folder"
       case .server: "exclamationmark.icloud"
       case .unreadable: "doc.badge.ellipsis"
@@ -191,10 +201,24 @@ public struct LoadFailure {
       switch (self, subject) {
       case (.offline, _):
         String(kit: "Check your internet connection, then try again.", locale: locale)
+      case (.cellularDenied, _):
+        String(
+          kit:
+            "Cellular data is turned off for this app, or roaming is. Turn it on in Settings, or connect to Wi-Fi.",
+          locale: locale)
+      case (.secureConnection, _):
+        String(
+          kit:
+            "A secure connection couldn't be made. If this network has a login page, sign in, or check its proxy settings, then try again.",
+          locale: locale)
       case (.notFound, .document):
         String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
         String(kit: "This RFC has no plain-text version.", locale: locale)
+      case (.notFound, .index), (.unreadable, .index):
+        String(kit: "The RFC index couldn't be read. Try again later.", locale: locale)
+      case (.other, .index):
+        String(kit: "Try again in a moment.", locale: locale)
       case (.server, _):
         String(kit: "The RFC Editor isn't responding right now. Try again later.", locale: locale)
       case (.unreadable, _):
@@ -210,9 +234,14 @@ public struct LoadFailure {
     switch error {
     case let error as URLError:
       switch error.code {
-      case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
-        .internationalRoamingOff:
+      case .notConnectedToInternet, .networkConnectionLost:
         return .offline
+      case .dataNotAllowed, .internationalRoamingOff:
+        return .cellularDenied
+      case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
+        .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+        .clientCertificateRejected, .clientCertificateRequired:
+        return .secureConnection
       case .timedOut, .cannotFindHost, .cannotConnectToHost:
         return .server
       default:
@@ -232,6 +261,8 @@ public struct LoadFailure {
     case RFCXMLParser.ParseError.notAnRFC(rootElement: "html"):
       return .server
     case is RFCXMLParser.ParseError:
+      return .unreadable
+    case is RFCIndexParser.ParseError:
       return .unreadable
     default:
       return .other

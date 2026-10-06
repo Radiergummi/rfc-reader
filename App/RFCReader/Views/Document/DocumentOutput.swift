@@ -16,6 +16,27 @@
     private(set) var exported: ExportedFile?
     /// Whether an export is being made or Save to Files is up; see `exportDocument`.
     private(set) var isExporting = false
+    /// An export or print that failed, while its alert is up (#759). The Mac
+    /// presents the same failures from the window (`ReaderWindowController`).
+    var failure: Failure?
+
+    /// What failed to be made, for the alert's title, and why, for its message.
+    enum Failure {
+      case export(LoadFailure)
+      /// `original` when the print was of the published text, which has a
+      /// not-found of its own.
+      case print(LoadFailure, original: Bool)
+
+      var load: LoadFailure {
+        switch self {
+        case .export(let load), .print(let load, _): load
+        }
+      }
+
+      var subject: LoadFailure.Subject {
+        if case .print(_, original: true) = self { .originalText } else { .document }
+      }
+    }
 
     /// Save to Files, with the document in `format` (#376). Laid out for the
     /// region's paper, as a print is.
@@ -25,15 +46,15 @@
       guard !isExporting else { return }
       isExporting = true
       Task {
-        guard
-          let data = try? await DocumentExport.data(
+        do {
+          let data = try await DocumentExport.data(
             for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
             library: library)
-        else {
+          exported = ExportedFile(data: data, format: format)
+        } catch {
           isExporting = false
-          return
+          fail(.export(LoadFailure(error: error)), id)
         }
-        exported = ExportedFile(data: data, format: format)
       }
     }
 
@@ -53,12 +74,14 @@
       guard !isPrinting else { return }
       isPrinting = true
       Task {
-        guard
-          let data = try? await DocumentPDF.make(
+        let data: Data
+        do {
+          data = try await DocumentPDF.make(
             for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
             library: library)
-        else {
+        } catch {
           isPrinting = false
+          fail(.print(LoadFailure(error: error), original: original), id)
           return
         }
         let info = UIPrintInfo.printInfo()
@@ -73,6 +96,16 @@
         }
         if !presented { isPrinting = false }
       }
+    }
+
+    private func fail(_ failure: Failure, _ id: DocumentID) {
+      let action =
+        switch failure {
+        case .export: "export"
+        case .print: "print"
+        }
+      readerLog.failure(of: id, "\(action) failed", failure.load.error)
+      self.failure = failure
     }
   }
 #endif

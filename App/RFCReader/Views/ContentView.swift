@@ -310,9 +310,16 @@ struct EmptyDetailView: View {
       if query.isEmpty {
         Text("A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link.")
       } else if !results.isSearching {
-        if library.index == nil {
+        // Not `library.index == nil`, for the reason the Mac's palette gives.
+        switch library.indexState {
+        case .idle, .loading:
           Text("The RFC index is still loading.")
-        } else {
+        case .failed:
+          HStack {
+            Text("The RFC index couldn't be loaded. A number still opens.")
+            Button("Retry") { library.retryIndex() }
+          }
+        case .ready:
           Text("Nothing in the index matches “\(query)”.")
         }
       }
