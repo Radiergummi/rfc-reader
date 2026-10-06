@@ -3,7 +3,6 @@
   import RFCReaderKit
   import SwiftUI
   import UIKit
-  import os
 
   /// Export and Print on iOS (#599): the file or PDF made, then Save to Files or the
   /// print sheet presented. The Mac's are the window's (`ReaderWindowController`):
@@ -105,9 +104,7 @@
         case .export: "export"
         case .print: "print"
         }
-      readerLog.error(
-        "\(id.displayName, privacy: .public): \(action, privacy: .public) failed: \(String(describing: failure.load.error), privacy: .public)"
-      )
+      readerLog.failure(of: id, "\(action) failed", failure.load.error)
       self.failure = failure
     }
   }

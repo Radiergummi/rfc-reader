@@ -203,7 +203,8 @@ public struct LoadFailure {
         String(kit: "Check your internet connection, then try again.", locale: locale)
       case (.cellularDenied, _):
         String(
-          kit: "Cellular data is turned off for this app, or roaming is. Turn it on in Settings, or connect to Wi-Fi.",
+          kit:
+            "Cellular data is turned off for this app, or roaming is. Turn it on in Settings, or connect to Wi-Fi.",
           locale: locale)
       case (.secureConnection, _):
         String(

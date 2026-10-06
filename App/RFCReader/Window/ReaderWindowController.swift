@@ -535,9 +535,7 @@
         } catch {
           isPrinting = false
           guard !Task.isCancelled else { return }
-          readerLog.error(
-            "\(id.displayName, privacy: .public): print failed: \(String(describing: error), privacy: .public)"
-          )
+          readerLog.failure(of: id, "print failed", error)
           _ = window.presentError(error)
         }
       }

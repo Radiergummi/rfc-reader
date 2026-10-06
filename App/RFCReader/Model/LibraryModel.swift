@@ -265,7 +265,8 @@ final class LibraryModel {
   /// logged, as `editCollections` logs the change's own (#759).
   func collectionUndoFailed(_ error: any Error) {
     libraryLog.error(
-      "undoing or redoing a removal from a collection failed: \(String(describing: error), privacy: .public)")
+      "undoing or redoing a removal from a collection failed: \(String(describing: error), privacy: .public)"
+    )
   }
 
   /// Adds the bookmark or removes it, on the app's context, titled from the index

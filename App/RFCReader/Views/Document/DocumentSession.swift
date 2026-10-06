@@ -10,6 +10,16 @@ import os
 let readerLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
 
+extension Logger {
+  /// Something done with a document that failed, at error level, which the unified
+  /// log keeps: "RFC 9110: `event`: `cause`".
+  func failure(of document: DocumentID, _ event: String, _ cause: any Error) {
+    error(
+      "\(document.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: cause), privacy: .public)"
+    )
+  }
+}
+
 /// Everything a build depends on. One trigger, so the document is built in one
 /// place whatever changed — a new RFC, a reading setting, or a window resize.
 struct BuildInputs: Equatable {
@@ -133,7 +143,7 @@ final class DocumentSession {
         // Canceled only when the session goes, or when Try Again replaces this
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
-        logFailure("original text failed", error)
+        readerLog.failure(of: id, "loading the original text failed", error)
         originalTextFailure = LoadFailure(error: error)
       }
     }
@@ -184,7 +194,7 @@ final class DocumentSession {
         trace("loaded")
       } catch {
         guard let self, !Task.isCancelled else { return }
-        logFailure("failed", error)
+        readerLog.failure(of: id, "loading failed", error)
         state.fail(error)
         failed()
       }
@@ -262,12 +272,5 @@ final class DocumentSession {
   /// doesn't keep.
   private func trace(_ event: String) {
     readerLog.debug("\(self.id.displayName, privacy: .public): \(event, privacy: .public)")
-  }
-
-  /// A failure, at error level, which the unified log keeps.
-  private func logFailure(_ event: String, _ error: any Error) {
-    readerLog.error(
-      "\(self.id.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: error), privacy: .public)"
-    )
   }
 }
