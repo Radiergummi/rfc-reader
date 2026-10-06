@@ -11,6 +11,7 @@ Everything goes through the `Makefile`:
 | `make check` | `lint build test`, plus `test-app` on a Mac — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK; part of `make check` on a Mac) |
+| `make build-app-tests-ios` | RFCReaderKit's test target, built for the iOS Simulator without running it (#821); CI does it too |
 | `make test-corpus` | the `Corpus-backed:` suites, over the documents in the Makefile's `CORPUS_TEST_DOCUMENTS` and `CORPUS_TEST_XML_DOCUMENTS`, fetched into `corpus/` and passed as `RFC_CORPUS_TEXT` and `RFC_CORPUS_XML`; not part of `make check` |
 | `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
