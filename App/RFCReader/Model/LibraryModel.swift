@@ -221,7 +221,17 @@ final class LibraryModel {
   }
 
   private func refreshCollections() {
-    let snapshot = CollectionSnapshot.fetch(in: container.mainContext)
+    let snapshot: CollectionSnapshot
+    do {
+      snapshot = try CollectionSnapshot.fetch(in: container.mainContext)
+    } catch {
+      // The last snapshot stands until a fetch succeeds, which the next save tries:
+      // an empty one would close every filter on a collection (#613).
+      failedMirrors.insert(.collections)
+      libraryLog.error(
+        "reading collections failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard snapshot != collections else { return }
     collections = snapshot

@@ -27,8 +27,8 @@ struct CollectionStoreTests {
     Issue.record(error, "an undo or redo failed")
   }
 
-  private func members(of collection: UUID, in context: ModelContext) -> [DocumentID] {
-    CollectionSnapshot.fetch(in: context)[collection]?.members ?? []
+  private func members(of collection: UUID, in context: ModelContext) throws -> [DocumentID] {
+    try CollectionSnapshot.fetch(in: context)[collection]?.members ?? []
   }
 
   @Test func `a new collection is trimmed and goes after the others`() throws {
@@ -37,7 +37,7 @@ struct CollectionStoreTests {
     try CollectionStore.create(named: "HTTP/3", color: .blue, in: context)
     try CollectionStore.create(named: "  DNS \n", color: .green, in: context)
 
-    let names = CollectionSnapshot.fetch(in: context).collections.map(\.name)
+    let names = try CollectionSnapshot.fetch(in: context).collections.map(\.name)
     #expect(names == ["HTTP/3", "DNS"])
   }
 
@@ -51,7 +51,7 @@ struct CollectionStoreTests {
     #expect(throws: CollectionStore.Failure.emptyName) {
       try CollectionStore.update(collection.identifier, name: "\t", color: .blue, in: context)
     }
-    #expect(CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
+    #expect(try CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
   /// What the editor enables its button by, so the button and the store agree.
@@ -74,7 +74,7 @@ struct CollectionStoreTests {
 
     try CollectionStore.update(id, name: "QUIC", color: .orange, in: context)
 
-    let entry = CollectionSnapshot.fetch(in: context)[id]
+    let entry = try CollectionSnapshot.fetch(in: context)[id]
     #expect(entry?.name == "QUIC")
     #expect(entry?.color == .orange)
     #expect(saves.count == 1)
@@ -88,7 +88,7 @@ struct CollectionStoreTests {
     try CollectionStore.add(.rfc(9114), to: id, in: context)
     try CollectionStore.add(.rfc(9000), to: id, in: context)
 
-    #expect(members(of: id, in: context) == [.rfc(9000), .rfc(9114)])
+    #expect(try members(of: id, in: context) == [.rfc(9000), .rfc(9114)])
   }
 
   /// A reading path saved as a collection (#189).
@@ -109,7 +109,7 @@ struct CollectionStoreTests {
       in: context
     ).identifier
 
-    #expect(members(of: id, in: context) == [.rfc(9000), .rfc(9110), .rfc(9114)])
+    #expect(try members(of: id, in: context) == [.rfc(9000), .rfc(9110), .rfc(9114)])
     #expect(saves.count == 1)
   }
 
@@ -137,7 +137,7 @@ struct CollectionStoreTests {
     #expect(
       try CollectionStore.toggle(
         .rfc(9000), in: id, undoManager: nil, onUndoFailure: Self.undoFailed, in: context))
-    #expect(members(of: id, in: context) == [.rfc(9000)])
+    #expect(try members(of: id, in: context) == [.rfc(9000)])
   }
 
   @Test func `deleting a collection deletes its items and nothing else`() throws {
@@ -150,7 +150,7 @@ struct CollectionStoreTests {
 
     try CollectionStore.delete(doomed, in: context)
 
-    #expect(CollectionSnapshot.fetch(in: context).collections.map(\.id) == [kept])
+    #expect(try CollectionSnapshot.fetch(in: context).collections.map(\.id) == [kept])
     let items = try context.fetch(FetchDescriptor<DocumentCollectionItem>())
     #expect(items.map(\.collectionIdentifier) == [kept])
   }
@@ -163,11 +163,11 @@ struct CollectionStoreTests {
 
     try CollectionStore.move(
       .rfc(3), in: id, afterVisible: .rfc(1), beforeVisible: .rfc(2), in: context)
-    #expect(members(of: id, in: context) == [.rfc(1), .rfc(3), .rfc(2)])
+    #expect(try members(of: id, in: context) == [.rfc(1), .rfc(3), .rfc(2)])
 
     try CollectionStore.move(
       .rfc(2), in: id, afterVisible: nil, beforeVisible: .rfc(1), in: context)
-    #expect(members(of: id, in: context) == [.rfc(2), .rfc(1), .rfc(3)])
+    #expect(try members(of: id, in: context) == [.rfc(2), .rfc(1), .rfc(3)])
   }
 
   /// Sync can leave two items naming one document. The list shows the first, so
@@ -185,7 +185,7 @@ struct CollectionStoreTests {
     try CollectionStore.move(
       .rfc(1), in: id, afterVisible: .rfc(3), beforeVisible: nil, in: context)
 
-    #expect(members(of: id, in: context) == [.rfc(2), .rfc(3), .rfc(1)])
+    #expect(try members(of: id, in: context) == [.rfc(2), .rfc(3), .rfc(1)])
   }
 
   /// A gap halved until it cannot be split again, and two items at one position:
@@ -206,7 +206,7 @@ struct CollectionStoreTests {
     try CollectionStore.move(
       .rfc(3), in: id, afterVisible: .rfc(1), beforeVisible: .rfc(2), in: context)
 
-    #expect(members(of: id, in: context) == [.rfc(1), .rfc(3), .rfc(2)])
+    #expect(try members(of: id, in: context) == [.rfc(1), .rfc(3), .rfc(2)])
     let positions = try context.fetch(
       FetchDescriptor<DocumentCollectionItem>(sortBy: [SortDescriptor(\.position)])
     ).map(\.position)
@@ -224,7 +224,7 @@ struct CollectionStoreTests {
       third, afterVisible: nil, beforeVisible: first, in: context)
 
     #expect(
-      CollectionSnapshot.fetch(in: context).collections.map(\.id) == [third, first, second])
+      try CollectionSnapshot.fetch(in: context).collections.map(\.id) == [third, first, second])
   }
 
   /// Two collections on one position — two devices appending offline — sit in the
@@ -245,14 +245,14 @@ struct CollectionStoreTests {
     try context.save()
     let third = try CollectionStore.create(named: "C", color: .blue, in: context).identifier
     #expect(
-      CollectionSnapshot.fetch(in: context).collections.map(\.id)
+      try CollectionSnapshot.fetch(in: context).collections.map(\.id)
         == [first.identifier, second.identifier, third])
 
     try CollectionStore.moveCollection(
       third, afterVisible: first.identifier, beforeVisible: second.identifier, in: context)
 
     #expect(
-      CollectionSnapshot.fetch(in: context).collections.map(\.id)
+      try CollectionSnapshot.fetch(in: context).collections.map(\.id)
         == [first.identifier, third, second.identifier])
   }
 
@@ -266,7 +266,7 @@ struct CollectionStoreTests {
     try CollectionStore.add(.rfc(9000), to: id, in: context)
 
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
-    #expect(members(of: id, in: context) == [.rfc(9000)])
+    #expect(try members(of: id, in: context) == [.rfc(9000)])
   }
 
   /// Undoing a removal after the collection went, or after the document came back,
@@ -312,7 +312,7 @@ struct CollectionStoreTests {
     #expect(undoManager.canRedo)
     undoManager.redo()
 
-    #expect(members(of: id, in: context) == [.rfc(2)])
+    #expect(try members(of: id, in: context) == [.rfc(2)])
   }
 
   /// A reading path must not lose its place to a mistaken tap.
@@ -328,10 +328,10 @@ struct CollectionStoreTests {
     try CollectionStore.remove(
       .rfc(2), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
-    #expect(members(of: id, in: context) == [.rfc(1), .rfc(3)])
+    #expect(try members(of: id, in: context) == [.rfc(1), .rfc(3)])
 
     undoManager.undo()
 
-    #expect(members(of: id, in: context) == [.rfc(1), .rfc(2), .rfc(3)])
+    #expect(try members(of: id, in: context) == [.rfc(1), .rfc(2), .rfc(3)])
   }
 }
