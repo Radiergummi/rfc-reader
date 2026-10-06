@@ -3,8 +3,10 @@ import RFCReaderKit
 import SwiftUI
 import os
 
-/// The reader's load and build decisions, at debug level: what a device's
-/// Console shows when a document fails to load or never finishes (#252, #253).
+/// The reader's load and build decisions: what a device's Console shows when a
+/// document fails to load or never finishes (#252, #253). Progress is logged at
+/// debug level, which is shown only while streaming; a failure at error level,
+/// which the unified log keeps (#759).
 let readerLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
 
@@ -131,7 +133,7 @@ final class DocumentSession {
         // Canceled only when the session goes, or when Try Again replaces this
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
-        trace("original text failed: \(error)")
+        logFailure("original text failed", error)
         originalTextFailure = LoadFailure(error: error)
       }
     }
@@ -182,7 +184,7 @@ final class DocumentSession {
         trace("loaded")
       } catch {
         guard let self, !Task.isCancelled else { return }
-        trace("failed: \(error)")
+        logFailure("failed", error)
         state.fail(error)
         failed()
       }
@@ -256,7 +258,16 @@ final class DocumentSession {
     }
   }
 
+  /// Progress, at debug level, which the unified log shows while streaming and
+  /// doesn't keep.
   private func trace(_ event: String) {
     readerLog.debug("\(self.id.displayName, privacy: .public): \(event, privacy: .public)")
+  }
+
+  /// A failure, at error level, which the unified log keeps.
+  private func logFailure(_ event: String, _ error: any Error) {
+    readerLog.error(
+      "\(self.id.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: error), privacy: .public)"
+    )
   }
 }
