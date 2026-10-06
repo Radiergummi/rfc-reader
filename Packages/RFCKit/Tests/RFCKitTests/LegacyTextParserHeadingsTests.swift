@@ -526,6 +526,9 @@ struct LegacyTextParserHeadingsTests {
     var notCentered = lines
     notCentered[13] = .text("                                                  GLOSSARY")
     #expect(heading(notCentered, at: 13) == nil, "set to the right, as a diagram's label")
+    var spreadAcross = lines
+    spreadAcross[13] = .text("          HOST X                                        HOST Y")
+    #expect(heading(spreadAcross, at: 13) == nil, "a diagram's labels, centered as a row")
     var notOnItsOwn = lines
     notOnItsOwn[14] = .text("   A term.")
     #expect(heading(notOnItsOwn, at: 13) == nil)

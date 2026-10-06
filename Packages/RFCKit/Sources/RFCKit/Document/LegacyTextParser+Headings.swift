@@ -131,6 +131,13 @@ extension LegacyTextParser {
   /// whose number a heading has already taken, so a list of one-line items under a
   /// heading of that number stays a list.
   ///
+  /// Once a document has centered a chapter that way, a line after it centered on the
+  /// page, in capitals and on its own, is a chapter heading as well (#550): one with
+  /// no number, RFC 793's `GLOSSARY` and `REFERENCES`, or a numbered chapter with no
+  /// numbered subsection to confirm it, RFC 753's `4.  EXAMPLES & SCENARIOS`
+  /// (`centeredChapters`). A centered line in a body is otherwise a figure's title or
+  /// a caption, which the document's centered chapters are what tell apart.
+  ///
   /// One pass from the end, carrying the next heading down, because asking each line
   /// for the heading after it scanned the section for every one of them: RFC 1122's
   /// 266 indented numbered lines made its parse four times slower. A column-0 line is
@@ -165,7 +172,44 @@ extension LegacyTextParser {
       }
       nearestOfNumber[number] = index
     }
-    return headings
+    return centeredChapters(in: prelude, after: headings)
+  }
+
+  /// `headings`, the centered chapters a following subsection confirms, and every
+  /// line after the first of them that is set like one: centered, in capitals and on
+  /// its own, numbered as a chapter or with a title an unnumbered heading may have.
+  private static func centeredChapters(in prelude: Prelude, after headings: [Int: HeadingInfo])
+    -> [Int: HeadingInfo]
+  {
+    guard let first = headings.keys.min() else { return headings }
+    let lines = prelude.lines
+    var chapters = headings
+    for index in lines.indices[first...] where chapters[index] == nil {
+      guard let string = lines[index].string, !string.isBlank, !string.startsAtColumnZero,
+        isCenteredOnPage(string), !string.contains(where: \.isLowercase),
+        isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
+        let heading = heading(from: string, separators: prelude.separators),
+        !isContentsEntry(at: index, in: lines)
+      else { continue }
+      if let number = heading.number {
+        guard !number.contains(".") else { continue }
+      } else if refusesUnnumberedHeading(heading.title) {
+        continue
+      }
+      chapters[index] = heading
+    }
+    return chapters
+  }
+
+  /// Whether a line is centered on the 72 columns of a page: as far from its left
+  /// edge as from its right, within a few columns, and set in from both. Words spread
+  /// across the line, as a diagram's labels or a table's row are, `TCP A` far left of
+  /// `TCP B`, are not one centered line.
+  static func isCenteredOnPage(_ line: String) -> Bool {
+    let indent = line.prefix { $0 == " " }.count
+    let text = line.trimmingCharacters(in: .whitespaces)
+    let end = text.count + indent
+    return indent >= 8 && end < 72 && abs(indent - (72 - end)) <= 3 && !text.contains("   ")
   }
 
   static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {

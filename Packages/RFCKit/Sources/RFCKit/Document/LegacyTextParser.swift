@@ -454,12 +454,12 @@ public enum LegacyTextParser {
             sections.append(RawSection(heading: heading))
             if let number = heading.number { numbers.insert(number) }
           }
-        } else if let heading = centered[index], let number = heading.number,
-          !numbers.contains(number)
+        } else if let heading = centered[index],
+          heading.number.map({ !numbers.contains($0) }) ?? true
         {
           flushBlock()
           sections.append(RawSection(heading: heading))
-          numbers.insert(number)
+          if let number = heading.number { numbers.insert(number) }
         } else {
           current.append(string)
         }
