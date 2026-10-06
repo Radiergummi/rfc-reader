@@ -179,6 +179,11 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
     continuation?.resume()
   }
 
+  /// Every document with a fetch running.
+  var runningDocuments: Set<DocumentID> {
+    running.withLock { running in Set(running.keys) }
+  }
+
   func isRunning(_ id: DocumentID) -> Bool {
     running.withLock { running in running[id] != nil }
   }

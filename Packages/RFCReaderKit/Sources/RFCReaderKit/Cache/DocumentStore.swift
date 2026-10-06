@@ -51,10 +51,16 @@ public actor DocumentStore {
   private lazy var keptDocuments = DocumentCacheIndex(scanning: keptDirectory)
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: cacheDirectory)
 
+  /// The documents wanted offline, as the app last said: the marked ones, and the
+  /// bookmarked ones when the setting keeps them (`OfflineReconciler.wanted`). A
+  /// body of one of these is written to the kept tier, whoever fetched it, so a
+  /// marked document a reader opens before the reconciler has fetched it is kept,
+  /// not cached.
+  private var wanted: Set<DocumentID> = []
+
   /// The documents `keep(_:formats:client:)` is fetching, whose bodies go to the
-  /// kept tier when they arrive. With the kept tier's own documents, the documents
-  /// wanted offline: the disk says which are kept, so nothing here can drift from
-  /// it, and a keep that fails promises nothing.
+  /// kept tier when they arrive, wanted or not: a keep tapped on this device writes
+  /// where it is asked to before the mark it made reaches `wanted`.
   private var keeping: Set<DocumentID> = []
 
   /// The fetches running, so a second open joins the first, a removal made during
@@ -418,6 +424,30 @@ public actor DocumentStore {
     return keptDocuments.rfcNumbers
   }
 
+  /// Sets the documents wanted offline: where a body fetched from now on is
+  /// written. Moves nothing; the reconciler's plan does that.
+  public func setWanted(_ documents: Set<DocumentID>) {
+    wanted = documents
+  }
+
+  /// What `OfflineReconciler.plan` reads of the disk and the network.
+  public struct OfflineState: Sendable, Hashable {
+    /// The documents with a body in the kept tier.
+    public var kept: Set<DocumentID>
+    /// The documents with a body in the cache.
+    public var cached: Set<DocumentID>
+    /// Every document with a download running, of its body or its text.
+    public var running: Set<DocumentID>
+  }
+
+  public func offlineState() -> OfflineState {
+    keptDocuments.revalidate()
+    cachedDocuments.revalidate()
+    return OfflineState(
+      kept: keptDocuments.all, cached: cachedDocuments.all,
+      running: downloads.runningDocuments.union(texts.runningDocuments))
+  }
+
   /// Removes `id`'s bodies from both tiers. A body that cannot be deleted is left
   /// where it is, and stays cached: the index records what the removal left on
   /// disk, not what it set out to do.
@@ -508,7 +538,8 @@ public actor DocumentStore {
   /// disk has room for it there; see `StorageTier.hasRoom`. A body with no room is
   /// not written, and the document is fetched again on its next open.
   private func write(_ data: Data, for id: DocumentID, format: FileFormat) throws {
-    let tier: StorageTier = keeping.contains(id) || isKept(id) ? .kept : .cache
+    // A body already kept stays where it is until the reconciler releases it.
+    let tier = isKept(id) ? .kept : StorageTier.of(id, wanted: wanted.union(keeping))
     guard tier.hasRoom(for: data.count, available: freeSpace(tier)) else {
       storeLog.notice(
         "\(id.displayName, privacy: .public): not written, the disk is too full")

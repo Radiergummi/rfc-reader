@@ -19,6 +19,44 @@ struct UserDataStoreTests {
     try context.fetchCount(FetchDescriptor<Row>())
   }
 
+  // MARK: - Keep Offline marks (#358)
+
+  @Test func `marking a document offline adds a mark and unmarking removes it`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: context)
+    #expect(try OfflineMarkStore.markedDocuments(in: context) == [.rfc(9110)])
+
+    try OfflineMarkStore.setMarked(.rfc(9110), false, in: context)
+    #expect(try OfflineMarkStore.markedDocuments(in: context).isEmpty)
+  }
+
+  @Test func `marking a marked document again adds no second mark`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: context)
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: context)
+    #expect(try rowCount(OfflineMark.self, in: context) == 1)
+  }
+
+  @Test func `unmarking removes every mark naming the document`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    context.insert(OfflineMark(document: .rfc(9110)))
+    context.insert(OfflineMark(document: .rfc(9110)))
+    context.insert(OfflineMark(document: DocumentID(series: .bcp, number: 14)))
+    try context.save()
+
+    try OfflineMarkStore.setMarked(.rfc(9110), false, in: context)
+    #expect(try OfflineMarkStore.markedDocuments(in: context) == [DocumentID(series: .bcp, number: 14)])
+  }
+
+  @Test func `a mark is saved before it returns`() throws {
+    let container = try makeContainer()
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: container.mainContext)
+    #expect(!container.mainContext.hasChanges)
+  }
+
   // MARK: - Bookmarks
 
   @Test func `toggling adds a bookmark and toggling again removes it`() throws {

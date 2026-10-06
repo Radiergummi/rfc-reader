@@ -57,6 +57,9 @@ public struct DocumentCacheIndex: Sendable {
     documents.contains(id)
   }
 
+  /// Every document with a body here.
+  public var all: Set<DocumentID> { documents }
+
   /// Numbers of every RFC with a cached body. Documents in the other series are
   /// cached too, but the library lists RFCs.
   public var rfcNumbers: Set<Int> {

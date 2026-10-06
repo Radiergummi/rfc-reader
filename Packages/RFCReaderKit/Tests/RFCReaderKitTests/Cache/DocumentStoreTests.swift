@@ -469,4 +469,141 @@ struct DocumentStoreTests {
 
     #expect(sandbox.exists(id, format: .xml, in: .cache))
   }
+
+  // MARK: - Keeping what is wanted offline (#358)
+
+  /// A document marked but not fetched yet, opened by a reader, is written where it
+  /// belongs, rather than into the cache for the reconciler to move.
+  @Test func `a document wanted offline is written to the kept tier when read`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    await store.setWanted([id])
+
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+  }
+
+  @Test func `the offline state names each tier's documents and the downloads running`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let cached = DocumentID.rfc(2119)
+    let kept = DocumentID.rfc(8999)
+    let fetching = DocumentID.rfc(9110)
+    let opening = Task { try await store.document(fetching, formats: [.xml], client: fetcher) }
+    await untilWaiting(documents: 1, for: fetching, in: store)
+    let reading = Task { try await store.originalText(cached, client: fetcher) }
+    await untilWaiting(texts: 1, for: cached, in: store)
+    let state = await store.offlineState()
+    #expect(state.running == [fetching, cached])
+    await fetcher.gate.open()
+    _ = try await opening.value
+    _ = try await reading.value
+    try await store.keep(kept, formats: [.xml], client: fetcher)
+    await store.remove(fetching)
+
+    let settled = await store.offlineState()
+
+    #expect(settled.kept == [kept])
+    #expect(settled.cached == [cached])
+    #expect(settled.running.isEmpty)
+  }
+
+  @MainActor @Test func `marking a cached document moves it without a fetch`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id])
+    await keeper.settle()
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+  }
+
+  @MainActor @Test func `marking a document on neither tier fetches it into the kept tier`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id])
+    await keeper.settle()
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  @MainActor @Test func `unmarking a kept document moves it back into the cache`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [])
+
+    #expect(!sandbox.exists(id, format: .xml, in: .kept))
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+  }
+
+  /// #116's case: the fetch nobody waits for any more is canceled, and nothing is
+  /// written.
+  @MainActor @Test func `a mark removed while its fetch runs keeps nothing`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id])
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await keeper.reconcile(wanted: [])
+    await untilWaiting(documents: 0, for: id, in: store)
+    await fetcher.gate.open()
+    await keeper.settle()
+
+    #expect(await !store.isCached(id))
+  }
+
+  @MainActor @Test func `reconciling again while a fetch runs starts no second one`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id])
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await keeper.reconcile(wanted: [id])
+    #expect(await store.waiters(id).documents == 1)
+    await fetcher.gate.open()
+    await keeper.settle()
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
 }
