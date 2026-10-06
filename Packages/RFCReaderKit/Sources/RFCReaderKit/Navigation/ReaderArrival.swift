@@ -9,9 +9,9 @@
 /// `Request` is the navigation's scroll request, which the reader carries out as it
 /// would any other.
 public enum ReaderArrival<Request> {
-  /// Scroll to this anchor, unanimated.
+  /// Scroll to this anchor.
   case place(String)
-  /// Scroll to the stored reading position's line, unanimated (#322).
+  /// Scroll to the stored reading position's line (#322).
   case stored(ReadingPlace)
   /// Carry out the navigation's scroll request: a deep link, or a place in the
   /// history.
@@ -21,9 +21,7 @@ public enum ReaderArrival<Request> {
 
   /// - Parameters:
   ///   - pendingAnchor: where a scroll asked for while the text view was gone is
-  ///     going, such as a jump from the contents panel over the original text. It
-  ///     was asked for animated, over a text view that was not there; arriving, it
-  ///     is not a movement the reader sees.
+  ///     going, such as a jump from the contents panel over the original text.
   ///   - placeLeft: where the reader was when the text view last went, or nil if
   ///     it has not gone with a place yet. Taken as it goes, not as it comes back:
   ///     a text view reports the top of its text as it is made, before any restore.

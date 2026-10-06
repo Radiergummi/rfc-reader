@@ -89,14 +89,12 @@ struct RFCTextView: View {
   }
 }
 
-/// Where the reader is asked to scroll, and whether it should get there smoothly.
+/// Where the reader is asked to scroll.
 ///
-/// Smoothly only within a document already on screen — a link, a contents row, Back
-/// within it — where the motion says which way the jump went. Arriving at a
-/// document, or at a restored reading position, is not a movement the reader made.
+/// A jump is never animated: the layout engine settles its line in several passes,
+/// each followed by a layout, so there is no single scroll to animate (#585).
 struct ReaderScrollTarget: Equatable {
   let anchor: String
-  let animated: Bool
   /// Characters past the anchor: a saved reading position's line (#322).
   var offset: Int = 0
 }
@@ -205,8 +203,7 @@ struct ReaderInputs {
     }
     coordinator.couple(to: coupling, installed: installs)
     if let scrollTarget {
-      coordinator.scroll(
-        to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
+      coordinator.scroll(to: scrollTarget.anchor, offset: scrollTarget.offset)
     }
     if isShown, !coordinator.isShown { coordinator.reportAgain() }
     coordinator.isShown = isShown
