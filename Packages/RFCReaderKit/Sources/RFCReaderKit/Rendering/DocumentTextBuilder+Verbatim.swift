@@ -165,7 +165,8 @@ extension DocumentTextBuilder {
     ]
     var label = attributes
     label[.kern] = style.codeLabelFont.pointSize * 0.08
-    let line = NSMutableAttributedString(string: type.uppercased(), attributes: label)
+    let line = NSMutableAttributedString(
+      string: CodeLanguage.name(of: type).uppercased(), attributes: label)
     #if !canImport(UIKit)
       if style.emitsLinks, let button = copyButton(attributes: attributes) {
         line.append(NSAttributedString(string: " ", attributes: attributes))
