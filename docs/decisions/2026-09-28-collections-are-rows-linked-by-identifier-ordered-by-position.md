@@ -1,9 +1,18 @@
 # Collections are rows linked by identifier, ordered by position
 
-*Decided September 2026 (issue #349).* A collection is a `DocumentCollection` and its members are `DocumentCollectionItem` rows naming it by identifier, in `SchemaV4`. Not a SwiftData relationship: with one, the collection's to-many side is what two devices both edit once sync is on; as independent rows, two devices adding to one collection each insert a row and nothing is lost. `SchemaV4` declares its own copies of V3's models, and `ReadingPosition` keeps its `originalName: "sectionAnchor"`: without it, the migration drops every anchor, measured on V1, V2 and V3 stores.
+*Decided September 2026 (issue #349).*
+A collection is a `DocumentCollection` and its members are `DocumentCollectionItem` rows naming it by identifier, in `SchemaV4`.
+Not a SwiftData relationship: with one, the collection's to-many side is what two devices both edit once sync is on; as independent rows, two devices adding to one collection each insert a row and nothing is lost.
+`SchemaV4` declares its own copies of V3's models, and `ReadingPosition` keeps its `originalName: "sectionAnchor"`: without it, the migration drops every anchor, measured on V1, V2 and V3 stores.
 
-Items are ordered by `(position, addedAt, documentKey)`. Positions are `Double`s, so a move takes the midpoint of its neighbors and writes one row; a gap too narrow to split, or two equal positions after offline appends, renumbers the collection first (`CollectionOrder`). A move made in a list that hides rows resolves by the visible neighbors' documents, never by offset. A reorder racing a renumber on another device may misplace one item; that is accepted.
+Items are ordered by `(position, addedAt, documentKey)`.
+Positions are `Double`s, so a move takes the midpoint of its neighbors and writes one row; a gap too narrow to split, or two equal positions after offline appends, renumbers the collection first (`CollectionOrder`).
+A move made in a list that hides rows resolves by the visible neighbors' documents, never by offset.
+A reorder racing a renumber on another device may misplace one item; that is accepted.
 
-Items whose collection is missing are not deleted. Under sync they may simply have arrived before it, and deleting them would sync back and empty the collection where it was made; nothing shows them, since every list and count is computed per existing collection. A sweep with a grace period belongs to the sync work.
+Items whose collection is missing are not deleted.
+Under sync they may simply have arrived before it, and deleting them would sync back and empty the collection where it was made; nothing shows them, since every list and count is computed per existing collection.
+A sweep with a grace period belongs to the sync work.
 
-Every change is made by `CollectionStore` and read through `CollectionSnapshot`, both in `RFCReaderKit` and tested there; `LibraryModel` publishes the snapshot, keys a collection's list on its members, and answers every title through `title(for:)`, since a collection's filter does not carry its name. A color is stored by name from a fixed palette (`CollectionColor`), so it adapts to dark mode and an older device reads a name it does not know as the default.
+Every change is made by `CollectionStore` and read through `CollectionSnapshot`, both in `RFCReaderKit` and tested there; `LibraryModel` publishes the snapshot, keys a collection's list on its members, and answers every title through `title(for:)`, since a collection's filter does not carry its name.
+A color is stored by name from a fixed palette (`CollectionColor`), so it adapts to dark mode and an older device reads a name it does not know as the default.
