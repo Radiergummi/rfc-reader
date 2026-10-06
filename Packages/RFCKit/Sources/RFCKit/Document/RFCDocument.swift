@@ -250,13 +250,18 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   public var titleText: String { title.plainText }
 
+  /// `4.2` or `Appendix A`: the number as a heading names it, without the period
+  /// that sets it off from the words. Nil when the section has no number.
+  public var numberLabel: String? {
+    number.map { isAppendix ? "Appendix \($0)" : $0 }
+  }
+
   /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
   /// to compose: the number lives in `number`, not in the words.
   /// With no words after it, nothing follows the number (#683).
   private var numberPrefix: String {
-    guard let number else { return "" }
-    let prefix = isAppendix ? "Appendix \(number)." : "\(number)."
-    return titleText.isEmpty ? prefix : prefix + " "
+    guard let numberLabel else { return "" }
+    return titleText.isEmpty ? numberLabel + "." : numberLabel + ". "
   }
 
   /// `4.2. Title` or `Appendix A. Title` or just the title.
@@ -284,6 +289,8 @@ public enum Block: Sendable, Hashable, Codable {
   case blockQuote([Block])
   case aside([Block])
   case references(ReferenceList)
+  /// The index prep generates from a document's `<iref>`s.
+  case index(IndexBlock)
 }
 
 public struct Paragraph: Sendable, Hashable, Codable {

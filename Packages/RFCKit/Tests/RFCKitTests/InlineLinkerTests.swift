@@ -73,6 +73,19 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A name built on an RFC number -- a protocol item named after a format, a
+  /// message field, a file name -- is a name, not a citation of the RFC, whether
+  /// what follows the period is in capitals or in mixed case.
+  @Test(arguments: [
+    "a client may ask for RFC822.HEADER alone",
+    "the slides are in RFC4321.PS on the server",
+    "the domain taken from RFC5322.From is compared",
+    "a verifier checks RFC5321.MailFrom first",
+  ])
+  func `a dotted name that starts with an RFC number stays text`(sentence: String) {
+    #expect(linker.link(sentence) == [.text(sentence)])
+  }
+
   /// Each number of a list is its own reference, linked where it stands; the word
   /// and the separators stay text.
   @Test func `every number of an RFC list is linked where it stands`() {

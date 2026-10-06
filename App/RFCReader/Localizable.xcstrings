@@ -420,6 +420,16 @@
         }
       }
     },
+    "A–Z" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–Z"
+          }
+        }
+      }
+    },
     "Back" : {
       "localizations" : {
         "de" : {
@@ -566,6 +576,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nebeneinander vergleichen"
+          }
+        }
+      }
+    },
+    "Contains a match" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält einen Treffer"
           }
         }
       }
@@ -817,6 +837,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dokument"
+          }
+        }
+      }
+    },
+    "Document Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumentreihenfolge"
           }
         }
       }
@@ -1697,6 +1727,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Öffnet das Dokument"
+          }
+        }
+      }
+    },
+    "Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reihenfolge"
           }
         }
       }

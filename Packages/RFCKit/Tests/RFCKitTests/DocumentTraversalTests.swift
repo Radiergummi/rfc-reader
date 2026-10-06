@@ -79,6 +79,7 @@ struct DocumentTraversalTests {
     case .blockQuote: "quote"
     case .aside: "aside"
     case .references: "references"
+    case .index: "index"
     }
   }
 

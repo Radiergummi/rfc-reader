@@ -325,7 +325,8 @@ public enum RFCXMLParser {
       let isNumbered = element["numbered"] != "false"
       let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
-      let blocks = parseBlocks(in: element)
+      // Prep's index is one block; a section of any other shape reads as its blocks.
+      let blocks = parseIndex(element).map { [Block.index($0)] } ?? parseBlocks(in: element)
       // A `pn` says which it is. Where there is none, as in unprepped XML, a section is
       // an appendix by where it sits: in `<back>`, or in an appendix. Prepped RFCXML
       // gives every section in `<back>` an appendix's `pn`, but a legacy conversion
@@ -362,6 +363,122 @@ public enum RFCXMLParser {
       case .section(let number): (number, false)
       case .appendix(let number): (number, true)
       case .figure, .table, nil: (nil, false)
+      }
+    }
+
+    // MARK: Index
+
+    /// The index prep generates from a document's `<iref>`s, where `section` is one:
+    /// a `<t>` anchored `rfc.index.index`, which prep writes and nothing else does,
+    /// then a `<ul>` of letter groups. Nil for any other section, and for an index of
+    /// any other shape, which reads as the generic blocks it is made of rather than as
+    /// half an index.
+    func parseIndex(_ section: XMLTree.Element) -> IndexBlock? {
+      let body = section.elements.filter { $0.name != "name" }
+      guard body.count == 2, body[0].name == "t", body[0]["anchor"] == IndexBlock.anchor,
+        body[1].name == "ul"
+      else { return nil }
+      var groups: [IndexBlock.Group] = []
+      for item in body[1].elements {
+        guard let group = parseIndexGroup(item) else { return nil }
+        groups.append(group)
+      }
+      return IndexBlock(groups: groups)
+    }
+
+    /// A letter group: an anchored empty `<t>`, whose anchor names the letter by its
+    /// code point, and a list holding one `<dl>`.
+    private func parseIndexGroup(_ item: XMLTree.Element) -> IndexBlock.Group? {
+      let parts = item.elements
+      guard item.name == "li", parts.count == 2, parts[0].name == "t", parts[1].name == "ul",
+        let anchor = parts[0]["anchor"], IndexBlock.label(ofGroupAnchor: anchor) != nil
+      else { return nil }
+      let items = parts[1].elements
+      guard items.count == 1, let onlyItem = items.first, onlyItem.name == "li" else { return nil }
+      let lists = onlyItem.elements
+      guard lists.count == 1, let list = lists.first, list.name == "dl",
+        let read = parseIndexEntries(list), read.parentLocators.isEmpty
+      else { return nil }
+      return IndexBlock.Group(anchor: anchor, entries: read.entries)
+    }
+
+    /// The entries of an index `<dl>`, a `<dt>` and a `<dd>` each, and the locators of
+    /// those without a term. Prep writes an item's own locators so when it has
+    /// subitems too (RFC 9051, 9499), and they are the enclosing entry's. An entry
+    /// without a term that holds a list holds the subentries of the entry before it
+    /// (RFC 9110's `Grammar`).
+    private func parseIndexEntries(_ list: XMLTree.Element) -> (
+      entries: [IndexBlock.Entry], parentLocators: [IndexBlock.Locator]
+    )? {
+      let parts = list.elements
+      guard parts.count.isMultiple(of: 2) else { return nil }
+      var entries: [IndexBlock.Entry] = []
+      var parentLocators: [IndexBlock.Locator] = []
+      for start in stride(from: 0, to: parts.count, by: 2) {
+        let term = parts[start]
+        let description = parts[start + 1]
+        // A `<dd>` holds its locators' paragraphs and at most one list of subentries;
+        // a second would be half an index.
+        let contents = description.elements
+        let nestedLists = contents.filter { $0.name == "dl" }
+        guard term.name == "dt", description.name == "dd", nestedLists.count <= 1,
+          let locators = parseIndexLocators(contents.filter { $0.name != "dl" })
+        else { return nil }
+        // A term names something: an RFC number in it is part of the name, not a
+        // citation (RFC 9051 indexes fetch items named after a format).
+        let words = normalize(parseInlines(term.children, linkBare: false))
+        if words.isEmpty {
+          parentLocators += locators
+        } else {
+          entries.append(IndexBlock.Entry(term: words, locators: locators))
+        }
+        if let nested = nestedLists.first {
+          guard !entries.isEmpty, let read = parseIndexEntries(nested) else { return nil }
+          entries[entries.count - 1].locators += read.parentLocators
+          entries[entries.count - 1].subentries += read.entries
+        }
+      }
+      return (entries, parentLocators)
+    }
+
+    /// The locators in the paragraphs of an index `<dd>`: each `<xref>` in a `<t>`,
+    /// primary where prep set it in `<strong>`, with nothing but separators between
+    /// them, which prep writes as a semicolon. Nil for anything else, such as words.
+    private func parseIndexLocators(_ paragraphs: [XMLTree.Element]) -> [IndexBlock.Locator]? {
+      var locators: [IndexBlock.Locator] = []
+      for part in paragraphs {
+        guard part.name == "t", Self.holdsOnlySeparators(part) else { return nil }
+        for element in part.elements {
+          switch element.name {
+          case "xref":
+            locators.append(
+              IndexBlock.Locator(reference: parseCrossReference(element), isPrimary: false))
+          case "strong":
+            let emphases = element.elements.filter { $0.name == "em" }
+            let references = element.elements.flatMap { $0.name == "em" ? $0.elements : [$0] }
+            guard !references.isEmpty, references.allSatisfy({ $0.name == "xref" }),
+              ([element] + emphases).allSatisfy(Self.holdsOnlySeparators)
+            else {
+              return nil
+            }
+            locators += references.map {
+              IndexBlock.Locator(reference: parseCrossReference($0), isPrimary: true)
+            }
+          default:
+            return nil
+          }
+        }
+      }
+      return locators
+    }
+
+    /// Whether the text directly in `paragraph`, or in the emphasis around a primary
+    /// locator, is only what separates locators: a semicolon or a comma, and white
+    /// space.
+    private static func holdsOnlySeparators(_ paragraph: XMLTree.Element) -> Bool {
+      paragraph.children.allSatisfy { node in
+        guard case .text(let text) = node else { return true }
+        return text.allSatisfy { $0.isWhitespace || $0 == ";" || $0 == "," }
       }
     }
 

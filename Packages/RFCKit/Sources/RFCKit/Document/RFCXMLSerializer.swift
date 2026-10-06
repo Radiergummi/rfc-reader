@@ -453,7 +453,30 @@ public struct RFCXMLSerializer: Sendable {
         writeReference(reference, writer: &writer, context: &context)
       }
       writer.close("references")
+    case .index(let index):
+      writeIndex(index, writer: &writer, context: &context)
     }
+  }
+
+  /// An index in the shape prep generates and `RFCXMLParser` reads back: the
+  /// anchored paragraph, then a list item per letter group, each holding the `<dl>`
+  /// of its entries that `IndexBlock.definitionList` makes.
+  private func writeIndex(_ index: IndexBlock, writer: inout Writer, context: inout Context) {
+    writer.empty("t", [("anchor", IndexBlock.anchor)])
+    writer.open("ul", [("empty", "true")])
+    for group in index.groups {
+      writer.open("li")
+      writer.empty("t", [("anchor", group.anchor)])
+      writer.open("ul", [("empty", "true")])
+      writer.open("li")
+      writeBlock(
+        .definitionList(IndexBlock.definitionList(group.entries)), writer: &writer,
+        context: &context)
+      writer.close("li")
+      writer.close("ul")
+      writer.close("li")
+    }
+    writer.close("ul")
   }
 
   // MARK: - Inlines
