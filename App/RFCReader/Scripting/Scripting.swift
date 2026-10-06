@@ -48,6 +48,19 @@
       }
     }
 
+    /// The Keep Offline mark (#358). Setting it returns before a download it starts
+    /// has finished; the store being in memory is reported as a bookmark's is.
+    @objc var isKeptOffline: Bool {
+      get { LibraryModel.shared.offlineMarks.contains(id) }
+      set {
+        if AppData.isStoredInMemory {
+          ScriptError.report(AppData.storeWarning.message)
+        }
+        guard newValue != isKeptOffline else { return }
+        LibraryModel.shared.toggleKeptOffline(id)
+      }
+    }
+
     /// Where the object lives, which is how a script gets a reference it can use
     /// again: the application's `rfcs`, by number.
     nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {

@@ -250,7 +250,7 @@ struct DocumentStoreTests {
     #expect(sandbox.exists(id, format: .xml, in: .cache))
     #expect(!sandbox.exists(id, format: .xml, in: .kept))
     #expect(await !store.isKept(id))
-    #expect(await store.keptNumbers().isEmpty)
+    #expect(await store.offlineState().kept.isEmpty)
   }
 
   /// Marking a document already read moves its body across and fetches nothing.
@@ -270,7 +270,7 @@ struct DocumentStoreTests {
     #expect(!sandbox.exists(id, format: .xml, in: .cache))
     #expect(await store.isKept(id))
     #expect(await store.isCached(id))
-    #expect(await store.keptNumbers() == [8999])
+    #expect(await store.offlineState().kept == [id])
   }
 
   @Test func `keeping a document on neither tier fetches it into the kept tier`() async throws {
@@ -536,7 +536,9 @@ struct DocumentStoreTests {
     #expect(!sandbox.exists(id, format: .xml, in: .cache))
   }
 
-  @MainActor @Test func `marking a document on neither tier fetches it into the kept tier`() async throws {
+  @MainActor @Test func `marking a document on neither tier fetches it into the kept tier`()
+    async throws
+  {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()

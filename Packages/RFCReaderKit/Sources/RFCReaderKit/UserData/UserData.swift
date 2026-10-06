@@ -446,7 +446,8 @@ public enum UserData {
     removeDuplicates(
       items, keyedBy: { "\($0.collectionIdentifier?.uuidString ?? "")/\($0.documentKey)" },
       in: context)
-    let marks = try context.fetch(FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
+    let marks = try context.fetch(
+      FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
     removeDuplicates(marks, keyedBy: \.documentKey, in: context)
     if context.hasChanges { try context.save() }
   }

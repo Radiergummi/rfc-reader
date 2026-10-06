@@ -39,6 +39,9 @@
       <property name="bookmarked" code="RFCb" type="boolean" description="Whether the RFC is bookmarked. Set it to bookmark or unbookmark the RFC.">
         <cocoa key="isBookmarked"/>
       </property>
+      <property name="kept offline" code="RFCk" type="boolean" description="Whether the RFC is marked Keep Offline. Set it to keep the RFC for reading offline, or to stop keeping it.">
+        <cocoa key="isKeptOffline"/>
+      </property>
     </class>
 
     <class-extension extends="application" description="RFC Reader's top-level scripting object.">

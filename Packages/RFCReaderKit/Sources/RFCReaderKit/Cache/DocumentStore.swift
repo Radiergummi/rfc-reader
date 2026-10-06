@@ -418,12 +418,6 @@ public actor DocumentStore {
     return nil
   }
 
-  /// Numbers of every RFC with a body in the kept tier.
-  public func keptNumbers() -> Set<Int> {
-    keptDocuments.revalidate()
-    return keptDocuments.rfcNumbers
-  }
-
   /// Sets the documents wanted offline: where a body fetched from now on is
   /// written. Moves nothing; the reconciler's plan does that.
   public func setWanted(_ documents: Set<DocumentID>) {

@@ -48,7 +48,8 @@ struct UserDataStoreTests {
     try context.save()
 
     try OfflineMarkStore.setMarked(.rfc(9110), false, in: context)
-    #expect(try OfflineMarkStore.markedDocuments(in: context) == [DocumentID(series: .bcp, number: 14)])
+    #expect(
+      try OfflineMarkStore.markedDocuments(in: context) == [DocumentID(series: .bcp, number: 14)])
   }
 
   @Test func `a mark is saved before it returns`() throws {

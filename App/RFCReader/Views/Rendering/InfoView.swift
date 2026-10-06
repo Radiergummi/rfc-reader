@@ -449,8 +449,8 @@ private struct LinkRow: View {
 /// outline arrow of a document not kept keeps it, moving a copy already read or
 /// downloading one (#358). A copy no longer kept goes to the reading cache, which
 /// may remove it when it needs the room; the tooltip says so. Whether it is kept is
-/// the library's set, so it is right the moment the pane shows, and a download or a
-/// removal re-reads the size. Only an RFC has a body of its own; a series number the
+/// the document's Keep Offline mark, from the library's set, so it is right the
+/// moment the pane shows, and a download or a removal re-reads the size. Only an RFC has a body of its own; a series number the
 /// index has not resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
@@ -465,7 +465,7 @@ private struct OfflineSection: View {
   @State private var hadNoRoom = false
 
   private var isKept: Bool {
-    document.series == .rfc && library.downloadedNumbers.contains(document.number)
+    document.series == .rfc && library.offlineMarks.contains(document)
   }
 
   var body: some View {
@@ -521,18 +521,17 @@ private struct OfflineSection: View {
 
   private func toggle() {
     isWorking = true
+    let keeps = !isKept
     Task {
-      if isKept {
-        await library.removeDownload(document)
-      } else {
-        do {
-          try await library.download(document)
-        } catch {
-          readerLog.failure(of: document, "keeping offline failed", error)
-          hadNoRoom = error is DocumentStore.NotEnoughSpace
-          downloadFailed = true
-        }
+      do {
+        try await library.setKeptOffline(document, keeps)
+      } catch {
+        readerLog.failure(of: document, "keeping offline failed", error)
+        hadNoRoom = error is DocumentStore.NotEnoughSpace
+        downloadFailed = true
       }
+      // The mark changed before the download finished, and the size with it.
+      if keeps { size = await library.downloadedSize(document) }
       isWorking = false
     }
   }
