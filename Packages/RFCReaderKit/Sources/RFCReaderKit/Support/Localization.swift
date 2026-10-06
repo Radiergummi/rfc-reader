@@ -14,6 +14,12 @@ extension String {
   }
 }
 
+extension Bundle {
+  /// RFCReaderKit's own resources, its catalog among them, for a test to ask: the
+  /// test target's `Bundle.module` is its own, whose only language is English.
+  static let kit = Bundle.module
+}
+
 extension LocalizedStringResource {
   /// Text that is data, for an API that only takes a resource, such as an App
   /// Intent's display representation: looked up in a table no catalog has, so a

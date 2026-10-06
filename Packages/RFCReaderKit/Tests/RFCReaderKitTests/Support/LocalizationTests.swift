@@ -64,7 +64,7 @@ struct LocalizationTests {
   }
 
   @Test func `the interface language is the one the catalog resolves to, not the region's`() {
-    let resolved = Locale(identifier: Bundle.module.preferredLocalizations.first ?? "en")
+    let resolved = Locale(identifier: Bundle.kit.preferredLocalizations.first ?? "en")
     #expect(Locale.interface.language.languageCode == resolved.language.languageCode)
   }
 
