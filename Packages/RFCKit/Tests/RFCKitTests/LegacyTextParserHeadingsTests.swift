@@ -490,6 +490,54 @@ struct LegacyTextParserHeadingsTests {
     #expect(heading(aNearerOne, at: 3) == "WIDGET RULES")
   }
 
+  /// RFC 793 centers `GLOSSARY` and `REFERENCES` as it centers its chapters. As
+  /// text, its references were never a bibliography, and its citations linked
+  /// nowhere (#550).
+  @Test func `a centered unnumbered chapter heads its chapter`() throws {
+    let document = try Fixtures.document("rfc793.txt")
+    let titles = document.sections.map(\.titleText)
+    #expect(titles.contains("GLOSSARY"))
+    #expect(titles.contains("REFERENCES"))
+    #expect(document.referenceLists.flatMap(\.entries).count >= 2)
+  }
+
+  /// Once a document centers its chapters, a line centered the same way, in capitals
+  /// and on its own, is a chapter heading too: an unnumbered one, or a numbered one
+  /// with no numbered subsection to confirm it (#550). Nothing else centered is.
+  @Test func `a document that centers its chapters centers its other chapters too`() {
+    let lines: [LegacyTextParser.Line] = [
+      .text(""), .text("                            1.  WIDGET RULES"), .text(""),
+      .text("   The text."), .text(""), .text("1.1.  Widget Sizes"), .text(""),
+      .text("   More text."), .text(""),
+      .text("                          2.  WIDGET EXAMPLES"), .text(""),
+      .text("   An example."), .text(""),
+      .text("                                GLOSSARY"), .text(""),
+      .text("   A term."), .text(""),
+    ]
+    func heading(_ lines: [LegacyTextParser.Line], at index: Int) -> String? {
+      LegacyTextParser.centeredHeadings(in: .init(lines: lines, bodyIsIndented: true))[index]?
+        .title
+    }
+    #expect(heading(lines, at: 9) == "WIDGET EXAMPLES")
+    #expect(heading(lines, at: 13) == "GLOSSARY")
+    var mixedCase = lines
+    mixedCase[13] = .text("                            Figure Widgets")
+    #expect(heading(mixedCase, at: 13) == nil, "a caption")
+    var notCentered = lines
+    notCentered[13] = .text("                                                  GLOSSARY")
+    #expect(heading(notCentered, at: 13) == nil, "set to the right, as a diagram's label")
+    var notOnItsOwn = lines
+    notOnItsOwn[14] = .text("   A term.")
+    #expect(heading(notOnItsOwn, at: 13) == nil)
+    var noCenteredChapter = lines
+    noCenteredChapter[5] = .text("3.1.  Widget Sizes")
+    #expect(heading(noCenteredChapter, at: 13) == nil, "the document centers no chapter")
+    var beforeTheFirstChapter = lines
+    beforeTheFirstChapter.insert(
+      contentsOf: [.text("                                PREFACE"), .text("")], at: 1)
+    #expect(heading(beforeTheFirstChapter, at: 1) == nil, "the title page repeated, a preface")
+  }
+
   // MARK: Unnumbered headings (#201)
 
   /// A column-0 line that starts in lower case is a MIB line, wrapped prose or an `o`
