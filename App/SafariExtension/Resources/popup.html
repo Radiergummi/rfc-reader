@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="popup.css">
+    <script type="module" src="popup.js"></script>
+  </head>
+  <body>
+    <button id="grant" type="button" hidden>Allow on rfc-editor.org and Datatracker</button>
+    <button id="open" type="button" disabled>Open in RFC Reader</button>
+    <label id="redirect-row" hidden>
+      <input id="redirect" type="checkbox">
+      <span>Always open RFCs from <span id="site"></span> in RFC Reader</span>
+    </label>
+    <p class="note">Safari asks before it opens RFC Reader, each time.</p>
+  </body>
+</html>

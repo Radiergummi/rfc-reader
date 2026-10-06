@@ -55,10 +55,16 @@ final class LibraryModel {
     case idle
     case loading
     case ready(updatedAt: Date)
-    case failed(String)
+    /// What kind of failure, for the sentence the status line says, and the error's
+    /// own description, which it shows second (#759).
+    case failed(LoadFailure.Kind, message: String)
 
     var isReady: Bool {
       if case .ready = self { true } else { false }
+    }
+
+    static func failed(_ error: any Error) -> IndexState {
+      .failed(LoadFailure(error: error).kind, message: error.localizedDescription)
     }
   }
 
@@ -256,6 +262,14 @@ final class LibraryModel {
     }
   }
 
+  /// What an undone or redone removal from a collection does with its failure:
+  /// logged, as `editCollections` logs the change's own (#759).
+  func collectionUndoFailed(_ error: any Error) {
+    libraryLog.error(
+      "undoing or redoing a removal from a collection failed: \(String(describing: error), privacy: .public)"
+    )
+  }
+
   /// Adds the bookmark or removes it, on the app's context, titled from the index
   /// or else `documentTitle`, what an open reader has parsed. A failure is logged
   /// rather than shown, as a collection's is (#125). A failed lookup changes
@@ -354,7 +368,7 @@ final class LibraryModel {
         await refreshIndex()
       }
     } catch {
-      indexState = .failed(error.localizedDescription)
+      indexState = .failed(error)
       settleIndex()
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
@@ -582,7 +596,7 @@ final class LibraryModel {
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
       if index == nil {
-        indexState = .failed(error.localizedDescription)
+        indexState = .failed(error)
         settleIndex()
       }
     }
@@ -724,7 +738,8 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The automatic daily check of the index under way, which a second one joins.
+  /// The refresh of the index under way, the automatic daily check's or a Retry's,
+  /// which a second one joins.
   @ObservationIgnored private var indexRefresh: Task<Void, Never>?
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
@@ -773,6 +788,16 @@ final class LibraryModel {
     }
     indexRefresh = check
     return check
+  }
+
+  /// Retry, after the index failed: on any network, as a person asked for it, and
+  /// joining a refresh already under way rather than fetching the index beside it.
+  func retryIndex() {
+    guard indexRefresh == nil else { return }
+    indexRefresh = Task(name: "Refresh index") {
+      await refreshIndex()
+      indexRefresh = nil
+    }
   }
 
   /// Compares the bookmarked RFCs with the last baseline, after every change to the

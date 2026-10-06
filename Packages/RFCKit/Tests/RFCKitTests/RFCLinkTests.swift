@@ -211,8 +211,87 @@ struct RFCLinkTests {
     #expect(RFCLink(citing: url) == expected)
   }
 
+  /// Every form the Safari extension meets (#194), each keeping its section: the
+  /// RFC Editor's page in any of its formats, the PDF it keeps under `pdfrfc/` among
+  /// them, and Datatracker's two pages.
+  @Test(arguments: [
+    "https://www.rfc-editor.org/rfc/rfc4321#section-8.3",
+    "https://rfc-editor.org/rfc/rfc4321.html#section-8.3",
+    "https://www.rfc-editor.org/rfc/rfc4321.txt#section-8.3",
+    "https://www.rfc-editor.org/rfc/rfc4321.xml#section-8.3",
+    "https://www.rfc-editor.org/rfc/rfc4321.pdf#section-8.3",
+    "https://www.rfc-editor.org/rfc/pdfrfc/rfc4321.txt.pdf#section-8.3",
+    "https://datatracker.ietf.org/doc/html/rfc4321#section-8.3",
+    "https://datatracker.ietf.org/doc/rfc4321/#section-8.3",
+    "https://datatracker.ietf.org/doc/rfc4321#section-8.3",
+  ])
+  func `the extension opens every form of a document's page at its section`(address: String)
+    throws
+  {
+    let url = try #require(URL(string: address))
+    let link = RFCLink(id: .rfc(4321), section: "8.3")
+    #expect(RFCLink(url: url) == link)
+    #expect(RFCLink(documentPage: url) == link)
+    #expect(RFCLink(documentPage: url)?.appURL.absoluteString == "rfc://4321#section-8.3")
+  }
+
+  /// A page about a document names it, so the toolbar button can open it, but it is
+  /// not the document: someone following a link to its errata or its history wants
+  /// that page, and the opt-in redirect leaves it in Safari (#194).
+  @Test(arguments: [
+    "https://www.rfc-editor.org/info/rfc4321",
+    "https://www.rfc-editor.org/errata/rfc4321",
+    "https://datatracker.ietf.org/doc/rfc4321/history/",
+    "https://datatracker.ietf.org/doc/rfc4321/bibtex/",
+    "https://www.rfc-editor.org/rfc/rfc4321.json",
+    "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
+  ])
+  func `a page about a document is no document page`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(url: url) == RFCLink(id: .rfc(4321)))
+    #expect(RFCLink(documentPage: url) == nil)
+  }
+
+  /// A number in a Datatracker path is no RFC unless it is spelled as one: a draft's
+  /// revision, a meeting and an IPR disclosure are numbered too, and the extension
+  /// would open RFC 19, 118 or 6000 for them (#194).
+  @Test(arguments: [
+    "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics/19/",
+    "https://datatracker.ietf.org/meeting/118",
+    "https://datatracker.ietf.org/ipr/6000/",
+  ])
+  func `a bare number on Datatracker names no RFC`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(url: url) == nil)
+    #expect(RFCLink(documentPage: url) == nil)
+  }
+
+  /// The RFC Editor keeps a BCP's and an STD's text beside the RFCs', and the app
+  /// opens those as it opens an RFC.
+  @Test(arguments: [
+    ("https://www.rfc-editor.org/rfc/bcp/bcp14.txt", DocumentID(series: .bcp, number: 14)),
+    ("https://www.rfc-editor.org/rfc/std/std1.txt", DocumentID(series: .std, number: 1)),
+  ])
+  func `a BCP's or an STD's text is a document page`(address: String, id: DocumentID) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(documentPage: url) == RFCLink(id: id))
+  }
+
+  /// Nor is the app's own link, which the extension never has to send anywhere.
+  @Test(arguments: [
+    "rfc://4321",
+    "https://www.rfc-editor.org/",
+    "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics/",
+    "https://example.com/rfc/rfc4321",
+  ])
+  func `anything else is no document page`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(documentPage: url) == nil)
+  }
+
   @Test(arguments: [
     "https://www.rfc-editor.org/errata/rfc4321",
+    "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
     "https://datatracker.ietf.org/doc/rfc4321/history/",
     "https://www.rfc-editor.org/rfc/rfc4321.html#name-example-flows",
   ])
