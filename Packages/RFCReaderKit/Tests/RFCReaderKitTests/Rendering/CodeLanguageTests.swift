@@ -9,6 +9,7 @@ struct CodeLanguageTests {
   @Test(arguments: [
     ("application/jsonpath", "JSON Path"),
     ("http-message", "HTTP Message"),
+    ("http-message-new", "HTTP Message"),
     ("yangtree", "YANG Tree"),
     ("cbor-diag", "CBOR Diagnostic Notation"),
     ("x509", "X.509"),
@@ -19,6 +20,14 @@ struct CodeLanguageTests {
 
   @Test func `a type is looked up whatever its case`() {
     #expect(CodeLanguage.name(of: "Application/JSONPath") == "JSON Path")
+  }
+
+  @Test(arguments: [
+    (" message/http ; msgtype=\"request\"", "HTTP Message"),
+    ("cbordiag", "CBOR Diagnostic Notation"),
+  ])
+  func `a type is looked up as the renderers read it`(type: String, name: String) {
+    #expect(CodeLanguage.name(of: type) == name)
   }
 
   @Test(arguments: ["abnf", "yang", "CDDL", "rust"])

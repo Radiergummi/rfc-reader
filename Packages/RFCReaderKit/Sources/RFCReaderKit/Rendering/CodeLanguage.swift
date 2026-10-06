@@ -1,11 +1,14 @@
+import RFCKit
+
 /// What a code block's language label says (#820). A `<sourcecode type>` is a
 /// keyword or a media type, and some of them read badly in the label's capitals,
 /// `APPLICATION/JSONPATH` or `CBOR-DIAG`: those are shown by their language's name.
 /// The names are the reader's, English like the rest of the body.
 enum CodeLanguage {
-  /// The types of the RFCXML corpus whose capitals do not read as a name, keyed in
-  /// lowercase. A type whose capitals read well, `ABNF` or `YANG`, needs none.
-  static let names: [String: String] = [
+  /// The types of the RFCXML corpus whose capitals do not read as a name, keyed by
+  /// their `ArtworkType` name. A type whose capitals read well, `ABNF` or `YANG`,
+  /// needs none, and neither does an author's typo.
+  private static let names: [String: String] = [
     "abnf9110": "ABNF",
     "application/jsonpath": "JSON Path",
     "application/pgp-encrypted": "OpenPGP Message",
@@ -14,12 +17,12 @@ enum CodeLanguage {
     "application/sslkeylogfile": "SSL Key Log",
     "asn1": "ASN.1",
     "cbor-diag": "CBOR Diagnostic Notation",
-    "cbordiag": "CBOR Diagnostic Notation",
     "cbor-pretty": "Annotated CBOR",
     "core-link-format": "CoRE Link Format",
     "dns-rr": "DNS Records",
     "example-crypto-material": "Example Key Material",
     "http-message": "HTTP Message",
+    "http-message-new": "HTTP Message",
     "message/http": "HTTP Message",
     "message/rfc822": "Internet Message",
     "nfsv4compound": "NFSv4 COMPOUND",
@@ -41,8 +44,9 @@ enum CodeLanguage {
     "yangtree": "YANG Tree",
   ]
 
-  /// The name of the language `type` declares, or `type` as given where it has none.
+  /// The name of the language `type` declares, read as the renderers read it, or
+  /// `type` as given where it has none.
   static func name(of type: String) -> String {
-    names[type.lowercased()] ?? type
+    ArtworkType.canonical(type).flatMap { names[$0.name] } ?? type
   }
 }
