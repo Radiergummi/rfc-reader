@@ -311,16 +311,34 @@ struct AbbreviationsTests {
         == ["IIS=Internet Information Services"])
   }
 
-  /// A word that supplies two letters with nothing before it to take one stays
-  /// as it is: `IPv6`, `QoS`, `DoS`, and a word before whose initial the short
-  /// form has no room for, `Public` before `Pre-Shared Key`.
-  @Test func `a word that holds two letters keeps them when the word before cannot`() {
+  /// A word with one letter of the short form in each part never reaches back:
+  /// `IPv6`, `QoS`, `DoS`, and `Pre-Shared Key` with `Public` before it.
+  @Test func `a match with a letter in each word keeps its start`() {
     #expect(
       pairs("the Internet Protocol version 6 (IPv6) header") == ["IPv6=Internet Protocol version 6"]
     )
     #expect(pairs("for Quality of Service (QoS) marking") == ["QoS=Quality of Service"])
     #expect(pairs("against Denial of Service (DoS) floods") == ["DoS=Denial of Service"])
     #expect(pairs("with a Public Pre-Shared Key (PSK) only") == ["PSK=Pre-Shared Key"])
+  }
+
+  /// A word that holds two letters reaches back only to a word the short form
+  /// has room for: `Simple` would need a third `S` in `SSH`, and `in` is a
+  /// function word.
+  @Test func `a word that holds two letters keeps them when the word before cannot`() {
+    #expect(pairs("over a Simple Secure Shell (SSH) session") == ["SSH=Secure Shell"])
+    #expect(pairs("is kept in Identifiers (II) only") == ["II=Identifiers"])
+  }
+
+  /// An acronym inside the expansion supplies its letters by right, so it is no
+  /// sign that the match stopped short.
+  @Test func `an acronym in the expansion does not reach back`() {
+    #expect(
+      pairs("it supports SSH Fingerprint (SSHFP) records") == ["SSHFP=SSH Fingerprint"])
+    #expect(
+      pairs("this provides PPP over Ethernet (PPPoE) links") == ["PPPoE=PPP over Ethernet"])
+    #expect(
+      pairs("the Public PPP over Ethernet (PPPoE) service") == ["PPPoE=PPP over Ethernet"])
   }
 
   /// Each part of a hyphenated word supplies its own letter, so no word holds two;

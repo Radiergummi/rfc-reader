@@ -173,7 +173,8 @@ enum Abbreviations {
 
   /// Schwartz and Hearst's match: each letter and digit of `short`, right to left,
   /// against `long`, right to left, case-insensitively; the first has to start a
-  /// word. The long form runs from that word to the end.
+  /// word. The long form runs from that word to the end, or from the word before
+  /// it where the match stopped a word short (`wordBefore`).
   static func longForm(of short: String, in long: String) -> String? {
     let shortOriginal = Array(short)
     let shortCharacters = shortOriginal.map(folded)
@@ -218,6 +219,11 @@ enum Abbreviations {
     return !(previous.isLetter || previous.isNumber || previous == "-")
   }
 
+  /// The word of `text` that starts at `index`, a hyphenated word counting as one.
+  private static func word(_ text: [Character], at index: Int) -> String {
+    String(text[index...].prefix { $0.isLetter || $0.isNumber || $0 == "-" })
+  }
+
   /// The words of `text` from `start`, a hyphenated word counting as one.
   private static func words(_ text: [Character], from start: Int) -> [String] {
     String(text[start...]).split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "-") })
@@ -229,14 +235,18 @@ enum Abbreviations {
   /// matched both in `Report` of `Receiver Report`, and `IIS` matched only
   /// `Information Services` (#690). Only the short form's capitals and digits
   /// count, since its lowercase letters spell out a word, as `Tree` in `E-Tree`
-  /// does; and each part of a hyphenated word counts as a word here, so
-  /// `man-in-the-middle (MITM)` holds one letter in each and stays as it is.
+  /// does. Each part of a hyphenated word counts as a word here, so
+  /// `man-in-the-middle (MITM)` holds one letter in each and stays as it is. A
+  /// part all in capitals is an acronym that supplies its letters by right, so
+  /// `SSH Fingerprint (SSHFP)` stays as it is too.
   ///
   /// The word before has to start with the first letter, follow with nothing but
   /// a space, not be a function word, and its initial and the ones after it have
-  /// to follow the short form less a plural `s`, so `Public Pre-Shared Key (PSK)`
-  /// keeps `Pre-Shared Key`, and `synchronization sources (SSRCs)` does not take
-  /// in a word before it.
+  /// to follow the short form less a plural `s`, so `Simple Secure Shell (SSH)`
+  /// keeps `Secure Shell`, and `synchronization sources (SSRCs)` does not take in
+  /// a word before it. Nor is a lowercase word taken in before a capital: `supports
+  /// SSH Fingerprint (SSHFP)` is a verb before a name whose `Fingerprint` supplies
+  /// two letters by right.
   private static func wordBefore(
     _ long: [Character], taking start: Int, matched: [Int], for short: String
   ) -> Int? {
@@ -245,21 +255,29 @@ enum Abbreviations {
       while !startsWord(long, at: index) { index -= 1 }
       return index
     }
-    func partStart(_ index: Int) -> Int {
-      var index = index
-      while index > 0, long[index - 1].isLetter || long[index - 1].isNumber { index -= 1 }
-      return index
+    func isAlphanumeric(_ character: Character) -> Bool {
+      character.isLetter || character.isNumber
     }
-    guard Set(matched.map(partStart)).count < matched.count else { return nil }
+    func part(around index: Int) -> Range<Int> {
+      var start = index
+      while start > 0, isAlphanumeric(long[start - 1]) { start -= 1 }
+      var end = index
+      while end < long.count, isAlphanumeric(long[end]) { end += 1 }
+      return start..<end
+    }
+    let parts = matched.map(part(around:)).filter { part in
+      long[part].contains(where: \.isLowercase)
+    }
+    guard Set(parts).count < parts.count else { return nil }
     var index = start - 1
     while index >= 0, long[index].isWhitespace { index -= 1 }
     guard index >= 0, index < start - 1, long[index].isLetter || long[index].isNumber else {
       return nil
     }
     index = wordStart(index)
-    let word = String(long[index...].prefix { $0.isLetter || $0.isNumber || $0 == "-" })
     guard folded(long[index]) == folded(long[start]),
-      !functionWords.contains(word.lowercased()),
+      long[index].isUppercase || !long[start].isUppercase,
+      !functionWords.contains(word(long, at: index).lowercased()),
       initialsFollow(singular(short), words(long, from: index))
     else { return nil }
     return index
@@ -297,15 +315,12 @@ enum Abbreviations {
   private static func startingOnAContentWord(
     _ long: [Character], at start: Int, for short: String
   ) -> Int? {
-    func word(at index: Int) -> String {
-      String(long[index...].prefix { $0.isLetter || $0.isNumber || $0 == "-" })
-    }
-    guard functionWords.contains(word(at: start)) else { return start }
+    guard functionWords.contains(word(long, at: start)) else { return start }
     let initial = folded(long[start])
     var index = start - 1
     while index >= 0 {
       if startsWord(long, at: index), folded(long[index]) == initial,
-        !functionWords.contains(word(at: index).lowercased())
+        !functionWords.contains(word(long, at: index).lowercased())
       {
         return initialsFollow(short, words(long, from: index)) ? index : nil
       }
