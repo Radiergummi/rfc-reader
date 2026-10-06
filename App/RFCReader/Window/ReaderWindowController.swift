@@ -5,6 +5,7 @@
   import RFCReaderKit
   import SwiftData
   import SwiftUI
+  import os
 
   /// One window — which is one tab — and everything in it.
   ///
@@ -47,6 +48,9 @@
     /// Whether a print is being prepared or its panel is up, so a second ⌘P
     /// neither builds the PDF again nor asks for a second sheet.
     private var isPrinting = false
+    /// The PDF being made for a print, canceled when the window closes, so a closed
+    /// window neither goes on building it nor asks for a sheet on itself.
+    private var printing: Task<Void, Never>?
     /// Whether an export's save panel is up or its file is being made, so a second
     /// ⌘⇧E neither asks for a second panel nor makes the file again.
     private var isExporting = false
@@ -503,15 +507,22 @@
       printInfo.bottomMargin = 0
       let original = reader.showOriginal
       isPrinting = true
-      Task {
+      printing = Task {
         do {
           let data = try await DocumentPDF.make(
             for: id, original: original, paperSize: printInfo.paperSize, library: library)
+          guard !Task.isCancelled else { return }
           guard let pdf = PDFDocument(data: data),
             let operation = pdf.printOperation(
               for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
           else {
             isPrinting = false
+            readerLog.error(
+              "\(id.displayName, privacy: .public): print failed: PDFKit made no print operation of the PDF"
+            )
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Couldn't print \(id.displayName)")
+            alert.beginSheetModal(for: window, completionHandler: nil)
             return
           }
           // The one field of the Save as PDF sheet a print can fill: its Author,
@@ -523,6 +534,10 @@
             didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
         } catch {
           isPrinting = false
+          guard !Task.isCancelled else { return }
+          readerLog.error(
+            "\(id.displayName, privacy: .public): print failed: \(String(describing: error), privacy: .public)"
+          )
           _ = window.presentError(error)
         }
       }
@@ -657,6 +672,7 @@
         observation.cancel()
       }
       observations = []
+      printing?.cancel()
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
