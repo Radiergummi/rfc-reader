@@ -22,8 +22,7 @@ import RFCKit
 /// count as a cached body is exactly the kind of rule that wants tests of its own.
 public struct DocumentCacheIndex: Sendable {
   private let directory: URL
-  /// Every document with a body in the directory.
-  public private(set) var documents: Set<DocumentID>
+  private var documents: Set<DocumentID>
 
   /// The directory's modification date when `documents` last matched it, or `nil`
   /// when it could not be read.

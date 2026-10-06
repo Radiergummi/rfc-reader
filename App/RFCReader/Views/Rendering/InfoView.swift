@@ -447,10 +447,10 @@ private struct LinkRow: View {
 /// arrow turns to a cross under the pointer and stops keeping the copy, and the
 /// outline arrow of a document not kept keeps it, moving a copy already read or
 /// downloading one (#358). A copy no longer kept goes to the reading cache, which
-/// may remove it when it needs the room; the tooltip says so. Whether it is kept is the library's set,
-/// so it is right the moment the pane shows, and a download or a removal re-reads
-/// the size. Only an RFC has a body of its own; a series number the index has not
-/// resolved yet has none.
+/// may remove it when it needs the room; the tooltip says so. Whether it is kept is
+/// the library's set, so it is right the moment the pane shows, and a download or a
+/// removal re-reads the size. Only an RFC has a body of its own; a series number the
+/// index has not resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
   let library: LibraryModel
