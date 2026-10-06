@@ -34,14 +34,8 @@ import SwiftUI
             Label("Reading Path", systemImage: "list.number")
           }
           .labelStyle(.titleAndIcon)
-          Button {
-            library.setKeptOfflineInBackground(row.id, !isKeptOffline)
-          } label: {
-            Label(
-              isKeptOffline ? "Stop Keeping Offline" : "Keep Offline",
-              systemImage: isKeptOffline ? "xmark.circle" : "arrow.down.circle")
-          }
-          .labelStyle(.titleAndIcon)
+          KeepOfflineButton(document: row.id, library: library)
+            .labelStyle(.titleAndIcon)
         }
         if collection != nil {
           Button("Remove from Collection") { remove(row.id) }
@@ -50,8 +44,6 @@ import SwiftUI
     }
 
     private var isBookmarked: Bool { library.bookmarkedDocuments.contains(row.id) }
-    private var isKeptOffline: Bool { library.offlineMarks.contains(row.id) }
-
     private func toggleBookmark() {
       library.toggleBookmark(row.id)
     }

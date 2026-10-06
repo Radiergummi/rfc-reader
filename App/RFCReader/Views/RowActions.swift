@@ -63,13 +63,7 @@ import SwiftUI
             } label: {
               Label("Reading Path", systemImage: "list.number")
             }
-            Button {
-              library.setKeptOfflineInBackground(rfc.id, !isKeptOffline)
-            } label: {
-              Label(
-                isKeptOffline ? "Stop Keeping Offline" : "Keep Offline",
-                systemImage: isKeptOffline ? "xmark.circle" : "arrow.down.circle")
-            }
+            KeepOfflineButton(document: rfc.id, library: library)
             ShareLink(
               item: RFCEditorEndpoints.infoPage(rfc.id),
               subject: Text(verbatim: "\(rfc.id.displayName): \(rfc.title)"))
@@ -106,8 +100,6 @@ import SwiftUI
       .padding()
       .frame(width: 340, alignment: .leading)
     }
-
-    private var isKeptOffline: Bool { library.offlineMarks.contains(row.id) }
 
     private func toggleBookmark() {
       library.toggleBookmark(row.id)

@@ -482,7 +482,7 @@ private struct OfflineSection: View {
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
-        .accessibilityLabel(isKept ? "Stop Keeping Offline" : "Keep Offline")
+        .accessibilityLabel(Text(verbatim: DocumentActions.keepOfflineCommand(isKept: isKept)))
         .accessibilityHint(help)
         Text(
           downloadFailed

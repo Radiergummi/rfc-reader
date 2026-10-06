@@ -150,10 +150,9 @@ final class LibraryModel {
   /// kept body back into the cache.
   @ObservationIgnored private var hasReadOfflineMarks = false
 
-  /// The RFCs of `offlineMarks`, which is what the library lists.
-  var availableOfflineNumbers: Set<Int> {
-    Set(offlineMarks.filter { $0.series == .rfc }.map(\.number))
-  }
+  /// The RFCs of `offlineMarks`, which is what the library lists, kept beside it
+  /// rather than worked out on every read: the sidebar counts it as it draws.
+  private(set) var availableOfflineNumbers: Set<Int> = []
 
   /// Moves, releases and fetches bodies to match `offlineMarks`.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
@@ -241,6 +240,7 @@ final class LibraryModel {
     hasReadOfflineMarks = true
     guard marks != offlineMarks else { return }
     offlineMarks = marks
+    availableOfflineNumbers = Set(marks.filter { $0.series == .rfc }.map(\.number))
     reconcileOffline()
   }
 
@@ -1337,8 +1337,7 @@ final class LibraryModel {
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     let open = sceneRegistry.open.compactMap(\.selection)
-    // A marked document's body is in the cache only until the reconciler moves it.
-    return bookmarked.union(read).union(open).union(offlineMarks)
+    return bookmarked.union(read).union(open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
@@ -1413,23 +1412,12 @@ final class LibraryModel {
     do {
       try mark(id, keptOffline: isKept)
     } catch {
-      libraryLog.error(
-        "\(id.displayName, privacy: .public): marking Keep Offline failed: \(String(describing: error), privacy: .public)"
-      )
+      libraryLog.failure(of: id, "marking Keep Offline failed", error)
       return
     }
     guard isKept else { return }
-    Task(name: "Keep offline") {
-      do {
-        try await offlineKeeper.fetchNow(id)
-      } catch is CancellationError {
-        // Unmarked while it downloaded.
-      } catch {
-        libraryLog.error(
-          "\(id.displayName, privacy: .public): keeping offline failed: \(String(describing: error), privacy: .public)"
-        )
-      }
-    }
+    // The keeper logs a failed download itself.
+    Task(name: "Keep offline") { try? await offlineKeeper.fetchNow(id) }
   }
 
   /// Saves the mark and reads the marks again at once, rather than when the save's

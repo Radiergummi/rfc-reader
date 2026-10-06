@@ -363,6 +363,23 @@ struct DocumentStoreTests {
     #expect(await !store.isCached(read))
   }
 
+  /// A wanted body in the cache is there only until the reconciler moves it.
+  @Test func `eviction never removes a wanted body from the cache`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+    await store.setWanted([id])
+
+    let evicted = await store.evict(pinned: [], bound: 0)
+
+    #expect(evicted.isEmpty)
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+  }
+
   /// The kept tier can be downloaded again, so it stays out of backups.
   @Test func `the kept tier is excluded from backups`() async throws {
     let sandbox = Sandbox()

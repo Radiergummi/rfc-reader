@@ -51,9 +51,8 @@ public actor DocumentStore {
   private lazy var keptDocuments = DocumentCacheIndex(scanning: keptDirectory)
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: cacheDirectory)
 
-  /// The documents wanted offline, as the app last said: the marked ones, and the
-  /// bookmarked ones when the setting keeps them (`OfflineReconciler.wanted`). A
-  /// body of one of these is written to the kept tier, whoever fetched it, so a
+  /// The documents wanted offline, as the app last said. A body of one of these is
+  /// written to the kept tier, whoever fetched it, and eviction leaves it be, so a
   /// marked document a reader opens before the reconciler has fetched it is kept,
   /// not cached.
   private var wanted: Set<DocumentID> = []
@@ -477,11 +476,7 @@ public actor DocumentStore {
   public func keep(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws
   {
-    if isKept(id) { return }
-    if isCached(id) {
-      try move(id, to: .kept)
-      return
-    }
+    if try keepCached(id) || isKept(id) { return }
     keeping.insert(id)
     defer { keeping.remove(id) }
     if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
@@ -497,11 +492,13 @@ public actor DocumentStore {
   /// Moves `id`'s cached body into the kept tier, replacing one already there, so
   /// a document with a body in both ends with one. Fetches nothing: a body no
   /// longer in the cache, evicted or purged since it was asked for, leaves this
-  /// with nothing to do.
-  public func keepCached(_ id: DocumentID) throws {
+  /// with nothing to do. Answers whether there was a body to move.
+  @discardableResult
+  public func keepCached(_ id: DocumentID) throws -> Bool {
     cachedDocuments.revalidate()
-    guard cachedDocuments.contains(id) else { return }
+    guard cachedDocuments.contains(id) else { return false }
     try move(id, to: .kept)
+    return true
   }
 
   /// Stops keeping `id` offline: its body goes back into the cache, where eviction
@@ -810,15 +807,16 @@ public actor DocumentStore {
   public var hasGrownSinceEviction: Bool { hasGrown }
 
   /// Removes the least recently opened bodies of the cache past `bound`, never a
-  /// pinned one; see `CacheEviction`. The kept tier is never looked at. Only after
-  /// the cache has grown, so an ordinary open costs nothing here. Returns what it
-  /// removed.
+  /// pinned one, nor one wanted offline, which is in the cache only until the
+  /// reconciler moves it; see `CacheEviction`. The kept tier is never looked at.
+  /// Only after the cache has grown, so an ordinary open costs nothing here.
+  /// Returns what it removed.
   @discardableResult
   public func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
     guard hasGrown else { return [] }
     hasGrown = false
     let victims = CacheEviction.victims(
-      of: CacheEviction.entries(in: cacheDirectory), pinned: pinned, bound: bound)
+      of: CacheEviction.entries(in: cacheDirectory), pinned: pinned.union(wanted), bound: bound)
     for id in victims {
       remove(id, from: [.cache])
     }
