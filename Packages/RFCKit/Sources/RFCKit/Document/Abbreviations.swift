@@ -175,11 +175,13 @@ enum Abbreviations {
   /// against `long`, right to left, case-insensitively; the first has to start a
   /// word. The long form runs from that word to the end.
   static func longForm(of short: String, in long: String) -> String? {
-    let shortCharacters = Array(short).map(folded)
+    let shortOriginal = Array(short)
+    let shortCharacters = shortOriginal.map(folded)
     let original = Array(long)
     let longCharacters = original.map(folded)
     var shortIndex = shortCharacters.count - 1
     var longIndex = longCharacters.count - 1
+    var matched: [Int] = []
     while shortIndex >= 0 {
       let current = shortCharacters[shortIndex]
       guard current.isLetter || current.isNumber else {
@@ -192,10 +194,15 @@ enum Abbreviations {
         longIndex -= 1
       }
       guard longIndex >= 0 else { return nil }
+      if !shortOriginal[shortIndex].isLowercase {
+        matched.append(longIndex)
+      }
       longIndex -= 1
       shortIndex -= 1
     }
-    guard let start = startingOnAContentWord(original, at: longIndex + 1, for: short) else {
+    let first = longIndex + 1
+    let matchStart = wordBefore(original, taking: first, matched: matched, for: short) ?? first
+    guard let start = startingOnAContentWord(original, at: matchStart, for: short) else {
       return nil
     }
     let result = String(original[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -215,6 +222,54 @@ enum Abbreviations {
   private static func words(_ text: [Character], from start: Int) -> [String] {
     String(text[start...]).split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "-") })
       .map(String.init)
+  }
+
+  /// The word before the match's first word, when a word of the match holds two
+  /// letters of the short form: the match took the nearest letters, so `RR`
+  /// matched both in `Report` of `Receiver Report`, and `IIS` matched only
+  /// `Information Services` (#690). Only the short form's capitals and digits
+  /// count, since its lowercase letters spell out a word, as `Tree` in `E-Tree`
+  /// does; and each part of a hyphenated word counts as a word here, so
+  /// `man-in-the-middle (MITM)` holds one letter in each and stays as it is.
+  ///
+  /// The word before has to start with the first letter, follow with nothing but
+  /// a space, not be a function word, and its initial and the ones after it have
+  /// to follow the short form less a plural `s`, so `Public Pre-Shared Key (PSK)`
+  /// keeps `Pre-Shared Key`, and `synchronization sources (SSRCs)` does not take
+  /// in a word before it.
+  private static func wordBefore(
+    _ long: [Character], taking start: Int, matched: [Int], for short: String
+  ) -> Int? {
+    func wordStart(_ index: Int) -> Int {
+      var index = index
+      while !startsWord(long, at: index) { index -= 1 }
+      return index
+    }
+    func partStart(_ index: Int) -> Int {
+      var index = index
+      while index > 0, long[index - 1].isLetter || long[index - 1].isNumber { index -= 1 }
+      return index
+    }
+    guard Set(matched.map(partStart)).count < matched.count else { return nil }
+    var index = start - 1
+    while index >= 0, long[index].isWhitespace { index -= 1 }
+    guard index >= 0, index < start - 1, long[index].isLetter || long[index].isNumber else {
+      return nil
+    }
+    index = wordStart(index)
+    let word = String(long[index...].prefix { $0.isLetter || $0.isNumber || $0 == "-" })
+    guard folded(long[index]) == folded(long[start]),
+      !functionWords.contains(word.lowercased()),
+      initialsFollow(singular(short), words(long, from: index))
+    else { return nil }
+    return index
+  }
+
+  /// `short` less a plural `s` after a capital: `RRs` is `RR`.
+  private static func singular(_ short: String) -> String {
+    guard short.count > 2, short.hasSuffix("s"), short.dropLast().last?.isUppercase == true
+    else { return short }
+    return String(short.dropLast())
   }
 
   /// Lowercase words an expansion does not start with. The match takes the nearest

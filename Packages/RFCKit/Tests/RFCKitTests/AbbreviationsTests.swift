@@ -315,10 +315,23 @@ struct AbbreviationsTests {
   /// as it is: `IPv6`, `QoS`, `DoS`, and a word before whose initial the short
   /// form has no room for, `Public` before `Pre-Shared Key`.
   @Test func `a word that holds two letters keeps them when the word before cannot`() {
-    #expect(pairs("the Internet Protocol version 6 (IPv6) header") == ["IPv6=Internet Protocol version 6"])
+    #expect(
+      pairs("the Internet Protocol version 6 (IPv6) header") == ["IPv6=Internet Protocol version 6"]
+    )
     #expect(pairs("for Quality of Service (QoS) marking") == ["QoS=Quality of Service"])
-    #expect(pairs("a Denial of Service (DoS) attack") == ["DoS=Denial of Service"])
+    #expect(pairs("against Denial of Service (DoS) floods") == ["DoS=Denial of Service"])
     #expect(pairs("with a Public Pre-Shared Key (PSK) only") == ["PSK=Pre-Shared Key"])
+  }
+
+  /// Each part of a hyphenated word supplies its own letter, so no word holds two;
+  /// and a plural `s` is not a letter a word's initial stands for.
+  @Test func `parts of a hyphenated word and a plural do not take in the word before`() {
+    #expect(
+      pairs("by a malicious man-in-the-middle (MITM) attacker")
+        == ["MITM=man-in-the-middle"])
+    #expect(
+      pairs("names three shared synchronization sources (SSRCs) here")
+        == ["SSRCs=synchronization sources"])
   }
 
   private func glossary(_ term: String, _ definition: String) -> String? {
