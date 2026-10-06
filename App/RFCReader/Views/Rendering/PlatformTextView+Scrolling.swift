@@ -84,18 +84,16 @@ extension PlatformTextView {
     #endif
   }
 
-  /// `animated` is a request, not a promise: with Reduce Motion on, every jump is
-  /// instant. Never above the top; past the end only while `knowsEnd` is false, the
-  /// end being an estimate (`ReaderLayout.scrollOrigin`).
-  func scroll(toY y: CGFloat, animated: Bool = false, knowsEnd: Bool = false) {
+  /// Never above the top; past the end only while `knowsEnd` is false, the end
+  /// being an estimate (`ReaderLayout.scrollOrigin`).
+  func scroll(toY y: CGFloat, knowsEnd: Bool = false) {
     #if canImport(UIKit)
-      let animated = animated && !UIAccessibility.isReduceMotionEnabled
       // `y` is where the uncovered viewport starts; see `viewportTop`.
       let offset = ReaderLayout.scrollOrigin(
         y - contentInset.top, contentHeight: knowsEnd ? contentSize.height : nil,
         viewportHeight: bounds.height, topInset: contentInset.top,
         bottomInset: contentInset.bottom)
-      setContentOffset(CGPoint(x: 0, y: offset), animated: animated)
+      setContentOffset(CGPoint(x: 0, y: offset), animated: false)
     #else
       guard let scroll = enclosingScrollView else { return }
       let clip = scroll.contentView
@@ -106,19 +104,8 @@ extension PlatformTextView {
           y - clip.contentInsets.top, contentHeight: knowsEnd ? frame.height : nil,
           viewportHeight: clip.bounds.height, topInset: clip.contentInsets.top,
           bottomInset: clip.contentInsets.bottom))
-      guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-        clip.scroll(to: target)
-        scroll.reflectScrolledClipView(clip)
-        return
-      }
-      // The clip view's animator moves its bounds; the scroll view follows each
-      // step through the bounds-change notifications it already observes, so the
-      // scroller and the reader's own tracking see the motion as a scroll.
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = 0.3
-        context.allowsImplicitAnimation = true
-        clip.animator().setBoundsOrigin(target)
-      }
+      clip.scroll(to: target)
+      scroll.reflectScrolledClipView(clip)
     #endif
   }
 }
