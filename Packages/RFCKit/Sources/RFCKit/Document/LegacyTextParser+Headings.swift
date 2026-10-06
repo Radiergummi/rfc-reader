@@ -193,11 +193,13 @@ extension LegacyTextParser {
   /// - A numbered one has a chapter's number, between the confirmed chapters' around
   ///   it: a numbered row of a figure in chapter 1 is not chapter 2. RFC 830 has no
   ///   chapter 4 heading, so its 5 is not 4 + 1.
-  /// - An unnumbered one, or an appendix, comes after every numbered heading: the
-  ///   back matter, `GLOSSARY` and `REFERENCES`. A centered capitals line inside a
-  ///   chapter would take the chapter's subsections after it under it.
-  /// - The capitals line directly under a centered heading is that heading's title,
-  ///   RFC 830's `CONVENTION ASSIGNMENTS` under its `Appendix A`, and heads nothing.
+  /// - An unnumbered one, or an appendix, comes after every numbered heading, the
+  ///   chapters found here included: the back matter, `GLOSSARY` and `REFERENCES`.
+  ///   A centered capitals line inside a chapter would take the chapter's
+  ///   subsections after it under it, or the chapter after it.
+  /// - The unnumbered line directly under a centered heading is that heading's
+  ///   title, RFC 830's `CONVENTION ASSIGNMENTS` under its `Appendix A`, and heads
+  ///   nothing.
   private static func centeredChapters(
     in prelude: Prelude, confirmed: [Int: HeadingInfo], columnZeroNumbers: Set<String>,
     lastNumbered: Int?
@@ -209,45 +211,57 @@ extension LegacyTextParser {
       let first = ordered.first(where: { !columnZeroNumbers.contains(String($0.number)) })
     else { return confirmed }
     let lines = prelude.lines
-    let backMatter = max(lastNumbered ?? 0, ordered.last?.index ?? 0)
-    var chapters = confirmed
-    var previousHeading: Int?
-    for index in lines.indices[first.index...] {
-      if chapters[index] != nil {
+    // The chapters from the first one on, where back matter starts after `backMatter`.
+    func scan(backMatter: Int) -> [Int: HeadingInfo] {
+      var chapters = confirmed
+      var previousHeading: Int?
+      for index in lines.indices[first.index...] {
+        if chapters[index] != nil {
+          previousHeading = index
+          continue
+        }
+        guard let string = lines[index].string, !string.isBlank else { continue }
+        let followsAHeading = previousHeading != nil
+        previousHeading = nil
+        guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
+          isCenteredOnPage(string), !isContentsEntry(at: index, in: lines),
+          let heading = heading(from: string, separators: prelude.separators),
+          heading.isAppendix || !string.contains(where: \.isLowercase),
+          !isSpreadAcross(string, numbered: heading.number != nil && !heading.isAppendix)
+        else { continue }
+        if heading.isAppendix || heading.number == nil {
+          guard !followsAHeading, index > backMatter,
+            heading.isAppendix || !refusesUnnumberedHeading(heading.title)
+          else { continue }
+        } else {
+          guard let number = heading.number.flatMap(Int.init),
+            !columnZeroNumbers.contains(String(number)),
+            ordered.allSatisfy({ chapter in
+              chapter.index < index ? chapter.number < number : chapter.number > number
+            })
+          else { continue }
+        }
+        chapters[index] = heading
         previousHeading = index
-        continue
       }
-      guard let string = lines[index].string, !string.isBlank else { continue }
-      let followsAHeading = previousHeading != nil
-      previousHeading = nil
-      guard !followsAHeading,
-        isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
-        isCenteredOnPage(string), !isContentsEntry(at: index, in: lines),
-        let heading = heading(from: string, separators: prelude.separators),
-        heading.isAppendix || !string.contains(where: \.isLowercase),
-        !isSpreadAcross(string, numbered: heading.number != nil && !heading.isAppendix)
-      else { continue }
-      if heading.isAppendix || heading.number == nil {
-        guard index > backMatter,
-          heading.isAppendix || !refusesUnnumberedHeading(heading.title)
-        else { continue }
-      } else {
-        guard let number = heading.number.flatMap(Int.init),
-          !columnZeroNumbers.contains(String(number)),
-          ordered.allSatisfy({ chapter in
-            chapter.index < index ? chapter.number < number : chapter.number > number
-          })
-        else { continue }
-      }
-      chapters[index] = heading
-      previousHeading = index
+      return chapters
+    }
+    // A numbered chapter the scan finds moves the back matter after it, and what it
+    // took for back matter before that chapter was a caption: scan again from there.
+    var backMatter = max(lastNumbered ?? 0, ordered.last?.index ?? 0)
+    var chapters = scan(backMatter: backMatter)
+    while let lastChapter = chapters.filter({ $0.value.number != nil && !$0.value.isAppendix })
+      .keys.max(), lastChapter > backMatter
+    {
+      backMatter = lastChapter
+      chapters = scan(backMatter: backMatter)
     }
     return chapters
   }
 
   /// Whether a line is centered on the 72 columns of a page: as far from its left
   /// edge as from its right, within a few columns, and set in from both.
-  static func isCenteredOnPage(_ line: String) -> Bool {
+  private static func isCenteredOnPage(_ line: String) -> Bool {
     let indent = line.leadingSpaceCount
     let end = line.trimmingCharacters(in: .whitespaces).count + indent
     return indent >= 8 && end < 72 && abs(indent - (72 - end)) <= 3

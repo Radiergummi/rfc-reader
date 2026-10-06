@@ -545,6 +545,11 @@ struct LegacyTextParserHeadingsTests {
     var inAChapter = lines
     inAChapter[3] = .text("                             WIDGET DIAGRAM")
     #expect(heading(inAChapter, at: 3) == nil, "a caption before the chapter's subsections")
+    var beforeAnUnconfirmedChapter = lines
+    beforeAnUnconfirmedChapter[7] = .text("                             WIDGET DIAGRAM")
+    #expect(
+      heading(beforeAnUnconfirmedChapter, at: 7) == nil,
+      "a caption before a chapter no subsection confirms")
     var underTheHeading = lines
     underTheHeading[15] = .text("                              WIDGET TERMS")
     #expect(heading(underTheHeading, at: 15) == nil, "the glossary's title")
