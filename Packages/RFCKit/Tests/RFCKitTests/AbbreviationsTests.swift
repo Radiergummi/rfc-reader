@@ -296,6 +296,31 @@ struct AbbreviationsTests {
     #expect(pairs("a peer-to-peer Overlay (TO) is").isEmpty)
   }
 
+  /// The nearest word with the first letter can hold a later letter too, and then
+  /// the match stops a word short: `RR` matched both of its letters in `Report`
+  /// (#690). Where the word before starts with the first letter and the initials
+  /// still follow the short form, the expansion starts there.
+  @Test func `two letters in the first word give way to the word before`() {
+    #expect(pairs("each Receiver Report (RR) carries") == ["RR=Receiver Report"])
+    #expect(pairs("holds the resource records (RRs) of") == ["RRs=resource records"])
+    #expect(
+      pairs("a Universally Unique Identifier (UUID) names")
+        == ["UUID=Universally Unique Identifier"])
+    #expect(
+      pairs("runs Internet Information Services (IIS) on")
+        == ["IIS=Internet Information Services"])
+  }
+
+  /// A word that supplies two letters with nothing before it to take one stays
+  /// as it is: `IPv6`, `QoS`, `DoS`, and a word before whose initial the short
+  /// form has no room for, `Public` before `Pre-Shared Key`.
+  @Test func `a word that holds two letters keeps them when the word before cannot`() {
+    #expect(pairs("the Internet Protocol version 6 (IPv6) header") == ["IPv6=Internet Protocol version 6"])
+    #expect(pairs("for Quality of Service (QoS) marking") == ["QoS=Quality of Service"])
+    #expect(pairs("a Denial of Service (DoS) attack") == ["DoS=Denial of Service"])
+    #expect(pairs("with a Public Pre-Shared Key (PSK) only") == ["PSK=Pre-Shared Key"])
+  }
+
   private func glossary(_ term: String, _ definition: String) -> String? {
     Abbreviations.glossaryEntry(
       term: term, definition: [.paragraph(Paragraph(text: definition))])?.long
