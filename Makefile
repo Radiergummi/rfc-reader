@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -70,12 +70,13 @@ fmt:
 	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
-# RFCReaderKit only on a Mac; elsewhere it cannot build.
+# RFCReaderKit and the benchmarks only on a Mac; elsewhere they cannot build.
 build:
 	swift build --package-path $(RFCKIT) $(RFCKIT_WARNINGS)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
 	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
+	$(MAKE) build-benchmarks
 endif
 
 ## Run the RFCKit and corpus-build test suites
@@ -148,6 +149,13 @@ BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+## Build the benchmarks without running them
+# Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
+# in RFCKit or RFCReaderKit that breaks them fails there rather than when someone
+# next wants a baseline (#419). Debug: it checks that they compile, not how fast.
+build-benchmarks:
+	swift build --package-path $(BENCHMARKS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
