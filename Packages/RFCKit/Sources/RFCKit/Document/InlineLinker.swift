@@ -53,7 +53,8 @@ struct InlineLinker: Sendable {
   /// A period and a capital after the number make a name, not a citation: an IMAP
   /// fetch item named after a format (`RFC822.SIZE`), a message field
   /// (`RFC5322.From`), a file (`RFC1131.PS`). A sentence run on without its space
-  /// would read the same, but the corpus holds none.
+  /// reads the same and loses its link; the legacy corpus holds one, where the
+  /// converter joined two paragraphs.
   static let bareRFCPattern = Gated(
     regex: #/\bRFC[\s\-]?(?<number>\d+)\b(?!\.[A-Z])/#, gate: \.rfc)
   /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
