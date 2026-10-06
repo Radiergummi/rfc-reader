@@ -4,30 +4,26 @@ Date: 2026-09-21
 Machine: Apple M3 Pro, macOS 27.0 (build 26A428), arm64
 Toolchain: Apple Swift 6.4 (swiftlang-6.4.0.34.1)
 
-*References below to "Task N", "the spec", "the design spec" and "requirement 1" are to the implementation plan and the design this was measured for, retired in #161; the TextKit decision (`2026-09-20-textkit-2-for-the-reader-body.md`) keeps what the design decided. Requirement 1 was that selection flows continuously through the document, across artwork, tables and figures. Both documents are recoverable with `git show ed0dc7d:docs/superpowers/plans/2026-09-21-textkit-2-reader-body.md` and `git show ed0dc7d:docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md`.*
+*References below to "Task N", "the spec", "the design spec" and "requirement 1" are to the implementation plan and the design this was measured for, retired in #161; the TextKit decision (`2026-09-20-textkit-2-for-the-reader-body.md`) keeps what the design decided.
+Requirement 1 was that selection flows continuously through the document, across artwork, tables and figures.
+Both documents are recoverable with `git show ed0dc7d:docs/superpowers/plans/2026-09-21-textkit-2-reader-body.md` and `git show ed0dc7d:docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md`.*
 
-Measured with the throwaway `Tools/textkit-probe` package (deleted after this run; git history
-keeps it at the commit that adds this file). Probes A and B ran headless — no window, no view —
-against `corpus/xml/rfc5661.xml`: 968 sections, 1,303,608 characters in the approximated
-attributed string (one paragraph per block, `plainText`, monospaced for preformatted). Probe C
-fetched `https://www.rfc-editor.org/rfc/rfc9110.xml` and `.../rfc9114.xml` over the network.
+Measured with the throwaway `Tools/textkit-probe` package (deleted after this run; git history keeps it at the commit that adds this file).
+Probes A and B ran headless — no window, no view — against `corpus/xml/rfc5661.xml`: 968 sections, 1,303,608 characters in the approximated attributed string (one paragraph per block, `plainText`, monospaced for preformatted).
+Probe C fetched `https://www.rfc-editor.org/rfc/rfc9110.xml` and `.../rfc9114.xml` over the network.
 
 ## Probe A — deep jump
 
 **Decision note (added after this probe ran):** the > 400 ms verdict below stands as measured.
-The decision is to proceed with the single-storage TextKit 2 design as specified anyway, and to
-revisit layout cost later as a paging optimization. The measured numbers and the verdict itself
-are unchanged.
+The decision is to proceed with the single-storage TextKit 2 design as specified anyway, and to revisit layout cost later as a paging optimization.
+The measured numbers and the verdict itself are unchanged.
 
-**Resolution (added 2026-09-21, once the milestone shipped):** the gate's Stop was overridden by that
-decision, not acted on. Neither of the two options the gate cell names below was taken —
-there is no chunked storage per chapter, and the design did not weaken requirement 1. The
-project shipped the single-storage design as specified, accepted the visible ~530 ms delay
-on the largest documents at first paint, and deferred paging as the fix. That deferred work
-is now tracked as issue #9, which cites these exact numbers (551.5 / 532.5 / 539.3 ms).
+**Resolution (added 2026-09-21, once the milestone shipped):** the gate's Stop was overridden by that decision, not acted on.
+Neither of the two options the gate cell names below was taken — there is no chunked storage per chapter, and the design did not weaken requirement 1.
+The project shipped the single-storage design as specified, accepted the visible ~530 ms delay on the largest documents at first paint, and deferred paging as the fix.
+That deferred work is now tracked as issue #9, which cites these exact numbers (551.5 / 532.5 / 539.3 ms).
 
-Cold storage, lay out only as far as the last section (`ensureLayout` over the full document
-range in one call, timed).
+Cold storage, lay out only as far as the last section (`ensureLayout` over the full document range in one call, timed).
 
 | Trial | Time |
 |---|---|
@@ -43,22 +39,18 @@ range in one call, timed).
 | 150–400 ms | Proceed, but Task 9 must lay out asynchronously and show the jump target as soon as its fragment exists. |
 | **> 400 ms** | **Stop.** Sequential layout is too expensive for reading-position restore on every open. Return to the spec: the remaining options are chunked storages per chapter, which weakens requirement 1, or accepting a visible delay on deep links. |
 
-Both warm trials (532.5 ms, 539.3 ms) land in the **> 400 ms — Stop** band. Per the task
-instructions at the time, this was reported as a concern rather than acted on: the probe tool
-was not yet deleted and no workaround was invented in this task. **The decision on how to
-proceed — chunked storages per chapter, or accepting a visible delay on deep links — was the
-controller's, not this task's.**
+Both warm trials (532.5 ms, 539.3 ms) land in the **> 400 ms — Stop** band.
+Per the task instructions at the time, this was reported as a concern rather than acted on: the probe tool was not yet deleted and no workaround was invented in this task.
+**The decision on how to proceed — chunked storages per chapter, or accepting a visible delay on deep links — was the controller's, not this task's.**
 
-**Update (added 2026-09-21, once the milestone shipped):** both of those statements describe this task's
-moment, not the file's current state. The probe tool *was* deleted once its run was captured
-here (see the file header above and "Files" below); it does not still exist. And the decision
-was made: see the "Resolution" note above the gate table. Neither named option was taken —
-the controller instead accepted the design as specified and opened issue #9 for paging.
+**Update (added 2026-09-21, once the milestone shipped):** both of those statements describe this task's moment, not the file's current state.
+The probe tool *was* deleted once its run was captured here (see the file header above and "Files" below); it does not still exist.
+And the decision was made: see the "Resolution" note above the gate table.
+Neither named option was taken — the controller instead accepted the design as specified and opened issue #9 for paging.
 
 ## Probe B — restyle
 
-Rebuild the approximated attributed string at the same measure and lay the whole document out
-again from scratch (simulates a font-size change).
+Rebuild the approximated attributed string at the same measure and lay the whole document out again from scratch (simulates a font-size change).
 
 | Trial | Time |
 |---|---|
@@ -66,13 +58,12 @@ again from scratch (simulates a font-size change).
 | 2 (warm) | 545.4 ms |
 | 3 (warm) | 624.0 ms |
 
-**Debounce for Task 9's font-size slider:** the higher of the two warm trials, 624.0 ms, rounded
-up to the next 50 ms → **650 ms**.
+**Debounce for Task 9's font-size slider:** the higher of the two warm trials, 624.0 ms, rounded up to the next 50 ms → **650 ms**.
 
 ## Probe C — table grid/stacked threshold
 
-Real font metrics (17 pt system font), two measures: 712 pt (760 pt frame minus 24 pt padding
-each side) and 320 pt (narrow iPhone). Gutter 16 pt between columns.
+Real font metrics (17 pt system font), two measures: 712 pt (760 pt frame minus 24 pt padding each side) and 320 pt (narrow iPhone).
+Gutter 16 pt between columns.
 
 ### RFC 9110 (12 tables)
 
@@ -103,10 +94,8 @@ each side) and 320 pt (narrow iPhone). Gutter 16 pt between columns.
 
 ### Comparison against the spec's character estimate
 
-The design spec's "Tables as text, in one of two shapes" section predicted, from character
-counts alone, that RFC 9110's tables 1, 4 and 6 (105–116 characters, each with an 87–92 character
-prose column) would come out stacked at the 712 pt measure, and that most of RFC 9114's tables
-would come out grid. Both hold with real font metrics:
+The design spec's "Tables as text, in one of two shapes" section predicted, from character counts alone, that RFC 9110's tables 1, 4 and 6 (105–116 characters, each with an 87–92 character prose column) would come out stacked at the 712 pt measure, and that most of RFC 9114's tables would come out grid.
+Both hold with real font metrics:
 
 - RFC 9110 tables 1, 4, 6 are stacked at 712 pt, exactly as predicted.
 - RFC 9114: 4 of 5 tables (1, 2, 3, 5) are grid at 712 pt; only table 4 is stacked — "most... grid"

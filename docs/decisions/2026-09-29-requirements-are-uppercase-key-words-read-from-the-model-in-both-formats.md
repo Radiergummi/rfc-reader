@@ -1,7 +1,18 @@
 # Requirements are uppercase key words, read from the model in both formats
 
-*Decided September 2026 (issue #180).* `Requirements.extract(from:)` in RFCKit lists every sentence a document states with a BCP 14 key word, for the Requirements tab and its checklist. It reads the model, not the markup: RFCXML's `<bcp14>` stays emphasis, and a key word is an uppercase whole word, which is RFC 8174's own definition and the only one legacy text can offer. A document has requirements only if it cites BCP 14, RFC 2119 or RFC 8174, or is RFC 2119 or RFC 8174 itself, which it cannot cite: `RFCDocument.referencedDocuments` never lists the document itself (#279). Prose is read (paragraphs, list items, definitions, table cells, asides) and artwork, source code, quotations and the references are not. A table row with a cell of key words alone is one requirement, its cells joined, since the cell says nothing without its row.
+*Decided September 2026 (issue #180).*
+`Requirements.extract(from:)` in RFCKit lists every sentence a document states with a BCP 14 key word, for the Requirements tab and its checklist.
+It reads the model, not the markup: RFCXML's `<bcp14>` stays emphasis, and a key word is an uppercase whole word, which is RFC 8174's own definition and the only one legacy text can offer.
+A document has requirements only if it cites BCP 14, RFC 2119 or RFC 8174, or is RFC 2119 or RFC 8174 itself, which it cannot cite: `RFCDocument.referencedDocuments` never lists the document itself (#279).
+Prose is read (paragraphs, list items, definitions, table cells, asides) and artwork, source code, quotations and the references are not.
+A table row with a cell of key words alone is one requirement, its cells joined, since the cell says nothing without its row.
 
-The declaration of the key words is not a requirement. It is known by listing five or more key words at once, which no requirement does, or by citing BCP 14, RFC 2119, RFC 8174 or `[KEYWORDS]` and either saying the words are "interpreted" or naming one in quotes: a sentence that quotes a key word is about it, not bound by it. Over the XML corpus the quoted rule drops only sentences of that kind. A declaration worded neither way is still listed.
+The declaration of the key words is not a requirement.
+It is known by listing five or more key words at once, which no requirement does, or by citing BCP 14, RFC 2119, RFC 8174 or `[KEYWORDS]` and either saying the words are "interpreted" or naming one in quotes: a sentence that quotes a key word is about it, not bound by it.
+Over the XML corpus the quoted rule drops only sentences of that kind.
+A declaration worded neither way is still listed.
 
-Sentences are split by a rule of our own, since `NLTokenizer` is not on Linux: a stop, then any closing quote or parenthesis, then a space and a capital, a digit, or an opening quote or bracket. `e.g.`, `i.e.`, `Sec.`, `cf.`, `vs.` and `Fig.` do not end one; `etc.` does. A sentence that opens on a lowercase identifier is not told apart from an abbreviation and stays joined to the one before. Requirements read from legacy text are marked heuristic, and the tab and both checklists say so (`RequirementList.note(for:)`).
+Sentences are split by a rule of our own, since `NLTokenizer` is not on Linux: a stop, then any closing quote or parenthesis, then a space and a capital, a digit, or an opening quote or bracket.
+`e.g.`, `i.e.`, `Sec.`, `cf.`, `vs.` and `Fig.` do not end one; `etc.` does.
+A sentence that opens on a lowercase identifier is not told apart from an abbreviation and stays joined to the one before.
+Requirements read from legacy text are marked heuristic, and the tab and both checklists say so (`RequirementList.note(for:)`).

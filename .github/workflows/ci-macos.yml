@@ -50,11 +50,11 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
-      - run: swift test --package-path Packages/RFCKit
-      - run: make test-app
+      # RFCKit and corpus-build, with the Makefile's flags (RFCKit's warnings, #440).
       # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
       # run on both.
-      - run: swift test --package-path Tools/corpus-build
+      - run: make test
+      - run: make test-app
       - name: Save the SwiftPM builds
         if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
