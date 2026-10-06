@@ -15,8 +15,9 @@ import os
 /// keeps it there while the rest is laid out. Only a live resize on the Mac, which
 /// cannot afford that on every step, pins on estimates instead, and pins again when
 /// it ends, after `NSTextView`'s own scroll (`keepPlace`); the rebuild for the new
-/// column that follows it settles, at the resize's end if it landed during it. Only calls into the text view live here; the
-/// arithmetic is RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
+/// column that follows it settles, at the resize's end if it landed during it
+/// (`OwedSettle`). Only calls into the text view live here; the arithmetic is
+/// RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   weak var textView: PlatformTextView?
   private(set) var keeper = AnchorKeeper()
@@ -57,38 +58,29 @@ final class ReaderLayoutEngine: PinSurface {
     let carried = self.built.map { keeper.carried(in: $0.anchors) }
     self.built = built
     if let carried { keeper.restore(carried, in: built.anchors, length: built.text.length) }
-    putBack()
+    putBack(isRebuild: true)
     startCompletion()
   }
 
   func columnChanged() {
-    // Its rebuild follows and settles, so a column change pinned in a live resize
-    // owes nothing.
-    defer { owesSettle = false }
     putBack()
     startCompletion()
   }
 
-  /// Settles the place, or pins it on estimates during a live resize.
-  private func putBack() {
-    if isInLiveResize {
-      pin()
-      owesSettle = true
-    } else {
-      settle()
-    }
+  /// Settles the place, or pins it on estimates during a live resize. A rebuild or a
+  /// refold pinned that way owes the settle it skipped (`keepPlace`).
+  private func putBack(isRebuild: Bool = false) {
+    guard isInLiveResize else { return settle() }
+    pin()
+    if isRebuild { owed.pinnedRebuild() }
   }
 
-  /// Whether a rebuild or a refold was pinned on estimates during the live resize under
-  /// way, and is settled when it ends (`keepPlace`): a rebuild for the new column that
-  /// lands while the resize still runs, as when the window is resized while the
-  /// inspector's closing animation is one, has no later settle of its own (#542). A
-  /// change of column owes nothing, since its rebuild follows.
-  private var owesSettle = false
+  private var owed = OwedSettle()
 
   /// Puts the place back at the top of the viewport, everything above it laid out
   /// first (`PinRecipe.settle`).
   func settle() {
+    owed.settled()
     move { anchor, layout in
       signposter.withIntervalSignpost(
         "Settle", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)"
@@ -149,7 +141,7 @@ final class ReaderLayoutEngine: PinSurface {
       #endif
     }
     knowsDocumentEnd = laidOut
-    putBack()
+    putBack(isRebuild: true)
     startCompletion(knowingEnd: laidOut)
   }
 
@@ -157,17 +149,15 @@ final class ReaderLayoutEngine: PinSurface {
   /// move rather than the reader's, then pins the place back where it is laid out:
   /// what `NSTextView` scrolls to at the end of a live resize is not where the reader
   /// was (#542). Pinned as through the resize; settled only where a rebuild was pinned
-  /// during it (`owesSettle`), which is the settle that rebuild would have made, not a
+  /// during it (`OwedSettle`), which is the settle that rebuild would have made, not a
   /// second one.
   func keepPlace(through body: () -> Void) {
     keeper.beginEngineMove()
     defer { keeper.endEngineMove(top: containerTop) }
     body()
-    if owesSettle {
-      owesSettle = false
-      settle()
-    } else {
-      pin()
+    switch owed.atResizeEnd {
+    case .settle: settle()
+    case .pin: pin()
     }
   }
 
