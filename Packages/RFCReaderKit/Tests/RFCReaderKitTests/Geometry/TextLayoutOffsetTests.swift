@@ -112,14 +112,8 @@ struct TextLayoutOffsetTests {
   /// decorated block's edges, across a whole document, the same answer as the
   /// built text's.
   @Test func `a location is on a card where its character is`() throws {
-    let text = DocumentTextBuilder.build(
-      try Fixtures.document(named: "rfc8999.xml"), style: ReadingStyle(measure: 712)
-    ).text
-    let storage = NSTextContentStorage()
-    defer { withExtendedLifetime(storage) {} }
-    storage.install(text)
-    let layout = NSTextLayoutManager()
-    storage.addTextLayoutManager(layout)
+    let text = try LayoutFixture.built().text
+    let fixture = LayoutFixture(text: text, width: 712)
     var edges: [Int] = []
     text.enumerateAttribute(.rfcDecoration, in: NSRange(location: 0, length: text.length)) {
       value, range, _ in
@@ -128,9 +122,9 @@ struct TextLayoutOffsetTests {
     }
     #expect(edges.contains { FragmentGeometry.drawsCard(in: text, at: $0) })
     for offset in edges where offset >= 0 && offset < text.length {
-      let location = try #require(layout.location(atOffset: offset))
+      let location = try #require(fixture.layout.location(atOffset: offset))
       #expect(
-        layout.drawsCard(at: location)
+        fixture.layout.drawsCard(at: location)
           == FragmentGeometry.drawsCard(in: text, at: offset), "offset \(offset)")
     }
   }
