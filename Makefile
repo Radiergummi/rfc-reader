@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -260,6 +260,16 @@ build-app: xcodeproj
 ## Build the app for the iOS Simulator
 ios-sim: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
+	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Build RFCReaderKit's tests for the iOS Simulator
+# `test-app` builds them for macOS only, so code behind `#if canImport(UIKit)`
+# could stop compiling unseen (#568). Builds without running: the suite has
+# failures on the Simulator that macOS doesn't (#821), and once they are fixed
+# this should run the tests too. xcodebuild finds the package's scheme only
+# from inside the package.
+build-app-tests-ios:
+	cd $(RFCREADERKIT) && xcodebuild build-for-testing -scheme RFCReaderKit \
 	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
 ## Build the app for an iOS device
