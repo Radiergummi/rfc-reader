@@ -166,6 +166,13 @@ public struct LoadFailure {
   public enum Kind: Sendable, Hashable, CaseIterable {
     /// The device's own connection: nothing reached the network.
     case offline
+    /// Cellular data is turned off, for the app or while roaming: a setting to
+    /// change (`FetchPolicy.PathStatus.cellularDenied`). iOS opens the app's page in
+    /// Settings, which has its switch; roaming's is a level up, under Cellular.
+    case cellularDenied
+    /// A secure connection could not be made, as a network's login page or a proxy
+    /// causes by answering in the RFC Editor's place.
+    case secureConnection
     /// The RFC Editor has no such document.
     case notFound
     /// The server did not answer, answered with an error, or sent a web page where
@@ -178,6 +185,8 @@ public struct LoadFailure {
     public var symbol: String {
       switch self {
       case .offline: "wifi.exclamationmark"
+      case .cellularDenied: "antenna.radiowaves.left.and.right.slash"
+      case .secureConnection: "lock.trianglebadge.exclamationmark"
       case .notFound: "questionmark.folder"
       case .server: "exclamationmark.icloud"
       case .unreadable: "doc.badge.ellipsis"
@@ -191,6 +200,15 @@ public struct LoadFailure {
       switch (self, subject) {
       case (.offline, _):
         String(kit: "Check your internet connection, then try again.", locale: locale)
+      case (.cellularDenied, _):
+        String(
+          kit: "Cellular data is turned off for this app, or roaming is. Turn it on in Settings, or connect to Wi-Fi.",
+          locale: locale)
+      case (.secureConnection, _):
+        String(
+          kit:
+            "A secure connection couldn't be made. If this network has a login page, sign in, or check its proxy settings, then try again.",
+          locale: locale)
       case (.notFound, .document):
         String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
@@ -210,9 +228,14 @@ public struct LoadFailure {
     switch error {
     case let error as URLError:
       switch error.code {
-      case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
-        .internationalRoamingOff:
+      case .notConnectedToInternet, .networkConnectionLost:
         return .offline
+      case .dataNotAllowed, .internationalRoamingOff:
+        return .cellularDenied
+      case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
+        .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+        .clientCertificateRejected, .clientCertificateRequired:
+        return .secureConnection
       case .timedOut, .cannotFindHost, .cannotConnectToHost:
         return .server
       default:

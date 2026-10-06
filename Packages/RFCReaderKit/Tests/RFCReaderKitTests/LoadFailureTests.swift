@@ -11,12 +11,26 @@ struct LoadFailureTests {
   private let url = URL(string: "https://www.rfc-editor.org/rfc/rfc9110.xml")!
 
   /// Only the device's own connection: a host that does not answer is the server's.
-  @Test(arguments: [
-    URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
-    .internationalRoamingOff,
-  ])
+  @Test(arguments: [URLError.Code.notConnectedToInternet, .networkConnectionLost])
   func `a lost connection is offline`(code: URLError.Code) {
     #expect(LoadFailure(error: URLError(code)).kind == .offline)
+  }
+
+  /// Cellular data turned off, for the app or while roaming, is a setting to change
+  /// rather than a connection to check (#759).
+  @Test(arguments: [URLError.Code.dataNotAllowed, .internationalRoamingOff])
+  func `cellular data turned off is cellular denied`(code: URLError.Code) {
+    #expect(LoadFailure(error: URLError(code)).kind == .cellularDenied)
+  }
+
+  /// What a network's login page or a proxy does to a TLS connection (#759).
+  @Test(arguments: [
+    URLError.Code.secureConnectionFailed, .serverCertificateHasBadDate,
+    .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+    .serverCertificateNotYetValid, .clientCertificateRejected, .clientCertificateRequired,
+  ])
+  func `a TLS failure is a secure connection failure`(code: URLError.Code) {
+    #expect(LoadFailure(error: URLError(code)).kind == .secureConnection)
   }
 
   @Test(arguments: [URLError.Code.timedOut, .cannotFindHost, .cannotConnectToHost])

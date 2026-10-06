@@ -113,7 +113,10 @@
             get: { output.failure != nil },
             set: { if !$0 { output.failure = nil } }),
           presenting: output.failure
-        ) { _ in
+        ) { failure in
+          if failure.load.kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
           Button("OK") {}
         } message: { failure in
           Text(failure.load.kind.recoverySuggestion(for: failure.subject))
