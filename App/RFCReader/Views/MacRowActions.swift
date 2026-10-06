@@ -35,7 +35,7 @@ import SwiftUI
           }
           .labelStyle(.titleAndIcon)
           Button {
-            library.toggleKeptOffline(row.id)
+            library.setKeptOfflineInBackground(row.id, !isKeptOffline)
           } label: {
             Label(
               isKeptOffline ? "Stop Keeping Offline" : "Keep Offline",

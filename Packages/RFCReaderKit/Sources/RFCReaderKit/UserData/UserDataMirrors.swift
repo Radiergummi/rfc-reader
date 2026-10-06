@@ -5,8 +5,9 @@ import SwiftData
 /// changed (#603).
 ///
 /// `LibraryModel` keeps four: the bookmarked documents, the collections, the
-/// Recently Read count and the Keep Offline marks. It read all three again on every save, and most saves only
-/// record a reading position, so the bookmark and collection fetches ran for
+/// Recently Read count and the Keep Offline marks. It used to read all of them
+/// again on every save, and most saves only record a reading position, so the
+/// bookmark and collection fetches ran for
 /// nothing — `CollectionSnapshot.fetch` reads every collection and every item. A
 /// save's notification names the rows it inserted, updated and deleted, and each
 /// row's entity says which mirror it feeds.

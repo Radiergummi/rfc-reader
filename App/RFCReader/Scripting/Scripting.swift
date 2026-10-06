@@ -48,8 +48,9 @@
       }
     }
 
-    /// The Keep Offline mark (#358). Setting it returns before a download it starts
-    /// has finished; the store being in memory is reported as a bookmark's is.
+    /// The Keep Offline mark (#358). Setting it saves the mark before it returns, and
+    /// a download it starts goes on after; the store being in memory is reported as
+    /// a bookmark's is.
     @objc var isKeptOffline: Bool {
       get { LibraryModel.shared.offlineMarks.contains(id) }
       set {
@@ -57,7 +58,7 @@
           ScriptError.report(AppData.storeWarning.message)
         }
         guard newValue != isKeptOffline else { return }
-        LibraryModel.shared.toggleKeptOffline(id)
+        LibraryModel.shared.setKeptOfflineInBackground(id, newValue)
       }
     }
 

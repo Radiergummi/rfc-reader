@@ -64,7 +64,7 @@ import SwiftUI
               Label("Reading Path", systemImage: "list.number")
             }
             Button {
-              library.toggleKeptOffline(rfc.id)
+              library.setKeptOfflineInBackground(rfc.id, !isKeptOffline)
             } label: {
               Label(
                 isKeptOffline ? "Stop Keeping Offline" : "Keep Offline",

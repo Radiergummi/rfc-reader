@@ -24,7 +24,7 @@ public final class OfflineKeeper {
 
   /// The fetches this has running, with a token each, so a fetch that ends removes
   /// itself and not one started after it for the same document.
-  private var fetches: [DocumentID: (token: UUID, task: Task<Void, Never>)] = [:]
+  private var fetches: [DocumentID: (token: UUID, task: Task<Void, any Error>)] = [:]
 
   public init(
     store: DocumentStore, client: any DocumentFetching,
@@ -48,8 +48,7 @@ public final class OfflineKeeper {
     }
     for id in plan.keep {
       do {
-        // A cached body, so this moves it and fetches nothing.
-        try await store.keep(id, formats: formats(id), client: client)
+        try await store.keepCached(id)
       } catch {
         offlineLog.error(
           "\(id.displayName, privacy: .public): not moved into the kept tier: \(String(describing: error), privacy: .public)"
@@ -65,28 +64,43 @@ public final class OfflineKeeper {
     }
   }
 
-  private func start(_ id: DocumentID) {
+  /// Keeps `id` now, for a reader who tapped Keep Offline and waits to hear how it
+  /// went: a move when it is cached, a fetch otherwise, on any network. The fetch
+  /// is this keeper's own, joined if one is running, so unmarking leaves it as it
+  /// leaves any other, and throws `CancellationError` here.
+  public func fetchNow(_ id: DocumentID) async throws {
+    let task = fetches[id]?.task ?? start(id)
+    try await task.value
+  }
+
+  @discardableResult
+  private func start(_ id: DocumentID) -> Task<Void, any Error> {
     let token = UUID()
     let formats = formats(id)
     let task = Task {
+      defer {
+        if fetches[id]?.token == token { fetches[id] = nil }
+      }
       do {
         try await store.keep(id, formats: formats, client: client)
-      } catch is CancellationError {
-        // Left: no longer wanted.
       } catch {
-        offlineLog.error(
-          "\(id.displayName, privacy: .public): keeping offline failed: \(String(describing: error), privacy: .public)"
-        )
+        // A cancellation is a fetch left: the document is no longer wanted.
+        if !(error is CancellationError) {
+          offlineLog.error(
+            "\(id.displayName, privacy: .public): keeping offline failed: \(String(describing: error), privacy: .public)"
+          )
+        }
+        throw error
       }
-      if fetches[id]?.token == token { fetches[id] = nil }
     }
     fetches[id] = (token, task)
+    return task
   }
 
   /// Until every fetch this has running has ended: each removes itself as it ends.
   func settle() async {
     while let fetch = fetches.values.first {
-      await fetch.task.value
+      _ = await fetch.task.result
     }
   }
 }

@@ -590,6 +590,79 @@ struct DocumentStoreTests {
     #expect(await !store.isCached(id))
   }
 
+  /// A tapped Keep Offline is the keeper's own fetch, so unmarking leaves it as it
+  /// leaves any other.
+  @MainActor @Test func `unmarking during a fetch a reader asked for keeps nothing`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await keeper.reconcile(wanted: [])
+    await fetcher.gate.open()
+
+    await #expect(throws: CancellationError.self) { try await tapped.value }
+    #expect(await !store.isCached(id))
+  }
+
+  @MainActor @Test func `a fetch a reader asked for joins the reconciler's`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id])
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await fetcher.gate.open()
+    try await tapped.value
+
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// The reconciler's plan promises a document in both tiers ends with one.
+  @MainActor @Test func `a wanted body in both tiers loses its cached copy`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+    try FileManager.default.createDirectory(
+      at: sandbox.file(id, format: .xml).deletingLastPathComponent(),
+      withIntermediateDirectories: true)
+    try FileManager.default.copyItem(
+      at: sandbox.file(id, format: .xml, in: .kept), to: sandbox.file(id, format: .xml))
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id])
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+  }
+
+  /// A move only: a cached body gone by the time it runs is not fetched.
+  @Test func `keeping a cached body fetches nothing when there is none`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let id = DocumentID.rfc(8999)
+
+    try await store.keepCached(id)
+
+    #expect(await !store.isCached(id))
+  }
+
   @MainActor @Test func `reconciling again while a fetch runs starts no second one`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }

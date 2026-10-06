@@ -494,6 +494,16 @@ public actor DocumentStore {
     guard isKept(id) else { throw NotEnoughSpace(id: id) }
   }
 
+  /// Moves `id`'s cached body into the kept tier, replacing one already there, so
+  /// a document with a body in both ends with one. Fetches nothing: a body no
+  /// longer in the cache, evicted or purged since it was asked for, leaves this
+  /// with nothing to do.
+  public func keepCached(_ id: DocumentID) throws {
+    cachedDocuments.revalidate()
+    guard cachedDocuments.contains(id) else { return }
+    try move(id, to: .kept)
+  }
+
   /// Stops keeping `id` offline: its body goes back into the cache, where eviction
   /// treats it as any other, rather than being deleted.
   public func release(_ id: DocumentID) {
