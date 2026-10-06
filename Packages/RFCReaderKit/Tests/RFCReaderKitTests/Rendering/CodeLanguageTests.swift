@@ -28,7 +28,7 @@ struct CodeLanguageTests {
 
   @Test func `a code sample typed as a media type is labeled with its language`() {
     let content = Preformatted(
-      kind: .sourceCode, text: "$.store.book[0]", type: "application/jsonpath")
+      kind: .sourceCode, text: "$.a[0]", type: "application/jsonpath")
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(content)), style: ReadingStyle())
     #expect(built.text.string.contains("JSON PATH"))
