@@ -68,6 +68,26 @@ struct CodeCopyTests {
       #expect(text.copyButton(at: button) != nil)
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
+
+    /// Where the pointer is the arrow (#724): each button in the range, whole, and
+    /// none outside it.
+    @Test func `the copy buttons in a range are found whole`() throws {
+      let text = DocumentTextBuilder.build(
+        Fixtures.document(.preformatted(Self.indented), .preformatted(Self.outdentedFolds)),
+        style: ReadingStyle(measure: 4000)
+      ).text
+      let all = NSRange(location: 0, length: text.length)
+      let buttons = text.copyButtons(in: all)
+      #expect(buttons.count == 2)
+      for button in buttons {
+        #expect(text.copyButton(at: button.location) == button)
+      }
+      let second = try #require(buttons.last)
+      #expect(
+        text.copyButtons(in: NSRange(location: second.location, length: text.length - second.location))
+          == [second])
+      #expect(text.copyButtons(in: NSRange(location: 0, length: buttons[0].location)).isEmpty)
+    }
   #endif
 
   /// `rfcfold` sets the header, and under `'\\'` each continuation's backslash, at
