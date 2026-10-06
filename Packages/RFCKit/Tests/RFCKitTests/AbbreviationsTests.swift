@@ -309,6 +309,8 @@ struct AbbreviationsTests {
     #expect(
       pairs("runs Internet Information Services (IIS) on")
         == ["IIS=Internet Information Services"])
+    #expect(
+      pairs("adds a Secure SPDY Transition (SST) here") == ["SST=Secure SPDY Transition"])
   }
 
   /// A word with one letter of the short form in each part never reaches back:
@@ -339,6 +341,8 @@ struct AbbreviationsTests {
       pairs("this provides PPP over Ethernet (PPPoE) links") == ["PPPoE=PPP over Ethernet"])
     #expect(
       pairs("the Public PPP over Ethernet (PPPoE) service") == ["PPPoE=PPP over Ethernet"])
+    #expect(
+      pairs("Storing SSH Fingerprint (SSHFP) Records") == ["SSHFP=SSH Fingerprint"])
   }
 
   /// Each part of a hyphenated word supplies its own letter, so no word holds two;

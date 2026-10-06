@@ -238,7 +238,10 @@ enum Abbreviations {
   /// does. Each part of a hyphenated word counts as a word here, so
   /// `man-in-the-middle (MITM)` holds one letter in each and stays as it is. A
   /// part all in capitals is an acronym that supplies its letters by right, so
-  /// `SSH Fingerprint (SSHFP)` stays as it is too.
+  /// `SSH Fingerprint (SSHFP)` stays as it is too, and a match that starts on one
+  /// holding several letters never reaches back: `Storing SSH Fingerprint (SSHFP)`
+  /// would take in `Storing`, since `Fingerprint` holds the `F` and the `p`. One
+  /// that supplies a single letter can: `Simple SIPP Transition (SST)`.
   ///
   /// The word before has to start with the first letter, follow with nothing but
   /// a space, not be a function word, and its initial and the ones after it have
@@ -268,7 +271,10 @@ enum Abbreviations {
     let parts = matched.map(part(around:)).filter { part in
       long[part].contains(where: \.isLowercase)
     }
-    guard Set(parts).count < parts.count else { return nil }
+    let firstPart = part(around: start)
+    guard Set(parts).count < parts.count,
+      long[firstPart].contains(where: \.isLowercase) || matched.filter(firstPart.contains).count < 2
+    else { return nil }
     var index = start - 1
     while index >= 0, long[index].isWhitespace { index -= 1 }
     guard index >= 0, index < start - 1, long[index].isLetter || long[index].isNumber else {
