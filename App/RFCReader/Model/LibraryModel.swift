@@ -132,7 +132,8 @@ final class LibraryModel {
   }
 
   /// Every collection and its members, fetched again on every save of a collection or
-  /// an item (#603) and published only when it changed (#349). The sidebar, a
+  /// an item (#603), and after a failed fetch on the next save of any kind
+  /// (`failedMirrors`, #613), and published only when it changed (#349). The sidebar, a
   /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts
   /// all read it.
   private(set) var collections = CollectionSnapshot.empty
@@ -221,7 +222,17 @@ final class LibraryModel {
   }
 
   private func refreshCollections() {
-    let snapshot = CollectionSnapshot.fetch(in: container.mainContext)
+    let snapshot: CollectionSnapshot
+    do {
+      snapshot = try CollectionSnapshot.fetch(in: container.mainContext)
+    } catch {
+      // The last snapshot stands until a fetch succeeds, which the next save tries:
+      // an empty one would close every filter on a collection (#613).
+      failedMirrors.insert(.collections)
+      libraryLog.error(
+        "reading collections failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard snapshot != collections else { return }
     collections = snapshot

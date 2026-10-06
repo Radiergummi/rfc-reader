@@ -412,17 +412,15 @@ struct ReaderInputs {
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
       }
-      textView.isOverCopyButton = { [weak coordinator = context.coordinator] event in
-        coordinator?.isOverCopyButton(event) ?? false
-      }
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
       textView.toggleSection = { [weak coordinator = context.coordinator] event in
         coordinator?.toggleSection(under: event) ?? false
       }
-      textView.disclosureCursorRects = { [weak coordinator = context.coordinator] in
-        coordinator?.disclosureCursorRects() ?? []
+      textView.arrowCursorRects = { [weak coordinator = context.coordinator] in
+        guard let coordinator else { return [] }
+        return coordinator.disclosureCursorRects() + coordinator.copyButtonCursorRects()
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)

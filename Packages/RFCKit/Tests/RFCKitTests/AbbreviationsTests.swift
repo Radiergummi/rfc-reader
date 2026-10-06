@@ -296,6 +296,66 @@ struct AbbreviationsTests {
     #expect(pairs("a peer-to-peer Overlay (TO) is").isEmpty)
   }
 
+  /// The nearest word with the first letter can hold a later letter too, and then
+  /// the match stops a word short: `RR` matched both of its letters in `Report`
+  /// (#690). Where the word before starts with the first letter and the initials
+  /// still follow the short form, the expansion starts there.
+  @Test func `two letters in the first word give way to the word before`() {
+    #expect(pairs("each Receiver Report (RR) carries") == ["RR=Receiver Report"])
+    #expect(pairs("holds the resource records (RRs) of") == ["RRs=resource records"])
+    #expect(
+      pairs("a Universally Unique Identifier (UUID) names")
+        == ["UUID=Universally Unique Identifier"])
+    #expect(
+      pairs("runs Internet Information Services (IIS) on")
+        == ["IIS=Internet Information Services"])
+    #expect(
+      pairs("adds a Secure SPDY Transition (SST) here") == ["SST=Secure SPDY Transition"])
+  }
+
+  /// A word with one letter of the short form in each part never reaches back:
+  /// `IPv6`, `QoS`, `DoS`, and `Pre-Shared Key` with `Public` before it.
+  @Test func `a match with a letter in each word keeps its start`() {
+    #expect(
+      pairs("the Internet Protocol version 6 (IPv6) header") == ["IPv6=Internet Protocol version 6"]
+    )
+    #expect(pairs("for Quality of Service (QoS) marking") == ["QoS=Quality of Service"])
+    #expect(pairs("against Denial of Service (DoS) floods") == ["DoS=Denial of Service"])
+    #expect(pairs("with a Public Pre-Shared Key (PSK) only") == ["PSK=Pre-Shared Key"])
+  }
+
+  /// A word that holds two letters reaches back only to a word the short form
+  /// has room for: `Simple` would need a third `S` in `SSH`, and `in` is a
+  /// function word.
+  @Test func `a word that holds two letters keeps them when the word before cannot`() {
+    #expect(pairs("over a Simple Secure Shell (SSH) session") == ["SSH=Secure Shell"])
+    #expect(pairs("is kept in Identifiers (II) only") == ["II=Identifiers"])
+  }
+
+  /// An acronym inside the expansion supplies its letters by right, so it is no
+  /// sign that the match stopped short.
+  @Test func `an acronym in the expansion does not reach back`() {
+    #expect(
+      pairs("it supports SSH Fingerprint (SSHFP) records") == ["SSHFP=SSH Fingerprint"])
+    #expect(
+      pairs("this provides PPP over Ethernet (PPPoE) links") == ["PPPoE=PPP over Ethernet"])
+    #expect(
+      pairs("the Public PPP over Ethernet (PPPoE) service") == ["PPPoE=PPP over Ethernet"])
+    #expect(
+      pairs("Storing SSH Fingerprint (SSHFP) Records") == ["SSHFP=SSH Fingerprint"])
+  }
+
+  /// Each part of a hyphenated word supplies its own letter, so no word holds two;
+  /// and a plural `s` is not a letter a word's initial stands for.
+  @Test func `parts of a hyphenated word and a plural do not take in the word before`() {
+    #expect(
+      pairs("by a malicious man-in-the-middle (MITM) attacker")
+        == ["MITM=man-in-the-middle"])
+    #expect(
+      pairs("names three shared synchronization sources (SSRCs) here")
+        == ["SSRCs=synchronization sources"])
+  }
+
   private func glossary(_ term: String, _ definition: String) -> String? {
     Abbreviations.glossaryEntry(
       term: term, definition: [.paragraph(Paragraph(text: definition))])?.long
