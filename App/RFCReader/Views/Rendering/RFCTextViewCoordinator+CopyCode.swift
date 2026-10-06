@@ -16,11 +16,23 @@ import RFCReaderKit
     private static let holdDuration: TimeInterval = 2
     private static let fadeOutDuration: TimeInterval = 0.6
 
-    /// Whether a copy button is under the pointer of `event`. Asked on every
-    /// pointer move, so it only looks; the code is worked out on a click.
-    func isOverCopyButton(_ event: NSEvent) -> Bool {
-      guard let hit = textOffset(under: event) else { return false }
-      return hit.text.copyButton(at: hit.offset) != nil
+    /// Where the pointer is the arrow over a copy button (#724): the box of each
+    /// button in the viewport (`FragmentGeometry.copyButtonCursorRect`). A button in
+    /// a folded section has no box, and no rect.
+    func copyButtonCursorRects() -> [CGRect] {
+      guard let textView, let layout = textView.textLayoutManager,
+        let text = layout.attributedText,
+        let viewport = layout.textViewportLayoutController.viewportRange
+      else { return [] }
+      let start = layout.offset(of: viewport.location)
+      let end = layout.offset(of: viewport.endLocation)
+      guard start >= 0, end > start else { return [] }
+      let origin = textView.textContainerOrigin
+      return text.copyButtons(in: NSRange(location: start, length: end - start)).compactMap {
+        referenceRect(for: $0).map {
+          FragmentGeometry.copyButtonCursorRect(buttonFrame: $0, containerOrigin: origin)
+        }
+      }
     }
 
     /// Where the pointer is the arrow in the outline (#698) and in Implementer (#700):

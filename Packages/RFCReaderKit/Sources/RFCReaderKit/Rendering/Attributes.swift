@@ -303,6 +303,17 @@ extension NSAttributedString {
     return button
   }
 
+  /// The extent of every copy button in `range`, in order: where the pointer is the
+  /// arrow over the text in view (#724).
+  public func copyButtons(in range: NSRange) -> [NSRange] {
+    var buttons: [NSRange] = []
+    enumerateAttribute(.rfcCopyCode, in: range) { value, run, _ in
+      guard value != nil, let button = copyButton(at: run.location) else { return }
+      if buttons.last != button { buttons.append(button) }
+    }
+    return buttons
+  }
+
   /// What the copy button at this character offset copies: its block as Copy
   /// Figure copies it (`FigureCopy.pasteboardText(for:)`). Nil anywhere but on the
   /// button. Asked on a click.

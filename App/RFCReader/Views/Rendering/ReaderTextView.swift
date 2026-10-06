@@ -124,17 +124,16 @@ import RFCReaderKit
     /// The link, and the character it is on, that a click at a mouse-down follows
     /// when the mouse-down is on a reference, or nil anywhere else.
     var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
-    /// Whether a code block's copy button is under the pointer of an event, which
-    /// shows the arrow; and copying the block for a click on it, answering whether
-    /// there was one.
-    var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
+    /// Copies a code block for a click on its copy button, answering whether there
+    /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
     /// Opens or closes the section of a heading clicked in the outline (#698);
     /// answers whether the click was on one.
     var toggleSection: (NSEvent) -> Bool = { _ in false }
-    /// Where a click would toggle a heading's section in the outline, in this view's
-    /// coordinates: where the pointer is the arrow (`resetCursorRects()`).
-    var disclosureCursorRects: () -> [CGRect] = { [] }
+    /// Where the pointer is the arrow over the text in view, in this view's
+    /// coordinates (`resetCursorRects()`): where a click would toggle a heading's
+    /// section in the outline, and a code block's copy button (#724).
+    var arrowCursorRects: () -> [CGRect] = { [] }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -193,14 +192,15 @@ import RFCReaderKit
     /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
     /// view does not handle arrives here through the responder chain, and every move
     /// resets it.
-    /// The arrow beside a heading the outline discloses (#698), in two halves that
-    /// both have to hold, as a run of the app showed: a cursor rect, added after
-    /// `super`'s as `NSTextView` adds a link's pointing hand over its I-beam, sets it
-    /// on the way in; and `wantsArrow`, which answers for the same rects, keeps
-    /// `mouseMoved` from putting the I-beam back on every move.
+    /// The arrow beside a heading the outline discloses (#698) and over a code block's
+    /// copy button (#724), in two halves that both have to hold, as a run of the app
+    /// showed: a cursor rect, added after `super`'s as `NSTextView` adds a link's
+    /// pointing hand over its I-beam, sets it on the way in; and `wantsArrow`, which
+    /// answers for the same rects, keeps `mouseMoved` from putting the I-beam back on
+    /// every move.
     override func resetCursorRects() {
       super.resetCursorRects()
-      for rect in disclosureCursorRects() {
+      for rect in arrowCursorRects() {
         addCursorRect(rect, cursor: .arrow)
       }
     }
@@ -225,11 +225,11 @@ import RFCReaderKit
       if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
         return true
       }
-      if isOverCopyButton(event) { return true }
-      // Beside a heading the outline discloses: the cursor rects show the arrow on the
-      // way in, and every move reaches here, where `super` would put the I-beam back.
+      // Beside a heading the outline discloses, or over a copy button: the cursor rects
+      // show the arrow on the way in, and every move reaches here, where `super` would
+      // put the I-beam back.
       let point = convert(event.locationInWindow, from: nil)
-      if disclosureCursorRects().contains(where: { $0.contains(point) }) { return true }
+      if arrowCursorRects().contains(where: { $0.contains(point) }) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }

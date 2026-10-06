@@ -84,7 +84,8 @@ struct CodeCopyTests {
       }
       let second = try #require(buttons.last)
       #expect(
-        text.copyButtons(in: NSRange(location: second.location, length: text.length - second.location))
+        text.copyButtons(
+          in: NSRange(location: second.location, length: text.length - second.location))
           == [second])
       #expect(text.copyButtons(in: NSRange(location: 0, length: buttons[0].location)).isEmpty)
     }
