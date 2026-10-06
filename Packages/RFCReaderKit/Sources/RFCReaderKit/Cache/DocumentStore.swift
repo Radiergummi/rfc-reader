@@ -144,26 +144,24 @@ public actor DocumentStore {
   }
 
   /// What the volume holding `folder` has free: for important usage for the kept
-  /// tier, for opportunistic usage for the cache. Asked afresh each time, since a
-  /// URL may answer from values cached on it. Zero is taken for a volume that does
-  /// not say, as some that are not APFS answer, rather than for a full disk, which
-  /// a write would then fail on anyway.
+  /// tier, for opportunistic usage for the cache; see `StorageTier.freeSpace`.
+  /// Asked afresh each time, since a URL may answer from values cached on it.
   private static func volumeFreeSpace(for tier: StorageTier, at folder: URL) -> Int? {
     var url = folder
     url.removeAllCachedResourceValues()
-    let capacity: Int64?
-    switch tier {
-    case .kept:
-      capacity =
-        (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
-        .volumeAvailableCapacityForImportantUsage
-    case .cache:
-      capacity =
-        (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForOpportunisticUsageKey]))?
-        .volumeAvailableCapacityForOpportunisticUsage
-    }
-    guard let capacity, capacity > 0 else { return nil }
-    return Int(clamping: capacity)
+    let usageKey: URLResourceKey =
+      switch tier {
+      case .kept: .volumeAvailableCapacityForImportantUsageKey
+      case .cache: .volumeAvailableCapacityForOpportunisticUsageKey
+      }
+    let values = try? url.resourceValues(forKeys: [usageKey, .volumeAvailableCapacityKey])
+    let usage =
+      switch tier {
+      case .kept: values?.volumeAvailableCapacityForImportantUsage
+      case .cache: values?.volumeAvailableCapacityForOpportunisticUsage
+      }
+    return StorageTier.freeSpace(
+      forUsage: usage, available: values?.volumeAvailableCapacity.map(Int64.init))
   }
 
   // MARK: - Index

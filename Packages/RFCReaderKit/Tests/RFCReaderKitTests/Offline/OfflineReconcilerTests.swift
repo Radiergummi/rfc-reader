@@ -38,6 +38,18 @@ struct OfflineReconcilerTests {
     #expect(StorageTier.cache.hasRoom(for: size, available: nil))
   }
 
+  /// A volume that reports no capacity for important or opportunistic usage is read
+  /// by its plain available capacity instead: a full disk still reads 0 and blocks
+  /// the write, and a volume that does not report the usage keys still has room.
+  @Test func `a capacity of 0 for the usage falls back to the volume's available capacity`() {
+    #expect(StorageTier.freeSpace(forUsage: 5_000, available: 9_000) == 5_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: 9_000) == 9_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: 0) == 0)
+    #expect(StorageTier.freeSpace(forUsage: nil, available: 9_000) == 9_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: nil) == nil)
+    #expect(StorageTier.freeSpace(forUsage: nil, available: nil) == nil)
+  }
+
   /// Marking a document already read moves its body across and fetches nothing.
   @Test func `a wanted body already cached is moved, not fetched`() {
     let plan = OfflineReconciler.plan(wanted: [.rfc(1)], kept: [], cached: [.rfc(1)])

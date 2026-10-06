@@ -18,6 +18,16 @@ public enum StorageTier: Sendable, Hashable {
   /// What the cache leaves free on the disk: reading is never what fills it.
   public static let cacheReserve = 100 * 1024 * 1024
 
+  /// The bytes free for a body, from what the volume reports: `usage` is its
+  /// capacity for important or opportunistic usage, and `available` its plain
+  /// available capacity. A volume that does not report the usage, as some that are
+  /// not APFS answer 0, is read by its available capacity instead, so a full disk
+  /// still reads 0. Nil when neither can be read.
+  public static func freeSpace(forUsage usage: Int64?, available: Int64?) -> Int? {
+    if let usage, usage > 0 { return Int(clamping: usage) }
+    return available.map { Int(clamping: $0) }
+  }
+
   /// Whether a body of `bytes` is written to this tier, with `available` bytes free
   /// for it: the volume's capacity for important usage for a kept body, which is a
   /// promise and needs only its own room, and for opportunistic usage for a cached
