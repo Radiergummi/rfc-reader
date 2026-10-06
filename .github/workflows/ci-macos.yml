@@ -65,6 +65,22 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
 
+  benchmarks-build:
+    name: Benchmarks build
+    if: ${{ !github.event.pull_request.draft }}
+    # Nothing else builds Tools/benchmarks, so an API change in RFCKit or
+    # RFCReaderKit would break it silently (#419). The Xcode the package tests
+    # use, for the same Swift 6.3.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
+      - run: make build-benchmarks
+
   app-build:
     name: App build (macOS + iOS)
     if: ${{ !github.event.pull_request.draft }}
