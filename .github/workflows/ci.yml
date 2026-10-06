@@ -100,7 +100,8 @@ jobs:
       # the library but not them. make and curl for the patch check below.
       - name: Install tools
         run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
-      - run: swift test --package-path Packages/RFCKit
+      # -warnings-as-errors as the Makefile passes it; see RFCKit's manifest (#440).
+      - run: swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors
       - run: swift test --package-path Tools/corpus-build
       # Before the patch check, which needs the network on a cache miss: a fetch that
       # fails there fails the job, and should not cost main its builds.

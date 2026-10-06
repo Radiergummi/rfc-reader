@@ -50,7 +50,8 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
-      - run: swift test --package-path Packages/RFCKit
+      # -warnings-as-errors as the Makefile passes it; see RFCKit's manifest (#440).
+      - run: swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors
       - run: make test-app
       # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
       # run on both.
