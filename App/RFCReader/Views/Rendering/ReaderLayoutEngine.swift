@@ -149,8 +149,9 @@ final class ReaderLayoutEngine: PinSurface {
   /// move rather than the reader's, then pins the place back where it is laid out:
   /// what `NSTextView` scrolls to at the end of a live resize is not where the reader
   /// was (#542). Pinned as through the resize; settled only where a rebuild was pinned
-  /// during it (`OwedSettle`), which is the settle that rebuild would have made, not a
-  /// second one.
+  /// during it (`OwedSettle`), which is the settle that rebuild skipped. Where the
+  /// column was dragged on after that rebuild, its own rebuild follows and settles
+  /// again: the engine cannot tell that column from one dragged back to the build's.
   func keepPlace(through body: () -> Void) {
     keeper.beginEngineMove()
     defer { keeper.endEngineMove(top: containerTop) }
