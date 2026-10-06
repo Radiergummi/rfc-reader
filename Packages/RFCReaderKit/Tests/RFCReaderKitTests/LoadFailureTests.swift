@@ -97,4 +97,24 @@ struct LoadFailureTests {
       #expect((document == originalText) == (kind != .notFound))
     }
   }
+
+  /// The index is not a document: what its status line says about a failure never
+  /// sends the reader to a document's page, and a failure of the connection reads
+  /// as it does for a document (#759).
+  /// An index that does not parse has its own words, rather than "try again in a
+  /// moment", which would not help.
+  @Test func `an index that does not parse is unreadable`() {
+    let syntax = XMLSyntaxError(line: 1, column: 2, message: "unexpected end")
+    #expect(LoadFailure(error: RFCIndexParser.ParseError.malformed(syntax)).kind == .unreadable)
+  }
+
+  @Test func `the index is not a document`() {
+    let ownWording: Set<LoadFailure.Kind> = [.notFound, .unreadable, .other]
+    for kind in LoadFailure.Kind.allCases {
+      let document = kind.recoverySuggestion(for: .document, locale: .english)
+      let index = kind.recoverySuggestion(for: .index, locale: .english)
+      #expect((document == index) == !ownWording.contains(kind))
+      #expect(!index.contains("document"))
+    }
+  }
 }

@@ -156,10 +156,11 @@ public struct LoadFailure {
 
   public var message: String { error.localizedDescription }
 
-  /// What was being loaded: the document, or its original text, which has a
-  /// not-found of its own.
+  /// What was being loaded: the document, its original text, which has a not-found
+  /// of its own, or the RFC index, which is not a document and has no page to send
+  /// the reader to.
   public enum Subject: Sendable {
-    case document, originalText
+    case document, originalText, index
   }
 
   /// What failed, as far as the reader can tell from the error.
@@ -213,6 +214,10 @@ public struct LoadFailure {
         String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
         String(kit: "This RFC has no plain-text version.", locale: locale)
+      case (.notFound, .index), (.unreadable, .index):
+        String(kit: "The RFC index couldn't be read. Try again later.", locale: locale)
+      case (.other, .index):
+        String(kit: "Try again in a moment.", locale: locale)
       case (.server, _):
         String(kit: "The RFC Editor isn't responding right now. Try again later.", locale: locale)
       case (.unreadable, _):
@@ -255,6 +260,8 @@ public struct LoadFailure {
     case RFCXMLParser.ParseError.notAnRFC(rootElement: "html"):
       return .server
     case is RFCXMLParser.ParseError:
+      return .unreadable
+    case is RFCIndexParser.ParseError:
       return .unreadable
     default:
       return .other

@@ -400,10 +400,21 @@ struct IndexStatusView: View {
         Text("Loading index…")
       case .ready(let updatedAt):
         Text("Updated \(updatedAt, format: .relative(presentation: .named))")
-      case .failed(let message):
-        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        Text(message).lineLimit(2)
-        Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+      case .failed(let kind, let message):
+        Image(systemName: kind.symbol).foregroundStyle(.orange)
+        // What went wrong in words first, as the reader says it of a document; the
+        // error's own text, an HTTP status or where the XML broke, after it.
+        VStack(alignment: .leading, spacing: 2) {
+          Text(kind.recoverySuggestion(for: .index)).lineLimit(2)
+          Text(message).lineLimit(2).foregroundStyle(.tertiary)
+        }
+        #if !os(macOS)
+          if kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+              .buttonStyle(.borderless)
+          }
+        #endif
+        Button("Retry") { library.retryIndex() }
           .buttonStyle(.borderless)
       }
     }

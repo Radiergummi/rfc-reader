@@ -317,7 +317,7 @@ struct EmptyDetailView: View {
         case .failed:
           HStack {
             Text("The RFC index couldn't be loaded. A number still opens.")
-            Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+            Button("Retry") { library.retryIndex() }
           }
         case .ready:
           Text("Nothing in the index matches “\(query)”.")

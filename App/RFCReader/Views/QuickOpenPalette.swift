@@ -60,7 +60,7 @@
               .foregroundStyle(.secondary)
               .frame(maxWidth: .infinity, alignment: .leading)
             if case .failed = library.indexState {
-              Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+              Button("Retry") { library.retryIndex() }
             }
           }
           .padding(.horizontal, 18)
