@@ -115,9 +115,11 @@ import RFCReaderKit
     /// `NSTextView` ends a live resize by scrolling back to the text it showed when the
     /// resize began, by its own measure: after a jump, a line above the place the
     /// reader put on top, so opening the inspector, which a split view animates as a
-    /// live resize, read as a scroll to the section before (#542). Set by the
-    /// representable to run that scroll as the reader's own move, which puts the place
-    /// back after it.
+    /// live resize, read as a scroll to the section before (#542). The scroll is made
+    /// within `super.viewDidEndLiveResize()`, as a probe's stack showed
+    /// (`_NSTextViewScrollContainerViewToTextRange` under it). Set by the
+    /// representable to run it as the engine's move, which pins the place back after
+    /// it.
     var keepingPlace: (() -> Void) -> Void = { $0() }
 
     override func viewDidEndLiveResize() {

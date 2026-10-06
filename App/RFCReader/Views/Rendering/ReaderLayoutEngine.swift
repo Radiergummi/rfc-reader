@@ -13,8 +13,9 @@ import os
 /// place (`PinRecipe.settle`). Everything above it is then laid out, so it is where
 /// the layout of the whole document puts it, and the platform's own scroll view
 /// keeps it there while the rest is laid out. Only a live resize on the Mac, which
-/// cannot afford that on every step, pins on estimates instead; the rebuild for the
-/// new column that follows it settles. Only calls into the text view live here; the
+/// cannot afford that on every step, pins on estimates instead, and pins again when
+/// it ends, after `NSTextView`'s own scroll (`keepPlace`); the rebuild for the new
+/// column that follows it settles. Only calls into the text view live here; the
 /// arithmetic is RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   weak var textView: PlatformTextView?
@@ -138,13 +139,15 @@ final class ReaderLayoutEngine: PinSurface {
   }
 
   /// Runs `body`, which scrolls the text view by a measure of its own, as the engine's
-  /// move rather than the reader's, then puts the place back: what `NSTextView`
-  /// scrolls to at the end of a live resize is not where the reader was (#542).
+  /// move rather than the reader's, then pins the place back where it is laid out:
+  /// what `NSTextView` scrolls to at the end of a live resize is not where the reader
+  /// was (#542). Pinned as through the resize, never settled: a change of column is
+  /// settled by the rebuild that follows it.
   func keepPlace(through body: () -> Void) {
     keeper.beginEngineMove()
+    defer { keeper.endEngineMove(top: containerTop) }
     body()
-    keeper.endEngineMove()
-    putBack()
+    pin()
   }
 
   /// The character the reader's line is on; nil at the top, above the text.
