@@ -19,6 +19,8 @@ settings:
     # two settings on the RFCReader target (#129). Complete strict concurrency is
     # Swift 6's default, so it is not spelled out.
     SWIFT_VERSION: "6.0"
+    # The tree has no warnings, and a new one fails the build (#440).
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: "YES"
     CODE_SIGN_STYLE: Automatic
     # The compiler records every localizable string it sees in a .stringsdata
     # file, which `make strings` syncs into the string catalogs.
