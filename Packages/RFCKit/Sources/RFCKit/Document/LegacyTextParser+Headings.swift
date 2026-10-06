@@ -131,6 +131,13 @@ extension LegacyTextParser {
   /// whose number a heading has already taken, so a list of one-line items under a
   /// heading of that number stays a list.
   ///
+  /// Once a document has centered a chapter that way, a line after it centered on the
+  /// page, in capitals and on its own, can be a chapter heading as well (#550): one
+  /// with no number, RFC 793's `GLOSSARY` and `REFERENCES`, or a numbered chapter with
+  /// no numbered subsection to confirm it, RFC 753's `4.  EXAMPLES & SCENARIOS`
+  /// (`centeredChapters`). A centered line in a body is otherwise a figure's title or
+  /// a caption, which the document's centered chapters are what tell apart.
+  ///
   /// One pass from the end, carrying the next heading down, because asking each line
   /// for the heading after it scanned the section for every one of them: RFC 1122's
   /// 266 indented numbered lines made its parse four times slower. A column-0 line is
@@ -143,6 +150,11 @@ extension LegacyTextParser {
     var headings: [Int: HeadingInfo] = [:]
     var next: (index: Int, number: String?)?
     var nearestOfNumber: [String: Int] = [:]
+    // What `centeredChapters` is judged by: the numbers column-0 headings have, and
+    // where the last numbered one is, an appendix's aside: back matter comes before
+    // the appendices.
+    var columnZeroNumbers: Set<String> = []
+    var lastNumbered: Int?
     for index in lines.indices[prelude.bodyStart...].reversed() {
       guard let string = lines[index].string, !string.isBlank else { continue }
       if string.startsAtColumnZero {
@@ -152,6 +164,10 @@ extension LegacyTextParser {
           !isContentsEntry(at: index, in: lines)
         {
           next = (index, heading.number)
+          if let number = heading.number {
+            columnZeroNumbers.insert(number)
+            if !heading.isAppendix { lastNumbered = lastNumbered ?? index }
+          }
         }
         continue
       }
@@ -165,7 +181,101 @@ extension LegacyTextParser {
       }
       nearestOfNumber[number] = index
     }
-    return headings
+    return centeredChapters(
+      in: prelude, confirmed: headings, columnZeroNumbers: columnZeroNumbers,
+      lastNumbered: lastNumbered)
+  }
+
+  /// The centered chapters a following subsection confirms, `confirmed`, and the
+  /// lines set like them once the document has one whose number no column-0 heading
+  /// has: centered, on its own and in capitals, or an appendix's `Appendix A`.
+  ///
+  /// - A numbered one has a chapter's number, between the confirmed chapters' around
+  ///   it: a numbered row of a figure in chapter 1 is not chapter 2. RFC 830 has no
+  ///   chapter 4 heading, so its 5 is not 4 + 1.
+  /// - An unnumbered one, or an appendix, comes after every numbered heading, the
+  ///   chapters found here included: the back matter, `GLOSSARY` and `REFERENCES`.
+  ///   A centered capitals line inside a chapter would take the chapter's
+  ///   subsections after it under it, or the chapter after it.
+  /// - The unnumbered line directly under a centered heading is that heading's
+  ///   title, RFC 830's `CONVENTION ASSIGNMENTS` under its `Appendix A`, and heads
+  ///   nothing.
+  private static func centeredChapters(
+    in prelude: Prelude, confirmed: [Int: HeadingInfo], columnZeroNumbers: Set<String>,
+    lastNumbered: Int?
+  ) -> [Int: HeadingInfo] {
+    let ordered = confirmed.sorted { $0.key < $1.key }.compactMap { entry in
+      entry.value.number.flatMap(Int.init).map { (index: entry.key, number: $0) }
+    }
+    guard
+      let first = ordered.first(where: { !columnZeroNumbers.contains(String($0.number)) })
+    else { return confirmed }
+    let lines = prelude.lines
+    // The chapters from the first one on, where back matter starts after `backMatter`.
+    func scan(backMatter: Int) -> [Int: HeadingInfo] {
+      var chapters = confirmed
+      var previousHeading: Int?
+      for index in lines.indices[first.index...] {
+        if chapters[index] != nil {
+          previousHeading = index
+          continue
+        }
+        guard let string = lines[index].string, !string.isBlank else { continue }
+        let followsAHeading = previousHeading != nil
+        previousHeading = nil
+        guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
+          isCenteredOnPage(string), !isContentsEntry(at: index, in: lines),
+          let heading = heading(from: string, separators: prelude.separators),
+          heading.isAppendix || !string.contains(where: \.isLowercase),
+          !isSpreadAcross(string, numbered: heading.number != nil && !heading.isAppendix)
+        else { continue }
+        if heading.isAppendix || heading.number == nil {
+          guard !followsAHeading, index > backMatter,
+            heading.isAppendix || !refusesUnnumberedHeading(heading.title)
+          else { continue }
+        } else {
+          guard let number = heading.number.flatMap(Int.init),
+            !columnZeroNumbers.contains(String(number)),
+            ordered.allSatisfy({ chapter in
+              chapter.index < index ? chapter.number < number : chapter.number > number
+            })
+          else { continue }
+        }
+        chapters[index] = heading
+        previousHeading = index
+      }
+      return chapters
+    }
+    // A numbered chapter the scan finds moves the back matter after it, and what it
+    // took for back matter before that chapter was a caption: scan again from there.
+    var backMatter = max(lastNumbered ?? 0, ordered.last?.index ?? 0)
+    var chapters = scan(backMatter: backMatter)
+    while let lastChapter = chapters.filter({ $0.value.number != nil && !$0.value.isAppendix })
+      .keys.max(), lastChapter > backMatter
+    {
+      backMatter = lastChapter
+      chapters = scan(backMatter: backMatter)
+    }
+    return chapters
+  }
+
+  /// Whether a line is centered on the 72 columns of a page: as far from its left
+  /// edge as from its right, within a few columns, and set in from both.
+  private static func isCenteredOnPage(_ line: String) -> Bool {
+    let indent = line.leadingSpaceCount
+    let end = line.trimmingCharacters(in: .whitespaces).count + indent
+    return indent >= 8 && end < 72 && abs(indent - (72 - end)) <= 3
+  }
+
+  /// Whether a line's words are spread across it, as a diagram's labels or a table's
+  /// row are, `TCP A` far left of `TCP B`, rather than set as one title. The gap after
+  /// a chapter's number is its own: RFC 830 sets three spaces there.
+  private static func isSpreadAcross(_ line: String, numbered: Bool) -> Bool {
+    var text = Substring(line.trimmingCharacters(in: .whitespaces))
+    if numbered {
+      text = text.drop { !$0.isWhitespace }.drop { $0.isWhitespace }
+    }
+    return text.contains("   ")
   }
 
   static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {

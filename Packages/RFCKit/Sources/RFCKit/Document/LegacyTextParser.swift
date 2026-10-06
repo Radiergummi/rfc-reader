@@ -417,6 +417,13 @@ public enum LegacyTextParser {
     var numbers: Set<String> = []
     let centered = centeredHeadings(in: prelude)
 
+    // Whether a centered heading's number is one a heading has already taken; one
+    // with no number takes none.
+    func takes(_ number: String?, from numbers: Set<String>) -> Bool {
+      guard let number else { return false }
+      return numbers.contains(number)
+    }
+
     func flushBlock() {
       if !current.isEmpty {
         sections[sections.count - 1].blocks.append(
@@ -454,12 +461,10 @@ public enum LegacyTextParser {
             sections.append(RawSection(heading: heading))
             if let number = heading.number { numbers.insert(number) }
           }
-        } else if let heading = centered[index], let number = heading.number,
-          !numbers.contains(number)
-        {
+        } else if let heading = centered[index], !takes(heading.number, from: numbers) {
           flushBlock()
           sections.append(RawSection(heading: heading))
-          numbers.insert(number)
+          if let number = heading.number { numbers.insert(number) }
         } else {
           current.append(string)
         }

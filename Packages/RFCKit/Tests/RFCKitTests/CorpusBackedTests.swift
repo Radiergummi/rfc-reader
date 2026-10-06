@@ -576,6 +576,32 @@ struct CorpusBackedUnnumberedHeadingTests {
   }
 }
 
+@Suite("Corpus-backed: centered chapters", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCenteredChapterTests {
+  /// RFC 753 centers its chapters, and its fourth has no numbered subsection to
+  /// confirm it: it heads its chapter all the same, rather than staying a list item
+  /// with its text under chapter 3 (#550).
+  @Test func `a centered chapter with no numbered subsection heads its chapter`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc753"))
+    let chapter = try #require(document.section(number: "4"))
+    #expect(chapter.titleText.hasPrefix("EXAMPLES"))
+    #expect(document.sections.contains { $0.titleText == "REFERENCES" })
+  }
+
+  /// RFC 830 sets three spaces after a chapter's number, centers an appendix's
+  /// label, and centers the appendix's title under it.
+  @Test func `a chapter set with a wide gap and a centered appendix head their own`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc830"))
+    let chapter = try #require(document.section(number: "5"))
+    #expect(chapter.titleText.hasPrefix("NCP TO TCP"))
+    #expect(
+      document.allSections.contains {
+        $0.titleText.hasPrefix("Appendix") || $0.anchor.hasPrefix("appendix")
+      })
+    #expect(!document.allSections.contains { $0.titleText == "CONVENTION ASSIGNMENTS" })
+  }
+}
+
 @Suite("Corpus-backed: omitted boilerplate", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedOmittedBoilerplateTests {
   /// An omitted section, such as `Status of this Memo`, runs to the next heading. A
