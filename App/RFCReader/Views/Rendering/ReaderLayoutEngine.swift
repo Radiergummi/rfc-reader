@@ -137,6 +137,16 @@ final class ReaderLayoutEngine: PinSurface {
     startCompletion(knowingEnd: laidOut)
   }
 
+  /// Runs `body`, which scrolls the text view by a measure of its own, as the engine's
+  /// move rather than the reader's, then puts the place back: what `NSTextView`
+  /// scrolls to at the end of a live resize is not where the reader was (#542).
+  func keepPlace(through body: () -> Void) {
+    keeper.beginEngineMove()
+    body()
+    keeper.endEngineMove()
+    putBack()
+  }
+
   /// The character the reader's line is on; nil at the top, above the text.
   var placeOffset: Int? {
     guard case .line(let anchor) = keeper.place else { return nil }

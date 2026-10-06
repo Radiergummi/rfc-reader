@@ -112,8 +112,16 @@ import RFCReaderKit
     /// says nothing. The background layout waits for it (`ReaderLayoutEngine`).
     static let didEndLiveResizeNotification = Notification.Name("ReaderTextViewDidEndLiveResize")
 
+    /// `NSTextView` ends a live resize by scrolling back to the text it showed when the
+    /// resize began, by its own measure: after a jump, a line above the place the
+    /// reader put on top, so opening the inspector, which a split view animates as a
+    /// live resize, read as a scroll to the section before (#542). Set by the
+    /// representable to run that scroll as the reader's own move, which puts the place
+    /// back after it.
+    var keepingPlace: (() -> Void) -> Void = { $0() }
+
     override func viewDidEndLiveResize() {
-      super.viewDidEndLiveResize()
+      keepingPlace { super.viewDidEndLiveResize() }
       NotificationCenter.default.post(name: Self.didEndLiveResizeNotification, object: self)
     }
 
