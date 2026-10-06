@@ -17,15 +17,9 @@ struct DocumentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
-  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-    .defaultFontSize
-  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
-    ReaderPreferences.defaultPreferOriginalText
-  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
-    ReaderPreferences.defaultUnderlineLinks
-  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
-  @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
-    ReaderPreferences.defaultDrawDiagrams
+  /// Every reading setting; the build-time ones reach the build through
+  /// `buildInputs`, the draw-time ones the text view's palette.
+  @ReaderSettingsValue private var settings
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -171,7 +165,7 @@ struct DocumentView: View {
   /// rebuilding it and losing the reader's place. What the panel overlaps, it
   /// covers, and closing it uncovers.
   private var column: CGFloat? {
-    paneWidth.map { ReaderLayout.column(forWidth: $0, measure: measure) }
+    paneWidth.map { ReaderLayout.column(forWidth: $0, measure: settings.measure) }
   }
 
   private var metadata: RFCMetadata? { library.metadata(id) }
@@ -182,10 +176,9 @@ struct DocumentView: View {
 
   private var buildInputs: BuildInputs {
     BuildInputs(
-      hasDocument: session.state.document != nil, fontSize: fontSize,
-      underlineLinks: underlineLinks,
+      hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
-      choices: library.presentationChoices(for: id, drawsDiagrams: drawDiagrams))
+      choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams))
   }
 
   /// The folding index of the build on screen, and in Focus the References tab's
@@ -464,7 +457,7 @@ struct DocumentView: View {
       OriginalTextView(
         text: session.originalText,
         failure: session.originalTextFailure,
-        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
+        fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
       .onAppear {
@@ -477,7 +470,7 @@ struct DocumentView: View {
       RFCTextView(
         built: built,
         bibliography: reader.groups,
-        measure: measure,
+        measure: settings.measure,
         documentID: id,
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
@@ -580,6 +573,11 @@ struct DocumentView: View {
         Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
+        #if !os(macOS)
+          if failure.kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else if session.state.showsProgress(isDue: session.isProgressDue) {
@@ -652,10 +650,10 @@ struct DocumentView: View {
 
   /// Fetches the document, with the reader's panel made ready for it first.
   private func startLoad() {
-    keptOriginal = preferOriginalText
+    keptOriginal = settings.preferOriginalText
     session.open(
       into: reader, library: library, navigation: navigation, positions: positions,
-      showsOriginal: preferOriginalText)
+      showsOriginal: settings.preferOriginalText)
   }
 
   /// Takes the tab an App Intent asked for beside this document in this tab (#192),

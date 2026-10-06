@@ -400,6 +400,16 @@
         }
       }
     },
+    "Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung"
+          }
+        }
+      }
+    },
     "Assumed" : {
       "localizations" : {
         "de" : {
@@ -526,6 +536,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schließen"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
           }
         }
       }
@@ -680,6 +700,16 @@
         }
       }
     },
+    "Couldn't export %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
     "Couldn't load %@" : {
       "localizations" : {
         "de" : {
@@ -696,6 +726,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Originaltext konnte nicht geladen werden"
+          }
+        }
+      }
+    },
+    "Couldn't print %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte nicht gedruckt werden"
           }
         }
       }
@@ -1601,6 +1641,16 @@
         }
       }
     },
+    "Open Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen öffnen"
+          }
+        }
+      }
+    },
     "Open in New Tab" : {
       "localizations" : {
         "de" : {
@@ -1707,6 +1757,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sonst werden sie als der Text gezeigt, mit dem sie gezeichnet wurden. Das Menü eines Diagramms kann es weiterhin umschalten."
+          }
+        }
+      }
+    },
+    "Page" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite"
           }
         }
       }
@@ -1877,6 +1937,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesepfad"
+          }
+        }
+      }
+    },
+    "Reading Settings…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen …"
           }
         }
       }
@@ -2111,6 +2181,16 @@
         }
       }
     },
+    "Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen"
+          }
+        }
+      }
+    },
     "Share" : {
       "localizations" : {
         "de" : {
@@ -2267,6 +2347,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße"
+          }
+        }
+      }
+    },
+    "The RFC index couldn't be loaded. A number still opens." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index konnte nicht geladen werden. Eine Nummer lässt sich trotzdem öffnen."
           }
         }
       }

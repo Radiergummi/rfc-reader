@@ -99,7 +99,7 @@ The app's chrome is localized through string catalogs, and the reader body is no
 
 ## Generated files
 
-`RFCReader.xcodeproj`, `App/RFCReader/Info.plist` and `App/RFCReader/RFCReader.entitlements` are produced by XcodeGen from `project.yml` and are gitignored — edit `project.yml`, never the generated project. `corpus/` is a working directory; only `corpus/overrides/` is committed.
+`RFCReader.xcodeproj`, and the `Info.plist` and entitlements of `App/RFCReader` and `App/SafariExtension`, are produced by XcodeGen from `project.yml` and are gitignored — edit `project.yml`, never the generated project. `corpus/` is a working directory; only `corpus/overrides/` is committed.
 
 `.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; a line that has to run past the cap carries a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
 

@@ -21,6 +21,12 @@ struct CollectionStoreTests {
     var count = 0
   }
 
+  /// What an undo or redo reports failing, which none here should: a collection
+  /// gone since, or a document back in it, is nothing to put back, not a failure.
+  private static func undoFailed(_ error: any Error) {
+    Issue.record(error, "an undo or redo failed")
+  }
+
   private func members(of collection: UUID, in context: ModelContext) -> [DocumentID] {
     CollectionSnapshot.fetch(in: context)[collection]?.members ?? []
   }
@@ -123,11 +129,14 @@ struct CollectionStoreTests {
     context.insert(DocumentCollectionItem(collection: id, document: .rfc(9000), position: 2))
     try context.save()
 
-    let isIn = try CollectionStore.toggle(.rfc(9000), in: id, undoManager: nil, in: context)
+    let isIn = try CollectionStore.toggle(
+      .rfc(9000), in: id, undoManager: nil, onUndoFailure: Self.undoFailed, in: context)
 
     #expect(!isIn)
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).isEmpty)
-    #expect(try CollectionStore.toggle(.rfc(9000), in: id, undoManager: nil, in: context))
+    #expect(
+      try CollectionStore.toggle(
+        .rfc(9000), in: id, undoManager: nil, onUndoFailure: Self.undoFailed, in: context))
     #expect(members(of: id, in: context) == [.rfc(9000)])
   }
 
@@ -271,14 +280,16 @@ struct CollectionStoreTests {
     try CollectionStore.add(.rfc(9000), to: id, in: context)
 
     undoManager.beginUndoGrouping()
-    try CollectionStore.remove(.rfc(9000), from: id, undoManager: undoManager, in: context)
+    try CollectionStore.remove(
+      .rfc(9000), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
     try CollectionStore.add(.rfc(9000), to: id, in: context)
     undoManager.undo()
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
 
     undoManager.beginUndoGrouping()
-    try CollectionStore.remove(.rfc(9000), from: id, undoManager: undoManager, in: context)
+    try CollectionStore.remove(
+      .rfc(9000), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
     try CollectionStore.delete(id, in: context)
     undoManager.undo()
@@ -294,7 +305,8 @@ struct CollectionStoreTests {
     for number in [1, 2] { try CollectionStore.add(.rfc(number), to: id, in: context) }
 
     undoManager.beginUndoGrouping()
-    try CollectionStore.remove(.rfc(1), from: id, undoManager: undoManager, in: context)
+    try CollectionStore.remove(
+      .rfc(1), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
     undoManager.undo()
     #expect(undoManager.canRedo)
@@ -313,7 +325,8 @@ struct CollectionStoreTests {
     for number in [1, 2, 3] { try CollectionStore.add(.rfc(number), to: id, in: context) }
 
     undoManager.beginUndoGrouping()
-    try CollectionStore.remove(.rfc(2), from: id, undoManager: undoManager, in: context)
+    try CollectionStore.remove(
+      .rfc(2), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
     #expect(members(of: id, in: context) == [.rfc(1), .rfc(3)])
 

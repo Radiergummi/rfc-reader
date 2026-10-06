@@ -23,6 +23,7 @@ rfc-reader/
 │   ├── Window/               macOS only: AppDelegate, ReaderWindowController, the toolbar
 │   ├── Scripting/            macOS only: the AppleScript dictionary
 │   └── Intents/              App Intents: the RFC, section and registry entry entities, and the intents over them
+├── App/SafariExtension/      Safari Web Extension (iOS, macOS): a toolbar button and an opt-in redirect to `rfc://`, URLs read by RFCLink in a native handler
 ├── project.yml               XcodeGen spec that produces RFCReader.xcodeproj
 └── docs/
 ```
@@ -166,6 +167,7 @@ is that way, and what was measured or tried first.
 - [A reading mode folds paragraphs out of the layout, not out of the storage](decisions/2026-10-03-a-reading-mode-folds-paragraphs-out-of-the-layout.md)
 - [App Intents act on entities whose queries are RFCKit's](decisions/2026-10-03-app-intents-act-on-entities-whose-queries-are-rfckits.md)
 - [On iOS, a citation pushes a reader](decisions/2026-10-03-on-ios-a-citation-pushes-a-reader.md)
+- [The Safari extension asks the app which RFC a page is](decisions/2026-10-03-the-safari-extension-asks-the-app-which-rfc-a-page-is.md)
 - [The app's chrome is localized, the reader body is not](decisions/2026-10-04-the-apps-chrome-is-localized-the-reader-body-is-not.md)
 
 ## Planned engines

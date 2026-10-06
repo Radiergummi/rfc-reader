@@ -103,62 +103,96 @@ public enum CollectionStore {
 
   /// Every item naming the document, since nothing stops there being two. Undoing
   /// puts it back where it was, not at the end.
+  ///
+  /// The undo and its redo run long after this returns, where nothing can catch what
+  /// they throw, so they hand it to `onUndoFailure`: the App decides what to do with
+  /// it, as with every other failure here (#759).
   public static func remove(
     _ document: DocumentID, from identifier: UUID, undoManager: UndoManager?,
-    in context: ModelContext
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
   ) throws {
     let removed = try items(in: identifier, context: context)
       .filter { $0.documentKey == document.fileStem }
     guard let first = removed.first else { return }
-    let position = first.position
-    let addedAt = first.addedAt
+    let removal = Removal(
+      document: document, collection: identifier, position: first.position,
+      addedAt: first.addedAt)
     removed.forEach(context.delete)
     try context.save()
     undoManager?.registerUndo(withTarget: context) { context in
+      // An undo manager runs what is registered on the thread that calls its undo()
+      // or redo(). The App's come from SwiftUI's environment and are driven by the
+      // Edit menu and the shake gesture, on the main thread; the tests drive theirs
+      // from the main actor.
       MainActor.assumeIsolated {
-        restore(
-          document, to: identifier, at: (position, addedAt), undoManager: undoManager,
-          in: context)
+        do {
+          try restore(
+            removal, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
+        } catch {
+          onUndoFailure(error)
+        }
       }
     }
     undoManager?.setActionName(String(kit: "Remove from Collection", locale: .interface))
+  }
+
+  /// What a removal took out, for its undo to put back.
+  private struct Removal {
+    let document: DocumentID
+    let collection: UUID
+    let position: Double
+    let addedAt: Date
   }
 
   /// Undoing a removal: the item back where it was, and the removal again as the
   /// redo. Nothing is put back into a collection that has gone since, or next to a
   /// copy of the document added since — either would leave a row nothing removes.
   private static func restore(
-    _ document: DocumentID, to identifier: UUID, at place: (position: Double, addedAt: Date),
-    undoManager: UndoManager?, in context: ModelContext
-  ) {
-    guard (try? collection(identifier, in: context)) != nil,
-      let items = try? items(in: identifier, context: context),
-      !items.contains(where: { $0.documentKey == document.fileStem })
-    else { return }
+    _ removal: Removal, undoManager: UndoManager?,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
+  ) throws {
+    let document = removal.document
+    let identifier = removal.collection
+    do {
+      _ = try collection(identifier, in: context)
+    } catch Failure.noSuchCollection {
+      return
+    }
+    let items = try items(in: identifier, context: context)
+    guard !items.contains(where: { $0.documentKey == document.fileStem }) else { return }
     context.insert(
       DocumentCollectionItem(
-        collection: identifier, document: document, position: place.position,
-        addedAt: place.addedAt))
-    try? context.save()
+        collection: identifier, document: document, position: removal.position,
+        addedAt: removal.addedAt))
+    try context.save()
     undoManager?.registerUndo(withTarget: context) { context in
+      // On the main thread, for the reason `remove` gives.
       MainActor.assumeIsolated {
-        try? remove(document, from: identifier, undoManager: undoManager, in: context)
+        do {
+          try remove(
+            document, from: identifier, undoManager: undoManager, onUndoFailure: onUndoFailure,
+            in: context)
+        } catch {
+          onUndoFailure(error)
+        }
       }
     }
     undoManager?.setActionName(String(kit: "Remove from Collection", locale: .interface))
   }
 
   /// Removes the document if it is in the collection, adds it otherwise. Answers
-  /// whether it is in the collection afterwards.
+  /// whether it is in the collection afterwards. `onUndoFailure` is `remove`'s.
   @discardableResult
   public static func toggle(
     _ document: DocumentID, in identifier: UUID, undoManager: UndoManager?,
-    in context: ModelContext
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
   ) throws -> Bool {
     let isIn = try items(in: identifier, context: context)
       .contains { $0.documentKey == document.fileStem }
     if isIn {
-      try remove(document, from: identifier, undoManager: undoManager, in: context)
+      try remove(
+        document, from: identifier, undoManager: undoManager, onUndoFailure: onUndoFailure,
+        in: context)
     } else {
       try add(document, to: identifier, in: context)
     }

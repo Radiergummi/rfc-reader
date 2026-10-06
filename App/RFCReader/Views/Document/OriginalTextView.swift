@@ -18,6 +18,11 @@ struct OriginalTextView: View {
         Text(failure.kind.recoverySuggestion(for: .originalText))
       } actions: {
         Button("Try Again", action: tryAgain)
+        #if !os(macOS)
+          if failure.kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
       }
     } else {
       ProgressView()

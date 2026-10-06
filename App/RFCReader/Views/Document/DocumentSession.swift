@@ -3,10 +3,22 @@ import RFCReaderKit
 import SwiftUI
 import os
 
-/// The reader's load and build decisions, at debug level: what a device's
-/// Console shows when a document fails to load or never finishes (#252, #253).
+/// The reader's load and build decisions: what a device's Console shows when a
+/// document fails to load or never finishes (#252, #253). Progress is logged at
+/// debug level, which is shown only while streaming; a failure at error level,
+/// which the unified log keeps (#759).
 let readerLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
+
+extension Logger {
+  /// Something done with a document that failed, at error level, which the unified
+  /// log keeps: "RFC 9110: `event`: `cause`".
+  func failure(of document: DocumentID, _ event: String, _ cause: any Error) {
+    error(
+      "\(document.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: cause), privacy: .public)"
+    )
+  }
+}
 
 /// Everything a build depends on. One trigger, so the document is built in one
 /// place whatever changed — a new RFC, a reading setting, or a window resize.
@@ -15,21 +27,26 @@ struct BuildInputs: Equatable {
   /// triggers the build. A session only ever fetches into a state with no
   /// document, so every load arrives as a false → true transition.
   let hasDocument: Bool
-  let fontSize: Double
-  let underlineLinks: Bool
-  let textSize: DynamicTypeSize
   let legibilityWeight: LegibilityWeight?
   let column: CGFloat?
+  /// The build-time half of the reader's settings, for `column`, and nil until
+  /// there is one. Only this half: a draw-time setting (`ReaderSettings.palette`)
+  /// must not be a reason to build again.
+  let style: ReadingStyle?
   /// How the blocks with a rendering are shown: the preference, and the reader's
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
-  var style: ReadingStyle? {
-    column.map {
-      ReadingStyle(
-        bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
-    }
+  init(
+    hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
+    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices
+  ) {
+    self.hasDocument = hasDocument
+    self.legibilityWeight = legibilityWeight
+    self.column = column
+    style = column.map { settings.style(column: $0, textSize: textSize) }
+    self.choices = choices
   }
 }
 
@@ -126,7 +143,7 @@ final class DocumentSession {
         // Canceled only when the session goes, or when Try Again replaces this
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
-        trace("original text failed: \(error)")
+        readerLog.failure(of: id, "loading the original text failed", error)
         originalTextFailure = LoadFailure(error: error)
       }
     }
@@ -177,7 +194,7 @@ final class DocumentSession {
         trace("loaded")
       } catch {
         guard let self, !Task.isCancelled else { return }
-        trace("failed: \(error)")
+        readerLog.failure(of: id, "loading failed", error)
         state.fail(error)
         failed()
       }
@@ -251,6 +268,8 @@ final class DocumentSession {
     }
   }
 
+  /// Progress, at debug level, which the unified log shows while streaming and
+  /// doesn't keep.
   private func trace(_ event: String) {
     readerLog.debug("\(self.id.displayName, privacy: .public): \(event, privacy: .public)")
   }

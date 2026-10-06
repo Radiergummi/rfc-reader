@@ -14,6 +14,7 @@ struct RFCListView: View {
   #if !os(macOS)
     /// Whether the notices of the code the app adapts are on show.
     @State private var showsAcknowledgements = false
+    @State private var showsSettings = false
   #endif
 
   private var rows: [LibraryRow] {
@@ -67,7 +68,9 @@ struct RFCListView: View {
   private func remove(_ document: DocumentID) {
     guard let collection else { return }
     library.editCollections {
-      try CollectionStore.remove(document, from: collection, undoManager: undoManager, in: $0)
+      try CollectionStore.remove(
+        document, from: collection, undoManager: undoManager,
+        onUndoFailure: library.collectionUndoFailed, in: $0)
     }
     navigation.listNow()
   }
@@ -306,6 +309,7 @@ struct RFCListView: View {
       // end (#348).
       .refreshable { await library.refreshIndex() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
+      .sheet(isPresented: $showsSettings) { SettingsScreen() }
     #endif
   }
 
@@ -315,6 +319,11 @@ struct RFCListView: View {
       Menu {
         ListViewOptions(navigation: navigation)
         Section {
+          // iOS has no Settings scene, and the reader's settings are the app's own
+          // rather than the Settings app's (#703).
+          Button("Settings", systemImage: "gearshape") {
+            showsSettings = true
+          }
           Button("Acknowledgements", systemImage: "doc.text") {
             showsAcknowledgements = true
           }
@@ -391,10 +400,21 @@ struct IndexStatusView: View {
         Text("Loading index…")
       case .ready(let updatedAt):
         Text("Updated \(updatedAt, format: .relative(presentation: .named))")
-      case .failed(let message):
-        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        Text(message).lineLimit(2)
-        Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+      case .failed(let kind, let message):
+        Image(systemName: kind.symbol).foregroundStyle(.orange)
+        // What went wrong in words first, as the reader says it of a document; the
+        // error's own text, an HTTP status or where the XML broke, after it.
+        VStack(alignment: .leading, spacing: 2) {
+          Text(kind.recoverySuggestion(for: .index)).lineLimit(2)
+          Text(message).lineLimit(2).foregroundStyle(.tertiary)
+        }
+        #if !os(macOS)
+          if kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+              .buttonStyle(.borderless)
+          }
+        #endif
+        Button("Retry") { library.retryIndex() }
           .buttonStyle(.borderless)
       }
     }

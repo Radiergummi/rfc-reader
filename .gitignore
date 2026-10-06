@@ -25,6 +25,8 @@ Tools/benchmarks/.benchmarkBaselines/
 RFCReader.xcodeproj/
 App/RFCReader/Info.plist
 App/RFCReader/RFCReader.entitlements
+App/SafariExtension/Info.plist
+App/SafariExtension/RFCReaderSafari.entitlements
 
 # Claude Code: worktrees and personal settings stay local; skills and settings.json are shared
 .claude/worktrees/
