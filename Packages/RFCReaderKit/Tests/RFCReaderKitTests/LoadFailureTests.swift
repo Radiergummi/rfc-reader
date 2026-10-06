@@ -11,12 +11,26 @@ struct LoadFailureTests {
   private let url = URL(string: "https://www.rfc-editor.org/rfc/rfc9110.xml")!
 
   /// Only the device's own connection: a host that does not answer is the server's.
-  @Test(arguments: [
-    URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
-    .internationalRoamingOff,
-  ])
+  @Test(arguments: [URLError.Code.notConnectedToInternet, .networkConnectionLost])
   func `a lost connection is offline`(code: URLError.Code) {
     #expect(LoadFailure(error: URLError(code)).kind == .offline)
+  }
+
+  /// Cellular data turned off, for the app or while roaming, is a setting to change
+  /// rather than a connection to check (#759).
+  @Test(arguments: [URLError.Code.dataNotAllowed, .internationalRoamingOff])
+  func `cellular data turned off is cellular denied`(code: URLError.Code) {
+    #expect(LoadFailure(error: URLError(code)).kind == .cellularDenied)
+  }
+
+  /// What a network's login page or a proxy does to a TLS connection (#759).
+  @Test(arguments: [
+    URLError.Code.secureConnectionFailed, .serverCertificateHasBadDate,
+    .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+    .serverCertificateNotYetValid, .clientCertificateRejected, .clientCertificateRequired,
+  ])
+  func `a TLS failure is a secure connection failure`(code: URLError.Code) {
+    #expect(LoadFailure(error: URLError(code)).kind == .secureConnection)
   }
 
   @Test(arguments: [URLError.Code.timedOut, .cannotFindHost, .cannotConnectToHost])
@@ -81,6 +95,26 @@ struct LoadFailureTests {
       let document = kind.recoverySuggestion(for: .document, locale: .english)
       let originalText = kind.recoverySuggestion(for: .originalText, locale: .english)
       #expect((document == originalText) == (kind != .notFound))
+    }
+  }
+
+  /// The index is not a document: what its status line says about a failure never
+  /// sends the reader to a document's page, and a failure of the connection reads
+  /// as it does for a document (#759).
+  /// An index that does not parse has its own words, rather than "try again in a
+  /// moment", which would not help.
+  @Test func `an index that does not parse is unreadable`() {
+    let syntax = XMLSyntaxError(line: 1, column: 2, message: "unexpected end")
+    #expect(LoadFailure(error: RFCIndexParser.ParseError.malformed(syntax)).kind == .unreadable)
+  }
+
+  @Test func `the index is not a document`() {
+    let ownWording: Set<LoadFailure.Kind> = [.notFound, .unreadable, .other]
+    for kind in LoadFailure.Kind.allCases {
+      let document = kind.recoverySuggestion(for: .document, locale: .english)
+      let index = kind.recoverySuggestion(for: .index, locale: .english)
+      #expect((document == index) == !ownWording.contains(kind))
+      #expect(!index.contains("document"))
     }
   }
 }

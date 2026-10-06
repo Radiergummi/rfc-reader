@@ -3,10 +3,22 @@ import RFCReaderKit
 import SwiftUI
 import os
 
-/// The reader's load and build decisions, at debug level: what a device's
-/// Console shows when a document fails to load or never finishes (#252, #253).
+/// The reader's load and build decisions: what a device's Console shows when a
+/// document fails to load or never finishes (#252, #253). Progress is logged at
+/// debug level, which is shown only while streaming; a failure at error level,
+/// which the unified log keeps (#759).
 let readerLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
+
+extension Logger {
+  /// Something done with a document that failed, at error level, which the unified
+  /// log keeps: "RFC 9110: `event`: `cause`".
+  func failure(of document: DocumentID, _ event: String, _ cause: any Error) {
+    error(
+      "\(document.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: cause), privacy: .public)"
+    )
+  }
+}
 
 /// Everything a build depends on. One trigger, so the document is built in one
 /// place whatever changed — a new RFC, a reading setting, or a window resize.
@@ -131,7 +143,7 @@ final class DocumentSession {
         // Canceled only when the session goes, or when Try Again replaces this
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
-        trace("original text failed: \(error)")
+        readerLog.failure(of: id, "loading the original text failed", error)
         originalTextFailure = LoadFailure(error: error)
       }
     }
@@ -182,7 +194,7 @@ final class DocumentSession {
         trace("loaded")
       } catch {
         guard let self, !Task.isCancelled else { return }
-        trace("failed: \(error)")
+        readerLog.failure(of: id, "loading failed", error)
         state.fail(error)
         failed()
       }
@@ -256,6 +268,8 @@ final class DocumentSession {
     }
   }
 
+  /// Progress, at debug level, which the unified log shows while streaming and
+  /// doesn't keep.
   private func trace(_ event: String) {
     readerLog.debug("\(self.id.displayName, privacy: .public): \(event, privacy: .public)")
   }

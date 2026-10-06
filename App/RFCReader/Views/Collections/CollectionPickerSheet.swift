@@ -32,7 +32,9 @@ struct CollectionPickerSheet: View {
         let isMember = members.contains(row.id)
         Button {
           library.editCollections {
-            try CollectionStore.toggle(row.id, in: collection, undoManager: undoManager, in: $0)
+            try CollectionStore.toggle(
+              row.id, in: collection, undoManager: undoManager,
+              onUndoFailure: library.collectionUndoFailed, in: $0)
           }
         } label: {
           HStack {

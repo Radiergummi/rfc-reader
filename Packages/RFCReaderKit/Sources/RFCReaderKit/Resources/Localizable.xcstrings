@@ -325,6 +325,16 @@
         }
       }
     },
+    "A secure connection couldn't be made. If this network has a login page, sign in, or check its proxy settings, then try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es konnte keine sichere Verbindung hergestellt werden. Hat dieses Netzwerk eine Anmeldeseite, melde dich an, oder prüfe seine Proxy-Einstellungen und versuche es dann erneut."
+          }
+        }
+      }
+    },
     "A series of introductory Informational RFCs, for readers new to the Internet." : {
       "localizations" : {
         "de" : {
@@ -631,6 +641,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen"
+          }
+        }
+      }
+    },
+    "Cellular data is turned off for this app, or roaming is. Turn it on in Settings, or connect to Wi-Fi." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mobile Daten sind für diese App ausgeschaltet, oder Datenroaming ist es. Schalte sie in den Einstellungen ein oder verbinde dich mit einem WLAN."
           }
         }
       }
@@ -1945,6 +1965,16 @@
         }
       }
     },
+    "The RFC index couldn't be read. Try again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index konnte nicht gelesen werden. Versuche es später erneut."
+          }
+        }
+      }
+    },
     "The index is still loading" : {
       "localizations" : {
         "de" : {
@@ -2123,6 +2153,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This section of %1$@ has no counterpart in %2$@"
+          }
+        }
+      }
+    },
+    "Try again in a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche es gleich noch einmal."
           }
         }
       }
