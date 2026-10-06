@@ -539,6 +539,35 @@ struct LegacyTextParserHeadingsTests {
     beforeTheFirstChapter.insert(
       contentsOf: [.text("                                PREFACE"), .text("")], at: 1)
     #expect(heading(beforeTheFirstChapter, at: 1) == nil, "the title page repeated, a preface")
+    var threeSpaces = lines
+    threeSpaces[9] = .text("                          2   WIDGET EXAMPLES")
+    #expect(heading(threeSpaces, at: 9) == "WIDGET EXAMPLES", "the gap after the number")
+    var inAChapter = lines
+    inAChapter[3] = .text("                             WIDGET DIAGRAM")
+    #expect(heading(inAChapter, at: 3) == nil, "a caption before the chapter's subsections")
+    var underTheHeading = lines
+    underTheHeading[15] = .text("                              WIDGET TERMS")
+    #expect(heading(underTheHeading, at: 15) == nil, "the glossary's title")
+    var anAppendix = lines
+    anAppendix[13] = .text("                               Appendix A")
+    #expect(heading(anAppendix, at: 13) != nil)
+  }
+
+  /// An unconfirmed numbered line heads a chapter only where its number falls
+  /// between the confirmed chapters around it: a figure's numbered row in chapter 1
+  /// is not chapter 2, which a subsection confirms further on.
+  @Test func `a numbered row before its chapter does not take the chapter's number`() {
+    let lines: [LegacyTextParser.Line] = [
+      .text(""), .text("                            1.  WIDGET RULES"), .text(""),
+      .text("1.1.  Widget Sizes"), .text(""),
+      .text("                              2  WIDGET HOST"), .text(""),
+      .text("                            2.  WIDGET PARTS"), .text(""),
+      .text("2.1.  Widget Knobs"), .text(""),
+    ]
+    let headings = LegacyTextParser.centeredHeadings(
+      in: .init(lines: lines, bodyIsIndented: true))
+    #expect(headings[5] == nil)
+    #expect(headings[7]?.title == "WIDGET PARTS")
   }
 
   // MARK: Unnumbered headings (#201)
