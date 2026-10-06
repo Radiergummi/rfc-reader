@@ -11,7 +11,6 @@ import Foundation
 /// A text laid out headless: a content storage, a layout manager and a container.
 /// The storage is kept because the layout manager holds it weakly. Written through
 /// `install`, never `attributedString`: see CLAUDE.md.
-@MainActor
 final class LayoutFixture {
   let storage = NSTextContentStorage()
   let layout = NSTextLayoutManager()

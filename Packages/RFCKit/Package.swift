@@ -7,6 +7,10 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("MemberImportVisibility"),
   .enableUpcomingFeature("InferIsolatedConformances"),
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  // No treatAllWarnings here, unlike the other packages: RFCKit is their
+  // dependency, and Swift 6.3's build system gives a dependency
+  // -suppress-warnings, which it refuses beside -warnings-as-errors. Where RFCKit
+  // is the root, the Makefile and CI pass -warnings-as-errors instead (#440).
 ]
 
 let package = Package(

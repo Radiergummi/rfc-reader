@@ -1,7 +1,12 @@
 # On iOS, a diagram is said by a pronunciation in the text
 
-*Decided October 2026 (issues #12, #308), to be confirmed by ear on a device.* On macOS VoiceOver says a diagram as one label, "Diagram", because `ReaderTextView` overrides the per-range accessibility accessors (#297). `UITextView` has no such accessor to override, so that fix cannot be copied, and VoiceOver on iOS read a diagram one box-drawing character at a time. The only lever that keeps the text view one accessibility element, with its line, word and character reading, selection and in-place links, is a speech attribute in the text itself: the builder sets `accessibilitySpeechIPANotation` on a diagram's lines, the IPA of "diagram" on the first line that is not blank and an empty pronunciation on the later ones (`AccessibleReading.diagramSpeech`).
+*Decided October 2026 (issues #12, #308), to be confirmed by ear on a device.*
+On macOS VoiceOver says a diagram as one label, "Diagram", because `ReaderTextView` overrides the per-range accessibility accessors (#297).
+`UITextView` has no such accessor to override, so that fix cannot be copied, and VoiceOver on iOS read a diagram one box-drawing character at a time.
+The only lever that keeps the text view one accessibility element, with its line, word and character reading, selection and in-place links, is a speech attribute in the text itself: the builder sets `accessibilitySpeechIPANotation` on a diagram's lines, the IPA of "diagram" on the first line that is not blank and an empty pronunciation on the later ones (`AccessibleReading.diagramSpeech`).
 
 A diagram as its own accessibility element was weighed and rejected: the text view would have to become a container, losing word and character granularity, selection and in-place links in all the prose around it. Only "diagram" is said, not a packet diagram's field list as on macOS, because its fields cannot be turned into IPA.
 
-Whether VoiceOver honors a speech attribute in a text view's storage is not documented, and an empty pronunciation least of all, so this waits for a listening pass on a device. If line-by-line reading still reads the characters, a single space or another silent pronunciation is the next try. If reading through does not say "diagram" either, VoiceOver does not honor the attribute in a text view, and the limitation is documented instead.
+Whether VoiceOver honors a speech attribute in a text view's storage is not documented, and an empty pronunciation least of all, so this waits for a listening pass on a device.
+If line-by-line reading still reads the characters, a single space or another silent pronunciation is the next try.
+If reading through does not say "diagram" either, VoiceOver does not honor the attribute in a text view, and the limitation is documented instead.

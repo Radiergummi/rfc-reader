@@ -13,7 +13,7 @@ Everything goes through the `Makefile`:
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK; part of `make check` on a Mac) |
 | `make build-app-tests-ios` | RFCReaderKit's test target, built for the iOS Simulator without running it (#821); CI does it too |
 | `make test-corpus` | the `Corpus-backed:` suites, over the documents in the Makefile's `CORPUS_TEST_DOCUMENTS` and `CORPUS_TEST_XML_DOCUMENTS`, fetched into `corpus/` and passed as `RFC_CORPUS_TEXT` and `RFC_CORPUS_XML`; not part of `make check` |
-| `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
+| `swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`); the flag is the one `make test` passes, so switching between them rebuilds nothing |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |

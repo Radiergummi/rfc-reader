@@ -51,14 +51,14 @@ jobs:
             Tools/benchmarks/.build
           key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
           restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
-      - run: swift test --package-path Packages/RFCKit
+      # RFCKit and corpus-build, with the Makefile's flags (RFCKit's warnings, #440).
+      # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
+      # run on both.
+      - run: make test
       - run: make test-app
       # Nothing else builds Tools/benchmarks, so an API change in RFCKit or
       # RFCReaderKit would break it silently (#419).
       - run: make build-benchmarks
-      # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
-      # run on both.
-      - run: swift test --package-path Tools/corpus-build
       - name: Save the SwiftPM builds
         if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

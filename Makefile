@@ -9,6 +9,9 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
+# RFCKit, built as the root package, fails on a warning; the other packages say so
+# in their manifests. See RFCKit's manifest for why it cannot (#440).
+RFCKIT_WARNINGS := -Xswiftc -warnings-as-errors
 # Release for a corpus run. CI checks the patches with the debug build its tests
 # already made (CORPUS_CONFIGURATION=debug), rather than building again.
 CORPUS_CONFIGURATION ?= release
@@ -69,7 +72,7 @@ fmt:
 ## Build the Swift packages
 # RFCReaderKit and the benchmarks only on a Mac; elsewhere they cannot build.
 build:
-	swift build --package-path $(RFCKIT)
+	swift build --package-path $(RFCKIT) $(RFCKIT_WARNINGS)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
 	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
@@ -79,7 +82,7 @@ endif
 ## Run the RFCKit and corpus-build test suites
 # The fast loop: no simulator, no Xcode project.
 test:
-	swift test --package-path $(RFCKIT)
+	swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS)
 	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
@@ -124,7 +127,7 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCKIT) --filter CorpusBacked
+	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \

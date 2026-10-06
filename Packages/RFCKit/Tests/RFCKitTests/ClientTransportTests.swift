@@ -12,7 +12,7 @@ import Testing
 struct ClientTransportTests {
   /// A `URLProtocol` that answers every request with `StubProtocol.response`, and
   /// remembers the last request it saw. Serialized suite: one stub at a time.
-  final class StubProtocol: URLProtocol, @unchecked Sendable {
+  final class StubProtocol: URLProtocol {
     nonisolated(unsafe) static var response: URLResponse?
     nonisolated(unsafe) static var lastRequest: URLRequest?
 

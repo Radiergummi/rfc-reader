@@ -15,7 +15,6 @@ import Testing
 /// offsets into the whole document, on every paragraph, not only the first — the
 /// first being the one place a wrong base still looks right.
 @Suite("Text layout offsets")
-@MainActor
 struct TextLayoutOffsetTests {
   /// Several paragraphs, so that every conversion below crosses element boundaries.
   private let text = NSAttributedString(
@@ -23,10 +22,10 @@ struct TextLayoutOffsetTests {
       "First paragraph.\nA second, somewhat longer paragraph.\n\nFourth, after an empty one.\nLast")
 
   /// Lays `text` out. The storage is returned because the layout manager holds it
-  /// weakly. Written through `textStorage`, never `attributedString`: see CLAUDE.md.
+  /// weakly. Written through `install`, never `attributedString`: see CLAUDE.md.
   private func layOut() -> (NSTextContentStorage, NSTextLayoutManager) {
     let storage = NSTextContentStorage()
-    storage.textStorage?.setAttributedString(text)
+    storage.install(text)
     let layout = NSTextLayoutManager()
     storage.addTextLayoutManager(layout)
     let container = NSTextContainer(size: CGSize(width: 400, height: 100_000))
@@ -75,7 +74,7 @@ struct TextLayoutOffsetTests {
     defer { withExtendedLifetime(storage) {} }
 
     let stale = try #require(layout.textRange(for: NSRange(location: 80, length: 4)))
-    storage.textStorage?.setAttributedString(NSAttributedString(string: "Short.\nTwo"))
+    storage.install(NSAttributedString(string: "Short.\nTwo"))
     #expect(layout.range(of: stale) == nil)
   }
 
