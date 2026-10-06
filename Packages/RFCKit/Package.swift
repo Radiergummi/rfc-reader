@@ -7,6 +7,9 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("MemberImportVisibility"),
   .enableUpcomingFeature("InferIsolatedConformances"),
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  // The tree has no warnings, and a new one fails the build (#440). Only these
+  // targets, never a dependency.
+  .treatAllWarnings(as: .error),
 ]
 
 let package = Package(
