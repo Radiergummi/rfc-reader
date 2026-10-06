@@ -54,12 +54,17 @@
           rows
         } else if let message {
           Divider()
-          Text(message)
-            .lineLimit(2)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+          HStack {
+            Text(message)
+              .lineLimit(2)
+              .foregroundStyle(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            if case .failed = library.indexState {
+              Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+            }
+          }
+          .padding(.horizontal, 18)
+          .padding(.vertical, 12)
         }
       }
       .frame(width: Self.width)
@@ -76,8 +81,13 @@
     private var message: String? {
       let query = results.query
       guard !query.isEmpty, !results.isSearching else { return nil }
-      if library.index == nil { return String(localized: "The RFC index is still loading.") }
-      return String(localized: "Nothing in the index matches “\(query)”.")
+      // Not `library.index == nil`, which an offline first launch leaves so for good:
+      // the index has failed then, and saying it is loading promises what won't come.
+      return switch library.indexState {
+      case .idle, .loading: String(localized: "The RFC index is still loading.")
+      case .failed: String(localized: "The RFC index couldn't be loaded. A number still opens.")
+      case .ready: String(localized: "Nothing in the index matches “\(query)”.")
+      }
     }
 
     private var field: some View {
