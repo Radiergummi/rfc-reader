@@ -53,7 +53,7 @@ public struct DocumentReport: Codable, Sendable {
       case .list: lists += 1
       case .preformatted: artwork += 1
       case .references(let list): references += list.entries.count
-      case .definitionList, .figure, .blockQuote, .aside, .table: break
+      case .definitionList, .figure, .blockQuote, .aside, .table, .index: break
       }
     }
 

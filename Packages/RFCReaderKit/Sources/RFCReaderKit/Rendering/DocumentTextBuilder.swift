@@ -361,6 +361,8 @@ extension DocumentTextBuilder {
         // Skipped: see `holdsOnlyReferences`. A `.references` block outside a
         // bibliography section would land here, and is still not body prose.
         continue
+      case .index(let index):
+        appendBlocks(Self.plainBlocks(of: index), indent: indent)
       }
     }
   }
