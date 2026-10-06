@@ -42,7 +42,7 @@ struct BuilderIndexTests {
     #expect(built.anchors.offset(of: "rfc.index.u67") != nil)
   }
 
-  @Test func `the plain blocks set the primary locator in bold`() {
+  @Test func `the plain blocks set the primary locator in bold and italic`() {
     let blocks = DocumentTextBuilder.plainBlocks(of: Self.index)
     guard case .definitionList(let list) = blocks[2],
       case .paragraph(let locators) = list.items[0].definition[0]
@@ -50,6 +50,7 @@ struct BuilderIndexTests {
       Issue.record("the group's entries are a definition list of locator paragraphs")
       return
     }
-    #expect(locators.inlines.first.map { if case .strong = $0 { true } else { false } } == true)
+    let primary = Inline.crossReference(Self.locator(primary: true).reference)
+    #expect(locators.inlines == [.strong([.emphasis([primary])])])
   }
 }
