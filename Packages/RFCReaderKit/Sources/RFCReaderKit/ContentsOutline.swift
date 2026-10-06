@@ -54,7 +54,7 @@ public enum ContentsOutline {
     var path: [PathStep] = []
     for section in sections {
       let depth = section.depth
-      while let last = path.last, last.depth >= depth { path.removeLast() }
+      while let last = path.last, last.section.depth >= depth { path.removeLast() }
       let isMatch = matches(section, title: section.titleText, text)
       if isMatch {
         for index in path.indices where !path[index].isListed {
@@ -62,22 +62,20 @@ public enum ContentsOutline {
           rows.append(
             Row(
               anchor: ancestor.section.anchor, title: ancestor.section.displayTitle,
-              depth: ancestor.depth, isContext: true))
+              depth: ancestor.section.depth, isContext: true))
           path[index].isListed = true
         }
         rows.append(
           Row(anchor: section.anchor, title: section.displayTitle, depth: depth, isContext: false))
       }
-      path.append(PathStep(section: section, depth: depth, isListed: isMatch))
+      path.append(PathStep(section: section, isListed: isMatch))
     }
     return rows
   }
 
-  /// A section on the path to the one `rows` is at: its depth, and whether it is
-  /// listed yet.
+  /// A section on the path to the one `rows` is at, and whether it is listed yet.
   private struct PathStep {
     let section: Section
-    let depth: Int
     var isListed: Bool
   }
 
