@@ -378,6 +378,30 @@ struct DocumentStoreTests {
     #expect(values.isExcludedFromBackup == true)
   }
 
+  /// A keep made while the document is being opened joins that fetch, and
+  /// whichever of the two writes the body puts it in the kept tier: the reader that
+  /// writes is the first to finish, on the store's actor, so the other finds the
+  /// body there.
+  @Test func `keeping a document while it is opened keeps it`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+
+    let opening = Task { try await store.document(id, formats: [.xml], client: fetcher) }
+    await untilWaiting(documents: 1, for: id, in: store)
+    let keeping = Task { try await store.keep(id, formats: [.xml], client: fetcher) }
+    await untilWaiting(documents: 2, for: id, in: store)
+    await fetcher.gate.open()
+
+    _ = try await opening.value
+    try await keeping.value
+    #expect(fetcher.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+  }
+
   /// A disk too full for the cache's reserve still shows the document; it is only
   /// not written, so it is fetched again next time.
   @Test func `a read document is not cached when the disk is low`() async throws {
