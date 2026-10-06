@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// What the reader says about a failed load depends on what failed (#125): every
 /// failure used to read as a lost connection, under the same Wi-Fi symbol.
 @Suite("Load failure")
