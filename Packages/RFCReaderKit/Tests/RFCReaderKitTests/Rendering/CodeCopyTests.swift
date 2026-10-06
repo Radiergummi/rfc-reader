@@ -65,8 +65,31 @@ struct CodeCopyTests {
       let text = Self.built(measure: measure)
       let button = (text.string as NSString).range(of: "\u{FFFC}").location
       try #require(button != NSNotFound)
-      #expect(text.copyButton(at: button) != nil)
+      #expect(
+        text.copyButtons(in: NSRange(location: button, length: 1))
+          == [NSRange(location: button, length: 1)])
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
+    }
+
+    /// Where the pointer is the arrow (#724): each button in the range, whole, and
+    /// none outside it.
+    @Test func `the copy buttons in a range are found whole`() throws {
+      let text = DocumentTextBuilder.build(
+        Fixtures.document(.preformatted(Self.indented), .preformatted(Self.outdentedFolds)),
+        style: ReadingStyle(measure: 4000)
+      ).text
+      let all = NSRange(location: 0, length: text.length)
+      let buttons = text.copyButtons(in: all)
+      #expect(buttons.count == 2)
+      for button in buttons {
+        #expect((text.string as NSString).substring(with: button) == "\u{FFFC}")
+      }
+      let second = try #require(buttons.last)
+      #expect(
+        text.copyButtons(
+          in: NSRange(location: second.location, length: text.length - second.location))
+          == [second])
+      #expect(text.copyButtons(in: NSRange(location: 0, length: buttons[0].location)).isEmpty)
     }
   #endif
 
