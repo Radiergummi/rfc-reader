@@ -680,6 +680,16 @@
         }
       }
     },
+    "Couldn't export %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
     "Couldn't load %@" : {
       "localizations" : {
         "de" : {
@@ -696,6 +706,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Originaltext konnte nicht geladen werden"
+          }
+        }
+      }
+    },
+    "Couldn't print %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte nicht gedruckt werden"
           }
         }
       }
@@ -1591,6 +1611,16 @@
         }
       }
     },
+    "Open Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen öffnen"
+          }
+        }
+      }
+    },
     "Open in New Tab" : {
       "localizations" : {
         "de" : {
@@ -2277,6 +2307,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße"
+          }
+        }
+      }
+    },
+    "The RFC index couldn't be loaded. A number still opens." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index konnte nicht geladen werden. Eine Nummer lässt sich trotzdem öffnen."
           }
         }
       }
