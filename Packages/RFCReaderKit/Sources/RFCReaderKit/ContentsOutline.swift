@@ -87,8 +87,12 @@ public enum ContentsOutline {
     for section in sections {
       let title = section.titleText
       guard matches(section, title: title, text) else { continue }
-      let key = sortKey(section, title: title)
-      byLabel[groupLabel(key), default: []].append((key, entry(section, title: title)))
+      // A title sorts from its first letter or digit; one with no words in it sorts
+      // by the number it is shown by, under `#`, whether a section's or an appendix's.
+      let words = title.drop { !$0.isLetter && !$0.isNumber }
+      let key = words.isEmpty ? section.displayTitle : String(words)
+      let label = words.isEmpty ? "#" : groupLabel(key)
+      byLabel[label, default: []].append((key, entry(section, title: title)))
     }
     let letters = byLabel.keys.filter { $0 != "#" }.sorted()
     return (letters + ["#"]).compactMap { label in
@@ -118,13 +122,6 @@ public enum ContentsOutline {
       return Entry(anchor: section.anchor, title: section.displayTitle, caption: nil)
     }
     return Entry(anchor: section.anchor, title: title, caption: section.numberLabel)
-  }
-
-  /// What a section sorts by: its title from its first letter or digit, or, with no
-  /// words in it, the number it is shown by.
-  private static func sortKey(_ section: Section, title: String) -> String {
-    let words = title.drop { !$0.isLetter && !$0.isNumber }
-    return words.isEmpty ? section.displayTitle : String(words)
   }
 
   /// `A` to `Z` for a key that starts with a Latin letter, diacritics folded, and `#`

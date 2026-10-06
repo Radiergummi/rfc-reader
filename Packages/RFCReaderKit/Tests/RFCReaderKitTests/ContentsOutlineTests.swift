@@ -156,6 +156,15 @@ struct ContentsOutlineTests {
     #expect(groups[1].entries[0].caption == nil)
   }
 
+  @Test func `an appendix without words in its title shows by its number, under # too`() {
+    let groups = Self.alphabetical([
+      Section(anchor: "a", number: "1", title: "Alpha"),
+      Section(anchor: "b", number: "B", title: "", isAppendix: true),
+    ])
+    #expect(groups.map(\.label) == ["A", "#"])
+    #expect(groups[1].entries[0].title == "Appendix B.")
+  }
+
   @Test func `the filter applies in A–Z too, with no context rows`() {
     let entries = Self.alphabetical(Self.sections, "cach").flatMap(\.entries)
     #expect(entries.map(\.anchor) == ["section-14.2", "section-4.2"])
