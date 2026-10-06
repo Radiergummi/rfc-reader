@@ -307,12 +307,15 @@ extension DocumentTextBuilder {
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
   /// the run's own font size, or `pointSize`, and its bounds are centered on that
-  /// font's cap height, to the nearest whole point: a symbol that hangs below the
-  /// line's descender makes its line that much taller, even past a fixed line
-  /// height, and a fraction there puts every fragment below it off the pixel grid
-  /// (#273). A backlink caption's arrow and a code block's copy button are set the
-  /// same way, the arrow in the caption's `color`, both a little smaller than the
-  /// words beside them.
+  /// font's cap height, to the nearest whole point, and never below the font's
+  /// descender: a symbol that hangs below the descender makes its line that much
+  /// taller, even past a fixed line height, and a fraction there puts every
+  /// fragment below it off the pixel grid (#273). The descender itself is a
+  /// fraction, so a whole-point offset below it still leaves one, and UIKit's
+  /// symbols are tall enough to hang there: the offset is held at the whole point
+  /// above the descender (#821). A backlink caption's arrow and a code
+  /// block's copy button are set the same way, the arrow in the caption's `color`,
+  /// both a little smaller than the words beside them.
   private func chipSymbolRun(
     _ name: String, color: PlatformColor = RFCColors.accent, pointSize: CGFloat? = nil,
     attributes: [NSAttributedString.Key: Any]
@@ -327,8 +330,9 @@ extension DocumentTextBuilder {
     // after the default initializer instead, which UIKit also accepts.
     let attachment = NSTextAttachment()
     attachment.image = symbol
+    let centered = ((font.capHeight - symbol.size.height) / 2).rounded()
     attachment.bounds = CGRect(
-      x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width,
+      x: 0, y: max(centered, font.descender.rounded(.up)), width: symbol.size.width,
       height: symbol.size.height)
     let run = NSMutableAttributedString(attachment: attachment)
     run.addAttributes(attributes, range: NSRange(location: 0, length: run.length))

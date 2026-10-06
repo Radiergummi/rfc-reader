@@ -23,8 +23,8 @@ extension DocumentTextBuilder {
   /// the paragraph at the paragraph's own multiple, to the nearest whole point, as
   /// both the minimum and the maximum, so a glyph from a fallback font cannot make
   /// one line a fraction taller than the rest. A symbol that hangs below the
-  /// descender still makes its line taller, which is why a chip's symbol sits on a
-  /// whole point (`chipSymbolRun`).
+  /// descender still makes its line taller, which is why a chip's symbol never
+  /// hangs below it (`chipSymbolRun`).
   ///
   /// The spacing after the block's last paragraph is left as it is: it is below
   /// the last fragment's lines, where nothing meets the card.
