@@ -9,8 +9,8 @@ import RFCKit
 /// keeps this current itself: every body it writes or deletes goes through
 /// `update(_:by:)`, which records what is on disk for that one document afterwards.
 ///
-/// The store is not the only thing that can change the directory — it is in
-/// Application Support, and Finder will delete from it — so each question starts
+/// The store is not the only thing that can change the directory — the system
+/// purges Caches, and Finder will delete from either tier — so each question starts
 /// with `revalidate()`, which compares the directory's modification date with the
 /// one recorded when this last matched it and scans again only when they differ.
 /// That is one `stat` per question instead of an enumeration, and a file removed
@@ -43,10 +43,9 @@ public struct DocumentCacheIndex: Sendable {
   /// Scans `directory` for the bodies the store has written there.
   ///
   /// A file counts only when its name is exactly what the store would have named
-  /// it: a document's `fileStem` and a body format's extension. The RFC index
-  /// lives in the same directory as `rfc-index.xml`, and a name the store did not
-  /// write is not something it can answer for. A directory that cannot be read is
-  /// an empty cache.
+  /// it: a document's `fileStem` and a body format's extension. A name the store
+  /// did not write is not something it can answer for. A directory that cannot be
+  /// read is an empty cache.
   public init(scanning directory: URL) {
     let found = Self.scan(directory)
     self.directory = directory
@@ -66,9 +65,6 @@ public struct DocumentCacheIndex: Sendable {
 
   /// Scans again if something other than `update(_:by:)` has changed the directory
   /// since this last matched it. Ask before answering from the index.
-  ///
-  /// Writing the RFC index into the same directory counts as such a change, so the
-  /// question after the daily index refresh pays for one scan.
   public mutating func revalidate() {
     guard Self.modificationDate(of: directory) != directoryDate else {
       return

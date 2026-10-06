@@ -139,9 +139,10 @@ final class LibraryModel {
   private(set) var collections = CollectionSnapshot.empty
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
-  /// Every RFC with a cached body: the Available Offline list. Kept here, and
-  /// refreshed whenever the cache can have changed, so a tab can take it the moment
-  /// it enters that filter rather than waiting on the store's actor.
+  /// Every RFC with a body in the kept tier, not merely read (#358): the Available
+  /// Offline list. Kept here, and refreshed whenever the tier can have changed, so
+  /// a tab can take it the moment it enters that filter rather than waiting on the
+  /// store's actor.
   private(set) var downloadedNumbers: Set<Int> = []
 
   /// The RFCs the installed legacy pack lists as text that only points to its
@@ -315,7 +316,7 @@ final class LibraryModel {
   }
 
   private func refreshDownloadedNumbers() async {
-    let numbers = await store.cachedNumbers()
+    let numbers = await store.keptNumbers()
     guard numbers != downloadedNumbers else { return }
     downloadedNumbers = numbers
   }
@@ -1240,7 +1241,8 @@ final class LibraryModel {
 
   // MARK: - Documents
 
-  /// Fetching a document caches it, so the offline set is refreshed after.
+  /// Fetching a document a keep is waiting for keeps it, so the offline set is
+  /// refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()
@@ -1353,8 +1355,11 @@ final class LibraryModel {
     }
   }
 
+  /// Keeps `id` offline, moving a copy already read or downloading one; see
+  /// `DocumentStore.keep(_:formats:client:)`.
   func download(_ id: DocumentID) async throws {
-    _ = try await document(for: id)
+    try await store.keep(id, formats: index?[id]?.formats ?? [], client: client)
+    await refreshDownloadedNumbers()
   }
 
   #if os(macOS)
@@ -1386,9 +1391,10 @@ final class LibraryModel {
     }
   #endif
 
+  /// Stops keeping `id` offline. Its body goes back into the reading cache rather
+  /// than being deleted, so its previews stay.
   func removeDownload(_ id: DocumentID) async {
-    await store.remove(id)
-    forgetPreviews(of: [id])
+    await store.release(id)
     await refreshDownloadedNumbers()
   }
 }

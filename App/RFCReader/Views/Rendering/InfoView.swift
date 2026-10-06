@@ -445,13 +445,13 @@ private struct LinkRow: View {
 /// pane that is the store's rather than the index's.
 ///
 /// One row whose icon is the control, as a download is in Safari's list: the filled
-/// arrow turns to a cross under the pointer and removes the copy, and the outline
-/// arrow of a document not kept downloads it. Removing leaves the document on
-/// screen, since it is already in memory, and deletes the file, so the next open
-/// downloads it again; the tooltip says so. Whether it is kept is the library's set,
-/// so it is right the moment the pane shows, and a download or a removal re-reads
-/// the size. Only an RFC has a body of its own; a series number the index has not
-/// resolved yet has none.
+/// arrow turns to a cross under the pointer and stops keeping the copy, and the
+/// outline arrow of a document not kept keeps it, moving a copy already read or
+/// downloading one (#358). A copy no longer kept goes to the reading cache, which
+/// may remove it when it needs the room; the tooltip says so. Whether it is kept is
+/// the library's set, so it is right the moment the pane shows, and a download or a
+/// removal re-reads the size. Only an RFC has a body of its own; a series number the
+/// index has not resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
   let library: LibraryModel
@@ -461,6 +461,8 @@ private struct OfflineSection: View {
   @State private var isWorking = false
   /// A warning for a moment after a download that failed, as `LinkRow` shows one.
   @State private var downloadFailed = false
+  /// Whether that was for want of room on the disk rather than a failed fetch.
+  @State private var hadNoRoom = false
 
   private var isKept: Bool {
     document.series == .rfc && library.downloadedNumbers.contains(document.number)
@@ -480,10 +482,14 @@ private struct OfflineSection: View {
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
-        .accessibilityLabel(isKept ? "Remove Offline Copy" : "Keep Offline")
+        .accessibilityLabel(isKept ? "Stop Keeping Offline" : "Keep Offline")
         .accessibilityHint(help)
-        Text(downloadFailed ? "Couldn't download" : isKept ? "Kept offline" : "Not kept offline")
-          .foregroundStyle(isKept ? .primary : .secondary)
+        Text(
+          downloadFailed
+            ? (hadNoRoom ? "Not enough space" : "Couldn't download")
+            : isKept ? "Kept offline" : "Not kept offline"
+        )
+        .foregroundStyle(isKept ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))
@@ -508,7 +514,7 @@ private struct OfflineSection: View {
     isKept
       ? String(
         localized:
-          "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
+          "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room."
       )
       : String(localized: "Keep a copy to read offline.")
   }
@@ -523,6 +529,7 @@ private struct OfflineSection: View {
           try await library.download(document)
         } catch {
           readerLog.failure(of: document, "keeping offline failed", error)
+          hadNoRoom = error is DocumentStore.NotEnoughSpace
           downloadFailed = true
         }
       }

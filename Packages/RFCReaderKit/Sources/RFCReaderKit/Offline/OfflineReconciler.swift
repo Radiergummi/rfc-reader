@@ -14,6 +14,32 @@ public enum StorageTier: Sendable, Hashable {
   public static func of(_ id: DocumentID, wanted: Set<DocumentID>) -> StorageTier {
     wanted.contains(id) ? .kept : .cache
   }
+
+  /// What the cache leaves free on the disk: reading is never what fills it.
+  public static let cacheReserve = 100 * 1024 * 1024
+
+  /// The bytes free for a body, from what the volume reports: `usage` is its
+  /// capacity for important or opportunistic usage, and `available` its plain
+  /// available capacity. A volume that does not report the usage, as some that are
+  /// not APFS answer 0, is read by its available capacity instead, so a full disk
+  /// still reads 0. Nil when neither can be read.
+  public static func freeSpace(forUsage usage: Int64?, available: Int64?) -> Int? {
+    if let usage, usage > 0 { return Int(clamping: usage) }
+    return available.map { Int(clamping: $0) }
+  }
+
+  /// Whether a body of `bytes` is written to this tier, with `available` bytes free
+  /// for it: the volume's capacity for important usage for a kept body, which is a
+  /// promise and needs only its own room, and for opportunistic usage for a cached
+  /// one, which leaves the reserve as well. A capacity that cannot be read blocks
+  /// neither.
+  public func hasRoom(for bytes: Int, available: Int?) -> Bool {
+    guard let available else { return true }
+    switch self {
+    case .kept: return available >= bytes
+    case .cache: return available >= bytes + Self.cacheReserve
+    }
+  }
 }
 
 /// What keeping documents offline still owes, given the marks and what is on disk
