@@ -65,7 +65,9 @@ struct CodeCopyTests {
       let text = Self.built(measure: measure)
       let button = (text.string as NSString).range(of: "\u{FFFC}").location
       try #require(button != NSNotFound)
-      #expect(text.copyButton(at: button) != nil)
+      #expect(
+        text.copyButtons(in: NSRange(location: button, length: 1))
+          == [NSRange(location: button, length: 1)])
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
 
@@ -80,7 +82,7 @@ struct CodeCopyTests {
       let buttons = text.copyButtons(in: all)
       #expect(buttons.count == 2)
       for button in buttons {
-        #expect(text.copyButton(at: button.location) == button)
+        #expect((text.string as NSString).substring(with: button) == "\u{FFFC}")
       }
       let second = try #require(buttons.last)
       #expect(

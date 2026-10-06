@@ -46,7 +46,7 @@ extension RFCTextViewCoordinator {
     #if !canImport(UIKit)
       // The arrows are cursor rects over the viewport's copy buttons, and its headings
       // and captions in the outline and Implementer.
-      if let textView {
+      if folding.mode.discloses || hasCopyButtons, let textView {
         textView.window?.invalidateCursorRects(for: textView)
       }
     #endif

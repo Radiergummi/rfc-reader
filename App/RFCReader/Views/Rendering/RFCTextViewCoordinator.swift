@@ -249,7 +249,16 @@ final class RFCTextViewCoordinator: NSObject {
   /// `follow(_:)` to report the place it was put at.
   var isFollowing = false
 
-  var built: BuiltDocument?
+  var built: BuiltDocument? {
+    didSet {
+      hasCopyButtons =
+        built.map { !$0.text.copyButtons(in: NSRange(location: 0, length: $0.text.length)).isEmpty }
+        ?? false
+    }
+  }
+  /// Whether the document shows a copy button anywhere (macOS), so that a document
+  /// without one never looks for them in its viewport (#724).
+  private(set) var hasCopyButtons = false
   /// The anchors tracking may report. The full index covers *every* anchor —
   /// paragraphs, figures, tables, reference rows — because `scroll(to:)` has to
   /// reach all of them, but every consumer of the reader's visible anchor resolves

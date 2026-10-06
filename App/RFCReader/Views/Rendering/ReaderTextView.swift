@@ -200,10 +200,15 @@ import RFCReaderKit
     /// every move.
     override func resetCursorRects() {
       super.resetCursorRects()
-      for rect in arrowCursorRects() {
+      arrowRects = arrowCursorRects()
+      for rect in arrowRects {
         addCursorRect(rect, cursor: .arrow)
       }
     }
+
+    /// The arrow's rects as the cursor rects were last set, which every pointer move
+    /// asks about: worked out once per reset, not per move.
+    private var arrowRects: [CGRect] = []
 
     override func cursorUpdate(with event: NSEvent) {
       guard !wantsArrow(event) else {
@@ -229,7 +234,7 @@ import RFCReaderKit
       // show the arrow on the way in, and every move reaches here, where `super` would
       // put the I-beam back.
       let point = convert(event.locationInWindow, from: nil)
-      if arrowCursorRects().contains(where: { $0.contains(point) }) { return true }
+      if arrowRects.contains(where: { $0.contains(point) }) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }

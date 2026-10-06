@@ -5,7 +5,7 @@ import RFCReaderKit
 
   // A code block's copy button (macOS): a click copies the block, and the button
   // shows a checkmark for a moment. What it copies and where it is are
-  // `copyButton(at:)` and `code(ofCopyButtonAt:)`; this is the click and the
+  // `copyButtons(in:)` and `code(ofCopyButtonAt:)`; this is the click and the
   // feedback. The checkmark is a view over the button rather than a change to the
   // text, which no text view may write to: a kept build is installed into more
   // than one.
@@ -16,11 +16,12 @@ import RFCReaderKit
     private static let holdDuration: TimeInterval = 2
     private static let fadeOutDuration: TimeInterval = 0.6
 
-    /// Where the pointer is the arrow over a copy button (#724): the box of each
-    /// button in the viewport (`FragmentGeometry.copyButtonCursorRect`). A button in
-    /// a folded section has no box, and no rect.
-    func copyButtonCursorRects() -> [CGRect] {
-      guard let textView, let layout = textView.textLayoutManager,
+    /// The copy buttons in the viewport, and the box of each in the text view
+    /// (`FragmentGeometry.copyButtonCursorRect`): where the pointer is the arrow
+    /// (#724), and where a click copies, so the two cannot disagree. A button in a
+    /// folded section is not shown, and has neither.
+    private func copyButtonsInView() -> [(range: NSRange, rect: CGRect)] {
+      guard hasCopyButtons, let textView, let layout = textView.textLayoutManager,
         let text = layout.attributedText,
         let viewport = layout.textViewportLayoutController.viewportRange
       else { return [] }
@@ -29,10 +30,20 @@ import RFCReaderKit
       guard start >= 0, end > start else { return [] }
       let origin = textView.textContainerOrigin
       return text.copyButtons(in: NSRange(location: start, length: end - start)).compactMap {
-        referenceRect(for: $0).map {
-          FragmentGeometry.copyButtonCursorRect(buttonFrame: $0, containerOrigin: origin)
-        }
+        button in
+        guard !foldingDelegate.hidden.contains(button.location),
+          let frame = referenceRect(for: button)
+        else { return nil }
+        return (
+          button,
+          FragmentGeometry.copyButtonCursorRect(buttonFrame: frame, containerOrigin: origin)
+        )
       }
+    }
+
+    /// Where the pointer is the arrow over a copy button (#724).
+    func copyButtonCursorRects() -> [CGRect] {
+      copyButtonsInView().map(\.rect)
     }
 
     /// Where the pointer is the arrow in the outline (#698) and in Implementer (#700):
@@ -87,26 +98,16 @@ import RFCReaderKit
     /// Copies the block whose button is under the pointer of `event`; answers
     /// whether there was one.
     func copyCode(under event: NSEvent) -> Bool {
-      guard let hit = textOffset(under: event),
-        let range = hit.text.copyButton(at: hit.offset),
-        let code = hit.text.code(ofCopyButtonAt: hit.offset)
-      else { return false }
-      Clipboard.copy(code, announcing: .code)
-      showCopied(over: range)
-      return true
-    }
-
-    /// The text and the character offset under the pointer of `event`, or nil.
-    private func textOffset(under event: NSEvent) -> (text: NSAttributedString, offset: Int)? {
       guard let textView, event.window === textView.window,
         let text = textView.textLayoutManager?.attributedText
-      else { return nil }
-      let viewPoint = textView.convert(event.locationInWindow, from: nil)
-      let containerPoint = CGPoint(
-        x: viewPoint.x - textView.textContainerOrigin.x,
-        y: viewPoint.y - textView.textContainerOrigin.y)
-      guard let offset = characterOffset(atContainerPoint: containerPoint) else { return nil }
-      return (text, offset)
+      else { return false }
+      let point = textView.convert(event.locationInWindow, from: nil)
+      guard let button = copyButtonsInView().first(where: { $0.rect.contains(point) }),
+        let code = text.code(ofCopyButtonAt: button.range.location)
+      else { return false }
+      Clipboard.copy(code, announcing: .code)
+      showCopied(over: button.range)
+      return true
     }
 
     private func showCopied(over range: NSRange) {
@@ -114,8 +115,8 @@ import RFCReaderKit
       for view in textView.subviews where view.identifier == Self.feedbackIdentifier {
         view.removeFromSuperview()
       }
-      let frame = rect.offsetBy(
-        dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y
+      let frame = FragmentGeometry.copyButtonCursorRect(
+        buttonFrame: rect, containerOrigin: textView.textContainerOrigin
       )
       .insetBy(dx: -2, dy: -2)
       let feedback = NSView(frame: frame)
