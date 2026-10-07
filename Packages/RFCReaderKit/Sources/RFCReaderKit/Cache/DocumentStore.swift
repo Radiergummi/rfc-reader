@@ -316,6 +316,43 @@ public actor DocumentStore {
     try data.write(to: workingGroupsURL, options: .atomic)
   }
 
+  // MARK: - Errata
+
+  private nonisolated var errataURL: URL { directory.appending(path: "errata.json") }
+  private nonisolated var errataCheckURL: URL { directory.appending(path: "errata-check.json") }
+
+  /// The errata feed kept (#387), as the RFC Editor served it, for the caller to
+  /// decode off the main actor; nil when none is kept.
+  public nonisolated func cachedErrata() -> Data? {
+    try? Data(contentsOf: errataURL)
+  }
+
+  /// The last check of the feed kept, as `indexCheck()` is the index's: nil when no
+  /// feed is kept for the validators to describe.
+  public nonisolated func errataCheck() -> IndexCheck? {
+    guard FileManager.default.fileExists(atPath: errataURL.path),
+      let data = try? Data(contentsOf: errataCheckURL)
+    else { return nil }
+    return try? JSONDecoder().decode(IndexCheck.self, from: data)
+  }
+
+  /// Keeps a fetched feed and what identifies it for the next check.
+  public func storeErrata(_ data: Data, validators: CacheValidators?) throws {
+    try data.write(to: errataURL, options: .atomic)
+    try storeErrataCheck(IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators))
+  }
+
+  /// Records that a check sent with `kept`'s validators found the feed unchanged.
+  public func recordUnchangedErrata(_ kept: IndexCheck) throws {
+    var check = kept
+    check.checkedAt = .now
+    try storeErrataCheck(check)
+  }
+
+  private func storeErrataCheck(_ check: IndexCheck) throws {
+    try JSONEncoder().encode(check).write(to: errataCheckURL, options: .atomic)
+  }
+
   // MARK: - Registries
 
   /// The IANA registries the Go to RFC palette looks values up in (#175), one file

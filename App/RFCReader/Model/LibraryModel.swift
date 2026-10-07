@@ -104,6 +104,10 @@ final class LibraryModel {
   /// `groups.json`: the groups the index names, for a working group's card (#363).
   /// Nil until the cached copy or a fetch has arrived.
   private(set) var workingGroups: WorkingGroups?
+  /// Every RFC's errata (#387), from the RFC Editor's feed: the copy kept first, then
+  /// a check once a day. Nil until either has been read.
+  private(set) var errata: Errata?
+  @ObservationIgnored private var isRefreshingErrata = false
   @ObservationIgnored private var workingGroupsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingWorkingGroups = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
@@ -208,6 +212,7 @@ final class LibraryModel {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
         Task(name: "Refresh working groups") { await self.refreshWorkingGroups() }
+        Task(name: "Refresh errata") { await self.refreshErrata() }
         self.recheckSpotlight()
       }
     }
@@ -419,6 +424,7 @@ final class LibraryModel {
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
+    Task(name: "Refresh errata") { await refreshErrata() }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -915,6 +921,46 @@ final class LibraryModel {
       libraryLog.error(
         "fetching working groups failed: \(String(describing: error), privacy: .public)")
     }
+  }
+
+  // MARK: - Errata
+
+  /// The copy of the errata feed kept, read the first time, then the RFC Editor asked
+  /// for a newer one once a day, as the index is (#314): with the validators of the
+  /// one kept, so an unchanged feed is a `304`, and on a network that is neither
+  /// metered nor in Low Data Mode, since nobody is waiting for it. A failure keeps
+  /// what there is and is logged, not shown.
+  func refreshErrata() async {
+    guard !isRefreshingErrata else { return }
+    isRefreshingErrata = true
+    defer { isRefreshingErrata = false }
+    if errata == nil, let data = store.cachedErrata() {
+      errata = try? await Self.decodeErrata(data)
+    }
+    // Without a feed in memory, a `304` would leave nothing to show.
+    let kept = errata == nil ? nil : store.errataCheck()
+    if let kept, !IndexCheck.isDue(checkedAt: kept.checkedAt, now: .now) { return }
+    do {
+      let fetched = try await clientOnCheapNetworks.fetchErrataData(
+        unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
+      switch fetched {
+      case .unchanged:
+        if let kept { try await store.recordUnchangedErrata(kept) }
+      case .changed(let data, let validators):
+        let decoded = try await Self.decodeErrata(data)
+        try await store.storeErrata(data, validators: validators)
+        errata = decoded
+      }
+    } catch {
+      libraryLog.error(
+        "refreshing the errata failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// Off the main actor: the feed is about 12 MB of JSON.
+  @concurrent
+  private static func decodeErrata(_ data: Data) async throws -> Errata {
+    try Errata.decode(data)
   }
 
   /// What a working group's card says: the group as the file describes it, if it

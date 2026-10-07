@@ -18,6 +18,11 @@ struct InfoView: View {
   let open: (DocumentID) -> Void
   let search: (String) -> Void
   let showReadingPath: (DocumentID) -> Void
+  /// The body's sections, which an erratum's section is found in; empty before the
+  /// body has loaded.
+  let sections: [RFCKit.Section]
+  /// Goes to a section of the document, by its anchor.
+  let selectSection: (String) -> Void
 
   var body: some View {
     if let info {
@@ -29,6 +34,11 @@ struct InfoView: View {
             InfoSection(title: section.title) {
               SectionRows(section: section, library: library, open: open, search: search)
             }
+          }
+          if let document, let errata = library.errata?[document], !errata.isEmpty {
+            ErrataSection(
+              summary: ErrataSummary(errata: errata, sections: sections),
+              selectSection: selectSection)
           }
           if let document, document.series == .rfc {
             InfoSection(title: String(localized: "Reading Path")) {
@@ -162,6 +172,81 @@ private struct InfoSection<Content: View>: View {
         .font(.infoHeading)
         .accessibilityAddTraits(.isHeader)
       content
+    }
+  }
+}
+
+/// A document's errata (#387): each verified or held one with its status, type and
+/// place, a link to the section it names, and the original and corrected text; then
+/// how many more there are, which the RFC Editor's page, among the links, lists.
+private struct ErrataSection: View {
+  let summary: ErrataSummary
+  let selectSection: (String) -> Void
+
+  var body: some View {
+    InfoSection(title: String(localized: "Errata")) {
+      VStack(alignment: .leading, spacing: 14) {
+        ForEach(summary.items) { item in
+          ErratumView(item: item, selectSection: selectSection)
+        }
+        if let notListed = summary.notListed {
+          Text(verbatim: notListed)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+}
+
+private struct ErratumView: View {
+  let item: ErrataSummary.Item
+  let selectSection: (String) -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .firstTextBaseline) {
+        if let anchor = item.anchor {
+          Button {
+            selectSection(anchor)
+          } label: {
+            Text(verbatim: item.place)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(.tint)
+          .help("Go to \(item.place)")
+        } else {
+          Text(verbatim: item.place)
+        }
+        Spacer(minLength: 8)
+        Link(destination: item.page) {
+          Text(verbatim: "\(item.status) · \(item.type)")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .help("Open this erratum on the RFC Editor's site")
+      }
+      .font(.subheadline.weight(.medium))
+      text(String(localized: "Original"), item.original)
+      text(String(localized: "Corrected"), item.corrected)
+    }
+  }
+
+  /// One of the erratum's texts, in the reader's code font, as the RFC's own text is
+  /// set; nothing when the reporter left it empty.
+  @ViewBuilder
+  private func text(_ label: String, _ text: String) -> some View {
+    let trimmed = text.trimmingCharacters(in: .newlines)
+    if !trimmed.trimmingCharacters(in: .whitespaces).isEmpty {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(verbatim: label)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Text(verbatim: trimmed)
+          .font(.caption.monospaced())
+          .textSelection(.enabled)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
   }
 }
