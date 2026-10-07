@@ -69,11 +69,19 @@ struct SearchTextTests {
 
   /// The one thing byte comparison gives up against `String.range(of:)`, pinned so
   /// it is a known trade rather than a surprise: the two spellings of `é` are
-  /// canonically equivalent and no longer match each other.
+  /// canonically equivalent and don't match as bytes. The search folds both sides
+  /// first (`folded`, #425), so it never meets them unfolded.
   @Test func `canonically equivalent spellings no longer match`() {
     let composed = text("\u{00E9}")
     let decomposed = text("e\u{0301}")
     #expect(!composed.contains(decomposed))
     #expect(!decomposed.contains(composed))
+  }
+
+  /// Folded, they are the same bytes, and so is a letter Foundation doesn't count as
+  /// a base letter and a diacritic: a kana and its voicing mark typed apart.
+  @Test func `folded, canonically equivalent spellings are the same`() {
+    #expect(SearchText(folding: "\u{00E9}") == SearchText(folding: "e\u{0301}"))
+    #expect(SearchText(folding: "\u{304C}") == SearchText(folding: "\u{304B}\u{3099}"))
   }
 }

@@ -4,8 +4,9 @@ import Foundation
 public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<PublicationStream> = []
-  /// Lowercased when set, and nil when set empty, as the prepared fields it is
-  /// matched against are lowercased and an empty value is no filter.
+  /// Lowercased when set, and nil when set empty, as an empty value is no filter. It
+  /// is shown as typed otherwise, and folded where it is matched (`folded`), as the
+  /// fields it is matched against are.
   public var workingGroup: String? {
     didSet { workingGroup = Self.normalized(workingGroup) }
   }
@@ -70,11 +71,11 @@ public struct IndexSearch: Sendable {
         number: SearchText(String(rfc.number)),
         title: SearchText(title),
         titleWords: Set(words.map { SearchText(String($0)) }),
-        keywords: rfc.keywords.map { SearchText(folded($0)) },
-        authors: rfc.authors.map { SearchText(folded($0.name)) },
+        keywords: rfc.keywords.map { SearchText(folding: $0) },
+        authors: rfc.authors.map { SearchText(folding: $0.name) },
         authorNames: rfc.authors.map { AuthorName($0.name) },
-        abstract: SearchText(folded(rfc.abstract ?? "")),
-        group: SearchText(folded(rfc.workingGroup ?? ""))
+        abstract: SearchText(folding: rfc.abstract ?? ""),
+        group: SearchText(folding: rfc.workingGroup ?? "")
       )
     }
   }
@@ -146,7 +147,8 @@ public struct IndexSearch: Sendable {
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written.
+    // A quoted phrase is one term, so it has to match as it is written, less case and
+    // diacritics, as every term is.
     // Folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
     let terms = SearchQuery.words(in: folded(trimmed)).map(SearchQuery.unquoted)
       .filter { !$0.isEmpty }
@@ -157,9 +159,9 @@ public struct IndexSearch: Sendable {
 
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
-    let needles = terms.map(SearchText.init)
+    let needles = terms.map { SearchText($0) }
     // The query as the title bonus compares it, without the quotes of its phrases.
-    let lowered = SearchText(terms.joined(separator: " "))
+    let foldedQuery = SearchText(terms.joined(separator: " "))
     let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
@@ -169,7 +171,7 @@ public struct IndexSearch: Sendable {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
       }
-      if let score = score(entry, rfc: rfc, terms: needles, loweredQuery: lowered) {
+      if let score = score(entry, rfc: rfc, terms: needles, foldedQuery: foldedQuery) {
         hits.append(SearchHit(rfc: rfc, score: score))
       }
     }
@@ -219,7 +221,7 @@ public struct IndexSearch: Sendable {
 
     init(_ filters: SearchFilters) {
       self.filters = filters
-      group = filters.workingGroup.map { SearchText(folded($0)) }
+      group = filters.workingGroup.map { SearchText(folding: $0) }
       author = filters.author.map(AuthorQuery.init)
     }
 
@@ -238,7 +240,7 @@ public struct IndexSearch: Sendable {
 
   /// Every term must match somewhere; where it matches decides the weight.
   private func score(
-    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], loweredQuery: SearchText
+    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], foldedQuery: SearchText
   ) -> Int? {
     var total = 0
     for term in terms {
@@ -266,7 +268,7 @@ public struct IndexSearch: Sendable {
       guard best > 0 else { return nil }
       total += best
     }
-    if terms.count > 1, entry.title.contains(loweredQuery) { total += 50 }
+    if terms.count > 1, entry.title.contains(foldedQuery) { total += 50 }
     if rfc.isObsolete { total -= 10 }
     if rfc.currentStatus.isStandardsTrack || rfc.currentStatus == .bestCurrentPractice {
       total += 5
@@ -292,8 +294,15 @@ public struct IndexSearch: Sendable {
 struct SearchText: Hashable, Sendable {
   private let bytes: [UInt8]
 
+  /// `string` as it is: text already folded, such as a term split from a folded
+  /// query, or digits.
   init(_ string: String) {
     bytes = Array(string.utf8)
+  }
+
+  /// `text` folded (`folded`), as every field and needle a search compares is.
+  init(folding text: String) {
+    self.init(folded(text))
   }
 
   func hasPrefix(_ other: SearchText) -> Bool {
@@ -344,7 +353,7 @@ struct AuthorName: Sendable {
     let words = name.split(separator: " ")
     let given = words.dropLast().prefix(while: Self.isInitials)
     initials = Set(given.flatMap { word in folded(String(word)).filter(\.isLetter) })
-    surname = SearchText(folded(words.dropFirst(given.count).joined(separator: " ")))
+    surname = SearchText(folding: words.dropFirst(given.count).joined(separator: " "))
   }
 
   /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
@@ -384,10 +393,14 @@ struct AuthorQuery: Sendable {
 
 /// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
 /// however its ü is spelled: what every field the search prepares, and every term
-/// and filter it matches against them, is compared as (#425). A combining mark is
-/// dropped whether its letter is precomposed (`ü`) or decomposed (`u` and U+0308), so
-/// both spellings become the same bytes. A letter that is not a base letter and a
-/// mark, `ß`, `ø`, `æ`, is left as it is.
-private func folded(_ text: String) -> String {
-  text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+/// and filter it matches against them, is compared as (#425), and what `wg:`
+/// completion and tokens compare names as. Composed first (NFC), so a letter and its
+/// marks typed apart, `u` and U+0308 or `か` and U+3099, are the one letter the other
+/// spelling is, then folded, which drops a mark Foundation counts as a diacritic. A
+/// letter that is not a base letter and a mark, `ß`, `ø`, `æ`, is left as it is.
+/// ASCII, most of the index, is only lowercased: there is nothing else to do to it.
+func folded(_ text: String) -> String {
+  if text.utf8.allSatisfy({ $0 < 0x80 }) { return text.lowercased() }
+  return text.precomposedStringWithCanonicalMapping.lowercased()
+    .folding(options: .diacriticInsensitive, locale: nil)
 }
