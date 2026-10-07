@@ -21,7 +21,7 @@
     private static func make() -> NSWindow {
       let window = NSWindow(
         contentViewController: NSHostingController(rootView: ScrollView { PrimerView() }))
-      window.title = Glossary.primer().title
+      window.title = Glossary.primerTitle()
       window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
       window.isReleasedWhenClosed = false
       window.setContentSize(NSSize(width: 520, height: 640))

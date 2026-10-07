@@ -38,8 +38,15 @@ struct PrimerTests {
   }
 
   /// The streams other than the IETF's are where the primer leaves the IETF's path.
-  @Test func `the other streams are the IAB, the IRTF and the Independent stream`() {
-    #expect(primer.otherStreams.related == [.stream(.iab), .stream(.irtf), .stream(.independent)])
+  @Test func `the other streams are the IAB, the IRTF, the Independent and the Editorial`() {
+    #expect(
+      primer.otherStreams.related == [
+        .stream(.iab), .stream(.irtf), .stream(.independent), .stream(.editorial),
+      ])
+  }
+
+  @Test func `the title alone is the primer's title`() {
+    #expect(Glossary.primerTitle(locale: .english) == primer.title)
   }
 
   /// Every stage has an identity of its own, so a list of them can be iterated.
@@ -48,10 +55,18 @@ struct PrimerTests {
     #expect(Set(stages.map(\.id)).count == stages.count)
   }
 
-  /// The words come from RFCReaderKit's catalog, so a German interface reads German.
+  /// The words come from RFCReaderKit's catalog, so a German interface reads German:
+  /// every one of them, as a key that drifted from its entry would fall back to English.
   @Test func `the primer is translated`() {
-    let german = Glossary.primer(locale: Locale(identifier: "de"))
-    #expect(german.title != primer.title)
-    #expect(german.stages.count == primer.stages.count)
+    let german = Glossary.primer(locale: .german)
+    let texts = { (primer: Glossary.Primer) in
+      [primer.title, primer.introduction]
+        + (primer.stages + [primer.otherStreams]).flatMap { [$0.title, $0.text] }
+    }
+    // A title that is the same in both languages, as "Working Group Last Call" is.
+    let alike: Set<String> = ["Working Group Last Call"]
+    for (english, german) in zip(texts(primer), texts(german)) where !alike.contains(english) {
+      #expect(german != english, "\(english)")
+    }
   }
 }

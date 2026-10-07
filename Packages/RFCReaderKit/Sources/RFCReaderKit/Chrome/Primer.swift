@@ -28,9 +28,14 @@ extension Glossary {
     public var id: String { title }
   }
 
+  /// The primer's title, on its own: what a link to it says.
+  public static func primerTitle(locale: Locale = .interface) -> String {
+    String(kit: "How an RFC Is Made", locale: locale)
+  }
+
   public static func primer(locale: Locale = .interface) -> Primer {
     Primer(
-      title: String(kit: "How an RFC Is Made", locale: locale),
+      title: primerTitle(locale: locale),
       introduction: String(
         kit: """
           Most RFCs come from the IETF, and go through the same stages on their way from a \
@@ -96,11 +101,11 @@ extension Glossary {
         title: String(kit: "Other Streams", locale: locale),
         text: String(
           kit: """
-            Not every RFC comes from the IETF. The IAB, the IRTF and the Independent Submissions \
-            Editor each publish RFCs through a review of their own, and none of them publishes \
-            standards.
+            Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions \
+            Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs \
+            through a review of their own, and none of them publishes standards.
             """, locale: locale),
-        related: [.stream(.iab), .stream(.irtf), .stream(.independent)])
+        related: [.stream(.iab), .stream(.irtf), .stream(.independent), .stream(.editorial)])
     )
   }
 }

@@ -10,12 +10,14 @@ struct PrimerView: View {
     VStack(alignment: .leading, spacing: 18) {
       Text(verbatim: primer.introduction)
         .fixedSize(horizontal: false, vertical: true)
+        .textSelection(.enabled)
       ForEach(Array(primer.stages.enumerated()), id: \.element.id) { offset, stage in
         stageView(stage, number: offset + 1)
       }
       stageView(primer.otherStreams, number: nil)
     }
-    .textSelection(.enabled)
+    // A glossary entry opened from here is already inside the primer.
+    .environment(\.offersPrimer, false)
     .padding()
     .frame(maxWidth: 560, alignment: .leading)
     .frame(maxWidth: .infinity)
@@ -32,8 +34,10 @@ struct PrimerView: View {
       }
       .font(.headline)
       .accessibilityAddTraits(.isHeader)
+      // Selectable on its own, not with the term links below, which are buttons.
       Text(verbatim: stage.text)
         .fixedSize(horizontal: false, vertical: true)
+        .textSelection(.enabled)
       WrappingRowLayout(spacing: 10) {
         ForEach(stage.related) { term in
           GlossaryButton(term: term, presentation: .here) {
@@ -52,23 +56,24 @@ struct PrimerScreen: View {
     ScrollView {
       PrimerView()
     }
-    .navigationTitle(Glossary.primer().title)
+    .navigationTitle(Glossary.primerTitle())
   }
 }
 
 /// A link to the primer: from a glossary entry, and from the empty reader. On macOS
-/// it opens the primer's window; on iOS it pushes the primer when it is inside a
-/// navigation stack, as a glossary sheet is, and presents it as a sheet otherwise.
+/// it opens the primer's window. On iOS it pushes the primer when `pushes` says the
+/// link is inside a navigation stack, as a glossary sheet's is, and presents it as a
+/// sheet otherwise.
 struct PrimerLink: View {
+  /// Whether to push the primer onto the navigation stack the link is in, rather
+  /// than present it. The Mac opens the primer's window either way.
+  var pushes = false
   #if os(iOS)
-    /// Whether to push the primer onto the navigation stack the link is in, rather
-    /// than present it.
-    var pushes = false
     @State private var isPresented = false
   #endif
 
   var body: some View {
-    let title = Glossary.primer().title
+    let title = Glossary.primerTitle()
     #if os(macOS)
       Button(title) { PrimerWindow.show() }
     #else
@@ -99,3 +104,9 @@ struct PrimerLink: View {
     }
   }
 #endif
+
+extension EnvironmentValues {
+  /// Whether a glossary entry links to the primer: not inside the primer, where the
+  /// link would open what is already open (#365).
+  @Entry var offersPrimer = true
+}

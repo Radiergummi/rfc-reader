@@ -1416,11 +1416,22 @@
       }
     },
     "Not every RFC comes from the IETF. The IAB, the IRTF and the Independent Submissions Editor each publish RFCs through a review of their own, and none of them publishes standards." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF und der Independent Submissions Editor veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards."
+          }
+        }
+      }
+    },
+    "Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs through a review of their own, and none of them publishes standards." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF, der Independent Submissions Editor und, für die Regeln der RFC-Reihe selbst, der Editorial Stream veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards."
           }
         }
       }
