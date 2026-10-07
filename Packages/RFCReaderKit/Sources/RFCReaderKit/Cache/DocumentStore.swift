@@ -529,6 +529,10 @@ public actor DocumentStore {
   /// Moves `id`'s bodies from the other tier into `tier`, replacing any already
   /// there, so a document with a body in both ends with one. A move within one
   /// volume takes no room, so the disk is not asked.
+  ///
+  /// A body is moved in beside the one it replaces, under a name of its own, and
+  /// only then swapped in: a move that fails leaves the destination's body as it
+  /// was, rather than deleted with nothing in its place.
   private func move(_ id: DocumentID, to tier: StorageTier) throws {
     let source: StorageTier = tier == .kept ? .cache : .kept
     let files = FileManager.default
@@ -538,8 +542,19 @@ public actor DocumentStore {
         let origin = fileURL(id, format: format, in: source)
         guard files.fileExists(atPath: origin.path) else { continue }
         let destination = fileURL(id, format: format, in: tier)
-        try? files.removeItem(at: destination)
-        try files.moveItem(at: origin, to: destination)
+        guard files.fileExists(atPath: destination.path) else {
+          try files.moveItem(at: origin, to: destination)
+          continue
+        }
+        let incoming = destination.deletingLastPathComponent()
+          .appending(path: ".\(UUID().uuidString)-\(destination.lastPathComponent)")
+        try files.moveItem(at: origin, to: incoming)
+        do {
+          _ = try files.replaceItemAt(destination, withItemAt: incoming)
+        } catch {
+          try? files.removeItem(at: incoming)
+          throw error
+        }
       }
     }
     // Records what the source holds afterwards, which the moves above changed.

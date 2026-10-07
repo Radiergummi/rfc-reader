@@ -550,6 +550,33 @@ struct DocumentStoreTests {
     #expect(fetcher.documentFetches == 1)
   }
 
+  /// A move that fails leaves the body already at its destination: here a cached
+  /// copy that cannot leave its folder, moved onto a kept one.
+  @Test func `a failed move keeps the body at its destination`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    try await store.keep(id, formats: [.xml], client: fetcher)
+    let cacheFolder = sandbox.file(id, format: .xml).deletingLastPathComponent()
+    try FileManager.default.createDirectory(at: cacheFolder, withIntermediateDirectories: true)
+    try FileManager.default.copyItem(
+      at: sandbox.file(id, format: .xml, in: .kept), to: sandbox.file(id, format: .xml))
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o555], ofItemAtPath: cacheFolder.path)
+    defer {
+      try? FileManager.default.setAttributes(
+        [.posixPermissions: 0o755], ofItemAtPath: cacheFolder.path)
+    }
+
+    await #expect(throws: (any Error).self) { try await store.keepCached(id) }
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+    #expect(await store.isKept(id))
+  }
+
   /// A move only: a cached body gone by the time it runs is not fetched.
   @Test func `keeping a cached body fetches nothing when there is none`() async throws {
     let sandbox = Sandbox()
