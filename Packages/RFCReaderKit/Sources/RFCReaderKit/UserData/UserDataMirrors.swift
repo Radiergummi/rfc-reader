@@ -4,12 +4,12 @@ import SwiftData
 /// The sets the app keeps read from the store, and which of them a save can have
 /// changed (#603).
 ///
-/// `LibraryModel` keeps three: the bookmarked documents, the collections and the
-/// Recently Read count. It read all three again on every save, and most saves only
-/// record a reading position, so the bookmark and collection fetches ran for
-/// nothing — `CollectionSnapshot.fetch` reads every collection and every item. A
-/// save's notification names the rows it inserted, updated and deleted, and each
-/// row's entity says which mirror it feeds.
+/// `LibraryModel` keeps four: the bookmarked documents, the collections, the
+/// Recently Read count and the Keep Offline marks. It used to read all of them
+/// again on every save, and most saves only record a reading position, so the
+/// bookmark and collection fetches ran for nothing — `CollectionSnapshot.fetch`
+/// reads every collection and every item. A save's notification names the rows it
+/// inserted, updated and deleted, and each row's entity says which mirror it feeds.
 public struct UserDataMirrors: OptionSet, Sendable {
   public let rawValue: Int
 
@@ -24,8 +24,12 @@ public struct UserDataMirrors: OptionSet, Sendable {
   /// `ReadingPositionStore.recentlyReadCount`, read from `ReadingPosition` rows
   /// alone: a bookmark is not a reading.
   public static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
+  /// `OfflineMarkStore.markedDocuments`, read from `OfflineMark` rows alone (#358).
+  public static let offlineMarks = UserDataMirrors(rawValue: 1 << 3)
 
-  public static let all: UserDataMirrors = [.bookmarks, .collections, .recentlyReadCount]
+  public static let all: UserDataMirrors = [
+    .bookmarks, .collections, .recentlyReadCount, .offlineMarks,
+  ]
 
   /// The mirrors a save of rows of these entities can have changed. Nil — the
   /// notification did not say what it saved — is every mirror, as before #603. An
@@ -46,6 +50,7 @@ public struct UserDataMirrors: OptionSet, Sendable {
     String(describing: ReadingPosition.self): .recentlyReadCount,
     String(describing: DocumentCollection.self): .collections,
     String(describing: DocumentCollectionItem.self): .collections,
+    String(describing: OfflineMark.self): .offlineMarks,
   ]
 
   /// The entity names of the rows a `ModelContext.didSave` notification says were

@@ -1172,6 +1172,7 @@
       }
     },
     "Keep Offline" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2332,6 +2333,7 @@
       }
     },
     "Stop Keeping Offline" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {

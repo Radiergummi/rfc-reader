@@ -1165,6 +1165,16 @@
         }
       }
     },
+    "Keep Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline behalten"
+          }
+        }
+      }
+    },
     "Keywords" : {
       "localizations" : {
         "de" : {
@@ -1841,6 +1851,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Text zeigen"
+          }
+        }
+      }
+    },
+    "Stop Keeping Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr offline behalten"
           }
         }
       }

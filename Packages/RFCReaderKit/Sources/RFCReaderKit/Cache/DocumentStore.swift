@@ -51,10 +51,15 @@ public actor DocumentStore {
   private lazy var keptDocuments = DocumentCacheIndex(scanning: keptDirectory)
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: cacheDirectory)
 
+  /// The documents wanted offline, as the app last said. A body of one of these is
+  /// written to the kept tier, whoever fetched it, and eviction leaves it be, so a
+  /// marked document a reader opens before the reconciler has fetched it is kept,
+  /// not cached.
+  private var wanted: Set<DocumentID> = []
+
   /// The documents `keep(_:formats:client:)` is fetching, whose bodies go to the
-  /// kept tier when they arrive. With the kept tier's own documents, the documents
-  /// wanted offline: the disk says which are kept, so nothing here can drift from
-  /// it, and a keep that fails promises nothing.
+  /// kept tier when they arrive, wanted or not: a keep tapped on this device writes
+  /// where it is asked to before the mark it made reaches `wanted`.
   private var keeping: Set<DocumentID> = []
 
   /// The fetches running, so a second open joins the first, a removal made during
@@ -412,10 +417,37 @@ public actor DocumentStore {
     return nil
   }
 
-  /// Numbers of every RFC with a body in the kept tier.
-  public func keptNumbers() -> Set<Int> {
+  /// Sets the documents wanted offline: where a body fetched from now on is
+  /// written. Moves nothing; the reconciler's plan does that.
+  public func setWanted(_ documents: Set<DocumentID>) {
+    wanted = documents
+  }
+
+  /// What `OfflineReconciler.plan` reads of the disk and the network.
+  public struct OfflineState: Sendable, Hashable {
+    /// The documents with a body in the kept tier.
+    public var kept: Set<DocumentID>
+    /// The documents with a body in the cache.
+    public var cached: Set<DocumentID>
+    /// Every document with a download running, of its body or its text.
+    public var running: Set<DocumentID>
+  }
+
+  public func offlineState() -> OfflineState {
     keptDocuments.revalidate()
-    return keptDocuments.rfcNumbers
+    cachedDocuments.revalidate()
+    return OfflineState(
+      kept: keptDocuments.all, cached: cachedDocuments.all,
+      running: downloads.runningDocuments.union(texts.runningDocuments))
+  }
+
+  /// Until the downloads running now for `documents`, of a body or a text, have
+  /// ended: what the reconciler waits for before it moves a body it had to leave.
+  public func untilDownloadsEnd(of documents: Set<DocumentID>) async {
+    for id in documents {
+      await downloads.ended(id)
+      await texts.ended(id)
+    }
   }
 
   /// Removes `id`'s bodies from both tiers. A body that cannot be deleted is left
@@ -453,11 +485,10 @@ public actor DocumentStore {
   public func keep(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws
   {
+    // Kept first: a document already kept needs no move, and one that failed would
+    // fail a keep that has nothing left to do.
     if isKept(id) { return }
-    if isCached(id) {
-      try move(id, to: .kept)
-      return
-    }
+    if try keepCached(id) { return }
     keeping.insert(id)
     defer { keeping.remove(id) }
     if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
@@ -468,6 +499,18 @@ public actor DocumentStore {
     // Released, or removed, while it was fetched: nothing was promised.
     guard keeping.contains(id) else { return }
     guard isKept(id) else { throw NotEnoughSpace(id: id) }
+  }
+
+  /// Moves `id`'s cached body into the kept tier, replacing one already there, so
+  /// a document with a body in both ends with one. Fetches nothing: a body no
+  /// longer in the cache, evicted or purged since it was asked for, leaves this
+  /// with nothing to do. Answers whether there was a body to move.
+  @discardableResult
+  public func keepCached(_ id: DocumentID) throws -> Bool {
+    cachedDocuments.revalidate()
+    guard cachedDocuments.contains(id) else { return false }
+    try move(id, to: .kept)
+    return true
   }
 
   /// Stops keeping `id` offline: its body goes back into the cache, where eviction
@@ -486,6 +529,10 @@ public actor DocumentStore {
   /// Moves `id`'s bodies from the other tier into `tier`, replacing any already
   /// there, so a document with a body in both ends with one. A move within one
   /// volume takes no room, so the disk is not asked.
+  ///
+  /// A body is moved in beside the one it replaces, under a name of its own, and
+  /// only then swapped in: a move that fails leaves the destination's body as it
+  /// was, rather than deleted with nothing in its place.
   private func move(_ id: DocumentID, to tier: StorageTier) throws {
     let source: StorageTier = tier == .kept ? .cache : .kept
     let files = FileManager.default
@@ -495,8 +542,19 @@ public actor DocumentStore {
         let origin = fileURL(id, format: format, in: source)
         guard files.fileExists(atPath: origin.path) else { continue }
         let destination = fileURL(id, format: format, in: tier)
-        try? files.removeItem(at: destination)
-        try files.moveItem(at: origin, to: destination)
+        guard files.fileExists(atPath: destination.path) else {
+          try files.moveItem(at: origin, to: destination)
+          continue
+        }
+        let incoming = destination.deletingLastPathComponent()
+          .appending(path: ".\(UUID().uuidString)-\(destination.lastPathComponent)")
+        try files.moveItem(at: origin, to: incoming)
+        do {
+          _ = try files.replaceItemAt(destination, withItemAt: incoming)
+        } catch {
+          try? files.removeItem(at: incoming)
+          throw error
+        }
       }
     }
     // Records what the source holds afterwards, which the moves above changed.
@@ -508,7 +566,8 @@ public actor DocumentStore {
   /// disk has room for it there; see `StorageTier.hasRoom`. A body with no room is
   /// not written, and the document is fetched again on its next open.
   private func write(_ data: Data, for id: DocumentID, format: FileFormat) throws {
-    let tier: StorageTier = keeping.contains(id) || isKept(id) ? .kept : .cache
+    // A body already kept stays where it is until the reconciler releases it.
+    let tier = isKept(id) ? .kept : StorageTier.of(id, wanted: wanted.union(keeping))
     guard tier.hasRoom(for: data.count, available: freeSpace(tier)) else {
       storeLog.notice(
         "\(id.displayName, privacy: .public): not written, the disk is too full")
@@ -775,15 +834,16 @@ public actor DocumentStore {
   public var hasGrownSinceEviction: Bool { hasGrown }
 
   /// Removes the least recently opened bodies of the cache past `bound`, never a
-  /// pinned one; see `CacheEviction`. The kept tier is never looked at. Only after
-  /// the cache has grown, so an ordinary open costs nothing here. Returns what it
-  /// removed.
+  /// pinned one, nor one wanted offline, which is in the cache only until the
+  /// reconciler moves it; see `CacheEviction`. The kept tier is never looked at.
+  /// Only after the cache has grown, so an ordinary open costs nothing here.
+  /// Returns what it removed.
   @discardableResult
   public func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
     guard hasGrown else { return [] }
     hasGrown = false
     let victims = CacheEviction.victims(
-      of: CacheEviction.entries(in: cacheDirectory), pinned: pinned, bound: bound)
+      of: CacheEviction.entries(in: cacheDirectory), pinned: pinned.union(wanted), bound: bound)
     for id in victims {
       remove(id, from: [.cache])
     }

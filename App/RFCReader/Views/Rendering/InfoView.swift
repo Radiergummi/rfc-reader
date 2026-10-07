@@ -449,9 +449,10 @@ private struct LinkRow: View {
 /// outline arrow of a document not kept keeps it, moving a copy already read or
 /// downloading one (#358). A copy no longer kept goes to the reading cache, which
 /// may remove it when it needs the room; the tooltip says so. Whether it is kept is
-/// the library's set, so it is right the moment the pane shows, and a download or a
-/// removal re-reads the size. Only an RFC has a body of its own; a series number the
-/// index has not resolved yet has none.
+/// the document's Keep Offline mark, from the library's set, so it is right the
+/// moment the pane shows, wherever the mark was made, and the size is read once
+/// what the mark started has ended. Only an RFC has a body of its own; a series
+/// number the index has not resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
   let library: LibraryModel
@@ -465,7 +466,7 @@ private struct OfflineSection: View {
   @State private var hadNoRoom = false
 
   private var isKept: Bool {
-    document.series == .rfc && library.downloadedNumbers.contains(document.number)
+    document.series == .rfc && library.offlineMarks.contains(document)
   }
 
   var body: some View {
@@ -482,7 +483,7 @@ private struct OfflineSection: View {
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
-        .accessibilityLabel(isKept ? "Stop Keeping Offline" : "Keep Offline")
+        .accessibilityLabel(Text(verbatim: DocumentActions.keepOfflineCommand(isKept: isKept)))
         .accessibilityHint(help)
         Text(
           downloadFailed
@@ -499,7 +500,13 @@ private struct OfflineSection: View {
     }
     // Per document already: the section is given the document's identity.
     .task(id: isKept) {
-      size = isKept ? await library.downloadedSize(document) : nil
+      guard isKept else {
+        size = nil
+        return
+      }
+      let size = await library.keptSize(document)
+      // A wait that outlasted the mark reads a size that is no longer shown.
+      if !Task.isCancelled { self.size = size }
     }
     .resets($downloadFailed, to: false, after: .seconds(1.5))
   }
@@ -521,17 +528,16 @@ private struct OfflineSection: View {
 
   private func toggle() {
     isWorking = true
+    let keeps = !isKept
     Task {
-      if isKept {
-        await library.removeDownload(document)
-      } else {
-        do {
-          try await library.download(document)
-        } catch {
-          readerLog.failure(of: document, "keeping offline failed", error)
-          hadNoRoom = error is DocumentStore.NotEnoughSpace
-          downloadFailed = true
-        }
+      do {
+        try await library.setKeptOffline(document, keeps)
+      } catch is CancellationError {
+        // Unmarked elsewhere while it downloaded: nothing failed.
+      } catch {
+        readerLog.failure(of: document, "keeping offline failed", error)
+        hadNoRoom = error is DocumentStore.NotEnoughSpace
+        downloadFailed = true
       }
       isWorking = false
     }

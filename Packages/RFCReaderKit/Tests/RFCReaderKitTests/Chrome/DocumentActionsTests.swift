@@ -122,4 +122,10 @@ struct DocumentActionsTests {
     #expect(
       DocumentActions.bookmarkCommand(isBookmarked: true, locale: .english) == "Remove Bookmark")
   }
+
+  @Test func `the Keep Offline command is titled by what it will do`() {
+    #expect(DocumentActions.keepOfflineCommand(isKept: false, locale: .english) == "Keep Offline")
+    #expect(
+      DocumentActions.keepOfflineCommand(isKept: true, locale: .english) == "Stop Keeping Offline")
+  }
 }

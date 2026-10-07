@@ -139,11 +139,27 @@ final class LibraryModel {
   private(set) var collections = CollectionSnapshot.empty
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
-  /// Every RFC with a body in the kept tier, not merely read (#358): the Available
-  /// Offline list. Kept here, and refreshed whenever the tier can have changed, so
-  /// a tab can take it the moment it enters that filter rather than waiting on the
-  /// store's actor.
-  private(set) var downloadedNumbers: Set<Int> = []
+  /// Every document marked Keep Offline, fetched again on every save of a mark
+  /// (#358), and synced, so a mark made on another device arrives here too. What
+  /// is wanted offline, and what Available Offline lists, whether or not a body has
+  /// arrived yet.
+  private(set) var offlineMarks: Set<DocumentID> = []
+
+  /// Whether `offlineMarks` has been read from the store at least once. Until it
+  /// has, its emptiness means nothing, and reconciling against it would move every
+  /// kept body back into the cache.
+  @ObservationIgnored private var hasReadOfflineMarks = false
+
+  /// The RFCs of `offlineMarks`, which is what the library lists, kept beside it
+  /// rather than worked out on every read: the sidebar counts it as it draws.
+  private(set) var availableOfflineNumbers: Set<Int> = []
+
+  /// Moves, releases and fetches bodies to match `offlineMarks`.
+  @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
+    store: store, client: client
+  ) { [weak self] id in
+    self?.index?[id]?.formats ?? []
+  }
 
   /// The RFCs the installed legacy pack lists as text that only points to its
   /// original (#316): the reader shows their original without a load, offline too.
@@ -203,6 +219,37 @@ final class LibraryModel {
     if mirrors.contains(.bookmarks) { refreshBookmarks() }
     if mirrors.contains(.collections) { refreshCollections() }
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
+    if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
+  }
+
+  private func refreshOfflineMarks() {
+    let marks: Set<DocumentID>
+    do {
+      marks = try OfflineMarkStore.markedDocuments(in: container.mainContext)
+    } catch {
+      // The last set read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.offlineMarks)
+      libraryLog.error(
+        "reading Keep Offline marks failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    // The first read reconciles even when it finds what a failed one left: no set.
+    let isFirstRead = !hasReadOfflineMarks
+    hasReadOfflineMarks = true
+    guard isFirstRead || marks != offlineMarks else { return }
+    offlineMarks = marks
+    availableOfflineNumbers = Set(marks.filter { $0.series == .rfc }.map(\.number))
+    reconcileOffline()
+  }
+
+  /// Brings the disk in line with `offlineMarks`, after any reconciliation already
+  /// running. Not before the index has loaded, since a fetch needs the formats it
+  /// lists, and applying the index runs this; nor before the marks have been read.
+  /// Nor on a store that fell back to memory (#152), whose marks are not the ones
+  /// saved: reconciling against them would move every kept body into the cache.
+  private func reconcileOffline() {
+    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory else { return }
+    offlineKeeper.reconcile(wanted: offlineMarks)
   }
 
   private func refreshRecentlyReadCount() {
@@ -315,12 +362,6 @@ final class LibraryModel {
     compareBookmarks()
   }
 
-  private func refreshDownloadedNumbers() async {
-    let numbers = await store.keptNumbers()
-    guard numbers != downloadedNumbers else { return }
-    downloadedNumbers = numbers
-  }
-
   private func refreshPointersInPack() async {
     let pointers = await store.pointersInPack()
     guard pointers != pointersInPack else { return }
@@ -359,12 +400,6 @@ final class LibraryModel {
         libraryLog.error(
           "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
       }
-    }
-    await refreshDownloadedNumbers()
-    // A tab restored onto Available Offline (#155) entered it before there was a
-    // set to take, and took an empty one.
-    for scene in sceneRegistry.open {
-      scene.takeDownloaded()
     }
     await refreshPointersInPack()
     do {
@@ -625,6 +660,8 @@ final class LibraryModel {
     indexForSpotlight(prepared.index.rfcs)
     settleIndex()
     compareBookmarks()
+    // What waited for the formats the index lists.
+    reconcileOffline()
     // The RFCs a phrase can name are the ones read recently, which need the index.
     RFCReaderShortcuts.refreshParameters()
   }
@@ -1241,12 +1278,9 @@ final class LibraryModel {
 
   // MARK: - Documents
 
-  /// Fetching a document a keep is waiting for keeps it, so the offline set is
-  /// refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()
-    await refreshDownloadedNumbers()
     return document
   }
 
@@ -1267,7 +1301,6 @@ final class LibraryModel {
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
     await evictIfGrown()
-    await refreshDownloadedNumbers()
     return text
   }
 
@@ -1292,23 +1325,30 @@ final class LibraryModel {
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
-  /// keep the document offline; what was read in the last month; and whatever a
-  /// window has open, which includes the document just fetched.
+  /// keep the document offline; what was read in the last month; a document marked
+  /// Keep Offline, whose cached body waits for the keeper to move it (#358); and
+  /// whatever a window has open, which includes the document just fetched.
   private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
+    // Read here, as the store learns them only when the keeper first runs.
+    let marked = try OfflineMarkStore.markedDocuments(in: context)
     let open = sceneRegistry.open.compactMap(\.selection)
-    return bookmarked.union(read).union(open)
+    return bookmarked.union(read).union(marked).union(open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
     await store.isCached(id)
   }
 
-  func downloadedSize(_ id: DocumentID) async -> Int? {
-    await store.downloadedSize(id)
+  /// The size of `id`'s kept body, once what keeping it offline started has ended:
+  /// a mark from anywhere, the menu, a script or another device, fetches after it is
+  /// made.
+  func keptSize(_ id: DocumentID) async -> Int? {
+    await offlineKeeper.untilSettled(id)
+    return await store.downloadedSize(id)
   }
 
   /// The documents the reader has opened, most recent first, a BCP, STD or FYI
@@ -1317,7 +1357,7 @@ final class LibraryModel {
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
   /// re-sorted it under the click that was reading it. `NavigationModel` takes one
-  /// of these when its filter changes, exactly as it takes `downloadedNumbers`.
+  /// of these when its filter changes, exactly as it takes `availableOfflineNumbers`.
   ///
   /// Empty when the fetch fails, which is logged: the list is only shown, and
   /// nothing is decided by its being empty.
@@ -1355,11 +1395,40 @@ final class LibraryModel {
     }
   }
 
-  /// Keeps `id` offline, moving a copy already read or downloading one; see
-  /// `DocumentStore.keep(_:formats:client:)`.
-  func download(_ id: DocumentID) async throws {
-    try await store.keep(id, formats: index?[id]?.formats ?? [], client: client)
-    await refreshDownloadedNumbers()
+  /// Marks `id` Keep Offline, or removes its mark, as the Info pane's toggle does
+  /// (#358). Marking moves a copy already read, or downloads one now, on any
+  /// network, since somebody is waiting for it, and throws when that fails: the mark
+  /// stays, and the next reconciliation tries again. Unmarking moves the body back
+  /// into the reading cache rather than deleting it, and leaves a download running
+  /// for it. A mark that could not be saved is logged, as a bookmark's is (#125),
+  /// and leaves the toggle as it was.
+  func setKeptOffline(_ id: DocumentID, _ isKept: Bool) async throws {
+    guard mark(id, keptOffline: isKept), isKept else { return }
+    try await offlineKeeper.fetchNow(id)
+  }
+
+  /// `setKeptOffline` from a list's context menu or a script, which have nowhere to
+  /// show a failed download either. The mark is saved before this returns, so a
+  /// script that reads it back reads what it set, and only the download goes on
+  /// after.
+  func setKeptOfflineInBackground(_ id: DocumentID, _ isKept: Bool) {
+    guard mark(id, keptOffline: isKept), isKept else { return }
+    // The keeper logs a failed download itself.
+    Task(name: "Keep offline") { try? await offlineKeeper.fetchNow(id) }
+  }
+
+  /// Saves the mark and reads the marks again at once, rather than when the save's
+  /// notification arrives, which is after the next turn of the run loop. Answers
+  /// whether it was saved.
+  private func mark(_ id: DocumentID, keptOffline isKept: Bool) -> Bool {
+    do {
+      try OfflineMarkStore.setMarked(id, isKept, in: container.mainContext)
+    } catch {
+      libraryLog.failure(of: id, "marking Keep Offline failed", error)
+      return false
+    }
+    refreshOfflineMarks()
+    return true
   }
 
   #if os(macOS)
@@ -1390,11 +1459,4 @@ final class LibraryModel {
       return file
     }
   #endif
-
-  /// Stops keeping `id` offline. Its body goes back into the reading cache rather
-  /// than being deleted, so its previews stay.
-  func removeDownload(_ id: DocumentID) async {
-    await store.release(id)
-    await refreshDownloadedNumbers()
-  }
 }
