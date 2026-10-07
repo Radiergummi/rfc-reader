@@ -233,7 +233,7 @@ struct OfflineKeeperTests {
     let synced = DocumentID.rfc(8999)
     let tapped = DocumentID.rfc(9000)
     let keeper = OfflineKeeper(
-      store: store, client: anyNetwork, clientOnCheapNetworks: cheapNetworks
+      store: store, client: anyNetwork, clientFailingOnExpensiveNetworks: cheapNetworks
     ) { _ in [.xml] }
 
     await keeper.reconcile(wanted: [synced]).value
@@ -277,7 +277,7 @@ struct OfflineKeeperTests {
     await anyNetwork.gate.open()
     let id = DocumentID.rfc(8999)
     let keeper = OfflineKeeper(
-      store: store, client: anyNetwork, clientOnCheapNetworks: cheapNetworks
+      store: store, client: anyNetwork, clientFailingOnExpensiveNetworks: cheapNetworks
     ) { _ in [.xml] }
     await keeper.reconcile(wanted: [id]).value
     await untilWaiting(documents: 1, for: id, in: store)
@@ -333,6 +333,50 @@ struct OfflineKeeperTests {
     #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
+  /// Download Now refused by the path, as when it joins a download running on the
+  /// session for cheap networks: somebody is waiting, so the row offers Retry rather
+  /// than falling silent until a path change that may never come.
+  @MainActor @Test func `a fetch somebody waits for that the path refuses is failed`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1, error: Self.pathRefused)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await #expect(throws: URLError.self) { try await keeper.fetchNow(id) }
+
+    #expect(keeper.status.state(of: id) == .failed)
+  }
+
+  /// A discretionary fetch the path refuses is not failed: the run the path change
+  /// starts says it waits.
+  @MainActor @Test func `a fetch nobody waits for that the path refuses is not failed`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1, error: Self.pathRefused)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.state(of: id) == nil)
+  }
+
+  /// What a session that may not use an expensive path throws when the device moves
+  /// to one.
+  private static let pathRefused = URLError(
+    .notConnectedToInternet,
+    userInfo: [
+      NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue
+    ])
+
   /// A new path is a reason to try a failed fetch again: the failure may have been
   /// the old one's.
   @MainActor @Test func `forgetting the failures lets the next run fetch again`() async throws {
@@ -345,21 +389,22 @@ struct OfflineKeeperTests {
     await keeper.reconcile(wanted: [id]).value
     await keeper.untilSettled(id)
 
-    keeper.forgetFailures()
-    await keeper.reconcile(wanted: [id]).value
+    await keeper.reconcile(wanted: [id], forgettingFailures: true).value
     await keeper.untilSettled(id)
 
     #expect(fetcher.fetches == 2)
     #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
-  /// Fails its first `failures` fetches as a server error would, then serves RFC
+  /// Fails its first `failures` fetches with `error`, a server's by default, then serves RFC
   /// 8999's XML, at once.
   private final class FailingFetcher: DocumentFetching {
     private let state: Mutex<(fetches: Int, failuresLeft: Int)>
+    private let error: URLError
 
-    init(failures: Int) {
+    init(failures: Int, error: URLError = URLError(.badServerResponse)) {
       state = Mutex((0, failures))
+      self.error = error
     }
 
     var fetches: Int { state.withLock { $0.fetches } }
@@ -373,7 +418,7 @@ struct OfflineKeeperTests {
         defer { state.failuresLeft = max(0, state.failuresLeft - 1) }
         return state.failuresLeft > 0
       }
-      if fails { throw URLError(.badServerResponse) }
+      if fails { throw error }
       let data = try Fixtures.data("rfc8999.xml")
       return RFCEditorClient.FetchedDocument(
         data: data, format: .xml, document: try RFCXMLParser.parse(data), xmlParseFailure: nil)

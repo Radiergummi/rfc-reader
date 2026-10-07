@@ -427,8 +427,6 @@ struct IndexStatusView: View {
   }
 }
 
-/// A library row: an RFC, or a BCP, STD or FYI bookmarked or read as itself
-/// (#321), which shows the RFCs it names where an RFC shows its status and group.
 /// A row that reads where its document's body stands itself, so a fetch starting or
 /// ending redraws the rows rather than the whole list (#358). Reads nothing when not
 /// `isShown`, so the rows of other lists do not redraw at all.
@@ -443,6 +441,8 @@ private struct OfflineStated<Content: View>: View {
   }
 }
 
+/// A library row: an RFC, or a BCP, STD or FYI bookmarked or read as itself
+/// (#321), which shows the RFCs it names where an RFC shows its status and group.
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool

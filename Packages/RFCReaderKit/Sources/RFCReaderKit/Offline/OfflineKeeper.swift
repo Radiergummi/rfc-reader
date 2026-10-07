@@ -21,7 +21,7 @@ private let offlineLog = Logger(
 public final class OfflineKeeper {
   /// Where each wanted document stands, for Available Offline's rows: as the last
   /// run planned it, and every fetch since. Its `failed` are the documents no run
-  /// fetches again until Retry or `forgetFailures()`.
+  /// fetches again until Retry or a run that forgets them.
   public private(set) var status = OfflineStatus()
 
   @ObservationIgnored private let store: DocumentStore
@@ -29,7 +29,7 @@ public final class OfflineKeeper {
   @ObservationIgnored private let client: any DocumentFetching
   /// For a fetch nobody waits for, which never takes an expensive or constrained
   /// path, and fails when the device moves to one while it runs.
-  @ObservationIgnored private let clientOnCheapNetworks: any DocumentFetching
+  @ObservationIgnored private let clientFailingOnExpensiveNetworks: any DocumentFetching
   /// The formats the index lists for a document, which a fetch chooses from.
   @ObservationIgnored private let formats: (DocumentID) -> [FileFormat]
 
@@ -58,41 +58,41 @@ public final class OfflineKeeper {
   /// Waits for the downloads the last run had to leave a body to, then runs again.
   @ObservationIgnored private var rerun: Task<Void, Never>?
 
-  /// - Parameter clientOnCheapNetworks: the client for the fetches nobody waits for;
-  ///   `client` when nil.
+  /// - Parameter clientFailingOnExpensiveNetworks: the client for the fetches nobody
+  ///   waits for; `client` when nil.
   public init(
     store: DocumentStore, client: any DocumentFetching,
-    clientOnCheapNetworks: (any DocumentFetching)? = nil,
+    clientFailingOnExpensiveNetworks: (any DocumentFetching)? = nil,
     formats: @escaping (DocumentID) -> [FileFormat]
   ) {
     self.store = store
     self.client = client
-    self.clientOnCheapNetworks = clientOnCheapNetworks ?? client
+    self.clientFailingOnExpensiveNetworks = clientFailingOnExpensiveNetworks ?? client
     self.formats = formats
   }
 
   /// Carries out the plan for `wanted`, after any run already asked for, starting
   /// the fetches it owes only if `policy` allows a fetch nobody waits for. The task
   /// ends once the moves are made and the fetches started, not finished.
+  ///
+  /// - Parameter forgettingFailures: fetches the documents whose fetch failed as
+  ///   well, as when the device has moved to another network, on which they may
+  ///   succeed. Forgotten when the run starts, so their rows offer Retry until then.
   @discardableResult
-  public func reconcile(wanted: Set<DocumentID>, policy: FetchPolicy.Decision = .fetch)
-    -> Task<Void, Never>
-  {
+  public func reconcile(
+    wanted: Set<DocumentID>, policy: FetchPolicy.Decision = .fetch,
+    forgettingFailures: Bool = false
+  ) -> Task<Void, Never> {
     self.wanted = wanted
     self.policy = policy
     let previous = run
     let current = Task {
       await previous?.value
+      if forgettingFailures { status.failed = [] }
       await carryOut(wanted, policy: policy)
     }
     run = current
     return current
-  }
-
-  /// Lets the next run fetch the documents whose fetch failed: the device has moved
-  /// to another network, on which they may succeed.
-  public func forgetFailures() {
-    status.failed = []
   }
 
   /// Until what has been asked for `id` is done: every run asked for so far, and a
@@ -161,11 +161,13 @@ public final class OfflineKeeper {
   /// `CancellationError` here. One nobody waits for is left first, and its download
   /// with it unless a reader shares it, since it would not take every path.
   public func fetchNow(_ id: DocumentID) async throws {
-    if let running = fetches[id], running.isAwaited {
-      try await running.task.value
-      return
-    }
-    if let running = fetches.removeValue(forKey: id) {
+    // Again after each wait: a run may have started another meanwhile.
+    while let running = fetches[id] {
+      if running.isAwaited {
+        try await running.task.value
+        return
+      }
+      fetches.removeValue(forKey: id)
       running.task.cancel()
       _ = await running.task.result
     }
@@ -175,7 +177,7 @@ public final class OfflineKeeper {
   @discardableResult
   private func start(_ id: DocumentID, isAwaited: Bool) -> Task<Void, any Error> {
     let formats = formats(id)
-    let client = isAwaited ? client : clientOnCheapNetworks
+    let client = isAwaited ? client : clientFailingOnExpensiveNetworks
     status.failed.remove(id)
     status.waiting.remove(id)
     status.downloading.insert(id)
@@ -192,10 +194,12 @@ public final class OfflineKeeper {
         status.kept.insert(id)
       } catch {
         // A cancellation is a fetch left: the document is no longer wanted, or the
-        // path stopped allowing it. So is a path that stopped allowing it before
-        // the keeper heard: the run the path change starts says it waits.
+        // path stopped allowing it. So is a path that stopped allowing a fetch
+        // nobody waits for before the keeper heard: the run the path change starts
+        // says it waits. One somebody waits for can be refused too, having joined
+        // such a fetch's download, and fails in front of them.
         let isPathRefused = (error as? URLError)?.networkUnavailableReason != nil
-        if !(error is CancellationError), !isPathRefused {
+        if !(error is CancellationError), isAwaited || !isPathRefused {
           status.failed.insert(id)
           offlineLog.error(
             "\(id.displayName, privacy: .public): keeping offline failed: \(String(describing: error), privacy: .public)"

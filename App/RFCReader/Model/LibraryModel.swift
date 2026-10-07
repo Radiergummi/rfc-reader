@@ -159,7 +159,7 @@ final class LibraryModel {
   /// and fail rather than wait when the device moves to one.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
     store: store, client: client,
-    clientOnCheapNetworks: RFCEditorClient(
+    clientFailingOnExpensiveNetworks: RFCEditorClient(
       transport: URLSessionTransport(session: .rfcEditorFailingOnExpensiveNetworks))
   ) { [weak self] id in
     self?.index?[id]?.formats ?? []
@@ -224,7 +224,9 @@ final class LibraryModel {
       }
     }
     network.start(
-      pathChanged: { [weak self] in self?.pathChanged() },
+      // A new path: what waited may go ahead, what runs may have to wait, and what
+      // failed may succeed on it.
+      pathChanged: { [weak self] in self?.reconcileOffline(forgettingFailures: true) },
       // Low Power Mode decides whether a fetch waits, not whether it fails.
       powerChanged: { [weak self] in self?.reconcileOffline() })
   }
@@ -266,18 +268,12 @@ final class LibraryModel {
   /// Nor before the network path is known, which decides whether the fetches it
   /// owes start now: every one of them is a mark nobody on this device is waiting
   /// for, since a tapped one is fetched at once.
-  private func reconcileOffline() {
+  private func reconcileOffline(forgettingFailures: Bool = false) {
     guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
       let policy = network.decision(for: .syncedMark)
     else { return }
-    offlineKeeper.reconcile(wanted: offlineMarks, policy: policy)
-  }
-
-  /// A new path: what waited may go ahead, what runs may have to wait, and what
-  /// failed may succeed on it.
-  private func pathChanged() {
-    offlineKeeper.forgetFailures()
-    reconcileOffline()
+    offlineKeeper.reconcile(
+      wanted: offlineMarks, policy: policy, forgettingFailures: forgettingFailures)
   }
 
   /// Fetches a document marked Keep Offline on whatever path the device has, from
