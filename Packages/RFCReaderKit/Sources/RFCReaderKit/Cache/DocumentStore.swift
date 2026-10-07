@@ -668,8 +668,8 @@ public actor DocumentStore {
 
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
   /// joined by a second open, and a body removed while it parsed is shown but not
-  /// kept, like a fetch (#116). Nor is one parsed from what a pack installed while it
-  /// parsed replaces: that open shows it, and the next reads the pack.
+  /// kept, like a fetch (#116), and so is one parsed from what a pack installed
+  /// meanwhile replaces: that open shows it, and the next reads the pack.
   private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
     -> RFCDocument?
   {
@@ -684,9 +684,7 @@ public actor DocumentStore {
           id, xml: xmlURLs, pack: packURL, text: textURLs, signpostID: signpostID)
       }
     }
-    if let cached, isCachedKept, legacyPack?.file(for: id) == packURL {
-      parsed.store(cached, for: id)
-    }
+    if let cached, isCachedKept { parsed.store(cached, for: id) }
     return cached
   }
 
@@ -774,7 +772,12 @@ public actor DocumentStore {
     let pack = try await installPack(source, as: Self.legacyPackName)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
+    // A parse running now read what the pack replaces, and is not kept either, by
+    // whichever open joined it (#116).
     parsed.removeAll { pack.file(for: $0) != nil }
+    for id in parses.runningDocuments where pack.file(for: id) != nil {
+      parses.removed(id)
+    }
     return pack
   }
 
