@@ -7,9 +7,10 @@ rfc-reader/
 ├── Packages/RFCKit/          Swift package: everything that is not UI. Builds and tests on Linux and macOS.
 │   ├── Sources/RFCKit/
 │   │   ├── Models/           DocumentID, RFCMetadata, RFCIndex, enums for status/stream/format
-│   │   ├── Index/            RFCIndexParser (streaming SAX), XMLTree (small DOM used by the document parser)
+│   │   ├── Index/            RFCIndexParser (streaming SAX)
+│   │   ├── XML/              XMLDriver (the one front end every XML parser reads through), XMLTree (small DOM used by the document parser)
 │   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text), RFCXMLSerializer, SectionAlignment (a section's successor)
-│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), feed parser
+│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), RecentFeed (the Recent RFCs feed)
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)
 │   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section)
