@@ -129,11 +129,19 @@ public actor DocumentStore {
   /// A store keeping its index, packs and kept bodies in `directory`, and the
   /// index snapshot and the reading cache in `caches`. Both are created when they
   /// do not exist. `freeSpace` is the bytes free for a body in each tier, read from
-  /// the volume when it is nil. `parsing` is awaited before a body on disk is
-  /// parsed, for a test to hold the parse open as it holds a fetch.
+  /// the volume when it is nil.
   public init(
-    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
-    parsing: (@Sendable () async -> Void)? = nil
+    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil
+  ) {
+    self.init(directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil)
+  }
+
+  /// The store above, with `parsing` awaited in each parse of a body on disk, once
+  /// it has chosen which files to read: for a test to hold the parse open as it
+  /// holds a fetch.
+  init(
+    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)?,
+    parsing: (@Sendable () async -> Void)?
   ) {
     self.parsing = parsing
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
@@ -660,7 +668,8 @@ public actor DocumentStore {
 
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
   /// joined by a second open, and a body removed while it parsed is shown but not
-  /// kept, like a fetch (#116).
+  /// kept, like a fetch (#116). Nor is one parsed from what a pack installed while it
+  /// parsed replaces: that open shows it, and the next reads the pack.
   private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
     -> RFCDocument?
   {
@@ -675,7 +684,9 @@ public actor DocumentStore {
           id, xml: xmlURLs, pack: packURL, text: textURLs, signpostID: signpostID)
       }
     }
-    if let cached, isCachedKept { parsed.store(cached, for: id) }
+    if let cached, isCachedKept, legacyPack?.file(for: id) == packURL {
+      parsed.store(cached, for: id)
+    }
     return cached
   }
 
@@ -881,14 +892,17 @@ public actor DocumentStore {
 
   // MARK: - Tests
 
-  /// How many readers wait for the fetch of `id`'s document, and for its `.txt`, so
-  /// a test acts once the readers it started have joined them.
-  func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
-    (downloads.waiters(id), texts.waiters(id))
+  /// How many readers wait for the fetch of `id`'s document, for its `.txt`, and for
+  /// the parse of its body on disk, so a test acts once the readers it started have
+  /// joined them.
+  func waiters(_ id: DocumentID) -> Waiters {
+    Waiters(
+      documents: downloads.waiters(id), texts: texts.waiters(id), parses: parses.waiters(id))
   }
 
-  /// How many opens wait for the parse of `id`'s body on disk, for the tests.
-  func parseWaiters(_ id: DocumentID) -> Int {
-    parses.waiters(id)
+  struct Waiters: Equatable {
+    var documents: Int
+    var texts: Int
+    var parses: Int
   }
 }

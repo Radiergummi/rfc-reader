@@ -592,25 +592,24 @@ struct DocumentStoreTests {
 
   // MARK: - Overlapping a fetch or a parse (#614)
 
-  /// Eviction runs while a document is being fetched: it bounds the cache by what
-  /// is on disk, the document being fetched is pinned as every open one is, and
-  /// the fetch writes its body once it lands.
-  @Test func `eviction during a fetch evicts the others and keeps the fetched body`() async throws {
+  /// Eviction runs while a document is being fetched: it bounds the cache by what is
+  /// on disk, which the document being fetched is not yet, and the fetch writes its
+  /// body once it lands.
+  @Test func `eviction during a fetch evicts what is on disk and the fetch still writes`()
+    async throws
+  {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
     let fetcher = GatedFetcher()
     let older = DocumentID.rfc(2119)
     let fetched = DocumentID.rfc(8999)
-    try FileManager.default.createDirectory(
-      at: sandbox.file(older, format: .text).deletingLastPathComponent(),
-      withIntermediateDirectories: true)
-    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(older, format: .text))
+    try Self.write("rfc2119.txt", as: older, format: .text, in: sandbox)
     _ = try await store.document(older, formats: [.text], client: fetcher)
 
     let opening = Task { try await store.document(fetched, formats: [.xml], client: fetcher) }
     await untilWaiting(documents: 1, for: fetched, in: store)
-    let evicted = await store.evict(pinned: [fetched], bound: 0)
+    let evicted = await store.evict(pinned: [], bound: 0)
     await fetcher.gate.open()
 
     #expect(evicted == [older])
@@ -627,22 +626,19 @@ struct DocumentStoreTests {
     let gate = Gate()
     let parses = Mutex(0)
     let store = DocumentStore(
-      directory: sandbox.directory, caches: sandbox.caches,
+      directory: sandbox.directory, caches: sandbox.caches, freeSpace: nil,
       parsing: {
         parses.withLock { $0 += 1 }
         await gate.wait()
       })
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(8999)
-    try FileManager.default.createDirectory(
-      at: sandbox.file(id, format: .xml).deletingLastPathComponent(),
-      withIntermediateDirectories: true)
-    try Fixtures.data("rfc8999.xml").write(to: sandbox.file(id, format: .xml))
+    try Self.write("rfc8999.xml", as: id, format: .xml, in: sandbox)
 
     let first = Task { try await store.document(id, formats: [.xml], client: fetcher) }
-    await untilParsing(1, id, in: store)
+    await untilWaiting(parses: 1, for: id, in: store)
     let second = Task { try await store.document(id, formats: [.xml], client: fetcher) }
-    await untilParsing(2, id, in: store)
+    await untilWaiting(parses: 2, for: id, in: store)
     await gate.open()
 
     let expected = try Fixtures.rfc8999()
@@ -673,6 +669,42 @@ struct DocumentStoreTests {
 
     #expect(try await opening.value.source == .xml)
     #expect(fetcher.textFetches == 1)
+    #expect(sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  /// A cached legacy text is being parsed when the pack is installed: that open
+  /// shows the text's document, and the next reads the pack's, rather than the
+  /// parse the pack replaced being kept in memory for every open after.
+  @Test func `a pack installed while a cached body parses serves the next open`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let gate = Gate()
+    let store = DocumentStore(
+      directory: sandbox.directory, caches: sandbox.caches, freeSpace: nil,
+      parsing: { await gate.wait() })
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(2119)
+    try Self.write("rfc2119.txt", as: id, format: .text, in: sandbox)
+    let pack = try Self.legacyPack(holding: id, in: sandbox.root)
+
+    let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(parses: 1, for: id, in: store)
+    _ = try await store.installLegacyPack(from: pack)
+    await gate.open()
+
+    #expect(try await opening.value.source == .text)
+    #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
+  }
+
+  /// Writes the committed fixture `name` where the store keeps `id`'s body in
+  /// `format`, in the cache.
+  private static func write(
+    _ name: String, as id: DocumentID, format: FileFormat, in sandbox: Sandbox
+  ) throws {
+    let file = sandbox.file(id, format: format)
+    try FileManager.default.createDirectory(
+      at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Fixtures.data(name).write(to: file)
   }
 
   /// A legacy XML pack holding `id`, converted from the committed RFC 2119 text the
@@ -695,21 +727,17 @@ struct DocumentStoreTests {
   }
 }
 
-/// Until as many opens wait for `id`'s parse of a body on disk as given.
-func untilParsing(_ count: Int, _ id: DocumentID, in store: DocumentStore) async {
-  while await store.parseWaiters(id) != count {
-    await Task.yield()
-  }
-}
-
-/// Until as many readers wait for `id`'s fetches as given: an open started is not
-/// yet an open that has joined one.
+/// Until as many readers wait for `id`'s fetches and parse as given: an open
+/// started is not yet an open that has joined one.
 func untilWaiting(
-  documents: Int = 0, texts: Int = 0, for id: DocumentID, in store: DocumentStore
+  documents: Int = 0, texts: Int = 0, parses: Int = 0, for id: DocumentID,
+  in store: DocumentStore
 ) async {
   while true {
     let waiting = await store.waiters(id)
-    if waiting.documents == documents, waiting.texts == texts { return }
+    if waiting.documents == documents, waiting.texts == texts, waiting.parses == parses {
+      return
+    }
     await Task.yield()
   }
 }
