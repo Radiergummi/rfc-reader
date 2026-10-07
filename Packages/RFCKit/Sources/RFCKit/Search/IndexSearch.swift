@@ -122,7 +122,7 @@ public struct IndexSearch: Sendable {
   public static func parseQuery(_ query: String) -> SearchQuery.Parsed {
     var filters = SearchFilters()
     var words: [String] = []
-    var unknown: [SearchQuery.UnknownTerm] = []
+    var unknown: [UnknownSearchTerm] = []
     for token in SearchQuery.words(in: query) {
       guard let written = SearchQuery.qualifier(in: token) else {
         words.append(token)
@@ -135,7 +135,7 @@ public struct IndexSearch: Sendable {
         continue
       }
       guard let qualifier = SearchQuery.Qualifier(spelling: written.key) else {
-        unknown.append(SearchQuery.UnknownTerm(word: token, reason: .qualifier))
+        unknown.append(UnknownSearchTerm(word: token, reason: .qualifier))
         continue
       }
       // A comma separates the values of a union, unless the value is quoted.
@@ -143,7 +143,7 @@ public struct IndexSearch: Sendable {
       let values =
         qualifier.isUnion && !isQuoted ? value.split(separator: ",").map(String.init) : [value]
       if !read(values, as: qualifier, into: &filters) {
-        unknown.append(SearchQuery.UnknownTerm(word: token, reason: .value))
+        unknown.append(UnknownSearchTerm(word: token, reason: .value))
       }
     }
     return SearchQuery.Parsed(
@@ -291,7 +291,8 @@ public struct IndexSearch: Sendable {
     let groups: Set<SearchText>
     let author: AuthorQuery?
     /// The RFCs `in:` a document names, or nil when it names none. A collection is
-    /// the reader's, and narrowed by in RFCReaderKit.
+    /// the reader's, so once `in:` names one, RFCReaderKit narrows by the whole union
+    /// and this by none of it.
     let scope: Set<Int>?
     /// The earliest day a document published within `publishedWithinDays` can end on.
     let publishedSince: PublicationDate?
@@ -304,8 +305,9 @@ public struct IndexSearch: Sendable {
         guard case .document(let id) = scope else { return nil }
         return id
       }
+      let namesCollection = documents.count < filters.scopes.count
       scope =
-        documents.isEmpty
+        documents.isEmpty || namesCollection
         ? nil
         : Set(
           documents.flatMap { id in
@@ -330,10 +332,10 @@ public struct IndexSearch: Sendable {
       if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
       if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
       if let scope, !scope.contains(rfc.number) { return false }
-      if let after = filters.publishedAfter, !Self.month(of: rfc.date, isOnOrAfter: after) {
+      if let after = filters.publishedAfter, !Self.date(rfc.date, isOnOrAfter: after) {
         return false
       }
-      if let before = filters.publishedBefore, Self.month(of: rfc.date, isOnOrAfter: before) {
+      if let before = filters.publishedBefore, Self.date(rfc.date, isOnOrAfter: before) {
         return false
       }
       if let publishedSince, Self.lastDay(of: rfc.date) < publishedSince { return false }
@@ -346,7 +348,7 @@ public struct IndexSearch: Sendable {
     }
 
     /// Whether `date` falls in the year or month `bound` names, or later.
-    private static func month(of date: PublicationDate, isOnOrAfter bound: PublicationDate) -> Bool {
+    private static func date(_ date: PublicationDate, isOnOrAfter bound: PublicationDate) -> Bool {
       guard let month = bound.month else { return date.year >= bound.year }
       return (date.year, date.month ?? 1) >= (bound.year, month)
     }

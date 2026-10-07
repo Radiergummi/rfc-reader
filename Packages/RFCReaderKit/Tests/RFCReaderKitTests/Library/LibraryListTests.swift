@@ -144,6 +144,79 @@ struct LibraryListTests {
     #expect(ids(list) == [Self.bcp14])
   }
 
+  // MARK: - The reader's data, collections and sort in a query (#355)
+
+  private func ids(_ list: LibraryList, in index: RFCIndex) -> [DocumentID] {
+    list.rows(in: index, search: IndexSearch(index: index)).map(\.id)
+  }
+
+  /// `is:bookmarked` lists what Bookmarks does, a series row included, whatever the
+  /// filter it is typed in.
+  @Test func `is bookmarked lists the bookmarks`() {
+    let list = LibraryList(
+      filter: .all, query: "is:bookmarked", bookmarked: [.rfc(2026), Self.bcp14, .rfc(9110)])
+
+    #expect(ids(list) == [.rfc(9110), Self.bcp14, .rfc(2026)])
+  }
+
+  @Test func `is bookmarked narrows with the rest of the query`() {
+    let list = LibraryList(
+      filter: .all, query: "is:bookmarked uppercase", bookmarked: [Self.bcp14, .rfc(9110)])
+
+    #expect(ids(list) == [Self.bcp14])
+  }
+
+  @Test func `is read sorted by last read is Recently Read`() {
+    let list = LibraryList(
+      filter: .all, query: "is:read sort:last-read",
+      recentlyRead: [.rfc(2026), Self.bcp14, .rfc(9110)])
+
+    #expect(ids(list) == [.rfc(2026), Self.bcp14, .rfc(9110)])
+  }
+
+  @Test func `is offline lists the offline copies`() {
+    let list = LibraryList(filter: .all, query: "is:offline", downloaded: [2119, 9110])
+
+    #expect(ids(list) == [.rfc(9110), .rfc(2119)])
+  }
+
+  /// A collection by its name, whatever its case, and a document beside it: `in:` is
+  /// a union.
+  @Test func `in a collection lists its members`() {
+    let named = LibraryList(
+      filter: .all, query: #"in:"key words""#, collections: ["key words": [8174, 2119]])
+    let withDocument = LibraryList(
+      filter: .all, query: #"in:"Key Words" in:9110"#, collections: ["key words": [8174]])
+
+    #expect(ids(named, in: seriesIndex) == [.rfc(8174), .rfc(2119)])
+    #expect(ids(withDocument, in: seriesIndex) == [.rfc(9110), .rfc(8174)])
+  }
+
+  @Test func `sort orders a list by date`() {
+    let oldest = LibraryList(filter: .all, query: "sort:oldest")
+    let newest = LibraryList(filter: .all, query: "sort:newest s")
+
+    #expect(ids(oldest, in: seriesIndex) == [.rfc(2026), .rfc(2119), .rfc(8174), .rfc(9110)])
+    #expect(ids(newest, in: seriesIndex) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
+  }
+
+  /// A query naming something unknown lists nothing and says why, rather than more
+  /// than it means.
+  @Test func `a query naming something unknown lists nothing and says why`() {
+    let collection = LibraryList(filter: .all, query: #"in:"Gone" status:bcp"#)
+    let group = LibraryList(filter: .all, query: "wg:gone")
+    let qualifier = LibraryList(filter: .all, query: "released:2024 http")
+
+    #expect(ids(collection, in: seriesIndex).isEmpty)
+    #expect(
+      collection.unknownTerms(in: seriesIndex)
+        == [UnknownSearchTerm(word: #"in:"Gone""#, reason: .collection)])
+    #expect(ids(group, in: seriesIndex).isEmpty)
+    #expect(group.unknownTerms(in: seriesIndex).map(\.reason) == [.workingGroup])
+    #expect(ids(qualifier, in: seriesIndex).isEmpty)
+    #expect(qualifier.unknownTerms(in: seriesIndex).map(\.reason) == [.qualifier])
+  }
+
   @Test func `a field of only spaces and newlines is unsearched`() {
     #expect(" \t\n".isUnsearchedQuery)
     #expect("".isUnsearchedQuery)

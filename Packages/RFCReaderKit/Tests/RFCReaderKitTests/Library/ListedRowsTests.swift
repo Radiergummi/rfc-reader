@@ -95,6 +95,10 @@ struct LibraryListInputsTests {
       reads.append("members")
       return [4]
     }
+    func collection(named name: String) -> UUID? {
+      reads.append("collection \(name)")
+      return name == "Mine" ? UUID() : nil
+    }
   }
 
   private func reading(_ filter: LibraryFilter, from sources: Sources) -> LibraryList {
@@ -118,6 +122,23 @@ struct LibraryListInputsTests {
     let sources = Sources()
     _ = reading(filter, from: sources)
     #expect(sources.reads.isEmpty)
+  }
+
+  /// A query asking for the reader's data or a collection reads it, whatever the
+  /// filter, and only that.
+  @Test(arguments: [
+    ("is:bookmarked", ["bookmarked"]),
+    ("is:read", ["recentlyRead"]),
+    ("sort:last-read", ["recentlyRead"]),
+    ("is:offline", ["downloaded"]),
+    (#"in:"Mine""#, ["collection Mine", "members"]),
+    (#"in:"Gone""#, ["collection Gone"]),
+    ("in:9110 status:bcp", []),
+  ])
+  func `a query reads the input it asks for`(query: String, inputs: [String]) {
+    let sources = Sources()
+    _ = LibraryList.reading(.all, query: query, options: ListOptions(), from: sources)
+    #expect(sources.reads == inputs)
   }
 
   @Test func `what is read is what is listed from`() {

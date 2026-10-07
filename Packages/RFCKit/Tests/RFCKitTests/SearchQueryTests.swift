@@ -125,10 +125,11 @@ struct SearchQueryTests {
   /// as itself, and a status typed after it completes to `status:`.
   @Test func `is completes to the reader's data and to statuses`() throws {
     #expect(try completions("is") == ["is:"])
-    #expect(try completions("is:") == [
-      "is:bookmarked", "is:read", "is:offline", "status:std", "status:internet-standard",
-      "status:bcp", "status:info", "status:exp", "status:historic", "status:current",
-    ])
+    #expect(
+      try completions("is:") == [
+        "is:bookmarked", "is:read", "is:offline", "status:std", "status:internet-standard",
+        "status:bcp", "status:info", "status:exp", "status:historic", "status:current",
+      ])
     #expect(try completions("is:b") == ["is:bookmarked", "status:bcp"])
   }
 

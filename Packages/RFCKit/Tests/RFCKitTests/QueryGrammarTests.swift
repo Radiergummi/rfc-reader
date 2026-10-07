@@ -146,7 +146,7 @@ struct QueryGrammarTests {
   /// A qualifier this version doesn't know, or a value outside a closed vocabulary,
   /// is never searched as text: that would silently change what a saved query means.
   @Test(arguments: [
-    ("published:>90d", SearchQuery.UnknownTerm.Reason.value),
+    ("published:>90d", UnknownSearchTerm.Reason.value),
     ("status:nonsense", .value),
     ("stream:nowhere", .value),
     ("has:pdf", .value),
@@ -156,10 +156,12 @@ struct QueryGrammarTests {
     ("year:soon", .value),
     ("released:2024", .qualifier),
   ])
-  func `an unknown term is reported and not searched`(word: String, reason: SearchQuery.UnknownTerm.Reason) {
+  func `an unknown term is reported and not searched`(
+    word: String, reason: UnknownSearchTerm.Reason
+  ) {
     let parsed = IndexSearch.parseQuery("cache \(word)")
     #expect(parsed.text == "cache")
-    #expect(parsed.unknown == [SearchQuery.UnknownTerm(word: word, reason: reason)])
+    #expect(parsed.unknown == [UnknownSearchTerm(word: word, reason: reason)])
   }
 
   /// A query that names something unknown finds nothing, rather than more than it says.
@@ -181,7 +183,7 @@ struct QueryGrammarTests {
     let parsed = IndexSearch.parseQuery("wg:quic wg:gone")
     #expect(
       SearchQuery.unknownTerms(of: parsed, in: Self.index)
-        == [SearchQuery.UnknownTerm(word: "wg:gone", reason: .workingGroup)])
+        == [UnknownSearchTerm(word: "wg:gone", reason: .workingGroup)])
   }
 
   // MARK: - Fixture
@@ -196,14 +198,17 @@ struct QueryGrammarTests {
       rfc(9420, year: 2023, month: 7, group: "HTTPBIS", status: .internetStandard),
       rfc(9600, year: 2024, month: 3, group: "HTTPBIS", status: .informational),
     ],
-    series: [SeriesEntry(id: DocumentID(series: .bcp, number: 14), members: [.rfc(8446), .rfc(9400)])]
+    series: [
+      SeriesEntry(id: DocumentID(series: .bcp, number: 14), members: [.rfc(8446), .rfc(9400)])
+    ]
   )
 
   private static func rfc(
     _ number: Int, year: Int, month: Int, group: String, status: PublicationStatus
   ) -> RFCMetadata {
     RFCMetadata(
-      id: .rfc(number), title: "Document \(number)", date: PublicationDate(year: year, month: month),
+      id: .rfc(number), title: "Document \(number)",
+      date: PublicationDate(year: year, month: month),
       currentStatus: status, workingGroup: group)
   }
 }

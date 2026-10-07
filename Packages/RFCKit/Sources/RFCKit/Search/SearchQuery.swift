@@ -186,48 +186,23 @@ public enum SearchQuery {
     public var text: String
     public var filters: SearchFilters
     /// The words naming a qualifier or a value this version doesn't know, as written.
-    public var unknown: [UnknownTerm]
+    public var unknown: [UnknownSearchTerm]
 
-    public init(text: String, filters: SearchFilters, unknown: [UnknownTerm] = []) {
+    public init(text: String, filters: SearchFilters, unknown: [UnknownSearchTerm] = []) {
       self.text = text
       self.filters = filters
       self.unknown = unknown
     }
   }
 
-  /// A word of a query that names something this version, or this index, or this
-  /// library doesn't know. It filters nothing and is searched for as nothing: the
-  /// query finds nothing and says why, and keeps the word, so a query from a newer
-  /// version works once this one learns it.
-  public struct UnknownTerm: Sendable, Hashable {
-    public enum Reason: Sendable, Hashable {
-      /// A qualifier this version doesn't know: `released:2024`.
-      case qualifier
-      /// A value the qualifier doesn't take: `status:nonsense`, `after:June`.
-      case value
-      /// A working group the index doesn't name.
-      case workingGroup
-      /// A collection `in:` names that the library doesn't hold.
-      case collection
-    }
-
-    /// The word as written in the query.
-    public var word: String
-    public var reason: Reason
-
-    public init(word: String, reason: Reason) {
-      self.word = word
-      self.reason = reason
-    }
-  }
-
   /// The terms of `query` this version can't read, and then each working group it
   /// names that `index` doesn't: a group the index dropped since the query was saved.
-  public static func unknownTerms(of query: Parsed, in index: RFCIndex) -> [UnknownTerm] {
+  public static func unknownTerms(of query: Parsed, in index: RFCIndex) -> [UnknownSearchTerm] {
     let known = knownWorkingGroups(in: index)
     return query.unknown
       + query.filters.workingGroups.sorted().filter { !known.contains($0) }.map { group in
-        UnknownTerm(word: "\(Qualifier.workingGroup.name):\(written(group))", reason: .workingGroup)
+        UnknownSearchTerm(
+          word: "\(Qualifier.workingGroup.name):\(written(group))", reason: .workingGroup)
       }
   }
 
@@ -242,7 +217,7 @@ public enum SearchQuery {
   /// in a fixed order, then the unknown terms as they were written, then the free
   /// text. `parseQuery` reads it back to the same filters, unknown terms and text.
   public static func format(
-    text: String, filters: SearchFilters, unknown: [UnknownTerm] = []
+    text: String, filters: SearchFilters, unknown: [UnknownSearchTerm] = []
   ) -> String {
     var words = terms(of: filters).map(\.word) + unknown.map(\.word)
     let text = text.trimmingCharacters(in: .whitespaces)
@@ -454,7 +429,7 @@ public enum SearchQuery {
   /// A quote opens a run only at the start of a word or right after `key:`. Anywhere
   /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
   /// mark, and `status:bcp` is still a filter.
-  static func words(in query: String) -> [String] {
+  public static func words(in query: String) -> [String] {
     var words: [String] = []
     var word = ""
     var quoted = false
@@ -635,5 +610,31 @@ extension SearchFilters {
     } else {
       statuses.formUnion(status.statuses)
     }
+  }
+}
+
+/// A word of a query that names something this version, or this index, or this
+/// library doesn't know. It filters nothing and is searched for as nothing: the
+/// query finds nothing and says why, and keeps the word, so a query from a newer
+/// version works once this one learns it.
+public struct UnknownSearchTerm: Sendable, Hashable {
+  public enum Reason: Sendable, Hashable {
+    /// A qualifier this version doesn't know: `released:2024`.
+    case qualifier
+    /// A value the qualifier doesn't take: `status:nonsense`, `after:June`.
+    case value
+    /// A working group the index doesn't name.
+    case workingGroup
+    /// A collection `in:` names that the library doesn't hold.
+    case collection
+  }
+
+  /// The word as written in the query.
+  public var word: String
+  public var reason: Reason
+
+  public init(word: String, reason: Reason) {
+    self.word = word
+    self.reason = reason
   }
 }
