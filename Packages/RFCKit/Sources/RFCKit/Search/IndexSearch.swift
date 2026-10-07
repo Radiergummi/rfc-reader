@@ -2,26 +2,60 @@ import Foundation
 
 /// Filters that can be combined with a free-text query.
 public struct SearchFilters: Sendable, Hashable {
+  /// The reader's own data a query can ask for (`is:`), which the index does not hold:
+  /// RFCReaderKit narrows by it, and `IndexSearch` leaves it alone.
+  public enum ReaderData: String, Sendable, Hashable, CaseIterable {
+    case bookmarked, read, offline
+  }
+
+  /// What a query searches in (`in:`): a document, or a collection of the reader's.
+  public enum Scope: Sendable, Hashable {
+    /// An RFC is itself, and a series is its member RFCs.
+    case document(DocumentID)
+    /// A collection by its name, as written: RFCReaderKit finds it.
+    case collection(String)
+  }
+
+  /// The order a query asks for (`sort:`).
+  public enum Sort: String, Sendable, Hashable, CaseIterable {
+    case newest, oldest
+    case lastRead = "last-read"
+  }
+
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<PublicationStream> = []
-  /// Lowercased when set, and nil when set empty, as the prepared fields it is
-  /// matched against are lowercased and an empty value is no filter.
-  public var workingGroup: String? {
-    didSet { workingGroup = Self.normalized(workingGroup) }
+  /// Lowercased, and without empty names, as the prepared fields they are matched
+  /// against are lowercased and an empty value is no filter.
+  public var workingGroups: Set<String> = [] {
+    didSet {
+      let normalized = Set(workingGroups.filter { !$0.isEmpty }.map { $0.lowercased() })
+      if normalized != workingGroups { workingGroups = normalized }
+    }
   }
-  /// Lowercased when set, and nil when set empty, as `workingGroup` is.
+  /// Lowercased when set, and nil when set empty, as `workingGroups` are.
   public var author: String? {
     didSet { author = Self.normalized(author) }
   }
   public var yearRange: ClosedRange<Int>?
+  /// Published in this year or month, or later.
+  public var publishedAfter: PublicationDate?
+  /// Published before this year or month begins.
+  public var publishedBefore: PublicationDate?
+  /// Published within this many days of the moment the search is made.
+  public var publishedWithinDays: Int?
   public var excludeObsolete = false
   public var requiresXML = false
+  public var readerData: Set<ReaderData> = []
+  public var scopes: Set<Scope> = []
+  public var sort: Sort?
 
   public init() {}
 
   public var isEmpty: Bool {
-    statuses.isEmpty && streams.isEmpty && workingGroup == nil && author == nil
-      && yearRange == nil && !excludeObsolete && !requiresXML
+    statuses.isEmpty && streams.isEmpty && workingGroups.isEmpty && author == nil
+      && yearRange == nil && publishedAfter == nil && publishedBefore == nil
+      && publishedWithinDays == nil && !excludeObsolete && !requiresXML && readerData.isEmpty
+      && scopes.isEmpty && sort == nil
   }
 
   private static func normalized(_ value: String?) -> String? {
@@ -82,10 +116,13 @@ public struct IndexSearch: Sendable {
   ///
   /// A value with spaces is quoted, `author:"Roy Fielding"`, and loses its quotes. A
   /// quoted phrase of free text keeps them, so `search(text:filters:)` reads it as one
-  /// term (#177).
+  /// term (#177). A qualifier this version doesn't know, or a value it can't read, is
+  /// an unknown term, never free text: a saved query that searched for it as text
+  /// would silently mean something else (#355).
   public static func parseQuery(_ query: String) -> SearchQuery.Parsed {
     var filters = SearchFilters()
     var words: [String] = []
+    var unknown: [SearchQuery.UnknownTerm] = []
     for token in SearchQuery.words(in: query) {
       guard let written = SearchQuery.qualifier(in: token) else {
         words.append(token)
@@ -98,52 +135,91 @@ public struct IndexSearch: Sendable {
         continue
       }
       guard let qualifier = SearchQuery.Qualifier(spelling: written.key) else {
-        words.append(token)
+        unknown.append(SearchQuery.UnknownTerm(word: token, reason: .qualifier))
         continue
       }
+      // A comma separates the values of a union, unless the value is quoted.
+      let isQuoted = written.value.first.map(SearchQuery.quotes.contains) ?? false
+      let values =
+        qualifier.isUnion && !isQuoted ? value.split(separator: ",").map(String.init) : [value]
+      if !read(values, as: qualifier, into: &filters) {
+        unknown.append(SearchQuery.UnknownTerm(word: token, reason: .value))
+      }
+    }
+    return SearchQuery.Parsed(
+      text: words.joined(separator: " "), filters: filters, unknown: unknown)
+  }
+
+  /// Sets the filter `values` of `qualifier` name, or returns false, leaving `filters`
+  /// as they were, when one of them is not a value it takes.
+  private static func read(
+    _ values: [String], as qualifier: SearchQuery.Qualifier, into filters: inout SearchFilters
+  ) -> Bool {
+    var read = filters
+    for value in values {
+      let lowered = value.lowercased()
       switch qualifier {
       case .workingGroup:
-        filters.workingGroup = value
+        read.workingGroups.insert(lowered)
       case .author:
-        filters.author = value
+        read.author = value
       case .stream:
-        if let stream = SearchQuery.stream(spelled: value) {
-          filters.streams.insert(stream)
-        }
+        guard let stream = SearchQuery.stream(spelled: value) else { return false }
+        read.streams.insert(stream)
       case .status:
-        if let status = SearchQuery.StatusValue(spelling: value) {
-          if status.excludesObsolete {
-            filters.excludeObsolete = true
-          } else {
-            filters.statuses.formUnion(status.statuses)
-          }
+        guard let status = SearchQuery.StatusValue(spelling: value) else { return false }
+        read.insert(status)
+      case .readerData:
+        if let data = SearchFilters.ReaderData(rawValue: lowered) {
+          read.readerData.insert(data)
+        } else if let status = SearchQuery.StatusValue(spelling: value) {
+          read.insert(status)
         } else {
-          words.append(token)
+          return false
         }
       case .year:
         let bounds = value.split(separator: "-").compactMap { Int($0) }
         if bounds.count == 2 {
-          filters.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
+          read.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
         } else if bounds.count == 1 {
-          filters.yearRange = bounds[0]...bounds[0]
-        }
-      case .has:
-        if value.lowercased() == SearchQuery.xmlValue {
-          filters.requiresXML = true
+          read.yearRange = bounds[0]...bounds[0]
         } else {
-          words.append(token)
+          return false
         }
+      case .after:
+        guard let date = SearchQuery.month(spelled: value) else { return false }
+        read.publishedAfter = date
+      case .before:
+        guard let date = SearchQuery.month(spelled: value) else { return false }
+        read.publishedBefore = date
+      case .published:
+        guard let days = SearchQuery.days(spelled: value) else { return false }
+        read.publishedWithinDays = days
+      case .scope:
+        read.scopes.insert(
+          DocumentID(parsing: value).map(SearchFilters.Scope.document) ?? .collection(value))
+      case .has:
+        guard lowered == SearchQuery.xmlValue else { return false }
+        read.requiresXML = true
+      case .sort:
+        guard let sort = SearchFilters.Sort(rawValue: lowered) else { return false }
+        read.sort = sort
       }
     }
-    return SearchQuery.Parsed(text: words.joined(separator: " "), filters: filters)
+    filters = read
+    return true
   }
 
-  public func search(_ query: String, limit: Int = 100) -> [SearchHit] {
+  public func search(_ query: String, limit: Int = 100, now: Date = Date()) -> [SearchHit] {
     let parsed = Self.parseQuery(query)
-    return search(text: parsed.text, filters: parsed.filters, limit: limit)
+    guard parsed.unknown.isEmpty else { return [] }
+    return search(text: parsed.text, filters: parsed.filters, limit: limit, now: now)
   }
 
-  public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
+  /// - Parameter now: The moment a relative date (`published:<90d`) counts back from.
+  public func search(
+    text: String, filters: SearchFilters, limit: Int = 100, now: Date = Date()
+  ) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
     // A quoted phrase is one term, so it has to match as it is written.
     let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
@@ -158,7 +234,7 @@ public struct IndexSearch: Sendable {
     let needles = terms.map(SearchText.init)
     // The query as the title bonus compares it, without the quotes of its phrases.
     let lowered = SearchText(terms.joined(separator: " "))
-    let filter = PreparedFilters(filters)
+    let filter = PreparedFilters(filters, index: index, now: now)
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]
@@ -212,25 +288,73 @@ public struct IndexSearch: Sendable {
   /// over the full index, twice a free-text query's.
   private struct PreparedFilters {
     let filters: SearchFilters
-    let group: SearchText?
+    let groups: Set<SearchText>
     let author: AuthorQuery?
+    /// The RFCs `in:` a document names, or nil when it names none. A collection is
+    /// the reader's, and narrowed by in RFCReaderKit.
+    let scope: Set<Int>?
+    /// The earliest day a document published within `publishedWithinDays` can end on.
+    let publishedSince: PublicationDate?
 
-    init(_ filters: SearchFilters) {
+    init(_ filters: SearchFilters, index: RFCIndex, now: Date) {
       self.filters = filters
-      group = filters.workingGroup.map(SearchText.init)
+      groups = Set(filters.workingGroups.map(SearchText.init))
       author = filters.author.map(AuthorQuery.init)
+      let documents = filters.scopes.compactMap { scope -> DocumentID? in
+        guard case .document(let id) = scope else { return nil }
+        return id
+      }
+      scope =
+        documents.isEmpty
+        ? nil
+        : Set(
+          documents.flatMap { id in
+            id.series == .rfc ? [id.number] : (index.series(id)?.members.map(\.number) ?? [])
+          })
+      publishedSince = filters.publishedWithinDays.flatMap { days in
+        Self.calendar.date(byAdding: .day, value: -days, to: now).map { start in
+          let day = Self.calendar.dateComponents([.year, .month, .day], from: start)
+          return PublicationDate(year: day.year ?? 0, month: day.month, day: day.day)
+        }
+      }
     }
+
+    private static let calendar: Calendar = {
+      var calendar = Calendar(identifier: .gregorian)
+      calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
+      return calendar
+    }()
 
     func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
       if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
       if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
       if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
+      if let scope, !scope.contains(rfc.number) { return false }
+      if let after = filters.publishedAfter, !Self.month(of: rfc.date, isOnOrAfter: after) {
+        return false
+      }
+      if let before = filters.publishedBefore, Self.month(of: rfc.date, isOnOrAfter: before) {
+        return false
+      }
+      if let publishedSince, Self.lastDay(of: rfc.date) < publishedSince { return false }
       if filters.excludeObsolete, rfc.isObsolete { return false }
       if filters.requiresXML, !rfc.hasXMLSource { return false }
       // The text filters come last, so the cheap checks above spare them their scan.
-      if let group, entry.group != group { return false }
+      if !groups.isEmpty, !groups.contains(entry.group) { return false }
       if let author, !entry.authorNames.contains(where: { $0.matches(author) }) { return false }
       return true
+    }
+
+    /// Whether `date` falls in the year or month `bound` names, or later.
+    private static func month(of date: PublicationDate, isOnOrAfter bound: PublicationDate) -> Bool {
+      guard let month = bound.month else { return date.year >= bound.year }
+      return (date.year, date.month ?? 1) >= (bound.year, month)
+    }
+
+    /// The last day `date` can be: a date without a day is its month's last, and one
+    /// without a month its year's.
+    private static func lastDay(of date: PublicationDate) -> PublicationDate {
+      PublicationDate(year: date.year, month: date.month ?? 12, day: date.day ?? 31)
     }
   }
 
