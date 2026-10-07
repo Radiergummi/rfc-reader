@@ -34,6 +34,20 @@ struct ListedRowsTests {
     #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
   }
 
+  /// The iPhone sidebar's results for a query asking for the reader's data are
+  /// narrowed by it too, not every document the index holds (#355).
+  @Test func `the library's results narrow by the reader's data`() {
+    let list = LibraryList(filter: .recent, query: "is:bookmarked", bookmarked: [.rfc(3), .rfc(1)])
+    #expect(listed(list).librarySearch.map(\.id.number) == [3, 1])
+  }
+
+  /// The index answers nothing of `is:bookmarked`, so it is not searched for it.
+  @Test func `a query only of the reader's data searches nothing`() {
+    let list = LibraryList(filter: .all, query: "is:bookmarked", bookmarked: [.rfc(3)])
+    #expect(listed(list).hits.isEmpty)
+    #expect(listed(list).rows.map(\.id.number) == [3])
+  }
+
   @Test func `an unsearched list has no library results`() {
     #expect(listed(LibraryList(filter: .all, query: "")).librarySearch.isEmpty)
   }

@@ -198,6 +198,8 @@ public enum SearchQuery {
   /// The terms of `query` this version can't read, and then each working group it
   /// names that `index` doesn't: a group the index dropped since the query was saved.
   public static func unknownTerms(of query: Parsed, in index: RFCIndex) -> [UnknownSearchTerm] {
+    // Every list asks, so the index is read only for a query that names a group.
+    guard !query.filters.workingGroups.isEmpty else { return query.unknown }
     let known = knownWorkingGroups(in: index)
     return query.unknown
       + query.filters.workingGroups.sorted().filter { !known.contains($0) }.map { group in
@@ -281,7 +283,8 @@ public enum SearchQuery {
       terms.append(term(.before, spelling(of: before), label: "Before: \(before.formatted)"))
     }
     if let days = filters.publishedWithinDays {
-      terms.append(term(.published, "<\(days)d", label: "Published: Last \(days) Days"))
+      let span = days == 1 ? "Day" : "\(days) Days"
+      terms.append(term(.published, "<\(days)d", label: "Published: Last \(span)"))
     }
     if filters.requiresXML { terms.append(term(.has, xmlValue, label: "Has XML")) }
     terms += SearchFilters.ReaderData.allCases.filter(filters.readerData.contains).map {
@@ -339,13 +342,17 @@ public enum SearchQuery {
   /// naming this one go.
   public static func removing(_ term: Term, from query: String) -> String {
     let removed = qualifier(in: term.word).flatMap { Qualifier(spelling: $0.key) }
-    let kept = words(in: query).filter { word in
+    let kept = words(in: query).flatMap { word -> [String] in
       let parsed = IndexSearch.parseQuery(word)
-      guard parsed.text.isEmpty, let removed else { return true }
+      guard parsed.text.isEmpty, let removed else { return [word] }
       // What the word sets, written as terms are: `is:bcp` sets `status:bcp`.
       let set = terms(of: parsed.filters)
-      if removed.isUnion { return !set.contains(term) }
-      return !set.contains { qualifier(in: $0.word)?.key == removed.name[...] }
+      guard removed.isUnion else {
+        return set.contains { qualifier(in: $0.word)?.key == removed.name[...] } ? [] : [word]
+      }
+      // A word naming several values of a union loses only this one: `wg:quic,tls`
+      // without `wg:quic` is `wg:tls`.
+      return set.contains(term) ? set.filter { $0 != term }.map(\.word) : [word]
     }
     // The space the reader typed last stays, so the next keystroke begins a word.
     let trailingSpace = wordBeingTyped(in: query) == nil && !kept.isEmpty ? " " : ""
@@ -491,8 +498,18 @@ public enum SearchQuery {
 
   /// A qualifier's value as written back: in quotes when it has a space, or it would
   /// read back as a shorter value and a word of free text.
+  /// A comma would split it into two values of a union, so a value with one is
+  /// quoted too.
   private static func written(_ value: String) -> String {
-    value.contains(" ") ? "\"\(value)\"" : value
+    value.contains(" ") || value.contains(",") ? "\"\(value)\"" : value
+  }
+
+  /// Whether a word with a colon this version doesn't know as a qualifier reads as
+  /// one from another version: a word of letters, then a value with no other colon
+  /// and no slash after it. `urn:ietf:params`, `http://…`, `::1` and `10:30` are text.
+  static func looksLikeQualifier(_ word: (key: Substring, value: Substring)) -> Bool {
+    !word.key.isEmpty && word.key.allSatisfy { $0.isLetter || $0 == "-" }
+      && !word.value.contains(":") && !word.value.hasPrefix("/")
   }
 
   // MARK: - Completion
@@ -602,6 +619,16 @@ public enum SearchQuery {
 }
 
 extension SearchFilters {
+  /// Whether these ask for what the index doesn't hold: the reader's data, or a
+  /// collection to search in.
+  public var asksReader: Bool {
+    !readerData.isEmpty
+      || scopes.contains { scope in
+        if case .collection = scope { return true }
+        return false
+      }
+  }
+
   /// Adds what a `status:` value stands for: its statuses, or for `current` the
   /// obsolete filter.
   mutating func insert(_ status: SearchQuery.StatusValue) {

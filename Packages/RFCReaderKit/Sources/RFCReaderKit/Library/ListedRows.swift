@@ -16,6 +16,8 @@ public struct ListedRows: Sendable {
   /// Which index the rows were made over, as the library counts the indexes it
   /// installs: comparing two indexes would compare 9,842 entries.
   public let indexVersion: Int
+  /// The index the rows were made over, for `librarySearch`.
+  private let index: RFCIndex
 
   /// `list` over `index`, the library's `indexVersion`th. `search` is the index's
   /// own; see `LibraryList.rows`. `known` are its hits for `list.query` from an
@@ -26,12 +28,13 @@ public struct ListedRows: Sendable {
   ) {
     self.list = list
     self.indexVersion = indexVersion
+    self.index = index
     guard !list.query.isEmpty, let search else {
       rows = list.rows(in: index, search: search)
       hits = []
       return
     }
-    let hits = known ?? search.search(list.query, limit: .max).map(\.rfc)
+    let hits = known ?? list.hits(from: search)
     self.hits = hits
     rows = list.rows(in: index, search: search, hits: hits)
   }
@@ -51,10 +54,15 @@ public struct ListedRows: Sendable {
   }
 
   /// The whole library's results for the query, as All RFCs lists them: what the
-  /// iPhone sidebar shows while it is searched (#345). Shaped from `hits` when read,
-  /// since only that sidebar reads it.
+  /// iPhone sidebar shows while it is searched (#345). Made from `hits` when read,
+  /// since only that sidebar reads it, and narrowed by the reader's data the query
+  /// asks for, which `list` holds.
   public var librarySearch: [LibraryRow] {
     guard !list.query.isEmpty else { return [] }
-    return ListOptions().apply(to: hits.map(LibraryRow.rfc), filter: .all, query: list.query)
+    let library = LibraryList(
+      filter: .all, query: list.query, bookmarked: list.bookmarked,
+      recentlyRead: list.recentlyRead, downloaded: list.downloaded,
+      collections: list.collections)
+    return library.rows(in: index, search: nil, hits: hits)
   }
 }

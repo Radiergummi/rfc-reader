@@ -192,6 +192,25 @@ struct LibraryListTests {
     #expect(ids(withDocument, in: seriesIndex) == [.rfc(9110), .rfc(8174)])
   }
 
+  /// A series row is in when one of its members is in the collection, as a search
+  /// finds it through any of them.
+  @Test func `in a collection keeps a series row through its members`() {
+    let list = LibraryList(
+      filter: .bookmarks, query: #"in:"key words""#, bookmarked: [Self.bcp14, .rfc(9110)],
+      collections: ["key words": [2119]])
+
+    #expect(ids(list, in: seriesIndex) == [Self.bcp14])
+  }
+
+  /// Several kinds of the reader's data are one list, newest first.
+  @Test func `a union of the reader's data is newest first`() {
+    let list = LibraryList(
+      filter: .all, query: "is:bookmarked,offline", bookmarked: [.rfc(2026)],
+      downloaded: [9110, 2119])
+
+    #expect(ids(list, in: seriesIndex) == [.rfc(9110), .rfc(2119), .rfc(2026)])
+  }
+
   @Test func `sort orders a list by date`() {
     let oldest = LibraryList(filter: .all, query: "sort:oldest")
     let newest = LibraryList(filter: .all, query: "sort:newest s")

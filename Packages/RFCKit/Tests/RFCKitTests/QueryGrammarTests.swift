@@ -103,6 +103,7 @@ struct QueryGrammarTests {
     #expect(
       numbers(search.search("published:<365d", limit: .max, now: now)) == [9600, 9420])
     #expect(IndexSearch.parseQuery("published:<90d").filters.publishedWithinDays == 90)
+    #expect(IndexSearch.parseQuery("published:<90D").filters.publishedWithinDays == 90)
   }
 
   // MARK: - The reader's data, documents and collections
@@ -175,6 +176,52 @@ struct QueryGrammarTests {
     let parsed = IndexSearch.parseQuery(#""urn:ietf:params""#)
     #expect(parsed.unknown.isEmpty)
     #expect(parsed.text == #""urn:ietf:params""#)
+  }
+
+  /// A word that only has a colon in it, rather than reading as a qualifier of some
+  /// other version, is still searched as text.
+  @Test(arguments: ["urn:ietf:params:oauth", "::1", "10:30", "http://example.com"])
+  func `a word with a colon that is no qualifier is text`(word: String) {
+    let parsed = IndexSearch.parseQuery("cache \(word)")
+    #expect(parsed.unknown.isEmpty)
+    #expect(parsed.text == "cache \(word)")
+  }
+
+  /// A union naming no value is as unreadable as one naming a wrong one.
+  @Test func `a union of no values is unknown`() {
+    let parsed = IndexSearch.parseQuery("wg:, cache")
+    #expect(parsed.unknown == [UnknownSearchTerm(word: "wg:,", reason: .value)])
+    #expect(parsed.text == "cache")
+  }
+
+  /// The index holds neither the reader's data nor a collection: a search for them
+  /// alone finds nothing rather than every document. A list holding them narrows
+  /// by them itself.
+  @Test(arguments: ["is:bookmarked", #"in:"Some collection""#, "in:9110 in:Drafts cache"])
+  func `a query asking for the reader's data finds nothing in the index alone`(query: String) {
+    #expect(IndexSearch(index: Self.index).search(query, limit: .max).isEmpty)
+  }
+
+  /// A collection's name with a comma is quoted, or it would read back as two.
+  @Test func `a collection name with a comma round-trips`() {
+    let parsed = IndexSearch.parseQuery(#"in:"drafts,todo""#)
+    #expect(parsed.filters.scopes == [.collection("drafts,todo")])
+    #expect(SearchQuery.format(parsed) == #"in:"drafts,todo""#)
+  }
+
+  /// Removing one value's chip from a word naming several keeps the others.
+  @Test func `removing a term from a union word keeps its other values`() throws {
+    let query = "wg:quic,tls cache is:bookmarked,bcp"
+    let terms = SearchQuery.terms(of: IndexSearch.parseQuery(query).filters)
+    let quic = try #require(terms.first { $0.word == "wg:quic" })
+    let bcp = try #require(terms.first { $0.word == "status:bcp" })
+    #expect(SearchQuery.removing(quic, from: query) == "wg:tls cache is:bookmarked,bcp")
+    #expect(SearchQuery.removing(bcp, from: query) == "wg:quic,tls cache is:bookmarked")
+  }
+
+  @Test func `one day is labeled as one`() {
+    let terms = SearchQuery.terms(of: IndexSearch.parseQuery("published:<1d").filters)
+    #expect(terms.map(\.label) == ["Published: Last Day"])
   }
 
   /// A working group the index no longer names is unknown once the query is read

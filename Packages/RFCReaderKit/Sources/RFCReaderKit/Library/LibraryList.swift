@@ -103,15 +103,38 @@ public struct LibraryList: Hashable, Sendable {
   /// version doesn't know, a working group `index` doesn't name, or a collection the
   /// library doesn't hold. While there is one, the list is empty, and these say why.
   public func unknownTerms(in index: RFCIndex) -> [UnknownSearchTerm] {
-    let parsed = IndexSearch.parseQuery(query)
+    unknownTerms(of: IndexSearch.parseQuery(query), in: index)
+  }
+
+  private func unknownTerms(
+    of parsed: SearchQuery.Parsed, in index: RFCIndex
+  ) -> [UnknownSearchTerm] {
+    let known = SearchQuery.unknownTerms(of: parsed, in: index)
+    guard parsed.filters.collectionNames.contains(where: { collections[$0.lowercased()] == nil })
+    else { return known }
     // Each word naming a collection the library doesn't hold, as it was written.
     let missing = SearchQuery.words(in: query).filter { word in
       IndexSearch.parseQuery(word).filters.collectionNames.contains {
         collections[$0.lowercased()] == nil
       }
     }
-    return SearchQuery.unknownTerms(of: parsed, in: index)
-      + missing.map { UnknownSearchTerm(word: $0, reason: .collection) }
+    return known + missing.map { UnknownSearchTerm(word: $0, reason: .collection) }
+  }
+
+  /// The search's hits for the part of the query the index can answer, best first:
+  /// what `rows(in:search:hits:)` narrows the filter's rows by. None when the query
+  /// names something unknown, or asks the index for nothing.
+  public func hits(from search: IndexSearch, now: Date = Date()) -> [RFCMetadata] {
+    hits(for: IndexSearch.parseQuery(query), from: search, now: now)
+  }
+
+  private func hits(
+    for parsed: SearchQuery.Parsed, from search: IndexSearch, now: Date = Date()
+  ) -> [RFCMetadata] {
+    guard parsed.unknown.isEmpty, let indexed = parsed.filters.indexed(text: parsed.text) else {
+      return []
+    }
+    return search.search(text: parsed.text, filters: indexed, limit: .max, now: now).map(\.rfc)
   }
 
   /// The rows, as the options show them. `search` is the index's own; without one,
@@ -121,18 +144,27 @@ public struct LibraryList: Hashable, Sendable {
   public func rows(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [LibraryRow] {
-    let asked = IndexSearch.parseQuery(query).filters
-    guard unknownTerms(in: index).isEmpty else { return [] }
-    let rows = unshaped(in: index, search: search, hits: hits, asked: asked)
-    return options.apply(to: sorted(rows, by: asked.sort), filter: filter, query: query)
+    let parsed = IndexSearch.parseQuery(query)
+    guard unknownTerms(of: parsed, in: index).isEmpty else { return [] }
+    var base = rows(of: filter, in: index)
+    let narrowed = narrowing(base, in: index, by: parsed.filters)
+    base = narrowed.rows
+    // A query of only what was narrowed by, and a sort, searches for nothing more,
+    // and keeps the rows in their own order: Bookmarks newest first, Recently Read
+    // in reading order.
+    if parsed.filters.indexed(text: parsed.text) != nil {
+      let found = hits ?? search.map { self.hits(for: parsed, from: $0) }
+      if let found { base = searched(base, found: found, isNarrowed: narrowed.isNarrowed) }
+    }
+    return options.apply(to: sorted(base, by: parsed.filters.sort), filter: filter, query: query)
   }
 
   /// `rows` in the order a query's `sort:` asks for, or as they are without one.
   private func sorted(_ rows: [LibraryRow], by sort: SearchFilters.Sort?) -> [LibraryRow] {
     switch sort {
     case nil: return rows
-    case .newest: return rows.sorted { ($0.date, $0.id.number) > ($1.date, $1.id.number) }
-    case .oldest: return rows.sorted { ($0.date, $0.id.number) < ($1.date, $1.id.number) }
+    case .newest: return rows.sorted(by: LibraryRow.isNewer)
+    case .oldest: return rows.sorted { LibraryRow.isNewer($1, than: $0) }
     case .lastRead:
       let order = Dictionary(
         recentlyRead.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
@@ -154,13 +186,16 @@ public struct LibraryList: Hashable, Sendable {
     var rows = base
     var isNarrowed = false
     if !asked.readerData.isEmpty {
-      var asking: [LibraryRow] = []
-      if asked.readerData.contains(.bookmarked) { asking += readerRows(of: .bookmarks, in: index) }
-      if asked.readerData.contains(.read) { asking += readerRows(of: .recent, in: index) }
-      if asked.readerData.contains(.offline) { asking += readerRows(of: .downloaded, in: index) }
+      let sources: [(SearchFilters.ReaderData, LibraryFilter)] = [
+        (.bookmarked, .bookmarks), (.read, .recent), (.offline, .downloaded),
+      ]
+      let asking = sources.filter { asked.readerData.contains($0.0) }
       var listed: Set<DocumentID> = []
-      asking = asking.filter { listed.insert($0.id).inserted }
-      rows = filter == .all ? asking : rows.filter { listed.contains($0.id) }
+      var union = asking.flatMap { self.rows(of: $0.1, in: index) }
+        .filter { listed.insert($0.id).inserted }
+      // One input keeps its own order; several are put newest first, as every list is.
+      if asking.count > 1 { union.sort(by: LibraryRow.isNewer) }
+      rows = filter == .all ? union : rows.filter { listed.contains($0.id) }
       isNarrowed = true
     }
     if !asked.collectionNames.isEmpty {
@@ -170,69 +205,45 @@ public struct LibraryList: Hashable, Sendable {
         asked.collectionNames.flatMap { collections[$0.lowercased()] ?? [] }
           + asked.scopes.flatMap { scope -> [Int] in
             guard case .document(let id) = scope else { return [] }
-            return id.series == .rfc ? [id.number] : (index.series(id)?.members.map(\.number) ?? [])
+            return index.rfcNumbers(of: id)
           })
-      rows = rows.filter { $0.rfc.map { numbers.contains($0.number) } ?? false }
+      // A series row is in when one of its members is, as a search finds it.
+      rows = rows.filter { row in
+        row.rfc.map { numbers.contains($0.number) }
+          ?? row.members.contains { numbers.contains($0.number) }
+      }
       isNarrowed = true
     }
     return (rows, isNarrowed)
   }
 
-  /// The rows `filter` lists from the reader's data, newest first, or in reading order.
-  private func readerRows(of filter: LibraryFilter, in index: RFCIndex) -> [LibraryRow] {
+  /// The rows `filter` lists, newest first as every list is built, or in its own
+  /// order: Recently Read in reading order, a series or a collection in its own.
+  private func rows(of filter: LibraryFilter, in index: RFCIndex) -> [LibraryRow] {
     switch filter {
+    case .all: index.rfcs.reversed().map(LibraryRow.rfc)
     case .recent: recentlyRead.compactMap { LibraryRow($0, in: index) }
+    // By date rather than number, the one order an RFC and a series share.
     case .bookmarks:
       bookmarked.compactMap { LibraryRow($0, in: index) }.sorted(by: LibraryRow.isNewer)
     case .downloaded: downloaded.sorted(by: >).compactMap { index[$0] }.map(LibraryRow.rfc)
-    default: []
-    }
-  }
-
-  /// Newest first, as every list is built, or in order of relevance for a search.
-  private func unshaped(
-    in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]?, asked: SearchFilters
-  ) -> [LibraryRow] {
-    var base: [LibraryRow]
-    switch filter {
-    case .all: base = index.rfcs.reversed().map(LibraryRow.rfc)
-    // By date rather than number, the one order an RFC and a series share.
-    case .recent, .bookmarks, .downloaded: base = readerRows(of: filter, in: index)
     // Through the predicate the sidebar's counts use, so the two cannot disagree.
     case .standards, .bestCurrentPractice, .stream, .workingGroup:
-      base = index.rfcs.reversed().filter { filter.includes($0) == true }.map(LibraryRow.rfc)
-    case .series(let id): base = (LibraryRow(id, in: index)?.members ?? []).map(LibraryRow.rfc)
-    case .collection: base = members.compactMap { index[$0] }.map(LibraryRow.rfc)
+      index.rfcs.reversed().filter { filter.includes($0) == true }.map(LibraryRow.rfc)
+    case .series(let id): (LibraryRow(id, in: index)?.members ?? []).map(LibraryRow.rfc)
+    case .collection: members.compactMap { index[$0] }.map(LibraryRow.rfc)
     }
-
-    let narrowed = narrowing(base, in: index, by: asked)
-    base = narrowed.rows
-    // A query of only what was narrowed by, and a sort, searches for nothing more,
-    // and keeps the rows in their own order: Bookmarks newest first, Recently Read
-    // in reading order.
-    guard !asked.searchesIndex(text: IndexSearch.parseQuery(query).text) else {
-      return searched(base, in: index, search: search, hits: hits, isNarrowed: narrowed.isNarrowed)
-    }
-    return base
   }
 
-  /// `base` narrowed by the search for the query, in order of relevance.
+  /// `base` narrowed by the search's hits, `found`, in order of relevance.
+  ///
+  /// Every hit, not the top few hundred: the search scores and sorts all of them
+  /// anyway, the list windows its rows itself (`ListWindow`), and the count over the
+  /// list says how many there are. A cap also cut before the filter below, so a
+  /// search inside a collection lost whatever ranked outside the cap overall.
   private func searched(
-    _ base: [LibraryRow], in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]?,
-    isNarrowed: Bool
+    _ base: [LibraryRow], found: [RFCMetadata], isNarrowed: Bool
   ) -> [LibraryRow] {
-    // Every hit, not the top few hundred: the search scores and sorts all of them
-    // anyway, the list windows its rows itself (`ListWindow`), and the count over
-    // the list says how many there are. A cap also cut before the filter below,
-    // so a search inside a collection lost whatever ranked outside the cap overall.
-    let found: [RFCMetadata]
-    if let hits {
-      found = hits
-    } else if let search {
-      found = search.search(query, limit: .max).map(\.rfc)
-    } else {
-      return base
-    }
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter, !isNarrowed { return found.map(LibraryRow.rfc) }
     // In order of relevance, a series row where its best hit is: it is found when
@@ -269,13 +280,17 @@ extension SearchFilters {
     .sorted()
   }
 
-  /// Whether a query of `text` and these filters asks the index's search for more
-  /// than the reader's data, a collection and a sort, which are narrowed by here.
-  func searchesIndex(text: String) -> Bool {
+  /// The filters the index's search answers, beside `text`: these less the reader's
+  /// data, a sort, and `in:` once it names a collection, which a list narrows by
+  /// itself. Nil when they and the text ask the index for nothing.
+  func indexed(text: String) -> SearchFilters? {
     var indexed = self
     indexed.readerData = []
     indexed.sort = nil
     if !collectionNames.isEmpty { indexed.scopes = [] }
-    return !text.trimmingCharacters(in: .whitespaces).isEmpty || !indexed.isEmpty
+    guard !text.trimmingCharacters(in: .whitespaces).isEmpty || !indexed.isEmpty else {
+      return nil
+    }
+    return indexed
   }
 }

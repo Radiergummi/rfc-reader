@@ -135,7 +135,12 @@ public struct IndexSearch: Sendable {
         continue
       }
       guard let qualifier = SearchQuery.Qualifier(spelling: written.key) else {
-        unknown.append(UnknownSearchTerm(word: token, reason: .qualifier))
+        // A word that only has a colon in it, a URN, an address or a time, is text.
+        if SearchQuery.looksLikeQualifier(written) {
+          unknown.append(UnknownSearchTerm(word: token, reason: .qualifier))
+        } else {
+          words.append(token)
+        }
         continue
       }
       // A comma separates the values of a union, unless the value is quoted.
@@ -155,6 +160,8 @@ public struct IndexSearch: Sendable {
   private static func read(
     _ values: [String], as qualifier: SearchQuery.Qualifier, into filters: inout SearchFilters
   ) -> Bool {
+    // `wg:,` names no value; it is no more readable than `wg:nothing`.
+    guard !values.isEmpty else { return false }
     var read = filters
     for value in values {
       let lowered = value.lowercased()
@@ -193,7 +200,7 @@ public struct IndexSearch: Sendable {
         guard let date = SearchQuery.month(spelled: value) else { return false }
         read.publishedBefore = date
       case .published:
-        guard let days = SearchQuery.days(spelled: value) else { return false }
+        guard let days = SearchQuery.days(spelled: lowered) else { return false }
         read.publishedWithinDays = days
       case .scope:
         read.scopes.insert(
@@ -210,9 +217,12 @@ public struct IndexSearch: Sendable {
     return true
   }
 
+  /// The hits for `query`. A query naming something unknown, or asking for the
+  /// reader's data or a collection, which the index doesn't hold, finds nothing:
+  /// a list that holds them narrows by them itself, through `search(text:filters:)`.
   public func search(_ query: String, limit: Int = 100, now: Date = Date()) -> [SearchHit] {
     let parsed = Self.parseQuery(query)
-    guard parsed.unknown.isEmpty else { return [] }
+    guard parsed.unknown.isEmpty, !parsed.filters.asksReader else { return [] }
     return search(text: parsed.text, filters: parsed.filters, limit: limit, now: now)
   }
 
@@ -309,10 +319,7 @@ public struct IndexSearch: Sendable {
       scope =
         documents.isEmpty || namesCollection
         ? nil
-        : Set(
-          documents.flatMap { id in
-            id.series == .rfc ? [id.number] : (index.series(id)?.members.map(\.number) ?? [])
-          })
+        : Set(documents.flatMap(index.rfcNumbers(of:)))
       publishedSince = filters.publishedWithinDays.flatMap { days in
         Self.calendar.date(byAdding: .day, value: -days, to: now).map { start in
           let day = Self.calendar.dateComponents([.year, .month, .day], from: start)
