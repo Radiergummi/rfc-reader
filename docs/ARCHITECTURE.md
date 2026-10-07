@@ -136,6 +136,7 @@ is that way, and what was measured or tried first.
 - [The window layer is AppKit's on macOS](decisions/2026-09-22-the-window-layer-is-appkits-on-macos.md)
 - [Window hijack: probe results](decisions/2026-09-22-window-hijack-probe-results.md)
 - [Full-text search ranks by measurement, and was measured before it was built](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md)
+- [Full-text search is built on the device, and ranked by flat BM25](decisions/2026-10-07-full-text-search-is-built-on-the-device-and-ranked-flat.md)
 - [The parsers do not decide how a reference reads](decisions/2026-09-24-the-parsers-do-not-decide-how-a-reference-reads.md)
 - [A reference previews on hover and force click on macOS, and on long press on iOS](decisions/2026-09-26-a-reference-previews-on-hover-and-force-click-on-macos-and-on-long-press-on-ios.md)
 - [The document cache is bounded by size, and evicts the least recently opened](decisions/2026-09-27-the-document-cache-is-bounded-by-size-and-evicts-the-least-recently-opened.md)
@@ -174,7 +175,7 @@ is that way, and what was measured or tried first.
 
 ## Planned engines
 
-- **Search.** As [the search decision](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md) says, served from SQLite FTS5 (via GRDB), with snippets from `snippet()`. Metadata search moves into the same database.
+- **Search.** As [the search decision](decisions/2026-10-07-full-text-search-is-built-on-the-device-and-ranked-flat.md) says, SQLite FTS5 built on the device, through RFCKit's `CSQLite`, one row per section with snippets from `snippet()` (`FullTextIndex`, #37). The app's indexing of what it stores, the results in the search, and Index All RFCs are still to come; metadata search moves into the same database.
 - **Highlighting.** Built for JSON, XML and HTTP messages on one regex lexer engine in RFCKit (`Lexer`, `Lexers`), [as decided](decisions/2026-10-02-syntax-highlighting-is-one-regex-lexer-engine.md); further languages are rule tables on it. ABNF's rule links come from the strict `ABNF` parser instead (#185), and untyped blocks are not guessed at.
 - **Diff.** Section alignment from `SectionAlignment` (title and prose, ties broken by position; the `successions` table for an obsoletes edge), LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
 - **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.
@@ -204,7 +205,7 @@ is that way, and what was measured or tried first.
 ## Known gaps and the next technical steps
 
 - Legacy text: a definition list set as xml2rfc sets one, `Term:  definition` with the rest hung under it, is read as one (#436), but a term on a line of its own with its definition under it (e.g. the cache directives in RFC 2616 §14.9.1) still renders as a preformatted block; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
-- Search covers the index's metadata only, in memory, scanning every entry per query (the "Search" benchmarks of `make benchmark`). Full-text search over document bodies is [the search decision](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md), not yet built (#37); metadata search moves into its database when it lands.
+- Search covers the index's metadata only, in memory, scanning every entry per query (the "Search" benchmarks of `make benchmark`). Full-text search over document bodies has its index in RFCKit (`FullTextIndex`) but nothing in the app uses it yet (#37); metadata search moves into its database when it lands.
 - SVG artwork (`<artwork type="svg">`) is skipped in favor of the ASCII alternative.
 - No Spotlight indexing or iCloud sync yet. Errata and the Datatracker are pages the Info pane links to, not data the app fetches.
 - The reader lays out its viewport and completes the rest in the background; a deep jump before completion has passed its target still lays out everything above it first (#295). See [Decision: the reader lays out its viewport, and holds the reader's line](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md).
