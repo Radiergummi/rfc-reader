@@ -108,13 +108,16 @@ public enum OfflineReconciler {
   ///     not owed another fetch, since a fetch would join it, and its body is not
   ///     moved while the download may still write it; the next run moves it.
   ///   - own: the documents the reconciler itself is waiting on, a subset of `running`.
+  ///   - failed: the documents whose last fetch failed. One is owed no fetch, and is
+  ///     not listed as waiting either: its row offers Retry instead.
   ///   - policy: `FetchPolicy`'s decision for a discretionary fetch on the path now.
   public static func plan(
     wanted: Set<DocumentID>, kept: Set<DocumentID>, cached: Set<DocumentID>,
-    running: Set<DocumentID> = [], own: Set<DocumentID> = [],
+    running: Set<DocumentID> = [], own: Set<DocumentID> = [], failed: Set<DocumentID> = [],
     policy: FetchPolicy.Decision = .fetch
   ) -> Plan {
     let owed = wanted.subtracting(kept).subtracting(cached).subtracting(running)
+      .subtracting(failed)
     var plan = Plan(
       keep: wanted.intersection(cached).subtracting(running),
       release: kept.subtracting(wanted).subtracting(running))

@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import Synchronization
 import Testing
 
 @testable import RFCReaderKit
@@ -194,5 +195,146 @@ struct OfflineKeeperTests {
 
     #expect(!sandbox.exists(id, format: .xml, in: .cache))
     #expect(fetcher.documentFetches == 0)
+  }
+
+  // MARK: - The network
+
+  /// A path the policy does not allow starts nothing, and the status says what the
+  /// documents wait for.
+  @MainActor @Test func `a deferred path fetches nothing and says why`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id], policy: .deferred(.waitingForWiFi)).value
+    await keeper.untilSettled(id)
+
+    #expect(fetcher.documentFetches == 0)
+    #expect(keeper.status.state(of: id) == .waiting(.waitingForWiFi))
+  }
+
+  /// A fetch nobody waits for goes through the session that never uses an
+  /// expensive or constrained path; one somebody waits for, through the other.
+  @MainActor @Test func `only a fetch nobody waits for uses the client for cheap networks`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let anyNetwork = GatedFetcher()
+    let cheapNetworks = GatedFetcher()
+    await anyNetwork.gate.open()
+    await cheapNetworks.gate.open()
+    let synced = DocumentID.rfc(8999)
+    let tapped = DocumentID.rfc(9000)
+    let keeper = OfflineKeeper(
+      store: store, client: anyNetwork, clientOnCheapNetworks: cheapNetworks
+    ) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [synced]).value
+    await keeper.untilSettled(synced)
+    try await keeper.fetchNow(tapped)
+
+    #expect(cheapNetworks.documentFetches == 1)
+    #expect(anyNetwork.documentFetches == 1)
+  }
+
+  @MainActor @Test func `a kept document says nothing once its fetch has written it`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await untilWaiting(documents: 1, for: id, in: store)
+    #expect(keeper.status.state(of: id) == .downloading)
+    await fetcher.gate.open()
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.kept == [id])
+    #expect(keeper.status.state(of: id) == nil)
+  }
+
+  /// A failed fetch is not started again by the next run, whatever starts it: its
+  /// row offers Retry, which fetches on any path.
+  @MainActor @Test func `a failed fetch waits for Retry`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+    #expect(keeper.status.state(of: id) == .failed)
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+    #expect(fetcher.fetches == 1)
+
+    try await keeper.fetchNow(id)
+
+    #expect(fetcher.fetches == 2)
+    #expect(keeper.status.state(of: id) == nil)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// A new path is a reason to try a failed fetch again: the failure may have been
+  /// the old one's.
+  @MainActor @Test func `forgetting the failures lets the next run fetch again`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    keeper.forgetFailures()
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    #expect(fetcher.fetches == 2)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Fails its first `failures` fetches as a server error would, then serves RFC
+  /// 8999's XML, at once.
+  private final class FailingFetcher: DocumentFetching {
+    private let state: Mutex<(fetches: Int, failuresLeft: Int)>
+
+    init(failures: Int) {
+      state = Mutex((0, failures))
+    }
+
+    var fetches: Int { state.withLock { $0.fetches } }
+
+    @concurrent
+    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
+      -> RFCEditorClient.FetchedDocument
+    {
+      let fails = state.withLock { state in
+        state.fetches += 1
+        defer { state.failuresLeft = max(0, state.failuresLeft - 1) }
+        return state.failuresLeft > 0
+      }
+      if fails { throw URLError(.badServerResponse) }
+      let data = try Fixtures.data("rfc8999.xml")
+      return RFCEditorClient.FetchedDocument(
+        data: data, format: .xml, document: try RFCXMLParser.parse(data), xmlParseFailure: nil)
+    }
+
+    func fetchDocumentData(_ id: DocumentID, format: FileFormat) async throws -> Data {
+      throw URLError(.badServerResponse)
+    }
   }
 }
