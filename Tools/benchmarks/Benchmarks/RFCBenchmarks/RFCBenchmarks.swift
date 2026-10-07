@@ -18,11 +18,12 @@ import RFCReaderKit
 // which runs before the memory baseline is taken. So a benchmark pays only for
 // its own input, and its peak memory is the work's, not the inputs'.
 //
-// A benchmark whose work goes through Foundation's Objective-C types (attributed
-// strings, regular expressions) drains an autorelease pool after each iteration.
-// Without one, nothing the iterations autorelease is freed until the benchmark
-// ends, and its peak memory grows with the iteration count rather than saying
-// what one run of the work costs (#420).
+// The build and highlight benchmarks drain an autorelease pool after each
+// iteration: the builder's attributed strings and the lexer's regular expressions
+// autorelease enough that, freed only when the benchmark ended, their peak memory
+// grew with the iteration count rather than saying what one run costs (#420). The
+// others measured flat without one. A new benchmark whose peak memory climbs from
+// p0 to p100 wants one too.
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
