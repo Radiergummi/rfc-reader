@@ -33,8 +33,7 @@
     let reader = ReaderState()
 
     /// Print, export and page setup, as sheets on this window.
-    private(set) lazy var output = DocumentOutputController(
-      window: window!, navigation: navigation, reader: reader, library: library)
+    private(set) var output: DocumentOutputController!
 
     /// The window's columns; see `ReaderSplitViewController`.
     private(set) var splitController: ReaderSplitViewController!
@@ -79,6 +78,8 @@
       super.init(window: window)
       window.delegate = self
       makeRestorable(window)
+      output = DocumentOutputController(
+        window: window, navigation: navigation, reader: reader, library: library)
       build(in: window)
     }
 

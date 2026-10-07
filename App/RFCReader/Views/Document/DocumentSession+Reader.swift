@@ -118,13 +118,14 @@ extension DocumentSession {
   private static func present(
     _ loaded: RFCDocument, id: DocumentID, into reader: ReaderState.Writer, library: LibraryModel
   ) {
-    guard reader.isCurrent else { return }
-    reader.groups = ReferenceGroup.groups(in: loaded)
-    reader.info = info(for: id, authors: loaded.header.authors, in: library)
-    reader.documentTitle = loaded.header.title
-    reader.precedingDraft = loaded.header.precedingDraft
-    reader.hasDocument = true
-    reader.publishedOriginal = publishedOriginal(id, text: loaded, in: library)
+    reader { reader in
+      reader.groups = ReferenceGroup.groups(in: loaded)
+      reader.info = info(for: id, authors: loaded.header.authors, in: library)
+      reader.documentTitle = loaded.header.title
+      reader.precedingDraft = loaded.header.precedingDraft
+      reader.hasDocument = true
+      reader.publishedOriginal = publishedOriginal(id, text: loaded, in: library)
+    }
     // Last and apart, so the first build does not wait for it.
     Task(name: "Extract requirements") { [reader] in
       let requirements = await Self.requirements(in: loaded)
