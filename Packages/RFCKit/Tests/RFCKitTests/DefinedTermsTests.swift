@@ -76,10 +76,43 @@ struct DefinedTermsTests {
     ("widget:port", ["widget:port"]),
     ("W[i..j]", ["W[i..j]"]),
     ("(w_S^i, q_S^i)", ["(w_S^i, q_S^i)"]),
+    // A short form only when the other side expands it: a qualifier otherwise.
+    ("Content-Type (header field)", ["Content-Type"]),
+    ("Widget Route BCP 99", ["Widget Route"]),
+    ("Widget Route RFC9999", ["Widget Route"]),
+    // Quotes come off before anything is cut, and off each item of a list.
+    (#""Widget", "Gadget""#, ["Widget", "Gadget"]),
+    (#""Widget: Gateway""#, ["Widget"]),
     // Nothing left, or a list of letters, is no term.
     ("", []),
     ("I, p, q, R", []),
   ]
+
+  /// An index entry's comma inverts a name, and is no list.
+  @Test func `an index entry's comma is kept`() {
+    #expect(
+      DefinedTerms.spellings(of: "cache, private", splittingLists: false) == ["cache, private"])
+  }
+
+  /// A term a list names without a definition is defined by a later list that has one.
+  @Test func `a later definition replaces an entry without one`() throws {
+    let bare = DefinitionItem(term: [.text("Widget:")], definition: [], anchor: "bare")
+    let defined = DefinitionItem(
+      term: [.text("Widget:")], definition: [.paragraph(Paragraph(text: "A part."))],
+      anchor: "defined")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(
+          anchor: "terms", title: "Terminology",
+          blocks: [
+            .definitionList(DefinitionList([bare])), .definitionList(DefinitionList([defined])),
+          ])
+      ],
+      source: .xml)
+    let term = try #require(DefinedTerms.defined(in: document)["Widget"])
+    #expect(term.anchor == "defined")
+  }
 
   /// A term with no definition to show is no term a reader can be shown: an index
   /// entry nothing else supplies a definition for.
@@ -384,16 +417,35 @@ struct DefinedTermsTests {
     #expect(term.definition.isEmpty, "a section marked by an entry is no definition")
   }
 
+  /// Where the anchor the model holds defines nothing itself, a section around a table
+  /// cell, the entry is defined by the block it sits in, as the XML reads it.
+  @Test func `an entry in a block without an anchor is defined by that block`() throws {
+    let cell = [Block.paragraph(Paragraph(text: "A teapot."))]
+    let document = Self.model([
+      .table(Table(title: nil, header: [], rows: [Table.Row(cells: [[.text("A teapot.")]])]))
+    ])
+    let term = try #require(
+      DefinedTerms.lookUp(
+        [IndexedTerm(term: "teapot", anchors: ["table-1", "terms"], definition: cell)],
+        in: document
+      ).first)
+    #expect(term.anchor == "terms")
+    #expect(term.definition == cell)
+  }
+
   /// The model keeps a table row's author anchor, so an entry in that row lands on it.
   @Test func `an index entry in an anchored table row lands on the row`() throws {
     let table = Table(
       title: nil, header: [], rows: [Table.Row(cells: [[.text("A teapot.")]], anchor: "code.418")])
     let document = Self.model([.table(table)])
+    let cell = [Block.paragraph(Paragraph(text: "A teapot."))]
     let term = try #require(
       DefinedTerms.lookUp(
-        [IndexedTerm(term: "teapot", anchors: ["code.418", "table-1", "terms"])], in: document
+        [IndexedTerm(term: "teapot", anchors: ["code.418", "table-1", "terms"], definition: cell)],
+        in: document
       ).first)
     #expect(term.anchor == "code.418")
+    #expect(term.definition == cell, "the cell, not the whole table")
   }
 
   /// A term in a definition list is defined by its description, at either anchor.

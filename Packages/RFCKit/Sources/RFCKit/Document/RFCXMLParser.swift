@@ -626,16 +626,24 @@ public enum RFCXMLParser {
     /// it, whose anchors follow the term's.
     func primaryIndexTerms(in root: XMLTree.Element) -> [IndexedTerm] {
       var terms: [IndexedTerm] = []
-      func record(entriesIn element: XMLTree.Element, anchors: [String]) {
-        terms += Self.indexEntries(in: element).compactMap { entry -> IndexedTerm? in
-          guard entry["primary"] == "true", entry["subitem"] == nil, let item = entry["item"]
-          else { return nil }
-          return IndexedTerm(term: item, anchors: anchors)
+      func record(
+        entriesIn element: XMLTree.Element, anchors: [String], definition: () -> [Block]
+      ) {
+        let items = Self.indexEntries(in: element).compactMap { entry -> String? in
+          guard entry["primary"] == "true", entry["subitem"] == nil else { return nil }
+          return entry["item"]
         }
+        guard !items.isEmpty else { return }
+        // Built once, however many entries the block holds.
+        let definition = definition()
+        terms += items.map { IndexedTerm(term: $0, anchors: anchors, definition: definition) }
       }
       func visit(_ element: XMLTree.Element, around: [String]) {
         let anchors = Self.anchors(of: element) + around
-        record(entriesIn: element, anchors: anchors)
+        record(entriesIn: element, anchors: anchors) {
+          ["li", "dd", "td", "th"].contains(element.name)
+            ? parseBlocks(in: element) : parseBlock(element).map { [$0] } ?? []
+        }
         let children = element.elements.filter { !Self.inlineElements.contains($0.name) }
         for (position, child) in children.enumerated() {
           guard child.name == "dt" else {
@@ -643,8 +651,11 @@ public enum RFCXMLParser {
             continue
           }
           let next = children.dropFirst(position + 1).first
-          let description = next?.name == "dd" ? next.map(Self.anchors(of:)) ?? [] : []
-          record(entriesIn: child, anchors: Self.anchors(of: child) + description + anchors)
+          let description = next?.name == "dd" ? next : nil
+          record(
+            entriesIn: child,
+            anchors: Self.anchors(of: child) + (description.map(Self.anchors(of:)) ?? []) + anchors
+          ) { description.map(parseBlocks(in:)) ?? [] }
         }
       }
       visit(root, around: [])

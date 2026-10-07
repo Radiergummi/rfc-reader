@@ -22,6 +22,10 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 struct IndexedTerm: Sendable, Hashable {
   var term: String
   var anchors: [String]
+  /// The block the entry sits in, as the XML reads it: the definition where the
+  /// anchor the model holds defines nothing itself, as a section does for a table
+  /// cell, a quotation or a figure without an anchor of its own.
+  var definition: [Block] = []
 }
 
 /// Collects the terms a document defines, at parse time, the way abbreviations are
@@ -98,8 +102,9 @@ enum DefinedTerms {
   /// Each primary index entry where the model holds it (#455): at the first of its
   /// anchors the model holds, defined by what holds it. A paragraph, a piece of
   /// artwork, a figure or a table is its own definition, a list item or a definition
-  /// list entry its blocks, and a section none, as an entry placed directly in one
-  /// marks the section. An entry at no anchor the model holds is dropped.
+  /// list entry its blocks; a section, or a table row, defines nothing itself, and
+  /// the entry is defined by the block it sits in. An entry at no anchor the model
+  /// holds is dropped.
   static func lookUp(_ indexed: [IndexedTerm], in document: RFCDocument) -> [DefinedTerm] {
     guard !indexed.isEmpty else { return [] }
     var definitions: [String: [Block]] = [:]
@@ -119,7 +124,10 @@ enum DefinedTerms {
           hold(item.anchor, item.definition)
           hold(item.definitionAnchor, item.definition)
         }
-      case .paragraph, .preformatted, .figure, .table:
+      case .table(let table):
+        hold(table.anchor, [block])
+        for row in table.header + table.rows { hold(row.anchor, []) }
+      case .paragraph, .preformatted, .figure:
         for anchor in block.anchors { hold(anchor, [block]) }
       case .blockQuote, .aside, .references, .index:
         break
@@ -127,7 +135,9 @@ enum DefinedTerms {
     }
     return indexed.compactMap { entry in
       guard let anchor = entry.anchors.first(where: { definitions[$0] != nil }) else { return nil }
-      return DefinedTerm(term: entry.term, anchor: anchor, definition: definitions[anchor] ?? [])
+      let held = definitions[anchor] ?? []
+      return DefinedTerm(
+        term: entry.term, anchor: anchor, definition: held.isEmpty ? entry.definition : held)
     }
   }
 
@@ -137,18 +147,19 @@ enum DefinedTerms {
     -> [String: DefinedTerm]
   {
     var found: [String: DefinedTerm] = [:]
-    func record(_ term: DefinedTerm) {
-      for spelling in spellings(of: term.term) where found[spelling] == nil {
+    // The first definition of each spelling wins, but one with a definition replaces
+    // one without, wherever each came from.
+    func record(_ term: DefinedTerm, splittingLists: Bool) {
+      for spelling in spellings(of: term.term, splittingLists: splittingLists) {
+        if let kept = found[spelling], !(kept.definition.isEmpty && !term.definition.isEmpty) {
+          continue
+        }
         found[spelling] = DefinedTerm(
           term: spelling, anchor: term.anchor, definition: term.definition)
       }
     }
-    // An index entry placed directly in a section has no definition text, which
-    // another entry for the same term supplies: a later index entry that has one, or
-    // a definition list entry.
-    indexed.filter { !$0.definition.isEmpty }.forEach(record)
-    indexed.filter(\.definition.isEmpty).forEach(record)
-    var undefined = Set(found.values.filter(\.definition.isEmpty).map(\.term))
+    // An index entry's item is a name, which an index may invert: `cache, private`.
+    for term in indexed { record(term, splittingLists: false) }
     // A subsection of a section titled for its terms is one of its parts (`Core Terms`
     // under Terminology), whatever its own title says, unless that title only opens
     // with Definitions.
@@ -158,18 +169,11 @@ enum DefinedTerms {
         if inherited || namesTerms(title) {
           for items in definitionLists(in: section.blocks) {
             for item in items {
-              let defined = DefinedTerm(
-                term: term(item.term.plainText), anchor: item.anchor ?? section.anchor,
-                definition: item.definition)
-              for spelling in spellings(of: defined.term) {
-                let spelled = DefinedTerm(
-                  term: spelling, anchor: defined.anchor, definition: defined.definition)
-                if !spelled.definition.isEmpty, undefined.remove(spelling) != nil {
-                  found[spelling] = spelled
-                } else if found[spelling] == nil {
-                  found[spelling] = spelled
-                }
-              }
+              record(
+                DefinedTerm(
+                  term: item.term.plainText, anchor: item.anchor ?? section.anchor,
+                  definition: item.definition),
+                splittingLists: true)
             }
           }
         }
@@ -178,62 +182,6 @@ enum DefinedTerms {
     }
     read(document.sections, inherited: false)
     return found.filter { !$0.value.definition.isEmpty }
-  }
-
-  // MARK: Spellings
-
-  /// The spellings a term as its list or index entry writes it stands for, each as
-  /// prose would write it on its own; empty when it is none (#396).
-  ///
-  /// Left off: a citation after it (`Widget datagram [RFC9999]`, `… RFC 9999`), the
-  /// start of its definition after a colon and a space (`WGW: Widget Gateway.`), a
-  /// dash after it, and quotes around it. A parenthetical at the end is a second
-  /// spelling when either side is an abbreviation (`WGW (Widget Gateway)`), and a
-  /// qualifier, left off, when neither is (`parent (of a widget)`). A list is a
-  /// spelling per item (`Widget, wdgWidget`), and a list of single letters, a
-  /// formula's variables, is none. Notation keeps its colons and brackets: those with
-  /// no space before them (`widget:port`, `W[i..j]`), and a term that opens with a
-  /// parenthesis.
-  static func spellings(of written: String) -> [String] {
-    var term = written.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let citation = term.range(of: " [") { term = String(term[..<citation.lowerBound]) }
-    if let citation = term.range(
-      of: #"\sRFC[\s\u{00A0}]\d"#, options: .regularExpression)
-    {
-      term = String(term[..<citation.lowerBound])
-    }
-    if let definition = term.range(of: ": ") { term = String(term[..<definition.lowerBound]) }
-    term = term.trimmingCharacters(in: .whitespaces)
-    while let last = term.last, [":", "-", "\u{2013}", "\u{2014}"].contains(last) {
-      term.removeLast()
-      term = term.trimmingCharacters(in: .whitespaces)
-    }
-    let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
-    if term.count > 1, let first = term.first, let last = term.last, quotes.contains(first),
-      quotes.contains(last)
-    {
-      term = String(term.dropFirst().dropLast())
-    }
-    guard !term.isEmpty else { return [] }
-    if term.hasPrefix("(") { return [term] }
-    if term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) {
-      let outside = String(term[..<open.lowerBound])
-      let inside = String(term[open.upperBound...].dropLast())
-      guard isAbbreviation(outside) || isAbbreviation(inside) else { return spellings(of: outside) }
-      return [outside, inside].filter { !$0.isEmpty }
-    }
-    guard term.contains(", ") else { return [term] }
-    let items = term.components(separatedBy: ", ").map { item in
-      item.hasPrefix("or ") || item.hasPrefix("and ")
-        ? String(item.drop { $0 != " " }.dropFirst()) : item
-    }
-    return items.filter { $0.count > 1 && $0 != "etc." }
-  }
-
-  /// Whether `word` is an abbreviation: one word with two capitals or more, `WGW` or
-  /// `PoW`.
-  private static func isAbbreviation(_ word: String) -> Bool {
-    !word.contains(" ") && word.filter(\.isUppercase).count >= 2
   }
 
   /// The definition lists among `blocks`, however deep, but not those nested in a
@@ -249,11 +197,77 @@ enum DefinedTerms {
     }
   }
 
-  /// A definition list's term as the term itself: `significant change:` without the
-  /// colon the list sets after it.
-  static func term(_ written: String) -> String {
-    var term = written.trimmingCharacters(in: .whitespacesAndNewlines)
-    while term.last == ":" { term.removeLast() }
-    return term.trimmingCharacters(in: .whitespaces)
+  // MARK: Spellings
+
+  /// The spellings a term as its list or index entry writes it stands for, each as
+  /// prose would write it on its own; empty when it is none (#396).
+  ///
+  /// Left off: quotes around it, a citation after it (`Widget datagram [RFC9999]`,
+  /// and the trailing ones `Abbreviations` leaves off a glossary phrase, `RFC 9999`,
+  /// `BCP 38`), the start of its definition after a colon and a space (`WGW: Widget
+  /// Gateway.`), the colon a list sets after a term, and a dash after it. A
+  /// parenthetical at the end is a second spelling when one side is a short form the
+  /// other expands (`WGW (Widget Gateway)`), and a qualifier, left off, when not
+  /// (`parent (of a widget)`, `Content-Type (header field)`). With `splittingLists`,
+  /// a definition list's term that is a list is a spelling per item (`Widget,
+  /// wdgWidget`), and a list of single letters, a formula's variables, is none; an
+  /// index entry's comma is an inverted name's (`cache, private`), and stays.
+  /// Notation keeps its colons and brackets: those with no space before them
+  /// (`widget:port`, `W[i..j]`), and a term that opens with a parenthesis.
+  static func spellings(of written: String, splittingLists: Bool = true) -> [String] {
+    var term = unquoted(written.trimmingCharacters(in: .whitespacesAndNewlines))
+    if let citation = term.range(of: " [") { term = String(term[..<citation.lowerBound]) }
+    if let definition = term.range(of: ": ") { term = String(term[..<definition.lowerBound]) }
+    // The colon or dash after it first: a citation is left off only at the end.
+    term = trimmingTrailingPunctuation(term)
+    term = trimmingTrailingPunctuation(term.replacing(Abbreviations.citationsPattern, with: ""))
+    term = unquoted(term)
+    guard !term.isEmpty else { return [] }
+    if term.hasPrefix("(") { return [term] }
+    if term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) {
+      let outside = String(term[..<open.lowerBound])
+      let inside = String(term[open.upperBound...].dropLast())
+      guard expands(outside, inside) || expands(inside, outside) else {
+        return spellings(of: outside, splittingLists: splittingLists)
+      }
+      return [outside, inside]
+    }
+    guard splittingLists, term.contains(", ") else { return [term] }
+    let items = term.components(separatedBy: ", ").map { item in
+      let item =
+        item.hasPrefix("or ") || item.hasPrefix("and ")
+        ? String(item.drop { $0 != " " }.dropFirst()) : item
+      return unquoted(item)
+    }
+    return items.filter { $0.count > 1 && $0 != "etc." }
+  }
+
+  /// `text` without the colons and dashes after it, and the spaces around them.
+  private static func trimmingTrailingPunctuation(_ text: String) -> String {
+    var text = text.trimmingCharacters(in: .whitespaces)
+    while let last = text.last, [":", "-", "\u{2013}", "\u{2014}"].contains(last) {
+      text.removeLast()
+      text = text.trimmingCharacters(in: .whitespaces)
+    }
+    return text
+  }
+
+  /// `text` without the quotes around it, straight or typographic: only when they
+  /// enclose it whole, not when they open its first item and close its last.
+  private static func unquoted(_ text: String) -> String {
+    let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
+    guard text.count > 1, let first = text.first, let last = text.last, quotes.contains(first),
+      quotes.contains(last)
+    else { return text }
+    let inside = text.dropFirst().dropLast()
+    return inside.contains(where: quotes.contains) ? text : String(inside)
+  }
+
+  /// Whether `short` is a short form whose letters `long` spells, as `Abbreviations`
+  /// finds an expansion in prose: `WGW` and `Widget Gateway`, not `Content-Type` and
+  /// `header field`. Only that it spells them: where its expansion starts is the
+  /// prose's question, not this one's.
+  private static func expands(_ short: String, _ long: String) -> Bool {
+    Abbreviations.isShortForm(short) && Abbreviations.longForm(of: short, in: long) != nil
   }
 }
