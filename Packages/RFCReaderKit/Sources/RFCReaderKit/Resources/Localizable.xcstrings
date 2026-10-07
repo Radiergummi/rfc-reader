@@ -375,6 +375,16 @@
         }
       }
     },
+    "A working group whose charter covers the work can adopt a draft, and from then on the group decides what it says, not only its authors. A draft can also go ahead without a group, as an individual submission an area director sponsors." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Working Group, deren Charter die Arbeit abdeckt, kann einen Draft übernehmen, und von da an entscheidet die Gruppe, was er sagt, nicht nur seine Autoren. Ein Draft kann auch ohne Gruppe weitergehen, als Individual Submission, die ein Area Director unterstützt."
+          }
+        }
+      }
+    },
     "ABNF Grammar" : {
       "localizations" : {
         "de" : {
@@ -401,6 +411,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktiv"
+          }
+        }
+      }
+    },
+    "Adoption by a Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übernahme durch eine Working Group"
           }
         }
       }
@@ -441,6 +461,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ein Informational RFC kann aus jedem Stream kommen und muss keinen Konsens der Community wiedergeben."
+          }
+        }
+      }
+    },
+    "An Internet-Draft" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Internet-Draft"
           }
         }
       }
@@ -885,6 +915,16 @@
         }
       }
     },
+    "Every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder RFC beginnt als Internet-Draft, den jeder schreiben und einreichen kann. Ein Draft ist ein Zwischenstand, kein Standard: Er verfällt nach sechs Monaten, wenn er nicht überarbeitet wird, und viele werden nie veröffentlicht."
+          }
+        }
+      }
+    },
     "FYI Series" : {
       "localizations" : {
         "de" : {
@@ -975,6 +1015,16 @@
         }
       }
     },
+    "How an RFC Is Made" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie ein RFC entsteht"
+          }
+        }
+      }
+    },
     "IAB Program" : {
       "localizations" : {
         "de" : {
@@ -991,6 +1041,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "IAB-Stream"
+          }
+        }
+      }
+    },
+    "IETF Last Call and IESG Review" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IETF Last Call und Prüfung durch die IESG"
           }
         }
       }
@@ -1245,6 +1305,16 @@
         }
       }
     },
+    "Most RFCs come from the IETF, and go through the same stages on their way from a first draft to a published document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die meisten RFCs kommen von der IETF und durchlaufen auf dem Weg vom ersten Entwurf zum veröffentlichten Dokument dieselben Stationen."
+          }
+        }
+      }
+    },
     "Most such documents are early RFCs, published before the IETF defined its statuses." : {
       "localizations" : {
         "de" : {
@@ -1341,6 +1411,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ohne Lesezeichen"
+          }
+        }
+      }
+    },
+    "Not every RFC comes from the IETF. The IAB, the IRTF and the Independent Submissions Editor each publish RFCs through a review of their own, and none of them publishes standards." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF und der Independent Submissions Editor veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards."
           }
         }
       }
@@ -1495,6 +1575,16 @@
         }
       }
     },
+    "Other Streams" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Streams"
+          }
+        }
+      }
+    },
     "Outline" : {
       "localizations" : {
         "de" : {
@@ -1561,6 +1651,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorgeschlagen"
+          }
+        }
+      }
+    },
+    "Publication" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlichung"
           }
         }
       }
@@ -1945,12 +2045,32 @@
         }
       }
     },
+    "The RFC Editor" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor"
+          }
+        }
+      }
+    },
     "The RFC Editor doesn't have this document." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der RFC Editor hat dieses Dokument nicht."
+          }
+        }
+      }
+    },
+    "The RFC Editor edits the approved document for clarity and consistency. The authors then check the result one last time, a step called AUTH48." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor redigiert das genehmigte Dokument auf Klarheit und Einheitlichkeit. Die Autoren prüfen das Ergebnis dann ein letztes Mal, ein Schritt namens AUTH48."
           }
         }
       }
@@ -1991,6 +2111,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der RFC-Index konnte nicht gelesen werden. Versuche es später erneut."
+          }
+        }
+      }
+    },
+    "The document is published with an RFC number and its status, and never changes again. Errors are recorded beside it as errata, and later work updates or obsoletes it with an RFC of its own." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Dokument wird mit einer RFC-Nummer und seinem Status veröffentlicht und ändert sich danach nie wieder. Fehler werden daneben als Errata festgehalten, und spätere Arbeit aktualisiert oder ersetzt es mit einem eigenen RFC."
           }
         }
       }
@@ -2057,6 +2187,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die beiden müssen zusammen gelesen werden."
+          }
+        }
+      }
+    },
+    "The whole IETF then has a few weeks to comment, and the area directors of the IESG review the document. They approve it, ask for changes or decline it, and decide its status, such as Proposed Standard, Best Current Practice or Informational." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dann hat die ganze IETF einige Wochen Zeit für Kommentare, und die Area Directors der IESG prüfen das Dokument. Sie genehmigen es, verlangen Änderungen oder lehnen es ab und legen seinen Status fest, etwa Proposed Standard, Best Current Practice oder Informational."
           }
         }
       }
@@ -2257,12 +2397,32 @@
         }
       }
     },
+    "When the group thinks the document is done, its chairs ask the whole group for final comments. If there is rough consensus, the group asks the IESG to publish it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn die Gruppe das Dokument für fertig hält, bitten ihre Chairs die ganze Gruppe um letzte Kommentare. Gibt es Rough Consensus, bittet die Gruppe die IESG, es zu veröffentlichen."
+          }
+        }
+      }
+    },
     "Working Group" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Group"
+          }
+        }
+      }
+    },
+    "Working Group Last Call" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group Last Call"
           }
         }
       }

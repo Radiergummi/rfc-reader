@@ -95,6 +95,18 @@ struct GlossaryCard: View {
           }
         }
       }
+      // Where the term sits in the whole process (#365).
+      Divider()
+      Group {
+        #if os(macOS)
+          PrimerLink()
+        #else
+          PrimerLink(pushes: true)
+        #endif
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(.tint)
+      .font(.callout)
     }
     .padding()
     .frame(maxWidth: .infinity, alignment: .leading)
