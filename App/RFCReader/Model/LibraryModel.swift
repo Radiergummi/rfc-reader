@@ -108,6 +108,10 @@ final class LibraryModel {
   /// a check once a day. Nil until either has been read.
   private(set) var errata: Errata?
   @ObservationIgnored private var isRefreshingErrata = false
+  /// When this run last asked the RFC Editor for the feed, whatever came of it: a
+  /// feed that fails to arrive or to decode records no check, and would otherwise be
+  /// downloaded again at every activation.
+  @ObservationIgnored private var errataAskedAt: Date?
   @ObservationIgnored private var workingGroupsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingWorkingGroups = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
@@ -934,12 +938,14 @@ final class LibraryModel {
     guard !isRefreshingErrata else { return }
     isRefreshingErrata = true
     defer { isRefreshingErrata = false }
-    if errata == nil, let data = store.cachedErrata() {
+    if errata == nil, let data = await store.cachedErrata() {
       errata = try? await Self.decodeErrata(data)
     }
     // Without a feed in memory, a `304` would leave nothing to show.
     let kept = errata == nil ? nil : store.errataCheck()
     if let kept, !IndexCheck.isDue(checkedAt: kept.checkedAt, now: .now) { return }
+    if let errataAskedAt, !IndexCheck.isDue(checkedAt: errataAskedAt, now: .now) { return }
+    errataAskedAt = .now
     do {
       let fetched = try await clientOnCheapNetworks.fetchErrataData(
         unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
@@ -957,7 +963,7 @@ final class LibraryModel {
     }
   }
 
-  /// Off the main actor: the feed is about 12 MB of JSON.
+  /// Off the main actor: the feed is every erratum ever reported.
   @concurrent
   private static func decodeErrata(_ data: Data) async throws -> Errata {
     try Errata.decode(data)

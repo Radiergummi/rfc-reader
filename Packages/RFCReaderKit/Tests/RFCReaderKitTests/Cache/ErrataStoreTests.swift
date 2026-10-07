@@ -11,9 +11,9 @@ struct ErrataStoreTests {
   private let sandbox = DocumentStoreTests.Sandbox()
   private let validators = CacheValidators(entityTag: #""feed-1""#, lastModified: nil)
 
-  @Test func `nothing is kept at first`() {
+  @Test func `nothing is kept at first`() async {
     let store = sandbox.store()
-    #expect(store.cachedErrata() == nil)
+    #expect(await store.cachedErrata() == nil)
     #expect(store.errataCheck() == nil)
   }
 
@@ -22,7 +22,7 @@ struct ErrataStoreTests {
     try FileManager.default.createDirectory(
       at: sandbox.directory, withIntermediateDirectories: true)
     try await store.storeErrata(Data("[]".utf8), validators: validators)
-    #expect(store.cachedErrata() == Data("[]".utf8))
+    #expect(await store.cachedErrata() == Data("[]".utf8))
     let check = try #require(store.errataCheck())
     #expect(check.validators == validators)
   }

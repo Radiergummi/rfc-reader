@@ -53,8 +53,9 @@ public struct Erratum: Sendable, Hashable, Identifiable {
   /// The section field as the reporter wrote it: `4.1`, `In Sections 7.8 and 7.9`,
   /// `Figure 1`, or empty.
   public let section: String
-  /// The sections `section` names, in its order: `4.1` or `A.2`, as a heading is
-  /// numbered. Empty when it names none, and the erratum is the whole document's.
+  /// The sections `section` names, in its order, each as `Section.place` names it:
+  /// `4.1` or `A.2`, as a heading is numbered, or `appendix-1` for an appendix
+  /// numbered like a section. Empty when it names none.
   public let sections: [String]
   public let original: String
   public let corrected: String
@@ -86,19 +87,20 @@ public struct Erratum: Sendable, Hashable, Identifiable {
   // MARK: - Sections
 
   /// The sections a section field names, never guessed: a number or an appendix that
-  /// opens it, `4.1`, `A.2`, `6.4.5.`, `2.1,1st para`; or every one a `Section`,
-  /// `Sections`, `Appendix` or `Appendices` names in prose, `In Sections 7.8, 7.9,
-  /// and 8.4.1`. Anything else, `Figure 1`, `Abstract`, `GLOBAL`, names none.
+  /// opens it, `4.1`, `A.2`, `6.4.5.`, `2.1,1st para`; an anchor's spelling,
+  /// `section-4.1`, `appendix-C`; or every one a `Section`, `Sections`, `Appendix` or
+  /// `Appendices` names in prose, `In Sections 7.8, 7.9, and 8.4.1`. Anything else,
+  /// `Figure 1`, `Abstract`, `GLOBAL`, names none.
   public static func sections(in field: String) -> [String] {
-    let words = field.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" })
-      .map(String.init)
+    let words = field.split(whereSeparator: \.isWhitespace).map(String.init)
     let named = namedInProse(words)
     if !named.isEmpty { return named }
     guard let first = words.first else { return [] }
+    if let anchored = anchorSpelling(first) { return [anchored] }
     // A field that is one letter is an appendix; a word of prose that is one letter,
     // "A typo", is not.
     if words.count == 1, let letter = identifier(first), letter.count == 1 { return [letter] }
-    guard let opening = identifier(first, upTo: [",", ";", ":"]),
+    guard let opening = identifier(first, upTo: [",", ";", ":", ")"]),
       opening.count > 1
         || opening.first?.isNumber == true
     else { return [] }
@@ -113,10 +115,12 @@ public struct Erratum: Sendable, Hashable, Identifiable {
     var named: [String] = []
     var index = 0
     while index < words.count {
-      guard keywords.contains(words[index].lowercased()) else {
+      let keyword = words[index].lowercased()
+      guard keywords.contains(keyword) else {
         index += 1
         continue
       }
+      let namesAppendix = keyword.hasPrefix("appendi")
       index += 1
       while index < words.count {
         let word = words[index]
@@ -124,7 +128,8 @@ public struct Erratum: Sendable, Hashable, Identifiable {
           index += 1
           continue
         }
-        guard let section = identifier(word, upTo: [",", ";", ":", ")"]) else { break }
+        guard let identifier = identifier(word, upTo: [",", ";", ":", ")"]) else { break }
+        let section = namesAppendix ? appendix(identifier) : identifier
         if !named.contains(section) { named.append(section) }
         index += 1
         // A list goes on after a comma or a conjunction, and ends at anything else.
@@ -135,6 +140,26 @@ public struct Erratum: Sendable, Hashable, Identifiable {
       }
     }
     return named
+  }
+
+  /// An appendix's place: `A.2` as it is, `1.2` as `appendix-1.2`, so it is never
+  /// taken for the body's section 1.2 (#429).
+  private static func appendix(_ identifier: String) -> String {
+    identifier.first?.isNumber == true ? "appendix-\(identifier)" : identifier
+  }
+
+  /// A section named as its anchor is spelled, `section-4.1` or `appendix-C`.
+  private static func anchorSpelling(_ word: String) -> String? {
+    let lowered = word.lowercased()
+    for (prefix, isAppendix) in [("section-", false), ("appendix-", true)]
+    where lowered.hasPrefix(prefix) {
+      guard
+        let identifier = identifier(
+          String(word.dropFirst(prefix.count)), upTo: [",", ";", ":", ")"])
+      else { return nil }
+      return isAppendix ? appendix(identifier) : identifier
+    }
+    return nil
   }
 
   /// `word` read as a section's number, `4.1` or `A.2`, without a trailing full stop

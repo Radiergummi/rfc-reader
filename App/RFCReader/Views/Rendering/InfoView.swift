@@ -36,9 +36,11 @@ struct InfoView: View {
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
-            ErrataSection(
-              summary: ErrataSummary(errata: errata, sections: sections),
-              selectSection: selectSection)
+            let summary = ErrataSummary(errata: errata, sections: sections)
+            // Errata of only a status a later feed adds are neither listed nor counted.
+            if !summary.items.isEmpty || summary.notListed != nil {
+              ErrataSection(summary: summary, selectSection: selectSection)
+            }
           }
           if let document, document.series == .rfc {
             InfoSection(title: String(localized: "Reading Path")) {
@@ -229,13 +231,14 @@ private struct ErratumView: View {
       .font(.subheadline.weight(.medium))
       text(String(localized: "Original"), item.original)
       text(String(localized: "Corrected"), item.corrected)
+      text(String(localized: "Notes"), item.notes, isCode: false)
     }
   }
 
-  /// One of the erratum's texts, in the reader's code font, as the RFC's own text is
-  /// set; nothing when the reporter left it empty.
+  /// One of the erratum's texts, the RFC's own in the reader's code font, as it is set
+  /// there; nothing when the reporter left it empty.
   @ViewBuilder
-  private func text(_ label: String, _ text: String) -> some View {
+  private func text(_ label: String, _ text: String, isCode: Bool = true) -> some View {
     let trimmed = text.trimmingCharacters(in: .newlines)
     if !trimmed.trimmingCharacters(in: .whitespaces).isEmpty {
       VStack(alignment: .leading, spacing: 2) {
@@ -243,7 +246,7 @@ private struct ErratumView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
         Text(verbatim: trimmed)
-          .font(.caption.monospaced())
+          .font(isCode ? .caption.monospaced() : .caption)
           .textSelection(.enabled)
           .fixedSize(horizontal: false, vertical: true)
       }

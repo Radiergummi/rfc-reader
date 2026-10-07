@@ -27,6 +27,8 @@ struct ErrataSummaryTests {
       anchor: "details", number: "4", title: [.text("Details")],
       subsections: [Section(anchor: "the-detail", number: "4.1", title: [.text("Detail")])]),
     Section(anchor: "extra", number: "A", title: [.text("Extra")], isAppendix: true),
+    // An appendix numbered like a section, as some legacy RFCs number theirs (#429).
+    Section(anchor: "appendix-1", number: "1", title: [.text("Notes")], isAppendix: true),
   ]
 
   private func summary(_ errata: [Erratum]) -> ErrataSummary {
@@ -63,6 +65,28 @@ struct ErrataSummaryTests {
     #expect(items.map(\.anchor) == ["the-detail", "extra", "scope"])
   }
 
+  /// "Appendix 1" is the appendix numbered 1, never the body's Section 1.
+  @Test func `a numbered appendix is its own place`() throws {
+    let item = try #require(
+      summary([Self.erratum(1, .verified, section: "Appendix 1")]).items.first)
+    #expect(item.place == "Appendix 1")
+    #expect(item.anchor == "appendix-1")
+  }
+
+  /// A place the reporter named that is no section is shown as written, and only the
+  /// feed's `GLOBAL` or nothing reads as the whole document.
+  @Test func `a place that is no section is named as written`() {
+    let items = summary([
+      Self.erratum(1, .verified, section: "Figure 15"),
+      Self.erratum(2, .verified, section: "The abstract says:"),
+      Self.erratum(3, .verified, section: "GLOBAL"), Self.erratum(4, .verified, section: ""),
+    ]).items
+    #expect(
+      items.map(\.place) == [
+        "Figure 15", "The abstract says", "Whole document", "Whole document",
+      ])
+  }
+
   /// A section the document doesn't have, or none at all, is never guessed at.
   @Test func `a section the document lacks links nowhere`() {
     let items = summary([
@@ -87,7 +111,7 @@ struct ErrataSummaryTests {
     ]).items
     #expect(
       items.map(\.place) == [
-        "Whole document", "Section 4.1", "Appendix A.2", "Sections 7.8, 7.9, and 8.4.1",
+        "Figure 1", "Section 4.1", "Appendix A.2", "Sections 7.8, 7.9, and 8.4.1",
         "Appendix B and Section 2",
       ])
     let held = try #require(items.first { $0.id == 2 })
@@ -101,6 +125,7 @@ struct ErrataSummaryTests {
     #expect(item.original == "old")
     #expect(item.corrected == "new")
     #expect(item.page == URL(string: "https://www.rfc-editor.org/errata/eid7"))
+    #expect(item.notes == "")
   }
 
   @Test func `a document without errata has an empty summary`() {

@@ -225,7 +225,13 @@ public actor DocumentStore {
   /// The last check of the index kept on disk, or nil when there is no index on
   /// disk to have checked: the validators describe that file, and nothing else.
   public nonisolated func indexCheck() -> IndexCheck? {
-    guard FileManager.default.fileExists(atPath: indexURL.path),
+    Self.check(of: indexURL, keptAt: checkURL)
+  }
+
+  /// The check kept at `checkURL` of the file at `file`, or nil when the file is gone:
+  /// a check describes that file, and nothing else.
+  private nonisolated static func check(of file: URL, keptAt checkURL: URL) -> IndexCheck? {
+    guard FileManager.default.fileExists(atPath: file.path),
       let data = try? Data(contentsOf: checkURL)
     else { return nil }
     return try? JSONDecoder().decode(IndexCheck.self, from: data)
@@ -234,14 +240,23 @@ public actor DocumentStore {
   /// Records that a check sent with `kept`'s validators found the index unchanged,
   /// and returns when.
   public func recordUnchangedIndex(_ kept: IndexCheck) throws -> Date {
-    var check = kept
-    check.checkedAt = .now
-    try storeCheck(check)
-    return check.checkedAt
+    try Self.recordUnchanged(kept, at: checkURL)
   }
 
   private func storeCheck(_ check: IndexCheck) throws {
-    try JSONEncoder().encode(check).write(to: checkURL, options: .atomic)
+    try Self.store(check, at: checkURL)
+  }
+
+  private static func store(_ check: IndexCheck, at url: URL) throws {
+    try JSONEncoder().encode(check).write(to: url, options: .atomic)
+  }
+
+  /// `kept` checked again now and found unchanged, kept at `url`; returns when.
+  private static func recordUnchanged(_ kept: IndexCheck, at url: URL) throws -> Date {
+    var check = kept
+    check.checkedAt = .now
+    try store(check, at: url)
+    return check.checkedAt
   }
 
   /// Off the actor and after the caller has its index: encoding the whole index
@@ -322,35 +337,28 @@ public actor DocumentStore {
   private nonisolated var errataCheckURL: URL { directory.appending(path: "errata-check.json") }
 
   /// The errata feed kept (#387), as the RFC Editor served it, for the caller to
-  /// decode off the main actor; nil when none is kept.
-  public nonisolated func cachedErrata() -> Data? {
+  /// decode off the main actor; nil when none is kept. Read on this actor, not the
+  /// caller's: the feed is the size of the index.
+  public func cachedErrata() -> Data? {
     try? Data(contentsOf: errataURL)
   }
 
   /// The last check of the feed kept, as `indexCheck()` is the index's: nil when no
   /// feed is kept for the validators to describe.
   public nonisolated func errataCheck() -> IndexCheck? {
-    guard FileManager.default.fileExists(atPath: errataURL.path),
-      let data = try? Data(contentsOf: errataCheckURL)
-    else { return nil }
-    return try? JSONDecoder().decode(IndexCheck.self, from: data)
+    Self.check(of: errataURL, keptAt: errataCheckURL)
   }
 
   /// Keeps a fetched feed and what identifies it for the next check.
   public func storeErrata(_ data: Data, validators: CacheValidators?) throws {
     try data.write(to: errataURL, options: .atomic)
-    try storeErrataCheck(IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators))
+    try Self.store(
+      IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators), at: errataCheckURL)
   }
 
   /// Records that a check sent with `kept`'s validators found the feed unchanged.
   public func recordUnchangedErrata(_ kept: IndexCheck) throws {
-    var check = kept
-    check.checkedAt = .now
-    try storeErrataCheck(check)
-  }
-
-  private func storeErrataCheck(_ check: IndexCheck) throws {
-    try JSONEncoder().encode(check).write(to: errataCheckURL, options: .atomic)
+    _ = try Self.recordUnchanged(kept, at: errataCheckURL)
   }
 
   // MARK: - Registries

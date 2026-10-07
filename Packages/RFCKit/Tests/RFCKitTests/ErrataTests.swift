@@ -131,6 +131,14 @@ struct ErrataTests {
     ("Abstract", []),
     ("The abstract says:", []),
     ("A typo in the title", []),
+    ("Appendix 1", ["appendix-1"]),
+    ("Appendices 1 and B", ["appendix-1", "B"]),
+    ("section-4.1", ["4.1"]),
+    ("section-6.2.", ["6.2"]),
+    ("appendix-C", ["C"]),
+    ("appendix-2", ["appendix-2"]),
+    ("4.1)", ["4.1"]),
+    ("Section\u{00A0}26.1 says:", ["26.1"]),
   ]
 
   @Test func `a missing section field names no section`() throws {

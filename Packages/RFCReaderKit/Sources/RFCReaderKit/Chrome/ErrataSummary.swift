@@ -15,7 +15,8 @@ public struct ErrataSummary: Equatable, Sendable {
     public let status: String
     /// "Technical", "Editorial".
     public let type: String
-    /// "Section 4.1", "Sections 7.8 and 7.9", "Whole document".
+    /// "Section 4.1", "Sections 7.8 and 7.9", what the reporter wrote when it names no
+    /// section ("Figure 15", "Abstract"), or "Whole document".
     public let place: String
     /// The first section it names that the document has, to go to; nil when it names
     /// none, or none the document has.
@@ -33,11 +34,12 @@ public struct ErrataSummary: Equatable, Sendable {
   public let notListed: String?
 
   /// - Parameter sections: The document's top-level sections, which a section is
-  ///   found in by its number; empty before its body has loaded.
+  ///   found in by its place, as a citation finds it (`Section.place`); empty before
+  ///   its body has loaded.
   public init(errata: [Erratum], sections: [Section], locale: Locale = .interface) {
     var anchors: [String: String] = [:]
     func visit(_ section: Section) {
-      if let number = section.number, anchors[number] == nil { anchors[number] = section.anchor }
+      if let place = section.place, anchors[place] == nil { anchors[place] = section.anchor }
       section.subsections.forEach(visit)
     }
     sections.forEach(visit)
@@ -49,7 +51,9 @@ public struct ErrataSummary: Equatable, Sendable {
         id: erratum.id,
         status: Self.name(of: erratum.status, locale: locale),
         type: Self.name(of: erratum.type, locale: locale),
-        place: Self.place(of: erratum.sections, locale: locale),
+        place: erratum.sections.isEmpty
+          ? Self.place(written: erratum.section, locale: locale)
+          : Self.place(of: erratum.sections, locale: locale),
         anchor: erratum.sections.lazy.compactMap { anchors[$0] }.first,
         original: erratum.original,
         corrected: erratum.corrected,
@@ -83,20 +87,36 @@ public struct ErrataSummary: Equatable, Sendable {
     }
   }
 
-  /// The place the sections are, as a reader names them: "Section 4.1", "Appendix
-  /// A.2", "Sections 7.8, 7.9, and 8.4.1", "Appendix B and Section 2", or "Whole
-  /// document" for none.
-  private static func place(of sections: [String], locale: Locale) -> String {
-    let isAppendix = { (section: String) in section.first?.isLetter == true }
-    guard let first = sections.first else { return String(kit: "Whole document", locale: locale) }
-    if sections.count == 1 {
-      return isAppendix(first)
-        ? String(kit: "Appendix \(first)", locale: locale)
-        : String(kit: "Section \(first)", locale: locale)
+  /// The place an erratum naming no section names, as the reporter wrote it,
+  /// `Figure 15` or `Abstract`, without a colon after it; "Whole document" for none,
+  /// or for the feed's `GLOBAL`.
+  private static func place(written field: String, locale: Locale) -> String {
+    var written = field.trimmingCharacters(in: .whitespacesAndNewlines)
+    while written.last == ":" { written.removeLast() }
+    guard !written.isEmpty, written.uppercased() != "GLOBAL" else {
+      return String(kit: "Whole document", locale: locale)
     }
-    let list = sections.formatted(.list(type: .and).locale(locale))
-    if sections.allSatisfy(isAppendix) { return String(kit: "Appendices \(list)", locale: locale) }
-    if !sections.contains(where: isAppendix) {
+    return written
+  }
+
+  /// The place the sections are, as a reader names them: "Section 4.1", "Appendix
+  /// A.2", "Appendix 1" for `appendix-1`, "Sections 7.8, 7.9, and 8.4.1", "Appendix B
+  /// and Section 2".
+  private static func place(of sections: [String], locale: Locale) -> String {
+    // Each as an appendix or not, and the identifier it is named by.
+    let named = sections.map { section -> (isAppendix: Bool, identifier: String) in
+      if section.hasPrefix("appendix-") { return (true, String(section.dropFirst(9))) }
+      return (section.first?.isLetter == true, section)
+    }
+    guard let first = named.first else { return String(kit: "Whole document", locale: locale) }
+    if named.count == 1 {
+      return first.isAppendix
+        ? String(kit: "Appendix \(first.identifier)", locale: locale)
+        : String(kit: "Section \(first.identifier)", locale: locale)
+    }
+    let list = named.map(\.identifier).formatted(.list(type: .and).locale(locale))
+    if named.allSatisfy(\.isAppendix) { return String(kit: "Appendices \(list)", locale: locale) }
+    if !named.contains(where: \.isAppendix) {
       return String(kit: "Sections \(list)", locale: locale)
     }
     return sections.map { place(of: [$0], locale: locale) }

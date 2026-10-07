@@ -9,8 +9,8 @@ public enum RFCEditorEndpoints {
   /// The full index, about 14 MB of XML covering every RFC, BCP, STD and FYI.
   public static var index: URL { base.appending(path: "rfc-index.xml") }
 
-  /// Every erratum ever reported, verified or not, as JSON (#387): about 12 MB, and
-  /// about 2.6 MB on the wire, which it is served gzip-compressed.
+  /// Every erratum ever reported, verified or not, as JSON (#387), served
+  /// gzip-compressed.
   public static var errata: URL { base.appending(path: "api/v1/errata.json") }
 
   /// RSS feed of recently published RFCs; cheap to poll for "what's new".

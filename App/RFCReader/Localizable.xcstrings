@@ -1522,6 +1522,16 @@
         }
       }
     },
+    "Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
+          }
+        }
+      }
+    },
     "Nothing in the index matches “%@”." : {
       "localizations" : {
         "de" : {
