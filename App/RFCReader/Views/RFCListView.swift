@@ -86,6 +86,8 @@ struct RFCListView: View {
     // itself, which is a linear search per row over a list that can be 9,842 rows
     // long.
     let bookmarked = library.bookmarkedDocuments
+    // Only Available Offline's rows say where their bodies stand (#358).
+    let offline = shown.filter == .downloaded ? library.offlineStatus : nil
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
@@ -97,8 +99,8 @@ struct RFCListView: View {
     let row = { (row: LibraryRow, showsYear: Bool) in
       RFCRow(
         row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
-        filter: shown.filter
-      )
+        filter: shown.filter, offline: offline?.state(of: row.id)
+      ) { library.downloadNow(row.id) }
       .tag(row.id)
       // A combined element with no trait has the role AXUnknown on macOS, which
       // says nothing of what it is (#300). Here, where the row selects rather
@@ -433,6 +435,11 @@ struct RFCRow: View {
   /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
   /// not each say "pppext", nor the Internet Standards' each say "STD".
   var filter: LibraryFilter?
+  /// In Available Offline, where the document's body stands while it is not on
+  /// the device yet (#358).
+  var offline: OfflineRowState?
+  /// Download Now or Retry, beside `offline`: fetches on any path.
+  var fetchNow: () -> Void = {}
 
   private var rfc: RFCMetadata? { row.rfc }
 
@@ -502,12 +509,41 @@ struct RFCRow: View {
           }
         }
       #endif
+      if let offline {
+        offlineLine(offline)
+      }
     }
     .padding(.vertical, 2)
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(row.accessibilityLabel(isBookmarked: isBookmarked))
+    .accessibilityValue(offline.map { Text(verbatim: $0.description()) } ?? Text(verbatim: ""))
+    .accessibilityActions {
+      // The row is one element, so its button is reached as an action of it.
+      if let action = offline?.action() {
+        Button(action: fetchNow) { Text(verbatim: action) }
+      }
+    }
+  }
+
+  /// What the body is waiting for, or that it is downloading or failed, with Download
+  /// Now or Retry beside it.
+  private func offlineLine(_ state: OfflineRowState) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Text(verbatim: state.description())
+        .foregroundStyle(.secondary)
+      if let action = state.action() {
+        // Borderless, so it is pressed on its own rather than selecting the row.
+        Button(action: fetchNow) { Text(verbatim: action) }
+          .buttonStyle(.borderless)
+      }
+    }
+    #if os(macOS)
+      .font(.caption2)
+    #else
+      .font(.subheadline)
+    #endif
   }
 
   #if os(macOS)

@@ -154,12 +154,21 @@ final class LibraryModel {
   /// rather than worked out on every read: the sidebar counts it as it draws.
   private(set) var availableOfflineNumbers: Set<Int> = []
 
-  /// Moves, releases and fetches bodies to match `offlineMarks`.
+  /// Moves, releases and fetches bodies to match `offlineMarks`. Its fetches that
+  /// nobody waits for take only a path that is neither metered nor in Low Data Mode.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
-    store: store, client: client
+    store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks
   ) { [weak self] id in
     self?.index?[id]?.formats ?? []
   }
+
+  /// Where each document marked Keep Offline stands while its body is not on the
+  /// device: waiting and why, downloading, or failed.
+  var offlineStatus: OfflineStatus { offlineKeeper.status }
+
+  /// The path and Low Power Mode, which decide whether the keeper fetches a mark
+  /// that arrived from another device now or waits.
+  @ObservationIgnored private let network = NetworkConditions()
 
   /// The RFCs the installed legacy pack lists as text that only points to its
   /// original (#316): the reader shows their original without a load, offline too.
@@ -211,6 +220,7 @@ final class LibraryModel {
         self.recheckSpotlight()
       }
     }
+    network.start { [weak self] in self?.networkChanged() }
   }
 
   private func refresh(_ changed: UserDataMirrors) {
@@ -247,9 +257,27 @@ final class LibraryModel {
   /// lists, and applying the index runs this; nor before the marks have been read.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
   /// saved: reconciling against them would move every kept body into the cache.
+  /// Nor before the network path is known, which decides whether the fetches it
+  /// owes start now: every one of them is a mark nobody on this device is waiting
+  /// for, since a tapped one is fetched at once.
   private func reconcileOffline() {
-    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory else { return }
-    offlineKeeper.reconcile(wanted: offlineMarks)
+    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
+      let policy = network.decision(for: .syncedMark)
+    else { return }
+    offlineKeeper.reconcile(wanted: offlineMarks, policy: policy)
+  }
+
+  /// A new path, or Low Power Mode turned on or off: what waited may go ahead, what
+  /// runs may have to wait, and what failed may succeed now.
+  private func networkChanged() {
+    offlineKeeper.forgetFailures()
+    reconcileOffline()
+  }
+
+  /// Fetches a document marked Keep Offline on whatever path the device has, from
+  /// its row's Download Now or Retry. The keeper logs a failure, and its row says it.
+  func downloadNow(_ id: DocumentID) {
+    Task(name: "Download now") { try? await offlineKeeper.fetchNow(id) }
   }
 
   private func refreshRecentlyReadCount() {
