@@ -289,4 +289,50 @@ struct IndexSearchTests {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     #expect(search.search("zzzz-nothing-matches").isEmpty)
   }
+
+  // MARK: Diacritics (#425)
+
+  /// Hand-written entries: an author, a title word and a working group with accents,
+  /// one of them decomposed, `u` and U+0308, as some sources write it.
+  private static let accented = IndexSearch(
+    index: RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(9001), title: "A Widget Protocol", authors: [Author(name: "M. K\u{00FC}hlewind")],
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9002), title: "The Fa\u{00E7}ade Pattern for Gadgets",
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9003), title: "Re\u{0301}sume\u{0301} Messages", date: PublicationDate(year: 2024),
+        workingGroup: "Na\u{00EF}ve"),
+    ]))
+
+  private func numbers(_ query: String) -> [Int] {
+    Self.accented.search(query, limit: .max).map(\.rfc.number)
+  }
+
+  /// A name found by `author:` is found by free text too: both fold diacritics.
+  @Test func `free text finds an author without the accents`() {
+    #expect(numbers("kuhlewind") == [9001])
+    #expect(numbers("K\u{00FC}hlewind") == [9001])
+    #expect(numbers("author:kuhlewind") == numbers("kuhlewind"))
+  }
+
+  @Test func `a title word is found without its accent`() {
+    #expect(numbers("facade") == [9002])
+    #expect(numbers("fa\u{00E7}ade") == [9002])
+  }
+
+  /// A precomposed letter and its decomposed spelling are the same letter, on either
+  /// side: the index holds `e` and U+0301 here, the query types `é`.
+  @Test func `precomposed and decomposed letters are the same`() {
+    #expect(numbers("r\u{00E9}sum\u{00E9}") == [9003])
+    #expect(numbers("resume") == [9003])
+    #expect(numbers("ku\u{0308}hlewind") == [9001])
+  }
+
+  @Test func `a working group is matched without its accents`() {
+    #expect(numbers("wg:naive") == [9003])
+    #expect(numbers("wg:Na\u{00EF}ve") == [9003])
+  }
 }
