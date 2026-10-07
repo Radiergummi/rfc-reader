@@ -26,9 +26,10 @@ public struct Snippet: Sendable, Hashable {
 /// the RFC Editor on this device.
 ///
 /// A section's text is its heading and its own blocks: prose, lists, tables and
-/// verbatim text, but not its subsections, which are rows of their own. A
-/// bibliography is left out: it is a list of titles, which answers no question and
-/// outranks the sections that do.
+/// verbatim text, but not its subsections, which are rows of their own. The abstract
+/// is a row too, anchored `abstract` as the reader anchors it. A bibliography and a
+/// back-of-book index are left out: each is a list, of titles or of terms, which
+/// answers no question and outranks the sections that do.
 ///
 /// One connection, used from one task, as `CitationIndex` is: not `Sendable`. The
 /// connection is the one unsafe thing it holds, and nothing outside sees it, so it
@@ -36,14 +37,22 @@ public struct Snippet: Sendable, Hashable {
 ///
 /// The schema:
 ///
-///     meta (key, value)            -- `version`
-///     documents (document)         -- every document indexed, `rfc8999`
+///     meta (key, value)             -- `version`
+///     documents (document)          -- every document indexed, `rfc8999`
 ///     sections (document, anchor, number, heading, body)   -- FTS5
+///     section_rows (row, document)  -- which document each row of `sections` is
+///
+/// `section_rows` is what a document's rows are found by: `sections` cannot index
+/// its `document` column, so deleting by it scanned every row of every document.
 @safe public final class FullTextIndex {
   /// Raised whenever the tables or what a section's text is change: an index made
-  /// under another version is emptied when it is opened, and the app indexes its
-  /// stored bodies again.
+  /// under another version is emptied when it is opened. The app then indexes its
+  /// stored bodies again; a document indexed by Index All RFCs, whose body was not
+  /// kept, is only back once that run is made again.
   public static let version = 1
+
+  /// The anchor the reader gives the abstract, which a hit in it opens.
+  public static let abstractAnchor = "abstract"
 
   public struct Failure: Error, CustomStringConvertible {
     public let description: String
@@ -62,17 +71,23 @@ public struct Snippet: Sendable, Hashable {
     guard unsafe sqlite3_open(url.path, &connection) == SQLITE_OK else {
       throw Failure(description: message)
     }
+    // A second connection writing, as the app's indexing may be while a search
+    // reads, is waited for rather than failing at once.
+    try check(unsafe sqlite3_busy_timeout(connection, 5_000))
     try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     if try strings("SELECT value FROM meta WHERE key = 'version'").first != String(version) {
       try execute(
         """
         DROP TABLE IF EXISTS documents;
         DROP TABLE IF EXISTS sections;
+        DROP TABLE IF EXISTS section_rows;
         CREATE TABLE documents (document TEXT PRIMARY KEY);
         CREATE VIRTUAL TABLE sections USING fts5(
           document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
           tokenize = 'unicode61 remove_diacritics 2'
         );
+        CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
+        CREATE INDEX section_rows_by_document ON section_rows (document);
         """)
       try run("INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(version))
     }
@@ -95,14 +110,16 @@ public struct Snippet: Sendable, Hashable {
       let insert = try unsafe prepare(
         "INSERT INTO sections (document, anchor, number, heading, body) VALUES (?, ?, ?, ?, ?)")
       defer { unsafe sqlite3_finalize(insert) }
-      for section in document.allSections where !RFCXMLSerializer.isReferences(section) {
+      for row in Self.rows(of: document) {
         try check(unsafe sqlite3_reset(insert))
         try unsafe bind(id.fileStem, at: 1, in: insert)
-        try unsafe bind(section.anchor, at: 2, in: insert)
-        try unsafe bind(section.number, at: 3, in: insert)
-        try unsafe bind(section.titleText, at: 4, in: insert)
-        try unsafe bind(Self.text(of: section), at: 5, in: insert)
+        try unsafe bind(row.anchor, at: 2, in: insert)
+        try unsafe bind(row.number, at: 3, in: insert)
+        try unsafe bind(row.heading, at: 4, in: insert)
+        try unsafe bind(row.body, at: 5, in: insert)
         try unsafe step(insert)
+        try run(
+          "INSERT INTO section_rows (row, document) VALUES (last_insert_rowid(), ?)", id.fileStem)
       }
       try run("INSERT INTO documents (document) VALUES (?)", id.fileStem)
     }
@@ -117,15 +134,53 @@ public struct Snippet: Sendable, Hashable {
     Set(try strings("SELECT document FROM documents").compactMap(DocumentID.init(fileStem:)))
   }
 
+  /// A document never indexed has no rows, and costs one lookup.
   private func deleteRows(of id: DocumentID) throws {
-    try run("DELETE FROM sections WHERE document = ?", id.fileStem)
+    guard try !strings("SELECT document FROM documents WHERE document = ?", id.fileStem).isEmpty
+    else { return }
+    try run(
+      "DELETE FROM sections WHERE rowid IN (SELECT row FROM section_rows WHERE document = ?)",
+      id.fileStem)
+    try run("DELETE FROM section_rows WHERE document = ?", id.fileStem)
     try run("DELETE FROM documents WHERE document = ?", id.fileStem)
+  }
+
+  /// One row of `sections`, before it is written.
+  struct Row: Equatable {
+    var anchor: String
+    var number: String?
+    var heading: String
+    var body: String
+  }
+
+  /// What is indexed of `document`: the abstract, unless a section of the body is
+  /// the abstract already, as a converted legacy one may be; then every section that
+  /// is not a bibliography or a back-of-book index.
+  static func rows(of document: RFCDocument) -> [Row] {
+    let sections = document.allSections.filter {
+      !RFCXMLSerializer.isReferences($0) && !$0.holdsIndex
+    }
+    var rows: [Row] = []
+    if !document.header.abstract.isEmpty,
+      !document.allSections.contains(where: { $0.anchor == abstractAnchor })
+    {
+      rows.append(
+        Row(
+          anchor: abstractAnchor, number: nil, heading: "Abstract",
+          body: text(of: document.header.abstract)))
+    }
+    rows += sections.map { section in
+      Row(
+        anchor: section.anchor, number: section.number, heading: section.titleText,
+        body: text(of: section.blocks))
+    }
+    return rows
   }
 
   /// A section's own text, as it is searched: its blocks' prose and verbatim text,
   /// the blocks nested in them included, but not its subsections'.
-  static func text(of section: Section) -> String {
-    section.blocks.flattened.flatMap { block -> [String] in
+  static func text(of blocks: [Block]) -> String {
+    blocks.flattened.flatMap { block -> [String] in
       var runs = block.proseRuns.map(\.plainText)
       if case .preformatted(let content) = block {
         runs.append(content.text)
@@ -172,7 +227,10 @@ public struct Snippet: Sendable, Hashable {
   /// string, so nothing typed is read as an operator, a column filter or a prefix.
   /// Nil when nothing in it is a word.
   static func matchExpression(for query: String) -> String? {
-    let terms = SearchQuery.words(in: query)
+    // `words(in:)` splits at spaces only, and a tab or a line break pasted from a
+    // document would hold two words together as a phrase.
+    let spaced = query.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    let terms = SearchQuery.words(in: spaced)
       .map(SearchQuery.unquoted)
       .filter { $0.contains { $0.isLetter || $0.isNumber } }
       .map { "\"" + $0.replacing("\"", with: "\"\"") + "\"" }
@@ -180,25 +238,30 @@ public struct Snippet: Sendable, Hashable {
   }
 
   /// The private-use characters `snippet()` is asked to put around each match.
-  private static let matchStart: Character = "\u{E000}"
-  private static let matchEnd: Character = "\u{E001}"
+  private static let matchStart: Unicode.Scalar = "\u{E000}"
+  private static let matchEnd: Unicode.Scalar = "\u{E001}"
 
-  /// A snippet with its markers taken out and their places kept.
+  /// A snippet with its markers taken out and their places kept. Read by scalar, not
+  /// by character: a marker followed by a combining mark or a variation selector is
+  /// one character with it.
   static func snippet(marked: String) -> Snippet {
-    var text = ""
-    var matches: [Range<String.Index>] = []
-    var start: String.Index?
-    for character in marked {
-      switch character {
-      case matchStart: start = text.endIndex
+    var scalars = String.UnicodeScalarView()
+    var offsets: [Range<Int>] = []
+    var start: Int?
+    for scalar in marked.unicodeScalars {
+      switch scalar {
+      case matchStart: start = scalars.count
       case matchEnd:
-        if let begun = start { matches.append(begun..<text.endIndex) }
+        if let begun = start { offsets.append(begun..<scalars.count) }
         start = nil
-      default: text.append(character)
+      default: scalars.append(scalar)
       }
     }
-    // Indices into the string as it was while being built are its indices now: it
-    // was only ever appended to.
+    let text = String(scalars)
+    let matches = offsets.map { range in
+      let lower = text.unicodeScalars.index(text.startIndex, offsetBy: range.lowerBound)
+      return lower..<text.unicodeScalars.index(lower, offsetBy: range.count)
+    }
     return Snippet(text: text, matches: matches)
   }
 
@@ -244,15 +307,24 @@ public struct Snippet: Sendable, Hashable {
     try unsafe step(statement)
   }
 
-  /// The first column of every row `sql` returns.
-  private func strings(_ sql: String) throws -> [String] {
+  /// The first column of every row `sql` returns, with `values` bound in order. A
+  /// failure throws rather than ending the rows early: an empty answer to the
+  /// version check would empty the index, and to `indexed()` would index it all again.
+  private func strings(_ sql: String, _ values: String...) throws -> [String] {
     let statement = try unsafe prepare(sql)
     defer { unsafe sqlite3_finalize(statement) }
-    var values: [String] = []
-    while unsafe sqlite3_step(statement) == SQLITE_ROW {
-      if let value = unsafe column(0, of: statement) { values.append(value) }
+    for (offset, value) in values.enumerated() {
+      try unsafe bind(value, at: Int32(offset + 1), in: statement)
     }
-    return values
+    var rows: [String] = []
+    while true {
+      let result = unsafe sqlite3_step(statement)
+      guard result == SQLITE_ROW else {
+        guard result == SQLITE_DONE else { throw Failure(description: message) }
+        return rows
+      }
+      if let value = unsafe column(0, of: statement) { rows.append(value) }
+    }
   }
 
   private func step(_ statement: OpaquePointer?) throws {
@@ -283,4 +355,11 @@ public struct Snippet: Sendable, Hashable {
   }
 
   private static let transient = unsafe unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+}
+
+extension Section {
+  /// Whether this is the document's back-of-book index (`IndexBlock`).
+  fileprivate var holdsIndex: Bool {
+    blocks.contains { if case .index = $0 { true } else { false } }
+  }
 }

@@ -181,7 +181,7 @@ The `.noindex` suffixes keep Spotlight from indexing the pipeline's output as it
 
 1. Fix the heuristic classes the full run's `report.json` exposes (1970s RFCs, hanging-indent definition lists). A single document that is wrong gets a patch in `corpus/overrides/`.
 2. Add `graph` and `errata` builders to `corpus-build` (both are small transformations of data we already parse).
-3. Add the `fts` builder (GRDB or the sqlite3 C library, FTS5, section rows) and the app-side reader.
+3. A prebuilt `fts` pack, once #215 is answered: the index is built on the device until then (RFCKit's `FullTextIndex`, #37), and a pack would hold the same section rows.
 4. Pick and convert the embedding model; add the `embeddings` builders; hybrid rerank in the app.
 5. Background Assets integration and the Offline settings screen.
 6. Resolve the licensing question for public distribution of `legacy-xml`: the Trust has been asked; if the answer is no, fall back to structure sidecars.

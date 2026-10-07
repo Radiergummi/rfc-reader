@@ -77,13 +77,64 @@ struct FullTextIndexTests {
 
   /// What a person types is words, never FTS5's query language: a stray quote, a
   /// dash or an operator's spelling searches for what is there instead of throwing.
-  @Test(arguments: ["\"", "-", "AND", "NEAR(", "*", "quic\"version", "(", "^", ":", "   "])
+  @Test(arguments: [
+    "AND", "NEAR(", "quic\"version", "quic*", "a-b", "body:quic", "NOT version", "quic OR version",
+    "^quic", "(quic", "\"", "-", "   ",
+  ])
   func `a query is never read as FTS5 syntax`(query: String) throws {
     let scratch = Scratch()
     let index = try scratch.index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     _ = try index.search(query)
+  }
+
+  @Test func `each word of a query is one string, and a quoted run one phrase`() {
+    #expect(FullTextIndex.matchExpression(for: "quic OR version") == #""quic" "OR" "version""#)
+    #expect(FullTextIndex.matchExpression(for: "a\"b") == #""a""b""#)
+    #expect(FullTextIndex.matchExpression(for: "\"key words\" must") == #""key words" "must""#)
+    #expect(FullTextIndex.matchExpression(for: "- * :") == nil)
+  }
+
+  /// A tab or a line break, as in a query pasted from a document, parts words as a
+  /// space does, rather than holding them together as a phrase.
+  @Test func `any white space parts the words of a query`() {
+    #expect(
+      FullTextIndex.matchExpression(for: "congestion\tcontrol\nwindow")
+        == #""congestion" "control" "window""#)
+  }
+
+  @Test func `the abstract is a row of its own`() throws {
+    let document = try Fixtures.document("rfc8999.xml")
+    let rows = FullTextIndex.rows(of: document)
+    #expect(rows.first?.anchor == FullTextIndex.abstractAnchor)
+    #expect(rows.first?.body.isEmpty == false)
+    #expect(rows.filter { $0.anchor == FullTextIndex.abstractAnchor }.count == 1)
+  }
+
+  /// A back-of-book index lists nearly every term once, so it would match most
+  /// queries of two words in every document that has one.
+  @Test func `a back of book index is never a row`() {
+    let index = IndexBlock(groups: [IndexBlock.Group(anchor: "index-s", entries: [])])
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(1), title: "A document"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Body",
+          blocks: [.paragraph(.init(text: "words"))]),
+        Section(anchor: "index", title: "Index", blocks: [.index(index)]),
+      ],
+      source: .xml)
+
+    #expect(FullTextIndex.rows(of: document).map(\.anchor) == ["section-1"])
+  }
+
+  /// `snippet()` puts its marker before whatever follows the match, a variation
+  /// selector or a combining mark included, which makes one character with it.
+  @Test func `a match marker followed by a combining scalar is still read`() {
+    let snippet = FullTextIndex.snippet(marked: "a \u{E000}foo\u{E001}\u{FE0F} \u{E000}bar\u{E001}")
+    #expect(snippet.text == "a foo\u{FE0F} bar")
+    #expect(snippet.matches.map { String(snippet.text.unicodeScalars[$0]) } == ["foo", "bar"])
   }
 
   @Test func `a quoted phrase matches its words in order`() throws {
