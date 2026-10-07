@@ -17,6 +17,12 @@ import RFCReaderKit
 // Each benchmark runs in a process of its own and reads its input in `setup`,
 // which runs before the memory baseline is taken. So a benchmark pays only for
 // its own input, and its peak memory is the work's, not the inputs'.
+//
+// A benchmark whose work goes through Foundation's Objective-C types (attributed
+// strings, regular expressions) drains an autorelease pool after each iteration.
+// Without one, nothing the iterations autorelease is freed until the benchmark
+// ends, and its peak memory grows with the iteration count rather than saying
+// what one run of the work costs (#420).
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
@@ -96,7 +102,9 @@ let benchmarks: @Sendable () -> Void = {
   for number in [9110, 9000, 8927, 8727] {
     Benchmark("Build: RFC \(number)") { benchmark, document in
       for _ in benchmark.scaledIterations {
-        blackHole(DocumentTextBuilder.build(document, style: style))
+        autoreleasepool {
+          blackHole(DocumentTextBuilder.build(document, style: style))
+        }
       }
     } setup: {
       try RFCXMLParser.parse(corpus.data("rfc\(number).xml"))
@@ -105,8 +113,10 @@ let benchmarks: @Sendable () -> Void = {
   // Every block RFC 8727 highlights, its 53 KB JSON block among them.
   Benchmark("Highlight: RFC 8727") { benchmark, blocks in
     for _ in benchmark.scaledIterations {
-      for (text, type) in blocks {
-        blackHole(Lexers.highlight(text, as: type))
+      autoreleasepool {
+        for (text, type) in blocks {
+          blackHole(Lexers.highlight(text, as: type))
+        }
       }
     }
   } setup: {
@@ -120,7 +130,9 @@ let benchmarks: @Sendable () -> Void = {
   }
   Benchmark("Build: RFC 5661") { benchmark, document in
     for _ in benchmark.scaledIterations {
-      blackHole(DocumentTextBuilder.build(document, style: style))
+      autoreleasepool {
+        blackHole(DocumentTextBuilder.build(document, style: style))
+      }
     }
   } setup: {
     LegacyTextParser.parse(corpus.data("rfc5661.txt"))
