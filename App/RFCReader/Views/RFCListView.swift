@@ -87,7 +87,7 @@ struct RFCListView: View {
     // long.
     let bookmarked = library.bookmarkedDocuments
     // Only Available Offline's rows say where their bodies stand (#358).
-    let offline = shown.filter == .downloaded ? library.offlineStatus : nil
+    let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
@@ -97,10 +97,12 @@ struct RFCListView: View {
     // platform's multi-select chord rather than ours to take.
     let window = rows.prefix(limit)
     let row = { (row: LibraryRow, showsYear: Bool) in
-      RFCRow(
-        row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
-        filter: shown.filter, offline: offline?.state(of: row.id)
-      ) { library.downloadNow(row.id) }
+      OfflineStated(document: row.id, isShown: showsOfflineState) { offline in
+        RFCRow(
+          row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
+          filter: shown.filter, offline: offline
+        ) { library.downloadNow(row.id) }
+      }
       .tag(row.id)
       // A combined element with no trait has the role AXUnknown on macOS, which
       // says nothing of what it is (#300). Here, where the row selects rather
@@ -427,6 +429,20 @@ struct IndexStatusView: View {
 
 /// A library row: an RFC, or a BCP, STD or FYI bookmarked or read as itself
 /// (#321), which shows the RFCs it names where an RFC shows its status and group.
+/// A row that reads where its document's body stands itself, so a fetch starting or
+/// ending redraws the rows rather than the whole list (#358). Reads nothing when not
+/// `isShown`, so the rows of other lists do not redraw at all.
+private struct OfflineStated<Content: View>: View {
+  @Environment(LibraryModel.self) private var library
+  let document: DocumentID
+  let isShown: Bool
+  @ViewBuilder let content: (OfflineRowState?) -> Content
+
+  var body: some View {
+    content(isShown ? library.offlineStatus.state(of: document) : nil)
+  }
+}
+
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool

@@ -107,19 +107,20 @@ struct OfflineKeeperTests {
     #expect(await !store.isCached(id))
   }
 
-  @MainActor @Test func `a fetch a reader asked for joins the reconciler's`() async throws {
+  @MainActor @Test func `a second fetch a reader asks for joins the first`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(8999)
     let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    await keeper.reconcile(wanted: [id]).value
+    let first = Task { try await keeper.fetchNow(id) }
     await untilWaiting(documents: 1, for: id, in: store)
 
-    let tapped = Task { try await keeper.fetchNow(id) }
+    let second = Task { try await keeper.fetchNow(id) }
     await fetcher.gate.open()
-    try await tapped.value
+    try await first.value
+    try await second.value
 
     #expect(fetcher.documentFetches == 1)
     #expect(sandbox.exists(id, format: .xml, in: .kept))
@@ -241,6 +242,51 @@ struct OfflineKeeperTests {
 
     #expect(cheapNetworks.documentFetches == 1)
     #expect(anyNetwork.documentFetches == 1)
+  }
+
+  /// Keep Offline tapped on cellular: the run its mark starts finds a path that
+  /// allows no fetch nobody waits for, and leaves the tapped one running.
+  @MainActor @Test func `a deferred path leaves running a fetch somebody waits for`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await keeper.reconcile(wanted: [id], policy: .deferred(.waitingForWiFi)).value
+    #expect(await store.waiters(id).documents == 1)
+    await fetcher.gate.open()
+    try await tapped.value
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Download Now on a document the keeper is fetching on cheap networks only: that
+  /// fetch is left, and one that takes any path starts.
+  @MainActor @Test func `fetching now replaces a fetch nobody waits for`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let anyNetwork = GatedFetcher()
+    let cheapNetworks = GatedFetcher()
+    await anyNetwork.gate.open()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(
+      store: store, client: anyNetwork, clientOnCheapNetworks: cheapNetworks
+    ) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id]).value
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    try await keeper.fetchNow(id)
+    await cheapNetworks.gate.open()
+
+    #expect(anyNetwork.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
   @MainActor @Test func `a kept document says nothing once its fetch has written it`()

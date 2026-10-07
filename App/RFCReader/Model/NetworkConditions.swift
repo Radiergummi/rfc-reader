@@ -15,17 +15,21 @@ final class NetworkConditions {
   private let monitor = NWPathMonitor()
   private var powerChanges: (any NSObjectProtocol)?
 
-  /// Starts watching, calling `changed` on the main actor after each change.
-  func start(_ changed: @escaping @MainActor @Sendable () -> Void) {
+  /// Starts watching. `pathChanged` is called on every update of the path, even one
+  /// that reads the same, as a move to another Wi-Fi network does; `powerChanged`
+  /// when Low Power Mode is turned on or off.
+  func start(
+    pathChanged: @escaping @MainActor @Sendable () -> Void,
+    powerChanged: @escaping @MainActor @Sendable () -> Void
+  ) {
+    // On the main queue, so the updates arrive in the order they were made.
     monitor.pathUpdateHandler = { [weak self] path in
-      let read = Self.policyPath(of: path)
-      Task { @MainActor in
-        guard let self, read != self.path else { return }
-        self.path = read
-        changed()
+      MainActor.assumeIsolated {
+        self?.path = Self.policyPath(of: path)
+        pathChanged()
       }
     }
-    monitor.start(queue: DispatchQueue(label: "me.mazetti.rfc-reader.network"))
+    monitor.start(queue: .main)
     powerChanges = NotificationCenter.default.addObserver(
       forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
     ) { [weak self] _ in
@@ -34,7 +38,7 @@ final class NetworkConditions {
         let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         guard isLowPower != self.isLowPower else { return }
         self.isLowPower = isLowPower
-        changed()
+        powerChanged()
       }
     }
   }
@@ -44,7 +48,7 @@ final class NetworkConditions {
     path.map { FetchPolicy.decide(cause: cause, path: $0, lowPower: isLowPower) }
   }
 
-  private nonisolated static func policyPath(of path: NWPath) -> FetchPolicy.Path {
+  private static func policyPath(of path: NWPath) -> FetchPolicy.Path {
     let status: FetchPolicy.PathStatus =
       switch path.status {
       case .satisfied: .satisfied

@@ -63,6 +63,21 @@ extension URLSession {
     #endif
     return URLSession(configuration: configuration)
   }()
+
+  /// The session for a document kept offline that nobody on this device is waiting
+  /// for (#358): `rfcEditorOnCheapNetworks`'s, except that a request fails, with a
+  /// `networkUnavailableReason`, rather than waiting, when the path becomes one it
+  /// may not use. A reader who opens the document joins its download, and would
+  /// otherwise wait with it for Wi-Fi.
+  public static let rfcEditorFailingOnExpensiveNetworks: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.urlCache = nil
+    #if !canImport(FoundationNetworking)
+      configuration.allowsExpensiveNetworkAccess = false
+      configuration.allowsConstrainedNetworkAccess = false
+    #endif
+    return URLSession(configuration: configuration)
+  }()
 }
 
 /// What a server said identifies the version of a resource it sent, so a later
