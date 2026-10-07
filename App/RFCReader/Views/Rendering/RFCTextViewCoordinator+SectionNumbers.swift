@@ -56,7 +56,7 @@ import Synchronization
     /// Answers whether there was a number.
     func copySectionLink(under event: NSEvent) -> Bool {
       guard let documentID, let number = sectionNumber(under: event),
-        let url = DocumentTextBuilder.url(number.anchor, scheme: DocumentTextBuilder.anchorScheme),
+        let url = ReaderLinkScheme.url(number.anchor, scheme: ReaderLinkScheme.anchorScheme),
         let link = LinkCopy.forLink(
           url, from: documentID, in: environment?.library.index, bibliography: bibliography)
       else { return false }

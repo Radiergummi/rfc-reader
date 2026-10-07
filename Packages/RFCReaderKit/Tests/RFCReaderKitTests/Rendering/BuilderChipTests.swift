@@ -109,8 +109,8 @@ struct BuilderChipTests {
     ) { value, _, _ in
       if let url = value as? URL { links.append(url) }
     }
-    #expect(links.compactMap(DocumentTextBuilder.reference(from:)) == [entry])
-    #expect(links.compactMap(DocumentTextBuilder.anchor(from:)) == ["section-1"])
+    #expect(links.compactMap(ReaderLinkScheme.reference(from:)) == [entry])
+    #expect(links.compactMap(ReaderLinkScheme.anchor(from:)) == ["section-1"])
   }
 
   private static let chipPrefix = "\u{FFFC}\u{2060}"

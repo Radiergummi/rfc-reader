@@ -138,7 +138,7 @@ struct SectionNumberHangTests {
     let heading = try Fixtures.offset(of: "\t1.1\tRequirements Notation\n", in: built.text)
     let number = heading + 1
     let link = try #require(built.text.attribute(.link, at: number, effectiveRange: nil) as? URL)
-    #expect(DocumentTextBuilder.anchor(from: link) == "section-1.1")
+    #expect(ReaderLinkScheme.anchor(from: link) == "section-1.1")
     let color = built.text.attribute(.foregroundColor, at: number, effectiveRange: nil)
     #expect(color as? PlatformColor == RFCColors.secondaryLabel)
     var range = NSRange()
@@ -297,15 +297,15 @@ struct SectionNumberHangTests {
 
   @Test func `a hung number keeps its own color, and the label's under the pointer`() throws {
     let url = try #require(
-      DocumentTextBuilder.url("section-1", scheme: DocumentTextBuilder.anchorScheme))
+      ReaderLinkScheme.url("section-1", scheme: ReaderLinkScheme.anchorScheme))
     let defaults: [NSAttributedString.Key: Any] = [.foregroundColor: RFCColors.link]
-    let resting = DocumentTextBuilder.linkRenderingAttributes(
+    let resting = LinkRendering.attributes(
       for: url, defaults: defaults, sectionNumber: .resting)
     #expect(resting[.foregroundColor] == nil, "the storage's secondary color shows")
-    let hovered = DocumentTextBuilder.linkRenderingAttributes(
+    let hovered = LinkRendering.attributes(
       for: url, defaults: defaults, sectionNumber: .hovered)
     #expect(hovered[.foregroundColor] as? PlatformColor == RFCColors.label)
-    let link = DocumentTextBuilder.linkRenderingAttributes(for: url, defaults: defaults)
+    let link = LinkRendering.attributes(for: url, defaults: defaults)
     #expect(link[.foregroundColor] as? PlatformColor == RFCColors.link)
   }
 
@@ -329,7 +329,7 @@ struct SectionNumberHangTests {
   @Test func `the copied link is the RFC Editor's, to the section and to the appendix`() throws {
     for (anchor, fragment) in [("section-1.1", "section-1.1"), ("appendix-A", "appendix-A")] {
       let url = try #require(
-        DocumentTextBuilder.url(anchor, scheme: DocumentTextBuilder.anchorScheme))
+        ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme))
       let copy = try #require(
         LinkCopy.forLink(url, from: .rfc(9110), in: nil, bibliography: []))
       #expect(copy.url.absoluteString == "https://www.rfc-editor.org/rfc/rfc9110#\(fragment)")
