@@ -16,6 +16,23 @@ rfc-reader/
 │   ├── Sources/CSQLite/      the system's SQLite, a product of its own that corpus-build uses too
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, DocumentStore (actor, disk cache), the stores and the SwiftData schema. Needs an Apple SDK.
+│   ├── Sources/RFCReaderKit/
+│   │   ├── Rendering/        DocumentTextBuilder and the attributes it sets, palettes, reading modes, AccessibleReading
+│   │   ├── Geometry/         FragmentGeometry: where a decoration lands in a laid-out fragment
+│   │   ├── Layout/           ReaderLayout (the column), and the reading position kept through a relayout
+│   │   ├── Navigation/       history, link routing, the scene registry, previews, quick open, the contents outline
+│   │   ├── Chrome/           what the windows' chrome says: toolbar titles, the Info pane, menus, the glossary, panels
+│   │   ├── Library/          the library's lists, filters and rows
+│   │   ├── Cache/            DocumentStore (actor), the on-disk cache and its eviction
+│   │   ├── Offline/          Keep Offline: the fetch policy, the reconciler and the keeper
+│   │   ├── Index/, Packs/    the RFC index's snapshot and refresh check; data packs, verified and installed
+│   │   ├── UserData/         the SwiftData schema and its stores
+│   │   ├── Preferences/      the reader's settings, kept in user defaults
+│   │   ├── Export/, Print/   exports, and printing
+│   │   ├── Pasteboard/       what Copy puts on the pasteboard
+│   │   ├── ReadingPath/      the citation index and reading paths
+│   │   ├── Integrations/     App Intents' answers, Spotlight, Contacts
+│   │   └── Support/          small utilities, localization, acknowledgements
 ├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest; the checks in RFCCorpusKit); see DATA_PIPELINE.md
 ├── App/RFCReader/            SwiftUI multiplatform app (iOS, iPadOS, macOS); no test bundle, so nothing testable lives here
 │   ├── Model/                LibraryModel (process-wide), NavigationModel (per tab), ReaderState (per window)
