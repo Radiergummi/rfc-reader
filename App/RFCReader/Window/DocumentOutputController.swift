@@ -25,8 +25,9 @@
     /// ⌘⇧E neither asks for a second panel nor makes the file again.
     private var isExporting = false
 
-    init(window: NSWindow, navigation: NavigationModel, reader: ReaderState, library: LibraryModel)
-    {
+    init(
+      window: NSWindow, navigation: NavigationModel, reader: ReaderState, library: LibraryModel
+    ) {
       self.window = window
       self.navigation = navigation
       self.reader = reader
