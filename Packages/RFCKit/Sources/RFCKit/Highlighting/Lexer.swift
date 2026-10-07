@@ -18,40 +18,40 @@ import Foundation
 /// matches only where a line starts. Patterns compile with `anchorsMatchLines`, as
 /// Pygments' and Chroma's do. A state that changes state is searched a window of
 /// the text at a time (`WindowedText`), which finds what a search of all of it would.
-public struct Lexer: Highlighter {
-  public enum Transition: Sendable, Hashable {
+struct Lexer: Highlighter {
+  enum Transition: Sendable, Hashable {
     case push(String)
     /// Leaves this many states, never the root.
     case pop(Int)
   }
 
   /// What a rule emits for its match.
-  public enum Emit: Sendable, Hashable {
+  enum Emit: Sendable, Hashable {
     case kind(TokenKind)
     /// One kind per capture group, in order. Characters of the match outside every
     /// group are plain, and a group that matched nothing emits nothing.
     case groups([TokenKind])
   }
 
-  public struct Rule: Sendable {
-    public let pattern: String
-    public let emit: Emit
-    public let transition: Transition?
+  struct Rule: Sendable {
+    let pattern: String
+    let emit: Emit
+    let transition: Transition?
 
-    public init(_ pattern: String, _ kind: TokenKind, _ transition: Transition? = nil) {
+    init(_ pattern: String, _ kind: TokenKind, _ transition: Transition? = nil) {
       self.pattern = pattern
       self.emit = .kind(kind)
       self.transition = transition
     }
 
-    public init(_ pattern: String, groups: [TokenKind], _ transition: Transition? = nil) {
+    init(_ pattern: String, groups: [TokenKind], _ transition: Transition? = nil) {
       self.pattern = pattern
       self.emit = .groups(groups)
       self.transition = transition
     }
   }
 
-  public enum DefinitionError: Error, Hashable {
+  enum DefinitionError: Error, Hashable {
     case noRootState
     case unknownState(String)
     case invalidPattern(String)
@@ -99,7 +99,7 @@ public struct Lexer: Highlighter {
   static let window = 128
   static let lookbehind = 128
 
-  public init(
+  init(
     states definitions: [String: [Rule]], options: NSRegularExpression.Options = []
   ) throws(DefinitionError) {
     let options = options.union(.anchorsMatchLines)
@@ -177,7 +177,7 @@ public struct Lexer: Highlighter {
     return expression.numberOfCaptureGroups
   }
 
-  public func tokens(in text: String) -> [SyntaxToken] {
+  func tokens(in text: String) -> [SyntaxToken] {
     lex(text).tokens
   }
 

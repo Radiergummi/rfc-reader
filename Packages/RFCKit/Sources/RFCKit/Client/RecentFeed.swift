@@ -19,15 +19,15 @@ public struct RecentRFC: Sendable, Hashable, Identifiable {
   }
 }
 
-public enum RecentFeedParser {
-  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
+enum RecentFeedParser {
+  enum ParseError: Error, LocalizedError, Sendable, Equatable {
     /// Well-formed XML that is not RSS, such as a sign-in page served in the feed's
     /// place: an error, not a feed with nothing in it (#757).
     case notAFeed(rootElement: String)
     case malformed(XMLSyntaxError)
 
     /// The syntax error's own words, which the app shows (#320).
-    public var errorDescription: String? {
+    var errorDescription: String? {
       switch self {
       case .notAFeed(let root): "Not an RSS feed: the document's root element is <\(root)>."
       case .malformed(let error): error.errorDescription
@@ -51,7 +51,7 @@ public enum RecentFeedParser {
     timeZone: .gmt,
     isLenient: false)
 
-  public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
+  static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
     let root: XMLTree.Element
     do {
       root = try XMLTree.parse(data)
