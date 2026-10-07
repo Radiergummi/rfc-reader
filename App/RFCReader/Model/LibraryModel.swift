@@ -161,10 +161,6 @@ final class LibraryModel {
     self?.index?[id]?.formats ?? []
   }
 
-  /// The reconciliation running, which the next one waits for, so two never
-  /// interleave their moves.
-  @ObservationIgnored private var offlineReconciliation: Task<Void, Never>?
-
   /// The RFCs the installed legacy pack lists as text that only points to its
   /// original (#316): the reader shows their original without a load, offline too.
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
@@ -237,8 +233,10 @@ final class LibraryModel {
         "reading Keep Offline marks failed: \(String(describing: error), privacy: .public)")
       return
     }
+    // The first read reconciles even when it finds what a failed one left: no set.
+    let isFirstRead = !hasReadOfflineMarks
     hasReadOfflineMarks = true
-    guard marks != offlineMarks else { return }
+    guard isFirstRead || marks != offlineMarks else { return }
     offlineMarks = marks
     availableOfflineNumbers = Set(marks.filter { $0.series == .rfc }.map(\.number))
     reconcileOffline()
@@ -247,13 +245,11 @@ final class LibraryModel {
   /// Brings the disk in line with `offlineMarks`, after any reconciliation already
   /// running. Not before the index has loaded, since a fetch needs the formats it
   /// lists, and applying the index runs this; nor before the marks have been read.
+  /// Nor on a store that fell back to memory (#152), whose marks are not the ones
+  /// saved: reconciling against them would move every kept body into the cache.
   private func reconcileOffline() {
-    guard index != nil, hasReadOfflineMarks else { return }
-    let previous = offlineReconciliation
-    offlineReconciliation = Task(name: "Keep offline") {
-      await previous?.value
-      await offlineKeeper.reconcile(wanted: offlineMarks)
-    }
+    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory else { return }
+    offlineKeeper.reconcile(wanted: offlineMarks)
   }
 
   private func refreshRecentlyReadCount() {
@@ -1329,23 +1325,30 @@ final class LibraryModel {
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
-  /// keep the document offline; what was read in the last month; and whatever a
-  /// window has open, which includes the document just fetched.
+  /// keep the document offline; what was read in the last month; a document marked
+  /// Keep Offline, whose cached body waits for the keeper to move it (#358); and
+  /// whatever a window has open, which includes the document just fetched.
   private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
+    // Read here, as the store learns them only when the keeper first runs.
+    let marked = try OfflineMarkStore.markedDocuments(in: context)
     let open = sceneRegistry.open.compactMap(\.selection)
-    return bookmarked.union(read).union(open)
+    return bookmarked.union(read).union(marked).union(open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
     await store.isCached(id)
   }
 
-  func downloadedSize(_ id: DocumentID) async -> Int? {
-    await store.downloadedSize(id)
+  /// The size of `id`'s kept body, once what keeping it offline started has ended:
+  /// a mark from anywhere, the menu, a script or another device, fetches after it is
+  /// made.
+  func keptSize(_ id: DocumentID) async -> Int? {
+    await offlineKeeper.untilSettled(id)
+    return await store.downloadedSize(id)
   }
 
   /// The documents the reader has opened, most recent first, a BCP, STD or FYI
@@ -1397,34 +1400,35 @@ final class LibraryModel {
   /// network, since somebody is waiting for it, and throws when that fails: the mark
   /// stays, and the next reconciliation tries again. Unmarking moves the body back
   /// into the reading cache rather than deleting it, and leaves a download running
-  /// for it.
+  /// for it. A mark that could not be saved is logged, as a bookmark's is (#125),
+  /// and leaves the toggle as it was.
   func setKeptOffline(_ id: DocumentID, _ isKept: Bool) async throws {
-    try mark(id, keptOffline: isKept)
-    guard isKept else { return }
+    guard mark(id, keptOffline: isKept), isKept else { return }
     try await offlineKeeper.fetchNow(id)
   }
 
   /// `setKeptOffline` from a list's context menu or a script, which have nowhere to
-  /// show a failure: it is logged, as a bookmark's is (#125). The mark is saved
-  /// before this returns, so a script that reads it back reads what it set, and only
-  /// the download goes on after.
+  /// show a failed download either. The mark is saved before this returns, so a
+  /// script that reads it back reads what it set, and only the download goes on
+  /// after.
   func setKeptOfflineInBackground(_ id: DocumentID, _ isKept: Bool) {
-    do {
-      try mark(id, keptOffline: isKept)
-    } catch {
-      libraryLog.failure(of: id, "marking Keep Offline failed", error)
-      return
-    }
-    guard isKept else { return }
+    guard mark(id, keptOffline: isKept), isKept else { return }
     // The keeper logs a failed download itself.
     Task(name: "Keep offline") { try? await offlineKeeper.fetchNow(id) }
   }
 
   /// Saves the mark and reads the marks again at once, rather than when the save's
-  /// notification arrives, which is after the next turn of the run loop.
-  private func mark(_ id: DocumentID, keptOffline isKept: Bool) throws {
-    try OfflineMarkStore.setMarked(id, isKept, in: container.mainContext)
+  /// notification arrives, which is after the next turn of the run loop. Answers
+  /// whether it was saved.
+  private func mark(_ id: DocumentID, keptOffline isKept: Bool) -> Bool {
+    do {
+      try OfflineMarkStore.setMarked(id, isKept, in: container.mainContext)
+    } catch {
+      libraryLog.failure(of: id, "marking Keep Offline failed", error)
+      return false
+    }
     refreshOfflineMarks()
+    return true
   }
 
   #if os(macOS)

@@ -26,6 +26,17 @@ public final class OfflineKeeper {
   /// itself and not one started after it for the same document.
   private var fetches: [DocumentID: (token: UUID, task: Task<Void, any Error>)] = [:]
 
+  /// What was last asked for, which a run started to finish an earlier one's work
+  /// carries out instead of what that one was asked.
+  private var wanted: Set<DocumentID> = []
+
+  /// The run in progress, or the last, which the next waits for, so two never
+  /// interleave their moves.
+  private var run: Task<Void, Never>?
+
+  /// Waits for the downloads the last run had to leave a body to, then runs again.
+  private var rerun: Task<Void, Never>?
+
   public init(
     store: DocumentStore, client: any DocumentFetching,
     formats: @escaping (DocumentID) -> [FileFormat]
@@ -35,9 +46,28 @@ public final class OfflineKeeper {
     self.formats = formats
   }
 
-  /// Carries out the plan for `wanted`. Returns once the moves are made and the
-  /// fetches started, not finished.
-  public func reconcile(wanted: Set<DocumentID>) async {
+  /// Carries out the plan for `wanted`, after any run already asked for. The task
+  /// ends once the moves are made and the fetches started, not finished.
+  @discardableResult
+  public func reconcile(wanted: Set<DocumentID>) -> Task<Void, Never> {
+    self.wanted = wanted
+    let previous = run
+    let current = Task {
+      await previous?.value
+      await carryOut(wanted)
+    }
+    run = current
+    return current
+  }
+
+  /// Until what has been asked for `id` is done: every run asked for so far, and a
+  /// fetch of it that one of them or a reader started.
+  public func untilSettled(_ id: DocumentID) async {
+    await run?.value
+    _ = await fetches[id]?.task.result
+  }
+
+  private func carryOut(_ wanted: Set<DocumentID>) async {
     await store.setWanted(wanted)
     let state = await store.offlineState()
     let plan = OfflineReconciler.plan(
@@ -61,6 +91,18 @@ public final class OfflineKeeper {
     // Another run may have started one while this one waited on the store.
     for id in plan.fetch where fetches[id] == nil {
       start(id)
+    }
+    // The plan leaves a body alone while a download may still write it, and nothing
+    // else would run again once the download ends.
+    let left = state.running.intersection(
+      wanted.intersection(state.cached).union(state.kept.subtracting(wanted)))
+    rerun?.cancel()
+    rerun = nil
+    guard !left.isEmpty else { return }
+    rerun = Task {
+      await store.untilDownloadsEnd(of: left)
+      guard !Task.isCancelled else { return }
+      reconcile(wanted: self.wanted)
     }
   }
 
@@ -95,12 +137,5 @@ public final class OfflineKeeper {
     }
     fetches[id] = (token, task)
     return task
-  }
-
-  /// Until every fetch this has running has ended: each removes itself as it ends.
-  func settle() async {
-    while let fetch = fetches.values.first {
-      _ = await fetch.task.result
-    }
   }
 }

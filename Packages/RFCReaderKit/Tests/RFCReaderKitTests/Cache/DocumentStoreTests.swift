@@ -14,7 +14,7 @@ import Testing
 @Suite("Document store", .timeLimit(.minutes(1)))
 struct DocumentStoreTests {
   /// Holds every fetch in flight until the test lets them finish.
-  private actor Gate {
+  actor Gate {
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var isOpen = false
 
@@ -35,7 +35,7 @@ struct DocumentStoreTests {
   /// Serves the committed fixtures, read where they are: RFC 8999's XML as any
   /// preferred document, RFC 2119's text as any body's bytes. Each fetch counts
   /// itself, then waits at the gate.
-  private final class GatedFetcher: DocumentFetching {
+  final class GatedFetcher: DocumentFetching {
     let gate = Gate()
     private let documentCount = Mutex(0)
     private let textCount = Mutex(0)
@@ -62,7 +62,7 @@ struct DocumentStoreTests {
   }
 
   /// Directories of one test's own, for its store.
-  private struct Sandbox {
+  struct Sandbox {
     let root = FileManager.default.temporaryDirectory
       .appending(path: "DocumentStoreTests-\(UUID().uuidString)", directoryHint: .isDirectory)
 
@@ -91,18 +91,6 @@ struct DocumentStoreTests {
 
     func remove() {
       try? FileManager.default.removeItem(at: root)
-    }
-  }
-
-  /// Until as many readers wait for `id`'s fetches as given: an open started is not
-  /// yet an open that has joined one.
-  private func untilWaiting(
-    documents: Int = 0, texts: Int = 0, for id: DocumentID, in store: DocumentStore
-  ) async {
-    while true {
-      let waiting = await store.waiters(id)
-      if waiting.documents == documents, waiting.texts == texts { return }
-      await Task.yield()
     }
   }
 
@@ -535,43 +523,9 @@ struct DocumentStoreTests {
     #expect(settled.running.isEmpty)
   }
 
-  @MainActor @Test func `marking a cached document moves it without a fetch`() async throws {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    await fetcher.gate.open()
-    let id = DocumentID.rfc(8999)
-    _ = try await store.document(id, formats: [.xml], client: fetcher)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-
-    await keeper.reconcile(wanted: [id])
-    await keeper.settle()
-
-    #expect(fetcher.documentFetches == 1)
-    #expect(sandbox.exists(id, format: .xml, in: .kept))
-    #expect(!sandbox.exists(id, format: .xml, in: .cache))
-  }
-
-  @MainActor @Test func `marking a document on neither tier fetches it into the kept tier`()
-    async throws
-  {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    await fetcher.gate.open()
-    let id = DocumentID.rfc(8999)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-
-    await keeper.reconcile(wanted: [id])
-    await keeper.settle()
-
-    #expect(fetcher.documentFetches == 1)
-    #expect(sandbox.exists(id, format: .xml, in: .kept))
-  }
-
-  @MainActor @Test func `unmarking a kept document moves it back into the cache`() async throws {
+  /// A keep with nothing left to do does not fail on a move it did not need: here a
+  /// cached copy that cannot leave its folder.
+  @Test func `keeping a kept document does not move its cached copy`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
@@ -579,93 +533,21 @@ struct DocumentStoreTests {
     await fetcher.gate.open()
     let id = DocumentID.rfc(8999)
     try await store.keep(id, formats: [.xml], client: fetcher)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-
-    await keeper.reconcile(wanted: [])
-
-    #expect(!sandbox.exists(id, format: .xml, in: .kept))
-    #expect(sandbox.exists(id, format: .xml, in: .cache))
-  }
-
-  /// #116's case: the fetch nobody waits for any more is canceled, and nothing is
-  /// written.
-  @MainActor @Test func `a mark removed while its fetch runs keeps nothing`() async throws {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    let id = DocumentID.rfc(8999)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    await keeper.reconcile(wanted: [id])
-    await untilWaiting(documents: 1, for: id, in: store)
-
-    await keeper.reconcile(wanted: [])
-    await untilWaiting(documents: 0, for: id, in: store)
-    await fetcher.gate.open()
-    await keeper.settle()
-
-    #expect(await !store.isCached(id))
-  }
-
-  /// A tapped Keep Offline is the keeper's own fetch, so unmarking leaves it as it
-  /// leaves any other.
-  @MainActor @Test func `unmarking during a fetch a reader asked for keeps nothing`()
-    async throws
-  {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    let id = DocumentID.rfc(8999)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    let tapped = Task { try await keeper.fetchNow(id) }
-    await untilWaiting(documents: 1, for: id, in: store)
-
-    await keeper.reconcile(wanted: [])
-    await fetcher.gate.open()
-
-    await #expect(throws: CancellationError.self) { try await tapped.value }
-    #expect(await !store.isCached(id))
-  }
-
-  @MainActor @Test func `a fetch a reader asked for joins the reconciler's`() async throws {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    let id = DocumentID.rfc(8999)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    await keeper.reconcile(wanted: [id])
-    await untilWaiting(documents: 1, for: id, in: store)
-
-    let tapped = Task { try await keeper.fetchNow(id) }
-    await fetcher.gate.open()
-    try await tapped.value
-
-    #expect(fetcher.documentFetches == 1)
-    #expect(sandbox.exists(id, format: .xml, in: .kept))
-  }
-
-  /// The reconciler's plan promises a document in both tiers ends with one.
-  @MainActor @Test func `a wanted body in both tiers loses its cached copy`() async throws {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    await fetcher.gate.open()
-    let id = DocumentID.rfc(8999)
-    try await store.keep(id, formats: [.xml], client: fetcher)
-    try FileManager.default.createDirectory(
-      at: sandbox.file(id, format: .xml).deletingLastPathComponent(),
-      withIntermediateDirectories: true)
+    let cacheFolder = sandbox.file(id, format: .xml).deletingLastPathComponent()
+    try FileManager.default.createDirectory(at: cacheFolder, withIntermediateDirectories: true)
     try FileManager.default.copyItem(
       at: sandbox.file(id, format: .xml, in: .kept), to: sandbox.file(id, format: .xml))
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o555], ofItemAtPath: cacheFolder.path)
+    defer {
+      try? FileManager.default.setAttributes(
+        [.posixPermissions: 0o755], ofItemAtPath: cacheFolder.path)
+    }
 
-    await keeper.reconcile(wanted: [id])
+    try await store.keep(id, formats: [.xml], client: fetcher)
 
     #expect(sandbox.exists(id, format: .xml, in: .kept))
-    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(fetcher.documentFetches == 1)
   }
 
   /// A move only: a cached body gone by the time it runs is not fetched.
@@ -679,23 +561,16 @@ struct DocumentStoreTests {
 
     #expect(await !store.isCached(id))
   }
+}
 
-  @MainActor @Test func `reconciling again while a fetch runs starts no second one`() async throws {
-    let sandbox = Sandbox()
-    defer { sandbox.remove() }
-    let store = sandbox.store()
-    let fetcher = GatedFetcher()
-    let id = DocumentID.rfc(8999)
-    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    await keeper.reconcile(wanted: [id])
-    await untilWaiting(documents: 1, for: id, in: store)
-
-    await keeper.reconcile(wanted: [id])
-    #expect(await store.waiters(id).documents == 1)
-    await fetcher.gate.open()
-    await keeper.settle()
-
-    #expect(fetcher.documentFetches == 1)
-    #expect(sandbox.exists(id, format: .xml, in: .kept))
+/// Until as many readers wait for `id`'s fetches as given: an open started is not
+/// yet an open that has joined one.
+func untilWaiting(
+  documents: Int = 0, texts: Int = 0, for id: DocumentID, in store: DocumentStore
+) async {
+  while true {
+    let waiting = await store.waiters(id)
+    if waiting.documents == documents, waiting.texts == texts { return }
+    await Task.yield()
   }
 }

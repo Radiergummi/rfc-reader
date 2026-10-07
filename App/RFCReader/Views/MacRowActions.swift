@@ -44,6 +44,7 @@ import SwiftUI
     }
 
     private var isBookmarked: Bool { library.bookmarkedDocuments.contains(row.id) }
+
     private func toggleBookmark() {
       library.toggleBookmark(row.id)
     }

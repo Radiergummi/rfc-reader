@@ -184,6 +184,14 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
     running.withLock { running in Set(running.keys) }
   }
 
+  /// Until the fetch running for `id` now, if there is one, has ended. Waits beside
+  /// its readers rather than as one of them, so it neither keeps the fetch going nor
+  /// is given its result.
+  func ended(_ id: DocumentID) async {
+    let task = running.withLock { running in running[id]?.task }
+    _ = await task?.result
+  }
+
   func isRunning(_ id: DocumentID) -> Bool {
     running.withLock { running in running[id] != nil }
   }

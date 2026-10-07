@@ -441,6 +441,15 @@ public actor DocumentStore {
       running: downloads.runningDocuments.union(texts.runningDocuments))
   }
 
+  /// Until the downloads running now for `documents`, of a body or a text, have
+  /// ended: what the reconciler waits for before it moves a body it had to leave.
+  public func untilDownloadsEnd(of documents: Set<DocumentID>) async {
+    for id in documents {
+      await downloads.ended(id)
+      await texts.ended(id)
+    }
+  }
+
   /// Removes `id`'s bodies from both tiers. A body that cannot be deleted is left
   /// where it is, and stays cached: the index records what the removal left on
   /// disk, not what it set out to do.
@@ -476,7 +485,10 @@ public actor DocumentStore {
   public func keep(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws
   {
-    if try keepCached(id) || isKept(id) { return }
+    // Kept first: a document already kept needs no move, and one that failed would
+    // fail a keep that has nothing left to do.
+    if isKept(id) { return }
+    if try keepCached(id) { return }
     keeping.insert(id)
     defer { keeping.remove(id) }
     if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
