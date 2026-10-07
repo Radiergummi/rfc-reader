@@ -47,7 +47,9 @@ public enum OfflineRowState: Sendable, Hashable {
   case downloading
   /// The last fetch failed: the row offers Retry.
   case failed
-  /// The fetch waits for a path the policy allows: the row offers Download Now.
+  /// The fetch waits for a path the policy allows: the row offers Download Now,
+  /// unless the device is offline or cellular data is off for the app, where a
+  /// fetch on any path could only fail.
   case waiting(FetchPolicy.Reason)
 
   /// The row's few words about it.
@@ -67,9 +69,10 @@ public enum OfflineRowState: Sendable, Hashable {
   /// The button beside it, which fetches on any path, or nil when there is none.
   public func action(locale: Locale = .interface) -> String? {
     switch self {
-    case .downloading: nil
+    case .downloading, .waiting(.offline), .waiting(.cellularDenied): nil
     case .failed: String(kit: "Retry", locale: locale)
-    case .waiting: String(kit: "Download Now", locale: locale)
+    case .waiting(.waitingForWiFi), .waiting(.lowDataMode), .waiting(.lowPowerMode):
+      String(kit: "Download Now", locale: locale)
     }
   }
 }

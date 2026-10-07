@@ -42,6 +42,17 @@ struct OfflineStatusTests {
     #expect(
       OfflineRowState.waiting(.waitingForWiFi).description(locale: english)
         == "Waiting for Wi-Fi")
-    #expect(OfflineRowState.waiting(.offline).action(locale: english) == "Download Now")
+    #expect(OfflineRowState.waiting(.waitingForWiFi).action(locale: english) == "Download Now")
+  }
+
+  /// Download Now overrides a wait the device could end by fetching on any path, and
+  /// is not offered where such a fetch could only fail.
+  @Test func `only a wait a fetch on any path could end offers Download Now`() {
+    for reason in [FetchPolicy.Reason.waitingForWiFi, .lowDataMode, .lowPowerMode] {
+      #expect(OfflineRowState.waiting(reason).action(locale: .english) == "Download Now")
+    }
+    for reason in [FetchPolicy.Reason.offline, .cellularDenied] {
+      #expect(OfflineRowState.waiting(reason).action(locale: .english) == nil)
+    }
   }
 }
