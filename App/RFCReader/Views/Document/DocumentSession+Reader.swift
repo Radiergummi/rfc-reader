@@ -113,11 +113,13 @@ extension DocumentSession {
     }
   }
 
-  /// What the reader state says about a document that has loaded. What is worked
-  /// out off the main actor arrives only if its reader is still the one on screen.
+  /// What the reader state says about a document that has loaded: nothing, and no
+  /// work started for it, unless its reader is the one on screen. What is worked out
+  /// off the main actor arrives only if it still is.
   private static func present(
     _ loaded: RFCDocument, id: DocumentID, into reader: ReaderState.Writer, library: LibraryModel
   ) {
+    guard reader.isCurrent else { return }
     reader { reader in
       reader.groups = ReferenceGroup.groups(in: loaded)
       reader.info = info(for: id, authors: loaded.header.authors, in: library)

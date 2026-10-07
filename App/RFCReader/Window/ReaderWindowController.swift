@@ -33,7 +33,7 @@
     let reader = ReaderState()
 
     /// Print, export and page setup, as sheets on this window.
-    private(set) var output: DocumentOutputController!
+    let output: DocumentOutputController
 
     /// The window's columns; see `ReaderSplitViewController`.
     private(set) var splitController: ReaderSplitViewController!
@@ -75,11 +75,11 @@
       // to 307 and leave the new tab's split view laid out for the old width. The
       // first window of the session takes the name, in `AppDelegate`; a tab inherits
       // its sibling's frame from `addTabbedWindow(_:ordered:)`.
+      output = DocumentOutputController(
+        window: window, navigation: navigation, reader: reader, library: library)
       super.init(window: window)
       window.delegate = self
       makeRestorable(window)
-      output = DocumentOutputController(
-        window: window, navigation: navigation, reader: reader, library: library)
       build(in: window)
     }
 
