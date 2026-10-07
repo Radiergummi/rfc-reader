@@ -246,3 +246,15 @@ final class ReaderState {
     precedingDraft = nil
   }
 }
+
+extension ReaderState {
+  /// What a reader writes the window's reader state through: only while it is the
+  /// reader on screen (#772). See `ScopedWriter`.
+  typealias Writer = ScopedWriter<ReaderState>
+
+  /// The writer of the reader of `id`, at `depth` in the iOS stack, in `navigation`'s
+  /// tab.
+  func writer(showing id: DocumentID, at depth: Int?, in navigation: NavigationModel) -> Writer {
+    ScopedWriter(self) { navigation.shows(id, at: depth) }
+  }
+}

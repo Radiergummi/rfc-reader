@@ -258,8 +258,7 @@ final class DocumentSession {
   /// `resizeIsLive` is whether a new column comes from a resize still under way; see
   /// `ReaderResize`.
   func requestBuild(
-    for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState,
-    navigation: NavigationModel
+    for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState.Writer
   ) {
     switch BuildRequest.decide(inputs, built: builtInputs, building: buildingFor) {
     case .keep:
@@ -285,7 +284,7 @@ final class DocumentSession {
     let delay = state.buildDelay(
       for: ColumnChange(from: builtInputs?.column, to: inputs.column, isLive: resizeIsLive))
     trace("building")
-    build = Task(name: "Build document") { [weak self, reader, navigation, id, depth] in
+    build = Task(name: "Build document") { [weak self, reader] in
       if delay > .zero {
         try? await Task.sleep(for: delay)
       }
@@ -299,8 +298,7 @@ final class DocumentSession {
       builtInputs = inputs
       buildingFor = nil
       trace("built")
-      guard navigation.shows(id, at: depth) else { return }
-      reader.sections = rebuilt.reachableSections(of: document)
+      reader { $0.sections = rebuilt.reachableSections(of: document) }
     }
   }
 
