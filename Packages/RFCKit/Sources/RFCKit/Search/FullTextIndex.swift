@@ -25,7 +25,7 @@ public struct Snippet: Sendable, Hashable {
 /// documents the app has parsed, so it carries no text that was not downloaded from
 /// the RFC Editor on this device.
 ///
-/// A section's text is its heading and its own blocks: prose, lists, tables and
+/// A section's text is its heading and its own blocks: prose, lists, tables, captions and
 /// verbatim text, but not its subsections, which are rows of their own. The abstract
 /// is a row too, anchored `abstract` as the reader anchors it. A bibliography and a
 /// back-of-book index are left out: each is a list, of titles or of terms, which
@@ -74,8 +74,13 @@ public struct Snippet: Sendable, Hashable {
     // A second connection writing, as the app's indexing may be while a search
     // reads, is waited for rather than failing at once.
     try check(unsafe sqlite3_busy_timeout(connection, 5_000))
-    try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    if try strings("SELECT value FROM meta WHERE key = 'version'").first != String(version) {
+    // In one transaction, so a second connection opening the index at the same time
+    // finds the version once this one has rebuilt the tables, and does not rebuild them
+    // under it.
+    try transaction {
+      try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+      guard try strings("SELECT value FROM meta WHERE key = 'version'").first != String(version)
+      else { return }
       try execute(
         """
         DROP TABLE IF EXISTS documents;
@@ -110,6 +115,10 @@ public struct Snippet: Sendable, Hashable {
       let insert = try unsafe prepare(
         "INSERT INTO sections (document, anchor, number, heading, body) VALUES (?, ?, ?, ?, ?)")
       defer { unsafe sqlite3_finalize(insert) }
+      let record = try unsafe prepare(
+        "INSERT INTO section_rows (row, document) VALUES (last_insert_rowid(), ?)")
+      defer { unsafe sqlite3_finalize(record) }
+      try unsafe bind(id.fileStem, at: 1, in: record)
       for row in Self.rows(of: document) {
         try check(unsafe sqlite3_reset(insert))
         try unsafe bind(id.fileStem, at: 1, in: insert)
@@ -118,8 +127,8 @@ public struct Snippet: Sendable, Hashable {
         try unsafe bind(row.heading, at: 4, in: insert)
         try unsafe bind(row.body, at: 5, in: insert)
         try unsafe step(insert)
-        try run(
-          "INSERT INTO section_rows (row, document) VALUES (last_insert_rowid(), ?)", id.fileStem)
+        try check(unsafe sqlite3_reset(record))
+        try unsafe step(record)
       }
       try run("INSERT INTO documents (document) VALUES (?)", id.fileStem)
     }
@@ -177,11 +186,18 @@ public struct Snippet: Sendable, Hashable {
     return rows
   }
 
-  /// A section's own text, as it is searched: its blocks' prose and verbatim text,
-  /// the blocks nested in them included, but not its subsections'.
+  /// A section's own text, as it is searched: its blocks' prose, verbatim text and
+  /// captions, the blocks nested in them included, but not its subsections'.
   static func text(of blocks: [Block]) -> String {
     blocks.flattened.flatMap { block -> [String] in
       var runs = block.proseRuns.map(\.plainText)
+      let caption: String? =
+        switch block {
+        case .figure(let figure): figure.title
+        case .table(let table): table.title
+        default: nil
+        }
+      if let caption { runs.append(caption) }
       if case .preformatted(let content) = block {
         runs.append(content.text)
       }
@@ -196,11 +212,13 @@ public struct Snippet: Sendable, Hashable {
   /// phrase; everything else is words, whatever FTS5 would make of it.
   public func search(_ query: String, limit: Int = 50) throws -> [SectionHit] {
     guard let match = Self.matchExpression(for: query) else { return [] }
+    // `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
+    // `snippet()` runs for the rows returned only, not for every section that matched.
     let statement = try unsafe prepare(
       """
       SELECT document, anchor, number, heading,
         snippet(sections, -1, char(57344), char(57345), '…', 16)
-      FROM sections WHERE sections MATCH ? ORDER BY bm25(sections) LIMIT ?
+      FROM sections WHERE sections MATCH ? ORDER BY rank LIMIT ?
       """)
     defer { unsafe sqlite3_finalize(statement) }
     try unsafe bind(match, at: 1, in: statement)
@@ -272,8 +290,11 @@ public struct Snippet: Sendable, Hashable {
       ?? "SQLite failed"
   }
 
+  /// Takes the write lock at once: a transaction that reads first and then writes is
+  /// refused at its first write while another connection writes, without waiting
+  /// the busy timeout.
   private func transaction(_ body: () throws -> Void) throws {
-    try execute("BEGIN")
+    try execute("BEGIN IMMEDIATE")
     do {
       try body()
       try execute("COMMIT")

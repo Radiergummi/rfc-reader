@@ -51,6 +51,15 @@ struct FullTextIndexTests {
     #expect(hits.first?.document == .rfc(2119))
   }
 
+  /// A figure's or a table's caption is shown in its section, so it is searched there.
+  @Test func `a figure's caption finds its section`() throws {
+    let scratch = Scratch()
+    let index = try scratch.index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(try index.search("\"example format\"").map(\.anchor) == ["notational-conventions"])
+  }
+
   @Test func `every word of a query has to be in the section`() throws {
     let scratch = Scratch()
     let index = try scratch.index()
