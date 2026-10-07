@@ -37,6 +37,8 @@ public actor DocumentStore {
   private let cacheDirectory: URL
   /// The bytes free on the disk for a body in each tier; see `StorageTier.hasRoom`.
   private let freeSpace: @Sendable (StorageTier) -> Int?
+  /// Awaited before a body on disk is parsed: nil but in tests.
+  private let parsing: (@Sendable () async -> Void)?
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
   /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
@@ -127,10 +129,13 @@ public actor DocumentStore {
   /// A store keeping its index, packs and kept bodies in `directory`, and the
   /// index snapshot and the reading cache in `caches`. Both are created when they
   /// do not exist. `freeSpace` is the bytes free for a body in each tier, read from
-  /// the volume when it is nil.
+  /// the volume when it is nil. `parsing` is awaited before a body on disk is
+  /// parsed, for a test to hold the parse open as it holds a fetch.
   public init(
-    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil
+    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
+    parsing: (@Sendable () async -> Void)? = nil
   ) {
+    self.parsing = parsing
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
     let cacheDirectory = caches.appending(path: "Documents", directoryHint: .isDirectory)
     self.directory = directory
@@ -662,9 +667,11 @@ public actor DocumentStore {
     let xmlURLs = fileURLs(id, format: .xml)
     let textURLs = fileURLs(id, format: .text)
     let packURL = legacyPack?.file(for: id)
+    let parsing = parsing
     let (cached, isCachedKept) = try await parses.value(for: id) {
       Task {
-        await Self.parseCached(
+        await parsing?()
+        return await Self.parseCached(
           id, xml: xmlURLs, pack: packURL, text: textURLs, signpostID: signpostID)
       }
     }
@@ -878,5 +885,10 @@ public actor DocumentStore {
   /// a test acts once the readers it started have joined them.
   func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
     (downloads.waiters(id), texts.waiters(id))
+  }
+
+  /// How many opens wait for the parse of `id`'s body on disk, for the tests.
+  func parseWaiters(_ id: DocumentID) -> Int {
+    parses.waiters(id)
   }
 }

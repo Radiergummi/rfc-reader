@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import RFCKit
 import Synchronization
@@ -587,6 +588,117 @@ struct DocumentStoreTests {
     try await store.keepCached(id)
 
     #expect(await !store.isCached(id))
+  }
+
+  // MARK: - Overlapping a fetch or a parse (#614)
+
+  /// Eviction runs while a document is being fetched: it bounds the cache by what
+  /// is on disk, the document being fetched is pinned as every open one is, and
+  /// the fetch writes its body once it lands.
+  @Test func `eviction during a fetch evicts the others and keeps the fetched body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let older = DocumentID.rfc(2119)
+    let fetched = DocumentID.rfc(8999)
+    try FileManager.default.createDirectory(
+      at: sandbox.file(older, format: .text).deletingLastPathComponent(),
+      withIntermediateDirectories: true)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(older, format: .text))
+    _ = try await store.document(older, formats: [.text], client: fetcher)
+
+    let opening = Task { try await store.document(fetched, formats: [.xml], client: fetcher) }
+    await untilWaiting(documents: 1, for: fetched, in: store)
+    let evicted = await store.evict(pinned: [fetched], bound: 0)
+    await fetcher.gate.open()
+
+    #expect(evicted == [older])
+    #expect(try await opening.value == Fixtures.rfc8999())
+    #expect(await store.isCached(fetched))
+    #expect(await !store.isCached(older))
+  }
+
+  /// A second open of a body on disk joins the parse the first started, rather than
+  /// parsing it again, and both get the document.
+  @Test func `a second open joins the parse of a cached body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let gate = Gate()
+    let parses = Mutex(0)
+    let store = DocumentStore(
+      directory: sandbox.directory, caches: sandbox.caches,
+      parsing: {
+        parses.withLock { $0 += 1 }
+        await gate.wait()
+      })
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    try FileManager.default.createDirectory(
+      at: sandbox.file(id, format: .xml).deletingLastPathComponent(),
+      withIntermediateDirectories: true)
+    try Fixtures.data("rfc8999.xml").write(to: sandbox.file(id, format: .xml))
+
+    let first = Task { try await store.document(id, formats: [.xml], client: fetcher) }
+    await untilParsing(1, id, in: store)
+    let second = Task { try await store.document(id, formats: [.xml], client: fetcher) }
+    await untilParsing(2, id, in: store)
+    await gate.open()
+
+    let expected = try Fixtures.rfc8999()
+    #expect(try await first.value == expected)
+    #expect(try await second.value == expected)
+    #expect(parses.withLock { $0 } == 1)
+    #expect(fetcher.documentFetches == 0)
+  }
+
+  /// A legacy document is downloading as text when the legacy XML pack is
+  /// installed: once the text is on disk, the open reads the document from the pack,
+  /// which is the one XML path the pack exists for. The pack is made here from the
+  /// committed text fixture, converted as corpus-build converts it.
+  @Test func `a pack installed while a document downloads serves it from the pack`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(2119)
+    let pack = try Self.legacyPack(holding: id, in: sandbox.root)
+
+    let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(texts: 1, for: id, in: store)
+    _ = try await store.installLegacyPack(from: pack)
+    await fetcher.gate.open()
+
+    #expect(try await opening.value.source == .xml)
+    #expect(fetcher.textFetches == 1)
+  }
+
+  /// A legacy XML pack holding `id`, converted from the committed RFC 2119 text the
+  /// way corpus-build converts it, with a manifest listing it.
+  private static func legacyPack(holding id: DocumentID, in parent: URL) throws -> URL {
+    let directory = parent.appending(path: "pack", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let converted = RFCXMLSerializer().serialize(
+      LegacyTextParser.parse(try Fixtures.data("rfc2119.txt")))
+    let data = Data(converted.utf8)
+    let name = DocumentCacheIndex.fileName(for: id, format: .xml)
+    try data.write(to: directory.appending(path: name))
+    let manifest = Manifest(
+      version: "2026.10",
+      files: [
+        Manifest.Entry(path: name, bytes: data.count, sha256: Manifest.hex(SHA256.hash(data: data)))
+      ])
+    try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
+    return directory
+  }
+}
+
+/// Until as many opens wait for `id`'s parse of a body on disk as given.
+func untilParsing(_ count: Int, _ id: DocumentID, in store: DocumentStore) async {
+  while await store.parseWaiters(id) != count {
+    await Task.yield()
   }
 }
 
