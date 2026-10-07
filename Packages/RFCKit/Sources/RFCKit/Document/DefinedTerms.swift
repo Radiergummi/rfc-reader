@@ -17,6 +17,13 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
   }
 }
 
+/// A primary index entry's term, and the anchors it may be defined at, innermost
+/// first: what the XML says of it, before the model is asked which it holds (#455).
+struct IndexedTerm: Sendable, Hashable {
+  var term: String
+  var anchors: [String]
+}
+
 /// Collects the terms a document defines, at parse time, the way abbreviations are
 /// (#176): from the document's own text, so a definition is the author's and correct
 /// for this document.
@@ -30,7 +37,12 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// names a thing and then calls it something, is not read: that is a heuristic nothing
 /// has measured.
 /// The first definition of a term wins, except that an index entry with no definition
-/// text, one placed directly in a section, gives way to any entry that has one.
+/// text, one placed directly in a section, gives way to any entry that has one. A term
+/// still without a definition at the end has none to show, and is dropped (#396).
+///
+/// A term is kept by each spelling prose would use on its own (`spellings(of:)`):
+/// `WGW (Widget Gateway)` as both `WGW` and `Widget Gateway`, a citation or the start
+/// of the definition the term carried left off.
 enum DefinedTerms {
   /// Whether a section titled `title` defines terms: one opening with Definitions, or
   /// one whose title names terms for its subsections as well (`passesTermsOn`).
@@ -77,13 +89,59 @@ enum DefinedTerms {
 
   /// Every term the document defines: `indexed` first, from primary index entries, then
   /// the definition lists of sections that name terms, and of their subsections.
-  static func defined(in document: RFCDocument, indexed: [DefinedTerm] = [])
+  static func defined(in document: RFCDocument, indexed: [IndexedTerm] = [])
+    -> [String: DefinedTerm]
+  {
+    defined(in: document, indexed: lookUp(indexed, in: document))
+  }
+
+  /// Each primary index entry where the model holds it (#455): at the first of its
+  /// anchors the model holds, defined by what holds it. A paragraph, a piece of
+  /// artwork, a figure or a table is its own definition, a list item or a definition
+  /// list entry its blocks, and a section none, as an entry placed directly in one
+  /// marks the section. An entry at no anchor the model holds is dropped.
+  static func lookUp(_ indexed: [IndexedTerm], in document: RFCDocument) -> [DefinedTerm] {
+    guard !indexed.isEmpty else { return [] }
+    var definitions: [String: [Block]] = [:]
+    func hold(_ anchor: String?, _ definition: [Block]) {
+      guard let anchor, definitions[anchor] == nil else { return }
+      definitions[anchor] = definition
+    }
+    for section in document.allSections {
+      hold(section.anchor, [])
+    }
+    for block in document.blocks {
+      switch block {
+      case .list(let list):
+        for item in list.items { hold(item.anchor, item.blocks) }
+      case .definitionList(let list):
+        for item in list.items {
+          hold(item.anchor, item.definition)
+          hold(item.definitionAnchor, item.definition)
+        }
+      case .paragraph, .preformatted, .figure, .table:
+        for anchor in block.anchors { hold(anchor, [block]) }
+      case .blockQuote, .aside, .references, .index:
+        break
+      }
+    }
+    return indexed.compactMap { entry in
+      guard let anchor = entry.anchors.first(where: { definitions[$0] != nil }) else { return nil }
+      return DefinedTerm(term: entry.term, anchor: anchor, definition: definitions[anchor] ?? [])
+    }
+  }
+
+  /// Every term the document defines: `indexed` first, primary index entries already
+  /// looked up in the model, then the definition lists of sections that name terms.
+  static func defined(in document: RFCDocument, indexed: [DefinedTerm])
     -> [String: DefinedTerm]
   {
     var found: [String: DefinedTerm] = [:]
     func record(_ term: DefinedTerm) {
-      guard !term.term.isEmpty, found[term.term] == nil else { return }
-      found[term.term] = term
+      for spelling in spellings(of: term.term) where found[spelling] == nil {
+        found[spelling] = DefinedTerm(
+          term: spelling, anchor: term.anchor, definition: term.definition)
+      }
     }
     // An index entry placed directly in a section has no definition text, which
     // another entry for the same term supplies: a later index entry that has one, or
@@ -103,10 +161,14 @@ enum DefinedTerms {
               let defined = DefinedTerm(
                 term: term(item.term.plainText), anchor: item.anchor ?? section.anchor,
                 definition: item.definition)
-              if !defined.definition.isEmpty, undefined.remove(defined.term) != nil {
-                found[defined.term] = defined
-              } else {
-                record(defined)
+              for spelling in spellings(of: defined.term) {
+                let spelled = DefinedTerm(
+                  term: spelling, anchor: defined.anchor, definition: defined.definition)
+                if !spelled.definition.isEmpty, undefined.remove(spelling) != nil {
+                  found[spelling] = spelled
+                } else if found[spelling] == nil {
+                  found[spelling] = spelled
+                }
               }
             }
           }
@@ -115,7 +177,63 @@ enum DefinedTerms {
       }
     }
     read(document.sections, inherited: false)
-    return found
+    return found.filter { !$0.value.definition.isEmpty }
+  }
+
+  // MARK: Spellings
+
+  /// The spellings a term as its list or index entry writes it stands for, each as
+  /// prose would write it on its own; empty when it is none (#396).
+  ///
+  /// Left off: a citation after it (`Widget datagram [RFC9999]`, `… RFC 9999`), the
+  /// start of its definition after a colon and a space (`WGW: Widget Gateway.`), a
+  /// dash after it, and quotes around it. A parenthetical at the end is a second
+  /// spelling when either side is an abbreviation (`WGW (Widget Gateway)`), and a
+  /// qualifier, left off, when neither is (`parent (of a widget)`). A list is a
+  /// spelling per item (`Widget, wdgWidget`), and a list of single letters, a
+  /// formula's variables, is none. Notation keeps its colons and brackets: those with
+  /// no space before them (`widget:port`, `W[i..j]`), and a term that opens with a
+  /// parenthesis.
+  static func spellings(of written: String) -> [String] {
+    var term = written.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let citation = term.range(of: " [") { term = String(term[..<citation.lowerBound]) }
+    if let citation = term.range(
+      of: #"\sRFC[\s\u{00A0}]\d"#, options: .regularExpression)
+    {
+      term = String(term[..<citation.lowerBound])
+    }
+    if let definition = term.range(of: ": ") { term = String(term[..<definition.lowerBound]) }
+    term = term.trimmingCharacters(in: .whitespaces)
+    while let last = term.last, [":", "-", "\u{2013}", "\u{2014}"].contains(last) {
+      term.removeLast()
+      term = term.trimmingCharacters(in: .whitespaces)
+    }
+    let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
+    if term.count > 1, let first = term.first, let last = term.last, quotes.contains(first),
+      quotes.contains(last)
+    {
+      term = String(term.dropFirst().dropLast())
+    }
+    guard !term.isEmpty else { return [] }
+    if term.hasPrefix("(") { return [term] }
+    if term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) {
+      let outside = String(term[..<open.lowerBound])
+      let inside = String(term[open.upperBound...].dropLast())
+      guard isAbbreviation(outside) || isAbbreviation(inside) else { return spellings(of: outside) }
+      return [outside, inside].filter { !$0.isEmpty }
+    }
+    guard term.contains(", ") else { return [term] }
+    let items = term.components(separatedBy: ", ").map { item in
+      item.hasPrefix("or ") || item.hasPrefix("and ")
+        ? String(item.drop { $0 != " " }.dropFirst()) : item
+    }
+    return items.filter { $0.count > 1 && $0 != "etc." }
+  }
+
+  /// Whether `word` is an abbreviation: one word with two capitals or more, `WGW` or
+  /// `PoW`.
+  private static func isAbbreviation(_ word: String) -> Bool {
+    !word.contains(" ") && word.filter(\.isUppercase).count >= 2
   }
 
   /// The definition lists among `blocks`, however deep, but not those nested in a
