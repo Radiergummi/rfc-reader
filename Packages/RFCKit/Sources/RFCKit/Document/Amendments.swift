@@ -43,6 +43,12 @@ public struct Amendment: Sendable, Hashable, Codable {
 /// citation in a reference's annotation describes that entry. A document that does
 /// not state its own number amends nothing, since a row that cannot say which
 /// document amends answers nothing.
+///
+/// A citation of a BCP or STD names no RFC, and a document updates RFCs, so `members`
+/// says which RFCs a series holds -- the index's, `{ index.series($0)?.members ?? [] }`,
+/// which RFCKit's documents do not carry. Such a citation amends the one member the
+/// document updates; of two it updates, `BCP 14, Section 2` could mean either, and is
+/// counted for neither (#417).
 public enum Amendments {
   public static func links(
     in document: RFCDocument, members: (DocumentID) -> [DocumentID] = { _ in [] }
@@ -57,8 +63,8 @@ public enum Amendments {
     where !bibliographies.contains(place.sectionAnchor) {
       for inline in place.inlines {
         guard case .crossReference(let xref) = inline,
-          case .document(let id, let section?, _) = xref.target,
-          updated.contains(id)
+          case .document(let cited, let section?, _) = xref.target,
+          let id = Self.amended(cited, updated: updated, members: members)
         else { continue }
         let link = Amendment(
           amended: id,
@@ -72,5 +78,16 @@ public enum Amendments {
       }
     }
     return links
+  }
+
+  /// The updated RFC a citation of `cited` amends: itself, or the one member of a
+  /// series that the document updates.
+  private static func amended(
+    _ cited: DocumentID, updated: Set<DocumentID>, members: (DocumentID) -> [DocumentID]
+  ) -> DocumentID? {
+    if updated.contains(cited) { return cited }
+    guard cited.series != .rfc else { return nil }
+    let candidates = Set(members(cited)).intersection(updated)
+    return candidates.count == 1 ? candidates.first : nil
   }
 }
