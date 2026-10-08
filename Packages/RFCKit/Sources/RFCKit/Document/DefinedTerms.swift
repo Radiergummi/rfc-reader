@@ -208,7 +208,7 @@ enum DefinedTerms {
   /// `BCP 38`), the start of its definition after a colon and a space (`WGW: Widget
   /// Gateway.`), the colon a list sets after a term, and a dash after it. A
   /// parenthetical at the end is a second spelling when one side is a short form the
-  /// other expands (`WGW (Widget Gateway)`), and a qualifier, left off, when not
+  /// other expands whole (`WGW (Widget Gateway)`), and a qualifier, left off, when not
   /// (`parent (of a widget)`, `Content-Type (header field)`). With `splittingLists`,
   /// a definition list's term that is a list is the spellings of each item, cleaned
   /// as a term is (`Widget, wdgWidget`), and a list of single letters, a formula's
@@ -279,12 +279,10 @@ enum DefinedTerms {
   /// Whether `term` is a list that a short form after it abbreviates as a whole,
   /// `Widgets, Gadgets, and Gizmos (WGGs)`: one name, not a list of three.
   private static func isListExpanded(_ term: String) -> Bool {
-    guard let (outside, inside) = parenthetical(trimmingTrailingPunctuation(term)),
-      Abbreviations.isShortForm(inside)
-    else {
+    guard let (outside, inside) = parenthetical(trimmingTrailingPunctuation(term)) else {
       return false
     }
-    return Abbreviations.longForm(of: inside, in: outside) == outside
+    return expands(inside, outside)
   }
 
   /// Where `separator` occurs in `text` outside parentheses, brackets and braces, so
@@ -336,11 +334,11 @@ enum DefinedTerms {
     return inside.contains(where: quotes.contains) ? text : String(inside)
   }
 
-  /// Whether `short` is a short form whose letters `long` spells, as `Abbreviations`
-  /// finds an expansion in prose: `WGW` and `Widget Gateway`, not `Content-Type` and
-  /// `header field`. Only that it spells them: where its expansion starts is the
-  /// prose's question, not this one's.
+  /// Whether `short` is a short form that abbreviates all of `long`, as
+  /// `Abbreviations` reads a glossary entry: `WGW` and `Widget Gateway`, not
+  /// `Content-Type` and `header field`, nor `WGW` and `Upstream Widget Gateway`, whose
+  /// first word qualifies the expansion.
   private static func expands(_ short: String, _ long: String) -> Bool {
-    Abbreviations.isShortForm(short) && Abbreviations.longForm(of: short, in: long) != nil
+    Abbreviations.isShortForm(short) && Abbreviations.longForm(of: short, in: long) == long
   }
 }

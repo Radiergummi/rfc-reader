@@ -78,6 +78,9 @@ struct DefinedTermsTests {
     ("(w_S^i, q_S^i)", ["(w_S^i, q_S^i)"]),
     // A short form only when the other side expands it: a qualifier otherwise.
     ("Content-Type (header field)", ["Content-Type"]),
+    // The short form has to abbreviate the whole other side, not its last words: a
+    // qualified expansion is a qualifier's.
+    ("Upstream Content Delivery Network (CDN)", ["Upstream Content Delivery Network"]),
     ("Widget Route BCP 99", ["Widget Route"]),
     ("Widget Route RFC9999", ["Widget Route"]),
     // Quotes come off before anything is cut, and off each item of a list.
