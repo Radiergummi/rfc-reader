@@ -83,6 +83,25 @@ struct DefinedTermsTests {
     // Quotes come off before anything is cut, and off each item of a list.
     (#""Widget", "Gadget""#, ["Widget", "Gadget"]),
     (#""Widget: Gateway""#, ["Widget"]),
+    // Each item of a list is cleaned as a term is.
+    ("Widget Edge (WE), Gadget Edge (GE)", ["Widget Edge", "WE", "Gadget Edge", "GE"]),
+    ("Widget [RFC9999], Gadget [RFC9998]", ["Widget", "Gadget"]),
+    // A list a short form abbreviates as a whole is one name.
+    ("Widgets, Gadgets, and Gizmos (WGGs)", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
+    ("Widgets, Gadgets, and Gizmos (WGGs):", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
+    // A citation inside the parenthetical is left off too.
+    (
+      "WMAC (Widget Message Authentication Code [W.1])",
+      ["WMAC", "Widget Message Authentication Code"]
+    ),
+    // A comma or a colon inside brackets is notation's.
+    ("g(w, v)", ["g(w, v)"]),
+    ("{0, 1}", ["{0, 1}"]),
+    ("(W: G)", ["(W: G)"]),
+    // Single quotes too, and an apostrophe inside double quotes stays.
+    ("'Widget Policy'", ["Widget Policy"]),
+    ("\u{2018}Widget Policy\u{2019}", ["Widget Policy"]),
+    (#""Widget's Policy""#, ["Widget's Policy"]),
     // Nothing left, or a list of letters, is no term.
     ("", []),
     ("I, p, q, R", []),
@@ -123,7 +142,7 @@ struct DefinedTermsTests {
       source: .xml)
     let found = DefinedTerms.defined(
       in: document,
-      indexed: [DefinedTerm(term: "Gadget", anchor: "section-3", definition: [])])
+      lookedUp: [DefinedTerm(term: "Gadget", anchor: "section-3", definition: [])])
     #expect(Set(found.keys) == ["Widget"])
   }
 
@@ -252,7 +271,7 @@ struct DefinedTermsTests {
       ],
       source: .xml)
     let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
-    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    let term = try #require(DefinedTerms.defined(in: document, lookedUp: [indexed])["widget"])
     #expect(term.anchor == "widget")
     #expect(term.definition == listed.definition)
   }
@@ -278,7 +297,7 @@ struct DefinedTermsTests {
       ],
       source: .xml)
     let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
-    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    let term = try #require(DefinedTerms.defined(in: document, lookedUp: [indexed])["widget"])
     #expect(term.anchor == "widget")
     #expect(term.definition == listed.definition)
   }
@@ -293,7 +312,7 @@ struct DefinedTermsTests {
       term: "widget", anchor: "section-2-3",
       definition: [.paragraph(Paragraph(text: "A widget is what a sender emits."))])
     let term = try #require(
-      DefinedTerms.defined(in: document, indexed: [placed, defining])["widget"])
+      DefinedTerms.defined(in: document, lookedUp: [placed, defining])["widget"])
     #expect(term == defining)
   }
 
@@ -314,7 +333,7 @@ struct DefinedTermsTests {
     let indexed = DefinedTerm(
       term: "widget", anchor: "widget-def",
       definition: [.paragraph(Paragraph(text: "A widget is what a sender emits."))])
-    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    let term = try #require(DefinedTerms.defined(in: document, lookedUp: [indexed])["widget"])
     #expect(term == indexed)
   }
 
@@ -445,6 +464,22 @@ struct DefinedTermsTests {
         in: document
       ).first)
     #expect(term.anchor == "code.418")
+    #expect(term.definition == cell, "the cell, not the whole table")
+  }
+
+  /// A table the model holds by its author's anchor defines nothing itself either: an
+  /// entry in a cell of an unanchored row is defined by the cell, not the whole table.
+  @Test func `an index entry in an anchored table is defined by its cell`() throws {
+    let table = Table(
+      title: nil, header: [], rows: [Table.Row(cells: [[.text("A teapot.")]])], anchor: "codes")
+    let document = Self.model([.table(table)])
+    let cell = [Block.paragraph(Paragraph(text: "A teapot."))]
+    let term = try #require(
+      DefinedTerms.lookUp(
+        [IndexedTerm(term: "teapot", anchors: ["codes", "terms"], definition: cell)],
+        in: document
+      ).first)
+    #expect(term.anchor == "codes")
     #expect(term.definition == cell, "the cell, not the whole table")
   }
 

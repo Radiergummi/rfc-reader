@@ -2,7 +2,8 @@ import Foundation
 
 /// A term the document defines itself, and where (#176).
 public struct DefinedTerm: Sendable, Hashable, Codable {
-  /// As the document writes it: `significant change`, `user agent`.
+  /// One spelling of the term, as prose would write it (`DefinedTerms.spellings(of:)`):
+  /// `significant change`, `user agent`.
   public var term: String
   /// Where the definition is: the definition list item's or the element's own anchor,
   /// or its section's.
@@ -96,15 +97,15 @@ enum DefinedTerms {
   static func defined(in document: RFCDocument, indexed: [IndexedTerm] = [])
     -> [String: DefinedTerm]
   {
-    defined(in: document, indexed: lookUp(indexed, in: document))
+    defined(in: document, lookedUp: lookUp(indexed, in: document))
   }
 
   /// Each primary index entry where the model holds it (#455): at the first of its
   /// anchors the model holds, defined by what holds it. A paragraph, a piece of
-  /// artwork, a figure or a table is its own definition, a list item or a definition
-  /// list entry its blocks; a section, or a table row, defines nothing itself, and
-  /// the entry is defined by the block it sits in. An entry at no anchor the model
-  /// holds is dropped.
+  /// artwork or a figure is its own definition, a list item or a definition list
+  /// entry its blocks; a section, a table or a table row defines nothing itself, and
+  /// the entry is defined by the block it sits in, a table's cell rather than the
+  /// whole table. An entry at no anchor the model holds is dropped.
   static func lookUp(_ indexed: [IndexedTerm], in document: RFCDocument) -> [DefinedTerm] {
     guard !indexed.isEmpty else { return [] }
     var definitions: [String: [Block]] = [:]
@@ -125,7 +126,7 @@ enum DefinedTerms {
           hold(item.definitionAnchor, item.definition)
         }
       case .table(let table):
-        hold(table.anchor, [block])
+        hold(table.anchor, [])
         for row in table.header + table.rows { hold(row.anchor, []) }
       case .paragraph, .preformatted, .figure:
         for anchor in block.anchors { hold(anchor, [block]) }
@@ -141,9 +142,9 @@ enum DefinedTerms {
     }
   }
 
-  /// Every term the document defines: `indexed` first, primary index entries already
+  /// Every term the document defines: `lookedUp` first, primary index entries already
   /// looked up in the model, then the definition lists of sections that name terms.
-  static func defined(in document: RFCDocument, indexed: [DefinedTerm])
+  static func defined(in document: RFCDocument, lookedUp indexed: [DefinedTerm])
     -> [String: DefinedTerm]
   {
     var found: [String: DefinedTerm] = [:]
@@ -209,37 +210,106 @@ enum DefinedTerms {
   /// parenthetical at the end is a second spelling when one side is a short form the
   /// other expands (`WGW (Widget Gateway)`), and a qualifier, left off, when not
   /// (`parent (of a widget)`, `Content-Type (header field)`). With `splittingLists`,
-  /// a definition list's term that is a list is a spelling per item (`Widget,
-  /// wdgWidget`), and a list of single letters, a formula's variables, is none; an
-  /// index entry's comma is an inverted name's (`cache, private`), and stays.
-  /// Notation keeps its colons and brackets: those with no space before them
+  /// a definition list's term that is a list is the spellings of each item, cleaned
+  /// as a term is (`Widget, wdgWidget`), and a list of single letters, a formula's
+  /// variables, is none; an index entry's comma is an inverted name's (`cache,
+  /// private`), and stays. Notation keeps its colons, commas and brackets: those
+  /// inside brackets (`g(x, y)`, `(S: T)`), those with no space before them
   /// (`widget:port`, `W[i..j]`), and a term that opens with a parenthesis.
   static func spellings(of written: String, splittingLists: Bool = true) -> [String] {
     var term = unquoted(written.trimmingCharacters(in: .whitespacesAndNewlines))
-    if let citation = term.range(of: " [") { term = String(term[..<citation.lowerBound]) }
-    if let definition = term.range(of: ": ") { term = String(term[..<definition.lowerBound]) }
+    if let definition = topLevelRanges(of: ": ", in: term).first {
+      term = String(term[..<definition.lowerBound])
+    }
+    let separators = splittingLists ? topLevelRanges(of: ", ", in: term) : []
+    guard !separators.isEmpty, !isListExpanded(term) else { return spellings(ofName: term) }
+    var items: [String] = []
+    var start = term.startIndex
+    for separator in separators {
+      items.append(String(term[start..<separator.lowerBound]))
+      start = separator.upperBound
+    }
+    items.append(String(term[start...]))
+    return
+      items
+      .map { item in
+        item.hasPrefix("or ") || item.hasPrefix("and ")
+          ? String(item.drop { $0 != " " }.dropFirst()) : item
+      }
+      .flatMap(spellings(ofName:))
+      .filter { $0.count > 1 && $0 != "etc." }
+  }
+
+  /// The spellings one name stands for, a list's item or the whole term: see
+  /// `spellings(of:splittingLists:)`.
+  private static func spellings(ofName written: String) -> [String] {
+    var term = withoutCitation(unquoted(written.trimmingCharacters(in: .whitespaces)))
     // The colon or dash after it first: a citation is left off only at the end.
     term = trimmingTrailingPunctuation(term)
     term = trimmingTrailingPunctuation(term.replacing(Abbreviations.citationsPattern, with: ""))
     term = unquoted(term)
     guard !term.isEmpty else { return [] }
     if term.hasPrefix("(") { return [term] }
-    if term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) {
-      let outside = String(term[..<open.lowerBound])
-      let inside = String(term[open.upperBound...].dropLast())
+    if let (outside, inside) = parenthetical(term) {
       guard expands(outside, inside) || expands(inside, outside) else {
-        return spellings(of: outside, splittingLists: splittingLists)
+        return spellings(ofName: outside)
       }
       return [outside, inside]
     }
-    guard splittingLists, term.contains(", ") else { return [term] }
-    let items = term.components(separatedBy: ", ").map { item in
-      let item =
-        item.hasPrefix("or ") || item.hasPrefix("and ")
-        ? String(item.drop { $0 != " " }.dropFirst()) : item
-      return unquoted(item)
+    return [term]
+  }
+
+  /// `text` before a bracketed citation after it: `Widget datagram [RFC9999]`.
+  private static func withoutCitation(_ text: String) -> String {
+    guard let citation = topLevelRanges(of: " [", in: text).first else { return text }
+    return String(text[..<citation.lowerBound])
+  }
+
+  /// The name before a parenthetical that ends `term`, and the parenthetical's own
+  /// text, without a citation it carries: `KMAC (Widget MAC [RFC9999])`.
+  private static func parenthetical(_ term: String) -> (outside: String, inside: String)? {
+    guard term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) else {
+      return nil
     }
-    return items.filter { $0.count > 1 && $0 != "etc." }
+    return (
+      String(term[..<open.lowerBound]), withoutCitation(String(term[open.upperBound...].dropLast()))
+    )
+  }
+
+  /// Whether `term` is a list that a short form after it abbreviates as a whole,
+  /// `Widgets, Gadgets, and Gizmos (WGGs)`: one name, not a list of three.
+  private static func isListExpanded(_ term: String) -> Bool {
+    guard let (outside, inside) = parenthetical(trimmingTrailingPunctuation(term)),
+      Abbreviations.isShortForm(inside)
+    else {
+      return false
+    }
+    return Abbreviations.longForm(of: inside, in: outside) == outside
+  }
+
+  /// Where `separator` occurs in `text` outside parentheses, brackets and braces, so
+  /// notation such as `g(x, y)` or `{0, 1}` is not cut at what it holds.
+  private static func topLevelRanges(of separator: String, in text: String)
+    -> [Range<String.Index>]
+  {
+    var ranges: [Range<String.Index>] = []
+    var depth = 0
+    var index = text.startIndex
+    while index < text.endIndex {
+      if depth == 0, text[index...].hasPrefix(separator) {
+        let end = text.index(index, offsetBy: separator.count)
+        ranges.append(index..<end)
+        index = end
+        continue
+      }
+      switch text[index] {
+      case "(", "[", "{": depth += 1
+      case ")", "]", "}": depth = max(0, depth - 1)
+      default: break
+      }
+      index = text.index(after: index)
+    }
+    return ranges
   }
 
   /// `text` without the colons and dashes after it, and the spaces around them.
@@ -252,12 +322,15 @@ enum DefinedTerms {
     return text
   }
 
-  /// `text` without the quotes around it, straight or typographic: only when they
-  /// enclose it whole, not when they open its first item and close its last.
+  /// `text` without the quotes around it, double or single, straight or typographic:
+  /// only when they enclose it whole, not when they open its first item and close its
+  /// last.
   private static func unquoted(_ text: String) -> String {
-    let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
-    guard text.count > 1, let first = text.first, let last = text.last, quotes.contains(first),
-      quotes.contains(last)
+    let families: [Set<Character>] = [
+      ["\"", "\u{201C}", "\u{201D}"], ["'", "\u{2018}", "\u{2019}"],
+    ]
+    guard text.count > 1, let first = text.first, let last = text.last,
+      let quotes = families.first(where: { $0.contains(first) && $0.contains(last) })
     else { return text }
     let inside = text.dropFirst().dropLast()
     return inside.contains(where: quotes.contains) ? text : String(inside)
