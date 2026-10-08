@@ -501,7 +501,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         // Not while fading out over the next document's reader, nor under the top
-        // of the stack, as the load's and the build's callbacks guard: the title is
+        // of the stack, as the load's and the build's writes are not: the title is
         // the reader on screen's.
         onToolbarTitle: { state, source in writer { $0.report(title: state, from: source) } },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },

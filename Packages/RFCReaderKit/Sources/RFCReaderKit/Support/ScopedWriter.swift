@@ -18,7 +18,9 @@ public struct ScopedWriter<Root: AnyObject & Sendable> {
   /// Whether a write now would be made.
   public var isCurrent: Bool { current() }
 
-  /// Reads always; writes only while current.
+  /// Reads always; writes only while current. A member that is itself an object is
+  /// read, so a write into it (`writer.member.property = …`) is not guarded: make it
+  /// in `callAsFunction`.
   public subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<Root, Value>) -> Value {
     get { root[keyPath: keyPath] }
     nonmutating set {
