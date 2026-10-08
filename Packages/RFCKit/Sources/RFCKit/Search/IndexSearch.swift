@@ -357,8 +357,12 @@ struct AuthorName: Sendable {
   /// typed, and the words before them are given names or initials. Only the first
   /// of those has to fit one of the author's initials: the index holds one initial
   /// for most authors, so `Roy T. Fielding` finds "R. Fielding".
+  ///
+  /// A query of initials alone, `r.`, is on its way to `R. Fielding` and has no
+  /// surname yet, so the authors whose initials it fits match, whatever their surname.
   func matches(_ query: AuthorQuery) -> Bool {
-    query.surnames.indices.contains { split in
+    if query.isInitialsOnly { return initials.contains(query.initials[0]) }
+    return query.surnames.indices.contains { split in
       surname.contains(query.surnames[split])
         && (split == 0 || initials.contains(query.initials[0]))
     }
@@ -372,11 +376,22 @@ struct AuthorQuery: Sendable {
   /// For each word of the value, it and the words after it: the surname, if the
   /// words before it are given names.
   let surnames: [SearchText]
+  /// Whether every word of the value is an initial with its dot, `r.` or `j.k.`. A
+  /// word without one, `r`, is the start of a surname.
+  let isInitialsOnly: Bool
 
   init(_ value: String) {
     let words = folded(value).split(separator: " ")
     initials = words.compactMap(\.first)
     surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
+    isInitialsOnly = !words.isEmpty && words.allSatisfy(Self.isInitial)
+  }
+
+  /// Letters each followed by a dot: `r.`, `j.k.`. Not `st.`, the start of "St. Johns".
+  private static func isInitial(_ word: Substring) -> Bool {
+    let letters = word.split(separator: ".")
+    return word.hasSuffix(".") && !letters.isEmpty
+      && letters.allSatisfy { $0.count == 1 && $0.allSatisfy(\.isLetter) }
   }
 }
 

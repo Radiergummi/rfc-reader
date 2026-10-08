@@ -278,6 +278,8 @@ struct IndexSearchTests {
     ("J.K. Reynolds", "j.k.", true),
     ("M. Nottingham", "r.", false),
     ("RFC Editor", "r.", false),
+    ("M. St. Johns", "st.", true),
+    ("R. Fielding", ".", false),
     ("E. Rescorla", "r", true),
     ("R. Fielding", "r", false),
   ])
