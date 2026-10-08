@@ -95,4 +95,8 @@ extension LegacyTextParser {
       return section
     }
   }
+
+  static func numberingParagraphs(_ sections: [Section]) -> [Section] {
+    sections
+  }
 }
