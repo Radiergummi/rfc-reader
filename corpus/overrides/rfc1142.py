@@ -261,8 +261,9 @@ def main():
                "words joined, numbered headings recovered, invented headings demoted. The text is "
                "otherwise the converter's. Corrections: https://github.com/Radiergummi/rfc-reader")
     body = ET.tostring(root, encoding="unicode")
+    # From the start of a word, and open at its end, so `notifica tions` joins as well.
     for split, word in SPLIT_WORDS.items():
-        body = body.replace(split, word)
+        body = re.sub(r"\b" + re.escape(split), word, body)
     pathlib.Path(destination).write_text(
         f"<?xml version='1.0' encoding='utf-8'?>\n<!-- {comment} -->\n{body}\n", encoding="utf-8")
 
