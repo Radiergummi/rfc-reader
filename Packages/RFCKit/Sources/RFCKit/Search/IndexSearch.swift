@@ -156,8 +156,10 @@ public struct IndexSearch: Sendable {
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
     let needles = terms.map(SearchText.init)
-    // The query as the title bonus compares it, without the quotes of its phrases.
-    let lowered = SearchText(terms.joined(separator: " "))
+    // The query as the title bonus compares it, without the quotes of its phrases,
+    // when it is more than one word: several terms, or one phrase.
+    let isWords = terms.count > 1 || terms.first?.contains(" ") == true
+    let titleQuery = isWords ? SearchText(terms.joined(separator: " ")) : nil
     let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
@@ -167,7 +169,7 @@ public struct IndexSearch: Sendable {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
       }
-      if let score = score(entry, rfc: rfc, terms: needles, loweredQuery: lowered) {
+      if let score = score(entry, rfc: rfc, terms: needles, titleQuery: titleQuery) {
         hits.append(SearchHit(rfc: rfc, score: score))
       }
     }
@@ -234,9 +236,10 @@ public struct IndexSearch: Sendable {
     }
   }
 
-  /// Every term must match somewhere; where it matches decides the weight.
+  /// Every term must match somewhere; where it matches decides the weight. A title
+  /// holding `titleQuery`, when there is one, earns a bonus.
   private func score(
-    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], loweredQuery: SearchText
+    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], titleQuery: SearchText?
   ) -> Int? {
     var total = 0
     for term in terms {
@@ -264,7 +267,7 @@ public struct IndexSearch: Sendable {
       guard best > 0 else { return nil }
       total += best
     }
-    if terms.count > 1, entry.title.contains(loweredQuery) { total += 50 }
+    if let titleQuery, entry.title.contains(titleQuery) { total += 50 }
     if rfc.isObsolete { total -= 10 }
     if rfc.currentStatus.isStandardsTrack || rfc.currentStatus == .bestCurrentPractice {
       total += 5
