@@ -76,6 +76,26 @@ public struct SRGBColor: Hashable, Sendable {
     return scaled(clears)
   }
 
+  /// This color, lightened just enough to contrast `minimum` with `other`, a darker
+  /// color; itself when it already does. Lightened by mixing it with white, which
+  /// keeps its hue as it pales; white itself where nothing short of it clears.
+  public func lightened(toContrast minimum: Double, against other: SRGBColor) -> SRGBColor {
+    guard contrast(with: other) < minimum else { return self }
+    // The least white that clears it: contrast with a darker color only grows as
+    // the mix does, so a bisection finds it.
+    var fails = 0.0
+    var clears = 1.0
+    for _ in 0..<50 {
+      let amount = (fails + clears) / 2
+      if SRGBColor.white.composited(opacity: amount, over: self).contrast(with: other) >= minimum {
+        clears = amount
+      } else {
+        fails = amount
+      }
+    }
+    return SRGBColor.white.composited(opacity: clears, over: self)
+  }
+
   /// The channels with the sRGB curve undone.
   var linearChannels: [Double] { [red, green, blue].map(Self.linear) }
 

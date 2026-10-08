@@ -30,4 +30,23 @@ struct ReaderPaletteTests {
     #expect(box.palette == other)
     #expect(!box.replace(with: other))
   }
+
+  /// An informative chip is drawn as an outline, and a normative one filled; with
+  /// Increase Contrast, a normative one is outlined over its fill too (#457).
+  @Test func `what a chip draws, by its kind and by Increase Contrast`() {
+    let palette = ReaderPalette.automatic
+    #expect(palette.chipMarks(informative: false) == .init(fills: true, outlines: false))
+    #expect(palette.chipMarks(informative: true) == .init(fills: false, outlines: true))
+    let increased = palette.increasingContrast(true)
+    #expect(increased.chipMarks(informative: false) == .init(fills: true, outlines: true))
+    #expect(increased.chipMarks(informative: true) == .init(fills: false, outlines: true))
+  }
+
+  /// Turning Increase Contrast on is a change the box redraws for.
+  @Test func `increasing the contrast changes the palette`() {
+    let box = ReaderPaletteBox()
+    #expect(box.replace(with: ReaderPalette.automatic.increasingContrast(true)))
+    #expect(!box.replace(with: ReaderPalette.automatic.increasingContrast(true)))
+    #expect(box.replace(with: .automatic))
+  }
 }

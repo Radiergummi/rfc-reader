@@ -183,4 +183,30 @@ struct BuilderChipTests {
     #expect(marks[.rfc(5116)] == true)
     #expect(marks[.rfc(2119)] == false)
   }
+
+  /// The kind is said, not only drawn (#457): VoiceOver reads an informative chip
+  /// as its label and ", informative", on every character of the chip; a normative
+  /// one as it always has.
+  @Test func `an informative chip is said to be informative`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+    // What each chip is said as, and what it reads as on screen.
+    var spoken: [DocumentID: (label: String, shown: String)] = [:]
+    let whole = NSRange(location: 0, length: built.text.length)
+    built.text.enumerateAttribute(.rfcChip, in: whole) { value, range, _ in
+      guard value != nil,
+        let box = built.text.attribute(.rfcReference, at: range.location, effectiveRange: nil)
+          as? ReferenceBox,
+        case .document(let id, _, _) = box.reference.target
+      else { return }
+      var run = NSRange(location: 0, length: 0)
+      let label =
+        built.text.attribute(
+          .rfcSpoken, at: range.location, longestEffectiveRange: &run, in: whole) as? String
+      if label != nil { #expect(NSIntersectionRange(run, range) == range, "the whole chip") }
+      spoken[id] = (label ?? "", box.reference.display.text)
+    }
+    let informative = try #require(spoken[.rfc(5116)])
+    #expect(informative.label == informative.shown + ", informative")
+    #expect(spoken[.rfc(2119)]?.label == "", "a normative chip has no label of its own")
+  }
 }

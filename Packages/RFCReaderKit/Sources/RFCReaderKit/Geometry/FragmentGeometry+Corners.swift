@@ -4,6 +4,10 @@ extension FragmentGeometry {
   /// The corner radius of a reference chip, in the reader and wherever a chip is
   /// drawn to look like one.
   public static let chipRadius: CGFloat = 6
+  /// The hairline an informative chip is drawn with, and every chip under Increase
+  /// Contrast (#457): a point, which holds 3:1 where a pixel-wide line would read
+  /// fainter than its color.
+  public static let chipOutlineWidth: CGFloat = 1
 
   /// The corner radius of a card behind artwork and tables.
   public static let cardRadius: CGFloat = 8

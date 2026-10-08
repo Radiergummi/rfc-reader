@@ -42,6 +42,19 @@ public enum AccentContrast {
     return max(0, opacity)
   }
 
+  /// The hairline a chip is outlined with over `backdrop` (#457): an informative
+  /// chip's, which has no fill, and every chip's under Increase Contrast. The accent,
+  /// darkened on a light backdrop and lightened on a dark one just enough to clear
+  /// ``symbolContrast``, since it marks the chip as a symbol does and carries no
+  /// text. Unlike the fill, it costs the link on it nothing, so it holds on the
+  /// light cards where the fill has almost gone.
+  public static func chipOutline(accent: SRGBColor, backdrop: SRGBColor) -> SRGBColor {
+    guard accent.contrast(with: backdrop) < symbolContrast else { return accent }
+    return accent.relativeLuminance < backdrop.relativeLuminance
+      ? accent.darkened(toContrast: symbolContrast, against: backdrop)
+      : accent.lightened(toContrast: symbolContrast, against: backdrop)
+  }
+
   /// The reader's link color: macOS's own link color, stated so that iOS's reader
   /// uses it too. iOS colored links with the system tint, `#0088FF`, which is 3.52:1
   /// on a white page.

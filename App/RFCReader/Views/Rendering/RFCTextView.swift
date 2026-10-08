@@ -17,6 +17,7 @@ struct RFCTextView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  @Environment(\.colorSchemeContrast) private var contrast
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -83,7 +84,8 @@ struct RFCTextView: View {
         inputs: inputs,
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
-        palette: settings.palette,
+        // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
+        palette: settings.palette.increasingContrast(contrast == .increased),
         width: geometry.size.width)
     }
   }

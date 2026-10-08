@@ -34,8 +34,11 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   /// The lines a decorated block draws over its text, such as a packet diagram's.
   public var stroke: PlatformColor
   /// What a reference chip is tinted with, at `AccentContrast.chipTintOpacity`
-  /// (#317), or half of it for an informative reference (#184).
+  /// (#317), and outlined with, at `AccentContrast.chipOutline` (#457).
   public var chipTint: PlatformColor
+  /// Whether every chip is outlined, a normative one over its fill: the system's
+  /// Increase Contrast, read where the reader is drawn (`increasingContrast(_:)`).
+  public private(set) var outlinesEveryChip = false
 
   public init(
     id: String, pageBackground: PlatformColor? = nil, cardFill: PlatformColor,
@@ -51,8 +54,44 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
     self.chipTint = chipTint
   }
 
-  public static func == (lhs: ReaderPalette, rhs: ReaderPalette) -> Bool { lhs.id == rhs.id }
-  public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+  public static func == (lhs: ReaderPalette, rhs: ReaderPalette) -> Bool {
+    lhs.id == rhs.id && lhs.outlinesEveryChip == rhs.outlinesEveryChip
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+    hasher.combine(outlinesEveryChip)
+  }
+
+  /// This palette, with every chip outlined where the system asks for more
+  /// contrast: a redraw, as any change of palette is, and never a rebuild.
+  public func increasingContrast(_ increases: Bool) -> ReaderPalette {
+    var palette = self
+    palette.outlinesEveryChip = increases
+    return palette
+  }
+
+  /// What a chip is drawn with (#457).
+  public struct ChipMarks: Equatable, Sendable {
+    public var fills: Bool
+    public var outlines: Bool
+
+    public init(fills: Bool, outlines: Bool) {
+      self.fills = fills
+      self.outlines = outlines
+    }
+  }
+
+  /// An informative chip is an outline with no fill: it differs from a normative
+  /// one by shape, not by an amount of tint that the light cards leave almost none
+  /// of (#457, replacing #184's half tint). A normative chip is filled, and outlined
+  /// over its fill as well under Increase Contrast. A chip whose kind no list says
+  /// is drawn as a normative one.
+  public func chipMarks(informative: Bool) -> ChipMarks {
+    informative
+      ? ChipMarks(fills: false, outlines: true)
+      : ChipMarks(fills: true, outlines: outlinesEveryChip)
+  }
 
   /// The system's colors, and what a print draws with: its light appearance
   /// resolves them to a white page's.

@@ -92,6 +92,9 @@ extension DocumentTextBuilder {
       var chipAttributes = attributes
       if referenceKinds.kind(of: xref.target) == .informative {
         chipAttributes[.rfcInformative] = "informative"
+        // Said, not only drawn (#457): the outline is no cue to VoiceOver. The
+        // reader body is English, so this is too.
+        chipAttributes[.rfcSpoken] = display.text + ", informative"
       }
       return chipRun(display.text, attributes: chipAttributes)
 
