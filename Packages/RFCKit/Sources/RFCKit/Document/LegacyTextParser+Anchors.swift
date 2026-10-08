@@ -3,21 +3,24 @@ import Foundation
 extension LegacyTextParser {
   /// Every anchor a section can be declared under, so no entry is: each a section can start
   /// with, and each `makingAnchorsUnique` can rename a repeat to. That rename runs after
-  /// the prose is linked, and an entry settled onto `section-1-2` beside two sections
-  /// numbered 1 was renamed off it, away from its citations. A repeat takes the first free
-  /// `-n`, and what can hold one before it is an earlier repeat or another heading
-  /// spelled so (`name-foo-2`, for `Foo 2`), so for an anchor that can appear `c` times,
-  /// with `r` headings spelling `-n` of it, the rename lands within `-2` to `-(c + r)`.
+  /// the prose is linked, and an entry settled onto a rename beside two sections numbered
+  /// 1 was renamed off it, away from its citations. A repeat takes the first free `_n`,
+  /// which no heading spells, so for an anchor that can appear `c` times the rename lands
+  /// within `_2` to `_c`.
   static func reservedAnchors(_ candidates: [String]) -> Set<String> {
     let counts = candidates.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
     var reserved = Set(candidates)
     for (anchor, count) in counts where count > 1 {
-      let spelled = counts.keys.count {
-        $0.hasPrefix("\(anchor)-") && $0.dropFirst(anchor.count + 1).allSatisfy(\.isNumber)
-      }
-      for suffix in 2...(count + spelled) { reserved.insert("\(anchor)-\(suffix)") }
+      for suffix in 2...count { reserved.insert(renamed(anchor, suffix)) }
     }
     return reserved
+  }
+
+  /// A repeated section's anchor, `section-1_2` for the second `section-1`. Not `-2`, the
+  /// shape of a paragraph's part number, `section-1-2` (#491); an underscore is never one
+  /// that prep gives or a heading's slug spells.
+  static func renamed(_ anchor: String, _ suffix: Int) -> String {
+    "\(anchor)_\(suffix)"
   }
 
   /// `reservedAnchors` for the sections `parse` would read from `text`.
@@ -67,17 +70,17 @@ extension LegacyTextParser {
   /// Headings that repeat -- two `Introduction`s in RFC 1, two sections numbered 1 in RFC
   /// 19 -- and a bibliography listing one label twice gave two elements one anchor in 526
   /// documents (#65), and a link landed on whichever came first. A repeat takes the next
-  /// free `-2`, `-3`, the way xml2rfc numbers them; the first keeps its anchor, so every
-  /// link that landed on it still does. An entry keeps its label as `displayAnchor`, and
-  /// arrives here unique already (`settlingEntryAnchors`), clear of every anchor a
-  /// section's repeat can be renamed to (`reservedAnchors`).
+  /// free `_2`, `_3` (`renamed`); the first keeps its anchor, so every link that landed on
+  /// it still does. An entry keeps its label as `displayAnchor`, and arrives here unique
+  /// already (`settlingEntryAnchors`), clear of every anchor a section's repeat can be
+  /// renamed to (`reservedAnchors`).
   static func makingAnchorsUnique(_ sections: [Section]) -> [Section] {
     var taken: Set<String> = []
     func unique(_ anchor: String) -> String {
       var candidate = anchor
       var suffix = 2
       while !taken.insert(candidate).inserted {
-        candidate = "\(anchor)-\(suffix)"
+        candidate = renamed(anchor, suffix)
         suffix += 1
       }
       return candidate
@@ -96,7 +99,31 @@ extension LegacyTextParser {
     }
   }
 
+  /// Each paragraph's part number, as prep gives authored XML's (#491): `section-4.2-3` for
+  /// the third part of section 4.2. Prep numbers a section's parts in one sequence,
+  /// paragraphs, lists, artwork, figures and tables alike, so every block uses up a number
+  /// but only a paragraph keeps its. A number already declared, by a heading spelled `Foo
+  /// 2` beside `Foo`, or by an entry, is left to it, and the paragraph goes without.
   static func numberingParagraphs(_ sections: [Section]) -> [Section] {
-    sections
+    let declared = Set(sections.flatMap { [$0.anchor] + $0.blocks.flatMap(\.anchors) })
+    return sections.map { section in
+      var section = section
+      section.blocks = numberingParagraphs(section.blocks, of: section.anchor, avoiding: declared)
+      return section
+    }
+  }
+
+  /// `blocks`' paragraphs numbered as the parts of the section that goes by `anchor`.
+  static func numberingParagraphs(
+    _ blocks: [Block], of anchor: String, avoiding declared: Set<String>
+  ) -> [Block] {
+    blocks.enumerated().map { offset, block in
+      let number = "\(anchor)-\(offset + 1)"
+      guard case .paragraph(var paragraph) = block, paragraph.anchor == nil,
+        !declared.contains(number)
+      else { return block }
+      paragraph.anchor = number
+      return .paragraph(paragraph)
+    }
   }
 }

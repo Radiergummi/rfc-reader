@@ -761,10 +761,16 @@ public enum LegacyTextParser {
   }
 
   /// The document the sections make: nested by their numbers, their anchors made
-  /// unique, and its abbreviations and defined terms collected.
+  /// unique, their paragraphs and the abstract's numbered, and its abbreviations and
+  /// defined terms collected.
   private static func finished(_ sections: [Section], header: DocumentHeader) -> RFCDocument {
-    var document = RFCDocument(
-      header: header, sections: Self.nest(Self.makingAnchorsUnique(sections)), source: .text)
+    let sections = Self.numberingParagraphs(Self.makingAnchorsUnique(sections))
+    var header = header
+    // Prep's abstract goes by `section-abstract`, which no legacy heading's anchor is.
+    header.abstract = Self.numberingParagraphs(
+      header.abstract, of: "section-abstract",
+      avoiding: Set(sections.flatMap { [$0.anchor] + $0.blocks.flatMap(\.anchors) }))
+    var document = RFCDocument(header: header, sections: Self.nest(sections), source: .text)
     document.abbreviations = Abbreviations.defined(in: document)
     document.definedTerms = DefinedTerms.defined(in: document)
     return document

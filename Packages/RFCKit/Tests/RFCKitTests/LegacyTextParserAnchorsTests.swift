@@ -179,7 +179,7 @@ struct LegacyTextParserAnchorsTests {
     var numbered = 0
     for fixture in try Fixtures.legacyTexts() {
       let document = try Fixtures.document(fixture)
-      let anchors = document.blocks.flatMap(\.anchors) + document.declaredAnchors
+      let anchors = document.blocks.flatMap(\.anchors) + document.allSections.map(\.anchor)
       let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }
       #expect(repeated.isEmpty, "\(fixture): \(repeated.keys.sorted())")
       for section in document.allSections {
@@ -192,9 +192,9 @@ struct LegacyTextParserAnchorsTests {
     }
     #expect(numbered > 1000)
 
-    let rfc19 = try Fixtures.document("rfc19.txt").allSections
-    let second = try #require(rfc19.first { $0.anchor == "section-1_2" })
-    #expect(second.blocks.flatMap(\.anchors).contains { $0.hasPrefix("section-1_2-") })
+    let rfc1 = try Fixtures.document("rfc1.txt").allSections
+    let second = try #require(rfc1.first { $0.anchor == "name-introduction_2" })
+    #expect(second.blocks.first?.anchors == ["name-introduction_2-1"])
     let appendices = try Fixtures.legacyTexts().flatMap { try Fixtures.document($0).allSections }
       .filter(\.isAppendix)
     #expect(
