@@ -507,6 +507,10 @@ extension LegacyTextParser {
     #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#
       .ignoresCase())
 
+  /// The indent from which a header line that holds one column holds the right one:
+  /// past the middle of a 72-column line, where no left-column continuation reaches.
+  static let rightColumnIndent = 36
+
   static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
     var header = DocumentHeader(title: "")
     var index = 0
@@ -534,8 +538,15 @@ extension LegacyTextParser {
       let columns = line.components(separatedBy: "   ").map {
         $0.trimmingCharacters(in: .whitespaces)
       }.filter { !$0.isEmpty }
-      guard let left = columns.first else { continue }
-      let right = columns.count > 1 ? columns.last! : nil
+      guard let first = columns.first else { continue }
+      // A line set in the right half alone is the right column, its left one having run
+      // out: an author past the last line of the left column's labels (#767). An
+      // indented continuation of a left-column label sits well left of it.
+      let isRightOnly =
+        columns.count == 1
+        && line.prefix(while: { $0 == " " }).count >= rightColumnIndent
+      let left = isRightOnly ? "" : first
+      let right = isRightOnly ? first : columns.count > 1 ? columns.last! : nil
 
       if left.hasPrefix("Obsoletes:") {
         header.obsoletes = documentIDs(in: left)
