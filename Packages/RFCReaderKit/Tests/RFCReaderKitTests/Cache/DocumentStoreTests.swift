@@ -44,9 +44,9 @@ struct DocumentStoreTests {
     var textFetches: Int { textCount.withLock { $0 } }
 
     @concurrent
-    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
-      -> RFCEditorClient.FetchedDocument
-    {
+    func fetchPreferredDocument(
+      _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+    ) async throws -> RFCEditorClient.FetchedDocument {
       documentCount.withLock { $0 += 1 }
       await gate.wait()
       let data = try Fixtures.data("rfc8999.xml")
@@ -164,6 +164,31 @@ struct DocumentStoreTests {
 
     #expect(try document == Fixtures.rfc2119())
     #expect(fetcher.documentFetches == 0)
+    #expect(fetcher.textFetches == 0)
+  }
+
+  /// A legacy RFC read from its text takes its header from its index entry (#767), and
+  /// one read before the index is there is not kept, so the next open, with the entry,
+  /// reads it again and takes the entry's header.
+  @Test func `a text body takes its header from the index entry, once there is one`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(2119)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
+    let entry = RFCMetadata(
+      id: id, title: "Key Words", authors: [Author(name: "B. Second", role: .editor)],
+      date: PublicationDate(year: 1997, month: 3), formats: [.text])
+
+    let before = try await store.document(id, formats: [.text], client: fetcher)
+    #expect(before.header.authors != entry.authors)
+    let after = try await store.document(id, formats: [.text], entry: entry, client: fetcher)
+    #expect(after.header.authors == entry.authors)
+    #expect(after.header.date == entry.date)
     #expect(fetcher.textFetches == 0)
   }
 

@@ -196,10 +196,13 @@ public struct RFCEditorClient: Sendable {
   /// text after one would start a second request and report *its* failure instead.
   /// XML that is there but does not parse falls back to the text too, so the
   /// document stays readable, and the parse error comes back beside it.
+  ///
+  /// `entry` is the document's index entry, where the caller has it: the text's header
+  /// is taken from it (`LegacyTextParser.parse(_:entry:)`, #767).
   @concurrent
-  public func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil)
-    async throws -> FetchedDocument
-  {
+  public func fetchPreferredDocument(
+    _ id: DocumentID, availableFormats: [FileFormat]? = nil, entry: RFCMetadata? = nil
+  ) async throws -> FetchedDocument {
     var xmlParseFailure: (any Error)?
     if !Self.textIsTheDocument(availableFormats: availableFormats) {
       do {
@@ -223,7 +226,7 @@ public struct RFCEditorClient: Sendable {
       throw xmlParseFailure ?? ClientError.notFound(id)
     }
     return FetchedDocument(
-      data: data, format: .text, document: LegacyTextParser.parse(data),
+      data: data, format: .text, document: LegacyTextParser.parse(data, entry: entry),
       xmlParseFailure: xmlParseFailure)
   }
 

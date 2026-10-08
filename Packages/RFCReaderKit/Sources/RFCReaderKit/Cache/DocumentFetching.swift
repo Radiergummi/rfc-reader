@@ -5,10 +5,11 @@ import RFCKit
 /// `RFCEditorClient` it makes, so its tests can hold one in flight while they act.
 public protocol DocumentFetching: Sendable {
   /// A document in the best format it has, with the bytes it came as; see
-  /// `RFCEditorClient.fetchPreferredDocument(_:availableFormats:)`.
+  /// `RFCEditorClient.fetchPreferredDocument(_:availableFormats:entry:)`.
   @concurrent
-  func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
-    -> RFCEditorClient.FetchedDocument
+  func fetchPreferredDocument(
+    _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+  ) async throws -> RFCEditorClient.FetchedDocument
 
   /// Raw bytes of a document in the given format, for caching.
   func fetchDocumentData(_ id: DocumentID, format: FileFormat) async throws -> Data

@@ -8,8 +8,14 @@ import Foundation
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
 public enum LegacyTextParser {
-  public static func parse(_ data: Data) -> RFCDocument {
-    parse(text(decoding: data))
+  /// `entry` is the document's RFC index entry, where the caller has it. Its title is
+  /// the parse's (`parse(_:title:)`), and its number, authors, date, obsoletes and
+  /// updates replace the page's (`IndexHeader`), as a converted document's do: the app
+  /// parses a legacy RFC from its text too, and showed the page's guess (#767).
+  public static func parse(_ data: Data, entry: RFCMetadata? = nil) -> RFCDocument {
+    var document = parse(text(decoding: data), title: entry?.title)
+    if let entry { _ = IndexHeader.apply(entry, to: &document.header) }
+    return document
   }
 
   /// The text of a legacy RFC file: UTF-8, or Windows-1252 for the 34 older documents
