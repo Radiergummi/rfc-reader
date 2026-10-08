@@ -170,6 +170,21 @@ struct IndexSearchTests {
     #expect(word.score == 60)
   }
 
+  /// French typography puts a space inside guillemets; it is not part of the phrase,
+  /// and a single word padded with one is no phrase.
+  @Test func `a phrase loses the spaces inside its quotes`() throws {
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026))
+    ])
+    let search = IndexSearch(index: index)
+    let phrase = try #require(search.search(#""key words""#).first)
+    for query in ["\u{00AB} key words \u{00BB}", "\u{00AB}\u{00A0}key words\u{00A0}\u{00BB}"] {
+      #expect(search.search(query).first?.score == phrase.score, "\(query)")
+    }
+    #expect(search.search(#""key ""#).first?.score == 60)
+  }
+
   // MARK: « » and ‹ › (#454)
 
   /// A French or Swiss keyboard quotes with guillemets.
@@ -271,33 +286,52 @@ struct IndexSearchTests {
   }
 
   /// `r.` is an initial on its way to `R. Fielding`, not the start of a surname, so
-  /// it matches the authors with that initial. A word without a dot still is the
-  /// start of a surname.
+  /// a value that ends in one matches the authors its first given name fits. A word
+  /// without a dot still is the start of a surname, and a dotted word still matches
+  /// a surname it is part of.
   @Test(arguments: [
     ("R. Fielding", "r.", true),
     ("R. Fielding", "r. t.", true),
+    ("R. Fielding", "roy t.", true),
     ("J.K. Reynolds", "k.", true),
-    ("J.K. Reynolds", "j.k.", true),
+    ("J.K. Reynolds", "j.k", true),
+    ("JP. Vasseur", "jp.", true),
+    ("L-E. Jonsson", "l-e.", true),
     ("M. Nottingham", "r.", false),
+    ("R. Fielding", "mark t.", false),
     ("RFC Editor", "r.", false),
     ("M. St. Johns", "st.", true),
+    ("A. Smith Jr.", "smith jr.", true),
     ("R. Fielding", ".", false),
     ("E. Rescorla", "r", true),
     ("R. Fielding", "r", false),
   ])
-  func `a value of initials alone matches the authors with them`(
+  func `a value that ends in an initial matches the authors its given name fits`(
     name: String, query: String, matches: Bool
   ) {
     #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
   }
 
-  @Test func `the list never empties while an author is typed with an initial`() throws {
-    let search = IndexSearch(index: try Fixtures.sampleIndex())
-    let name = "R. Fielding"
-    for length in 1...name.count {
-      let query = #"author:""# + name.prefix(length)
-      #expect(search.search(query).contains { $0.rfc.number == 9110 }, "\(query)")
+  /// From the first initial's dot on, every keystroke of the name keeps the author.
+  @Test(arguments: [
+    ("R. Fielding", "R. Fielding"),
+    ("R. Fielding", "Roy T. Fielding"),
+    ("J.K. Reynolds", "J.K. Reynolds"),
+  ])
+  func `an author stays matched while the name is typed after an initial`(
+    name: String, typed: String
+  ) throws {
+    let author = AuthorName(name)
+    let dot = try #require(typed.firstIndex(of: "."))
+    for end in typed[dot...].indices {
+      let query = typed[...end]
+      #expect(author.matches(AuthorQuery(String(query))), "\(query)")
     }
+  }
+
+  @Test func `an initial being typed finds the author's documents`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search(#"author:"R."#).contains { $0.rfc.number == 9110 })
   }
 
   @Test func `filters apply`() throws {

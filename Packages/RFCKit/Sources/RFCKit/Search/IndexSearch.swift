@@ -145,8 +145,10 @@ public struct IndexSearch: Sendable {
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written.
-    let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
+    // A quoted phrase is one term, so it has to match as it is written, less the
+    // spaces inside its quotes that French typography puts there, `« key words »`.
+    let terms = SearchQuery.words(in: trimmed.lowercased())
+      .map { SearchQuery.unquoted($0).trimmingCharacters(in: .whitespaces) }
       .filter { !$0.isEmpty }
 
     if filters.isEmpty, let number = Self.number(in: trimmed) {
@@ -361,13 +363,14 @@ struct AuthorName: Sendable {
   /// of those has to fit one of the author's initials: the index holds one initial
   /// for most authors, so `Roy T. Fielding` finds "R. Fielding".
   ///
-  /// A query of initials alone, `r.`, is on its way to `R. Fielding` and has no
-  /// surname yet, so the authors whose initials it fits match, whatever their surname.
+  /// A query that ends in an initial, `r.` or `Roy T.`, is on its way to a surname
+  /// it has not reached, so the authors its first given name fits match, whatever
+  /// their surname.
   func matches(_ query: AuthorQuery) -> Bool {
-    if query.isInitialsOnly { return initials.contains(query.initials[0]) }
+    let fitsFirst = query.initials.first.map(initials.contains) ?? false
+    if query.endsInInitial, fitsFirst { return true }
     return query.surnames.indices.contains { split in
-      surname.contains(query.surnames[split])
-        && (split == 0 || initials.contains(query.initials[0]))
+      surname.contains(query.surnames[split]) && (split == 0 || fitsFirst)
     }
   }
 }
@@ -379,22 +382,25 @@ struct AuthorQuery: Sendable {
   /// For each word of the value, it and the words after it: the surname, if the
   /// words before it are given names.
   let surnames: [SearchText]
-  /// Whether every word of the value is an initial with its dot, `r.` or `j.k.`. A
-  /// word without one, `r`, is the start of a surname.
-  let isInitialsOnly: Bool
+  /// Whether the value's last word is an initial with a dot, `r.`, `j.k` or `jp.`, so
+  /// that no surname has been typed yet. A word without a dot, `r`, is the start of
+  /// a surname.
+  let endsInInitial: Bool
 
   init(_ value: String) {
     let words = folded(value).split(separator: " ")
     initials = words.compactMap(\.first)
     surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
-    isInitialsOnly = !words.isEmpty && words.allSatisfy(Self.isInitial)
+    endsInInitial = words.last.map(Self.isInitial) ?? false
   }
 
-  /// Letters each followed by a dot: `r.`, `j.k.`. Not `st.`, the start of "St. Johns".
+  /// A dot, and groups of at most two letters between dots and hyphens, as the index
+  /// writes initials: `r.`, `j.k.`, `jp.`, `l-e.`. That takes in `st.` and `jr.` as
+  /// well, which still match as a surname.
   private static func isInitial(_ word: Substring) -> Bool {
-    let letters = word.split(separator: ".")
-    return word.hasSuffix(".") && !letters.isEmpty
-      && letters.allSatisfy { $0.count == 1 && $0.allSatisfy(\.isLetter) }
+    let groups = word.split { $0 == "." || $0 == "-" }
+    return word.contains(".") && !groups.isEmpty
+      && groups.allSatisfy { $0.count <= 2 && $0.allSatisfy(\.isLetter) }
   }
 }
 
