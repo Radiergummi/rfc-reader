@@ -155,6 +155,41 @@ struct IndexSearchTests {
     #expect(inOrder.score == reversed.score + 50)
   }
 
+  /// A phrase is a query that reads as a title on its own, so a title holding it
+  /// ranks above a keyword that is exactly the phrase; a single word earns nothing.
+  @Test func `a single quoted phrase earns the title bonus`() throws {
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026)),
+      RFCMetadata(id: .rfc(2), title: "A Profile", date: PublicationDate(year: 2026), keywords: ["key words"]),
+    ])
+    let search = IndexSearch(index: index)
+    #expect(search.search(#""key words""#).map(\.rfc.number) == [1, 2])
+    let word = try #require(search.search("key").first { $0.rfc.number == 1 })
+    #expect(word.score == 60)
+  }
+
+  // MARK: « » and ‹ › (#454)
+
+  /// A French or Swiss keyboard quotes with guillemets.
+  @Test(arguments: [
+    "author:\u{00AB}Roy Fielding\u{00BB} cache",
+    "author:\u{2039}Roy Fielding\u{203A} cache",
+  ])
+  func `guillemets quote a value`(query: String) {
+    let parsed = IndexSearch.parseQuery(query)
+    #expect(parsed.filters.author == "roy fielding")
+    #expect(parsed.text == "cache")
+    #expect(
+      SearchQuery.format(text: parsed.text, filters: parsed.filters)
+        == #"author:"roy fielding" cache"#)
+  }
+
+  @Test func `a phrase in guillemets is one term`() {
+    let words = SearchQuery.words(in: "\u{2039}key words\u{203A} for")
+    #expect(words == ["\u{2039}key words\u{203A}", "for"])
+    #expect(SearchQuery.unquoted(words[0]) == "key words")
+  }
+
   // MARK: Authors (#177)
 
   /// The index holds an author as an initial and a surname, "R. Fielding"; a reader
@@ -216,6 +251,49 @@ struct IndexSearchTests {
     name: String, query: String, matches: Bool
   ) {
     #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  /// The index holds one initial for most authors, so only the first given name of
+  /// the query has to fit one; a middle name or initial after it is passed over.
+  @Test(arguments: [
+    ("R. Fielding", "roy t. fielding", true),
+    ("R. Fielding", "r. t. fielding", true),
+    ("D. Eastlake 3rd", "donald e. eastlake", true),
+    ("R. Fielding", "mark t. fielding", false),
+    ("R. Fielding", "t. roy fielding", false),
+  ])
+  func `only the first given name has to fit an initial`(
+    name: String, query: String, matches: Bool
+  ) {
+    #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  /// `r.` is an initial on its way to `R. Fielding`, not the start of a surname, so
+  /// it matches the authors with that initial. A word without a dot still is the
+  /// start of a surname.
+  @Test(arguments: [
+    ("R. Fielding", "r.", true),
+    ("R. Fielding", "r. t.", true),
+    ("J.K. Reynolds", "k.", true),
+    ("J.K. Reynolds", "j.k.", true),
+    ("M. Nottingham", "r.", false),
+    ("RFC Editor", "r.", false),
+    ("E. Rescorla", "r", true),
+    ("R. Fielding", "r", false),
+  ])
+  func `a value of initials alone matches the authors with them`(
+    name: String, query: String, matches: Bool
+  ) {
+    #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  @Test func `the list never empties while an author is typed with an initial`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    let name = "R. Fielding"
+    for length in 1...name.count {
+      let query = #"author:""# + name.prefix(length)
+      #expect(search.search(query).contains { $0.rfc.number == 9110 }, "\(query)")
+    }
   }
 
   @Test func `filters apply`() throws {
