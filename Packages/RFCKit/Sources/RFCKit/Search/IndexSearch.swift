@@ -5,8 +5,8 @@ public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<PublicationStream> = []
   /// Lowercased when set, and nil when set empty, as an empty value is no filter. It
-  /// is shown as typed otherwise, and folded where it is matched (`folded`), as the
-  /// fields it is matched against are.
+  /// keeps its diacritics, as it is shown, and is folded where it is matched
+  /// (`folded`), as the fields it is matched against are.
   public var workingGroup: String? {
     didSet { workingGroup = Self.normalized(workingGroup) }
   }
@@ -68,9 +68,9 @@ public struct IndexSearch: Sendable {
       let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
       return Entry(
         offset: offset,
-        number: SearchText(String(rfc.number)),
-        title: SearchText(title),
-        titleWords: Set(words.map { SearchText(String($0)) }),
+        number: SearchText(alreadyFolded: String(rfc.number)),
+        title: SearchText(alreadyFolded: title),
+        titleWords: Set(words.map { SearchText(alreadyFolded: String($0)) }),
         keywords: rfc.keywords.map { SearchText(folding: $0) },
         authors: rfc.authors.map { SearchText(folding: $0.name) },
         authorNames: rfc.authors.map { AuthorName($0.name) },
@@ -147,9 +147,8 @@ public struct IndexSearch: Sendable {
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written, less case and
-    // diacritics, as every term is.
-    // Folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
+    // A quoted phrase is one term, so it has to match as it is written. Every term is
+    // folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
     let terms = SearchQuery.words(in: folded(trimmed)).map(SearchQuery.unquoted)
       .filter { !$0.isEmpty }
 
@@ -159,9 +158,9 @@ public struct IndexSearch: Sendable {
 
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
-    let needles = terms.map { SearchText($0) }
+    let needles = terms.map(SearchText.init(alreadyFolded:))
     // The query as the title bonus compares it, without the quotes of its phrases.
-    let foldedQuery = SearchText(terms.joined(separator: " "))
+    let foldedQuery = SearchText(alreadyFolded: terms.joined(separator: " "))
     let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
@@ -287,22 +286,21 @@ public struct IndexSearch: Sendable {
 /// scanning, not the hits.
 ///
 /// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
-/// as U+00E9. Both sides are folded on the way in (`folded`), which takes off case
-/// and every combining mark, so the two spellings of an accented letter end as the
-/// same bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
+/// as U+00E9. Both sides are folded on the way in (`folded`), which composes them
+/// first, so the two spellings of an accented letter end as the same bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
 /// continuation byte a match cannot start in the middle of a character.
 struct SearchText: Hashable, Sendable {
   private let bytes: [UInt8]
 
   /// `string` as it is: text already folded, such as a term split from a folded
   /// query, or digits.
-  init(_ string: String) {
+  init(alreadyFolded string: String) {
     bytes = Array(string.utf8)
   }
 
   /// `text` folded (`folded`), as every field and needle a search compares is.
   init(folding text: String) {
-    self.init(folded(text))
+    self.init(alreadyFolded: folded(text))
   }
 
   func hasPrefix(_ other: SearchText) -> Bool {
@@ -387,7 +385,7 @@ struct AuthorQuery: Sendable {
   init(_ value: String) {
     let words = folded(value).split(separator: " ")
     initials = words.compactMap(\.first)
-    surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
+    surnames = words.indices.map { SearchText(alreadyFolded: words[$0...].joined(separator: " ")) }
   }
 }
 

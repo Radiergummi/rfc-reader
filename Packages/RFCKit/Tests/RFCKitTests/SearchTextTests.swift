@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Search text")
 struct SearchTextTests {
-  private func text(_ string: String) -> SearchText { SearchText(string) }
+  private func text(_ string: String) -> SearchText { SearchText(alreadyFolded: string) }
 
   // MARK: - Containment
 

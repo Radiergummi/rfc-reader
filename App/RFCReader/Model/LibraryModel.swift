@@ -947,7 +947,7 @@ final class LibraryModel {
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
-  /// Every working group the index names, lowercased, derived with the index for the
+  /// Every working group the index names, folded, derived with the index for the
   /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
   /// them on every body pass (#21).
   private(set) var knownWorkingGroups: Set<String> = []
