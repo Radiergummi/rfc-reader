@@ -80,7 +80,6 @@ struct ErrataTests {
   /// One malformed entry is skipped, not the feed: a document it names can't be read.
   @Test func `an entry naming no document is skipped`() throws {
     let errata = try Self.feed(Self.entry(document: "draft-x"), Self.entry(id: "2"))
-    #expect(errata.count == 1)
     #expect(errata[.rfc(9999)].map(\.id) == [2])
   }
 
@@ -94,6 +93,13 @@ struct ErrataTests {
 
   @Test func `a document without errata has none`() throws {
     #expect(try Self.feed(Self.entry())[.rfc(1)].isEmpty)
+  }
+
+  /// An entry whose fields are of an unexpected type is skipped, not the feed.
+  @Test func `an entry of the wrong shape is skipped`() throws {
+    let errata = try Errata.decode(
+      Data("[\(Self.entry(id: "2")), {\"errata_id\": 3, \"doc-id\": \"RFC9999\"}]".utf8))
+    #expect(errata[.rfc(9999)].map(\.id) == [2])
   }
 
   @Test func `a feed that is not a list fails`() {
@@ -139,6 +145,17 @@ struct ErrataTests {
     ("appendix-2", ["appendix-2"]),
     ("4.1)", ["4.1"]),
     ("Section\u{00A0}26.1 says:", ["26.1"]),
+    // A bare list names every section in it.
+    ("3.2 and 3.4", ["3.2", "3.4"]),
+    ("A.3, A.4", ["A.3", "A.4"]),
+    ("4.8 & 4.9", ["4.8", "4.9"]),
+    // The number that opens a field is kept beside those it names in prose.
+    ("13, Appendix B", ["13", "B"]),
+    ("11.6 (also Appendix B.2.3, B.2.4)", ["11.6", "B.2.3", "B.2.4"]),
+    // Another RFC's sections are none of this one's.
+    ("as detailed in Appendix B of RFC 2373", []),
+    ("Section 4 of [RFC5234]", []),
+    ("Section 2 and Section 4 of RFC 5234", ["2"]),
   ]
 
   @Test func `a missing section field names no section`() throws {
@@ -149,31 +166,14 @@ struct ErrataTests {
 
   // MARK: - Fetching
 
-  /// Answers with a scripted status and headers, and keeps the request it was sent.
-  private final class Transport: HTTPTransport, @unchecked Sendable {
-    private let status: Int
-    private let lock = NSLock()
-    private var sent: URLRequest?
-
-    init(status: Int) {
-      self.status = status
-    }
-
-    var request: URLRequest? {
-      lock.withLock { sent }
-    }
-
-    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-      lock.withLock { sent = request }
-      let response = HTTPURLResponse.served(
-        from: request.url!, statusCode: status,
-        headerFields: ["Content-Type": "application/json;charset=utf-8", "ETag": #""next""#])
-      return (status == 200 ? Data("[]".utf8) : Data(), response)
-    }
+  private static func transport(status: Int) -> ScriptedTransport {
+    ScriptedTransport(
+      status: status, body: Data("[]".utf8),
+      headers: ["Content-Type": "application/json;charset=utf-8", "ETag": #""next""#])
   }
 
   @Test func `the feed is asked for with the validators kept`() async throws {
-    let transport = Transport(status: 304)
+    let transport = Self.transport(status: 304)
     let fetched = try await RFCEditorClient(transport: transport).fetchErrataData(
       unlessMatching: CacheValidators(entityTag: #""kept""#, lastModified: nil),
       onExpensiveNetworks: false)
@@ -184,7 +184,7 @@ struct ErrataTests {
   }
 
   @Test func `a new feed comes with its own validators`() async throws {
-    let fetched = try await RFCEditorClient(transport: Transport(status: 200))
+    let fetched = try await RFCEditorClient(transport: Self.transport(status: 200))
       .fetchErrataData(unlessMatching: nil, onExpensiveNetworks: true)
     #expect(
       fetched

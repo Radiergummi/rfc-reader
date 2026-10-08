@@ -87,32 +87,27 @@ public struct Erratum: Sendable, Hashable, Identifiable {
   // MARK: - Sections
 
   /// The sections a section field names, never guessed: a number or an appendix that
-  /// opens it, `4.1`, `A.2`, `6.4.5.`, `2.1,1st para`; an anchor's spelling,
-  /// `section-4.1`, `appendix-C`; or every one a `Section`, `Sections`, `Appendix` or
-  /// `Appendices` names in prose, `In Sections 7.8, 7.9, and 8.4.1`. Anything else,
-  /// `Figure 1`, `Abstract`, `GLOBAL`, names none.
+  /// opens it, alone or as a list, `4.1`, `A.2`, `6.4.5.`, `2.1,1st para`, `3.2 and
+  /// 3.4`; an anchor's spelling, `section-4.1`, `appendix-C`; and every one a
+  /// `Section`, `Sections`, `Appendix` or `Appendices` names in prose, `In Sections
+  /// 7.8, 7.9, and 8.4.1`. Anything else, `Figure 1`, `Abstract`, `GLOBAL`, names
+  /// none, and so does a list of another RFC's, `Section 4 of RFC 5234`.
   public static func sections(in field: String) -> [String] {
     let words = field.split(whereSeparator: \.isWhitespace).map(String.init)
-    let named = namedInProse(words)
-    if !named.isEmpty { return named }
     guard let first = words.first else { return [] }
-    if let anchored = anchorSpelling(first) { return [anchored] }
-    // A field that is one letter is an appendix; a word of prose that is one letter,
-    // "A typo", is not.
-    if words.count == 1, let letter = identifier(first), letter.count == 1 { return [letter] }
-    guard let opening = identifier(first, upTo: [",", ";", ":", ")"]),
-      opening.count > 1
-        || opening.first?.isNumber == true
-    else { return [] }
-    return [opening]
-  }
-
-  /// Every section a `Section`, `Sections`, `Appendix` or `Appendices` names, with
-  /// the identifiers after it joined by commas, `and`, `or` and `&`.
-  private static func namedInProse(_ words: [String]) -> [String] {
-    let keywords: Set<String> = ["section", "sections", "appendix", "appendices"]
-    let conjunctions: Set<String> = ["and", "or", "&"]
     var named: [String] = []
+    func add(_ sections: [String]) {
+      for section in sections where !named.contains(section) { named.append(section) }
+    }
+    if let anchored = anchorSpelling(first) {
+      add([anchored])
+    } else if words.count == 1, let letter = identifier(first), letter.count == 1 {
+      // A field that is one letter is an appendix; a word of prose that is one
+      // letter, "A typo", is not.
+      add([letter])
+    } else {
+      add(list(in: words, from: 0, namesAppendix: false, accepting: opensField).sections)
+    }
     var index = 0
     while index < words.count {
       let keyword = words[index].lowercased()
@@ -120,27 +115,57 @@ public struct Erratum: Sendable, Hashable, Identifiable {
         index += 1
         continue
       }
-      let namesAppendix = keyword.hasPrefix("appendi")
-      index += 1
-      while index < words.count {
-        let word = words[index]
-        if conjunctions.contains(word.lowercased()) {
-          index += 1
-          continue
-        }
-        guard let identifier = identifier(word, upTo: [",", ";", ":", ")"]) else { break }
-        let section = namesAppendix ? appendix(identifier) : identifier
-        if !named.contains(section) { named.append(section) }
-        index += 1
-        // A list goes on after a comma or a conjunction, and ends at anything else.
-        let goesOn =
-          word.hasSuffix(",")
-          || (index < words.count && conjunctions.contains(words[index].lowercased()))
-        if !goesOn { break }
-      }
+      let read = list(
+        in: words, from: index + 1, namesAppendix: keyword.hasPrefix("appendi"),
+        accepting: { _ in true })
+      add(read.sections)
+      index = read.end
     }
     return named
   }
+
+  private static let keywords: Set<String> = ["section", "sections", "appendix", "appendices"]
+  private static let conjunctions: Set<String> = ["and", "or", "&"]
+
+  /// Whether an identifier can open a field as a section: a number, or an appendix
+  /// with more than its letter, since a field opening with one letter is prose.
+  private static func opensField(_ identifier: String) -> Bool {
+    identifier.count > 1 || identifier.first?.isNumber == true
+  }
+
+  /// The sections the list starting at `words[start]` names, joined by commas, `and`,
+  /// `or` and `&`, and the index of the word after it. A list followed by `of RFC
+  /// 5234` or `of [RFC5234]` is another RFC's, and names none of this one's.
+  private static func list(
+    in words: [String], from start: Int, namesAppendix: Bool,
+    accepting accepts: (String) -> Bool
+  ) -> (sections: [String], end: Int) {
+    var sections: [String] = []
+    var index = start
+    while index < words.count {
+      let word = words[index]
+      if conjunctions.contains(word.lowercased()) {
+        index += 1
+        continue
+      }
+      guard let identifier = identifier(word, upTo: identifierEnds), accepts(identifier)
+      else { break }
+      sections.append(namesAppendix ? appendix(identifier) : identifier)
+      index += 1
+      // A list goes on after a comma or a conjunction, and ends at anything else.
+      let goesOn =
+        word.hasSuffix(",")
+        || (index < words.count && conjunctions.contains(words[index].lowercased()))
+      if !goesOn { break }
+    }
+    let namesAnotherRFC =
+      index + 1 < words.count && words[index].lowercased() == "of"
+      && words[index + 1].lowercased().trimmingCharacters(in: ["[", "("]).hasPrefix("rfc")
+    return (namesAnotherRFC ? [] : sections, index)
+  }
+
+  /// What ends a section's number within a word: `2.1,1st para`, `4.1)`.
+  private static let identifierEnds: Set<Character> = [",", ";", ":", ")"]
 
   /// An appendix's place: `A.2` as it is, `1.2` as `appendix-1.2`, so it is never
   /// taken for the body's section 1.2 (#429).
@@ -148,18 +173,13 @@ public struct Erratum: Sendable, Hashable, Identifiable {
     identifier.first?.isNumber == true ? "appendix-\(identifier)" : identifier
   }
 
-  /// A section named as its anchor is spelled, `section-4.1` or `appendix-C`.
+  /// A section named as its anchor is spelled, `section-4.1` or `appendix-C`, read
+  /// as `SectionAnchor` reads an anchor.
   private static func anchorSpelling(_ word: String) -> String? {
-    let lowered = word.lowercased()
-    for (prefix, isAppendix) in [("section-", false), ("appendix-", true)]
-    where lowered.hasPrefix(prefix) {
-      guard
-        let identifier = identifier(
-          String(word.dropFirst(prefix.count)), upTo: [",", ";", ":", ")"])
-      else { return nil }
-      return isAppendix ? appendix(identifier) : identifier
-    }
-    return nil
+    var anchor = Substring(word)
+    if let end = anchor.firstIndex(where: identifierEnds.contains) { anchor = anchor[..<end] }
+    while anchor.last == "." { anchor = anchor.dropLast() }
+    return SectionAnchor.sectionNumber(fromAnchor: String(anchor))
   }
 
   /// `word` read as a section's number, `4.1` or `A.2`, without a trailing full stop
@@ -200,16 +220,21 @@ public struct Errata: Sendable {
     byDocument[document] ?? []
   }
 
-  /// How many errata there are, of every document.
-  public var count: Int {
-    byDocument.values.reduce(0) { $0 + $1.count }
-  }
-
   /// The feed as the RFC Editor serves it: a list of entries. An entry whose
-  /// document or number can't be read is skipped rather than failing the feed.
+  /// document or number can't be read, or that isn't shaped as one, is skipped
+  /// rather than failing the feed.
   public static func decode(_ data: Data) throws -> Errata {
-    let entries = try JSONDecoder().decode([ErrataFeedEntry].self, from: data)
-    return Errata(entries.compactMap(\.erratum))
+    let entries = try JSONDecoder().decode([SkippingMalformed].self, from: data)
+    return Errata(entries.compactMap { $0.entry?.erratum })
+  }
+}
+
+/// An entry of the feed, or nil for one that doesn't decode as one.
+private struct SkippingMalformed: Decodable {
+  let entry: ErrataFeedEntry?
+
+  init(from decoder: any Decoder) throws {
+    entry = try? ErrataFeedEntry(from: decoder)
   }
 }
 

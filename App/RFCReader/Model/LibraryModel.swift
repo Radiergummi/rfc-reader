@@ -953,9 +953,9 @@ final class LibraryModel {
       case .unchanged:
         if let kept { try await store.recordUnchangedErrata(kept) }
       case .changed(let data, let validators):
-        let decoded = try await Self.decodeErrata(data)
+        // Shown before it is kept, so a failed write loses only the copy on disk.
+        errata = try await Self.decodeErrata(data)
         try await store.storeErrata(data, validators: validators)
-        errata = decoded
       }
     } catch {
       libraryLog.error(

@@ -103,16 +103,15 @@ public struct ErrataSummary: Equatable, Sendable {
   /// A.2", "Appendix 1" for `appendix-1`, "Sections 7.8, 7.9, and 8.4.1", "Appendix B
   /// and Section 2".
   private static func place(of sections: [String], locale: Locale) -> String {
-    // Each as an appendix or not, and the identifier it is named by.
+    // Each as an appendix or not, and the identifier it is named by, as a citation
+    // names it.
     let named = sections.map { section -> (isAppendix: Bool, identifier: String) in
-      if section.hasPrefix("appendix-") { return (true, String(section.dropFirst(9))) }
-      return (section.first?.isLetter == true, section)
+      PlaceName.appendixNumber(of: section).map { (true, $0) } ?? (false, section)
     }
-    guard let first = named.first else { return String(kit: "Whole document", locale: locale) }
-    if named.count == 1 {
-      return first.isAppendix
-        ? String(kit: "Appendix \(first.identifier)", locale: locale)
-        : String(kit: "Section \(first.identifier)", locale: locale)
+    if named.count == 1, let only = named.first {
+      return only.isAppendix
+        ? String(kit: "Appendix \(only.identifier)", locale: locale)
+        : String(kit: "Section \(only.identifier)", locale: locale)
     }
     let list = named.map(\.identifier).formatted(.list(type: .and).locale(locale))
     if named.allSatisfy(\.isAppendix) { return String(kit: "Appendices \(list)", locale: locale) }
