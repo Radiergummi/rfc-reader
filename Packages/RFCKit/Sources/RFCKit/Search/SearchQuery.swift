@@ -509,11 +509,19 @@ public enum SearchQuery {
 
   /// Whether a word with a colon this version doesn't know as a qualifier reads as
   /// one from another version: a word of letters, then a value with no other colon
-  /// and no slash after it. `urn:ietf:params`, `http://…`, `::1` and `10:30` are text.
+  /// and no slash after it. `urn:ietf:params`, `http://…`, `::1` and `10:30` are text,
+  /// and so is a word beginning with a URI scheme RFCs are full of, `mailto:…`.
   static func looksLikeQualifier(_ word: (key: Substring, value: Substring)) -> Bool {
     !word.key.isEmpty && word.key.allSatisfy { $0.isLetter || $0 == "-" }
+      && !uriSchemes.contains(word.key.lowercased())
       && !word.value.contains(":") && !word.value.contains("/")
   }
+
+  /// The URI schemes whose words are searched for as text, never read as a qualifier
+  /// of another version: no qualifier will ever be named like one.
+  private static let uriSchemes: Set<String> = [
+    "urn", "mailto", "sip", "sips", "tel", "data", "doi", "tag",
+  ]
 
   /// Whether removing `removed` takes `term` with it: the same term, or a status the
   /// removed one's statuses include, which `terms(of:)` gave no chip of its own.

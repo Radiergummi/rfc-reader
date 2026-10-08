@@ -182,11 +182,20 @@ struct QueryGrammarTests {
   /// other version, is still searched as text.
   @Test(arguments: [
     "urn:ietf:params:oauth", "::1", "10:30", "http://example.com", "doi:10.1000/182",
+    "urn:ietf", "mailto:user@example.com", "sip:alice@example.com", "sips:bob@example.com",
+    "tel:+1-201-555-0123", "data:text", "tag:example.com", "URN:ietf",
   ])
   func `a word with a colon that is no qualifier is text`(word: String) {
     let parsed = IndexSearch.parseQuery("cache \(word)")
     #expect(parsed.unknown.isEmpty)
     #expect(parsed.text == "cache \(word)")
+  }
+
+  /// A word that reads as a qualifier and names none this version knows is unknown.
+  @Test func `a word that reads as an unknown qualifier is unknown`() {
+    let parsed = IndexSearch.parseQuery("foo:bar cache")
+    #expect(parsed.unknown == [UnknownSearchTerm(word: "foo:bar", reason: .qualifier)])
+    #expect(parsed.text == "cache")
   }
 
   /// A union naming no value is as unreadable as one naming a wrong one.
