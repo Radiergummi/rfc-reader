@@ -10,6 +10,12 @@ import Testing
 struct SectionInProseTests {
   /// Each paragraph of a hand-written document in RFCXML's shape, by its anchor.
   static func paragraphs() throws -> [String: Paragraph] {
+    try parsed.get()
+  }
+
+  private static let parsed = Result { try parse() }
+
+  private static func parse() throws -> [String: Paragraph] {
     let xml = """
       <?xml version="1.0" encoding="UTF-8"?>
       <rfc number="9999" version="3" prepTime="2026-01-01T00:00:00">
@@ -23,6 +29,7 @@ struct SectionInProseTests {
             <t anchor="lowercase">Per section 2.4 of <xref target="RFC3550"/>, it stops.</t>
             <t anchor="has-section">Section 9 of <xref target="RFC3550" section="4"/> differs.</t>
             <t anchor="earlier">Section 5 describes <xref target="RFC3550"/> too.</t>
+            <t anchor="subsection">See Subsection 2 of <xref target="RFC3550"/> for it.</t>
             <t anchor="words">Section 2 of <xref target="RFC3550">the transport spec</xref> says so.</t>
             <t anchor="tag">Section 4 of <xref target="QUIC-T"/> applies.</t>
             <t anchor="entry">Section 3.2 of <xref target="WEB-X"/> applies.</t>
@@ -75,17 +82,22 @@ struct SectionInProseTests {
     #expect(paragraph.inlines.first == .text(before))
   }
 
-  /// A citation with a section of its own keeps it, and a section named earlier in the
-  /// sentence is not the citation's.
-  @Test(arguments: ["has-section", "earlier"])
-  func `a section that is not the citation's stays in the prose`(anchor: String) throws {
+  /// A citation with a section of its own keeps it, and the prose before it stays.
+  @Test func `a citation with a section of its own keeps it`() throws {
+    let (paragraph, xref) = try Self.citation("has-section")
+    #expect(xref.target == .document(.rfc(3550), section: "4", entry: "RFC3550"))
+    #expect(paragraph.plainText.hasPrefix("Section 9 of "))
+  }
+
+  /// A section named earlier in the sentence, or at the end of a longer word, is not the
+  /// citation's.
+  @Test(arguments: [("earlier", "Section 5 describes "), ("subsection", "See Subsection 2 of ")])
+  func `a section that does not end right before the citation stays in the prose`(
+    anchor: String, before: String
+  ) throws {
     let (paragraph, xref) = try Self.citation(anchor)
-    #expect(paragraph.plainText.hasPrefix("Section "))
-    if anchor == "earlier" {
-      #expect(xref.target == .document(.rfc(3550), section: nil, entry: "RFC3550"))
-    } else {
-      #expect(xref.target == .document(.rfc(3550), section: "4", entry: "RFC3550"))
-    }
+    #expect(xref.target == .document(.rfc(3550), section: nil, entry: "RFC3550"))
+    #expect(paragraph.inlines.first == .text(before))
   }
 
   /// The author's own words stay the citation's, so the prose before them stays too, and

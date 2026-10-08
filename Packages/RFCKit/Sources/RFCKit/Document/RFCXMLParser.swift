@@ -905,20 +905,25 @@ public enum RFCXMLParser {
     /// link, and a cross reference nested in one is a link with two destinations.
     func parseInlines(_ nodes: [XMLTree.Node], linkBare: Bool = true) -> [Inline] {
       var result: [Inline] = []
-      var index = nodes.startIndex
-      while index < nodes.endIndex {
-        defer { index += 1 }
-        switch nodes[index] {
-        case .text(let text):
-          if index + 1 < nodes.endIndex, case .element(let next) = nodes[index + 1],
-            let folded = foldingSection(before: next, from: text)
+      // The citation a section named in the text before it was folded into, which
+      // stands in for the next node.
+      var folded: CrossReference?
+      for (offset, node) in nodes.enumerated() {
+        if let reference = folded {
+          result.append(.crossReference(reference))
+          folded = nil
+          continue
+        }
+        switch node {
+        case .text(var text):
+          // Words set as the author typed them are not ours to rewrite.
+          if linkBare, offset + 1 < nodes.count, case .element(let next) = nodes[offset + 1],
+            let fold = foldingSection(before: next, from: text)
           {
-            result += linkBare ? linker.link(folded.text) : [.text(folded.text)]
-            result.append(.crossReference(folded.reference))
-            index += 1
-          } else {
-            result += linkBare ? linker.link(text) : [.text(text)]
+            text = fold.text
+            folded = fold.reference
           }
+          result += linkBare ? linker.link(text) : [.text(text)]
         case .element(let element):
           result += parseInline(element, linkBare: linkBare)
         }
@@ -927,9 +932,9 @@ public enum RFCXMLParser {
     }
 
     /// A section named in the prose right before a citation, `Section 6.1 of` or
-    /// `Appendix B in`, ending `text`.
+    /// `Appendix B in`, ending `text`. A whole word: `Subsection 2 of` is not one.
     private static let sectionBeforeCitation = Pattern(
-      #/(?:[Ss]ection\s+(?<section>\d+(?:\.\d+)*)|[Aa]ppendix\s+(?<appendix>[A-Z](?:\.\d+)*))\s+(?:of|in)\s+$/#
+      #/\b(?:[Ss]ection\s+(?<section>\d+(?:\.\d+)*)|[Aa]ppendix\s+(?<appendix>[A-Z](?:\.\d+)*))\s+(?:of|in)\s+$/#
     )
 
     /// The citation `xref` with the section the prose before it names, and the prose
@@ -943,11 +948,16 @@ public enum RFCXMLParser {
       -> (text: String, reference: CrossReference)?
     {
       guard foldsSectionsInProse, xref.name == "xref" || xref.name == "relref",
-        xref["section"] == nil,
-        let match = text.firstMatch(of: Self.sectionBeforeCitation.regex)
+        xref["section"] == nil
+      else { return nil }
+      // Most text before a citation does not end in `of` or `in`, and is spared the scan.
+      let ending = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard ending.hasSuffix("of") || ending.hasSuffix("in"),
+        let match = text.firstMatch(of: Self.sectionBeforeCitation),
+        let section = match.section ?? match.appendix
       else { return nil }
       var sectioned = xref
-      sectioned.attributes["section"] = String(match.section ?? match.appendix ?? "")
+      sectioned.attributes["section"] = String(section)
       sectioned.attributes["sectionFormat"] = "of"
       let plain = parseCrossReference(xref)
       let reference = parseCrossReference(sectioned)
