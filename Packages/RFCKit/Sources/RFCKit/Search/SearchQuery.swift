@@ -291,8 +291,11 @@ public enum SearchQuery {
 
   /// The characters that open or close a quoted run: the straight quote, and the
   /// typographic ones Smart Punctuation, on by default on iOS, types for it: “ and ”,
-  /// or „ and “ on a German keyboard.
-  static let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}", "\u{201E}"]
+  /// or „ and “ on a German keyboard; and the guillemets « » and ‹ › a French or
+  /// Swiss keyboard quotes with.
+  static let quotes: Set<Character> = [
+    "\"", "\u{201C}", "\u{201D}", "\u{201E}", "\u{00AB}", "\u{00BB}", "\u{2039}", "\u{203A}",
+  ]
 
   /// The words of `query`, split at spaces outside quotes, each as typed. A quoted run
   /// is one word with its quotes (`author:"Roy Fielding"`, `"key words"`), and an
