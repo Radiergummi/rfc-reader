@@ -10,6 +10,8 @@ struct CollectionPickerSheet: View {
   let undoManager: UndoManager?
 
   @Environment(LibraryModel.self) private var library
+  /// Where a query's `is:` and `in:` are read from, as the tab's own list reads them.
+  @Environment(NavigationModel.self) private var navigation
   @Environment(\.dismiss) private var dismiss
   @State private var query = ""
   @State private var limit = ListWindow.page
@@ -56,7 +58,8 @@ struct CollectionPickerSheet: View {
       .task(
         id: Listing(query: AppliedSearch.query(for: query), indexVersion: library.indexVersion)
       ) {
-        let list = LibraryList(filter: .all, query: query)
+        let list = LibraryList.reading(
+          .all, query: query, options: ListOptions(), from: navigation)
         guard await Debounce.outlasted(AppliedSearch.pause(before: list.query)),
           let listed = await library.listed(list), !Task.isCancelled
         else { return }

@@ -55,10 +55,15 @@ public struct ListedRows: Sendable {
 
   /// The whole library's results for the query, as All RFCs lists them: what the
   /// iPhone sidebar shows while it is searched (#345). Made from `hits` when read,
-  /// since only that sidebar reads it, and narrowed by the reader's data the query
-  /// asks for, which `list` holds.
+  /// since only that sidebar reads it, twice a body: a query that asks for neither
+  /// the reader's data nor a sort is its hits as they are, and only one that does
+  /// is narrowed and sorted by what `list` holds.
   public var librarySearch: [LibraryRow] {
     guard !list.query.isEmpty else { return [] }
+    let filters = IndexSearch.parseQuery(list.query).filters
+    guard filters.asksReader || filters.sort != nil else {
+      return ListOptions().apply(to: hits.map(LibraryRow.rfc), filter: .all, query: list.query)
+    }
     let library = LibraryList(
       filter: .all, query: list.query, bookmarked: list.bookmarked,
       recentlyRead: list.recentlyRead, downloaded: list.downloaded,

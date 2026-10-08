@@ -195,17 +195,19 @@ public enum SearchQuery {
     }
   }
 
-  /// The terms of `query` this version can't read, and then each working group it
-  /// names that `index` doesn't: a group the index dropped since the query was saved.
-  public static func unknownTerms(of query: Parsed, in index: RFCIndex) -> [UnknownSearchTerm] {
+  /// The terms of `query` this version can't read, and then each word naming a
+  /// working group `index` doesn't, as written: a group the index dropped since the
+  /// query was saved.
+  public static func unknownTerms(in query: String, index: RFCIndex) -> [UnknownSearchTerm] {
+    let parsed = IndexSearch.parseQuery(query)
     // Every list asks, so the index is read only for a query that names a group.
-    guard !query.filters.workingGroups.isEmpty else { return query.unknown }
+    guard !parsed.filters.workingGroups.isEmpty else { return parsed.unknown }
     let known = knownWorkingGroups(in: index)
-    return query.unknown
-      + query.filters.workingGroups.sorted().filter { !known.contains($0) }.map { group in
-        UnknownSearchTerm(
-          word: "\(Qualifier.workingGroup.name):\(written(group))", reason: .workingGroup)
-      }
+    guard !parsed.filters.workingGroups.isSubset(of: known) else { return parsed.unknown }
+    let missing = words(in: query).filter { word in
+      !IndexSearch.parseQuery(word).filters.workingGroups.isSubset(of: known)
+    }
+    return parsed.unknown + missing.map { UnknownSearchTerm(word: $0, reason: .workingGroup) }
   }
 
   // MARK: - Writing a query back out
@@ -352,7 +354,8 @@ public enum SearchQuery {
       }
       // A word naming several values of a union loses only this one: `wg:quic,tls`
       // without `wg:quic` is `wg:tls`.
-      return set.contains(term) ? set.filter { $0 != term }.map(\.word) : [word]
+      let left = set.filter { !removes(term, $0) }
+      return left.count < set.count ? left.map(\.word) : [word]
     }
     // The space the reader typed last stays, so the next keystroke begins a word.
     let trailingSpace = wordBeingTyped(in: query) == nil && !kept.isEmpty ? " " : ""
@@ -509,7 +512,25 @@ public enum SearchQuery {
   /// and no slash after it. `urn:ietf:params`, `http://…`, `::1` and `10:30` are text.
   static func looksLikeQualifier(_ word: (key: Substring, value: Substring)) -> Bool {
     !word.key.isEmpty && word.key.allSatisfy { $0.isLetter || $0 == "-" }
-      && !word.value.contains(":") && !word.value.hasPrefix("/")
+      && !word.value.contains(":") && !word.value.contains("/")
+  }
+
+  /// Whether removing `removed` takes `term` with it: the same term, or a status the
+  /// removed one's statuses include, which `terms(of:)` gave no chip of its own.
+  /// Removing the standards track takes `status:internet-standard` with it.
+  private static func removes(_ removed: Term, _ term: Term) -> Bool {
+    guard removed != term else { return true }
+    guard let removedStatus = statusValue(of: removed), let status = statusValue(of: term),
+      !status.excludesObsolete
+    else { return false }
+    return status.statuses.isSubset(of: removedStatus.statuses)
+  }
+
+  /// The `status:` value a term names, or nil for another qualifier's.
+  private static func statusValue(of term: Term) -> StatusValue? {
+    guard let written = qualifier(in: term.word), written.key == Qualifier.status.name[...]
+    else { return nil }
+    return StatusValue(spelling: String(written.value))
   }
 
   // MARK: - Completion
@@ -622,11 +643,24 @@ extension SearchFilters {
   /// Whether these ask for what the index doesn't hold: the reader's data, or a
   /// collection to search in.
   public var asksReader: Bool {
-    !readerData.isEmpty
-      || scopes.contains { scope in
-        if case .collection = scope { return true }
-        return false
-      }
+    !readerData.isEmpty || !collectionNames.isEmpty
+  }
+
+  /// The documents `in:` names, in no order.
+  public var documentScopes: [DocumentID] {
+    scopes.compactMap { scope in
+      guard case .document(let id) = scope else { return nil }
+      return id
+    }
+  }
+
+  /// The names of the collections `in:` names, in order.
+  public var collectionNames: [String] {
+    scopes.compactMap { scope in
+      guard case .collection(let name) = scope else { return nil }
+      return name
+    }
+    .sorted()
   }
 
   /// Adds what a `status:` value stands for: its statuses, or for `current` the

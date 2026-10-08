@@ -311,13 +311,9 @@ public struct IndexSearch: Sendable {
       self.filters = filters
       groups = Set(filters.workingGroups.map(SearchText.init))
       author = filters.author.map(AuthorQuery.init)
-      let documents = filters.scopes.compactMap { scope -> DocumentID? in
-        guard case .document(let id) = scope else { return nil }
-        return id
-      }
-      let namesCollection = documents.count < filters.scopes.count
+      let documents = filters.documentScopes
       scope =
-        documents.isEmpty || namesCollection
+        documents.isEmpty || !filters.collectionNames.isEmpty
         ? nil
         : Set(documents.flatMap(index.rfcNumbers(of:)))
       publishedSince = filters.publishedWithinDays.flatMap { days in

@@ -109,7 +109,7 @@ public struct LibraryList: Hashable, Sendable {
   private func unknownTerms(
     of parsed: SearchQuery.Parsed, in index: RFCIndex
   ) -> [UnknownSearchTerm] {
-    let known = SearchQuery.unknownTerms(of: parsed, in: index)
+    let known = SearchQuery.unknownTerms(in: query, index: index)
     guard parsed.filters.collectionNames.contains(where: { collections[$0.lowercased()] == nil })
     else { return known }
     // Each word naming a collection the library doesn't hold, as it was written.
@@ -203,10 +203,7 @@ public struct LibraryList: Hashable, Sendable {
       // this once it names a collection.
       let numbers = Set(
         asked.collectionNames.flatMap { collections[$0.lowercased()] ?? [] }
-          + asked.scopes.flatMap { scope -> [Int] in
-            guard case .document(let id) = scope else { return [] }
-            return index.rfcNumbers(of: id)
-          })
+          + asked.documentScopes.flatMap(index.rfcNumbers(of:)))
       // A series row is in when one of its members is, as a search finds it.
       rows = rows.filter { row in
         row.rfc.map { numbers.contains($0.number) }
@@ -271,15 +268,6 @@ public struct LibraryList: Hashable, Sendable {
 }
 
 extension SearchFilters {
-  /// The names of the collections `in:` names.
-  var collectionNames: [String] {
-    scopes.compactMap { scope in
-      guard case .collection(let name) = scope else { return nil }
-      return name
-    }
-    .sorted()
-  }
-
   /// The filters the index's search answers, beside `text`: these less the reader's
   /// data, a sort, and `in:` once it names a collection, which a list narrows by
   /// itself. Nil when they and the text ask the index for nothing.

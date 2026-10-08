@@ -180,7 +180,9 @@ struct QueryGrammarTests {
 
   /// A word that only has a colon in it, rather than reading as a qualifier of some
   /// other version, is still searched as text.
-  @Test(arguments: ["urn:ietf:params:oauth", "::1", "10:30", "http://example.com"])
+  @Test(arguments: [
+    "urn:ietf:params:oauth", "::1", "10:30", "http://example.com", "doi:10.1000/182",
+  ])
   func `a word with a colon that is no qualifier is text`(word: String) {
     let parsed = IndexSearch.parseQuery("cache \(word)")
     #expect(parsed.unknown.isEmpty)
@@ -209,6 +211,16 @@ struct QueryGrammarTests {
     #expect(SearchQuery.format(parsed) == #"in:"drafts,todo""#)
   }
 
+  /// A status the standards track covers has no chip of its own, so removing the
+  /// standards track's takes the word naming it too.
+  @Test func `removing the standards track removes Internet Standard with it`() throws {
+    let query = "status:full status:std cache"
+    let terms = SearchQuery.terms(of: IndexSearch.parseQuery(query).filters)
+    #expect(terms.map(\.word) == ["status:std"])
+    let standards = try #require(terms.first)
+    #expect(SearchQuery.removing(standards, from: query) == "cache")
+  }
+
   /// Removing one value's chip from a word naming several keeps the others.
   @Test func `removing a term from a union word keeps its other values`() throws {
     let query = "wg:quic,tls cache is:bookmarked,bcp"
@@ -227,10 +239,19 @@ struct QueryGrammarTests {
   /// A working group the index no longer names is unknown once the query is read
   /// against the index.
   @Test func `a working group missing from the index is unknown`() {
-    let parsed = IndexSearch.parseQuery("wg:quic wg:gone")
     #expect(
-      SearchQuery.unknownTerms(of: parsed, in: Self.index)
+      SearchQuery.unknownTerms(in: "wg:quic wg:gone", index: Self.index)
         == [UnknownSearchTerm(word: "wg:gone", reason: .workingGroup)])
+  }
+
+  /// The unknown term is the word as it was written, whatever its spelling.
+  @Test func `a missing working group is reported as written`() {
+    #expect(
+      SearchQuery.unknownTerms(in: "group:Gone cache wg:quic,Other", index: Self.index)
+        == [
+          UnknownSearchTerm(word: "group:Gone", reason: .workingGroup),
+          UnknownSearchTerm(word: "wg:quic,Other", reason: .workingGroup),
+        ])
   }
 
   // MARK: - Fixture
