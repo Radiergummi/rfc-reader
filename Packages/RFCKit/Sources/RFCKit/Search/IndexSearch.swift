@@ -353,13 +353,14 @@ struct AuthorName: Sendable {
     return word.contains(".") || letters.count <= 2
   }
 
-  /// Each word of the query matches the surname, or is a given name or an initial
-  /// that fits one of the author's initials and comes before the surname. The
-  /// surname is matched in part, as the query is still being typed.
+  /// The query's last words match the surname, in part, as the query is still being
+  /// typed, and the words before them are given names or initials. Only the first
+  /// of those has to fit one of the author's initials: the index holds one initial
+  /// for most authors, so `Roy T. Fielding` finds "R. Fielding".
   func matches(_ query: AuthorQuery) -> Bool {
     query.surnames.indices.contains { split in
       surname.contains(query.surnames[split])
-        && query.initials[..<split].allSatisfy(initials.contains)
+        && (split == 0 || initials.contains(query.initials[0]))
     }
   }
 }
