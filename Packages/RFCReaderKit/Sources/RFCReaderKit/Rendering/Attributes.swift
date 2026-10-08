@@ -28,6 +28,9 @@ extension NSAttributedString.Key {
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on a numbered heading's number where it hangs in the gutter (#433): the
+  /// anchor of the heading it links to. A `String`, so the number's runs merge.
+  public static let rfcSectionNumber = NSAttributedString.Key("rfcSectionNumber")
   /// Set on every character of an aside, its "Note" caption first (#700): the
   /// aside's ordinal among the document's asides, which Implementer folds its body
   /// by (`FoldingIndex`). Only in a build with live links, which alone has the

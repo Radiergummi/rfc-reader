@@ -91,6 +91,10 @@ public final class DocumentTextBuilder {
   /// otherwise define its rules twice.
   var definedRules: Set<String> = []
 
+  /// How far the headings' numbers hang left of the column, and every paragraph is
+  /// set in by (`BuiltDocument.sectionNumberHang`). Zero unless the style hangs them.
+  var hang: CGFloat = 0
+
   /// Which blocks the reader asked to see as their source.
   let choices: PresentationChoices
   /// Reviewed verdicts on artwork types, for `ArtworkClassifier`.
@@ -124,6 +128,9 @@ public final class DocumentTextBuilder {
     choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
+    if style.hangsSectionNumbers, style.emitsLinks {
+      builder.hang = SectionNumberHang.width(of: document, style: style)
+    }
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
@@ -134,7 +141,8 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
+      sectionNumberHang: builder.hang)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -268,15 +276,29 @@ extension DocumentTextBuilder {
   /// has nothing above it, being the first thing in the storage; a section's is set
   /// off from the prose before it by `spacingBefore`, and from what follows by
   /// `spacingAfter`, the usual gap unless given.
+  ///
+  /// One that `hangsNumber` starts at the container's edge, left of the column by
+  /// the hang, with a tab to the number's end and another to the column's edge,
+  /// where the title starts and a wrapped title's lines go on (#433).
   private func headingAttributes(
-    depth: Int, anchor: String, spacingBefore: CGFloat = 0, spacingAfter: CGFloat? = nil
+    depth: Int, anchor: String, spacingBefore: CGFloat = 0, spacingAfter: CGFloat? = nil,
+    hangsNumber: Bool = false
   ) -> [NSAttributedString.Key: Any] {
-    [
+    let spacingAfter = spacingAfter ?? style.paragraphSpacing * 0.6
+    let paragraphStyle =
+      hangsNumber
+      ? paragraphStyle(
+        firstLineIndent: -hang, spacingBefore: spacingBefore, spacingAfter: spacingAfter,
+        tabStops: [
+          NSTextTab(textAlignment: .right, location: -SectionNumberHang.gap(style: style)),
+          NSTextTab(textAlignment: .left, location: 0),
+        ])
+      : paragraphStyle(spacingBefore: spacingBefore, spacingAfter: spacingAfter)
+    return [
       .font: style.headingFont(depth: depth),
       .foregroundColor: RFCColors.label,
       .rfcAnchor: anchor,
-      .paragraphStyle: paragraphStyle(
-        spacingBefore: spacingBefore, spacingAfter: spacingAfter ?? style.paragraphSpacing * 0.6),
+      .paragraphStyle: paragraphStyle,
     ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
   }
 
@@ -322,12 +344,19 @@ extension DocumentTextBuilder {
     // is in `base`, so the anchor, the font and the spacing carry across the
     // reference's own runs.
     let citing = backlinks[section.anchor]
+    let hangingNumber = hang > 0 ? section.number : nil
     // A backlink caption under the heading takes over the space after it, and
     // the heading keeps only enough to sit close above the caption it belongs to.
     let attributes = headingAttributes(
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
-      spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15)
-    output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+      spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15,
+      hangsNumber: hangingNumber != nil)
+    if let hangingNumber {
+      appendHangingNumber(hangingNumber, of: section.anchor, attributes: attributes)
+      output.append(inlineRuns(section.title, base: attributes))
+    } else {
+      output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+    }
     append("\n", attributes)
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
@@ -336,6 +365,21 @@ extension DocumentTextBuilder {
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
+  }
+
+  /// A heading's number in the gutter (#433), between the two tabs its paragraph
+  /// sets: quieter than the title, and a link to its own heading, which the text
+  /// view follows as it follows any anchor, and which Option-click copies.
+  private func appendHangingNumber(
+    _ number: String, of anchor: String, attributes: [NSAttributedString.Key: Any]
+  ) {
+    append("\t", attributes)
+    var numberAttributes = attributes
+    numberAttributes[.foregroundColor] = RFCColors.secondaryLabel
+    numberAttributes[.rfcSectionNumber] = anchor
+    numberAttributes[.link] = Self.url(anchor, scheme: Self.anchorScheme)
+    append(number, numberAttributes)
+    append("\t", attributes)
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {
@@ -442,14 +486,19 @@ extension DocumentTextBuilder {
     paragraph.alignment = alignment
     // Negative: measured in from the container's trailing edge.
     paragraph.tailIndent = -trailingIndent
-    paragraph.firstLineHeadIndent = firstLineIndent ?? indent
-    paragraph.headIndent = indent
+    // Every indent and tab stop is measured from the column's edge, which is `hang`
+    // in from the container's (#433).
+    paragraph.firstLineHeadIndent = hang + (firstLineIndent ?? indent)
+    paragraph.headIndent = hang + indent
     paragraph.paragraphSpacingBefore = spacingBefore
     paragraph.paragraphSpacing = spacingAfter
     paragraph.lineHeightMultiple = lineHeightMultiple ?? style.lineHeightMultiple
     paragraph.lineBreakMode = wraps ? .byWordWrapping : .byClipping
     if let tabStops {
-      paragraph.tabStops = tabStops
+      paragraph.tabStops = tabStops.map { stop in
+        NSTextTab(
+          textAlignment: stop.alignment, location: hang + stop.location, options: stop.options)
+      }
       paragraph.defaultTabInterval = style.indentStep
     }
     // An immutable copy, not the mutable object typed as immutable: Foundation
