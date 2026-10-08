@@ -99,19 +99,40 @@ public struct DraftHeader: Equatable, Sendable {
   /// "RFC" or the brackets around any. One reading for the XML attribute and the text
   /// line alike: drafts write the prefix in both, where a published RFC's own header
   /// never does.
+  ///
+  /// A number after a label that names something other than an RFC is not one:
+  /// `BCP 14`, `STD 3`, or an old header's `NIC 5893` (#767). `RFC #733` is an RFC.
   private static func listedNumbers(_ value: String) -> [Int] {
-    value.replacingOccurrences(of: "(if approved)", with: "", options: .caseInsensitive)
-      .split(whereSeparator: { $0 == "," || $0.isWhitespace })
-      .compactMap { token -> Int? in
-        // "[6265]" as a citation would write it.
-        var token = token.trimmingPrefix("[")
-        if token.hasSuffix("]") { token = token.dropLast() }
-        // "RFC-9993": a hyphen, not a minus sign.
-        if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3).trimmingPrefix("-") }
-        guard let number = Int(token), number > 0 else { return nil }
-        return number
+    var numbers: [Int] = []
+    var isOtherSeries = false
+    let tokens = value.replacingOccurrences(
+      of: "(if approved)", with: "", options: .caseInsensitive
+    )
+    .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+    for token in tokens {
+      // "[6265]" as a citation would write it.
+      var token = token.trimmingPrefix("[")
+      if token.hasSuffix("]") { token = token.dropLast() }
+      if let label = otherSeriesLabels.first(where: { token.uppercased().hasPrefix($0) }) {
+        // "BCP14", glued to its number, is one token; "BCP 14" is two.
+        isOtherSeries = Int(token.dropFirst(label.count)) == nil
+        continue
       }
+      // "RFC-9993": a hyphen, not a minus sign.
+      if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3).trimmingPrefix("-") }
+      guard let number = Int(token.trimmingPrefix("#")), number > 0 else { continue }
+      if isOtherSeries {
+        isOtherSeries = false
+      } else {
+        numbers.append(number)
+      }
+    }
+    return numbers
   }
+
+  /// Labels whose numbers are not RFCs: the series, and the NIC and IEN documents old
+  /// headers cite beside RFCs.
+  private static let otherSeriesLabels = ["BCP", "STD", "FYI", "NIC", "IEN"]
 
   /// Whether a left column carries on a list: numbers, and nothing else but the
   /// spellings `listedNumbers` reads past. A date alone in the right column,

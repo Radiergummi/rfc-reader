@@ -532,6 +532,11 @@ extension LegacyTextParser {
       runStart = runEnd
       while runStart < lines.count, lines[runStart].isEmpty { runStart += 1 }
     }
+    // What it obsoletes and updates, read as a draft's are: a list continued on an
+    // indented line, and `BCP 14` not read as RFC 14 (#767).
+    let lists = DraftHeader.parse(frontPage: Array(lines[index...]))
+    header.obsoletes = lists.obsoletes.map(DocumentID.rfc)
+    header.updates = lists.updates.map(DocumentID.rfc)
     while index < lines.count, !lines[index].isEmpty {
       let line = lines[index]
       index += 1
@@ -548,10 +553,8 @@ extension LegacyTextParser {
       let left = isRightOnly ? "" : first
       let right = isRightOnly ? first : columns.count > 1 ? columns.last! : nil
 
-      if left.hasPrefix("Obsoletes:") {
-        header.obsoletes = documentIDs(in: left)
-      } else if left.hasPrefix("Updates:") {
-        header.updates = documentIDs(in: left)
+      if left.hasPrefix("Obsoletes:") || left.hasPrefix("Updates:") {
+        // Read below, with the lines that continue them.
       } else if left.hasPrefix("Category:") {
         header.category = DocumentHeader.Category(
           parsing: String(left.dropFirst("Category:".count)))
@@ -590,11 +593,5 @@ extension LegacyTextParser {
     line.trimmingCharacters(in: .whitespaces).firstMatch(of: numberLinePattern).flatMap {
       Int($0.1)
     }
-  }
-
-  private static let digitsPattern = Pattern(#/\d+/#)
-
-  private static func documentIDs(in text: String) -> [DocumentID] {
-    text.matches(of: digitsPattern).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
   }
 }

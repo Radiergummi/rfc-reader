@@ -32,8 +32,10 @@ struct LegacyIndexEntryTests {
     let data = try Fixtures.data("rfc1149.txt")
     let entry = try Self.entry()
     let parsed = LegacyTextParser.parse(data, entry: entry).header.title
-    let converted = LegacyTextParser.parse(LegacyTextParser.text(decoding: data), title: entry.title)
-      .header.title
+    let converted = LegacyTextParser.parse(
+      LegacyTextParser.text(decoding: data), title: entry.title
+    )
+    .header.title
     #expect(parsed == converted)
   }
 
