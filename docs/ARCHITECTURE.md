@@ -12,7 +12,8 @@ rfc-reader/
 │   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), feed parser
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)
-│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed)
+│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section)
+│   ├── Sources/CSQLite/      the system's SQLite, a product of its own that corpus-build uses too
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, DocumentStore (actor, disk cache), the stores and the SwiftData schema. Needs an Apple SDK.
 ├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest; the checks in RFCCorpusKit); see DATA_PIPELINE.md

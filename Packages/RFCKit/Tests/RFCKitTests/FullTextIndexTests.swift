@@ -1,3 +1,4 @@
+import CSQLite
 import Foundation
 import Testing
 
@@ -17,7 +18,9 @@ struct FullTextIndexTests {
     }
 
     deinit {
-      try? FileManager.default.removeItem(at: url)
+      for suffix in ["", "-wal", "-shm"] {
+        try? FileManager.default.removeItem(at: URL(filePath: url.path + suffix))
+      }
     }
   }
 
@@ -88,7 +91,7 @@ struct FullTextIndexTests {
   /// dash or an operator's spelling searches for what is there instead of throwing.
   @Test(arguments: [
     "AND", "NEAR(", "quic\"version", "quic*", "a-b", "body:quic", "NOT version", "quic OR version",
-    "^quic", "(quic", "\"", "-", "   ",
+    "^quic", "(quic", "\"", "-", "   ", "quic\u{0}version",
   ])
   func `a query is never read as FTS5 syntax`(query: String) throws {
     let scratch = Scratch()
@@ -205,6 +208,41 @@ struct FullTextIndexTests {
     let snippet = try #require(try index.search("intermediaries").first).snippet
     #expect(!snippet.matches.isEmpty)
     #expect(snippet.matches.allSatisfy { snippet.text[$0].lowercased() == "intermediaries" })
+  }
+
+  /// A heading is shown beside the snippet, so the snippet is the body's words, even
+  /// where the heading matches as often.
+  @Test func `the snippet is taken from the body, not the heading`() throws {
+    let scratch = Scratch()
+    let index = try scratch.index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    let hit = try #require(try index.search("required").first { $0.anchor == "section-1" })
+    #expect(hit.snippet.text != hit.heading)
+  }
+
+  /// A snippet is one run of words for a result row: the line breaks and alignment of
+  /// the text it came from are a single space.
+  @Test func `a snippet's white space is one space`() {
+    let snippet = FullTextIndex.snippet(marked: "a\n   \u{E000}b\u{E001}\t c")
+    #expect(snippet.text == "a b c")
+    #expect(snippet.matches.map { String(snippet.text.unicodeScalars[$0]) } == ["b"])
+  }
+
+  /// Opening the index to search takes no write lock, so it is not kept waiting
+  /// while another connection indexes.
+  @Test func `the index opens while another connection writes`() throws {
+    let scratch = Scratch()
+    try scratch.index().add(Fixtures.document("rfc8999.xml"))
+    var writer: OpaquePointer?
+    defer { unsafe sqlite3_close(writer) }
+    try #require(unsafe sqlite3_open(scratch.url.path, &writer) == SQLITE_OK)
+    try #require(unsafe sqlite3_exec(writer, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK)
+
+    let started = ContinuousClock.now
+    let reader = try scratch.index()
+    #expect(try reader.search("intermediaries").count == 1)
+    #expect(ContinuousClock.now - started < .seconds(1))
   }
 
   @Test func `a document that names no number is refused`() throws {

@@ -17,6 +17,8 @@ public struct SectionHit: Sendable, Hashable {
 /// marked, for a result row to set them apart.
 public struct Snippet: Sendable, Hashable {
   public var text: String
+  /// Where the matched words are, on Unicode scalar boundaries: a match may end inside
+  /// a character, before a combining mark, so read them through `text.unicodeScalars`.
   public var matches: [Range<String.Index>]
 }
 
@@ -74,13 +76,18 @@ public struct Snippet: Sendable, Hashable {
     // A second connection writing, as the app's indexing may be while a search
     // reads, is waited for rather than failing at once.
     try check(unsafe sqlite3_busy_timeout(connection, 5_000))
+    // A search reads while indexing writes, and each document indexed is a commit of
+    // its own.
+    try execute("PRAGMA journal_mode = WAL")
+    // An index of this version is opened without the write lock, so a search is not
+    // kept waiting behind indexing.
+    guard try storedVersion() != String(version) else { return }
     // In one transaction, so a second connection opening the index at the same time
     // finds the version once this one has rebuilt the tables, and does not rebuild them
     // under it.
     try transaction {
       try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-      guard try strings("SELECT value FROM meta WHERE key = 'version'").first != String(version)
-      else { return }
+      guard try storedVersion() != String(version) else { return }
       try execute(
         """
         DROP TABLE IF EXISTS documents;
@@ -100,6 +107,14 @@ public struct Snippet: Sendable, Hashable {
 
   deinit {
     unsafe sqlite3_close(connection)
+  }
+
+  /// The version the index was made under, nil for a new file.
+  private func storedVersion() throws -> String? {
+    guard try !strings("SELECT name FROM sqlite_master WHERE name = 'meta'").isEmpty else {
+      return nil
+    }
+    return try strings("SELECT value FROM meta WHERE key = 'version'").first
   }
 
   // MARK: - Writing
@@ -214,10 +229,12 @@ public struct Snippet: Sendable, Hashable {
     guard let match = Self.matchExpression(for: query) else { return [] }
     // `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
     // `snippet()` runs for the rows returned only, not for every section that matched.
+    // The snippet is the body's (column 4): left to choose, FTS5 takes a heading that
+    // matches as often, which the result shows already.
     let statement = try unsafe prepare(
       """
       SELECT document, anchor, number, heading,
-        snippet(sections, -1, char(57344), char(57345), '…', 16)
+        snippet(sections, 4, char(57344), char(57345), '…', 16)
       FROM sections WHERE sections MATCH ? ORDER BY rank LIMIT ?
       """)
     defer { unsafe sqlite3_finalize(statement) }
@@ -246,8 +263,9 @@ public struct Snippet: Sendable, Hashable {
   /// Nil when nothing in it is a word.
   static func matchExpression(for query: String) -> String? {
     // `words(in:)` splits at spaces only, and a tab or a line break pasted from a
-    // document would hold two words together as a phrase.
-    let spaced = query.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    // document would hold two words together as a phrase. A NUL parts words too: FTS5
+    // reads its query only up to one, which would end it inside a quoted string.
+    let spaced = query.split { $0.isWhitespace || $0 == "\u{0}" }.joined(separator: " ")
     let terms = SearchQuery.words(in: spaced)
       .map(SearchQuery.unquoted)
       .filter { $0.contains { $0.isLetter || $0.isNumber } }
@@ -259,9 +277,10 @@ public struct Snippet: Sendable, Hashable {
   private static let matchStart: Unicode.Scalar = "\u{E000}"
   private static let matchEnd: Unicode.Scalar = "\u{E001}"
 
-  /// A snippet with its markers taken out and their places kept. Read by scalar, not
-  /// by character: a marker followed by a combining mark or a variation selector is
-  /// one character with it.
+  /// A snippet with its markers taken out and their places kept, and each run of white
+  /// space, a verbatim block's line breaks and alignment, one space. Read by scalar,
+  /// not by character: a marker followed by a combining mark or a variation selector
+  /// is one character with it.
   static func snippet(marked: String) -> Snippet {
     var scalars = String.UnicodeScalarView()
     var offsets: [Range<Int>] = []
@@ -272,6 +291,8 @@ public struct Snippet: Sendable, Hashable {
       case matchEnd:
         if let begun = start { offsets.append(begun..<scalars.count) }
         start = nil
+      case _ where scalar.properties.isWhitespace:
+        if scalars.last != " " { scalars.append(" ") }
       default: scalars.append(scalar)
       }
     }
@@ -362,7 +383,9 @@ public struct Snippet: Sendable, Hashable {
       try check(unsafe sqlite3_bind_null(statement, index))
       return
     }
-    try check(unsafe sqlite3_bind_text(statement, index, text, -1, Self.transient))
+    // Its length in bytes, rather than up to a NUL, so a NUL does not cut the text short.
+    let length = Int32(text.utf8.count)
+    try check(unsafe sqlite3_bind_text(statement, index, text, length, Self.transient))
   }
 
   private func column(_ index: Int32, of statement: OpaquePointer?) -> String? {

@@ -46,7 +46,8 @@ let package = Package(
     ),
     .testTarget(
       name: "RFCKitTests",
-      dependencies: ["RFCKit"],
+      // CSQLite for a test that holds a write lock on the index from a connection of its own.
+      dependencies: ["RFCKit", "CSQLite"],
       resources: [.copy("Fixtures")],
       swiftSettings: swiftSettings
     ),
