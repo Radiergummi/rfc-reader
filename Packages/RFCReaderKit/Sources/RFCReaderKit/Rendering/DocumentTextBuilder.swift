@@ -128,8 +128,8 @@ public final class DocumentTextBuilder {
     choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
-    if style.hangsSectionNumbers, style.emitsLinks {
-      builder.hang = SectionNumberHang.width(of: document, style: style)
+    if style.emitsLinks {
+      builder.hang = style.sectionNumberHang
     }
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
@@ -351,8 +351,10 @@ extension DocumentTextBuilder {
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
       spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15,
       hangsNumber: hangingNumber != nil)
-    if let hangingNumber {
-      appendHangingNumber(hangingNumber, of: section.anchor, attributes: attributes)
+    if let hangingNumber, let label = section.numberLabel {
+      appendHangingNumber(
+        hangingNumber, of: section.anchor,
+        copiedAs: label + (section.titleText.isEmpty ? "." : ". "), attributes: attributes)
       output.append(inlineRuns(section.title, base: attributes))
     } else {
       output.append(inlineRuns(section.displayTitleInlines, base: attributes))
@@ -369,17 +371,21 @@ extension DocumentTextBuilder {
 
   /// A heading's number in the gutter (#433), between the two tabs its paragraph
   /// sets: quieter than the title, and a link to its own heading, which the text
-  /// view follows as it follows any anchor, and which Option-click copies.
+  /// view follows as it follows any anchor, and which Option-click copies. A copy
+  /// of it is `copiedAs`, the prefix the heading reads with inline, not its tabs.
   private func appendHangingNumber(
-    _ number: String, of anchor: String, attributes: [NSAttributedString.Key: Any]
+    _ number: String, of anchor: String, copiedAs: String,
+    attributes: [NSAttributedString.Key: Any]
   ) {
-    append("\t", attributes)
-    var numberAttributes = attributes
+    var tab = attributes
+    tab[.rfcCopiedAs] = copiedAs
+    var numberAttributes = tab
     numberAttributes[.foregroundColor] = RFCColors.secondaryLabel
     numberAttributes[.rfcSectionNumber] = anchor
     numberAttributes[.link] = Self.url(anchor, scheme: Self.anchorScheme)
+    append("\t", tab)
     append(number, numberAttributes)
-    append("\t", attributes)
+    append("\t", tab)
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {

@@ -87,8 +87,13 @@ public enum ReaderLayout {
 
   /// The text container's inset on its leading side: the gutter, less the `hang`
   /// the container reaches into it by, so the column stays where the gutter puts it.
+  ///
+  /// Never less than nothing. The gutter is the live width's, and the hang is the
+  /// build's on screen until the rebuild lands: a resize, or Full Width, can narrow
+  /// the gutter below a hang that no longer fits, and a negative inset would put the
+  /// numbers off the view's edge. Until the rebuild, the column moves over instead.
   public static func leadingInset(gutter: CGFloat, hang: CGFloat) -> CGFloat {
-    gutter - hang
+    max(0, gutter - hang)
   }
 
   /// The inset a hosted header takes, given what it measured when `offered` a

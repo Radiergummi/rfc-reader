@@ -127,9 +127,9 @@ import RFCReaderKit
     /// Copies a link to the heading whose hung number an Option-click is on (#433),
     /// answering whether there was one.
     var copySectionLink: (NSEvent) -> Bool = { _ in false }
-    /// Told where the pointer is, or nil when it leaves, so a hung number under it
-    /// can light up.
-    var hoverSectionNumber: (NSEvent?) -> Void = { _ in }
+    /// Told where the pointer is, so a hung number under it can light up. That it
+    /// left the view, the hover controller's tracking area says.
+    var hoverSectionNumber: (NSEvent) -> Void = { _ in }
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
@@ -236,11 +236,6 @@ import RFCReaderKit
         return
       }
       super.cursorUpdate(with: event)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-      hoverSectionNumber(nil)
-      super.mouseExited(with: event)
     }
 
     override func mouseMoved(with event: NSEvent) {

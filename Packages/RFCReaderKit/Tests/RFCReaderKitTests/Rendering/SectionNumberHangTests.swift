@@ -43,7 +43,7 @@ struct SectionNumberHangTests {
 
   private var hanging: ReadingStyle {
     var style = ReadingStyle()
-    style.hangsSectionNumbers = true
+    style.sectionNumberHang = SectionNumberHang.width(of: document, style: style)
     return style
   }
 
@@ -116,6 +116,10 @@ struct SectionNumberHangTests {
     #expect(ReaderLayout.leadingInset(gutter: 100, hang: 0) == 100)
   }
 
+  @Test func `a gutter narrowed under the hang before the rebuild keeps the numbers in view`() {
+    #expect(ReaderLayout.leadingInset(gutter: ReaderLayout.margin, hang: 60) == 0)
+  }
+
   // MARK: The build
 
   @Test func `a build that hangs says how far`() {
@@ -151,6 +155,22 @@ struct SectionNumberHangTests {
     #expect(found.range == NSRange(location: heading + 1, length: 3))
     #expect(built.text.sectionNumber(at: heading) == nil, "the tab before it is not the number")
     #expect(built.text.sectionNumber(at: heading + 5) == nil, "nor is the title")
+  }
+
+  @Test func `a hung heading copies as the heading reads inline`() throws {
+    let built = DocumentTextBuilder.build(document, style: hanging)
+    for (hung, copied) in [
+      ("\t1.1\tRequirements Notation\n", "1.1. Requirements Notation\n"),
+      ("\tA\tCollected Grammar\n", "Appendix A. Collected Grammar\n"),
+    ] {
+      let start = try Fixtures.offset(of: hung, in: built.text)
+      let whole = NSRange(location: start, length: hung.utf16.count)
+      #expect(SelectionText.plainText(of: built.text.attributedSubstring(from: whole)) == copied)
+      // Part of the number is the whole prefix, as part of a chip is its label.
+      let fromNumber = NSRange(location: start + 2, length: hung.utf16.count - 2)
+      #expect(
+        SelectionText.plainText(of: built.text.attributedSubstring(from: fromNumber)) == copied)
+    }
   }
 
   @Test func `an appendix hangs its letter`() throws {
@@ -243,6 +263,15 @@ struct SectionNumberHangTests {
     #expect(hovered[.foregroundColor] as? PlatformColor == RFCColors.label)
     let link = DocumentTextBuilder.linkRenderingAttributes(for: url, defaults: defaults)
     #expect(link[.foregroundColor] as? PlatformColor == RFCColors.link)
+  }
+
+  @Test func `the copied badge sits just above the number, ending where it ends`() {
+    let frame = FragmentGeometry.linkCopiedBadgeFrame(
+      numberFrame: CGRect(x: 10, y: 100, width: 20, height: 18),
+      badgeSize: CGSize(width: 80, height: 20), containerOrigin: CGPoint(x: 50, y: 30))
+    #expect(frame.maxX == CGFloat(50 + 30))
+    #expect(frame.maxY == CGFloat(30 + 100) - FragmentGeometry.badgeGap)
+    #expect(frame.size == CGSize(width: 80, height: 20))
   }
 
   @Test func `the copied link is the RFC Editor's, to the section and to the appendix`() throws {

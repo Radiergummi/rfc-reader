@@ -23,6 +23,7 @@ extension RFCTextViewCoordinator {
       // A preview timing or shown belongs to the document being replaced, and its
       // range means nothing in the new one.
       hover.send(.reset)
+      forgetHoveredSectionNumber()
     #endif
     self.built = built
     lastReportedAnchor = nil
@@ -215,7 +216,7 @@ extension RFCTextViewCoordinator {
       textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
       // Symmetric too, so the container's reach into the gutter is its origin's.
-      (textView as? ReaderTextView)?.leadingHang = hang
+      (textView as? ReaderTextView)?.leadingHang = gutter - leading
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 

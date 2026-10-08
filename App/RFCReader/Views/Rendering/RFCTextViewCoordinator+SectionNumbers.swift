@@ -13,21 +13,21 @@ import Synchronization
   // may write to: a kept build is installed into more than one.
 
   extension RFCTextViewCoordinator {
-    private static let linkCopiedIdentifier = NSUserInterfaceItemIdentifier("linkCopiedBadge")
-    private static let badgeHoldDuration: TimeInterval = 1.2
-    private static let badgeFadeDuration: TimeInterval = 0.6
-
     /// The hung number under the pointer of `event`: the heading it links to, and
     /// its extent.
     private func sectionNumber(under event: NSEvent) -> (anchor: String, range: NSRange)? {
-      guard let textView, event.window === textView.window,
+      guard let hang = laidOutHang, hang > 0, let textView, event.window === textView.window,
         let text = textView.textLayoutManager?.attributedText
       else { return nil }
       let viewPoint = textView.convert(event.locationInWindow, from: nil)
       let containerPoint = CGPoint(
         x: viewPoint.x - textView.textContainerOrigin.x,
         y: viewPoint.y - textView.textContainerOrigin.y)
-      guard let offset = characterOffset(atContainerPoint: containerPoint) else { return nil }
+      // Asked on every pointer move: only the hang, left of the column, holds numbers,
+      // and only there is a hit test worth its cost.
+      guard containerPoint.x >= 0, containerPoint.x < hang,
+        let offset = characterOffset(atContainerPoint: containerPoint)
+      else { return nil }
       return text.sectionNumber(at: offset)
     }
 
@@ -65,11 +65,9 @@ import Synchronization
       return true
     }
 
+    /// "Link copied", in a badge over the number, as a code block's checkmark is shown.
     private func showLinkCopied(over range: NSRange) {
       guard let textView, let rect = referenceRect(for: range) else { return }
-      for view in textView.subviews where view.identifier == Self.linkCopiedIdentifier {
-        view.removeFromSuperview()
-      }
       let label = NSTextField(labelWithString: CopyFeedback.link.announcement())
       label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
       label.textColor = RFCColors.label
@@ -78,38 +76,17 @@ import Synchronization
       let size = CGSize(
         width: label.frame.width + padding.width * 2,
         height: label.frame.height + padding.height * 2)
-      let origin = textView.textContainerOrigin
-      // Above the number, its trailing edge on the number's: the badge is wider than
-      // a number, and the gutter is to its left.
-      let badge = NSView(
-        frame: CGRect(
-          x: origin.x + rect.maxX - size.width, y: origin.y + rect.minY - size.height - 2,
-          width: size.width, height: size.height))
-      badge.identifier = Self.linkCopiedIdentifier
-      badge.wantsLayer = true
-      badge.layer?.cornerRadius = size.height / 2
-      badge.layer?.masksToBounds = true
-      // Opaque, so the heading's text does not show through: the page, and a card's
-      // tint over it, as a code block's copy feedback is drawn.
-      textView.effectiveAppearance.performAsCurrentDrawingAppearance {
-        badge.layer?.backgroundColor = textView.backgroundColor.cgColor
-        let tint = CALayer()
-        tint.frame = badge.bounds
-        tint.backgroundColor = paletteBox.palette.cardFill.cgColor
-        badge.layer?.addSublayer(tint)
-      }
       label.frame.origin = CGPoint(x: padding.width, y: padding.height)
-      badge.addSubview(label)
-      textView.addSubview(badge)
+      let frame = FragmentGeometry.linkCopiedBadgeFrame(
+        numberFrame: rect, badgeSize: size, containerOrigin: textView.textContainerOrigin)
+      showCopyFeedback(label, in: frame, cornerRadius: size.height / 2)
+    }
 
-      Task { [weak badge] in
-        try? await Task.sleep(for: .seconds(Self.badgeHoldDuration))
-        await NSAnimationContext.runAnimationGroup { context in
-          context.duration = Self.badgeFadeDuration
-          badge?.animator().alphaValue = 0
-        }
-        badge?.removeFromSuperview()
-      }
+    /// Puts out a lit number: the build it was lit in is being replaced, and the
+    /// pointer may have left the text without a move to say so.
+    func forgetHoveredSectionNumber() {
+      hoveredSectionNumber.withLock { $0 = nil }
+      textView?.toolTip = nil
     }
   }
 #endif

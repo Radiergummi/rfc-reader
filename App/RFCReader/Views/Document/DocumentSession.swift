@@ -38,21 +38,21 @@ struct BuildInputs: Equatable {
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
-  /// - Parameter hangs: whether the headings' numbers hang in the gutter, in a style
-  ///   (#433). Asked of the style rather than given, since how far they hang depends
-  ///   on its sizes; and a yes or no rather than the gutter's width, so a resize
-  ///   rebuilds only where the numbers come or go.
+  /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
+  ///   or zero where they don't (#433). Asked of the style rather than given, since
+  ///   how far they hang depends on its sizes; and the hang rather than the gutter's
+  ///   width, so a resize rebuilds only where the numbers come or go.
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
-    hangs: (ReadingStyle) -> Bool = { _ in false }
+    hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
     self.column = column
     style = column.map { column in
       var style = settings.style(column: column, textSize: textSize)
-      style.hangsSectionNumbers = hangs(style)
+      style.sectionNumberHang = hang(style)
       return style
     }
     self.choices = choices
@@ -92,9 +92,14 @@ final class DocumentSession {
 
   func sectionNumberHang(in style: ReadingStyle) -> CGFloat {
     guard let document = state.document else { return 0 }
-    if let measuredHang, measuredHang.style == style { return measuredHang.hang }
-    let hang = SectionNumberHang.width(of: document, style: style)
-    measuredHang = (style, hang)
+    // Kept by the fonts alone: the column moves on every step of a resize, and the
+    // numbers' widths do not move with it.
+    var fonts = style
+    fonts.measure = ReaderLayout.idealMeasure
+    fonts.sectionNumberHang = 0
+    if let measuredHang, measuredHang.style == fonts { return measuredHang.hang }
+    let hang = SectionNumberHang.width(of: document, style: fonts)
+    measuredHang = (fonts, hang)
     return hang
   }
 

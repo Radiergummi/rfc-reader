@@ -85,17 +85,28 @@ public enum SelectionText {
   /// not part of what was copied: a copied heading is the heading alone, with no
   /// line where the caption was, and copied code is the code, in the rich flavors
   /// as in the plain one.
+  ///
+  /// Nor is how it sets a heading's hung number (#433): the tabs and the number copy
+  /// as the heading's own prefix (`.rfcCopiedAs`), so a heading copies the same
+  /// whether the window had room to hang it or not.
   public static func withoutReaderText(of selection: NSAttributedString) -> NSAttributedString {
-    var runs: [NSRange] = []
-    selection.enumerateAttribute(
-      .rfcReaderOnly, in: NSRange(location: 0, length: selection.length)
-    ) { value, range, _ in
-      if value != nil { runs.append(range) }
+    let whole = NSRange(location: 0, length: selection.length)
+    var runs: [(range: NSRange, replacement: String)] = []
+    selection.enumerateAttribute(.rfcReaderOnly, in: whole) { value, range, _ in
+      if value != nil { runs.append((range, "")) }
+    }
+    selection.enumerateAttribute(.rfcCopiedAs, in: whole) { value, range, _ in
+      if let copied = value as? String { runs.append((range, copied)) }
     }
     guard !runs.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
-    for run in runs.reversed() {
-      result.deleteCharacters(in: run)
+    for run in runs.sorted(by: { $0.range.location > $1.range.location }) {
+      // In the attributes of the run's last character, the tab before the title:
+      // the heading's own, with no link.
+      let attributes = result.attributes(at: NSMaxRange(run.range) - 1, effectiveRange: nil)
+        .filter { $0.key != .rfcCopiedAs }
+      result.replaceCharacters(
+        in: run.range, with: NSAttributedString(string: run.replacement, attributes: attributes))
     }
     return result
   }
