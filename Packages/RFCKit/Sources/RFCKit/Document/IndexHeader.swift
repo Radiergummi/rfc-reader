@@ -1,5 +1,3 @@
-import RFCKit
-
 /// What a converted legacy document's header takes from the RFC index rather than from
 /// its title page.
 ///
