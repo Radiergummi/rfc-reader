@@ -110,9 +110,11 @@ public final class OfflineKeeper {
     let plan = OfflineReconciler.plan(
       wanted: wanted, kept: state.kept, cached: state.cached, running: state.running,
       own: discretionary, failed: failed, policy: policy)
-    // A fetch somebody waits for is left only when its document is no longer wanted.
+    // A fetch somebody waits for is left only when its document is no longer wanted
+    // by what was last asked for: this run's `wanted` can be older than the mark
+    // that started it.
     let awaited = Set(fetches.keys).subtracting(discretionary)
-    let leave = plan.leave.union(awaited.subtracting(wanted))
+    let leave = plan.leave.union(awaited.subtracting(self.wanted))
     for id in leave {
       fetches.removeValue(forKey: id)?.task.cancel()
     }

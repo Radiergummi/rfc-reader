@@ -266,6 +266,29 @@ struct OfflineKeeperTests {
     #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
+  /// Keep Offline tapped while a run asked for before the mark is still under way:
+  /// that run's wanted is older than the tapped fetch, which it leaves running.
+  @MainActor @Test func `a run asked for before the mark leaves running the fetch it tapped`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let earlier = keeper.reconcile(wanted: [])
+    keeper.reconcile(wanted: [id])
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await earlier.value
+    await fetcher.gate.open()
+    try await tapped.value
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
   /// Download Now on a document the keeper is fetching on cheap networks only: that
   /// fetch is left, and one that takes any path starts.
   @MainActor @Test func `fetching now replaces a fetch nobody waits for`() async throws {

@@ -49,14 +49,8 @@ final class NetworkConditions {
   }
 
   private static func policyPath(of path: NWPath) -> FetchPolicy.Path {
-    let status: FetchPolicy.PathStatus =
-      switch path.status {
-      case .satisfied: .satisfied
-      case .requiresConnection: .requiresConnection
-      case .unsatisfied: path.unsatisfiedReason == .cellularDenied ? .cellularDenied : .unsatisfied
-      @unknown default: .unsatisfied
-      }
-    return FetchPolicy.Path(
-      status: status, isExpensive: path.isExpensive, isConstrained: path.isConstrained)
+    FetchPolicy.Path(
+      status: FetchPolicy.PathStatus(path.status, unsatisfiedReason: path.unsatisfiedReason),
+      isExpensive: path.isExpensive, isConstrained: path.isConstrained)
   }
 }
