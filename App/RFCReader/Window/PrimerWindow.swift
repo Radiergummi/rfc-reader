@@ -24,6 +24,9 @@
       window.title = Glossary.primerTitle()
       window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
       window.isReleasedWhenClosed = false
+      // Over a reader in full screen rather than on a Space of its own, which would
+      // hide the document it is read beside; and on the Space it is opened from.
+      window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
       window.setContentSize(NSSize(width: 520, height: 640))
       window.center()
       window.setFrameAutosaveName("Primer")

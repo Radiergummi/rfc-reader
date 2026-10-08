@@ -73,9 +73,10 @@
       }
     }
 
-    /// The dock icon, with every window closed.
+    /// The dock icon, with every window closed, or every reader window: the primer's
+    /// window or the settings left open alone do not count as one (#365).
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-      if !hasVisibleWindows {
+      if !hasVisibleWindows || controllers.isEmpty {
         openWindow(tabbedWith: nil, inBackground: false)
       }
       return true

@@ -10,7 +10,6 @@ extension Glossary {
   /// Plain data, as the glossary is. The text keeps to what RFC 2026, RFC 7322,
   /// RFC 8729 and RFC 9280 say, and quotes none of them.
   public struct Primer: Sendable, Hashable {
-    public let title: String
     public let introduction: String
     /// The IETF stream's stages, in order.
     public let stages: [Stage]
@@ -28,14 +27,13 @@ extension Glossary {
     public var id: String { title }
   }
 
-  /// The primer's title, on its own: what a link to it says.
+  /// The primer's title: what its window, its navigation bar and a link to it say.
   public static func primerTitle(locale: Locale = .interface) -> String {
     String(kit: "How an RFC Is Made", locale: locale)
   }
 
   public static func primer(locale: Locale = .interface) -> Primer {
     Primer(
-      title: primerTitle(locale: locale),
       introduction: String(
         kit: """
           Most RFCs come from the IETF, and go through the same stages on their way from a \
@@ -46,9 +44,9 @@ extension Glossary {
           title: String(kit: "An Internet-Draft", locale: locale),
           text: String(
             kit: """
-              Every RFC starts as an Internet-Draft, which anyone can write and submit. A draft \
-              is work in progress, not a standard: it expires after six months unless it is \
-              revised, and many are never published.
+              Today every RFC starts as an Internet-Draft, which anyone can write and submit. A \
+              draft is work in progress, not a standard: it expires after six months unless it \
+              is revised, and many are never published.
               """, locale: locale),
           related: [.process(.internetDraft)]),
         Stage(
@@ -91,8 +89,8 @@ extension Glossary {
           title: String(kit: "Publication", locale: locale),
           text: String(
             kit: """
-              The document is published with an RFC number and its status, and never changes \
-              again. Errors are recorded beside it as errata, and later work updates or \
+              The document is published with an RFC number and its status, and its text never \
+              changes again, though its status can. Errors are recorded beside it as errata, and later work updates or \
               obsoletes it with an RFC of its own.
               """, locale: locale),
           related: [.process(.errata), .process(.updates), .process(.obsoletes)]),
@@ -103,9 +101,13 @@ extension Glossary {
           kit: """
             Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions \
             Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs \
-            through a review of their own, and none of them publishes standards.
+            through a review of their own, and none of them publishes standards. The earliest \
+            RFCs, from before there were streams, are filed under Legacy.
             """, locale: locale),
-        related: [.stream(.iab), .stream(.irtf), .stream(.independent), .stream(.editorial)])
+        related: [
+          .stream(.iab), .stream(.irtf), .stream(.independent), .stream(.editorial),
+          .stream(.legacy),
+        ])
     )
   }
 }

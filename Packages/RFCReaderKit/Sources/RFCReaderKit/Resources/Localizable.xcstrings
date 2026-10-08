@@ -916,6 +916,7 @@
       }
     },
     "Every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1427,11 +1428,22 @@
       }
     },
     "Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs through a review of their own, and none of them publishes standards." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF, der Independent Submissions Editor und, für die Regeln der RFC-Reihe selbst, der Editorial Stream veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards."
+          }
+        }
+      }
+    },
+    "Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs through a review of their own, and none of them publishes standards. The earliest RFCs, from before there were streams, are filed under Legacy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF, der Independent Submissions Editor und, für die Regeln der RFC-Reihe selbst, der Editorial Stream veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards. Die frühesten RFCs, aus der Zeit vor den Streams, stehen unter Legacy."
           }
         }
       }
@@ -2126,7 +2138,18 @@
         }
       }
     },
+    "The document is published with an RFC number and its status, and its text never changes again, though its status can. Errors are recorded beside it as errata, and later work updates or obsoletes it with an RFC of its own." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Dokument wird mit einer RFC-Nummer und seinem Status veröffentlicht, und sein Text ändert sich danach nie wieder, sein Status aber schon. Fehler werden daneben als Errata festgehalten, und spätere Arbeit aktualisiert oder ersetzt es mit einem eigenen RFC."
+          }
+        }
+      }
+    },
     "The document is published with an RFC number and its status, and never changes again. Errors are recorded beside it as errata, and later work updates or obsoletes it with an RFC of its own." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2324,6 +2347,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This section of %1$@ has no counterpart in %2$@"
+          }
+        }
+      }
+    },
+    "Today every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heute beginnt jeder RFC als Internet-Draft, den jeder schreiben und einreichen kann. Ein Draft ist ein Zwischenstand, kein Standard: Er verfällt nach sechs Monaten, wenn er nicht überarbeitet wird, und viele werden nie veröffentlicht."
           }
         }
       }

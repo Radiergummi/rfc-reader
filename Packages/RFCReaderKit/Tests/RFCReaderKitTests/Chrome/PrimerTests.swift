@@ -10,7 +10,7 @@ struct PrimerTests {
   private let primer = Glossary.primer(locale: .english)
 
   @Test func `the stages run from a draft to publication`() {
-    #expect(primer.title == "How an RFC Is Made")
+    #expect(Glossary.primerTitle(locale: .english) == "How an RFC Is Made")
     #expect(
       primer.stages.map(\.title) == [
         "An Internet-Draft", "Adoption by a Working Group", "Working Group Last Call",
@@ -37,16 +37,14 @@ struct PrimerTests {
     }
   }
 
-  /// The streams other than the IETF's are where the primer leaves the IETF's path.
-  @Test func `the other streams are the IAB, the IRTF, the Independent and the Editorial`() {
+  /// The streams other than the IETF's are where the primer leaves the IETF's path,
+  /// and Legacy is where the RFCs from before there were streams are.
+  @Test func `every other stream is named, the Editorial and Legacy included`() {
     #expect(
       primer.otherStreams.related == [
         .stream(.iab), .stream(.irtf), .stream(.independent), .stream(.editorial),
+        .stream(.legacy),
       ])
-  }
-
-  @Test func `the title alone is the primer's title`() {
-    #expect(Glossary.primerTitle(locale: .english) == primer.title)
   }
 
   /// Every stage has an identity of its own, so a list of them can be iterated.
@@ -59,8 +57,9 @@ struct PrimerTests {
   /// every one of them, as a key that drifted from its entry would fall back to English.
   @Test func `the primer is translated`() {
     let german = Glossary.primer(locale: .german)
+    #expect(Glossary.primerTitle(locale: .german) != Glossary.primerTitle(locale: .english))
     let texts = { (primer: Glossary.Primer) in
-      [primer.title, primer.introduction]
+      [primer.introduction]
         + (primer.stages + [primer.otherStreams]).flatMap { [$0.title, $0.text] }
     }
     // A title that is the same in both languages, as "Working Group Last Call" is.
