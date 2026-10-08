@@ -38,14 +38,23 @@ struct BuildInputs: Equatable {
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
+  /// - Parameter hangs: whether the headings' numbers hang in the gutter, in a style
+  ///   (#433). Asked of the style rather than given, since how far they hang depends
+  ///   on its sizes; and a yes or no rather than the gutter's width, so a resize
+  ///   rebuilds only where the numbers come or go.
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
-    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices
+    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
+    hangs: (ReadingStyle) -> Bool = { _ in false }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
     self.column = column
-    style = column.map { settings.style(column: $0, textSize: textSize) }
+    style = column.map { column in
+      var style = settings.style(column: column, textSize: textSize)
+      style.hangsSectionNumbers = hangs(style)
+      return style
+    }
     self.choices = choices
   }
 }
@@ -76,6 +85,18 @@ final class DocumentSession {
   /// `DocumentView`'s `onVisibleAnchorChange` for why it is not asked of the
   /// document each time.
   private(set) var sectionPlaces: [String: String] = [:]
+
+  /// How far the document's heading numbers hang in a style (#433), measured once
+  /// per style: asked on every update pass, for whether they fit the gutter.
+  @ObservationIgnored private var measuredHang: (style: ReadingStyle, hang: CGFloat)?
+
+  func sectionNumberHang(in style: ReadingStyle) -> CGFloat {
+    guard let document = state.document else { return 0 }
+    if let measuredHang, measuredHang.style == style { return measuredHang.hang }
+    let hang = SectionNumberHang.width(of: document, style: style)
+    measuredHang = (style, hang)
+    return hang
+  }
 
   /// The original text (`reader.showOriginal`), fetched the first time it is shown,
   /// and why it could not be.

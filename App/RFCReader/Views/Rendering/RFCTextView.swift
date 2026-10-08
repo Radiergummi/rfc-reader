@@ -193,7 +193,7 @@ struct ReaderInputs {
       coordinator.headerIdentity = headerIdentity
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
-    coordinator.layOut(width: width, measure: measure)
+    coordinator.layOut(width: width, measure: measure, hang: built.sectionNumberHang)
     if let requirements { coordinator.setRequirements(requirements) }
     let installs = coordinator.built?.text !== built.text
     if installs {
@@ -408,6 +408,12 @@ struct ReaderInputs {
       }
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
+      }
+      textView.copySectionLink = { [weak coordinator = context.coordinator] event in
+        coordinator?.copySectionLink(under: event) ?? false
+      }
+      textView.hoverSectionNumber = { [weak coordinator = context.coordinator] event in
+        coordinator?.hoverSectionNumber(under: event)
       }
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false

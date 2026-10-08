@@ -178,7 +178,12 @@ struct DocumentView: View {
     BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
-      choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams))
+      choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
+      hangs: { [session, paneWidth, measure = settings.measure] style in
+        guard let paneWidth else { return false }
+        return ReaderLayout.hangs(
+          session.sectionNumberHang(in: style), width: paneWidth, measure: measure)
+      })
   }
 
   /// The folding index of the build on screen, and in Focus the References tab's

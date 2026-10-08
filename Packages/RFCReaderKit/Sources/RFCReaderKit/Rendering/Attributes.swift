@@ -292,6 +292,20 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
+  /// The hung heading number at this character offset (#433): the anchor of the
+  /// heading it links to, and the number's own extent, which the pointer lights up
+  /// and a copy's feedback is shown over.
+  public func sectionNumber(at offset: Int) -> (anchor: String, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      let anchor = attribute(.rfcSectionNumber, at: offset, effectiveRange: nil) as? String
+    else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcSectionNumber, at: offset, longestEffectiveRange: &range,
+      in: NSRange(location: 0, length: length))
+    return (anchor, range)
+  }
+
   /// The extent of every code block's copy button in `range`, in order: where the
   /// pointer is the arrow over the text in view (#724), a click copies, and its
   /// feedback is shown. It only looks: what a button copies is

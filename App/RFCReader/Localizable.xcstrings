@@ -1742,6 +1742,16 @@
         }
       }
     },
+    "Option-click to copy link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit gedrückter Wahltaste klicken, um den Link zu kopieren"
+          }
+        }
+      }
+    },
     "Order" : {
       "localizations" : {
         "de" : {

@@ -124,9 +124,29 @@ import RFCReaderKit
     /// The link, and the character it is on, that a click at a mouse-down follows
     /// when the mouse-down is on a reference, or nil anywhere else.
     var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
+    /// Copies a link to the heading whose hung number an Option-click is on (#433),
+    /// answering whether there was one.
+    var copySectionLink: (NSEvent) -> Bool = { _ in false }
+    /// Told where the pointer is, or nil when it leaves, so a hung number under it
+    /// can light up.
+    var hoverSectionNumber: (NSEvent?) -> Void = { _ in }
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
+
+    /// How far the text container reaches left into the gutter, for the headings'
+    /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
+    /// the container's origin instead.
+    var leadingHang: CGFloat = 0 {
+      didSet {
+        if leadingHang != oldValue { invalidateTextContainerOrigin() }
+      }
+    }
+
+    override var textContainerOrigin: NSPoint {
+      let origin = super.textContainerOrigin
+      return NSPoint(x: origin.x - leadingHang, y: origin.y)
+    }
     /// Opens or closes the section of a heading clicked in the outline (#698);
     /// answers whether the click was on one.
     var toggleSection: (NSEvent) -> Bool = { _ in false }
@@ -218,7 +238,13 @@ import RFCReaderKit
       super.cursorUpdate(with: event)
     }
 
+    override func mouseExited(with event: NSEvent) {
+      hoverSectionNumber(nil)
+      super.mouseExited(with: event)
+    }
+
     override func mouseMoved(with event: NSEvent) {
+      hoverSectionNumber(event)
       guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
@@ -248,6 +274,14 @@ import RFCReaderKit
     /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
+      // An Option-click on a hung heading number copies a link to the heading,
+      // rather than following it (#433).
+      if event.clickCount == 1,
+        event.modifierFlags.intersection([.option, .control, .shift, .command]) == .option,
+        copySectionLink(event)
+      {
+        return
+      }
       // A copy button is a button: a click on it copies, and selects nothing.
       if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
         return

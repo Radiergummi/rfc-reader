@@ -50,7 +50,8 @@ struct SectionNumberHangTests {
   private func paragraphStyle(at offset: Int, in text: NSAttributedString) throws
     -> NSParagraphStyle
   {
-    try #require(text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    try #require(
+      text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
   }
 
   // MARK: The hang's width
@@ -142,6 +143,16 @@ struct SectionNumberHangTests {
     #expect(titleColor as? PlatformColor == RFCColors.label)
   }
 
+  @Test func `the number under an offset is found with its heading and its extent`() throws {
+    let built = DocumentTextBuilder.build(document, style: hanging)
+    let heading = try Fixtures.offset(of: "\t1.1\tRequirements Notation\n", in: built.text)
+    let found = try #require(built.text.sectionNumber(at: heading + 2))
+    #expect(found.anchor == "section-1.1")
+    #expect(found.range == NSRange(location: heading + 1, length: 3))
+    #expect(built.text.sectionNumber(at: heading) == nil, "the tab before it is not the number")
+    #expect(built.text.sectionNumber(at: heading + 5) == nil, "nor is the title")
+  }
+
   @Test func `an appendix hangs its letter`() throws {
     let built = DocumentTextBuilder.build(document, style: hanging)
     let heading = try Fixtures.offset(of: "\tA\tCollected Grammar\n", in: built.text)
@@ -221,7 +232,8 @@ struct SectionNumberHangTests {
   // MARK: Drawing and copying
 
   @Test func `a hung number keeps its own color, and the label's under the pointer`() throws {
-    let url = try #require(DocumentTextBuilder.url("section-1", scheme: DocumentTextBuilder.anchorScheme))
+    let url = try #require(
+      DocumentTextBuilder.url("section-1", scheme: DocumentTextBuilder.anchorScheme))
     let defaults: [NSAttributedString.Key: Any] = [.foregroundColor: RFCColors.link]
     let resting = DocumentTextBuilder.linkRenderingAttributes(
       for: url, defaults: defaults, sectionNumber: .resting)
@@ -235,7 +247,8 @@ struct SectionNumberHangTests {
 
   @Test func `the copied link is the RFC Editor's, to the section and to the appendix`() throws {
     for (anchor, fragment) in [("section-1.1", "section-1.1"), ("appendix-A", "appendix-A")] {
-      let url = try #require(DocumentTextBuilder.url(anchor, scheme: DocumentTextBuilder.anchorScheme))
+      let url = try #require(
+        DocumentTextBuilder.url(anchor, scheme: DocumentTextBuilder.anchorScheme))
       let copy = try #require(
         LinkCopy.forLink(url, from: .rfc(9110), in: nil, bibliography: []))
       #expect(copy.url.absoluteString == "https://www.rfc-editor.org/rfc/rfc9110#\(fragment)")
