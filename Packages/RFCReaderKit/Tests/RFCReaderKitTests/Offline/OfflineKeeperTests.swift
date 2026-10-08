@@ -356,9 +356,8 @@ struct OfflineKeeperTests {
     #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
-  /// Download Now refused by the path, as when it joins a download running on the
-  /// session for cheap networks: somebody is waiting, so the row offers Retry rather
-  /// than falling silent until a path change that may never come.
+  /// Download Now refused by the path: somebody is waiting, so the row offers Retry
+  /// rather than falling silent until a path change that may never come.
   @MainActor @Test func `a fetch somebody waits for that the path refuses is failed`()
     async throws
   {

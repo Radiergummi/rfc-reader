@@ -198,8 +198,8 @@ public final class OfflineKeeper {
         // A cancellation is a fetch left: the document is no longer wanted, or the
         // path stopped allowing it. So is a path that stopped allowing a fetch
         // nobody waits for before the keeper heard: the run the path change starts
-        // says it waits. One somebody waits for can be refused too, having joined
-        // such a fetch's download, and fails in front of them.
+        // says it waits. One somebody waits for fails in front of them: one that
+        // joined such a fetch's download has already fetched again on its own.
         let isPathRefused = (error as? URLError)?.networkUnavailableReason != nil
         if !(error is CancellationError), isAwaited || !isPathRefused {
           status.failed.insert(id)
