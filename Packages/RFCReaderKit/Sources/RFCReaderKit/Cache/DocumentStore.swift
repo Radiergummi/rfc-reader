@@ -74,6 +74,8 @@ public actor DocumentStore {
   private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
+  /// A pack installed meanwhile marks the parses it replaces as a removal does, so
+  /// none of them is kept.
   private let parses = InFlightDownloads<RFCDocument?>()
 
   /// Whether a body has been written to the cache since eviction last looked, so a

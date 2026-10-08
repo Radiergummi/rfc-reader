@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import RFCKit
 import Synchronization
@@ -724,20 +723,10 @@ struct DocumentStoreTests {
   /// A legacy XML pack holding `id`, converted from the committed RFC 2119 text the
   /// way corpus-build converts it, with a manifest listing it.
   private static func legacyPack(holding id: DocumentID, in parent: URL) throws -> URL {
-    let directory = parent.appending(path: "pack", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let converted = RFCXMLSerializer().serialize(
       LegacyTextParser.parse(try Fixtures.data("rfc2119.txt")))
-    let data = Data(converted.utf8)
-    let name = DocumentCacheIndex.fileName(for: id, format: .xml)
-    try data.write(to: directory.appending(path: name))
-    let manifest = Manifest(
-      version: "2026.10",
-      files: [
-        Manifest.Entry(path: name, bytes: data.count, sha256: Manifest.hex(SHA256.hash(data: data)))
-      ])
-    try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
-    return directory
+    return try DataPackTests.makePack(
+      in: parent, files: [DocumentCacheIndex.fileName(for: id, format: .xml): converted])
   }
 }
 
@@ -747,8 +736,8 @@ func untilWaiting(
   documents: Int = 0, texts: Int = 0, parses: Int = 0, for id: DocumentID,
   in store: DocumentStore
 ) async {
+  let expected = DocumentStore.Waiters(documents: documents, texts: texts, parses: parses)
   while true {
-    let expected = DocumentStore.Waiters(documents: documents, texts: texts, parses: parses)
     if await store.waiters(id) == expected { return }
     await Task.yield()
   }
