@@ -56,24 +56,12 @@ public struct SRGBColor: Hashable, Sendable {
   public func darkened(toContrast minimum: Double, against other: SRGBColor) -> SRGBColor {
     guard contrast(with: other) < minimum else { return self }
     let channels = linearChannels
-    func scaled(_ factor: Double) -> SRGBColor {
+    return leastChange(toContrast: minimum, against: other) { amount in
       SRGBColor(
-        red: Self.encoded(channels[0] * factor), green: Self.encoded(channels[1] * factor),
-        blue: Self.encoded(channels[2] * factor))
+        red: Self.encoded(channels[0] * (1 - amount)),
+        green: Self.encoded(channels[1] * (1 - amount)),
+        blue: Self.encoded(channels[2] * (1 - amount)))
     }
-    // The largest factor that still clears it: contrast with a lighter color only
-    // grows as the factor falls, so a bisection finds it.
-    var clears = 0.0
-    var fails = 1.0
-    for _ in 0..<50 {
-      let factor = (clears + fails) / 2
-      if scaled(factor).contrast(with: other) >= minimum {
-        clears = factor
-      } else {
-        fails = factor
-      }
-    }
-    return scaled(clears)
   }
 
   /// This color, lightened just enough to contrast `minimum` with `other`, a darker
@@ -81,19 +69,29 @@ public struct SRGBColor: Hashable, Sendable {
   /// keeps its hue as it pales; white itself where nothing short of it clears.
   public func lightened(toContrast minimum: Double, against other: SRGBColor) -> SRGBColor {
     guard contrast(with: other) < minimum else { return self }
-    // The least white that clears it: contrast with a darker color only grows as
-    // the mix does, so a bisection finds it.
+    return leastChange(toContrast: minimum, against: other) { amount in
+      SRGBColor.white.composited(opacity: amount, over: self)
+    }
+  }
+
+  /// `change` of the least amount, from 0 to 1, that contrasts `minimum` with
+  /// `other`, or of all of it where nothing less does. `change` moves the color
+  /// away from `other` as the amount grows, so contrast only grows with it, and a
+  /// bisection finds the least.
+  private func leastChange(
+    toContrast minimum: Double, against other: SRGBColor, _ change: (Double) -> SRGBColor
+  ) -> SRGBColor {
     var fails = 0.0
     var clears = 1.0
     for _ in 0..<50 {
       let amount = (fails + clears) / 2
-      if SRGBColor.white.composited(opacity: amount, over: self).contrast(with: other) >= minimum {
+      if change(amount).contrast(with: other) >= minimum {
         clears = amount
       } else {
         fails = amount
       }
     }
-    return SRGBColor.white.composited(opacity: clears, over: self)
+    return change(clears)
   }
 
   /// The channels with the sRGB curve undone.

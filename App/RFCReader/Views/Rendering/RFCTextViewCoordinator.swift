@@ -90,15 +90,16 @@ final class RFCTextViewCoordinator: NSObject {
   nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
   /// The colors this reader's fragments draw their decoration in: the reader's
-  /// palette setting (#703). A box the fragments keep, so that `apply(palette:)`
+  /// palette setting (#703). A box the fragments keep, so that `apply(palette:outlinesEveryChip:)`
   /// recolors the ones already laid out rather than laying them out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
   /// Draws the decoration in `palette` from now on, and redraws what is on screen
   /// if it changed. Never a layout: a palette is the draw-time half of the settings,
-  /// and costs neither a rebuild nor the reader's place.
-  func apply(palette: ReaderPalette) {
-    guard paletteBox.replace(with: palette), let textView,
+  /// and costs neither a rebuild nor the reader's place. So is Increase Contrast,
+  /// which outlines every chip (#457).
+  func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
+    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView,
       let layoutManager = textView.textLayoutManager
     else { return }
     // Asks TextKit to render the laid-out fragments again, which reads the box;

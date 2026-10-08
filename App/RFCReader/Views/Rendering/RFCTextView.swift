@@ -85,7 +85,8 @@ struct RFCTextView: View {
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
         // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
-        palette: settings.palette.increasingContrast(contrast == .increased),
+        palette: settings.palette,
+        outlinesEveryChip: contrast == .increased,
         width: geometry.size.width)
     }
   }
@@ -271,6 +272,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -346,7 +349,7 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -368,6 +371,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -478,7 +483,7 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

@@ -276,26 +276,21 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// lighter than 15% where the link would not clear the minimum contrast on it
   /// (#317). On a card the link is the card's link color (#694).
   private static func chipTintOpacity(
-    of tint: PlatformColor, on card: PlatformColor?, banded: Bool
+    of tint: PlatformColor, on card: PlatformColor?, over backdrop: SRGBColor?
   ) -> Double {
     guard let accent = SRGBColor(resolving: tint),
       let link = SRGBColor(
         resolving: card == nil
           ? RFCColors.readerLink : RFCColors.cardLink(over: RFCColors.readerLink)),
-      let backdrop = chipBackdrop(on: card, banded: banded)
+      let backdrop
     else { return AccentContrast.chipTint }
     return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
   }
 
-  /// The hairline a chip is outlined with for `tint` as it resolves now, on the page
-  /// or on `card`, and under a band where there is one: held to 3:1 against it
-  /// (#457).
-  private static func chipOutline(
-    of tint: PlatformColor, on card: PlatformColor?, banded: Bool
-  ) -> CGColor {
-    guard let accent = SRGBColor(resolving: tint),
-      let backdrop = chipBackdrop(on: card, banded: banded)
-    else { return tint.cgColor }
+  /// The hairline a chip is outlined with for `tint` as it resolves now, over the
+  /// chip's `backdrop`: held to 3:1 against it (#457).
+  private static func chipOutline(of tint: PlatformColor, over backdrop: SRGBColor?) -> CGColor {
+    guard let accent = SRGBColor(resolving: tint), let backdrop else { return tint.cgColor }
     let outline = AccentContrast.chipOutline(accent: accent, backdrop: backdrop)
     return CGColor(srgbRed: outline.red, green: outline.green, blue: outline.blue, alpha: 1)
   }
@@ -373,36 +368,59 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   ) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
+    // An informative citation is background to the specification rather than part
+    // of it, and reads so beside a normative one by its shape (#184, #457):
+    // `ChipMarks` says which marks each kind gets, and the box whether Increase
+    // Contrast is on.
+    let outlinesEveryChip = paletteBox.outlinesEveryChip
+    let marks = chips.map {
+      ChipMarks(informative: $0.isInformative, outlinesEveryChip: outlinesEveryChip)
+    }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
-    // appearance-dependent, so it comes from the cache and only moves.
+    // appearance-dependent, so it comes from the cache and only moves. The outline
+    // only where a chip has one: most fragments' chips are all filled.
     let chipTint = palette.chipTint
-    let opacity = Self.chipTintOpacity(of: chipTint, on: card, banded: banded)
+    let backdrop = Self.chipBackdrop(on: card, banded: banded)
+    let opacity = Self.chipTintOpacity(of: chipTint, on: card, over: backdrop)
     let tint = chipTint.withAlphaComponent(opacity).cgColor
-    let outline = Self.chipOutline(of: chipTint, on: card, banded: banded)
-    for chip in chips {
-      // An informative citation is background to the specification rather than
-      // part of it, and reads so beside a normative one by its shape (#184, #457):
-      // `ReaderPalette.chipMarks` says which marks each kind gets.
-      let marks = palette.chipMarks(informative: chip.isInformative)
+    let outline =
+      marks.contains { $0.outlines } ? Self.chipOutline(of: chipTint, over: backdrop) : nil
+    context.saveGState()
+    defer { context.restoreGState() }
+    for (chip, marks) in zip(chips, marks) {
       let rect = chip.rect.offsetBy(dx: point.x, dy: point.y)
-      let corners = FragmentGeometry.Corners(
-        leading: chip.roundsLeading, trailing: chip.roundsTrailing)
       if marks.fills {
-        fill(rect, radius: FragmentGeometry.chipRadius, corners: corners, color: tint, in: context)
+        fill(
+          rect, radius: FragmentGeometry.chipRadius,
+          corners: FragmentGeometry.Corners(
+            leading: chip.roundsLeading, trailing: chip.roundsTrailing),
+          color: tint, in: context)
       }
-      if marks.outlines {
-        // Inside the chip's box, so it covers what the fill would and no more.
-        let inset = FragmentGeometry.chipOutlineWidth / 2
-        context.setStrokeColor(outline)
-        context.setLineWidth(FragmentGeometry.chipOutlineWidth)
-        context.addPath(
-          FragmentGeometry.roundedPath(
-            in: rect.insetBy(dx: inset, dy: inset),
-            cornerRadius: FragmentGeometry.chipRadius - inset, corners: corners))
-        context.strokePath()
+      if marks.outlines, let outline {
+        strokeOutline(of: chip, at: rect, color: outline, in: context)
       }
     }
+  }
+
+  /// A chip's hairline, on whole device pixels inside its box, and open where the
+  /// chip continues onto another line (#457).
+  private func strokeOutline(
+    of chip: FragmentGeometry.ChipRect, at rect: CGRect, color: CGColor, in context: CGContext
+  ) {
+    let width = FragmentGeometry.chipOutlineWidth
+    let deviceWidth = max(
+      1, abs(context.convertToDeviceSpace(CGSize(width: width, height: 0)).width))
+    let snapped = context.convertToUserSpace(
+      FragmentGeometry.chipOutlineRect(
+        context.convertToDeviceSpace(rect), lineWidth: deviceWidth.rounded()))
+    context.setStrokeColor(color)
+    context.setLineWidth(width)
+    context.addPath(
+      FragmentGeometry.chipOutlinePath(
+        in: snapped, cornerRadius: FragmentGeometry.chipRadius - width / 2,
+        leading: chip.roundsLeading, trailing: chip.roundsTrailing))
+    context.strokePath()
   }
 
   /// The card's outer padding is only added on the run's own top and/or bottom

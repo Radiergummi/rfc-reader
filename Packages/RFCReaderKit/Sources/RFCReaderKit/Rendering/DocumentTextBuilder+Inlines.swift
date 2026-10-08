@@ -93,7 +93,10 @@ extension DocumentTextBuilder {
       if referenceKinds.kind(of: xref.target) == .informative {
         chipAttributes[.rfcInformative] = "informative"
         // Said, not only drawn (#457): the outline is no cue to VoiceOver. The
-        // reader body is English, so this is too.
+        // reader body is English, so this is too. Only macOS reads it, where the
+        // text view's per-range accessors go through `AccessibleReading`; a
+        // `UITextView` has no such accessor, and iOS still says the chip as a
+        // normative one.
         chipAttributes[.rfcSpoken] = display.text + ", informative"
       }
       return chipRun(display.text, attributes: chipAttributes)

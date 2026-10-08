@@ -165,8 +165,8 @@ struct BuilderChipTests {
     #expect(url.absoluteString == "rfc://9110")
   }
 
-  /// An informative citation's chip is marked for its lighter tint; a normative one,
-  /// and one whose kind no list says, is drawn as before (#184).
+  /// An informative citation's chip is marked for its outline; a normative one, and
+  /// one whose kind no list says, is drawn filled (#184, #457).
   @Test func `only an informative citation's chip is marked informative`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     var marks: [DocumentID: Bool] = [:]
@@ -184,9 +184,9 @@ struct BuilderChipTests {
     #expect(marks[.rfc(2119)] == false)
   }
 
-  /// The kind is said, not only drawn (#457): VoiceOver reads an informative chip
-  /// as its label and ", informative", on every character of the chip; a normative
-  /// one as it always has.
+  /// The kind is said, not only drawn (#457): VoiceOver on macOS reads an
+  /// informative chip as its label and ", informative", which every character of
+  /// the chip carries; a normative one as it always has.
   @Test func `an informative chip is said to be informative`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     // What each chip is said as, and what it reads as on screen.

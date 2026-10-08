@@ -44,15 +44,22 @@ public enum AccentContrast {
 
   /// The hairline a chip is outlined with over `backdrop` (#457): an informative
   /// chip's, which has no fill, and every chip's under Increase Contrast. The accent,
-  /// darkened on a light backdrop and lightened on a dark one just enough to clear
-  /// ``symbolContrast``, since it marks the chip as a symbol does and carries no
-  /// text. Unlike the fill, it costs the link on it nothing, so it holds on the
-  /// light cards where the fill has almost gone.
+  /// darkened or lightened just enough to clear ``symbolContrast``, since it marks
+  /// the chip as a symbol does and carries no text. Unlike the fill, it costs the
+  /// link on it nothing, so it holds on the light cards where the fill has almost
+  /// gone.
+  ///
+  /// Darkened first on a light backdrop and lightened first on a dark one, and the
+  /// other way where the first cannot clear: a dark accent on a dark page darkens
+  /// only to black, which is no outline there.
   public static func chipOutline(accent: SRGBColor, backdrop: SRGBColor) -> SRGBColor {
     guard accent.contrast(with: backdrop) < symbolContrast else { return accent }
-    return accent.relativeLuminance < backdrop.relativeLuminance
-      ? accent.darkened(toContrast: symbolContrast, against: backdrop)
-      : accent.lightened(toContrast: symbolContrast, against: backdrop)
+    let darker = accent.darkened(toContrast: symbolContrast, against: backdrop)
+    let lighter = accent.lightened(toContrast: symbolContrast, against: backdrop)
+    let preferred = backdrop.relativeLuminance > 0.18 ? [darker, lighter] : [lighter, darker]
+    return preferred.first { $0.contrast(with: backdrop) >= symbolContrast }
+      ?? preferred.max { $0.contrast(with: backdrop) < $1.contrast(with: backdrop) }
+      ?? accent
   }
 
   /// The reader's link color: macOS's own link color, stated so that iOS's reader
