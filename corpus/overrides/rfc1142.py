@@ -25,6 +25,8 @@ the converter over it, and demotes the headings the converter invents:
 4. Any section the converter found that is not one of those headings -- a
    table label standing alone between blank lines -- is demoted to a paragraph
    of the section before it, and the tree is nested again.
+5. The words the typesetting split inside them with a space are joined in the
+   output (SPLIT_WORDS, #205).
 
 Needs Python 3.9 or later (str.removeprefix).
 
@@ -59,6 +61,13 @@ NOT_WRAPPED = {"8.4.1.5"}
 # but it heads the first thing the converter finds after the RFC's front matter -- the
 # ISO title and the contents list -- and a demoted section needs one before it.
 UNNUMBERED = {"ISO/IEC DIS 10589", "Introduction", "Security Considerations", "Author's Address"}
+
+# Words the typesetting split inside them with a space, joined (#205). `route ing` is
+# `routeing`, ISO 10589's own spelling, which the standard also writes unsplit.
+SPLIT_WORDS = {"Interme diate": "Intermediate", "informa tion": "information",
+               "parti tion": "partition", "notifica tion": "notification",
+               "manage ment": "management", "indicat ing": "indicating", "resid ing": "residing",
+               "route ing": "routeing"}
 
 NUMBERED = re.compile(r"^(\d+(?:\.\d+)*|[A-D](?:\.\d+)+)\.?[ \t]+(\S.*)$")
 
@@ -252,6 +261,8 @@ def main():
                "words joined, numbered headings recovered, invented headings demoted. The text is "
                "otherwise the converter's. Corrections: https://github.com/Radiergummi/rfc-reader")
     body = ET.tostring(root, encoding="unicode")
+    for split, word in SPLIT_WORDS.items():
+        body = body.replace(split, word)
     pathlib.Path(destination).write_text(
         f"<?xml version='1.0' encoding='utf-8'?>\n<!-- {comment} -->\n{body}\n", encoding="utf-8")
 
