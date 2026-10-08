@@ -105,12 +105,18 @@ extension LegacyTextParser {
   /// but only a paragraph keeps its. A number already declared, by a heading spelled `Foo
   /// 2` beside `Foo`, or by an entry, is left to it, and the paragraph goes without.
   static func numberingParagraphs(_ sections: [Section]) -> [Section] {
-    let declared = Set(sections.flatMap { [$0.anchor] + $0.blocks.flatMap(\.anchors) })
+    let declared = declaredAnchors(sections)
     return sections.map { section in
       var section = section
       section.blocks = numberingParagraphs(section.blocks, of: section.anchor, avoiding: declared)
       return section
     }
+  }
+
+  /// Every anchor the sections declare, theirs and their blocks' at any depth, before
+  /// any paragraph is numbered.
+  static func declaredAnchors(_ sections: [Section]) -> Set<String> {
+    Set(sections.flatMap { [$0.anchor] + $0.blocks.flattened.flatMap(\.anchors) })
   }
 
   /// `blocks`' paragraphs numbered as the parts of the section that goes by `anchor`.
