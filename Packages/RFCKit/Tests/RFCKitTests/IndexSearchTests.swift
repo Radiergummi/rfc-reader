@@ -159,8 +159,10 @@ struct IndexSearchTests {
   /// ranks above a keyword that is exactly the phrase; a single word earns nothing.
   @Test func `a single quoted phrase earns the title bonus`() throws {
     let index = RFCIndex(rfcs: [
-      RFCMetadata(id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026)),
-      RFCMetadata(id: .rfc(2), title: "A Profile", date: PublicationDate(year: 2026), keywords: ["key words"]),
+      RFCMetadata(
+        id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026)),
+      RFCMetadata(
+        id: .rfc(2), title: "A Profile", date: PublicationDate(year: 2026), keywords: ["key words"]),
     ])
     let search = IndexSearch(index: index)
     #expect(search.search(#""key words""#).map(\.rfc.number) == [1, 2])
