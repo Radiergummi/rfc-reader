@@ -57,6 +57,17 @@ struct OverridesTests {
     let short = sections.map(\.titleText).filter { $0.count < 4 }
     #expect(short.isEmpty, "\(short)")
   }
+
+  /// The words the typesetting split inside them, joined in the snapshot itself (#205).
+  /// `routeing` is ISO 10589's own spelling, which the standard uses unsplit too.
+  @Test(arguments: [
+    "Interme diate", "informa tion", "parti tion", "notifica tion", "manage ment", "indicat ing",
+    "resid ing", "route ing",
+  ])
+  func `rfc1142 has no word split inside it`(split: String) throws {
+    let found = String(decoding: try Self.data("rfc1142.xml"), as: UTF8.self).contains(split)
+    #expect(!found)
+  }
 }
 
 /// The committed patches, applied to the documents they correct, as a corpus run
