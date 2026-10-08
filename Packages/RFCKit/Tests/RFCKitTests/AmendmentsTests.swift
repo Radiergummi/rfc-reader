@@ -100,6 +100,58 @@ struct AmendmentsTests {
     #expect(!Amendments.links(in: document).contains { $0.section == "3" })
   }
 
+  // MARK: Series (#417)
+
+  /// RFC 9283 with a citation of `section` of `series` in its first section, and the
+  /// RFCs it updates replaced by `updates`, where given.
+  static func citingSeries(
+    _ series: DocumentID, section: String, updates: [DocumentID]? = nil
+  ) throws -> RFCDocument {
+    var document = try Fixtures.document("rfc9283.xml")
+    if let updates { document.header.updates = updates }
+    document.sections[0].blocks.append(
+      .paragraph(
+        Paragraph([
+          .text("See "),
+          .crossReference(CrossReference(target: .document(series, section: section))),
+        ])))
+    return document
+  }
+
+  static let bcp = DocumentID(series: .bcp, number: 999)
+
+  /// A BCP or STD names no RFC, so a citation of its section counts as one of the RFC
+  /// it holds that the document updates.
+  @Test func `a section of a series of one updated RFC is that RFC's`() throws {
+    let document = try Self.citingSeries(Self.bcp, section: "7")
+    let links = Amendments.links(in: document) { $0 == Self.bcp ? [.rfc(2850)] : [] }
+    #expect(links.contains { $0.amended == .rfc(2850) && $0.section == "7" })
+    #expect(!links.contains { $0.amended == Self.bcp })
+    #expect(!Amendments.links(in: document).contains { $0.section == "7" }, "no members, no link")
+  }
+
+  /// Of a series of several, the one member the document updates is the one amended.
+  @Test func `a section of a series is the one member the document updates`() throws {
+    let document = try Self.citingSeries(Self.bcp, section: "7")
+    let links = Amendments.links(in: document) { _ in [.rfc(2850), .rfc(8000)] }
+    #expect(links.contains { $0.amended == .rfc(2850) && $0.section == "7" })
+  }
+
+  /// Two members it updates could each be the one meant, and neither is guessed at.
+  @Test func `a section of a series with two updated members amends neither`() throws {
+    let document = try Self.citingSeries(
+      Self.bcp, section: "7", updates: [.rfc(2850), .rfc(8000)])
+    let links = Amendments.links(in: document) { _ in [.rfc(2850), .rfc(8000)] }
+    #expect(!links.contains { $0.section == "7" })
+  }
+
+  /// A series whose members the document does not update is an ordinary citation.
+  @Test func `a section of a series the document updates nothing of amends nothing`() throws {
+    let document = try Self.citingSeries(Self.bcp, section: "7")
+    let links = Amendments.links(in: document) { _ in [.rfc(8000)] }
+    #expect(!links.contains { $0.section == "7" })
+  }
+
   /// A row that cannot say which document amends is no use to a reader asking which
   /// later documents amend the open one.
   @Test func `a document without a number amends nothing`() throws {

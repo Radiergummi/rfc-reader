@@ -44,7 +44,9 @@ public struct Amendment: Sendable, Hashable, Codable {
 /// not state its own number amends nothing, since a row that cannot say which
 /// document amends answers nothing.
 public enum Amendments {
-  public static func links(in document: RFCDocument) -> [Amendment] {
+  public static func links(
+    in document: RFCDocument, members: (DocumentID) -> [DocumentID] = { _ in [] }
+  ) -> [Amendment] {
     let updated = Set(document.header.updates)
     guard let amending = document.header.id, !updated.isEmpty else { return [] }
     let bibliographies: Set<String?> = Set(
