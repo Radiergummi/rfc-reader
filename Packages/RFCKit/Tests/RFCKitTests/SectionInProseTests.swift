@@ -4,14 +4,15 @@ import Testing
 @testable import RFCKit
 
 /// A section citation written in prose, `Section 6.1 of <xref target="RFC3550"/>`, folds
-/// into the `<xref>` after it, as if the author had given it a `section` (#445).
+/// into the `<xref>` after it, as if the author had given it a `section` (#445), in a
+/// document the RFC Editor prepped.
 @Suite("XML parser: a section named in prose before a citation")
 struct SectionInProseTests {
   /// Each paragraph of a hand-written document in RFCXML's shape, by its anchor.
   static func paragraphs() throws -> [String: Paragraph] {
     let xml = """
       <?xml version="1.0" encoding="UTF-8"?>
-      <rfc number="9999" version="3">
+      <rfc number="9999" version="3" prepTime="2026-01-01T00:00:00">
         <front><title>Sections in prose</title></front>
         <middle>
           <section anchor="intro"><name>Intro</name>
@@ -110,6 +111,25 @@ struct SectionInProseTests {
     }
     #expect(anchor == "WEB-X")
     #expect(section == "3.2")
+  }
+
+  /// XML corpus-build converted from plain text carries no `prepTime`, and its
+  /// citations are the legacy parser's reading, which the XML has to read back as.
+  @Test func `a converted document's prose is left as it was written`() throws {
+    let xml = """
+      <rfc number="9999" version="3"><front><title>Converted</title></front>
+      <middle><section anchor="s1"><name>One</name>
+      <t>As in Section 6.1 of <xref target="RFC3550"/>, it waits.</t>
+      </section></middle>
+      <back><references><reference anchor="RFC3550"><front><title>A Transport</title></front>
+      <seriesInfo name="RFC" value="3550"/></reference></references></back>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let paragraph = try #require(document.sections.first?.blocks.first?.paragraph)
+    let xref = try #require(paragraph.inlines.compactMap(\.crossReference).first)
+    #expect(xref.target == .document(.rfc(3550), section: nil, entry: "RFC3550"))
+    #expect(paragraph.inlines.first == .text("As in Section 6.1 of "))
   }
 
   /// A place in this document has no sections of another to take.
