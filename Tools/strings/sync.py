@@ -13,9 +13,13 @@ the translation.
 
 The compiler records every localizable string it type-checks in a .stringsdata
 file per source file (SWIFT_EMIT_LOC_STRINGS, project.yml). `xcstringstool sync`
-adds the strings it finds there to a catalog and marks the ones it does not find
-stale; xcodebuild never does this itself, only Xcode's editor does. Both
-platforms' builds are read, so a string inside `#if os(iOS)` is found too.
+adds the strings it finds there to a catalog, removes the untranslated ones it
+does not find and marks the translated ones stale; xcodebuild never does this
+itself, only Xcode's editor does. The sync then removes the stale keys too, as
+Xcode's editor does, so `make strings-check` fails on a catalog that still has
+one (#863). Only a key the sync extracted can go stale: a key added by hand
+("manual") is left alone. Both platforms' builds are read, so a string inside
+`#if os(iOS)` is found too.
 
 The App Shortcuts' phrases are not the compiler's: the App Intents metadata step
 records them in a file of its own, ExtractedAppShortcutsMetadata.stringsdata, in
@@ -76,13 +80,30 @@ def strings_data(objroot: Path, configuration: str, target: str, sources: Path) 
     return sorted(found)
 
 
+def remove_stale(catalog: Path) -> None:
+    """Removes the keys `xcstringstool sync` marked stale from `catalog`, written
+    back as the sync writes it."""
+    text = catalog.read_text()
+    document = json.loads(text)
+    strings = document["strings"]
+    stale = [key for key, entry in strings.items() if entry.get("extractionState") == "stale"]
+    if not stale:
+        return
+    for key in stale:
+        del strings[key]
+    written = json.dumps(document, indent=2, separators=(",", " : "), ensure_ascii=False)
+    if text.endswith("\n"):
+        written += "\n"
+    catalog.write_text(written)
+
+
 def untranslated(catalog: Path, language: str) -> list[str]:
     """The keys of `catalog` without a finished `language` translation."""
     document = json.loads(catalog.read_text())
     source = document["sourceLanguage"]
     missing = []
     for key, entry in document["strings"].items():
-        if entry.get("shouldTranslate") is False or entry.get("extractionState") == "stale":
+        if entry.get("shouldTranslate") is False:
             continue
         localizations = entry.get("localizations", {})
         translation = localizations.get(language)
@@ -141,6 +162,7 @@ def main() -> None:
         for file in files:
             command += ["--stringsdata", str(file)]
         subprocess.run(command, check=True)
+        remove_stale(Path(catalog))
 
 
 if __name__ == "__main__":
