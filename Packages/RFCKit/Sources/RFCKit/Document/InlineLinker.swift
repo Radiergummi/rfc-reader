@@ -34,7 +34,7 @@ struct InlineLinker: Sendable {
   /// sections, which linked them into the citing document (#768).
   static let sectionOfDocumentPattern = Gated(
     regex:
-      #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)\b(?!\.[A-Z]))/#,
+      #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)(?<suffix>\w*)(?!\.[A-Z]))/#,
     gate: \.sectionOfDocument
   )
   private static let sectionNumberPattern = Pattern(#/\d+(?:\.\d+)*/#)
@@ -133,7 +133,9 @@ struct InlineLinker: Sendable {
     var citedSections: [Range<String.Index>] = []
     for match in Self.sectionOfDocumentPattern.matches(in: text, given: literals) {
       citedSections.append(match.range)
-      guard
+      // "RFC 2223bis" is a draft that revises RFC 2223: another document, and not one
+      // whose sections are RFC 2223's.
+      guard match.suffix?.isEmpty ?? true,
         let cited = citedDocument(tag: match.tag, number: match.number, hyphen: match.hyphen)
       else { continue }
       let tag = match.tag.map(String.init) ?? ""

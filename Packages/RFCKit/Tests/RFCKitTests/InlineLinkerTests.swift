@@ -98,6 +98,13 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A draft that revises an RFC, named after it, is another document again: its
+  /// sections are neither the RFC's nor this document's.
+  @Test func `a section of a revision named after an RFC links nowhere`() {
+    let linker = InlineLinker(sectionNumbers: ["3"], referenceTargets: [:])
+    #expect(linker.link("Section 3 of RFC 1000bis") == [.text("Section 3 of RFC 1000bis")])
+  }
+
   /// The older spelling with a hyphen is a section of the RFC too, and keeps its
   /// hyphen.
   @Test func `a section of a hyphenated RFC links into it`() {
