@@ -23,8 +23,10 @@ public enum LegacyTextParser {
   /// `document`, read from a legacy text, with its header taken from `entry`: what a
   /// parse with the entry gives, for a document parsed before the entry was at hand.
   /// The title is chosen as the parse chooses it, but from the page's title alone: the
-  /// title page's other runs are the parse's. Applying it to a document that already
-  /// has it changes nothing, and a document read from XML is left as it is (#767).
+  /// title page's other runs are the parse's. Not for a document parsed with the
+  /// entry, whose title is chosen already: choosing again from an index title the
+  /// parse kept in capitals title-cases it. A document read from XML is left as it is
+  /// (#767).
   public static func applying(_ entry: RFCMetadata, to document: RFCDocument) -> RFCDocument {
     guard document.source == .text else { return document }
     var document = document

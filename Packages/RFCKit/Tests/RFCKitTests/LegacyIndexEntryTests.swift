@@ -40,7 +40,7 @@ struct LegacyIndexEntryTests {
   }
 
   /// A document parsed before the entry was at hand takes the entry's header when it
-  /// is read, as one parsed with it has; and applying it again changes nothing.
+  /// is read, as one parsed with it has.
   @Test(arguments: try Fixtures.legacyTexts())
   func `the entry applied after the parse gives the header the parse would`(fixture: String)
     throws
@@ -54,7 +54,6 @@ struct LegacyIndexEntryTests {
     #expect(applied.header.authors == parsed.header.authors)
     #expect(applied.header.date == parsed.header.date)
     #expect(applied.header.id == parsed.header.id)
-    #expect(LegacyTextParser.applying(entry, to: parsed).header == parsed.header)
   }
 
   @Test func `a document read from XML is left as it is`() throws {

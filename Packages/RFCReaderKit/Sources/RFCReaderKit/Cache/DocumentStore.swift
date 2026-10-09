@@ -45,7 +45,14 @@ public actor DocumentStore {
   /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
   /// (`make benchmark`). Bounded: it used to keep every document opened for as long
   /// as the app ran.
-  private var parsed = RecentValues<DocumentID, RFCDocument>(capacity: 8)
+  private var parsed = RecentValues<DocumentID, Parse>(capacity: 8)
+
+  /// A document as parsed, with the index entry its parse was given: nil for one
+  /// parsed before the index arrived, or read from XML, which takes none (#767).
+  private struct Parse: Sendable {
+    let document: RFCDocument
+    let entry: RFCMetadata?
+  }
 
   /// Which bodies are in each tier, scanned once on first use and kept current by
   /// every write, move and removal below, so asking does not enumerate a directory.
@@ -71,13 +78,15 @@ public actor DocumentStore {
   /// the text is all there is to a document, its load share (#324): the download
   /// alone, parsed afterwards by a load that wants it, so Original Text shows it
   /// without waiting for a parse, and a reader who leaves cancels nothing but bytes.
-  private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
+  private let downloads = InFlightDownloads<
+    (fetched: RFCEditorClient.FetchedDocument, entry: RFCMetadata?)
+  >()
   private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
   /// A pack installed meanwhile marks the parses of the documents it serves as a
   /// removal does, so none of them is kept.
-  private let parses = InFlightDownloads<RFCDocument?>()
+  private let parses = InFlightDownloads<Parse?>()
   /// How many removals each document has had, so a download started again for a
   /// reader whose joined one the path refused knows whether one came meanwhile.
   private var removals: [DocumentID: Int] = [:]
@@ -663,21 +672,27 @@ public actor DocumentStore {
 
   /// `entry` is the document's index entry, where the app holds one: a legacy RFC
   /// read from its text takes its header from it (#767), applied as it is handed out,
-  /// so a parse kept from before the index arrived shows the entry's header too.
+  /// so a parse kept from before the index arrived shows the entry's header too. Its
+  /// title is chosen once: against the page where the parse had no entry, and by the
+  /// parse where it had one, as the converter chooses it.
   public func document(
     _ id: DocumentID, formats: [FileFormat], entry: RFCMetadata? = nil,
     client: any DocumentFetching
   ) async throws -> RFCDocument {
-    let document = try await load(id, formats: formats, entry: entry, client: client)
-    return entry.map { LegacyTextParser.applying($0, to: document) } ?? document
+    let parse = try await load(id, formats: formats, entry: entry, client: client)
+    guard let entry, parse.document.source == .text else { return parse.document }
+    guard parse.entry != nil else { return LegacyTextParser.applying(entry, to: parse.document) }
+    var document = parse.document
+    _ = IndexHeader.apply(entry, to: &document.header)
+    return document
   }
 
-  /// `document(_:formats:entry:client:)`'s document, before the entry is applied. The
+  /// `document(_:formats:entry:client:)`'s parse, before the entry is applied. The
   /// entry is passed to a parse that runs, so the title the page sets is kept out of
   /// the lead-in as the converter keeps it.
   private func load(
     _ id: DocumentID, formats: [FileFormat], entry: RFCMetadata?, client: any DocumentFetching
-  ) async throws -> RFCDocument {
+  ) async throws -> Parse {
     let signpostID = signposter.makeSignpostID()
     let interval = signposter.beginInterval(
       "Load document", id: signpostID, "\(id.displayName, privacy: .public)")
@@ -724,19 +739,24 @@ public actor DocumentStore {
   private func fetchDocument(
     _ id: DocumentID, formats: [FileFormat], entry: RFCMetadata? = nil,
     client: any DocumentFetching
-  ) async throws -> RFCDocument {
-    let (fetched, isKept) = try await value(of: downloads, for: id) {
-      Task { try await Self.fetch(id, formats: formats, entry: entry, client: client) }
+  ) async throws -> Parse {
+    // With the entry the fetch was started with: a fetch this open joined was given another's.
+    let (download, isKept) = try await value(of: downloads, for: id) {
+      Task {
+        (try await Self.fetch(id, formats: formats, entry: entry, client: client), entry)
+      }
     }
+    let fetched = download.fetched
+    let parse = Parse(document: fetched.document, entry: download.entry)
     // A removal while this was in flight, or another reader of the same fetch has
     // kept it: the document is shown, and not written here (#116).
-    guard isKept else { return fetched.document }
+    guard isKept else { return parse }
     try write(fetched.data, for: id, format: fetched.format)
     // A pack installed while this was in flight serves the document from now on.
     if legacyPack?.file(for: id) == nil {
-      parsed.store(fetched.document, for: id)
+      parsed.store(parse, for: id)
     }
-    return fetched.document
+    return parse
   }
 
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
@@ -746,7 +766,7 @@ public actor DocumentStore {
   /// install, shows it, and the first open after it ends reads the pack.
   private func cachedDocument(
     _ id: DocumentID, entry: RFCMetadata?, signpostID: OSSignpostID
-  ) async throws -> RFCDocument? {
+  ) async throws -> Parse? {
     let xmlURLs = fileURLs(id, format: .xml)
     let textURLs = fileURLs(id, format: .text)
     let packURL = legacyPack?.file(for: id)
@@ -779,20 +799,20 @@ public actor DocumentStore {
   @concurrent
   private static func parseCached(
     _ id: DocumentID, from bodies: Bodies, entry: RFCMetadata?, signpostID: OSSignpostID
-  ) async -> RFCDocument? {
+  ) async -> Parse? {
     for url in bodies.xml {
       if let data = try? Data(contentsOf: url),
         let document = try? signposter.withIntervalSignpost(
           "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
       {
-        return document
+        return Parse(document: document, entry: nil)
       }
     }
     // Before a cached `.txt`: the pack is the single XML path it exists for, and a
     // `.txt` cached before it arrived still serves Original Text.
     if let pack = bodies.pack {
       do {
-        return try RFCXMLParser.parse(Data(contentsOf: pack))
+        return Parse(document: try RFCXMLParser.parse(Data(contentsOf: pack)), entry: nil)
       } catch {
         storeLog.error(
           "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
@@ -807,11 +827,12 @@ public actor DocumentStore {
 
   @concurrent
   private static func parseText(_ data: Data, entry: RFCMetadata?, signpostID: OSSignpostID)
-    async -> RFCDocument
+    async -> Parse
   {
-    signposter.withIntervalSignpost(
+    let document = signposter.withIntervalSignpost(
       "Parse document", id: signpostID, "text",
       around: { LegacyTextParser.parse(data, entry: entry) })
+    return Parse(document: document, entry: entry)
   }
 
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
