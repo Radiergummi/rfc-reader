@@ -31,6 +31,7 @@ struct SearchQueryTests {
     #""key words" status:bcp"#,
     #"wg:"NON WORKING GROUP" cache"#,
     #"author:"" cache"#,
+    "author:\"Roy\tFielding\" cache",
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
