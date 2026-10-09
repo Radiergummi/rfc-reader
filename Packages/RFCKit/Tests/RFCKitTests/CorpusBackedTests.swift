@@ -932,6 +932,16 @@ struct CorpusBackedGrammarTests {
     #expect(block.text.split(separator: "\n").first?.hasPrefix("/") == false)
   }
 
+  /// RFC 6455's grammar is RFC 5234's, slipping into `|` in a few rules: it stays
+  /// RFC 5234's, and only those rules are the bar dialect's (#696).
+  @Test func `an RFC 5234 grammar with a slip stays RFC 5234's`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc6455"))
+    let types = document.blocks.compactMap { block -> String? in
+      if case .preformatted(let preformatted) = block { preformatted.type } else { nil }
+    }
+    #expect(types.filter { $0 == "abnf" }.count > types.filter { $0 == "abnf822" }.count)
+  }
+
   /// RFC 2616 writes its grammar with `|`, a rule or a few at a time between prose.
   /// It is one grammar in the bar dialect: no block of it is typed as RFC 5234's, the
   /// ones without a `|` included (#696).

@@ -346,10 +346,10 @@ extension LegacyTextParser {
   /// whose stretches `=`, `/` and `*` draw.
   ///
   /// Asked in RFC 5234's dialect, then in the bar dialect (#696), where a stretch is
-  /// one grammar in it only where a block of it is written in it alone, with a `|` or
-  /// an `_` RFC 5234 does not read; the stretch's blocks RFC 5234 also reads are the
-  /// same grammar's, and are typed with it. Only a document that has a `|` or an `_` in
-  /// a verbatim block is asked the second time.
+  /// one grammar in it only where a block of it is written in it alone, with a `|` RFC
+  /// 5234 does not read; its artwork is typed with it, and which of the two a block RFC
+  /// 5234 has typed belongs to is the document's call (`unifyingGrammarDialect`). Only
+  /// a document that has a `|` or an `_` in a verbatim block is asked the second time.
   static func typingGrammars(_ blocks: [Block]) -> [Block] {
     let typed = typingGrammars(blocks, in: .rfc5234)
     let hasBarDialect = blocks.contains { block in
@@ -367,11 +367,15 @@ extension LegacyTextParser {
       defer { stretch = [] }
       let texts = stretch.map(\.text)
       let anchors = texts.contains { text in
-        ABNF.recognizes(text, dialect: dialect)
-          && (dialect == .rfc5234 || !ABNF.parses(text, dialect: .rfc5234))
+        dialect == .rfc5234 ? ABNF.recognizes(text) : isBarDialectGrammar(text)
       }
       guard anchors, ABNF.recognizes(blocks: texts, dialect: dialect) else { return }
       for (index, text) in stretch {
+        if case .preformatted(let block) = blocks[index], block.kind == .sourceCode,
+          block.type != type
+        {
+          continue
+        }
         blocks[index] = verbatimBlock(text, grammar: dialect)
       }
     }
@@ -391,19 +395,27 @@ extension LegacyTextParser {
     return blocks
   }
 
-  /// A document's grammar is in one dialect: where one of its blocks is in the bar
-  /// dialect, a block typed as RFC 5234's that the bar dialect reads as well is the
-  /// same grammar's, between prose, rather than half of it typed as another notation's
-  /// (#696). A block only RFC 5234 reads, with a `/` alternative or `=/`, stays.
+  /// A document's grammar is in one dialect, the one more of its blocks are written in
+  /// alone: where those are the bar dialect's, a block typed as RFC 5234's that the bar
+  /// dialect reads as well is the same grammar's, between prose, rather than half of it
+  /// typed as another notation's (#696). A block only RFC 5234 reads, with a `/`
+  /// alternative or `=/`, stays; and an RFC 5234 grammar that slips into `|` in a rule
+  /// or two (RFC 6455) stays RFC 5234's.
   static func unifyingGrammarDialect(_ sections: [Section]) -> [Section] {
     let bar = grammarType(.rfc822)
     let rfc5234 = grammarType(.rfc5234)
-    let hasBarDialect = sections.contains { section in
-      section.blocks.contains { block in
-        if case .preformatted(let verbatim) = block { verbatim.type == bar } else { false }
+    var barOnly = 0
+    var rfc5234Only = 0
+    for section in sections {
+      for case .preformatted(let verbatim) in section.blocks {
+        if verbatim.type == bar, !ABNF.parses(verbatim.text) {
+          barOnly += 1
+        } else if verbatim.type == rfc5234, !ABNF.parses(verbatim.text, dialect: .rfc822) {
+          rfc5234Only += 1
+        }
       }
     }
-    guard hasBarDialect else { return sections }
+    guard barOnly > rfc5234Only else { return sections }
     return sections.map { section in
       var section = section
       section.blocks = section.blocks.map { block in
@@ -435,9 +447,16 @@ extension LegacyTextParser {
     }
   }
 
-  /// The dialect `text` is a grammar in, RFC 5234's before RFC 822's, or nil.
+  /// The dialect `text` is a grammar in, RFC 5234's before the bar dialect, or nil.
   private static func grammarDialect(of text: String) -> ABNF.Dialect? {
-    [ABNF.Dialect.rfc5234, .rfc822].first { ABNF.recognizes(text, dialect: $0) }
+    if ABNF.recognizes(text) { return .rfc5234 }
+    return isBarDialectGrammar(text) ? .rfc822 : nil
+  }
+
+  /// Whether `text` is a grammar in the bar dialect alone: one with a `|`, which RFC
+  /// 5234 does not read. An `_` in a name says nothing alone, as `T_r=100ms` does not.
+  private static func isBarDialectGrammar(_ text: String) -> Bool {
+    text.contains("|") && ABNF.recognizes(text, dialect: .rfc822) && !ABNF.parses(text)
   }
 
   /// The type a grammar in `dialect` is set with: `abnf`, as RFCXML sets one, or

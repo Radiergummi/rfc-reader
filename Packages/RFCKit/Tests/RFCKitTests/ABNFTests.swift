@@ -311,13 +311,12 @@ struct ABNFTests {
     #expect(ABNF.recognizes(#"answer = "yes" | "no""#, dialect: .rfc822))
   }
 
-  /// A grammar in the bar dialect set as several blocks is one grammar: a block of it
-  /// RFC 5234 reads too, with no `|`, is typed with the rest, and a stretch with no
-  /// block in the bar dialect alone stays RFC 5234's.
+  /// A grammar in the bar dialect set as several blocks is one grammar: its artwork
+  /// RFC 5234 reads too, a plain rule, is typed with it; a stretch with no block in the
+  /// bar dialect alone stays as it was, and so does one whose only sign is an `_`.
   @Test func `a bar-dialect grammar's blocks are typed alike`() {
     let blocks = [
-      Self.verbatim(#"answer = "yes" | "no""#),
-      Self.verbatim("count = 1*DIGIT", abnf: true),
+      Self.verbatim(#"answer = "yes" | "no""#), Self.verbatim("choice = answer count"),
     ]
     let typed = LegacyTextParser.typingGrammars(blocks)
     #expect(
@@ -326,11 +325,13 @@ struct ABNFTests {
       })
     let rfc5234 = [Self.verbatim("count = 1*DIGIT", abnf: true), Self.verbatim("+--+")]
     #expect(LegacyTextParser.typingGrammars(rfc5234) == rfc5234)
+    let settings = [Self.verbatim("wait_time=100ms")]
+    #expect(LegacyTextParser.typingGrammars(settings) == settings)
   }
 
-  /// Between prose too: once a document has a grammar in the bar dialect, its blocks
-  /// typed as RFC 5234's that the bar dialect reads are that grammar's; one with a
-  /// `/` alternative stays RFC 5234's.
+  /// Between prose too: where more of a document's grammar blocks are in the bar
+  /// dialect alone than in RFC 5234's, its blocks typed as RFC 5234's that the bar
+  /// dialect reads are that grammar's; one with a `/` alternative stays RFC 5234's.
   @Test func `a document's grammar is in one dialect`() {
     let bar = Preformatted(kind: .sourceCode, text: #"answer = "yes" | "no""#, type: "abnf822")
     let plain = Preformatted(kind: .sourceCode, text: "count = 1*DIGIT", type: "abnf")
@@ -341,12 +342,15 @@ struct ABNFTests {
         anchor: "section-2", number: "2", title: "Two",
         blocks: [.preformatted(plain), .preformatted(slash)]),
     ]
-    let unified = LegacyTextParser.unifyingGrammarDialect(sections)
-    let types = unified[1].blocks.compactMap { block -> String? in
+    let unified = LegacyTextParser.unifyingGrammarDialect(
+      [sections[0], sections[0]] + [sections[1]])
+    let types = unified[2].blocks.compactMap { block -> String? in
       if case .preformatted(let verbatim) = block { verbatim.type } else { nil }
     }
     #expect(types == ["abnf822", "abnf"])
     #expect(LegacyTextParser.unifyingGrammarDialect([sections[1]]) == [sections[1]])
+    // An RFC 5234 grammar that slips into `|` once stays RFC 5234's.
+    #expect(LegacyTextParser.unifyingGrammarDialect(sections) == sections)
   }
 
   /// A block that alternates with both is neither dialect's grammar.
