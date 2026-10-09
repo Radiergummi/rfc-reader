@@ -47,12 +47,6 @@ struct PrimerTests {
       ])
   }
 
-  /// Every stage has an identity of its own, so a list of them can be iterated.
-  @Test func `every stage has an identity of its own`() {
-    let stages = primer.stages + [primer.otherStreams]
-    #expect(Set(stages.map(\.id)).count == stages.count)
-  }
-
   /// The words come from RFCReaderKit's catalog, so a German interface reads German:
   /// every one of them, as a key that drifted from its entry would fall back to English.
   @Test func `the primer is translated`() {

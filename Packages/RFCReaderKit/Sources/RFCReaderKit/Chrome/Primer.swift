@@ -19,12 +19,10 @@ extension Glossary {
 
   /// One stage of the primer: a title, two to four sentences, and the glossary terms
   /// it names, each opening its entry.
-  public struct Stage: Sendable, Hashable, Identifiable {
+  public struct Stage: Sendable, Hashable {
     public let title: String
     public let text: String
     public let related: [Term]
-
-    public var id: String { title }
   }
 
   /// The primer's title: what its window, its navigation bar and a link to it say.
@@ -90,8 +88,8 @@ extension Glossary {
           text: String(
             kit: """
               The document is published with an RFC number and its status, and its text never \
-              changes again, though its status can. Errors are recorded beside it as errata, and later work updates or \
-              obsoletes it with an RFC of its own.
+              changes again, though its status can. Errors are recorded beside it as errata, and \
+              later work updates or obsoletes it with an RFC of its own.
               """, locale: locale),
           related: [.process(.errata), .process(.updates), .process(.obsoletes)]),
       ],

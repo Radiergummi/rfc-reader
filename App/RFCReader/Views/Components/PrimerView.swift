@@ -11,7 +11,7 @@ struct PrimerView: View {
       Text(verbatim: primer.introduction)
         .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
-      ForEach(Array(primer.stages.enumerated()), id: \.element.id) { offset, stage in
+      ForEach(Array(primer.stages.enumerated()), id: \.offset) { offset, stage in
         stageView(stage, number: offset + 1)
       }
       stageView(primer.otherStreams, number: nil)
