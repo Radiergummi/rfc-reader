@@ -13,8 +13,21 @@ public enum LegacyTextParser {
   /// updates replace the page's (`IndexHeader`), as a converted document's do: the app
   /// parses a legacy RFC from its text too, and showed the page's guess (#767).
   public static func parse(_ data: Data, entry: RFCMetadata? = nil) -> RFCDocument {
-    var document = parse(text(decoding: data), title: entry?.title)
-    if let entry { _ = IndexHeader.apply(entry, to: &document.header) }
+    let document = parse(text(decoding: data), title: entry?.title)
+    return entry.map { applying($0, to: document) } ?? document
+  }
+
+  /// `document`, read from a legacy text, with its header taken from `entry`: what a
+  /// parse with the entry gives, for a document parsed before the entry was at hand.
+  /// The title is chosen as the parse chooses it, but from the page's title alone: the
+  /// title page's other runs are the parse's. Applying it to a document that already
+  /// has it changes nothing, and a document read from XML is left as it is (#767).
+  public static func applying(_ entry: RFCMetadata, to document: RFCDocument) -> RFCDocument {
+    guard document.source == .text else { return document }
+    var document = document
+    _ = IndexHeader.apply(entry, to: &document.header)
+    document.header.title = title(page: document.header.title, index: entry.title, titlePage: [])
+      .collapsingWhitespace()
     return document
   }
 

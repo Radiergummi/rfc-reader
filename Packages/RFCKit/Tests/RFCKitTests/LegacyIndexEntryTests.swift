@@ -39,6 +39,32 @@ struct LegacyIndexEntryTests {
     #expect(parsed == converted)
   }
 
+  /// A document parsed before the entry was at hand takes the entry's header when it
+  /// is read, as one parsed with it has; and applying it again changes nothing.
+  @Test(arguments: try Fixtures.legacyTexts())
+  func `the entry applied after the parse gives the header the parse would`(fixture: String)
+    throws
+  {
+    let index = try Fixtures.sampleIndex()
+    let data = try Fixtures.data(fixture)
+    let page = LegacyTextParser.parse(data)
+    guard let id = page.header.id, let entry = index[id] else { return }
+    let applied = LegacyTextParser.applying(entry, to: page)
+    let parsed = LegacyTextParser.parse(data, entry: entry)
+    #expect(applied.header.authors == parsed.header.authors)
+    #expect(applied.header.date == parsed.header.date)
+    #expect(applied.header.id == parsed.header.id)
+    #expect(LegacyTextParser.applying(entry, to: parsed).header == parsed.header)
+  }
+
+  @Test func `a document read from XML is left as it is`() throws {
+    let document = try Fixtures.document("rfc9283.xml")
+    let entry = RFCMetadata(
+      id: .rfc(9283), title: "Another", authors: [Author(name: "Z. Other")],
+      date: PublicationDate(year: 2000))
+    #expect(LegacyTextParser.applying(entry, to: document) == document)
+  }
+
   /// Without an entry the page is all there is, as before.
   @Test func `without an entry the header is the page's`() throws {
     let data = try Fixtures.data("rfc1149.txt")
