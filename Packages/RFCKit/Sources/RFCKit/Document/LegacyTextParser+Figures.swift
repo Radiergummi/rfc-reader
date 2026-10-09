@@ -28,6 +28,8 @@ extension LegacyTextParser {
   /// and the label alone on the second. A label followed by words with no separator,
   /// `Figure 3 shows …`, is a sentence and not a caption.
   static func caption(_ lines: [String]) -> Caption? {
+    // Most artwork is longer than a caption: told before any line is trimmed.
+    guard lines.lazy.filter({ !$0.isBlank }).prefix(3).count <= 2 else { return nil }
     let lines = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     guard (1...2).contains(lines.count) else { return nil }
     if let label = captionLabel(lines[0]) {
@@ -48,10 +50,11 @@ extension LegacyTextParser {
     guard let match = line.wholeMatch(of: captionPattern) else { return nil }
     let rest = match.rest.drop { $0 == " " }
     let separated = match.separator != nil || rest.isEmpty
-    guard separated || rest.first.map({ $0.isUppercase || $0 == "(" }) == true else {
-      return nil
-    }
-    let title = rest.drop { ".:-– ".contains($0) }
+    // Without a separator, a title opens with a capital, or is a parenthesis alone, as
+    // `(Continued)` is: `Figure 1 (above) shows …` is a sentence.
+    let parenthesized = rest.first == "(" && rest.firstIndex(of: ")") == rest.indices.last
+    guard separated || rest.first?.isUppercase == true || parenthesized else { return nil }
+    let title = rest.drop { ".:-–— ".contains($0) }
     // A title is words: what opens with a quote or a brace is code a label stands in.
     guard title.first.map({ $0.isLetter || $0.isNumber || $0 == "(" }) ?? true else {
       return nil
@@ -62,7 +65,7 @@ extension LegacyTextParser {
   }
 
   private static let captionPattern = Pattern(
-    #/(?<word>Figure|Fig\.|Table)\s+(?<number>\d+(?:[.-]\d+)*[A-Za-z]?(?:\s?\([a-z0-9]\))?)(?<separator>\.|:|\s*--?)?(?<rest>.*)/#
+    #/(?<word>Figure|Fig\.|Table)\s+(?<number>\d+(?:[.-]\d+)*[A-Za-z]?(?:\s?\([a-z0-9]\))?)(?<separator>\.|:|\s*--?|\s*[–—])?(?<rest>.*)/#
   )
 
   /// Each section's blocks with their drawings typed and their captions taken in. A
@@ -127,13 +130,8 @@ extension LegacyTextParser {
       return .table(table)
     case .preformatted(let above)?:
       guard var blocks = takingFigure(from: &result, above: above) else { return nil }
-      if caption.title == nil,
-        let index = blocks.indices.dropFirst().first(where: { index in
-          guard case .preformatted(let line) = blocks[index] else { return false }
-          return titleLine(line.text) != nil
-        }), case .preformatted(let line) = blocks.remove(at: index)
-      {
-        caption.title = titleLine(line.text)
+      if caption.title == nil, let title = takingTitle(from: &blocks) {
+        caption.title = title
       } else if caption.title == nil, blocks.count == 1, above.kind == .artwork,
         let split = splittingTitle(above)
       {
@@ -160,8 +158,8 @@ extension LegacyTextParser {
   /// `result`: `above`, or a drawing with a line or two of words between it and the
   /// caption, its title or a note under it (RFC 793's `TCP Header Format`, then a note,
   /// then `Figure 3.`), which are the figure's as well. Nil when the lines of words
-  /// stand under no drawing, as one under a ladder read as a list does: a title alone
-  /// is no figure.
+  /// stand under no drawing, as one under a ladder read as a list does, or under code
+  /// they may be the prose of: a title alone is no figure.
   private static func takingFigure(from result: inout [Block], above: Preformatted) -> [Block]? {
     var lines = 0
     while lines < 2, result.count > lines,
@@ -176,13 +174,25 @@ extension LegacyTextParser {
     }
     let start = result.count - 1 - lines
     guard start >= 0, case .preformatted(let drawing) = result[start],
-      !isLineOfWords(drawing.text)
+      DrawingShape.looksLikeDrawing(drawing.text)
     else {
       return nil
     }
     let blocks = Array(result[start...])
     result.removeSubrange(start...)
     return blocks
+  }
+
+  /// The first line of words under the drawing that reads as a title, taken out of
+  /// `blocks`, which `takingFigure` gave.
+  private static func takingTitle(from blocks: inout [Block]) -> String? {
+    for index in blocks.indices.dropFirst() {
+      guard case .preformatted(let line) = blocks[index], let title = titleLine(line.text)
+      else { continue }
+      blocks.remove(at: index)
+      return title
+    }
+    return nil
   }
 
   /// Whether `text` is one line of words, not a drawing's.
@@ -204,7 +214,8 @@ extension LegacyTextParser {
 
   /// A drawing whose last stretch, past a blank line, is a title: how a figure's
   /// title under it arrives when the drawing joined it (#437). Nil when there is no
-  /// such stretch, or nothing above it.
+  /// such stretch, or what is above it is no drawing: the last line of a trace or an
+  /// example is its own.
   private static func splittingTitle(_ verbatim: Preformatted) -> (
     drawing: Preformatted, title: String
   )? {
@@ -215,9 +226,10 @@ extension LegacyTextParser {
     else { return nil }
     lines.removeLast()
     while lines.last?.isBlank == true { lines.removeLast() }
-    guard lines.contains(where: { !$0.isBlank }) else { return nil }
+    let text = lines.joined(separator: "\n")
+    guard DrawingShape.looksLikeDrawing(text) else { return nil }
     var drawing = verbatim
-    drawing.text = lines.joined(separator: "\n")
+    drawing.text = text
     return (drawing, title)
   }
 

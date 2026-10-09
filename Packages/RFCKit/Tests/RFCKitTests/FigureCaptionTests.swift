@@ -16,6 +16,8 @@ struct FigureCaptionTests {
       LegacyTextParser.caption(["Table 2.  Option codes"])
         == .init(isTable: true, number: 2, label: "Table 2", title: "Option codes"))
     #expect(
+      LegacyTextParser.caption(["Figure 7 – Gateway layout"])?.title == "Gateway layout")
+    #expect(
       LegacyTextParser.caption(["Fig. 6 -- Gateway layout"])
         == .init(isTable: false, number: 6, label: "Fig. 6", title: "Gateway layout"))
   }
@@ -49,6 +51,7 @@ struct FigureCaptionTests {
     ["See Figure 3: it shows the sequence"],
     ["Figure 3", "is the relay sequence", "over a congested path"],
     ["Figures 3 and 4"],
+    ["Figure 1 (above) shows the relay path"],
     ["Table 4-2.\"", "::= { relayEntry 3 }"],
   ])
   func `a sentence about a figure is no caption`(lines: [String]) {
@@ -135,6 +138,18 @@ struct FigureCaptionTests {
       figure.blocks == [
         .preformatted(Preformatted(kind: .artwork, text: Self.drawing, type: "ascii-art"))
       ])
+  }
+
+  /// The last line of an example is its own, however much it looks like a title.
+  @Test func `an example keeps its last line`() throws {
+    let example = "C: HELO relay.example\nS: 250 OK\n\nS: Closing Down"
+    let blocks = LegacyTextParser.figuring([Self.artwork(example), Self.artwork("Figure 4.")])
+    guard case .figure(let figure) = blocks.only else {
+      Issue.record("not one figure: \(blocks)")
+      return
+    }
+    #expect(figure.title == nil)
+    #expect(figure.blocks == [Self.artwork(example)])
   }
 
   @Test func `a table's caption titles the table above it`() throws {
