@@ -140,7 +140,20 @@ public enum RFCXMLParser {
     /// written from.
     let foldsSectionsInProse: Bool
 
+    /// The RFC being parsed, whose page at the RFC Editor shows what an artwork
+    /// published only as SVG draws.
+    let documentID: DocumentID?
+
+    /// The RFC the document is, from its `number` or its front's `<seriesInfo>`; nil for
+    /// a draft.
+    static func documentID(of rfc: XMLTree.Element) -> DocumentID? {
+      if let number = rfc["number"].flatMap(Int.init) { return .rfc(number) }
+      let series = rfc.first("front")?.all("seriesInfo").first { $0["name"] == "RFC" }
+      return series?["value"].flatMap(Int.init).map(DocumentID.rfc)
+    }
+
     init(referencesIn root: XMLTree.Element) {
+      self.documentID = Self.documentID(of: root)
       let (referenceTargets, referenceEntries) = Self.references(in: root)
       self.referenceTargets = referenceTargets
       self.referenceEntries = referenceEntries
@@ -198,13 +211,7 @@ public enum RFCXMLParser {
       var header = DocumentHeader(title: titleElement?.normalizedText ?? "")
       header.abbreviatedTitle = titleElement?["abbrev"]
 
-      if let number = rfc["number"].flatMap(Int.init) {
-        header.id = .rfc(number)
-      } else if let series = front?.all("seriesInfo").first(where: { $0["name"] == "RFC" }),
-        let number = series["value"].flatMap(Int.init)
-      {
-        header.id = .rfc(number)
-      }
+      header.id = Self.documentID(of: rfc)
 
       header.authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor)
       if let date = front?.first("date") {
@@ -758,7 +765,8 @@ public enum RFCXMLParser {
       case "sourcecode":
         return .preformatted(parseArtwork(element, kind: .sourceCode))
       case "artset":
-        // Prefer the ASCII alternative; SVG needs a dedicated renderer.
+        // Prefer the ASCII alternative; SVG needs a dedicated renderer, and an artset
+        // without one shows the gap, as an SVG artwork alone does.
         let alternatives = element.all("artwork")
         let chosen = alternatives.first { $0["type"] == "ascii-art" } ?? alternatives.first
         return chosen.map { .preformatted(parseArtwork($0, kind: .artwork)) }
@@ -861,7 +869,10 @@ public enum RFCXMLParser {
     }
 
     private func parseArtwork(_ element: XMLTree.Element, kind: Preformatted.Kind) -> Preformatted {
-      var text = element.text
+      // An SVG drawing's text nodes, run together, are neither the drawing nor text
+      // to read; the block says where the drawing is, as xml2rfc's text rendering
+      // does, and keeps its type for a renderer to come (#768).
+      var text = element["type"]?.lowercased() == "svg" ? svgOnlyNote : element.text
       // The RFC Editor wraps artwork in newlines for readability of the XML itself.
       while text.hasPrefix("\n") { text.removeFirst() }
       while text.hasSuffix("\n") || text.hasSuffix(" ") { text.removeLast() }
@@ -869,6 +880,13 @@ public enum RFCXMLParser {
       let name = element["name"].flatMap { $0.isEmpty ? nil : $0 }
       return Preformatted(
         kind: kind, text: text, type: type, name: name, anchor: element["anchor"] ?? element["pn"])
+    }
+
+    /// What xml2rfc's text rendering sets in place of a drawing it has only as SVG.
+    private var svgOnlyNote: String {
+      guard let documentID else { return "(Artwork only available as SVG)" }
+      let page = RFCEditorEndpoints.base.appending(path: "rfc/\(documentID.fileStem).html")
+      return "(Artwork only available as SVG: see \(page.absoluteString))"
     }
 
     private func parseTable(_ element: XMLTree.Element) -> Table {
