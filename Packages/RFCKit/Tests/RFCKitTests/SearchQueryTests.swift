@@ -247,6 +247,17 @@ struct SearchQueryTests {
     #expect(parsed.text == "key words")
   }
 
+  /// Inside quotes the whitespace stays part of the word, and reads as one space, so
+  /// a name or a phrase pasted across a wrapped line matches as typed on one.
+  @Test func `whitespace inside quotes reads as one space`() {
+    let parsed = IndexSearch.parseQuery("author:\"Roy\tFielding\" wg:\"non\nworking group\"")
+    #expect(parsed.filters.author == "roy fielding")
+    #expect(parsed.filters.workingGroups == ["non working group"])
+    #expect(SearchQuery.format(parsed) == #"wg:"non working group" author:"roy fielding""#)
+    #expect(SearchQuery.unquoted("\"congestion\r\n  control\"") == "congestion control")
+    #expect(IndexSearch.parseQuery("author:\"\n\"").filters.author == nil)
+  }
+
   @Test func `a word is finished by a line break as by a space`() {
     #expect(SearchQuery.wordBeingTyped(in: "status:bcp\n") == nil)
     #expect(SearchQuery.wordBeingTyped(in: "cache\tst") == "st")

@@ -499,22 +499,23 @@ public enum SearchQuery {
   /// `word` without the quotes of its quoted run: a quoted value's text, or a
   /// phrase's. The run's opening quote is the word's first character, and the next
   /// quote closes it; a quote anywhere else is the word's own, as `words(in:)` reads
-  /// it.
+  /// it. Each run of whitespace inside the quotes is one space, so a phrase or a
+  /// name pasted across a wrapped line reads as it would typed on one (#852).
   static func unquoted(_ word: some StringProtocol) -> String {
     guard let first = word.first, quotes.contains(first) else { return String(word) }
     var text = String(word.dropFirst())
     if let closing = text.firstIndex(where: quotes.contains) {
       text.remove(at: closing)
     }
-    return text
+    return text.replacing(#/\s+/#, with: " ")
   }
 
-  /// A qualifier's value as written back: in quotes when it has whitespace, or it
-  /// would read back as a shorter value and a word of free text.
+  /// A qualifier's value as written back: in quotes when it has a space, or it would
+  /// read back as a shorter value and a word of free text.
   /// A comma would split it into two values of a union, so a value with one is
   /// quoted too.
   private static func written(_ value: String) -> String {
-    value.contains(where: \.isWhitespace) || value.contains(",") ? "\"\(value)\"" : value
+    value.contains(" ") || value.contains(",") ? "\"\(value)\"" : value
   }
 
   /// Whether a word with a colon this version doesn't know as a qualifier reads as
