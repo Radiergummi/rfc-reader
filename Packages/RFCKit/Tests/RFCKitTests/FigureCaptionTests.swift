@@ -76,7 +76,7 @@ struct FigureCaptionTests {
     }
     #expect(figure.number == 1)
     #expect(figure.title == "The exchange")
-    #expect(figure.anchor == "figure-1")
+    #expect(figure.anchor == nil)
     #expect(
       figure.blocks == [
         .preformatted(Preformatted(kind: .artwork, text: Self.drawing, type: "ascii-art"))
@@ -97,6 +97,27 @@ struct FigureCaptionTests {
     #expect(figure.title == "Client and Server")
     #expect(figure.blocks.count == 2)
     #expect(figure.blocks.last == Self.artwork("Each box is one host."))
+  }
+
+  /// Labels spread across the line under a drawing are the drawing's, not its title.
+  @Test func `spread labels are no title`() throws {
+    let blocks = LegacyTextParser.figuring([
+      Self.artwork(Self.drawing), Self.artwork("Before            After"),
+      Self.artwork("Figure 2."),
+    ])
+    guard case .figure(let figure) = blocks.only else {
+      Issue.record("not one figure: \(blocks)")
+      return
+    }
+    #expect(figure.title == nil)
+    #expect(figure.blocks.count == 2)
+  }
+
+  /// A title is read back from `<name>` with its spaces made single, so it is set so.
+  @Test func `a title's spaces are single`() {
+    #expect(
+      LegacyTextParser.caption(["Figure 4: Relay  sequence over", "  a congested  path"])?.title
+        == "Relay sequence over a congested path")
   }
 
   /// A drawing that took its title in, past a blank line, gives it up to the caption.
@@ -126,7 +147,7 @@ struct FigureCaptionTests {
     }
     #expect(titled.title == "Codes")
     #expect(titled.number == 3)
-    #expect(titled.anchor == "table-3")
+    #expect(titled.anchor == nil)
   }
 
   /// A caption under prose, or under a line of words that stands under no drawing,
@@ -139,18 +160,18 @@ struct FigureCaptionTests {
     #expect(LegacyTextParser.figuring(title) == title)
   }
 
-  /// Two figures one number, as a figure continued over a page: the first has the
-  /// anchor.
-  @Test func `a number's anchor goes to its first figure`() {
+  /// Two figures one number, as a figure continued over a page: the number is the
+  /// first's, since its part number is an ID, and the second keeps its label.
+  @Test func `a number goes to its first figure`() {
     let blocks = LegacyTextParser.figuring([
       Self.artwork(Self.drawing), Self.artwork("Figure 3"),
       Self.artwork(Self.drawing), Self.artwork("Figure 3 (Continued)"),
     ])
-    let anchors = blocks.map { block -> String? in
+    let names = blocks.map { block -> String in
       guard case .figure(let figure) = block else { return "not a figure" }
-      return figure.anchor
+      return "\(figure.number.map(String.init) ?? "-") \(figure.title ?? "-")"
     }
-    #expect(anchors == ["figure-3", nil])
+    #expect(names == ["3 -", "- Figure 3: (Continued)"])
   }
 
   @Test func `artwork that is no drawing stays untyped`() {
@@ -178,7 +199,6 @@ struct FigureCaptionTests {
     let figures = Self.figures(in: try Fixtures.parse("rfc793.txt"))
     let header = try #require(figures.first { $0.number == 3 })
     #expect(header.title == "TCP Header Format")
-    #expect(header.anchor == "figure-3")
     guard case .preformatted(let layout)? = header.blocks.first else {
       Issue.record("no layout")
       return
@@ -197,7 +217,7 @@ struct FigureCaptionTests {
   @Test func `RFC 1005's figures keep their section numbers`() throws {
     let figures = Self.figures(in: try Fixtures.parse("rfc1005.txt"))
     #expect(figures.contains { $0.title == "Figure 2.1: IP Class A Mapping" && $0.number == nil })
-    #expect(figures.allSatisfy { $0.anchor == nil })
+    #expect(figures.allSatisfy { $0.number == nil })
   }
 }
 

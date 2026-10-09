@@ -33,13 +33,14 @@ extension LegacyTextParser {
     if let label = captionLabel(lines[0]) {
       var label = label
       let title = ([label.title].compactMap { $0 } + lines.dropFirst()).joined(separator: " ")
+        .collapsingWhitespace()
       label.title = title.isEmpty ? nil : title
       return label
     }
     guard lines.count == 2, var label = captionLabel(lines[1]), label.title == nil,
       !DrawingShape.looksLikeDrawing(lines[0])
     else { return nil }
-    label.title = lines[0]
+    label.title = lines[0].collapsingWhitespace()
     return label
   }
 
@@ -60,10 +61,10 @@ extension LegacyTextParser {
     #/(?<word>Figure|Fig\.|Table)\s+(?<number>\d+(?:[.-]\d+)*[A-Za-z]?(?:\s?\([a-z0-9]\))?)(?<separator>\.|:|\s*--?)?(?<rest>.*)/#
   )
 
-  /// Each section's blocks with their drawings typed and their captions taken in, and
-  /// a figure or table numbered as a whole number anchored at `figure-N` or `table-N`
-  /// where nothing in the document has that anchor yet: the first of two figures a
-  /// document numbers the same, as one continued over a page, has it.
+  /// Each section's blocks with their drawings typed and their captions taken in. A
+  /// figure or table numbered as a whole number has no anchor: its part number,
+  /// `figure-N`, is its ID, as RFCXML's prep gives it one, and an anchor spelled the
+  /// same would declare it twice.
   static func figuringCaptions(_ sections: [Section]) -> [Section] {
     var taken = Set<String>()
     func visit(_ section: Section) -> Section {
@@ -108,19 +109,20 @@ extension LegacyTextParser {
   private static func captioning(
     _ result: inout [Block], with caption: Caption, taken: inout Set<String>
   ) -> Block? {
-    func anchor(_ prefix: String) -> String? {
-      guard let number = caption.number, taken.insert("\(prefix)-\(number)").inserted else {
-        return nil
-      }
-      return "\(prefix)-\(number)"
-    }
     var caption = caption
+    // A number is the document's once: its part number, `figure-3`, is an ID. A second
+    // figure the document numbers the same, one continued over a page, keeps its label.
+    let part = caption.number.map { "\(caption.isTable ? "table" : "figure")-\($0)" }
+    if let part, taken.contains(part) {
+      caption.title = caption.blockTitle
+      caption.number = nil
+    }
     switch result.last {
     case .table(var table)? where caption.isTable && table.title == nil:
       result.removeLast()
       table.title = caption.blockTitle
       table.number = caption.number
-      table.anchor = table.anchor ?? anchor("table")
+      if let part { taken.insert(part) }
       return .table(table)
     case .preformatted(let above)?:
       guard var blocks = takingFigure(from: &result, above: above) else { return nil }
@@ -143,14 +145,14 @@ extension LegacyTextParser {
         caption.title = caption.blockTitle
         caption.number = nil
       }
+      if caption.number != nil, let part { taken.insert(part) }
       return .figure(
         Figure(
           title: caption.blockTitle, number: caption.number,
           blocks: blocks.map { block in
             guard case .preformatted(let verbatim) = block else { return block }
             return .preformatted(typingDrawing(verbatim))
-          },
-          anchor: anchor("figure")))
+          }))
     default:
       return nil
     }
@@ -193,11 +195,13 @@ extension LegacyTextParser {
   }
 
   /// The line `text` is when it is a title: one line of words that is no sentence,
-  /// which a title does not end with a period to be.
+  /// which a title does not end with a period to be, and not a drawing's labels spread
+  /// across a line (`Before        After`), with its spaces made single as `<name>`
+  /// reads them.
   private static func titleLine(_ text: String) -> String? {
     let line = text.trimmingCharacters(in: .whitespaces)
-    guard isLineOfWords(line), !line.hasSuffix(".") else { return nil }
-    return line
+    guard isLineOfWords(line), !line.hasSuffix("."), !line.contains("   ") else { return nil }
+    return line.collapsingWhitespace()
   }
 
   /// A drawing whose last stretch, past a blank line, is a title: how a figure's
