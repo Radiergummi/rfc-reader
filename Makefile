@@ -292,6 +292,9 @@ ios-app: xcodeproj
 # Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
 # found either way, then adds new strings to the catalogs and removes the ones the
 # code no longer has (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# Always Debug, whatever CONFIGURATION says: a Release build lacks the strings
+# behind `#if DEBUG`, and the sync would remove them with their translations.
+strings: override CONFIGURATION = Debug
 strings: build-app ios-sim
 	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
 	  --configuration $(CONFIGURATION)

@@ -15,11 +15,11 @@ The compiler records every localizable string it type-checks in a .stringsdata
 file per source file (SWIFT_EMIT_LOC_STRINGS, project.yml). `xcstringstool sync`
 adds the strings it finds there to a catalog, removes the untranslated ones it
 does not find and marks the translated ones stale; xcodebuild never does this
-itself, only Xcode's editor does. The sync then removes the stale keys too, as
-Xcode's editor does, so `make strings-check` fails on a catalog that still has
-one (#863). Only a key the sync extracted can go stale: a key added by hand
-("manual") is left alone. Both platforms' builds are read, so a string inside
-`#if os(iOS)` is found too.
+itself, only Xcode's editor does. The sync then removes the stale keys too, so
+`make strings-check` fails on a catalog that still has one (#863). Only a key
+the sync extracted can go stale: a key added by hand ("manual") is left alone.
+Both platforms' builds are read, so a string inside `#if os(iOS)` is found too,
+and the Debug configuration's, so one inside `#if DEBUG` is.
 
 The App Shortcuts' phrases are not the compiler's: the App Intents metadata step
 records them in a file of its own, ExtractedAppShortcutsMetadata.stringsdata, in
@@ -77,6 +77,10 @@ def strings_data(objroot: Path, configuration: str, target: str, sources: Path) 
             kept = newest.get(path.name)
             if kept is None or path.stat().st_mtime > kept.stat().st_mtime:
                 newest[path.name] = path
+        if not newest:
+            # Without one platform's strings, the sync would take its translated
+            # keys for removed ones and delete them.
+            raise SystemExit(f"no .stringsdata for {target} in {directory}: build first")
         found += newest.values()
     return sorted(found)
 
@@ -160,8 +164,6 @@ def main() -> None:
 
     for catalog, target, sources in CATALOGS:
         files = strings_data(arguments.objroot, arguments.configuration, target, Path(sources))
-        if not files:
-            raise SystemExit(f"no .stringsdata for {target} under {arguments.objroot}: build first")
         command = ["xcrun", "xcstringstool", "sync", catalog]
         for file in files:
             command += ["--stringsdata", str(file)]
