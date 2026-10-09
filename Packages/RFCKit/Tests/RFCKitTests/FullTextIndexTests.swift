@@ -6,27 +6,27 @@ import Testing
 
 /// The full-text index over document bodies (#37): a hit is a section, found by a
 /// word only its own text holds, in a database of the test's own.
+///
+/// A class, so the file is removed when the test ends: Swift Testing makes an instance
+/// for each test and keeps it until the test returns, where a local object could be
+/// released after its last use, and its file removed under an open connection.
 @Suite("Full-text index")
-struct FullTextIndexTests {
-  /// An index in a file of its own, removed when the test ends.
-  private final class Scratch {
-    let url = FileManager.default.temporaryDirectory
-      .appending(path: "FullTextIndexTests-\(UUID().uuidString).sqlite")
+final class FullTextIndexTests {
+  let url = FileManager.default.temporaryDirectory
+    .appending(path: "FullTextIndexTests-\(UUID().uuidString).sqlite")
 
-    func index() throws -> FullTextIndex {
-      try FullTextIndex(contentsOf: url)
-    }
+  func index() throws -> FullTextIndex {
+    try FullTextIndex(contentsOf: url)
+  }
 
-    deinit {
-      for suffix in ["", "-wal", "-shm"] {
-        try? FileManager.default.removeItem(at: URL(filePath: url.path + suffix))
-      }
+  deinit {
+    for suffix in ["", "-wal", "-shm"] {
+      try? FileManager.default.removeItem(at: URL(filePath: url.path + suffix))
     }
   }
 
   @Test func `a word only a section's body holds finds that section`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     let hits = try index.search("intermediaries")
@@ -37,16 +37,14 @@ struct FullTextIndexTests {
   }
 
   @Test func `an appendix is found as a section`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     #expect(try index.search("changeable").map(\.anchor) == ["bad-assumptions"])
   }
 
   @Test func `a legacy document's sections are found by number`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc2119.txt"))
 
     let hits = try index.search("interoperation")
@@ -56,16 +54,14 @@ struct FullTextIndexTests {
 
   /// A figure's or a table's caption is shown in its section, so it is searched there.
   @Test func `a figure's caption finds its section`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     #expect(try index.search("\"example format\"").map(\.anchor) == ["notational-conventions"])
   }
 
   @Test func `every word of a query has to be in the section`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     #expect(try index.search("intermediaries changeable").isEmpty)
@@ -74,8 +70,7 @@ struct FullTextIndexTests {
   /// A bibliography is a list of titles: it answers no question, and its titles would
   /// outrank the sections that do (the search decision).
   @Test func `a bibliography is never a hit`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     let document = try Fixtures.document("rfc8999.xml")
     try index.add(document)
 
@@ -94,8 +89,7 @@ struct FullTextIndexTests {
     "^quic", "(quic", "\"", "-", "   ", "quic\u{0}version",
   ])
   func `a query is never read as FTS5 syntax`(query: String) throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     _ = try index.search(query)
@@ -150,8 +144,7 @@ struct FullTextIndexTests {
   }
 
   @Test func `a quoted phrase matches its words in order`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     #expect(try !index.search("\"version negotiation\"").isEmpty)
@@ -159,8 +152,7 @@ struct FullTextIndexTests {
   }
 
   @Test func `adding a document again replaces it`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     let document = try Fixtures.document("rfc8999.xml")
     try index.add(document)
     try index.add(document)
@@ -169,8 +161,7 @@ struct FullTextIndexTests {
   }
 
   @Test func `removing a document empties it`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
     try index.add(Fixtures.document("rfc2119.txt"))
 
@@ -181,10 +172,9 @@ struct FullTextIndexTests {
   }
 
   @Test func `the index survives being opened again`() throws {
-    let scratch = Scratch()
-    try scratch.index().add(Fixtures.document("rfc8999.xml"))
+    try index().add(Fixtures.document("rfc8999.xml"))
 
-    let reopened = try scratch.index()
+    let reopened = try index()
     #expect(try reopened.indexed() == [.rfc(8999)])
     #expect(try reopened.search("intermediaries").count == 1)
   }
@@ -192,17 +182,15 @@ struct FullTextIndexTests {
   /// A change to what a section's text is, or to the tables, raises the version: an
   /// index made under another is emptied, and the stored bodies are indexed again.
   @Test func `an index of another version is emptied when opened`() throws {
-    let scratch = Scratch()
-    try FullTextIndex(contentsOf: scratch.url, version: 1).add(Fixtures.document("rfc8999.xml"))
+    try FullTextIndex(contentsOf: url, version: 1).add(Fixtures.document("rfc8999.xml"))
 
-    let newer = try FullTextIndex(contentsOf: scratch.url, version: 2)
+    let newer = try FullTextIndex(contentsOf: url, version: 2)
     #expect(try newer.indexed().isEmpty)
     #expect(try newer.search("intermediaries").isEmpty)
   }
 
   @Test func `the snippet marks where the words matched`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"))
 
     let snippet = try #require(try index.search("intermediaries").first).snippet
@@ -213,8 +201,7 @@ struct FullTextIndexTests {
   /// A heading is shown beside the snippet, so the snippet is the body's words, even
   /// where the heading matches as often.
   @Test func `the snippet is taken from the body, not the heading`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     try index.add(Fixtures.document("rfc2119.txt"))
 
     let hit = try #require(try index.search("required").first { $0.anchor == "section-1" })
@@ -229,25 +216,38 @@ struct FullTextIndexTests {
     #expect(snippet.matches.map { String(snippet.text.unicodeScalars[$0]) } == ["b"])
   }
 
+  /// A snippet that starts at an indented verbatim block, or ends at a line break,
+  /// neither begins nor ends with a space.
+  @Test func `a snippet has no space at either end`() {
+    let snippet = FullTextIndex.snippet(marked: "   \u{E000}b\u{E001} c\n")
+    #expect(snippet.text == "b c")
+    #expect(snippet.matches.map { String(snippet.text.unicodeScalars[$0]) } == ["b"])
+  }
+
+  /// The characters `snippet()` marks a match with are taken out of what is indexed,
+  /// so one in a document is never read as a marker.
+  @Test func `a section's text never holds a match marker`() {
+    let text = FullTextIndex.text(of: [.paragraph(.init(text: "a\u{E000}b\u{E001}c"))])
+    #expect(text == "abc")
+  }
+
   /// Opening the index to search takes no write lock, so it is not kept waiting
   /// while another connection indexes.
   @Test func `the index opens while another connection writes`() throws {
-    let scratch = Scratch()
-    try scratch.index().add(Fixtures.document("rfc8999.xml"))
+    try index().add(Fixtures.document("rfc8999.xml"))
     var writer: OpaquePointer?
     defer { unsafe sqlite3_close(writer) }
-    try #require(unsafe sqlite3_open(scratch.url.path, &writer) == SQLITE_OK)
+    try #require(unsafe sqlite3_open(url.path, &writer) == SQLITE_OK)
     try #require(unsafe sqlite3_exec(writer, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK)
 
     let started = ContinuousClock.now
-    let reader = try scratch.index()
+    let reader = try index()
     #expect(try reader.search("intermediaries").count == 1)
     #expect(ContinuousClock.now - started < .seconds(1))
   }
 
   @Test func `a document that names no number is refused`() throws {
-    let scratch = Scratch()
-    let index = try scratch.index()
+    let index = try index()
     var document = try Fixtures.document("rfc8999.xml")
     document.header.id = nil
 

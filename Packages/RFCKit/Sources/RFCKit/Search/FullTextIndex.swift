@@ -1,4 +1,4 @@
-import CSQLite
+internal import CSQLite
 import Foundation
 
 /// A section found by `FullTextIndex.search`: where it is, what it is called, and the
@@ -202,9 +202,11 @@ public struct Snippet: Sendable, Hashable {
   }
 
   /// A section's own text, as it is searched: its blocks' prose, verbatim text and
-  /// captions, the blocks nested in them included, but not its subsections'.
+  /// captions, the blocks nested in them included, but not its subsections'. Without
+  /// the characters `snippet()` marks a match with, so one in a document is never
+  /// read as a marker.
   static func text(of blocks: [Block]) -> String {
-    blocks.flattened.flatMap { block -> [String] in
+    let text = blocks.flattened.flatMap { block -> [String] in
       var runs = block.proseRuns.map(\.plainText)
       let caption: String? =
         switch block {
@@ -219,6 +221,7 @@ public struct Snippet: Sendable, Hashable {
       return runs
     }
     .joined(separator: "\n")
+    return String(text.unicodeScalars.filter { $0 != matchStart && $0 != matchEnd })
   }
 
   // MARK: - Searching
@@ -278,22 +281,29 @@ public struct Snippet: Sendable, Hashable {
   private static let matchEnd: Unicode.Scalar = "\u{E001}"
 
   /// A snippet with its markers taken out and their places kept, and each run of white
-  /// space, a verbatim block's line breaks and alignment, one space. Read by scalar,
-  /// not by character: a marker followed by a combining mark or a variation selector
-  /// is one character with it.
+  /// space, a verbatim block's line breaks and alignment, one space, none at either
+  /// end. Read by scalar, not by character: a marker followed by a combining mark or a
+  /// variation selector is one character with it.
   static func snippet(marked: String) -> Snippet {
     var scalars = String.UnicodeScalarView()
     var offsets: [Range<Int>] = []
     var start: Int?
+    var pendingSpace = false
     for scalar in marked.unicodeScalars {
       switch scalar {
-      case matchStart: start = scalars.count
+      case matchStart:
+        if pendingSpace { scalars.append(" ") }
+        pendingSpace = false
+        start = scalars.count
       case matchEnd:
         if let begun = start { offsets.append(begun..<scalars.count) }
         start = nil
       case _ where scalar.properties.isWhitespace:
-        if scalars.last != " " { scalars.append(" ") }
-      default: scalars.append(scalar)
+        pendingSpace = !scalars.isEmpty
+      default:
+        if pendingSpace { scalars.append(" ") }
+        pendingSpace = false
+        scalars.append(scalar)
       }
     }
     let text = String(scalars)
