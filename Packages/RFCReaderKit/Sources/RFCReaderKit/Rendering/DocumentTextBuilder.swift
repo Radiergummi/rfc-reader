@@ -17,18 +17,6 @@ import RFCKit
 /// text view is the only part that needs the main actor, and `BuiltDocument` carries
 /// the result across.
 public final class DocumentTextBuilder {
-  /// The private URL scheme an in-document anchor link uses.
-  public static let anchorScheme = "rfc-anchor"
-
-  /// The scheme a citation of a bibliography entry uses instead. The body leaves
-  /// the bibliography to the inspector (`holdsOnlyReferences`), so a citation of
-  /// anything but an RFC — still an anchor after parsing — has no position to
-  /// scroll to, and goes to its entry there.
-  public static let referenceScheme = "rfc-reference"
-
-  /// The scheme of a heading's backlink caption (#183), naming the section: a click
-  /// lists the sections that refer to it rather than going anywhere.
-  public static let backlinksScheme = "rfc-backlinks"
   /// The style the *current* region is emitted in. A `var` because a region can be
   /// set quieter than the body around it — see `emitting(in:color:)`.
   private(set) var style: ReadingStyle
@@ -71,7 +59,7 @@ public final class DocumentTextBuilder {
   }
 
   /// The anchors of the document's bibliography entries, which `url(for:)` links
-  /// with `referenceScheme`. Collected before anything is emitted.
+  /// with `ReaderLinkScheme.referenceScheme`. Collected before anything is emitted.
   var referenceAnchors: Set<String> = []
 
   /// Which kind of list holds each bibliography entry, for whether a citation's
@@ -381,7 +369,7 @@ extension DocumentTextBuilder {
     var numberAttributes = tab
     numberAttributes[.foregroundColor] = RFCColors.secondaryLabel
     numberAttributes[.rfcSectionNumber] = anchor
-    numberAttributes[.link] = Self.url(anchor, scheme: Self.anchorScheme)
+    numberAttributes[.link] = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
     append("\t", tab)
     append(number, numberAttributes)
     append("\t", tab)

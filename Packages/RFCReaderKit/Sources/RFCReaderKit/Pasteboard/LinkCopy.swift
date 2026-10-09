@@ -25,7 +25,7 @@ public struct LinkCopy: Equatable, Sendable {
     _ link: URL, from currentDocument: DocumentID, in index: RFCIndex?,
     bibliography: [ReferenceGroup]
   ) -> LinkCopy? {
-    if let anchor = DocumentTextBuilder.anchor(from: link) {
+    if let anchor = ReaderLinkScheme.anchor(from: link) {
       // The RFC Editor's HTML carries the document's own anchors as ids, and a
       // section's is the `section-4.2` a number would have made.
       var components = URLComponents(
@@ -35,7 +35,7 @@ public struct LinkCopy: Equatable, Sendable {
       guard let url = components?.url else { return nil }
       return LinkCopy(url: url, label: label(for: currentDocument, in: index))
     }
-    if let anchor = DocumentTextBuilder.reference(from: link) {
+    if let anchor = ReaderLinkScheme.reference(from: link) {
       guard let entry = bibliography.entry(anchor: anchor), let url = entry.url else {
         return nil
       }
@@ -51,7 +51,7 @@ public struct LinkCopy: Equatable, Sendable {
   /// errata or history page is not the document's info page.
   public static func isReaders(_ link: URL) -> Bool {
     guard let scheme = link.scheme?.lowercased() else { return false }
-    return [RFCLink.scheme, DocumentTextBuilder.anchorScheme, DocumentTextBuilder.referenceScheme]
+    return [RFCLink.scheme, ReaderLinkScheme.anchorScheme, ReaderLinkScheme.referenceScheme]
       .contains(scheme)
   }
 

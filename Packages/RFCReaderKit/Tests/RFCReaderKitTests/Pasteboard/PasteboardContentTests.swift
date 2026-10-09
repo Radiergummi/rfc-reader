@@ -187,6 +187,6 @@ struct PublicURLTests {
   }
 
   @Test func `a reader's link with nothing to hand out has none`() {
-    #expect(publicURL("\(DocumentTextBuilder.referenceScheme):Unlinked") == nil)
+    #expect(publicURL("\(ReaderLinkScheme.referenceScheme):Unlinked") == nil)
   }
 }

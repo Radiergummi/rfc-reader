@@ -51,10 +51,10 @@ public enum LinkPreview: Equatable, Sendable {
   public static func resolve(
     _ url: URL, from currentDocument: DocumentID, in index: RFCIndex?
   ) -> LinkPreview? {
-    if let anchor = DocumentTextBuilder.anchor(from: url) {
+    if let anchor = ReaderLinkScheme.anchor(from: url) {
       return .document(currentDocument, place: anchor)
     }
-    if let entry = DocumentTextBuilder.reference(from: url) {
+    if let entry = ReaderLinkScheme.reference(from: url) {
       return .card(entry)
     }
     guard let link = RFCLink(url: url) else { return nil }

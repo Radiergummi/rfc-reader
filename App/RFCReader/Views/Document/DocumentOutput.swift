@@ -5,7 +5,7 @@
   import UIKit
 
   /// Export and Print on iOS (#599): the file or PDF made, then Save to Files or the
-  /// print sheet presented. The Mac's are the window's (`ReaderWindowController`):
+  /// print sheet presented. The Mac's are the window's (`DocumentOutputController`):
   /// a save panel and the print panel as sheets. Both make what they hand over the
   /// same way, through `DocumentExport` and `DocumentPDF`.
   @Observable
@@ -17,7 +17,7 @@
     /// Whether an export is being made or Save to Files is up; see `exportDocument`.
     private(set) var isExporting = false
     /// An export or print that failed, while its alert is up (#759). The Mac
-    /// presents the same failures from the window (`ReaderWindowController`).
+    /// presents the same failures from the window (`DocumentOutputController`).
     var failure: Failure?
 
     /// What failed to be made, for the alert's title, and why, for its message.

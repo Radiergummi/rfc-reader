@@ -447,8 +447,8 @@
 
     @objc private func newEmptyCollection() { controller.newCollection() }
 
-    @objc private func printDocument() { controller.printDocument() }
-    @objc private func exportDocument() { controller.exportDocument() }
+    @objc private func printDocument() { controller.output.printDocument() }
+    @objc private func exportDocument() { controller.output.exportDocument() }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {

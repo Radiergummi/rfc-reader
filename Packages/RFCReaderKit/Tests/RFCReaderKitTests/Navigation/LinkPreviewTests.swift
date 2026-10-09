@@ -40,7 +40,7 @@ struct LinkPreviewTests {
   /// same document, opened at the target.
   @Test func `an anchor in this document previews this document there`() {
     #expect(
-      resolve("\(DocumentTextBuilder.anchorScheme):section-4.2")
+      resolve("\(ReaderLinkScheme.anchorScheme):section-4.2")
         == .document(current, place: "section-4.2"))
   }
 
@@ -52,7 +52,7 @@ struct LinkPreviewTests {
 
   @Test func `a bibliography entry that names no RFC keeps its card`() {
     #expect(
-      resolve("\(DocumentTextBuilder.referenceScheme):IEEE.802.3_2018")
+      resolve("\(ReaderLinkScheme.referenceScheme):IEEE.802.3_2018")
         == .card("IEEE.802.3_2018"))
   }
 
