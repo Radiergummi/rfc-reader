@@ -146,6 +146,19 @@ extension RFCDocument {
 }
 
 extension Section {
+  /// True when this section is a bibliography: it holds a list of references among
+  /// whatever else it holds, or it holds nothing itself and every subsection below
+  /// it is one, as a `References` section around `Normative` and `Informative` is.
+  /// Looser than `holdsOnlyReferences`, which also asks that nothing else be there.
+  /// What the serializer lifts into `<back>`, what the legacy parser places an
+  /// appendix after, and what `Amendments` and the full-text index leave out.
+  public var holdsReferences: Bool {
+    if blocks.contains(where: { if case .references = $0 { true } else { false } }) {
+      return true
+    }
+    return !subsections.isEmpty && blocks.isEmpty && subsections.allSatisfy(\.holdsReferences)
+  }
+
   /// True when nothing in this section, or anything below it, is prose: only
   /// bibliography entries. The reader leaves such a section out of the body, heading
   /// and all, for its references panel. A `References` section is usually empty

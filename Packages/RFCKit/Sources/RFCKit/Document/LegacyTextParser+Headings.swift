@@ -497,7 +497,7 @@ extension LegacyTextParser {
         if case .references = $0 { true } else { false }
       }
       guard holdsEntries,
-        let first = section.subsections.firstIndex(where: { !RFCXMLSerializer.isReferences($0) })
+        let first = section.subsections.firstIndex(where: { !$0.holdsReferences })
       else { return [section] }
       let lifted = Array(section.subsections[first...])
       section.subsections.removeSubrange(first...)

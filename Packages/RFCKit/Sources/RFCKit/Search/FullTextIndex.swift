@@ -182,7 +182,7 @@ public struct Snippet: Sendable, Hashable {
   /// is not a bibliography or a back-of-book index.
   static func rows(of document: RFCDocument) -> [Row] {
     let sections = document.allSections.filter {
-      !RFCXMLSerializer.isReferences($0) && !$0.holdsIndex
+      !$0.holdsReferences && !$0.holdsIndex
     }
     var rows: [Row] = []
     if !document.header.abstract.isEmpty,

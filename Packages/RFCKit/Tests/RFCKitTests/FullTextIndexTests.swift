@@ -75,7 +75,7 @@ final class FullTextIndexTests {
     try index.add(document)
 
     let bibliographies = Set(
-      document.allSections.filter(RFCXMLSerializer.isReferences).map(\.anchor))
+      document.allSections.filter(\.holdsReferences).map(\.anchor))
     #expect(!bibliographies.isEmpty)
     let hits = try index.search("quic", limit: 100)
     #expect(!hits.isEmpty)

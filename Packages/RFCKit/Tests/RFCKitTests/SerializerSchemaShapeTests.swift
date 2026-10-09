@@ -79,14 +79,14 @@ struct SerializerSchemaShapeTests {
     }
     #expect(outline(reparsed) == outline(document))
     let chapters = { (document: RFCDocument) in
-      document.allSections.filter { !RFCXMLSerializer.isReferences($0) }.map { section in
-        let kept = section.subsections.count { !RFCXMLSerializer.isReferences($0) }
+      document.allSections.filter { !$0.holdsReferences }.map { section in
+        let kept = section.subsections.count { !$0.holdsReferences }
         return "\(section.anchor) \(kept)"
       }
     }
     #expect(chapters(reparsed) == chapters(document))
     let bibliographies = { (document: RFCDocument) in
-      document.allSections.filter(RFCXMLSerializer.isReferences).map { section in
+      document.allSections.filter(\.holdsReferences).map { section in
         "\(section.anchor) \(section.subsections.count)"
       }.sorted()
     }
