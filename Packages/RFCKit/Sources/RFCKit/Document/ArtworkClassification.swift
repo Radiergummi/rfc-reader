@@ -24,6 +24,19 @@ public struct ArtworkType: Sendable, Hashable {
   /// for a drawing of any kind.
   static let generic: Set<String> = ["", "ascii-art", "drawing", "ascii", "text", "plain", "none"]
 
+  /// Types that say a block is a drawing: RFCXML's `ascii-art`, which the legacy
+  /// parser sets on artwork shaped like one (#361), and the `drawing` some authors
+  /// write. Still `generic` to `canonical`: a drawing of what is left to a
+  /// recognizer, so a packet diagram typed `ascii-art` is still recognized as one.
+  static let drawings: Set<String> = ["ascii-art", "drawing"]
+
+  /// Whether `declared` says its block is a drawing.
+  public static func declaresDrawing(_ declared: String?) -> Bool {
+    guard let declared else { return false }
+    let name = declared.split(separator: ";").first.map(String.init) ?? ""
+    return drawings.contains(name.trimmingCharacters(in: .whitespaces).lowercased())
+  }
+
   /// Spellings authors use for a type the RPC spells otherwise.
   static let aliases: [String: String] = ["cbordiag": "cbor-diag"]
 

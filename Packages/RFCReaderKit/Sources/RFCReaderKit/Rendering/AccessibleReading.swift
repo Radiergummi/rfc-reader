@@ -139,80 +139,24 @@ public enum AccessibleReading {
   }
 
   /// Whether a verbatim block is said as a label rather than read: artwork that is
-  /// a drawing. Legacy documents set every block that is not prose as artwork —
-  /// grammars, message examples, tables — and those read perfectly well as words.
-  /// A block its rendering says something about is a diagram whatever it draws
-  /// with; only one with no rendering to say is left to the drawing-share guess.
-  /// Highlighted code never is: it is read as code.
+  /// a drawing. A block its rendering says something about is a diagram whatever it
+  /// draws with, and artwork typed as a drawing (`ascii-art`, which the legacy parser
+  /// sets on one, #361) is one; artwork with no such type, as RFCXML often leaves
+  /// it, is left to the drawing-share guess. Highlighted code never is: it is read
+  /// as code.
   public static func isDiagram(_ box: VerbatimBox) -> Bool {
     guard box.shown != .highlighted else { return false }
-    return box.spokenLabel != nil
-      || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
-  }
-
-  /// A drawing is mostly lines, boxes and arrows: at least this share of the
-  /// characters that are not white space are drawing characters. Measured, RFC 793's
-  /// header diagram sits at 0.76 and its state diagram at 0.71, RFC 5234's core
-  /// rules at 0.07 and RFC 8999's packet notation near 0.
-  static let drawingShare = 0.3
-
-  /// A drawing, unless most of its lines are words: then it is a table, whose
-  /// borders or underlines pass `drawingShare` but whose rows are data to be heard.
-  ///
-  /// A line is words when it has a letter and more than half of its characters
-  /// that are not white space are letters and digits. The letter keeps a bit
-  /// layout's numbered ruler out; "more than half" keeps out a box's middle line,
-  /// `| Client | -------> | Server |`, which is exactly half. "Most" is strictly
-  /// more than half of the lines that are not blank, because a bit layout
-  /// alternates field rows and borders: RFC 793's header has 7 lines of words in
-  /// 19, and its option layouts 2 in 4. So a bordered table needs more rows than
-  /// borders to be read, which one with a header row and two data rows does not.
-  static func looksLikeDrawing(_ text: String) -> Bool {
-    var characters = 0
-    var drawing = 0
-    var lines = 0
-    var linesOfWords = 0
-    for line in text.split(whereSeparator: \.isNewline) {
-      var lineCharacters = 0
-      var alphanumerics = 0
-      var hasLetter = false
-      for scalar in line.unicodeScalars where !scalar.properties.isWhitespace {
-        lineCharacters += 1
-        if isDrawing(scalar) {
-          drawing += 1
-        }
-        if scalar.properties.isAlphabetic {
-          hasLetter = true
-          alphanumerics += 1
-        } else if scalar.properties.numericType != nil {
-          alphanumerics += 1
-        }
-      }
-      guard lineCharacters > 0 else { continue }
-      characters += lineCharacters
-      lines += 1
-      if hasLetter && 2 * alphanumerics > lineCharacters {
-        linesOfWords += 1
-      }
-    }
-    return characters > 0
-      && Double(drawing) >= drawingShare * Double(characters)
-      && 2 * linesOfWords <= lines
-  }
-
-  /// The ASCII an RFC draws with, and Unicode's box drawing and block elements.
-  private static let asciiDrawing = Set("+-|/\\_=<>^*~".unicodeScalars)
-
-  private static func isDrawing(_ scalar: Unicode.Scalar) -> Bool {
-    asciiDrawing.contains(scalar) || (0x2500...0x259F).contains(scalar.value)
+    guard box.spokenLabel == nil else { return true }
+    guard box.content.kind == .artwork else { return false }
+    return ArtworkType.declaresDrawing(box.content.type)
+      || DrawingShape.looksLikeDrawing(box.content.text)
   }
 
   /// What VoiceOver says in place of a diagram. Not `Preformatted.name`, which is
   /// RFCXML's file name to extract the artwork to, not a title; and not the
   /// figure's caption, which in a document from XML is set as text right after
-  /// the diagram and would be read twice. A legacy document keeps its
-  /// "Figure 3: …" line inside the artwork, so there it goes unsaid with the
-  /// drawing (#361 splits it out into a real title).
+  /// the diagram and would be read twice. A legacy document's "Figure 3: …" line is
+  /// its figure's title as well (#361).
   public static let label = "Diagram"
 
   /// What the Diagrams rotor lists the diagram at `location` as: its figure's
