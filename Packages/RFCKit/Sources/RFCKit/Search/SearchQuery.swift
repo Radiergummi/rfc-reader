@@ -440,9 +440,11 @@ public enum SearchQuery {
     "\"", "\u{201C}", "\u{201D}", "\u{201E}", "\u{00AB}", "\u{00BB}", "\u{2039}", "\u{203A}",
   ]
 
-  /// The words of `query`, split at spaces outside quotes, each as typed. A quoted run
-  /// is one word with its quotes (`author:"Roy Fielding"`, `"key words"`), and an
-  /// unclosed one runs to the end of the query, which is still being typed (#177).
+  /// The words of `query`, split at whitespace outside quotes, each as typed: a tab or
+  /// a line break, as a query pasted across a wrapped line has, separates words as a
+  /// space does (#852). A quoted run is one word with its quotes and its whitespace
+  /// (`author:"Roy Fielding"`, `"key words"`), and an unclosed one runs to the end of
+  /// the query, which is still being typed (#177).
   ///
   /// A quote opens a run only at the start of a word or right after `key:`. Anywhere
   /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
@@ -452,7 +454,7 @@ public enum SearchQuery {
     var word = ""
     var quoted = false
     for character in query {
-      if character == " ", !quoted {
+      if character.isWhitespace, !quoted {
         if !word.isEmpty { words.append(word) }
         word = ""
         continue
@@ -469,8 +471,8 @@ public enum SearchQuery {
     return words
   }
 
-  /// The last word of `query` while the reader is still typing it, or nil once a
-  /// space outside quotes follows it and a new word begins. It is the last word
+  /// The last word of `query` while the reader is still typing it, or nil once
+  /// whitespace outside quotes follows it and a new word begins. It is the last word
   /// `words(in:)` finds, so an open quote keeps its spaces: in `by:"Roy s` it is the
   /// whole value, not `s`.
   static func wordBeingTyped(in query: String) -> String? {
@@ -497,14 +499,15 @@ public enum SearchQuery {
   /// `word` without the quotes of its quoted run: a quoted value's text, or a
   /// phrase's. The run's opening quote is the word's first character, and the next
   /// quote closes it; a quote anywhere else is the word's own, as `words(in:)` reads
-  /// it.
+  /// it. Each run of whitespace inside the quotes is one space, so a phrase or a
+  /// name pasted across a wrapped line reads as it would typed on one (#852).
   static func unquoted(_ word: some StringProtocol) -> String {
     guard let first = word.first, quotes.contains(first) else { return String(word) }
     var text = String(word.dropFirst())
     if let closing = text.firstIndex(where: quotes.contains) {
       text.remove(at: closing)
     }
-    return text
+    return text.replacing(#/\s+/#, with: " ")
   }
 
   /// A qualifier's value as written back: in quotes when it has a space, or it would
