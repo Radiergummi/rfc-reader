@@ -119,7 +119,8 @@
   }
 
   /// A reader window's properties. Every window and tab is a `ReaderWindow`; a script
-  /// asking one of these of any other window — the settings — gets an error.
+  /// asking one of these of any other window — the settings, or the primer — gets an
+  /// error.
   extension ReaderWindow {
     private var controller: ReaderWindowController? {
       ReaderWindowController.controller(for: self)
