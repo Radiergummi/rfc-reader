@@ -69,13 +69,8 @@ struct ProvenanceTests {
       ])
   }
 
-  @Test func `the chain says when it was published and what replaces it`() {
-    var metadata = advanced
-    metadata.obsoletedBy = [.rfc(9999)]
-    let chain = provenance(metadata)
-    #expect(chain.published == "Published June 2022")
-    #expect(chain.obsoletedBy == [.rfc(9999)])
-    #expect(provenance(advanced).obsoletedBy.isEmpty)
+  @Test func `the chain says when it was published`() {
+    #expect(provenance(advanced).published == "Published June 2022")
   }
 
   /// The chain's words are the interface's; the stream's and the status's names are

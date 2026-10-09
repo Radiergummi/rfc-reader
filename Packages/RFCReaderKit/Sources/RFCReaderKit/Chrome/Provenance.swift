@@ -33,16 +33,12 @@ public struct Provenance: Equatable, Sendable {
   /// from its stream to its status, and one whose status the index does not know
   /// ends at its stream or group.
   public let steps: [Step]
-  /// "Published June 2022", under the chain.
+  /// "Published June 2022", under the chain. What it obsoletes and updates, and what
+  /// replaces or updates it, stay in Relationships, where each is a document to open.
   public let published: String
-  /// The documents that replace this one, which the chain ends with; empty for a
-  /// current one. What it updates and what updates it stay in Relationships.
-  public let obsoletedBy: [DocumentID]
 
   /// The section's title.
   public let title: String
-  /// The caption over `obsoletedBy`.
-  public let obsoletedByLabel: String
 
   public init(_ metadata: RFCMetadata, locale: Locale = .interface) {
     var steps: [Step] = []
@@ -77,8 +73,6 @@ public struct Provenance: Equatable, Sendable {
     }
     self.steps = steps
     published = String(kit: "Published \(metadata.date.formatted(in: locale))", locale: locale)
-    obsoletedBy = metadata.obsoletedBy
     title = String(kit: "Provenance", locale: locale)
-    obsoletedByLabel = String(kit: "Obsoleted by", locale: locale)
   }
 }

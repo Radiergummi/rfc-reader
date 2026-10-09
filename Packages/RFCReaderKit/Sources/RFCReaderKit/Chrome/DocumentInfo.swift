@@ -17,8 +17,8 @@ public struct DocumentInfo: Equatable, Sendable {
   /// Today's status, for the header's badge.
   public let status: PublicationStatus
   public let isObsolete: Bool
-  /// When and how long: each a word or two over a caption. Who it is from and which
-  /// group is `provenance`'s (#364).
+  /// How long: a word or two over a caption. When, who it is from and which group are
+  /// `provenance`'s (#364); empty when the index does not know the length.
   public let facts: [Fact]
   /// Stream, working group and status, as one path (#364).
   public let provenance: Provenance
@@ -141,13 +141,8 @@ public struct DocumentInfo: Equatable, Sendable {
   }
 
   private static func facts(_ metadata: RFCMetadata, locale: Locale) -> [Fact] {
-    var facts = [
-      Fact(value: String(metadata.date.year), label: String(kit: "Published", locale: locale))
-    ]
-    if let pages = metadata.pageCount {
-      facts.append(Fact(value: String(pages), label: String(kit: "Pages", locale: locale)))
-    }
-    return facts
+    guard let pages = metadata.pageCount else { return [] }
+    return [Fact(value: String(pages), label: String(kit: "Pages", locale: locale))]
   }
 
   private static func authors(_ own: [Author]?, else indexed: [Author]) -> [Row] {

@@ -90,15 +90,10 @@ struct DocumentInfoTests {
     #expect(info(rich).sections.map(\.style) == [.list, .list, .card, .card, .list])
   }
 
-  /// The strip under the header: what someone deciding whether this is the right
-  /// document looks for first, each a short value over its caption. The stream and
-  /// the group are the provenance's (#364), so nothing is shown twice.
-  @Test func `the key facts are when and how long`() {
-    #expect(
-      info(rich).facts == [
-        DocumentInfo.Fact(value: "2022", label: "Published"),
-        DocumentInfo.Fact(value: "194", label: "Pages"),
-      ])
+  /// The strip under the provenance: how long the document is. When it was published,
+  /// the stream and the group are the provenance's (#364), so nothing is shown twice.
+  @Test func `the key fact is how long`() {
+    #expect(info(rich).facts == [DocumentInfo.Fact(value: "194", label: "Pages")])
     #expect(info(rich).provenance == Provenance(rich, locale: .english))
   }
 
@@ -187,10 +182,10 @@ struct DocumentInfoTests {
   /// shown.
   @Test func `what is not known is not shown`() {
     let info = info(bare)
-    #expect(info.facts.map(\.label) == ["Published"])
+    #expect(info.facts.isEmpty)
     #expect(info.sections.map(\.title) == ["Links"])
     let rows = info.sections.flatMap(\.rows).map(\.label)
-    for absent in ["Keywords", "Area", "DOI", "Errata", "Published as"] {
+    for absent in ["Keywords", "Area", "DOI", "Errata"] {
       #expect(!rows.contains(absent), "\(absent) shown for a document that has none")
     }
   }
