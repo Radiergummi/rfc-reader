@@ -84,8 +84,7 @@
     /// The application's `windows`, less any reader window that has closed but is
     /// still alive (#432). Closing empties such a window, so a script would see an
     /// invisible window that answers nothing. Open means still registered here, not
-    /// still having a controller: a print or export under way keeps the controller
-    /// of a window that has closed.
+    /// still alive: a print or export under way keeps a window that has closed.
     @objc var orderedWindows: [NSWindow] {
       NSApp.orderedWindows.filter { window in
         !(window is ReaderWindow) || controllers.contains { $0.window === window }

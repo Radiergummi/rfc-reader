@@ -70,13 +70,13 @@
       // front window's tab group rather than opening beside it.
       window.tabbingIdentifier = "org.rfc-editor.reader"
       window.tabbingMode = .preferred
+      output = DocumentOutputController(
+        window: window, navigation: navigation, reader: reader, library: library)
       // No frame autosave name here. It is one name per window, and giving every
       // window the same one made opening a tab collapse the window from 950 pt tall
       // to 307 and leave the new tab's split view laid out for the old width. The
       // first window of the session takes the name, in `AppDelegate`; a tab inherits
       // its sibling's frame from `addTabbedWindow(_:ordered:)`.
-      output = DocumentOutputController(
-        window: window, navigation: navigation, reader: reader, library: library)
       super.init(window: window)
       window.delegate = self
       makeRestorable(window)
