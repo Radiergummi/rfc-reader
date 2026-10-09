@@ -235,12 +235,32 @@
         }
       }
     },
+    "%lld not yet reviewed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld noch nicht geprüft"
+          }
+        }
+      }
+    },
     "%lld obsolete" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld veraltet"
+          }
+        }
+      }
+    },
+    "%lld rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld abgelehnt"
           }
         }
       }
@@ -471,6 +491,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jeder kann mitmachen, meist über die Mailingliste, und Entscheidungen fallen im Rough Consensus."
+          }
+        }
+      }
+    },
+    "Appendices %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge %@"
+          }
+        }
+      }
+    },
+    "Appendix %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhang %@"
           }
         }
       }
@@ -745,6 +785,16 @@
         }
       }
     },
+    "Couldn't download" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden fehlgeschlagen"
+          }
+        }
+      }
+    },
     "Datatracker" : {
       "localizations" : {
         "de" : {
@@ -835,6 +885,26 @@
         }
       }
     },
+    "Download Now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt laden"
+          }
+        }
+      }
+    },
+    "Downloading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird geladen …"
+          }
+        }
+      }
+    },
     "Drafts expire after six months unless revised, and are not meant to be cited as anything but work in progress. Many are revised until a stream approves them for publication as an RFC." : {
       "localizations" : {
         "de" : {
@@ -851,6 +921,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Editor"
+          }
+        }
+      }
+    },
+    "Editorial" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redaktionell"
           }
         }
       }
@@ -971,6 +1051,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empfehlungen der IETF für den Betrieb des Internets oder für ihre eigenen Prozesse."
+          }
+        }
+      }
+    },
+    "Held for Document Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für die nächste Revision vorgemerkt"
           }
         }
       }
@@ -1685,6 +1775,16 @@
         }
       }
     },
+    "Rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgelehnt"
+          }
+        }
+      }
+    },
     "Relationships" : {
       "localizations" : {
         "de" : {
@@ -1725,12 +1825,32 @@
         }
       }
     },
+    "Reported" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeldet"
+          }
+        }
+      }
+    },
     "Research Group" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Research Group"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederholen"
           }
         }
       }
@@ -1821,6 +1941,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zuletzt gelesene durchsuchen"
+          }
+        }
+      }
+    },
+    "Section %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt %@"
+          }
+        }
+      }
+    },
+    "Sections %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitte %@"
           }
         }
       }
@@ -1921,6 +2061,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Team"
+          }
+        }
+      }
+    },
+    "Technical" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technisch"
           }
         }
       }
@@ -2253,6 +2403,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktualisiert und Aktualisiert durch"
+          }
+        }
+      }
+    },
+    "Verified" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigt"
+          }
+        }
+      }
+    },
+    "Waiting for Wi-Fi" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf WLAN"
+          }
+        }
+      }
+    },
+    "Waiting for a connection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf eine Verbindung"
+          }
+        }
+      }
+    },
+    "Waiting: Low Data Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Datensparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: Low Power Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Stromsparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: cellular data is off for this app" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Mobile Daten sind für diese App aus"
+          }
+        }
+      }
+    },
+    "Whole document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganzes Dokument"
           }
         }
       }

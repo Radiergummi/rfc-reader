@@ -155,6 +155,58 @@ struct IndexSearchTests {
     #expect(inOrder.score == reversed.score + 50)
   }
 
+  /// A phrase is a query that reads as a title on its own, so a title holding it
+  /// ranks above a keyword that is exactly the phrase; a single word earns nothing.
+  @Test func `a single quoted phrase earns the title bonus`() throws {
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026)),
+      RFCMetadata(
+        id: .rfc(2), title: "A Profile", date: PublicationDate(year: 2026), keywords: ["key words"]),
+    ])
+    let search = IndexSearch(index: index)
+    #expect(search.search(#""key words""#).map(\.rfc.number) == [1, 2])
+    let word = try #require(search.search("key").first { $0.rfc.number == 1 })
+    #expect(word.score == 60)
+  }
+
+  /// French typography puts a space inside guillemets; it is not part of the phrase,
+  /// and a single word padded with one is no phrase.
+  @Test func `a phrase loses the spaces inside its quotes`() throws {
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(1), title: "Key Words for Requirement Levels", date: PublicationDate(year: 2026))
+    ])
+    let search = IndexSearch(index: index)
+    let phrase = try #require(search.search(#""key words""#).first)
+    for query in ["\u{00AB} key words \u{00BB}", "\u{00AB}\u{00A0}key words\u{00A0}\u{00BB}"] {
+      #expect(search.search(query).first?.score == phrase.score, "\(query)")
+    }
+    #expect(search.search(#""key ""#).first?.score == 60)
+  }
+
+  // MARK: « » and ‹ › (#454)
+
+  /// A French or Swiss keyboard quotes with guillemets.
+  @Test(arguments: [
+    "author:\u{00AB}Roy Fielding\u{00BB} cache",
+    "author:\u{2039}Roy Fielding\u{203A} cache",
+  ])
+  func `guillemets quote a value`(query: String) {
+    let parsed = IndexSearch.parseQuery(query)
+    #expect(parsed.filters.author == "roy fielding")
+    #expect(parsed.text == "cache")
+    #expect(
+      SearchQuery.format(text: parsed.text, filters: parsed.filters)
+        == #"author:"roy fielding" cache"#)
+  }
+
+  @Test func `a phrase in guillemets is one term`() {
+    let words = SearchQuery.words(in: "\u{2039}key words\u{203A} for")
+    #expect(words == ["\u{2039}key words\u{203A}", "for"])
+    #expect(SearchQuery.unquoted(words[0]) == "key words")
+  }
+
   // MARK: Authors (#177)
 
   /// The index holds an author as an initial and a surname, "R. Fielding"; a reader
@@ -216,6 +268,75 @@ struct IndexSearchTests {
     name: String, query: String, matches: Bool
   ) {
     #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  /// The index holds one initial for most authors, so only the first given name of
+  /// the query has to fit one; a middle name or initial after it is passed over.
+  @Test(arguments: [
+    ("R. Fielding", "roy t. fielding", true),
+    ("R. Fielding", "r. t. fielding", true),
+    ("D. Eastlake 3rd", "donald e. eastlake", true),
+    ("R. Fielding", "mark t. fielding", false),
+    ("R. Fielding", "t. roy fielding", false),
+  ])
+  func `only the first given name has to fit an initial`(
+    name: String, query: String, matches: Bool
+  ) {
+    #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  /// `r.` is an initial on its way to `R. Fielding`, not the start of a surname, so
+  /// a value that ends in one matches the authors its first given name fits. A word
+  /// without a dot still is the start of a surname, and a dotted word still matches
+  /// a surname it is part of.
+  @Test(arguments: [
+    ("R. Fielding", "r.", true),
+    ("R. Fielding", "r. t.", true),
+    ("R. Fielding", "roy t.", true),
+    ("J.K. Reynolds", "k.", true),
+    ("J.K. Reynolds", "j.k", true),
+    ("JP. Vasseur", "jp.", true),
+    ("L-E. Jonsson", "l-e.", true),
+    ("M. Nottingham", "r.", false),
+    ("R. Fielding", "mark t.", false),
+    ("RFC Editor", "r.", false),
+    ("M. St. Johns", "st.", true),
+    ("A. Smith Jr.", "smith jr.", true),
+    ("S. Jones", "smith jr.", false),
+    ("S. Jones", "st.", false),
+    ("S. Jones", "sr.", false),
+    ("D. Jones", "dr.", false),
+    ("M. Jones", "mr.", false),
+    ("R. Fielding", ".", false),
+    ("E. Rescorla", "r", true),
+    ("R. Fielding", "r", false),
+  ])
+  func `a value that ends in an initial matches the authors its given name fits`(
+    name: String, query: String, matches: Bool
+  ) {
+    #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
+  }
+
+  /// From the first initial's dot on, every keystroke of the name keeps the author.
+  @Test(arguments: [
+    ("R. Fielding", "R. Fielding"),
+    ("R. Fielding", "Roy T. Fielding"),
+    ("J.K. Reynolds", "J.K. Reynolds"),
+  ])
+  func `an author stays matched while the name is typed after an initial`(
+    name: String, typed: String
+  ) throws {
+    let author = AuthorName(name)
+    let dot = try #require(typed.firstIndex(of: "."))
+    for end in typed[dot...].indices {
+      let query = typed[...end]
+      #expect(author.matches(AuthorQuery(String(query))), "\(query)")
+    }
+  }
+
+  @Test func `an initial being typed finds the author's documents`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search(#"author:"R."#).contains { $0.rfc.number == 9110 })
   }
 
   @Test func `filters apply`() throws {
@@ -288,5 +409,66 @@ struct IndexSearchTests {
   @Test func `no match is empty`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     #expect(search.search("zzzz-nothing-matches").isEmpty)
+  }
+
+  // MARK: Diacritics (#425)
+
+  /// Hand-written entries: an author, a title word and a working group with accents.
+  /// The author and RFC 9003's title are decomposed, a letter and its mark apart, as
+  /// some sources write them; the rest precomposed.
+  private static let accented = IndexSearch(
+    index: RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(9001), title: "A Widget Protocol", authors: [Author(name: "M. Ku\u{0308}hlewind")],
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9002), title: "The Fa\u{00E7}ade Pattern for Gadgets",
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9003), title: "Re\u{0301}sume\u{0301} Messages", date: PublicationDate(year: 2024),
+        workingGroup: "Na\u{00EF}ve"),
+    ]))
+
+  private func numbers(_ query: String) -> [Int] {
+    Self.accented.search(query, limit: .max).map(\.rfc.number)
+  }
+
+  /// A name found by `author:` is found by free text too: both fold diacritics.
+  @Test func `free text finds an author without the accents`() {
+    #expect(numbers("kuhlewind") == [9001])
+    #expect(numbers("K\u{00FC}hlewind") == [9001])
+    #expect(numbers("author:kuhlewind") == numbers("kuhlewind"))
+  }
+
+  @Test func `a title word is found without its accent`() {
+    #expect(numbers("facade") == [9002])
+    #expect(numbers("fa\u{00E7}ade") == [9002])
+  }
+
+  /// A precomposed letter and its decomposed spelling are the same letter, on either
+  /// side: the index holds `e` and U+0301 here, the query types `é`.
+  @Test func `precomposed and decomposed letters are the same`() {
+    #expect(numbers("r\u{00E9}sum\u{00E9}") == [9003])
+    #expect(numbers("resume") == [9003])
+    #expect(numbers("ku\u{0308}hlewind") == [9001])
+  }
+
+  @Test func `a working group is matched without its accents`() {
+    #expect(numbers("wg:naive") == [9003])
+    #expect(numbers("wg:Na\u{00EF}ve") == [9003])
+  }
+
+  /// Completion and tokens compare a group as the search matches it, so `wg:naive`
+  /// becomes a token, and `wg:naiv` is offered the group the index spells with an
+  /// accent.
+  @Test func `wg completion and tokens fold as the search does`() {
+    let groups = SearchQuery.knownWorkingGroups(in: Self.accented.index)
+    #expect(groups == ["naive"])
+    #expect(
+      SearchQuery.tokenized("wg:naive ", workingGroups: groups).terms.map(\.word) == ["wg:naive"])
+    #expect(SearchQuery.tokenized("wg:Na\u{00EF}ve ", workingGroups: groups).terms.count == 1)
+    #expect(
+      SearchQuery.suggestions(for: "wg:naiv", in: Self.accented.index).map(\.completion)
+        == ["wg:naive"])
   }
 }

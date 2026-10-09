@@ -104,6 +104,15 @@ final class LibraryModel {
   /// `groups.json`: the groups the index names, for a working group's card (#363).
   /// Nil until the cached copy or a fetch has arrived.
   private(set) var workingGroups: WorkingGroups?
+  /// Every RFC's errata (#387), from the RFC Editor's feed: the copy kept first, then
+  /// a check once a day. Nil until either has been read.
+  private(set) var errata: Errata?
+  @ObservationIgnored private var isRefreshingErrata = false
+  /// When this run last had an answer from the RFC Editor for the feed, whatever came
+  /// of it: a feed that fails to decode or to be kept records no check, and would
+  /// otherwise be downloaded again at every activation. A request that fails is asked
+  /// again at the next activation, as the other refreshes are.
+  @ObservationIgnored private var errataAskedAt: Date?
   @ObservationIgnored private var workingGroupsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingWorkingGroups = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
@@ -154,12 +163,24 @@ final class LibraryModel {
   /// rather than worked out on every read: the sidebar counts it as it draws.
   private(set) var availableOfflineNumbers: Set<Int> = []
 
-  /// Moves, releases and fetches bodies to match `offlineMarks`.
+  /// Moves, releases and fetches bodies to match `offlineMarks`. Its fetches that
+  /// nobody waits for take only a path that is neither metered nor in Low Data Mode,
+  /// and fail rather than wait when the device moves to one.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
-    store: store, client: client
+    store: store, client: client,
+    clientFailingOnExpensiveNetworks: RFCEditorClient(
+      transport: URLSessionTransport(session: .rfcEditorFailingOnExpensiveNetworks))
   ) { [weak self] id in
     self?.index?[id]?.formats ?? []
   }
+
+  /// Where each document marked Keep Offline stands while its body is not on the
+  /// device: waiting and why, downloading, or failed.
+  var offlineStatus: OfflineStatus { offlineKeeper.status }
+
+  /// The path and Low Power Mode, which decide whether the keeper fetches a mark
+  /// that arrived from another device now or waits.
+  @ObservationIgnored private let network = NetworkConditions()
 
   /// The RFCs the installed legacy pack lists as text that only points to its
   /// original (#316): the reader shows their original without a load, offline too.
@@ -208,9 +229,16 @@ final class LibraryModel {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
         Task(name: "Refresh working groups") { await self.refreshWorkingGroups() }
+        Task(name: "Refresh errata") { await self.refreshErrata() }
         self.recheckSpotlight()
       }
     }
+    network.start(
+      // A new path: what waited may go ahead, what runs may have to wait, and what
+      // failed may succeed on it.
+      pathChanged: { [weak self] in self?.reconcileOffline(forgettingFailures: true) },
+      // Low Power Mode decides whether a fetch waits, not whether it fails.
+      powerChanged: { [weak self] in self?.reconcileOffline() })
   }
 
   private func refresh(_ changed: UserDataMirrors) {
@@ -247,9 +275,21 @@ final class LibraryModel {
   /// lists, and applying the index runs this; nor before the marks have been read.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
   /// saved: reconciling against them would move every kept body into the cache.
-  private func reconcileOffline() {
-    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory else { return }
-    offlineKeeper.reconcile(wanted: offlineMarks)
+  /// Nor before the network path is known, which decides whether the fetches it
+  /// owes start now: every one of them is a mark nobody on this device is waiting
+  /// for, since a tapped one is fetched at once.
+  private func reconcileOffline(forgettingFailures: Bool = false) {
+    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
+      let policy = network.decision(for: .syncedMark)
+    else { return }
+    offlineKeeper.reconcile(
+      wanted: offlineMarks, policy: policy, forgettingFailures: forgettingFailures)
+  }
+
+  /// Fetches a document marked Keep Offline on whatever path the device has, from
+  /// its row's Download Now or Retry. The keeper logs a failure, and its row says it.
+  func downloadNow(_ id: DocumentID) {
+    Task(name: "Download now") { try? await offlineKeeper.fetchNow(id) }
   }
 
   private func refreshRecentlyReadCount() {
@@ -419,6 +459,7 @@ final class LibraryModel {
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
+    Task(name: "Refresh errata") { await refreshErrata() }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -917,6 +958,48 @@ final class LibraryModel {
     }
   }
 
+  // MARK: - Errata
+
+  /// The copy of the errata feed kept, read the first time, then the RFC Editor asked
+  /// for a newer one once a day, as the index is (#314): with the validators of the
+  /// one kept, so an unchanged feed is a `304`, and on a network that is neither
+  /// metered nor in Low Data Mode, since nobody is waiting for it. A failure keeps
+  /// what there is and is logged, not shown.
+  func refreshErrata() async {
+    guard !isRefreshingErrata else { return }
+    isRefreshingErrata = true
+    defer { isRefreshingErrata = false }
+    if errata == nil, let data = await store.cachedErrata() {
+      errata = try? await Self.decodeErrata(data)
+    }
+    // Without a feed in memory, a `304` would leave nothing to show.
+    let kept = errata == nil ? nil : store.errataCheck()
+    if let kept, !IndexCheck.isDue(checkedAt: kept.checkedAt, now: .now) { return }
+    if let errataAskedAt, !IndexCheck.isDue(checkedAt: errataAskedAt, now: .now) { return }
+    do {
+      let fetched = try await clientOnCheapNetworks.fetchErrataData(
+        unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
+      errataAskedAt = .now
+      switch fetched {
+      case .unchanged:
+        if let kept { try await store.recordUnchangedErrata(kept) }
+      case .changed(let data, let validators):
+        // Shown before it is kept, so a failed write loses only the copy on disk.
+        errata = try await Self.decodeErrata(data)
+        try await store.storeErrata(data, validators: validators)
+      }
+    } catch {
+      libraryLog.error(
+        "refreshing the errata failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// Off the main actor: the feed is every erratum ever reported.
+  @concurrent
+  private static func decodeErrata(_ data: Data) async throws -> Errata {
+    try Errata.decode(data)
+  }
+
   /// What a working group's card says: the group as the file describes it, if it
   /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
   /// whatever the list's options hide: the card describes the group, not the list.
@@ -947,7 +1030,7 @@ final class LibraryModel {
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
-  /// Every working group the index names, lowercased, derived with the index for the
+  /// Every working group the index names, folded, derived with the index for the
   /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
   /// them on every body pass (#21).
   private(set) var knownWorkingGroups: Set<String> = []
@@ -1400,10 +1483,11 @@ final class LibraryModel {
   /// Marks `id` Keep Offline, or removes its mark, as the Info pane's toggle does
   /// (#358). Marking moves a copy already read, or downloads one now, on any
   /// network, since somebody is waiting for it, and throws when that fails: the mark
-  /// stays, and the next reconciliation tries again. Unmarking moves the body back
-  /// into the reading cache rather than deleting it, and leaves a download running
-  /// for it. A mark that could not be saved is logged, as a bookmark's is (#125),
-  /// and leaves the toggle as it was.
+  /// stays, and its row in Available Offline offers Retry until the device moves to
+  /// another network, when the keeper tries again by itself. Unmarking moves the
+  /// body back into the reading cache rather than deleting it, and leaves a download
+  /// running for it. A mark that could not be saved is logged, as a bookmark's is
+  /// (#125), and leaves the toggle as it was.
   func setKeptOffline(_ id: DocumentID, _ isKept: Bool) async throws {
     guard mark(id, keptOffline: isKept), isKept else { return }
     try await offlineKeeper.fetchNow(id)

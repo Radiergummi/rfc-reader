@@ -12,6 +12,7 @@
       hover.attach(to: textView)
       hover.target = { [weak self] point in self?.reference(atWindowPoint: point) }
       hover.restingTarget = { [weak self] in self?.referenceUnderRestingPointer() }
+      hover.pointerExited = { [weak self] in self?.hoverSectionNumber(under: nil) }
       hover.card = { [weak self] target in
         guard let self, let environment = self.environment,
           let preview = self.preview(for: target.box.reference),

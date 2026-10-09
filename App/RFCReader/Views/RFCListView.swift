@@ -86,6 +86,8 @@ struct RFCListView: View {
     // itself, which is a linear search per row over a list that can be 9,842 rows
     // long.
     let bookmarked = library.bookmarkedDocuments
+    // Only Available Offline's rows say where their bodies stand (#358).
+    let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
@@ -95,10 +97,12 @@ struct RFCListView: View {
     // platform's multi-select chord rather than ours to take.
     let window = rows.prefix(limit)
     let row = { (row: LibraryRow, showsYear: Bool) in
-      RFCRow(
-        row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
-        filter: shown.filter
-      )
+      OfflineStated(document: row.id, isShown: showsOfflineState) { offline in
+        RFCRow(
+          row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
+          filter: shown.filter, offline: offline
+        ) { library.downloadNow(row.id) }
+      }
       .tag(row.id)
       // A combined element with no trait has the role AXUnknown on macOS, which
       // says nothing of what it is (#300). Here, where the row selects rather
@@ -423,6 +427,20 @@ struct IndexStatusView: View {
   }
 }
 
+/// A row that reads where its document's body stands itself, so a fetch starting or
+/// ending redraws the rows rather than the whole list (#358). Reads nothing when not
+/// `isShown`, so the rows of other lists do not redraw at all.
+private struct OfflineStated<Content: View>: View {
+  @Environment(LibraryModel.self) private var library
+  let document: DocumentID
+  let isShown: Bool
+  @ViewBuilder let content: (OfflineRowState?) -> Content
+
+  var body: some View {
+    content(isShown ? library.offlineStatus.state(of: document) : nil)
+  }
+}
+
 /// A library row: an RFC, or a BCP, STD or FYI bookmarked or read as itself
 /// (#321), which shows the RFCs it names where an RFC shows its status and group.
 struct RFCRow: View {
@@ -433,6 +451,11 @@ struct RFCRow: View {
   /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
   /// not each say "pppext", nor the Internet Standards' each say "STD".
   var filter: LibraryFilter?
+  /// In Available Offline, where the document's body stands while it is not on
+  /// the device yet (#358).
+  var offline: OfflineRowState?
+  /// Download Now or Retry, beside `offline`: fetches on any path.
+  var fetchNow: () -> Void = {}
 
   private var rfc: RFCMetadata? { row.rfc }
 
@@ -502,12 +525,41 @@ struct RFCRow: View {
           }
         }
       #endif
+      if let offline {
+        offlineLine(offline)
+      }
     }
     .padding(.vertical, 2)
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(row.accessibilityLabel(isBookmarked: isBookmarked))
+    .accessibilityValue(offline.map { Text(verbatim: $0.description()) } ?? Text(verbatim: ""))
+    .accessibilityActions {
+      // The row is one element, so its button is reached as an action of it.
+      if let action = offline?.action() {
+        Button(action: fetchNow) { Text(verbatim: action) }
+      }
+    }
+  }
+
+  /// What the body is waiting for, or that it is downloading or failed, with Download
+  /// Now or Retry beside it.
+  private func offlineLine(_ state: OfflineRowState) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Text(verbatim: state.description())
+        .foregroundStyle(.secondary)
+      if let action = state.action() {
+        // Borderless, so it is pressed on its own rather than selecting the row.
+        Button(action: fetchNow) { Text(verbatim: action) }
+          .buttonStyle(.borderless)
+      }
+    }
+    #if os(macOS)
+      .font(.caption2)
+    #else
+      .font(.subheadline)
+    #endif
   }
 
   #if os(macOS)
