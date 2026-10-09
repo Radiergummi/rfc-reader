@@ -42,6 +42,22 @@ struct BoxTableTests {
     #expect(Self.cells(table) == [["one", "1"], ["two", "2"]])
   }
 
+  /// A body of one row has no rule between rows: a line whose first cell is empty goes
+  /// on with the row above, and a word broken after `/` or `-` is joined whole.
+  @Test func `a wrapped cell in a body of one row is one cell`() {
+    let table = LegacyTextParser.boxTable([
+      "+=======+==================+",
+      "| Kind  | Reference/       |",
+      "|       | Description      |",
+      "+=======+==================+",
+      "| one   | The only row, it |",
+      "|       | wraps once       |",
+      "+-------+------------------+",
+    ])
+    #expect(table?.header == [["Kind", "Reference/Description"]])
+    #expect(table?.rows == [["one", "The only row, it wraps once"]])
+  }
+
   /// The columns come from the rules' `+`s: a `|` inside a cell is the cell's text.
   @Test func `a bar inside a cell is text`() {
     let table = LegacyTextParser.boxTable([

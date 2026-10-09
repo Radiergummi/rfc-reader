@@ -15,8 +15,9 @@ extension LegacyTextParser {
   ///
   /// The rows above a `+===+` rule are the header. Where a rule stands between the
   /// body's rows, as xml2rfc draws one between every two, the lines between two rules
-  /// are one row, and a cell running over them is joined; where none does, each line
-  /// is a row.
+  /// are one row, and a cell running over them is joined; where none does, a line
+  /// whose first cell is empty goes on with the row above, as a wrapped cell's does,
+  /// and any other line is a row of its own.
   ///
   /// A table has two columns and two rows at least: a box of one cell, or a row of
   /// fields with their widths (RFC 810's address layouts), is a drawing.
@@ -55,18 +56,37 @@ extension LegacyTextParser {
     func joined(_ lines: [Substring]) -> [String] {
       let rows = lines.map(cells)
       return rows[0].indices.map { column in
-        rows.map { $0[column] }.filter { !$0.isEmpty }.joined(separator: " ")
+        joiningWrapped(rows.map { $0[column] }.filter { !$0.isEmpty })
       }
     }
     let header = stretches.prefix(headerCount).map { joined($0.lines) }
     let body = Array(stretches.dropFirst(headerCount))
     // A rule between the body's rows says its stretches are rows; without one, its
-    // one stretch is a row a line.
+    // one stretch is a row a line, but for the lines that go on with a wrapped cell.
     let rows =
       body.count > 1
-      ? body.map { joined($0.lines) } : body.flatMap { $0.lines.map(cells) }
+      ? body.map { joined($0.lines) }
+      : body.flatMap { stretch in
+        stretch.lines.reduce(into: [[Substring]]()) { rows, line in
+          if rows.isEmpty || cells(line).first?.isEmpty == false {
+            rows.append([line])
+          } else {
+            rows[rows.count - 1].append(line)
+          }
+        }
+        .map(joined)
+      }
     guard header.count + rows.count >= 2 else { return nil }
     return BoxTable(header: header, rows: rows)
+  }
+
+  /// A cell's lines as one: joined with a space, but after a line that ends in `-` or
+  /// `/`, where xml2rfc breaks a word (`Reference/` `Description`), with none.
+  private static func joiningWrapped(_ pieces: [String]) -> String {
+    pieces.reduce(into: "") { text, piece in
+      if !text.isEmpty, text.last != "-", text.last != "/" { text += " " }
+      text += piece
+    }
   }
 
   /// The columns of a rule's `+`s: a line of `+` and runs of `-` or `=` only, starting
