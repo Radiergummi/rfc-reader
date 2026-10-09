@@ -109,7 +109,7 @@ public final class ReaderPaletteBox: Sendable {
   /// Replaces the palette and the contrast, and says whether either changed, so
   /// that the caller redraws only then.
   @discardableResult
-  public func replace(with palette: ReaderPalette, outlinesEveryChip: Bool = false) -> Bool {
+  public func replace(with palette: ReaderPalette, outlinesEveryChip: Bool) -> Bool {
     let drawing = Drawing(palette: palette, outlinesEveryChip: outlinesEveryChip)
     return value.withLock { current in
       guard current != drawing else { return false }

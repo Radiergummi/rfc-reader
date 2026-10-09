@@ -22,13 +22,13 @@ struct ReaderPaletteTests {
   /// The caller redraws only when the palette changed.
   @Test func `the box says whether a replacement changed it`() {
     let box = ReaderPaletteBox()
-    #expect(!box.replace(with: .automatic))
+    #expect(!box.replace(with: .automatic, outlinesEveryChip: false))
     let other = ReaderPalette(
       id: "other", cardFill: RFCColors.label, asideFill: RFCColors.label, rule: RFCColors.label,
       stroke: RFCColors.label, chipTint: RFCColors.label)
-    #expect(box.replace(with: other))
+    #expect(box.replace(with: other, outlinesEveryChip: false))
     #expect(box.palette == other)
-    #expect(!box.replace(with: other))
+    #expect(!box.replace(with: other, outlinesEveryChip: false))
   }
 
   /// An informative chip is drawn as an outline, and a normative one filled; with
@@ -56,7 +56,7 @@ struct ReaderPaletteTests {
     #expect(box.outlinesEveryChip)
     #expect(box.palette == .automatic)
     #expect(!box.replace(with: .automatic, outlinesEveryChip: true))
-    #expect(box.replace(with: .automatic))
+    #expect(box.replace(with: .automatic, outlinesEveryChip: false))
     #expect(!box.outlinesEveryChip)
   }
 }
