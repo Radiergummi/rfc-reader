@@ -278,8 +278,6 @@ struct AccessibleReadingTests {
     #expect(labels == diagrams + chips)
   }
 
-  /// Guard level: what makes a block of artwork a drawing, over hand-written lines
-  /// in the shape of an RFC's.
   /// Source code is never a diagram, whatever it looks like.
   @Test func `source code that looks like a drawing is not a diagram`() {
     let box = VerbatimBox(Preformatted(kind: .sourceCode, text: diagram))
@@ -314,11 +312,22 @@ struct AccessibleReadingTests {
   }
 
   /// Whether a block is said as a diagram is its rendering's to say where it has
-  /// one, and the drawing-share heuristic's only where it has none.
+  /// one, then its type's, and the drawing-share heuristic's only where it has neither
+  /// (`DrawingShapeTests` in RFCKit).
   @Test func `a rendered block with a spoken label is a diagram whatever it draws with`() {
     let box = VerbatimBox(
       Preformatted(kind: .artwork, text: "mostly words and few lines"), shown: .rendered,
       spokenLabel: "Packet diagram")
     #expect(AccessibleReading.isDiagram(box))
+  }
+
+  /// Artwork typed as a drawing, as the legacy parser types one (#361), is a diagram
+  /// whatever its shape; untyped artwork of words is not.
+  @Test func `artwork typed as a drawing is a diagram`() {
+    let words = "client sends HELLO\nserver sends WELCOME"
+    #expect(
+      AccessibleReading.isDiagram(
+        VerbatimBox(Preformatted(kind: .artwork, text: words, type: "ascii-art"))))
+    #expect(!AccessibleReading.isDiagram(VerbatimBox(Preformatted(kind: .artwork, text: words))))
   }
 }

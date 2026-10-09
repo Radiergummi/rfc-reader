@@ -77,4 +77,14 @@ struct DrawingShapeTests {
   func `text set as artwork is not a diagram`(artwork: String) {
     #expect(!DrawingShape.looksLikeDrawing(artwork))
   }
+
+  /// RFCXML's `ascii-art` says a block is a drawing, as the legacy parser sets it
+  /// (#361), and still says nothing about what is drawn, so a recognizer may say.
+  @Test func `ascii-art declares a drawing and no more`() {
+    #expect(ArtworkType.declaresDrawing("ascii-art"))
+    #expect(ArtworkType.declaresDrawing("ASCII-Art"))
+    #expect(!ArtworkType.declaresDrawing("abnf"))
+    #expect(!ArtworkType.declaresDrawing(nil))
+    #expect(ArtworkType.canonical("ascii-art") == nil)
+  }
 }
