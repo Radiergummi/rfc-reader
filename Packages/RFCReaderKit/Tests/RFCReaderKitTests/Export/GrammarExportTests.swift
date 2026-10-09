@@ -27,11 +27,12 @@ struct GrammarExportTests {
     #expect(ExportFormat.available(for: try Fixtures.rfc8999()) == [.pdf])
   }
 
-  /// A grammar in RFC 822's dialect is not RFC 5234 ABNF, which a `.abnf` file is:
-  /// a tool reading it would refuse the `|` (#696).
-  @Test func `a grammar in RFC 822's dialect is not exported`() {
-    let grammar = Preformatted(
-      kind: .sourceCode, text: "greeting = salutation | name\nname = 1*ALPHA", type: "abnf822")
+  /// A grammar in the bar dialect is not RFC 5234 ABNF, which a `.abnf` file is: a
+  /// tool reading it would refuse the `|`, and its blocks without one are the same
+  /// grammar's (#696).
+  @Test(arguments: ["greeting = salutation | name\nname = 1*ALPHA", "name = 1*ALPHA"])
+  func `a grammar in the bar dialect is not exported`(text: String) {
+    let grammar = Preformatted(kind: .sourceCode, text: text, type: "abnf822")
     let document = RFCDocument(
       header: DocumentHeader(id: .rfc(999), title: "Old Grammar"),
       sections: [

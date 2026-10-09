@@ -581,13 +581,16 @@ struct CorpusBackedABNFTests {
 
   /// RFC 2326, RFC 2569 and RFC 2910 each define one rule name twice where `=/` or
   /// another name was meant; their repetitions and numeric values say they are
-  /// grammars all the same.
+  /// grammars all the same. RFC 2326's is in the bar dialect, as HTTP's of its time
+  /// (#696).
   @Test(arguments: [
     ("rfc2326", "utc-time"), ("rfc2569", "job-number"), ("rfc2910", "delimiter-tag"),
   ])
   func `a grammar that defines one name twice is still ABNF`(stem: String, rule: String) throws {
     let blocks = try Self.preformatted(stem).filter { $0.text.contains(rule) }
-    #expect(blocks.contains { $0.kind == .sourceCode && $0.type == "abnf" }, "\(stem)")
+    #expect(
+      blocks.contains { $0.kind == .sourceCode && ["abnf", "abnf822"].contains($0.type) },
+      "\(stem)")
   }
 
   /// RFC 1122 and RFC 6654 set legends as `name = what it names`, where the first word
@@ -927,5 +930,17 @@ struct CorpusBackedGrammarTests {
     let block = try #require(blocks.first { $0.text.contains("/  Require") })
     #expect(block.type == "abnf")
     #expect(block.text.split(separator: "\n").first?.hasPrefix("/") == false)
+  }
+
+  /// RFC 2616 writes its grammar with `|`, a rule or a few at a time between prose.
+  /// It is one grammar in the bar dialect: no block of it is typed as RFC 5234's, the
+  /// ones without a `|` included (#696).
+  @Test func `RFC 2616's grammar is in one dialect`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2616"))
+    let types = document.blocks.compactMap { block -> String? in
+      if case .preformatted(let preformatted) = block { preformatted.type } else { nil }
+    }
+    #expect(types.filter { $0 == "abnf822" }.count > 20)
+    #expect(!types.contains("abnf"))
   }
 }

@@ -705,7 +705,7 @@ public enum LegacyTextParser {
       }
       flat.append(section)
     }
-    return Self.finished(flat, header: header)
+    return Self.finished(Self.unifyingGrammarDialect(flat), header: header)
   }
 
   /// The entries of each references section that is a bibliography, by the section's

@@ -15,9 +15,9 @@ import Foundation
 /// asks for more than one rule, or for syntax only a grammar has.
 public enum ABNF {
   /// The notation a grammar is written in: RFC 5234's, which alternates with `/`, or
-  /// the one RFC 822 and RFC 2616 write their grammars in, which alternates with `|`
-  /// and has no `=/` (#696). The legacy parser types a grammar in the second as
-  /// `abnf822`, which no RFC 5234 tool reads.
+  /// the one HTTP's grammars were written in before it (RFC 1945, RFC 2616), which
+  /// alternates with `|`, names rules with `_` too, and has no `=/` (#696). The legacy
+  /// parser types a grammar in the second as `abnf822`, which no RFC 5234 tool reads.
   public enum Dialect: Sendable {
     case rfc5234
     case rfc822
@@ -102,6 +102,9 @@ public enum ABNF {
       !definesANameTwice || rules.contains(where: \.usesRepetitionOrNumericValue)
     else { return false }
     if rules.contains(where: \.usesGrammarSyntax) { return true }
+    // In the bar dialect, rules that only name one another are identifiers as often:
+    // `tmp_len = buf_len` in pseudocode.
+    guard dialect == .rfc5234 else { return false }
     let names = Set(rules.map { $0.name.lowercased() })
     return rules.count >= 2
       && rules.contains { rule in
@@ -314,7 +317,9 @@ public enum ABNF {
           position = start
           return true
         }
-        usesGrammarSyntax = true
+        // `|` is C's bitwise or as well, so an alternative alone says nothing in the
+        // bar dialect: `flags = SYN | ACK`.
+        if dialect == .rfc5234 { usesGrammarSyntax = true }
         skipSpace()
         guard concatenation() else { return false }
       }
