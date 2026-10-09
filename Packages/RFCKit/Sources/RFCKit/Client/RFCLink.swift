@@ -143,11 +143,14 @@ public struct RFCLink: Hashable, Sendable {
     case "www.rfc-editor.org", "rfc-editor.org":
       // /rfc/rfc9110.html, /rfc/rfc9110, /info/rfc9110, /rfc/rfc9110.txt, /errata/rfc9110,
       // and the PDF, /rfc/rfc9110.pdf or a legacy RFC's /rfc/pdfrfc/rfc2616.txt.pdf;
-      // and, but strictly, any other path whose last component names a document, as
-      // /bcp/bcp14.txt or /in-notes/rfc2119.txt does.
+      // and, except strictly, any other path whose last component names a document
+      // with its series, as /bcp/bcp14.txt or /in-notes/rfc2119.txt does. A bare
+      // number elsewhere on the site is no RFC.
+      let last = components.last ?? ""
       guard components.count >= 2,
-        !strictly || ["rfc", "info", "errata"].contains(components[0]),
-        let id = DocumentID(parsing: Self.stem(of: components[components.count - 1]))
+        ["rfc", "info", "errata"].contains(components[0])
+          || (!strictly && last.first?.isLetter == true),
+        let id = DocumentID(parsing: Self.stem(of: last))
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "www.ietf.org", "ietf.org":

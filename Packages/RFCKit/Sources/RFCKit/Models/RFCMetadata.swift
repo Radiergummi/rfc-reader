@@ -144,12 +144,17 @@ public struct Author: Hashable, Sendable, Codable {
   }
 
   /// The words before the surname, "R." or "Roy T.": empty when the name is all
-  /// surname.
+  /// surname. Beside a stated surname, the words of the name before it, or after it
+  /// where it comes first ("Zhang Wei").
   public var givenNames: String {
-    if let statedSurname, name.hasSuffix(statedSurname) {
-      return name.dropLast(statedSurname.count).trimmingCharacters(in: .whitespaces)
-    }
-    return Self.split(name).given.joined(separator: " ")
+    guard let statedSurname else { return Self.split(name).given.joined(separator: " ") }
+    let words = name.split(separator: " ")
+    let surname = statedSurname.split(separator: " ")
+    guard
+      let start = words.indices.first(where: { words[$0...].starts(with: surname) })
+    else { return Self.split(name).given.joined(separator: " ") }
+    let given = start > 0 ? words[..<start] : words[(start + surname.count)...]
+    return given.joined(separator: " ")
   }
 
   /// The leading words that are initials, "J.K." or "SN", are the given names; the

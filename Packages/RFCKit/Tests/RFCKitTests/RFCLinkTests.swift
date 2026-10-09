@@ -313,13 +313,16 @@ struct RFCLinkTests {
     #expect(RFCLink(citing: url) == nil)
   }
 
-  /// Elsewhere on `ietf.org` a document's name is no document of the series.
+  /// Elsewhere on `ietf.org` a document's name is no document of the series, and a
+  /// bare number elsewhere on the RFC Editor's site is no RFC.
   @Test(arguments: [
+    "https://www.rfc-editor.org/news/2024",
+    "https://www.rfc-editor.org/2024",
     "https://www.ietf.org/",
     "https://www.ietf.org/standards/rfcs/",
     "https://www.ietf.org/archive/id/draft-ietf-httpbis-semantics-19.txt",
   ])
-  func `other pages on ietf.org name no document`(address: String) throws {
+  func `other pages name no document`(address: String) throws {
     let url = try #require(URL(string: address))
     #expect(RFCLink(url: url) == nil)
   }

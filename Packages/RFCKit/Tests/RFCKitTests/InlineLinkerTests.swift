@@ -46,6 +46,20 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A series tag the bibliography resolves to an RFC is the author's name for it: the
+  /// label stays `[BCP14]`, not the RFC the entry opens.
+  @Test func `a section of a series tag keeps the tag`() {
+    let entry = CrossReference.Target.document(.rfc(2119), section: nil, entry: "BCP14")
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: ["BCP14": entry])
+    #expect(
+      linker.link("Section 2 of [BCP14]") == [
+        .crossReference(
+          CrossReference(
+            target: .document(.rfc(2119), section: "2", entry: "BCP14"),
+            text: CrossReference.nonBreakingLabel("Section 2 of [BCP14]")))
+      ])
+  }
+
   /// An entry outside the series has no sections to open, but a section of it is
   /// still not one of this document's: it is the entry's (#473), worded as written.
   @Test func `a section of an entry outside the series is the entry's`() {

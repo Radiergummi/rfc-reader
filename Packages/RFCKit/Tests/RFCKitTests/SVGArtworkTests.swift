@@ -21,22 +21,6 @@ struct SVGArtworkTests {
     #expect(!artworks.isEmpty)
     #expect(!artworks.contains { $0.type == "svg" })
   }
-
-  /// RFC 9783's figures, read as though the RFC Editor had published only their SVG.
-  @Test func `an artset with only SVG names the gap`() throws {
-    let xml = String(decoding: try Fixtures.data("rfc9783.xml"), as: UTF8.self)
-    let svgOnly = xml.replacing(
-      #/<artwork[^>]*type="ascii-art"[^>]*>.*?</artwork>/#.dotMatchesNewlines(), with: "")
-    let svg = Self.artworks(try RFCXMLParser.parse(Data(svgOnly.utf8))).filter {
-      $0.type == "svg"
-    }
-    #expect(svg.count == 4)
-    for artwork in svg {
-      #expect(
-        artwork.text
-          == "(Artwork only available as SVG: see https://www.rfc-editor.org/rfc/rfc9783.html)")
-    }
-  }
 }
 
 @Suite("Corpus-backed: SVG-only artwork", .enabled(if: CorpusText.isXMLAvailable))

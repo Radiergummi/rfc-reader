@@ -99,10 +99,19 @@ struct AuthorTests {
     document.referenceLists.flatMap(\.entries).flatMap(\.authors)
   }
 
-  /// A stated surname the name doesn't end with leaves the given names to the split.
-  @Test func `given names past a stated surname the name doesn't end with`() {
-    let author = Author(name: "R. Fielding", statedSurname: "Other")
-    #expect(author.surname == "Other")
-    #expect(author.givenNames == "R.")
+  /// Beside a stated surname, the given names are the words before it, or after it
+  /// where it comes first; a stated surname the name doesn't hold leaves them to the
+  /// split.
+  @Test(arguments: [
+    ("A. Writer 3rd", "Writer", "A."),
+    ("Anne B. Writer 3rd", "Writer", "Anne B."),
+    ("Writer Anne", "Writer", "Anne"),
+    ("Anne van Writer", "van Writer", "Anne"),
+    ("R. Fielding", "Other", "R."),
+  ])
+  func `given names beside a stated surname`(name: String, surname: String, given: String) {
+    let author = Author(name: name, statedSurname: surname)
+    #expect(author.surname == surname)
+    #expect(author.givenNames == given)
   }
 }

@@ -286,12 +286,18 @@ struct InlineLinker: Sendable {
     }
     guard let tag else { return nil }
     let parsed = DocumentID(parsing: String(tag))
-    let isCanonical = parsed.map { CrossReference.isCanonicalTag("[\(tag)]", for: $0) } ?? false
-    if let known = referenceTargets[String(tag)] { return (known, isCanonical) }
+    // Canonical only for the document the tag names itself: `[BCP14]` resolved to the
+    // entry's RFC 2119 is the author's name for it, and composing would say RFC 2119.
+    func isCanonical(for target: CrossReference.Target) -> Bool {
+      guard let parsed, case .document(parsed, _, _) = target else { return false }
+      return CrossReference.isCanonicalTag("[\(tag)]", for: parsed)
+    }
+    if let known = referenceTargets[String(tag)] { return (known, isCanonical(for: known)) }
     guard let parsed, parsed.series == .rfc,
       tag.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame
     else { return nil }
-    return (.document(parsed, section: nil), isCanonical)
+    let target = CrossReference.Target.document(parsed, section: nil)
+    return (target, isCanonical(for: target))
   }
 
   /// `section` of the document `target` names: a section of an RFC, or of a
