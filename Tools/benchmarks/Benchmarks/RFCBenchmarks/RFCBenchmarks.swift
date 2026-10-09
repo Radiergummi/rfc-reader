@@ -21,8 +21,8 @@ import RFCReaderKit
 // The build and highlight benchmarks drain an autorelease pool after each
 // iteration: the builder's attributed strings and the lexer's regular expression
 // matches autorelease enough that, freed only when the benchmark ended, their peak
-// memory grew with the iteration count (#420). The others measured flat without
-// one. A new benchmark whose peak memory climbs from p0 to p100 wants one too.
+// memory grew with the iteration count (#420). The others have none; one whose
+// peak memory climbs from p0 to p100 in `make benchmark` wants one too.
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
