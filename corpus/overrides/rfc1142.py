@@ -64,7 +64,7 @@ UNNUMBERED = {"ISO/IEC DIS 10589", "Introduction", "Security Considerations", "A
 
 # Words the typesetting split inside them with a space, joined (#205). `route ing` is
 # `routeing`, ISO 10589's own spelling, which the standard also writes unsplit.
-SPLIT_WORDS = {"Interme diate": "Intermediate", "informa tion": "information",
+SPLIT_WORDS = {"interme diate": "intermediate", "informa tion": "information",
                "parti tion": "partition", "notifica tion": "notification",
                "manage ment": "management", "indicat ing": "indicating", "resid ing": "residing",
                "route ing": "routeing"}
@@ -261,9 +261,11 @@ def main():
                "words joined, numbered headings recovered, invented headings demoted. The text is "
                "otherwise the converter's. Corrections: https://github.com/Radiergummi/rfc-reader")
     body = ET.tostring(root, encoding="unicode")
-    # From the start of a word, and open at its end, so `notifica tions` joins as well.
+    # From the start of a word, and open at its end, so `notifica tions` joins as well. In
+    # either case, keeping the first letter's, so `Manage ment` joins as well.
     for split, word in SPLIT_WORDS.items():
-        body = re.sub(r"\b" + re.escape(split), word, body)
+        body = re.sub(r"\b" + re.escape(split), lambda match: match[0][0] + word[1:], body,
+                      flags=re.IGNORECASE)
     pathlib.Path(destination).write_text(
         f"<?xml version='1.0' encoding='utf-8'?>\n<!-- {comment} -->\n{body}\n", encoding="utf-8")
 

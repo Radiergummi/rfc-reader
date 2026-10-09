@@ -59,14 +59,15 @@ struct OverridesTests {
   }
 
   /// The words the typesetting split inside them, joined in the snapshot itself (#205).
-  /// `routeing` is ISO 10589's own spelling, which the standard uses unsplit too.
+  /// `routeing` is ISO 10589's own spelling, which the standard uses unsplit too. In either
+  /// case, since a heading or a name such as `System Manage ment` splits a capital.
   @Test(arguments: [
-    "Interme diate", "informa tion", "parti tion", "notifica tion", "manage ment", "indicat ing",
+    "interme diate", "informa tion", "parti tion", "notifica tion", "manage ment", "indicat ing",
     "resid ing", "route ing",
   ])
   func `rfc1142 has no word split inside it`(split: String) throws {
-    let found = String(decoding: try Self.data("rfc1142.xml"), as: UTF8.self).contains(split)
-    #expect(!found)
+    let text = String(decoding: try Self.data("rfc1142.xml"), as: UTF8.self)
+    #expect(text.range(of: split, options: .caseInsensitive) == nil)
   }
 }
 
