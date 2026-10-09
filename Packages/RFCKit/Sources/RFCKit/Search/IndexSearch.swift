@@ -367,7 +367,7 @@ struct AuthorName: Sendable {
   /// it has not reached, so the authors its first given name fits match, whatever
   /// their surname.
   func matches(_ query: AuthorQuery) -> Bool {
-    let fitsFirst = query.initials.first.map(initials.contains) ?? false
+    let fitsFirst = query.firstInitial.map(initials.contains) ?? false
     if query.endsInInitial, fitsFirst { return true }
     return query.surnames.indices.contains { split in
       surname.contains(query.surnames[split]) && (split == 0 || fitsFirst)
@@ -377,8 +377,9 @@ struct AuthorName: Sendable {
 
 /// An `author:` value prepared once per search for `AuthorName.matches`.
 struct AuthorQuery: Sendable {
-  /// The first letter of each word of the value, as a given name or an initial.
-  let initials: [Character]
+  /// The first letter of the value's first word, as a given name or an initial: the
+  /// one word before the surname that has to fit one of the author's initials.
+  let firstInitial: Character?
   /// For each word of the value, it and the words after it: the surname, if the
   /// words before it are given names.
   let surnames: [SearchText]
@@ -389,7 +390,7 @@ struct AuthorQuery: Sendable {
 
   init(_ value: String) {
     let words = folded(value).split(separator: " ")
-    initials = words.compactMap(\.first)
+    firstInitial = words.first?.first
     surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
     endsInInitial = words.last.map(Self.isInitial) ?? false
   }
