@@ -296,6 +296,68 @@ struct ABNFTests {
     #expect((grammar + coreRules).allSatisfy { $0.kind == .sourceCode && $0.type == "abnf" })
   }
 
+  /// A rule set apart by blank lines is still its grammar's: RFC 5234 sets its
+  /// examples, and a rule of its own grammar and of its core rules, one block a rule,
+  /// and those whose rule was plain stayed artwork between source code (#423).
+  @Test func `a plain rule beside its grammar is the grammar's`() throws {
+    let document = try Fixtures.document("rfc5234.txt")
+    let verbatim = document.blocks.compactMap { block -> Preformatted? in
+      guard case .preformatted(let preformatted) = block else { return nil }
+      return preformatted
+    }
+    for locator in ["mumble", "=/ alt3", "rulename defined-as", "CR LF"] {
+      let block = try #require(verbatim.first { $0.text.contains(locator) }, "\(locator)")
+      #expect(block.kind == .sourceCode && block.type == "abnf", "\(locator)")
+    }
+  }
+
+  // MARK: Runs (#423)
+
+  private static func verbatim(_ text: String, abnf: Bool = false) -> Block {
+    .preformatted(
+      abnf
+        ? Preformatted(kind: .sourceCode, text: text, type: "abnf")
+        : Preformatted(kind: .artwork, text: text))
+  }
+
+  /// A block of one plain rule between two of a grammar's is typed with them.
+  @Test func `a plain rule between grammar blocks joins them`() {
+    let blocks = [
+      Self.verbatim("first-rule = second-rule / %x20", abnf: true),
+      Self.verbatim("second-rule = third-rule fourth-rule"),
+      Self.verbatim("third-rule = 1*DIGIT", abnf: true),
+    ]
+    let typed = LegacyTextParser.typingGrammars(blocks)
+    #expect(
+      typed == [
+        blocks[0], Self.verbatim("second-rule = third-rule fourth-rule", abnf: true), blocks[2],
+      ])
+  }
+
+  /// A drawing between them ends the run, and a block that does not parse stays
+  /// artwork, as plain assignments that refer to nothing among them do.
+  @Test func `a drawing or pseudocode beside a grammar stays artwork`() {
+    let drawing = [
+      Self.verbatim("first-rule = second-rule / %x20", abnf: true),
+      Self.verbatim("+------+\n| box  |\n+------+"),
+      Self.verbatim("second-rule = other"),
+    ]
+    #expect(LegacyTextParser.typingGrammars(drawing) == drawing)
+    let pseudocode = [Self.verbatim("count = limit"), Self.verbatim("size = width")]
+    #expect(LegacyTextParser.typingGrammars(pseudocode) == pseudocode)
+  }
+
+  /// The half of a grammar after a page break opens with the continuation of the
+  /// rule the page cut, and is the rest of that rule's block.
+  @Test func `a grammar cut by a page break goes on across it`() {
+    let first = ["   first-rule = alpha", "                / beta"]
+    let second = ["                / gamma", "   second-rule = first-rule"]
+    #expect(LegacyTextParser.continuesGrammarAcrossPage(first, second))
+    let prose = ["   This rule is not continued here, and the next page holds", "   words."]
+    #expect(!LegacyTextParser.continuesGrammarAcrossPage(first, prose))
+    #expect(!LegacyTextParser.continuesGrammarAcrossPage(first, ["   third-rule = alpha"]))
+  }
+
   /// A diagram stays artwork.
   @Test func `RFC 793's diagrams stay artwork`() throws {
     let document = try Fixtures.document("rfc793.txt")

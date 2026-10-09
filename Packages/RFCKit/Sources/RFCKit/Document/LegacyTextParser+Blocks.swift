@@ -156,6 +156,7 @@ extension LegacyTextParser {
       while block.followedByPageBreak, index + 1 < rawBlocks.count,
         shouldJoinAcrossPage(block, rawBlocks[index + 1], in: context)
           || continuesDefinitionAcrossPage(block, rawBlocks[index + 1], hangColumn: hangColumn)
+          || continuesGrammarAcrossPage(block.lines, rawBlocks[index + 1].lines)
       {
         block.lines += rawBlocks[index + 1].lines
         block.followedByPageBreak = rawBlocks[index + 1].followedByPageBreak
@@ -276,8 +277,13 @@ extension LegacyTextParser {
           case .preformatted(let previous)? = result.last, previous.kind == .artwork
         {
           let lines = above + [""] + block.lines
+          // `=`, `/` and `*` draw, so a stretch of grammar can join artwork above it;
+          // what they make together is asked again (#423).
+          let text = verbatimText(lines)
           result[result.count - 1] = .preformatted(
-            Preformatted(kind: .artwork, text: verbatimText(lines)))
+            ABNF.recognizes(text)
+              ? Preformatted(kind: .sourceCode, text: text, type: "abnf")
+              : Preformatted(kind: .artwork, text: text))
           openArtwork = block.followedByPageBreak ? nil : lines
         } else if case .list(let list) = parsed, case .list(var previous)? = result.last,
           list.continues(previous)
@@ -325,7 +331,53 @@ extension LegacyTextParser {
         }
       }
     }
-    return result
+    return typingGrammars(result)
+  }
+
+  /// One grammar set as several blocks, a rule or a few at a time with blank lines
+  /// between, is typed as one (#423): a block that is only one plain rule is no grammar
+  /// alone, and stayed artwork between the blocks of its own. Over each run of adjacent
+  /// verbatim blocks, the stretches of blocks that each parse as ABNF are asked
+  /// together, and a stretch that is a grammar is typed `abnf` throughout. A block that
+  /// does not parse, a drawing, ends a stretch and stays as it is; the blocks stay
+  /// apart, as the author set them.
+  static func typingGrammars(_ blocks: [Block]) -> [Block] {
+    var blocks = blocks
+    var stretch: [Int] = []
+    func typeStretch() {
+      defer { stretch = [] }
+      guard stretch.count > 1 else { return }
+      let texts = stretch.compactMap { index -> String? in
+        if case .preformatted(let block) = blocks[index] { block.text } else { nil }
+      }
+      guard ABNF.recognizes(texts.joined(separator: "\n\n")) else { return }
+      for (index, text) in zip(stretch, texts) {
+        blocks[index] = .preformatted(Preformatted(kind: .sourceCode, text: text, type: "abnf"))
+      }
+    }
+    for index in blocks.indices {
+      guard case .preformatted(let block) = blocks[index],
+        block.kind == .artwork || block.type == "abnf",
+        block.type == "abnf" || ABNF.parse(block.text) != nil
+      else {
+        typeStretch()
+        continue
+      }
+      stretch.append(index)
+    }
+    typeStretch()
+    return blocks
+  }
+
+  /// Whether `next`, on the page after `lines`, is the rest of the grammar `lines`
+  /// holds: it opens with the continuation of the rule the page break cut, set deeper
+  /// than the rules, so it does not parse alone, and the two parse as one (#423).
+  static func continuesGrammarAcrossPage(_ lines: [String], _ next: [String]) -> Bool {
+    let ruleIndent = lines.filter { !$0.isBlank }.map(\.leadingSpaceCount).min() ?? 0
+    guard let opening = next.first(where: { !$0.isBlank }), opening.leadingSpaceCount > ruleIndent,
+      ABNF.parse(verbatimText(lines)) != nil, ABNF.parse(verbatimText(next)) == nil
+    else { return false }
+    return ABNF.parse(verbatimText(lines + next)) != nil
   }
 
   /// Each entry of a catalog or of a hanging-indent list, its term and its text as a
