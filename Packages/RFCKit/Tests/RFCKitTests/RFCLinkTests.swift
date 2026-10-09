@@ -180,6 +180,15 @@ struct RFCLinkTests {
     #expect(link.appURL.absoluteString == "rfc://9000#\(fragment)")
   }
 
+  /// A repeated legacy section is `section-1_2` (#491): the second section 1, an anchor,
+  /// not section `1_2`, and so is a paragraph of it.
+  @Test(arguments: ["section-1_2", "appendix-A_2", "section-1_2-3"])
+  func `a repeated section's fragment is an anchor, not a section`(fragment: String) throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://19#\(fragment)")!))
+    #expect(link.section == nil)
+    #expect(link.anchor == fragment)
+  }
+
   /// Prep spells a top-level appendix's part number `section-appendix.a`; it is the
   /// same appendix as `appendix-A`.
   @Test(

@@ -40,7 +40,7 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 
 Browse and find
 - Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Snapshot bundled for offline first launch.
-- Instant type-ahead search over number, title, keywords, authors, working group, abstract. Query grammar: `wg:httpbis`, `author:fielding`, `status:std`, `status:current`, `year:2020-2022`, `has:xml`.
+- Instant type-ahead search over number, title, keywords, authors, working group, abstract. Query grammar: `wg:httpbis` (or `wg:quic,tls`), `author:fielding`, `status:std`, `status:internet-standard`, `status:current`, `year:2020-2022`, `after:2023-06`, `before:2024`, `published:<90d`, `has:xml`, `is:bookmarked|read|offline`, `in:rfc9110`, `in:bcp14` or `in:"Some collection"`, `sort:newest|oldest|last-read`. A term this version doesn't know finds nothing rather than being searched as text (#355).
 - Sidebar: Bookmarks, Recently read, Available offline, All, Internet Standards, BCPs, streams, top working groups, "Just published" from the RFC Editor RSS feed.
 - Command-L "Go to RFC…" accepting a number, `BCP 14`, or any rfc-editor.org / datatracker URL.
 
@@ -61,7 +61,7 @@ Reference
 
 ### Tier 1 — the reader people recommend ("0.2 – 0.3")
 
-- **Full-text search** across downloaded documents with snippets and section-level results (SQLite FTS5 via GRDB). Offer "download everything" (~600 MB of text) for people who want a complete offline corpus.
+- **Full-text search** across downloaded documents with snippets and section-level results (SQLite FTS5, built on the device; #37). Offer "download everything" (~600 MB of text) for people who want a complete offline corpus.
 - **Reference peek** *(shipped)*. Long-press or hover a `[RFC7231]` link to see title, status, abstract and the referenced section, without leaving the page.
 - **Lineage view.** For any RFC: what it obsoletes and updates, what obsoletes and updates it, drawn as a small graph. "Show me the current version of this" in one tap.
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.

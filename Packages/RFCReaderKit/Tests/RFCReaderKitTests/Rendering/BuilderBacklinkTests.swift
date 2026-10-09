@@ -65,8 +65,8 @@ struct BuilderBacklinkTests {
     }
     let link = built.text.attribute(.link, at: caption.range.location, effectiveRange: nil)
     let url = try #require(link as? URL)
-    #expect(DocumentTextBuilder.backlinks(from: url) == "two")
-    #expect(DocumentTextBuilder.anchor(from: url) == nil, "a backlink caption is not a jump")
+    #expect(ReaderLinkScheme.backlinks(from: url) == "two")
+    #expect(ReaderLinkScheme.anchor(from: url) == nil, "a backlink caption is not a jump")
   }
 
   /// A paragraph of its own, not a line of the heading's: the running heading
@@ -182,13 +182,13 @@ struct BuilderBacklinkTests {
       .foregroundColor: RFCColors.accent, .underlineStyle: NSUnderlineStyle.single.rawValue,
     ]
     let caption = try #require(
-      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
-    let kept = DocumentTextBuilder.linkRenderingAttributes(for: caption, defaults: defaults)
+      ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.backlinksScheme))
+    let kept = LinkRendering.attributes(for: caption, defaults: defaults)
     #expect(kept[.foregroundColor] == nil)
     #expect(kept[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
     let jump = try #require(
-      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
-    let other = DocumentTextBuilder.linkRenderingAttributes(for: jump, defaults: defaults)
+      ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.anchorScheme))
+    let other = LinkRendering.attributes(for: jump, defaults: defaults)
     #expect(other[.foregroundColor] as? PlatformColor == RFCColors.accent)
   }
 
@@ -201,7 +201,7 @@ struct BuilderBacklinkTests {
     let defaults: [NSAttributedString.Key: Any] = [
       .foregroundColor: own, .underlineStyle: NSUnderlineStyle.single.rawValue,
     ]
-    let card = DocumentTextBuilder.cardLinkAttributes(defaults)
+    let card = LinkRendering.cardAttributes(defaults)
     let color = try #require(card[.foregroundColor] as? PlatformColor)
     let dark = try #require(Self.resolved(color, dark: true))
     let light = try #require(Self.resolved(color, dark: false))
@@ -209,8 +209,8 @@ struct BuilderBacklinkTests {
     #expect(Self.matches(light, SRGBColor(red: 0.2, green: 0.4, blue: 0.6)), "\(light)")
     #expect(card[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
     let caption = try #require(
-      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
-    let kept = DocumentTextBuilder.linkRenderingAttributes(for: caption, defaults: card)
+      ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.backlinksScheme))
+    let kept = LinkRendering.attributes(for: caption, defaults: card)
     #expect(kept[.foregroundColor] == nil)
   }
 
@@ -241,13 +241,13 @@ struct BuilderBacklinkTests {
     let cursor = NSAttributedString.Key("cursor")
     let defaults: [NSAttributedString.Key: Any] = [cursor: "pointing hand"]
     let caption = try #require(
-      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
-    let kept = DocumentTextBuilder.linkRenderingAttributes(
+      ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.backlinksScheme))
+    let kept = LinkRendering.attributes(
       for: caption, defaults: defaults, caption: [cursor: "arrow"])
     #expect(kept[cursor] as? String == "arrow")
     let jump = try #require(
-      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
-    let other = DocumentTextBuilder.linkRenderingAttributes(
+      ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.anchorScheme))
+    let other = LinkRendering.attributes(
       for: jump, defaults: defaults, caption: [cursor: "arrow"])
     #expect(other[cursor] as? String == "pointing hand")
   }

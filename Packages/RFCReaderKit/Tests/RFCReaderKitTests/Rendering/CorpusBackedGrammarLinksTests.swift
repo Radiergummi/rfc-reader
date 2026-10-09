@@ -45,7 +45,7 @@ struct CorpusBackedGrammarLinksTests {
         built.text.attribute(.rfcVerbatim, at: range.location, effectiveRange: nil) != nil
       else { return }
       links += 1
-      if let anchor = DocumentTextBuilder.anchor(from: url) {
+      if let anchor = ReaderLinkScheme.anchor(from: url) {
         if built.anchors.offset(of: anchor) == nil { unresolved.append(anchor) }
       } else if RFCLink(url: url) != RFCLink(id: .rfc(5234), section: "B.1") {
         unresolved.append(url.absoluteString)

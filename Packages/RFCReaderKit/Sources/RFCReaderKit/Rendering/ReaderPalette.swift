@@ -34,7 +34,7 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   /// The lines a decorated block draws over its text, such as a packet diagram's.
   public var stroke: PlatformColor
   /// What a reference chip is tinted with, at `AccentContrast.chipTintOpacity`
-  /// (#317), or half of it for an informative reference (#184).
+  /// (#317), and outlined with, at `AccentContrast.chipOutline` (#457).
   public var chipTint: PlatformColor
 
   public init(
@@ -81,25 +81,63 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
 /// change of palette: TextKit keeps the ones it laid out, and a theme switch must
 /// recolor them without laying anything out again. Whoever replaces the palette
 /// asks the text view to redraw.
+///
+/// Beside the palette, whether the system asks for more contrast (#457): drawn the
+/// same way, and no part of a palette a reader chooses.
 public final class ReaderPaletteBox: Sendable {
-  private let value: Mutex<ReaderPalette>
+  private struct Drawing: Equatable {
+    var palette: ReaderPalette
+    var outlinesEveryChip: Bool
+  }
+
+  private let value: Mutex<Drawing>
 
   public init(_ palette: ReaderPalette = .automatic) {
-    value = Mutex(palette)
+    value = Mutex(Drawing(palette: palette, outlinesEveryChip: false))
   }
 
   public var palette: ReaderPalette {
-    value.withLock { $0 }
+    value.withLock { $0.palette }
   }
 
-  /// Replaces the palette, and says whether it changed, so that the caller redraws
-  /// only then.
+  /// Whether every chip is outlined, a normative one over its fill: the system's
+  /// Increase Contrast, as the reader was last drawn under it.
+  public var outlinesEveryChip: Bool {
+    value.withLock { $0.outlinesEveryChip }
+  }
+
+  /// Replaces the palette and the contrast, and says whether either changed, so
+  /// that the caller redraws only then.
   @discardableResult
-  public func replace(with palette: ReaderPalette) -> Bool {
-    value.withLock { current in
-      guard current != palette else { return false }
-      current = palette
+  public func replace(with palette: ReaderPalette, outlinesEveryChip: Bool) -> Bool {
+    let drawing = Drawing(palette: palette, outlinesEveryChip: outlinesEveryChip)
+    return value.withLock { current in
+      guard current != drawing else { return false }
+      current = drawing
       return true
     }
+  }
+}
+
+/// What a chip is drawn with (#457).
+public struct ChipMarks: Equatable, Sendable {
+  public var fills: Bool
+  public var outlines: Bool
+
+  public init(fills: Bool, outlines: Bool) {
+    self.fills = fills
+    self.outlines = outlines
+  }
+
+  /// An informative chip is an outline with no fill: it differs from a normative
+  /// one by shape, not by an amount of tint that the light cards leave almost none
+  /// of (#457, replacing #184's half tint). A normative chip is filled, and outlined
+  /// over its fill as well where `outlinesEveryChip`, under Increase Contrast. A chip
+  /// whose kind no list says is drawn as a normative one.
+  public init(informative: Bool, outlinesEveryChip: Bool) {
+    self =
+      informative
+      ? ChipMarks(fills: false, outlines: true)
+      : ChipMarks(fills: true, outlines: outlinesEveryChip)
   }
 }

@@ -223,6 +223,7 @@ struct EmptyDetailView: View {
     } actions: {
       Button("Go to RFC…") { navigation.isShowingGoToSheet = true }
         .keyboardShortcut("l", modifiers: .command)
+      PrimerLink()
     }
   }
 }
