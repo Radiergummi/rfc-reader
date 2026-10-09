@@ -347,6 +347,29 @@ struct ABNFTests {
     #expect(LegacyTextParser.typingGrammars(pseudocode) == pseudocode)
   }
 
+  /// Plain assignments that each parse and name one another are no grammar unless one
+  /// block of their stretch is one alone: pseudocode reads that way as often.
+  @Test func `assignments naming one another need a grammar beside them`() {
+    let assignments = [Self.verbatim("lowest = unset"), Self.verbatim("highest = lowest")]
+    #expect(LegacyTextParser.typingGrammars(assignments) == assignments)
+  }
+
+  /// Each block of a stretch is parsed with its own indentation: a comment set left of
+  /// one block's rules does not make them continue the block above.
+  @Test func `each block of a stretch keeps its own rule column`() {
+    let blocks = ["first-rule = second-rule / %x20", "; the second rule\n  second-rule = 1*DIGIT"]
+    #expect(ABNF.recognizes(blocks: blocks))
+    // A name defined in two blocks is defined twice, as within one.
+    #expect(!ABNF.recognizes(blocks: ["first-rule = second-rule", "first-rule = third-rule"]))
+  }
+
+  /// A comment set left of the rules does not set the column a page's opening line
+  /// has to be deeper than: a new rule there is no continuation.
+  @Test func `a comment left of the rules does not make a rule a continuation`() {
+    let first = [" ; the rules", "   first-rule = alpha", "                / beta"]
+    #expect(!LegacyTextParser.continuesGrammarAcrossPage(first, ["  second-rule = (", "   gamma"]))
+  }
+
   /// The half of a grammar after a page break opens with the continuation of the
   /// rule the page cut, and is the rest of that rule's block.
   @Test func `a grammar cut by a page break goes on across it`() {

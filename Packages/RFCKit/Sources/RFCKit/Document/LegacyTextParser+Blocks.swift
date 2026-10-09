@@ -156,7 +156,8 @@ extension LegacyTextParser {
       while block.followedByPageBreak, index + 1 < rawBlocks.count,
         shouldJoinAcrossPage(block, rawBlocks[index + 1], in: context)
           || continuesDefinitionAcrossPage(block, rawBlocks[index + 1], hangColumn: hangColumn)
-          || continuesGrammarAcrossPage(block.lines, rawBlocks[index + 1].lines)
+          || hangColumn == nil && listMarker(of: block.lines) == nil
+            && continuesGrammarAcrossPage(block.lines, rawBlocks[index + 1].lines)
       {
         block.lines += rawBlocks[index + 1].lines
         block.followedByPageBreak = rawBlocks[index + 1].followedByPageBreak
@@ -276,14 +277,11 @@ extension LegacyTextParser {
         if joinable, let above = artworkAbove, draws(block.lines),
           case .preformatted(let previous)? = result.last, previous.kind == .artwork
         {
-          let lines = above + [""] + block.lines
           // `=`, `/` and `*` draw, so a stretch of grammar can join artwork above it;
-          // what they make together is asked again (#423).
-          let text = verbatimText(lines)
+          // `typingGrammars` asks what they make together (#423).
+          let lines = above + [""] + block.lines
           result[result.count - 1] = .preformatted(
-            ABNF.recognizes(text)
-              ? Preformatted(kind: .sourceCode, text: text, type: "abnf")
-              : Preformatted(kind: .artwork, text: text))
+            Preformatted(kind: .artwork, text: verbatimText(lines)))
           openArtwork = block.followedByPageBreak ? nil : lines
         } else if case .list(let list) = parsed, case .list(var previous)? = result.last,
           list.continues(previous)
@@ -338,32 +336,34 @@ extension LegacyTextParser {
   /// between, is typed as one (#423): a block that is only one plain rule is no grammar
   /// alone, and stayed artwork between the blocks of its own. Over each run of adjacent
   /// verbatim blocks, the stretches of blocks that each parse as ABNF are asked
-  /// together, and a stretch that is a grammar is typed `abnf` throughout. A block that
-  /// does not parse, a drawing, ends a stretch and stays as it is; the blocks stay
-  /// apart, as the author set them.
+  /// together, each with its own indentation, and a stretch that is a grammar is typed
+  /// `abnf` throughout. A block that does not parse, a drawing, ends a stretch and stays
+  /// as it is; the blocks stay apart, as the author set them.
+  ///
+  /// A stretch is a grammar only where one of its blocks is one alone: plain
+  /// assignments that each parse and name one another are pseudocode as often. A
+  /// stretch of one block is asked too, for artwork joined across a blank line (#437),
+  /// whose stretches `=`, `/` and `*` draw.
   static func typingGrammars(_ blocks: [Block]) -> [Block] {
     var blocks = blocks
-    var stretch: [Int] = []
+    var stretch: [(index: Int, text: String)] = []
     func typeStretch() {
       defer { stretch = [] }
-      guard stretch.count > 1 else { return }
-      let texts = stretch.compactMap { index -> String? in
-        if case .preformatted(let block) = blocks[index] { block.text } else { nil }
-      }
-      guard ABNF.recognizes(texts.joined(separator: "\n\n")) else { return }
-      for (index, text) in zip(stretch, texts) {
-        blocks[index] = .preformatted(Preformatted(kind: .sourceCode, text: text, type: "abnf"))
+      let texts = stretch.map(\.text)
+      guard texts.contains(where: ABNF.recognizes), ABNF.recognizes(blocks: texts) else { return }
+      for (index, text) in stretch {
+        blocks[index] = verbatimBlock(text, isGrammar: true)
       }
     }
     for index in blocks.indices {
       guard case .preformatted(let block) = blocks[index],
         block.kind == .artwork || block.type == "abnf",
-        block.type == "abnf" || ABNF.parse(block.text) != nil
+        block.type == "abnf" || ABNF.parses(block.text)
       else {
         typeStretch()
         continue
       }
-      stretch.append(index)
+      stretch.append((index, block.text))
     }
     typeStretch()
     return blocks
@@ -371,13 +371,26 @@ extension LegacyTextParser {
 
   /// Whether `next`, on the page after `lines`, is the rest of the grammar `lines`
   /// holds: it opens with the continuation of the rule the page break cut, set deeper
-  /// than the rules, so it does not parse alone, and the two parse as one (#423).
+  /// than the rules, so it does not parse alone, and the two parse as one (#423). The
+  /// half above need not parse alone either: the page may cut a group open. The rules'
+  /// column is found as `ABNF.parse` finds it, a comment set left of the rules aside.
   static func continuesGrammarAcrossPage(_ lines: [String], _ next: [String]) -> Bool {
-    let ruleIndent = lines.filter { !$0.isBlank }.map(\.leadingSpaceCount).min() ?? 0
-    guard let opening = next.first(where: { !$0.isBlank }), opening.leadingSpaceCount > ruleIndent,
-      ABNF.parse(verbatimText(lines)) != nil, ABNF.parse(verbatimText(next)) == nil
+    let ruleIndent =
+      lines.filter { !$0.isBlank && !$0.drop(while: \.isWhitespace).hasPrefix(";") }
+      .map(\.leadingSpaceCount).min() ?? 0
+    guard let opening = next.first(where: { !$0.isBlank }),
+      opening.leadingSpaceCount > ruleIndent, !ABNF.parses(verbatimText(next))
     else { return false }
-    return ABNF.parse(verbatimText(lines + next)) != nil
+    return ABNF.parses(verbatimText(lines + next))
+  }
+
+  /// Verbatim text as a block: source code typed `abnf`, as RFCXML sets a grammar,
+  /// where it is one (#45), and artwork otherwise.
+  private static func verbatimBlock(_ text: String, isGrammar: Bool) -> Block {
+    .preformatted(
+      isGrammar
+        ? Preformatted(kind: .sourceCode, text: text, type: "abnf")
+        : Preformatted(kind: .artwork, text: text))
   }
 
   /// Each entry of a catalog or of a hanging-indent list, its term and its text as a
@@ -872,10 +885,7 @@ extension LegacyTextParser {
     let text = verbatimText(lines)
     // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
     // typed `abnf` (#45). Only what would otherwise be artwork; no prose verdict changes.
-    if ABNF.recognizes(text) {
-      return [.preformatted(Preformatted(kind: .sourceCode, text: text, type: "abnf"))]
-    }
-    return [.preformatted(Preformatted(kind: .artwork, text: text))]
+    return [verbatimBlock(text, isGrammar: ABNF.recognizes(text))]
   }
 
   /// Whether a block of artwork may be one with the artwork beside it, a blank
