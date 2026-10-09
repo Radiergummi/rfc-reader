@@ -34,6 +34,16 @@ struct GrammarLinksTests {
 
   // MARK: Guards
 
+  /// A grammar in RFC 822's dialect, alternating with `|`, links as one in RFC 5234's
+  /// does (#696).
+  @Test func `a grammar that alternates with a bar links its rules`() throws {
+    let text = Self.text("greeting = salutation | name", "name     = 1*ALPHA")
+    let linked = try Self.linked(text)
+    #expect(linked.definitions.map(\.anchor) == ["abnf-greeting", "abnf-name"])
+    #expect(linked.links.map { Self.substring(text, $0.range) } == ["name"])
+    #expect(ABNFPresentation.types.contains("abnf822"))
+  }
+
   @Test func `a definition is an anchor named for the rule`() throws {
     let text = Self.text("greeting = salutation SP name", "Name     = 1*ALPHA")
     let linked = try Self.linked(text)

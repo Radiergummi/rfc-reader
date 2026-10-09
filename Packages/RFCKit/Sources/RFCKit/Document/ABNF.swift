@@ -14,6 +14,23 @@ import Foundation
 /// and a comment, and so is a line of C or of a configuration file. `recognizes(_:)`
 /// asks for more than one rule, or for syntax only a grammar has.
 public enum ABNF {
+  /// The notation a grammar is written in: RFC 5234's, which alternates with `/`, or
+  /// the one RFC 822 and RFC 2616 write their grammars in, which alternates with `|`
+  /// and has no `=/` (#696). The legacy parser types a grammar in the second as
+  /// `abnf822`, which no RFC 5234 tool reads.
+  public enum Dialect: Sendable {
+    case rfc5234
+    case rfc822
+
+    /// What sets one alternative off from the next.
+    var alternative: Character {
+      switch self {
+      case .rfc5234: "/"
+      case .rfc822: "|"
+      }
+    }
+  }
+
   public struct Rule: Sendable, Hashable {
     public var name: String
     /// A `=/` rule, adding alternatives to one defined before it.
@@ -59,20 +76,22 @@ public enum ABNF {
   /// A hex number read as a count and a name, and a name defined twice in a block with
   /// no repetition or numeric value, parse but are not recognized: test vectors,
   /// listings of settings and message layouts read that way.
-  static func recognizes(_ text: String) -> Bool {
-    recognizes(blocks: [text])
+  static func recognizes(_ text: String, dialect: Dialect = .rfc5234) -> Bool {
+    recognizes(blocks: [text], dialect: dialect)
   }
 
   /// Whether `blocks`, each parsed as a block of its own, with its own indentation, are
   /// one grammar together, as `recognizes(_:)` asks of one block: a grammar set a rule
   /// or a few at a time with blank lines between (#423). A name defined in two of them
   /// counts as one defined twice.
-  static func recognizes(blocks: [String]) -> Bool {
+  static func recognizes(blocks: [String], dialect: Dialect = .rfc5234) -> Bool {
     var rules: [Rule] = []
     var definesANameTwice = false
     var defined: Set<String> = []
     for block in blocks {
-      guard let parsed = parsed(block, locatingNames: false) else { return false }
+      guard let parsed = parsed(block, dialect: dialect, locatingNames: false) else {
+        return false
+      }
       rules += parsed.rules
       definesANameTwice = definesANameTwice || parsed.definesANameTwice
       for rule in parsed.rules where !rule.isIncremental {
@@ -95,15 +114,15 @@ public enum ABNF {
 
   /// Whether `text` parses as ABNF, grammar or not, without locating the names the
   /// reader links.
-  static func parses(_ text: String) -> Bool {
-    parsed(text, locatingNames: false) != nil
+  static func parses(_ text: String, dialect: Dialect = .rfc5234) -> Bool {
+    parsed(text, dialect: dialect, locatingNames: false) != nil
   }
 
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
   /// only a comment are skipped; every other line either starts a rule at column 0 or
   /// continues the one before it, set deeper.
-  public static func parse(_ text: String) -> [Rule]? {
-    parsed(text, locatingNames: true)?.rules
+  public static func parse(_ text: String, dialect: Dialect = .rfc5234) -> [Rule]? {
+    parsed(text, dialect: dialect, locatingNames: true)?.rules
   }
 
   /// The rules, and whether a name is defined with `=` twice, whatever its case: a
@@ -114,7 +133,7 @@ public enum ABNF {
   ///
   /// `locatingNames` is what the ranges cost: recognizing, which the legacy parser
   /// asks of every candidate block in the corpus, reads none, and gets empty ones.
-  private static func parsed(_ text: String, locatingNames: Bool)
+  private static func parsed(_ text: String, dialect: Dialect, locatingNames: Bool)
     -> (rules: [Rule], definesANameTwice: Bool)?
   {
     var rules: [Rule] = []
@@ -126,7 +145,7 @@ public enum ABNF {
     func finishRule() -> Bool {
       guard let source = current else { return true }
       current = nil
-      var parser = RuleParser(source.source, offsets: source.offsets)
+      var parser = RuleParser(source.source, offsets: source.offsets, dialect: dialect)
       guard let rule = parser.rule() else { return false }
       if !rule.isIncremental, !defined.insert(rule.name.lowercased()).inserted {
         definesANameTwice = true
@@ -202,10 +221,12 @@ public enum ABNF {
     private var usesGrammarSyntax = false
     private var usesRepetitionOrNumericValue = false
     private var readsAsHexNumber = false
+    private let dialect: Dialect
 
-    init(_ characters: [Character], offsets: [Int?]) {
+    init(_ characters: [Character], offsets: [Int?], dialect: Dialect) {
       self.characters = characters
       self.offsets = offsets
+      self.dialect = dialect
     }
 
     /// `rulename defined-as elements`, and nothing after it.
@@ -215,7 +236,7 @@ public enum ABNF {
       let nameRange = range(from: start)
       skipSpace()
       guard take("=") else { return nil }
-      let isIncremental = take("/")
+      let isIncremental = dialect == .rfc5234 && take("/")
       skipSpace()
       guard alternation() else { return nil }
       skipSpace()
@@ -278,13 +299,14 @@ public enum ABNF {
       character.isASCII && (character.isLetter || character.isNumber || character == "-")
     }
 
-    /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`.
+    /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`, with `|` in RFC 822's
+    /// dialect.
     private mutating func alternation() -> Bool {
       guard concatenation() else { return false }
       while true {
         let start = position
         skipSpace()
-        guard take("/") else {
+        guard take(dialect.alternative) else {
           position = start
           return true
         }

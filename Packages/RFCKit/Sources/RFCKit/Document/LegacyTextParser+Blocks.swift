@@ -343,22 +343,30 @@ extension LegacyTextParser {
   /// A stretch is a grammar only where one of its blocks is one alone: plain
   /// assignments that each parse and name one another are pseudocode as often. A
   /// stretch of one block is asked too, for artwork joined across a blank line (#437),
-  /// whose stretches `=`, `/` and `*` draw.
+  /// whose stretches `=`, `/` and `*` draw. Asked in RFC 5234's dialect, then in RFC
+  /// 822's of what is left (#696).
   static func typingGrammars(_ blocks: [Block]) -> [Block] {
+    typingGrammars(typingGrammars(blocks, in: .rfc5234), in: .rfc822)
+  }
+
+  private static func typingGrammars(_ blocks: [Block], in dialect: ABNF.Dialect) -> [Block] {
     var blocks = blocks
+    let type = grammarType(dialect)
     var stretch: [(index: Int, text: String)] = []
     func typeStretch() {
       defer { stretch = [] }
       let texts = stretch.map(\.text)
-      guard texts.contains(where: ABNF.recognizes), ABNF.recognizes(blocks: texts) else { return }
+      guard texts.contains(where: { ABNF.recognizes($0, dialect: dialect) }),
+        ABNF.recognizes(blocks: texts, dialect: dialect)
+      else { return }
       for (index, text) in stretch {
-        blocks[index] = verbatimBlock(text, isGrammar: true)
+        blocks[index] = verbatimBlock(text, grammar: dialect)
       }
     }
     for index in blocks.indices {
       guard case .preformatted(let block) = blocks[index],
-        block.kind == .artwork || block.type == "abnf",
-        block.type == "abnf" || ABNF.parses(block.text)
+        block.kind == .artwork || block.type == type,
+        block.type == type || ABNF.parses(block.text, dialect: dialect)
       else {
         typeStretch()
         continue
@@ -379,18 +387,35 @@ extension LegacyTextParser {
       lines.filter { !$0.isBlank && !$0.drop(while: \.isWhitespace).hasPrefix(";") }
       .map(\.leadingSpaceCount).min() ?? 0
     guard let opening = next.first(where: { !$0.isBlank }),
-      opening.leadingSpaceCount > ruleIndent, !ABNF.parses(verbatimText(next))
+      opening.leadingSpaceCount > ruleIndent
     else { return false }
-    return ABNF.parses(verbatimText(lines + next))
+    let rest = verbatimText(next)
+    let joined = verbatimText(lines + next)
+    return [ABNF.Dialect.rfc5234, .rfc822].contains { dialect in
+      !ABNF.parses(rest, dialect: dialect) && ABNF.parses(joined, dialect: dialect)
+    }
   }
 
-  /// Verbatim text as a block: source code typed `abnf`, as RFCXML sets a grammar,
-  /// where it is one (#45), and artwork otherwise.
-  private static func verbatimBlock(_ text: String, isGrammar: Bool) -> Block {
+  /// The dialect `text` is a grammar in, RFC 5234's before RFC 822's, or nil.
+  private static func grammarDialect(of text: String) -> ABNF.Dialect? {
+    [ABNF.Dialect.rfc5234, .rfc822].first { ABNF.recognizes(text, dialect: $0) }
+  }
+
+  /// The type a grammar in `dialect` is set with: `abnf`, as RFCXML sets one, or
+  /// `abnf822`, which says it is no RFC 5234 grammar (#696).
+  private static func grammarType(_ dialect: ABNF.Dialect) -> String {
+    switch dialect {
+    case .rfc5234: "abnf"
+    case .rfc822: "abnf822"
+    }
+  }
+
+  /// Verbatim text as a block: source code typed as its dialect's grammar where it is
+  /// one (#45), and artwork otherwise.
+  private static func verbatimBlock(_ text: String, grammar dialect: ABNF.Dialect?) -> Block {
     .preformatted(
-      isGrammar
-        ? Preformatted(kind: .sourceCode, text: text, type: "abnf")
-        : Preformatted(kind: .artwork, text: text))
+      dialect.map { Preformatted(kind: .sourceCode, text: text, type: grammarType($0)) }
+        ?? Preformatted(kind: .artwork, text: text))
   }
 
   /// Each entry of a catalog or of a hanging-indent list, its term and its text as a
@@ -885,7 +910,7 @@ extension LegacyTextParser {
     let text = verbatimText(lines)
     // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
     // typed `abnf` (#45). Only what would otherwise be artwork; no prose verdict changes.
-    return [verbatimBlock(text, isGrammar: ABNF.recognizes(text))]
+    return [verbatimBlock(text, grammar: grammarDialect(of: text))]
   }
 
   /// Whether a block of artwork may be one with the artwork beside it, a blank

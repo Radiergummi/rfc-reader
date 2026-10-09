@@ -280,6 +280,52 @@ struct ABNFTests {
     #expect(Self.substring(text, rules[0].uses[0].range) == "second")
   }
 
+  // MARK: RFC 822's dialect (#696)
+
+  /// A grammar written before RFC 5234, as RFC 822's notation and RFC 2616's are,
+  /// alternates with `|`: no RFC 5234 grammar, and a grammar in RFC 822's dialect.
+  @Test func `a grammar that alternates with a bar is RFC 822's`() throws {
+    let text = "first-rule = second-rule | third-rule\nsecond-rule = 1*DIGIT"
+    #expect(ABNF.parse(text) == nil)
+    #expect(!ABNF.recognizes(text))
+    let rules = try #require(ABNF.parse(text, dialect: .rfc822))
+    #expect(rules.map(\.name) == ["first-rule", "second-rule"])
+    #expect(ABNF.recognizes(text, dialect: .rfc822))
+  }
+
+  /// A block that alternates with both is neither dialect's grammar.
+  @Test func `a grammar mixing slash and bar is no grammar`() {
+    let text = "first-rule = second-rule / third-rule | %x20\nsecond-rule = 1*DIGIT"
+    #expect(!ABNF.recognizes(text))
+    #expect(!ABNF.recognizes(text, dialect: .rfc822))
+  }
+
+  /// RFC 2371 writes its grammar with `|`: it is typed as RFC 822's, which the reader
+  /// links and an export as RFC 5234 ABNF leaves out.
+  @Test func `RFC 2371's grammar is typed as RFC 822's`() throws {
+    let document = try Fixtures.document("rfc2371.txt")
+    let grammar = try #require(
+      document.blocks.lazy.compactMap { block -> Preformatted? in
+        if case .preformatted(let preformatted) = block { preformatted } else { nil }
+      }
+      .first { $0.text.contains("pchar") })
+    #expect(grammar.kind == .sourceCode)
+    #expect(grammar.type == "abnf822")
+  }
+
+  /// RFC 2511's `|` is concatenation in pseudocode, not an alternative.
+  @Test func `RFC 2511's pseudocode is no grammar`() throws {
+    let document = try Fixtures.document("rfc2511.txt")
+    let typed = document.blocks.filter { block in
+      if case .preformatted(let preformatted) = block {
+        preformatted.type == "abnf822"
+      } else {
+        false
+      }
+    }
+    #expect(typed.isEmpty)
+  }
+
   // MARK: Through parse
 
   /// RFC 5234 sets its own grammar and its core rules as ABNF: both come out as

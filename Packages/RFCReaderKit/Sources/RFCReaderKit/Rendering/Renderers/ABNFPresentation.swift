@@ -7,7 +7,15 @@ import RFCKit
 /// B.1. A name defined nowhere in the document, as one imported from another, stays
 /// plain.
 enum ABNFPresentation {
-  static let types: Set<String> = ["abnf", "abnf9110"]
+  /// `abnf822` is a grammar in RFC 822's dialect, alternating with `|` (#696): its
+  /// rules link, and it is no RFC 5234 grammar, so no `.abnf` file takes it.
+  static let types: Set<String> = ["abnf", "abnf9110", "abnf822"]
+
+  /// The rules of `text` in whichever dialect it is written in: RFC 5234's, or, where
+  /// that does not read it, RFC 822's.
+  static func rules(of text: String) -> [ABNF.Rule]? {
+    ABNF.parse(text) ?? ABNF.parse(text, dialect: .rfc822)
+  }
 
   static let entry = RendererEntry(
     types: types,
@@ -30,7 +38,7 @@ enum ABNFPresentation {
   ]
 
   static func render(_ text: String, grammar: DocumentGrammar) -> Rendition? {
-    guard let rules = ABNF.parse(text) else { return nil }
+    guard let rules = rules(of: text) else { return nil }
     var definitions: [LinkedText.Definition] = []
     var links: [LinkedText.Link] = []
     for rule in rules {
@@ -106,7 +114,7 @@ public struct DocumentGrammar: Sendable, Equatable {
   /// The grammar of `blocks`, the texts of a document's grammar blocks in order.
   public init(blocks: [String]) {
     for block in blocks {
-      guard let rules = ABNF.parse(block) else { continue }
+      guard let rules = ABNFPresentation.rules(of: block) else { continue }
       let starts = rules.map(\.nameRange.location)
       for (index, rule) in rules.enumerated() where !rule.isIncremental {
         let anchor = ABNFPresentation.anchor(for: rule.name)

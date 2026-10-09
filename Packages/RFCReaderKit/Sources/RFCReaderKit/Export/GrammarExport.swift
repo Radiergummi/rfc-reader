@@ -13,6 +13,8 @@ public enum GrammarExport {
   public static func text(for document: RFCDocument, hints: ArtworkHints = .bundled) -> String? {
     let blocks = DocumentGrammar.blocks(of: document, hints: hints).compactMap {
       section, content -> (heading: String?, text: String)? in
+      // RFC 5234's dialect only: a grammar in RFC 822's, `abnf822`, alternates with
+      // `|`, which a tool reading the file would refuse (#696).
       guard ABNF.parse(content.text) != nil else { return nil }
       return (section.map(heading(of:)) ?? "Abstract", unindented(content.text))
     }
