@@ -44,6 +44,35 @@ struct GroundTruthTests {
       ])
   }
 
+  /// A table is scored by its cells, its header's first, row by row and with white
+  /// space collapsed, so a grid drawn in text and the `<table>` it was drawn from
+  /// compare equal (#438).
+  @Test func `a table is extracted as its rows of cells`() {
+    let table = Table(
+      title: nil,
+      header: [Table.Row(cells: [[.text("Bits")], [.text("Stream  Type")]])],
+      rows: [Table.Row(cells: [[.text("0x00")], [.text("Client-Initiated,"), .text(" Bidi")]])])
+    let blocks = GroundTruth.blocks(
+      of: document([Section(anchor: "s1", number: "1", title: "Types", blocks: [.table(table)])]))
+    #expect(
+      blocks == [
+        GroundTruth.Block(kind: .heading, content: "1 Types"),
+        GroundTruth.Block(
+          kind: .table, content: "Bits | Stream Type\n0x00 | Client-Initiated, Bidi"),
+      ])
+  }
+
+  /// A table is no verbatim block: a grid the parser leaves as artwork is a verbatim
+  /// block the XML does not have, and a table it finds is not one.
+  @Test func `a table is not verbatim`() {
+    let score = GroundTruth.score(
+      found: [GroundTruth.Block(kind: .table, content: "a | b")],
+      expected: [GroundTruth.Block(kind: .table, content: "a | b")])
+    #expect(
+      score[.table] == GroundTruth.Counts(truePositives: 1, falsePositives: 0, falseNegatives: 0))
+    #expect(score[.verbatim] == .zero)
+  }
+
   /// xml2rfc wraps artwork in a figure, and the parser may too.
   @Test func `artwork inside a figure or a list is extracted`() {
     let figure = Block.figure(Figure(title: "A Diagram", blocks: [artwork("[ A ]")]))
@@ -246,5 +275,16 @@ struct GroundTruthTests {
       )
     ])
     #expect(report.documents.map(\.errors) == [1])
+  }
+
+  /// A table missed or invented is an error of its document's too.
+  @Test func `a document's tables count among its errors`() {
+    let report = GroundTruthReport(documents: [
+      (
+        .rfc(9000),
+        [.table: GroundTruth.Counts(truePositives: 1, falsePositives: 1, falseNegatives: 2)]
+      )
+    ])
+    #expect(report.documents.map(\.errors) == [3])
   }
 }
