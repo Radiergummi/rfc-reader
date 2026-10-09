@@ -37,6 +37,9 @@ public actor DocumentStore {
   private let cacheDirectory: URL
   /// The bytes free on the disk for a body in each tier; see `StorageTier.hasRoom`.
   private let freeSpace: @Sendable (StorageTier) -> Int?
+  /// Awaited at the start of each look at the disk for a body to parse: nil but in
+  /// tests.
+  private let parsing: (@Sendable () async -> Void)?
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
   /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
@@ -72,6 +75,8 @@ public actor DocumentStore {
   private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
+  /// A pack installed meanwhile marks the parses of the documents it serves as a
+  /// removal does, so none of them is kept.
   private let parses = InFlightDownloads<RFCDocument?>()
   /// How many removals each document has had, so a download started again for a
   /// reader whose joined one the path refused knows whether one came meanwhile.
@@ -134,6 +139,17 @@ public actor DocumentStore {
   public init(
     directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil
   ) {
+    self.init(directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil)
+  }
+
+  /// The store above, with `parsing` awaited at the start of each look at the disk
+  /// for a body to parse, once it has chosen which files to read, whether or not one
+  /// is there: for a test to hold the parse open as it holds a fetch.
+  init(
+    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)?,
+    parsing: (@Sendable () async -> Void)?
+  ) {
+    self.parsing = parsing
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
     let cacheDirectory = caches.appending(path: "Documents", directoryHint: .isDirectory)
     self.directory = directory
@@ -659,16 +675,20 @@ public actor DocumentStore {
 
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
   /// joined by a second open, and a body removed while it parsed is shown but not
-  /// kept, like a fetch (#116).
+  /// kept, like a fetch (#116), and so is one parsed from what a pack installed
+  /// meanwhile replaces: every open that joins it before it ends, even after the
+  /// install, shows it, and the first open after it ends reads the pack.
   private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
     -> RFCDocument?
   {
     let xmlURLs = fileURLs(id, format: .xml)
     let textURLs = fileURLs(id, format: .text)
     let packURL = legacyPack?.file(for: id)
+    let parsing = parsing
     let (cached, isCachedKept) = try await parses.value(for: id) {
       Task {
-        await Self.parseCached(
+        await parsing?()
+        return await Self.parseCached(
           id, xml: xmlURLs, pack: packURL, text: textURLs, signpostID: signpostID)
       }
     }
@@ -760,7 +780,12 @@ public actor DocumentStore {
     let pack = try await installPack(source, as: Self.legacyPackName)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
+    // A parse running now read what the pack replaces, and is not kept either, by
+    // whichever open joined it (#116).
     parsed.removeAll { pack.file(for: $0) != nil }
+    for id in parses.runningDocuments where pack.file(for: id) != nil {
+      parses.removed(id)
+    }
     return pack
   }
 
@@ -902,9 +927,17 @@ public actor DocumentStore {
 
   // MARK: - Tests
 
-  /// How many readers wait for the fetch of `id`'s document, and for its `.txt`, so
-  /// a test acts once the readers it started have joined them.
-  func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
-    (downloads.waiters(id), texts.waiters(id))
+  /// How many readers wait for the fetch of `id`'s document, for its `.txt`, and for
+  /// the parse of its body on disk, so a test acts once the readers it started have
+  /// joined them.
+  func waiters(_ id: DocumentID) -> Waiters {
+    Waiters(
+      documents: downloads.waiters(id), texts: texts.waiters(id), parses: parses.waiters(id))
+  }
+
+  struct Waiters: Equatable {
+    var documents: Int
+    var texts: Int
+    var parses: Int
   }
 }
