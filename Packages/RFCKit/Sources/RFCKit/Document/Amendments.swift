@@ -44,11 +44,11 @@ public struct Amendment: Sendable, Hashable, Codable {
 /// not state its own number amends nothing, since a row that cannot say which
 /// document amends answers nothing.
 ///
-/// A citation of a series, a BCP, STD or FYI, names no RFC, and a document updates RFCs, so `members`
-/// says which RFCs a series holds -- the index's, `{ index.series($0)?.members ?? [] }`,
-/// which RFCKit's documents do not carry. Such a citation amends the one member the
-/// document updates; of two it updates, `BCP 14, Section 2` could mean either, and is
-/// counted for neither (#417).
+/// A citation of a series, a BCP, STD or FYI, names no RFC, and a document updates
+/// RFCs, so `members` says which RFCs a series holds -- the index's,
+/// `{ index.series($0)?.members ?? [] }`, which RFCKit's documents do not carry.
+/// Such a citation amends the one member the document updates; of two it updates,
+/// `BCP 14, Section 2` could mean either, and is counted for neither (#417).
 public enum Amendments {
   public static func links(
     in document: RFCDocument, members: (DocumentID) -> [DocumentID] = { _ in [] }

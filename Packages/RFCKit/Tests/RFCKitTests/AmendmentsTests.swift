@@ -120,7 +120,7 @@ struct AmendmentsTests {
 
   static let bcp = DocumentID(series: .bcp, number: 999)
 
-  /// A BCP or STD names no RFC, so a citation of its section counts as one of the RFC
+  /// A BCP or STD names no RFC, so a citation of its section counts as one of the RFCs
   /// it holds that the document updates.
   @Test func `a section of a series of one updated RFC is that RFC's`() throws {
     let document = try Self.citingSeries(Self.bcp, section: "7")
