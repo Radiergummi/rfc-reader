@@ -9,28 +9,10 @@ import Testing
 
 @Suite("Conditional index fetch")
 struct ConditionalIndexFetchTests {
-  /// Answers with a scripted status and headers, and keeps the request it was sent.
-  private final class Transport: HTTPTransport, @unchecked Sendable {
-    private let status: Int
-    private let headers: [String: String]
-    private let lock = NSLock()
-    private var sent: URLRequest?
-
-    init(status: Int, headers: [String: String] = [:]) {
-      self.status = status
-      self.headers = headers
-    }
-
-    var request: URLRequest? {
-      lock.withLock { sent }
-    }
-
-    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-      lock.withLock { sent = request }
-      let response = HTTPURLResponse.served(
-        from: request.url!, statusCode: status, headerFields: headers)
-      return (status == 200 ? Data("<rfc-index/>".utf8) : Data(), response)
-    }
+  private static func transport(status: Int, headers: [String: String] = [:])
+    -> ScriptedTransport
+  {
+    ScriptedTransport(status: status, body: Data("<rfc-index/>".utf8), headers: headers)
   }
 
   private let validators = CacheValidators(
@@ -50,7 +32,7 @@ struct ConditionalIndexFetchTests {
   }
 
   @Test func `the request carries the validators it was given`() async throws {
-    let transport = Transport(status: 304)
+    let transport = Self.transport(status: 304)
     _ = try await RFCEditorClient(transport: transport)
       .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: true)
     let request = try #require(transport.request)
@@ -60,7 +42,7 @@ struct ConditionalIndexFetchTests {
   }
 
   @Test func `a request without validators is unconditional`() async throws {
-    let transport = Transport(status: 200)
+    let transport = Self.transport(status: 200)
     _ = try await RFCEditorClient(transport: transport)
       .fetchIndexData(unlessMatching: nil, onExpensiveNetworks: true)
     let request = try #require(transport.request)
@@ -69,13 +51,13 @@ struct ConditionalIndexFetchTests {
   }
 
   @Test func `not modified is unchanged`() async throws {
-    let fetched = try await RFCEditorClient(transport: Transport(status: 304))
+    let fetched = try await RFCEditorClient(transport: Self.transport(status: 304))
       .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: true)
     #expect(fetched == .unchanged)
   }
 
   @Test func `a new index comes with its own validators`() async throws {
-    let transport = Transport(status: 200, headers: ["ETag": #""next""#])
+    let transport = Self.transport(status: 200, headers: ["ETag": #""next""#])
     let fetched = try await RFCEditorClient(transport: transport)
       .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: true)
     #expect(
@@ -86,7 +68,7 @@ struct ConditionalIndexFetchTests {
 
   #if !canImport(FoundationNetworking)
     @Test func `a fetch nobody asked for waits for a cheap network`() async throws {
-      let transport = Transport(status: 304)
+      let transport = Self.transport(status: 304)
       _ = try await RFCEditorClient(transport: transport)
         .fetchIndexData(unlessMatching: nil, onExpensiveNetworks: false)
       let request = try #require(transport.request)
@@ -107,7 +89,7 @@ struct ConditionalIndexFetchTests {
     }
 
     @Test func `a fetch someone asked for takes any network`() async throws {
-      let transport = Transport(status: 304)
+      let transport = Self.transport(status: 304)
       _ = try await RFCEditorClient(transport: transport)
         .fetchIndexData(unlessMatching: nil, onExpensiveNetworks: true)
       let request = try #require(transport.request)

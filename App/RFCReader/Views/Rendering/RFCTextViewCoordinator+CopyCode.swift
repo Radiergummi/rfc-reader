@@ -112,18 +112,38 @@ import RFCReaderKit
 
     private func showCopied(over range: NSRange) {
       guard let textView, let rect = referenceRect(for: range) else { return }
-      for view in textView.subviews where view.identifier == Self.feedbackIdentifier {
-        view.removeFromSuperview()
-      }
       let frame = FragmentGeometry.copyButtonCursorRect(
         buttonFrame: rect, containerOrigin: textView.textContainerOrigin
       )
       .insetBy(dx: -2, dy: -2)
+      let font =
+        textView.textLayoutManager?.attributedText?.attribute(
+          .font, at: range.location, effectiveRange: nil) as? NSFont
+      let checkmark = NSImageView(frame: CGRect(origin: .zero, size: frame.size))
+      checkmark.image = NSImage(
+        systemSymbolName: "checkmark", accessibilityDescription: nil)
+      checkmark.symbolConfiguration = .init(
+        pointSize: (font?.pointSize ?? rect.height * 0.7) * DocumentTextBuilder.copyButtonScale,
+        weight: .regular)
+      checkmark.contentTintColor = RFCColors.secondaryLabel
+      showCopyFeedback(checkmark, in: frame)
+    }
+
+    /// Shows `content` in `frame` of the text view, for a moment: a copy's feedback,
+    /// a code block's checkmark or a hung number's badge (#433). One at a time: a
+    /// new one replaces the last.
+    func showCopyFeedback(_ content: NSView, in frame: CGRect, cornerRadius: CGFloat = 0) {
+      guard let textView else { return }
+      for view in textView.subviews where view.identifier == Self.feedbackIdentifier {
+        view.removeFromSuperview()
+      }
       let feedback = NSView(frame: frame)
       feedback.identifier = Self.feedbackIdentifier
       feedback.wantsLayer = true
-      // Opaque, so the button does not show through: the page, and the card's tint
-      // over it, as the card draws.
+      feedback.layer?.cornerRadius = cornerRadius
+      feedback.layer?.masksToBounds = true
+      // Opaque, so what is under it does not show through: the page, and the card's
+      // tint over it, as the card draws.
       textView.effectiveAppearance.performAsCurrentDrawingAppearance {
         feedback.layer?.backgroundColor = textView.backgroundColor.cgColor
         let tint = CALayer()
@@ -131,17 +151,7 @@ import RFCReaderKit
         tint.backgroundColor = paletteBox.palette.cardFill.cgColor
         feedback.layer?.addSublayer(tint)
       }
-      let font =
-        textView.textLayoutManager?.attributedText?.attribute(
-          .font, at: range.location, effectiveRange: nil) as? NSFont
-      let checkmark = NSImageView(frame: feedback.bounds)
-      checkmark.image = NSImage(
-        systemSymbolName: "checkmark", accessibilityDescription: nil)
-      checkmark.symbolConfiguration = .init(
-        pointSize: (font?.pointSize ?? rect.height * 0.7) * DocumentTextBuilder.copyButtonScale,
-        weight: .regular)
-      checkmark.contentTintColor = RFCColors.secondaryLabel
-      feedback.addSubview(checkmark)
+      feedback.addSubview(content)
       feedback.alphaValue = 0
       textView.addSubview(feedback)
 

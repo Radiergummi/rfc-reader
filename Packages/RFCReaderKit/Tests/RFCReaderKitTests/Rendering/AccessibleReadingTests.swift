@@ -154,6 +154,24 @@ struct AccessibleReadingTests {
     #expect(AccessibleReading.rotorLabel(at: offset, in: text) == "Diagram")
   }
 
+  /// An informative chip is said as its label and its kind (#457), over the chip's
+  /// own range, so the text view can keep the link it is: said as a plain label, it
+  /// lost the link trait a normative chip keeps.
+  @Test func `an informative chip is said as a chip, with its range`() throws {
+    let text = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style).text
+    let chips = AccessibleReading.pieces(of: whole(text), in: text).compactMap { piece in
+      if case .chipLabel(let label, let range) = piece { (label, range) } else { nil }
+    }
+    let chip = try #require(chips.first)
+    #expect(chip.0.hasSuffix(", informative"))
+    #expect(text.attribute(.link, at: NSMaxRange(chip.1) - 1, effectiveRange: nil) != nil)
+    #expect(text.attribute(.rfcChip, at: chip.1.location, effectiveRange: nil) != nil)
+    // Where an accessor takes no range, the label is said as any other.
+    var asked: [NSRange] = []
+    let said = reading(chip.1, in: text, asked: &asked)
+    #expect(said == "[\(chip.0)]")
+  }
+
   @Test func `source code is read as text`() {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))

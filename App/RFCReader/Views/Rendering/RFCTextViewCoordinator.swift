@@ -89,16 +89,21 @@ final class RFCTextViewCoordinator: NSObject {
   /// may ask off the main thread.
   nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
+  /// The hung heading number under the pointer (#433), which the link's rendering
+  /// lights up. Behind a lock for the reason `linkAttributes` is.
+  nonisolated let hoveredSectionNumber = Mutex<NSRange?>(nil)
+
   /// The colors this reader's fragments draw their decoration in: the reader's
-  /// palette setting (#703). A box the fragments keep, so that `apply(palette:)`
+  /// palette setting (#703). A box the fragments keep, so that `apply(palette:outlinesEveryChip:)`
   /// recolors the ones already laid out rather than laying them out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
   /// Draws the decoration in `palette` from now on, and redraws what is on screen
   /// if it changed. Never a layout: a palette is the draw-time half of the settings,
-  /// and costs neither a rebuild nor the reader's place.
-  func apply(palette: ReaderPalette) {
-    guard paletteBox.replace(with: palette), let textView,
+  /// and costs neither a rebuild nor the reader's place. So is Increase Contrast,
+  /// which outlines every chip (#457).
+  func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
+    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView,
       let layoutManager = textView.textLayoutManager
     else { return }
     // Asks TextKit to render the laid-out fragments again, which reads the box;
@@ -294,6 +299,10 @@ final class RFCTextViewCoordinator: NSObject {
   /// whole resize. The inset is the gutter, so the gutter is what invalidates it.
   var laidOutGutter: CGFloat?
   var laidOutHeaderHeight: CGFloat?
+  var laidOutHang: CGFloat?
+  /// How far the container reaches into the leading gutter for the hang
+  /// (`ReaderLayout.containerReach`), which moves the column when it changes.
+  var laidOutReach: CGFloat?
 
   /// The header as hosted: given `environment`, and on iOS with a tap on its blank
   /// space for the bars.
@@ -454,6 +463,19 @@ final class RFCTextViewCoordinator: NSObject {
       // A backlink caption's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
       if backlinkCaption(at: textItem.range.location) != nil { return nil }
+      // A heading's hung number (#433) links to its own heading, which there is no
+      // point previewing: only the menu, its Copy and Share handing out the RFC
+      // Editor's URL for the section.
+      if let documentID,
+        let number = textView.textLayoutManager?.attributedText?.sectionNumber(
+          at: textItem.range.location),
+        let url = DocumentTextBuilder.url(number.anchor, scheme: DocumentTextBuilder.anchorScheme)
+      {
+        let link = LinkCopy.forLink(
+          url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+        return .init(
+          menu: referenceMenu(defaultMenu, sharing: link, from: textView, at: number.range))
+      }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let environment, let documentID,
@@ -704,6 +726,9 @@ final class RFCTextViewCoordinator: NSObject {
     func viewportDidScroll(_ notification: Notification) {
       if !isFollowing { reportVisibleAnchor() }
       hover.send(.scrolled)
+      // A lit number has moved out from under the pointer, and its help tag with it;
+      // the next move lights whatever is there now (#433).
+      hoverSectionNumber(under: nil)
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
@@ -787,6 +812,8 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     return DocumentTextBuilder.linkRenderingAttributes(
       for: link,
       defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
-      caption: textView.caption)
+      caption: textView.caption,
+      sectionNumber: textLayoutManager.sectionNumberState(
+        at: location, hovered: hoveredSectionNumber.withLock { $0 }))
   }
 }

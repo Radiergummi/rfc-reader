@@ -260,7 +260,7 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
   /// to compose: the number lives in `number`, not in the words.
   /// With no words after it, nothing follows the number (#683).
-  private var numberPrefix: String {
+  public var numberPrefix: String {
     guard let numberLabel else { return "" }
     return titleText.isEmpty ? numberLabel + "." : numberLabel + ". "
   }
