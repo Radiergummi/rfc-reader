@@ -179,9 +179,9 @@ struct DocumentView: View {
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
-      hang: { [session, paneWidth, measure = settings.measure] style in
+      hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
-        let hang = session.sectionNumberHang(in: style)
+        let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
         return ReaderLayout.hangs(hang, width: paneWidth, measure: measure) ? hang : 0
       })
   }

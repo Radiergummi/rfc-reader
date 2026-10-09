@@ -101,10 +101,12 @@ public enum SelectionText {
     guard !runs.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
     for run in runs.sorted(by: { $0.range.location > $1.range.location }) {
-      // In the attributes of the run's last character, the tab before the title:
-      // the heading's own, with no link.
-      let attributes = result.attributes(at: NSMaxRange(run.range) - 1, effectiveRange: nil)
-        .filter { $0.key != .rfcCopiedAs }
+      // In the heading's own attributes, its color and no link: the run's, less what
+      // makes the number one, since a selection that ends inside the number has no
+      // tab after it to take them from.
+      var attributes = result.attributes(at: NSMaxRange(run.range) - 1, effectiveRange: nil)
+        .filter { ![.rfcCopiedAs, .rfcSectionNumber, .link].contains($0.key) }
+      attributes[.foregroundColor] = RFCColors.label
       result.replaceCharacters(
         in: run.range, with: NSAttributedString(string: run.replacement, attributes: attributes))
     }
@@ -135,13 +137,23 @@ public enum SelectionText {
   /// text, with what a diagram hides shown again, and with every link one anyone
   /// can open, `publicURL`'s for the reader's links, or none. The chips stay as they
   /// look on screen, their symbols the images a rich target receives.
+  ///
+  /// `hang` is the build's (`BuiltDocument.sectionNumberHang`, #433), which every
+  /// paragraph is set in by on screen and none is in the copy: a paste is indented
+  /// the same whether the window had room to hang the numbers or not.
   public static func richCopy(
-    of selection: NSAttributedString, publicURL: (URL) -> URL?
+    of selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0
   ) -> NSAttributedString {
     let withoutReaderText = withoutReaderText(of: selection)
     let result = NSMutableAttributedString(
       attributedString: richText(of: withoutReaderText) ?? withoutReaderText)
     let whole = NSRange(location: 0, length: result.length)
+    if hang > 0 {
+      result.enumerateAttribute(.paragraphStyle, in: whole) { value, range, _ in
+        guard let style = value as? NSParagraphStyle else { return }
+        result.addAttribute(.paragraphStyle, value: unhung(style, by: hang), range: range)
+      }
+    }
     result.enumerateAttribute(.link, in: whole) { value, range, _ in
       guard let link = linkURL(value) else { return }
       if let url = publicURL(link) {
@@ -151,6 +163,23 @@ public enum SelectionText {
       }
     }
     return result
+  }
+
+  /// `style` as it is set where no number hangs: its indents and tab stops measured
+  /// from the column's edge rather than the container's, `hang` left of it. A hung
+  /// heading's tab to its number, left of the column, has no place there.
+  private static func unhung(_ style: NSParagraphStyle, by hang: CGFloat) -> NSParagraphStyle {
+    let unhung = NSMutableParagraphStyle()
+    unhung.setParagraphStyle(style)
+    unhung.firstLineHeadIndent = max(0, style.firstLineHeadIndent - hang)
+    unhung.headIndent = max(0, style.headIndent - hang)
+    unhung.tabStops = style.tabStops.compactMap { stop in
+      stop.location < hang
+        ? nil
+        : NSTextTab(
+          textAlignment: stop.alignment, location: stop.location - hang, options: stop.options)
+    }
+    return unhung
   }
 
   /// The HTML a copy of `selection` carries (#778): a `p` per paragraph and a `pre`

@@ -200,12 +200,14 @@ extension RFCTextViewCoordinator {
       column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
         || hang != laidOutHang
     else { return }
-    let containerChanged = column != laidOutColumn || hang != laidOutHang
+    let reach = ReaderLayout.containerReach(gutter: gutter, hang: hang)
+    let containerChanged = column != laidOutColumn || reach != laidOutReach
     laidOutColumn = column
     laidOutGutter = gutter
     laidOutHeaderHeight = headerHeight
     laidOutHang = hang
-    let leading = ReaderLayout.leadingInset(gutter: gutter, hang: hang)
+    laidOutReach = reach
+    let leading = gutter - reach
 
     #if canImport(UIKit)
       textView.textContainerInset = UIEdgeInsets(
@@ -216,11 +218,11 @@ extension RFCTextViewCoordinator {
       textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
       // Symmetric too, so the container's reach into the gutter is its origin's.
-      (textView as? ReaderTextView)?.leadingHang = gutter - leading
+      (textView as? ReaderTextView)?.leadingHang = reach
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
-    // The container is the column and the hang, set here and nowhere else. Tracking the text
+    // The container is the column and its reach, set here and nowhere else. Tracking the text
     // view's width instead re-wrapped the storage on *every* resize: the frame
     // and the inset cannot change in one step, so the container passed through a
     // width that was neither the old column nor the new one, and TextKit threw
@@ -234,10 +236,10 @@ extension RFCTextViewCoordinator {
     if containerChanged {
       #if canImport(UIKit)
         textView.textContainer.size = CGSize(
-          width: column + hang, height: .greatestFiniteMagnitude)
+          width: column + reach, height: .greatestFiniteMagnitude)
       #else
         textView.textContainer?.size = NSSize(
-          width: column + hang, height: .greatestFiniteMagnitude)
+          width: column + reach, height: .greatestFiniteMagnitude)
       #endif
       engine.columnChanged()
     } else {

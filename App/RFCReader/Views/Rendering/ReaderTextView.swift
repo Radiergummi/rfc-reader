@@ -71,6 +71,8 @@ import RFCReaderKit
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
+    /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
+    var sectionNumberHang: () -> CGFloat = { 0 }
 
     /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
     func copyAsQuote() {
@@ -94,7 +96,9 @@ import RFCReaderKit
         return
       }
       Clipboard.write(
-        .selection(attributed.attributedSubstring(from: selection), publicURL: publicURL))
+        .selection(
+          attributed.attributedSubstring(from: selection), publicURL: publicURL,
+          hang: sectionNumberHang()))
     }
   }
 
@@ -182,6 +186,8 @@ import RFCReaderKit
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
+    /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
+    var sectionNumberHang: () -> CGFloat = { 0 }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
     var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
@@ -344,7 +350,8 @@ import RFCReaderKit
         super.copy(sender)
         return
       }
-      Clipboard.write(.selection(selectedSubstring, publicURL: publicURL))
+      Clipboard.write(
+        .selection(selectedSubstring, publicURL: publicURL, hang: sectionNumberHang()))
     }
 
     /// A drag and a service get the HTML a copy carries too.
@@ -375,7 +382,8 @@ import RFCReaderKit
       guard selectedRanges.count == 1 else {
         return super.writeSelection(to: pboard, type: type)
       }
-      let content = PasteboardContent.selection(selectedSubstring, publicURL: publicURL)
+      let content = PasteboardContent.selection(
+        selectedSubstring, publicURL: publicURL, hang: sectionNumberHang())
       switch content.value(for: flavor.type) {
       case .text(let text)?: return pboard.setString(text, forType: type)
       case .data(let data)?: return pboard.setData(data, forType: type)

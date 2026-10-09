@@ -299,6 +299,9 @@ final class RFCTextViewCoordinator: NSObject {
   var laidOutGutter: CGFloat?
   var laidOutHeaderHeight: CGFloat?
   var laidOutHang: CGFloat?
+  /// How far the container reaches into the leading gutter for the hang
+  /// (`ReaderLayout.containerReach`), which moves the column when it changes.
+  var laidOutReach: CGFloat?
 
   /// The header as hosted: given `environment`, and on iOS with a tap on its blank
   /// space for the bars.
@@ -722,6 +725,9 @@ final class RFCTextViewCoordinator: NSObject {
     func viewportDidScroll(_ notification: Notification) {
       if !isFollowing { reportVisibleAnchor() }
       hover.send(.scrolled)
+      // A lit number has moved out from under the pointer, and its help tag with it;
+      // the next move lights whatever is there now (#433).
+      hoverSectionNumber(under: nil)
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it

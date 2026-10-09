@@ -351,10 +351,9 @@ extension DocumentTextBuilder {
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
       spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15,
       hangsNumber: hangingNumber != nil)
-    if let hangingNumber, let label = section.numberLabel {
+    if let hangingNumber {
       appendHangingNumber(
-        hangingNumber, of: section.anchor,
-        copiedAs: label + (section.titleText.isEmpty ? "." : ". "), attributes: attributes)
+        hangingNumber, of: section.anchor, copiedAs: section.numberPrefix, attributes: attributes)
       output.append(inlineRuns(section.title, base: attributes))
     } else {
       output.append(inlineRuns(section.displayTitleInlines, base: attributes))

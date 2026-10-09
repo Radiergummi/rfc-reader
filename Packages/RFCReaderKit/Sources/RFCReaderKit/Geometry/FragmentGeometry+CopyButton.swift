@@ -13,12 +13,14 @@ extension FragmentGeometry {
   /// Where the "Link copied" badge over a heading's hung number goes (#433), in the
   /// text view's coordinates: just above the number, its trailing edge on the
   /// number's, since a badge is wider than a number and the gutter is to its left.
-  /// `numberFrame` is the number's box in the text container.
+  /// `numberFrame` is the number's box in the text container. Never past the view's
+  /// leading edge, which a gutter only just wide enough for the hang would put a
+  /// long badge over.
   public static func linkCopiedBadgeFrame(
     numberFrame: CGRect, badgeSize: CGSize, containerOrigin: CGPoint
   ) -> CGRect {
     CGRect(
-      x: containerOrigin.x + numberFrame.maxX - badgeSize.width,
+      x: max(0, containerOrigin.x + numberFrame.maxX - badgeSize.width),
       y: containerOrigin.y + numberFrame.minY - badgeSize.height - badgeGap,
       width: badgeSize.width, height: badgeSize.height)
   }

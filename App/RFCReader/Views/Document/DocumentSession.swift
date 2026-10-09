@@ -87,18 +87,27 @@ final class DocumentSession {
   private(set) var sectionPlaces: [String: String] = [:]
 
   /// How far the document's heading numbers hang in a style (#433), measured once
-  /// per style: asked on every update pass, for whether they fit the gutter.
-  @ObservationIgnored private var measuredHang: (style: ReadingStyle, hang: CGFloat)?
+  /// per set of fonts: asked on every update pass, for whether they fit the gutter.
+  @ObservationIgnored private var measuredHang: (fonts: HangFonts, hang: CGFloat)?
 
-  func sectionNumberHang(in style: ReadingStyle) -> CGFloat {
+  /// What a measured hang depends on.
+  private struct HangFonts: Equatable {
+    let style: ReadingStyle
+    let legibilityWeight: LegibilityWeight?
+  }
+
+  /// `legibilityWeight` is Bold Text, which UIKit applies to the fonts as it makes
+  /// them, and so widens the numbers without changing the style.
+  func sectionNumberHang(in style: ReadingStyle, legibilityWeight: LegibilityWeight?) -> CGFloat {
     guard let document = state.document else { return 0 }
     // Kept by the fonts alone: the column moves on every step of a resize, and the
     // numbers' widths do not move with it.
-    var fonts = style
-    fonts.measure = ReaderLayout.idealMeasure
-    fonts.sectionNumberHang = 0
-    if let measuredHang, measuredHang.style == fonts { return measuredHang.hang }
-    let hang = SectionNumberHang.width(of: document, style: fonts)
+    var style = style
+    style.measure = ReaderLayout.idealMeasure
+    style.sectionNumberHang = 0
+    let fonts = HangFonts(style: style, legibilityWeight: legibilityWeight)
+    if let measuredHang, measuredHang.fonts == fonts { return measuredHang.hang }
+    let hang = SectionNumberHang.width(of: document, style: style)
     measuredHang = (fonts, hang)
     return hang
   }
@@ -215,6 +224,7 @@ final class DocumentSession {
           },
           uniquingKeysWith: { first, _ in first }
         )
+        measuredHang = nil
         state.finish(document)
         loaded(document)
         trace("loaded")

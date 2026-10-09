@@ -111,20 +111,25 @@ struct SectionNumberHangTests {
     #expect(!ReaderLayout.hangs(0, width: 2000, measure: .recommended))
   }
 
-  @Test func `the leading inset gives the hang back out of the gutter`() {
-    #expect(ReaderLayout.leadingInset(gutter: 100, hang: 40) == 60)
-    #expect(ReaderLayout.leadingInset(gutter: 100, hang: 0) == 100)
+  @Test func `the container reaches into the gutter by the hang`() {
+    #expect(ReaderLayout.containerReach(gutter: 100, hang: 40) == 40)
+    #expect(ReaderLayout.containerReach(gutter: 100, hang: 0) == 0)
   }
 
-  @Test func `a gutter narrowed under the hang before the rebuild keeps the numbers in view`() {
-    #expect(ReaderLayout.leadingInset(gutter: ReaderLayout.margin, hang: 60) == 0)
+  /// Until the rebuild lands: the container may reach no further than the gutter,
+  /// on the leading side for the numbers and on the trailing side for the text.
+  @Test func `a gutter narrowed under the hang before the rebuild keeps the text in view`() {
+    #expect(
+      ReaderLayout.containerReach(gutter: ReaderLayout.margin, hang: 60) == ReaderLayout.margin)
   }
 
   // MARK: The build
 
   @Test func `a build that hangs says how far`() {
     let built = DocumentTextBuilder.build(document, style: hanging)
-    #expect(built.sectionNumberHang == SectionNumberHang.width(of: document, style: hanging))
+    // Within a rounding: two measurements of a line can differ in the last places.
+    #expect(
+      abs(built.sectionNumberHang - SectionNumberHang.width(of: document, style: hanging)) < 0.001)
     #expect(DocumentTextBuilder.build(document, style: ReadingStyle()).sectionNumberHang == 0)
   }
 
@@ -171,6 +176,45 @@ struct SectionNumberHangTests {
       #expect(
         SelectionText.plainText(of: built.text.attributedSubstring(from: fromNumber)) == copied)
     }
+  }
+
+  @Test func `a copy ending inside the number gets the heading's prefix, not the number's link`()
+    throws
+  {
+    let built = DocumentTextBuilder.build(document, style: hanging)
+    let start = try Fixtures.offset(of: "\t1.1\tRequirements Notation\n", in: built.text)
+    // From the paragraph before, to the middle of `1.1`.
+    let selection = NSRange(location: start - 3, length: 5)
+    let rich = SelectionText.richCopy(
+      of: built.text.attributedSubstring(from: selection), publicURL: { $0 })
+    let prefix = try #require(rich.string.range(of: "1.1. "))
+    let offset = NSRange(prefix, in: rich.string).location
+    #expect(rich.attribute(.link, at: offset, effectiveRange: nil) == nil)
+    #expect(rich.attribute(.rfcSectionNumber, at: offset, effectiveRange: nil) == nil)
+    let color = rich.attribute(.foregroundColor, at: offset, effectiveRange: nil)
+    #expect(color as? PlatformColor == RFCColors.label)
+  }
+
+  /// The hang is the screen's: a paste is indented as the text is where no number
+  /// hangs, whatever the window's width was.
+  @Test func `a rich copy is indented as if nothing hung`() throws {
+    func copy(_ built: BuiltDocument) -> NSAttributedString {
+      SelectionText.richCopy(
+        of: built.text, publicURL: { $0 }, hang: built.sectionNumberHang)
+    }
+    let hung = copy(DocumentTextBuilder.build(document, style: hanging))
+    let plain = copy(DocumentTextBuilder.build(document, style: ReadingStyle()))
+    for text in ["Prose.", "Item.", "Requirements Notation"] {
+      let copied = try paragraphStyle(at: try Fixtures.offset(of: text, in: hung), in: hung)
+      let unhung = try paragraphStyle(at: try Fixtures.offset(of: text, in: plain), in: plain)
+      #expect(copied.firstLineHeadIndent == unhung.firstLineHeadIndent, "\(text)")
+      #expect(copied.headIndent == unhung.headIndent, "\(text)")
+    }
+    let item = try Fixtures.offset(of: "Item.", in: hung)
+    #expect(
+      try paragraphStyle(at: item, in: hung).tabStops.map(\.location)
+        == paragraphStyle(at: try Fixtures.offset(of: "Item.", in: plain), in: plain).tabStops.map(
+          \.location))
   }
 
   @Test func `an appendix hangs its letter`() throws {
@@ -272,6 +316,14 @@ struct SectionNumberHangTests {
     #expect(frame.maxX == CGFloat(50 + 30))
     #expect(frame.maxY == CGFloat(30 + 100) - FragmentGeometry.badgeGap)
     #expect(frame.size == CGSize(width: 80, height: 20))
+  }
+
+  @Test func `the copied badge stays inside the view where the gutter is narrow`() {
+    let frame = FragmentGeometry.linkCopiedBadgeFrame(
+      numberFrame: CGRect(x: 10, y: 100, width: 20, height: 18),
+      badgeSize: CGSize(width: 90, height: 20), containerOrigin: CGPoint(x: 30, y: 30))
+    #expect(frame.minX == 0)
+    #expect(frame.size == CGSize(width: 90, height: 20))
   }
 
   @Test func `the copied link is the RFC Editor's, to the section and to the appendix`() throws {
