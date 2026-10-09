@@ -138,4 +138,24 @@ struct OfflineReconcilerTests {
       OfflineReconciler.plan(wanted: withoutBookmarks, kept: kept, cached: [])
         == OfflineReconciler.Plan(release: [.rfc(2)]))
   }
+
+  /// A fetch that failed is not started again by the next run: its row says so, with
+  /// Retry. Nor is it listed as waiting, which would name a path to wait for.
+  @Test func `a document whose fetch failed is neither fetched again nor waiting`() {
+    #expect(
+      OfflineReconciler.plan(wanted: [.rfc(1), .rfc(2)], kept: [], cached: [], failed: [.rfc(1)])
+        == OfflineReconciler.Plan(fetch: [.rfc(2)]))
+    #expect(
+      OfflineReconciler.plan(
+        wanted: [.rfc(1), .rfc(2)], kept: [], cached: [], failed: [.rfc(1)],
+        policy: .deferred(.lowPowerMode))
+        == OfflineReconciler.Plan(waiting: [.rfc(2)], deferral: .lowPowerMode))
+  }
+
+  /// A failure is of a fetch; a body that is on disk anyway is moved as any other.
+  @Test func `a failed document whose body is cached is still moved`() {
+    #expect(
+      OfflineReconciler.plan(wanted: [.rfc(1)], kept: [], cached: [.rfc(1)], failed: [.rfc(1)])
+        == OfflineReconciler.Plan(keep: [.rfc(1)]))
+  }
 }

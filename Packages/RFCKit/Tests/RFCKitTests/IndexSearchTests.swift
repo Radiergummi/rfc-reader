@@ -293,4 +293,74 @@ struct IndexSearchTests {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     #expect(search.search("zzzz-nothing-matches").isEmpty)
   }
+
+  // MARK: Diacritics (#425)
+
+  /// Hand-written entries: an author, a title word and a working group with accents.
+  /// The author and RFC 9003's title are decomposed, a letter and its mark apart, as
+  /// some sources write them; the rest precomposed.
+  private static let accented = IndexSearch(
+    index: RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(9001), title: "A Widget Protocol", authors: [Author(name: "M. Ku\u{0308}hlewind")],
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9002), title: "The Fa\u{00E7}ade Pattern for Gadgets",
+        date: PublicationDate(year: 2024)),
+      RFCMetadata(
+        id: .rfc(9003), title: "Re\u{0301}sume\u{0301} Messages", date: PublicationDate(year: 2024),
+        workingGroup: "Na\u{00EF}ve"),
+    ]))
+
+  private func numbers(_ query: String) -> [Int] {
+    Self.accented.search(query, limit: .max).map(\.rfc.number)
+  }
+
+  /// A name found by `author:` is found by free text too: both fold diacritics.
+  @Test func `free text finds an author without the accents`() {
+    #expect(numbers("kuhlewind") == [9001])
+    #expect(numbers("K\u{00FC}hlewind") == [9001])
+    #expect(numbers("author:kuhlewind") == numbers("kuhlewind"))
+  }
+
+  @Test func `a title word is found without its accent`() {
+    #expect(numbers("facade") == [9002])
+    #expect(numbers("fa\u{00E7}ade") == [9002])
+  }
+
+  /// A precomposed letter and its decomposed spelling are the same letter, on either
+  /// side: the index holds `e` and U+0301 here, the query types `é`.
+  @Test func `precomposed and decomposed letters are the same`() {
+    #expect(numbers("r\u{00E9}sum\u{00E9}") == [9003])
+    #expect(numbers("resume") == [9003])
+    #expect(numbers("ku\u{0308}hlewind") == [9001])
+  }
+
+  @Test func `a working group is matched without its accents`() {
+    #expect(numbers("wg:naive") == [9003])
+    #expect(numbers("wg:Na\u{00EF}ve") == [9003])
+  }
+
+  /// Completion and tokens compare a group as the search matches it, so `wg:naive`
+  /// becomes a token, and `wg:naiv` is offered the group the index spells with an
+  /// accent.
+  @Test func `wg completion and tokens fold as the search does`() {
+    let groups = SearchQuery.knownWorkingGroups(in: Self.accented.index)
+    #expect(groups == ["naive"])
+    #expect(
+      SearchQuery.tokenized("wg:naive ", workingGroups: groups).terms.map(\.word) == ["wg:naive"])
+    #expect(SearchQuery.tokenized("wg:Na\u{00EF}ve ", workingGroups: groups).terms.count == 1)
+    #expect(
+      SearchQuery.suggestions(for: "wg:naiv", in: Self.accented.index).map(\.completion)
+        == ["wg:naive"])
+  }
+
+  /// A group the index names, with or without its accents, is no unknown term (#355).
+  @Test func `a working group written without its accents is known`() {
+    #expect(SearchQuery.unknownTerms(in: "wg:naive", index: Self.accented.index).isEmpty)
+    #expect(SearchQuery.unknownTerms(in: "wg:Na\u{00EF}ve", index: Self.accented.index).isEmpty)
+    #expect(
+      SearchQuery.unknownTerms(in: "wg:naive,quic", index: Self.accented.index)
+        == [UnknownSearchTerm(word: "wg:naive,quic", reason: .workingGroup)])
+  }
 }

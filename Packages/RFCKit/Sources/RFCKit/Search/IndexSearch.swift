@@ -24,8 +24,9 @@ public struct SearchFilters: Sendable, Hashable {
 
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<PublicationStream> = []
-  /// Lowercased, and without empty names, as the prepared fields they are matched
-  /// against are lowercased and an empty value is no filter.
+  /// Lowercased, and without empty names, as an empty value is no filter. They keep
+  /// their diacritics, as they are shown, and are folded where they are matched
+  /// (`SearchText.folded`), as the fields they are matched against are.
   public var workingGroups: Set<String> = [] {
     didSet {
       let normalized = Set(workingGroups.filter { !$0.isEmpty }.map { $0.lowercased() })
@@ -78,7 +79,8 @@ public struct SearchHit: Sendable, Identifiable {
 public struct IndexSearch: Sendable {
   public let index: RFCIndex
 
-  /// Lowercased copies of the searchable fields, built once so type-ahead stays fast.
+  /// Folded copies of the searchable fields (`SearchText.folded`), built once so
+  /// type-ahead stays fast.
   private struct Entry: Sendable {
     var offset: Int
     var number: SearchText
@@ -96,18 +98,18 @@ public struct IndexSearch: Sendable {
   public init(index: RFCIndex) {
     self.index = index
     self.entries = index.rfcs.enumerated().map { offset, rfc in
-      let title = rfc.title.lowercased()
+      let title = SearchText.folded(rfc.title)
       let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
       return Entry(
         offset: offset,
-        number: SearchText(String(rfc.number)),
-        title: SearchText(title),
-        titleWords: Set(words.map { SearchText(String($0)) }),
-        keywords: rfc.keywords.map { SearchText($0.lowercased()) },
-        authors: rfc.authors.map { SearchText($0.name.lowercased()) },
+        number: SearchText(alreadyFolded: String(rfc.number)),
+        title: SearchText(alreadyFolded: title),
+        titleWords: Set(words.map { SearchText(alreadyFolded: String($0)) }),
+        keywords: rfc.keywords.map { SearchText(folding: $0) },
+        authors: rfc.authors.map { SearchText(folding: $0.name) },
         authorNames: rfc.authors.map { AuthorName($0.name) },
-        abstract: SearchText(rfc.abstract?.lowercased() ?? ""),
-        group: SearchText(rfc.workingGroup?.lowercased() ?? "")
+        abstract: SearchText(folding: rfc.abstract ?? ""),
+        group: SearchText(folding: rfc.workingGroup ?? "")
       )
     }
   }
@@ -231,8 +233,9 @@ public struct IndexSearch: Sendable {
     text: String, filters: SearchFilters, limit: Int = 100, now: Date = Date()
   ) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written.
-    let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
+    // A quoted phrase is one term, so it has to match as it is written. Every term is
+    // folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
+    let terms = SearchQuery.words(in: SearchText.folded(trimmed)).map(SearchQuery.unquoted)
       .filter { !$0.isEmpty }
 
     if filters.isEmpty, let number = Self.number(in: trimmed) {
@@ -241,9 +244,9 @@ public struct IndexSearch: Sendable {
 
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
-    let needles = terms.map(SearchText.init)
+    let needles = terms.map(SearchText.init(alreadyFolded:))
     // The query as the title bonus compares it, without the quotes of its phrases.
-    let lowered = SearchText(terms.joined(separator: " "))
+    let foldedQuery = SearchText(alreadyFolded: terms.joined(separator: " "))
     let filter = PreparedFilters(filters, index: index, now: now)
     var hits: [SearchHit] = []
     for entry in entries {
@@ -253,7 +256,7 @@ public struct IndexSearch: Sendable {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
       }
-      if let score = score(entry, rfc: rfc, terms: needles, loweredQuery: lowered) {
+      if let score = score(entry, rfc: rfc, terms: needles, foldedQuery: foldedQuery) {
         hits.append(SearchHit(rfc: rfc, score: score))
       }
     }
@@ -309,7 +312,7 @@ public struct IndexSearch: Sendable {
 
     init(_ filters: SearchFilters, index: RFCIndex, now: Date) {
       self.filters = filters
-      groups = Set(filters.workingGroups.map(SearchText.init))
+      groups = Set(filters.workingGroups.map { SearchText(folding: $0) })
       author = filters.author.map(AuthorQuery.init)
       let documents = filters.documentScopes
       scope =
@@ -365,7 +368,7 @@ public struct IndexSearch: Sendable {
 
   /// Every term must match somewhere; where it matches decides the weight.
   private func score(
-    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], loweredQuery: SearchText
+    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], foldedQuery: SearchText
   ) -> Int? {
     var total = 0
     for term in terms {
@@ -393,7 +396,7 @@ public struct IndexSearch: Sendable {
       guard best > 0 else { return nil }
       total += best
     }
-    if terms.count > 1, entry.title.contains(loweredQuery) { total += 50 }
+    if terms.count > 1, entry.title.contains(foldedQuery) { total += 50 }
     if rfc.isObsolete { total -= 10 }
     if rfc.currentStatus.isStandardsTrack || rfc.currentStatus == .bestCurrentPractice {
       total += 5
@@ -402,7 +405,7 @@ public struct IndexSearch: Sendable {
   }
 }
 
-/// A lowercased field held as UTF-8, so searching it is a byte scan.
+/// A folded field held as UTF-8, so searching it is a byte scan.
 ///
 /// `String.range(of:)` was the whole cost of search. It is a Foundation call with
 /// per-call setup and Unicode-correct matching, and the scoring loop makes roughly
@@ -411,15 +414,23 @@ public struct IndexSearch: Sendable {
 /// query cost 96 ms, and a query matching *nothing* cost 93: the work was the
 /// scanning, not the hits.
 ///
-/// What this gives up is canonical equivalence: `e` + U+0301 no longer finds `é`
-/// spelled as U+00E9. Case is unaffected — both sides are lowercased on the way in —
-/// and UTF-8 is self-synchronizing, so since a needle never begins with a
+/// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
+/// as U+00E9. Both sides are folded on the way in (`SearchText.folded`), which
+/// composes them first, so the two spellings of an accented letter end as the same
+/// bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
 /// continuation byte a match cannot start in the middle of a character.
 struct SearchText: Hashable, Sendable {
   private let bytes: [UInt8]
 
-  init(_ string: String) {
+  /// `string` as it is: text already folded, such as a term split from a folded
+  /// query, or digits.
+  init(alreadyFolded string: String) {
     bytes = Array(string.utf8)
+  }
+
+  /// `text` folded (`folded`), as every field and needle a search compares is.
+  init(folding text: String) {
+    self.init(alreadyFolded: Self.folded(text))
   }
 
   func hasPrefix(_ other: SearchText) -> Bool {
@@ -469,8 +480,8 @@ struct AuthorName: Sendable {
   init(_ name: String) {
     let words = name.split(separator: " ")
     let given = words.dropLast().prefix(while: Self.isInitials)
-    initials = Set(given.flatMap { word in folded(String(word)).filter(\.isLetter) })
-    surname = SearchText(folded(words.dropFirst(given.count).joined(separator: " ")))
+    initials = Set(given.flatMap { word in SearchText.folded(String(word)).filter(\.isLetter) })
+    surname = SearchText(folding: words.dropFirst(given.count).joined(separator: " "))
   }
 
   /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
@@ -502,14 +513,24 @@ struct AuthorQuery: Sendable {
   let surnames: [SearchText]
 
   init(_ value: String) {
-    let words = folded(value).split(separator: " ")
+    let words = SearchText.folded(value).split(separator: " ")
     initials = words.compactMap(\.first)
-    surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
+    surnames = words.indices.map { SearchText(alreadyFolded: words[$0...].joined(separator: " ")) }
   }
 }
 
-/// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
-/// however its ü is spelled.
-private func folded(_ text: String) -> String {
-  text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+extension SearchText {
+  /// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
+  /// however its ü is spelled: what every field the search prepares, and every term
+  /// and filter it matches against them, is compared as (#425), and what `wg:`
+  /// completion and tokens compare names as. Composed first (NFC), so a letter and its
+  /// marks typed apart, `u` and U+0308 or `か` and U+3099, are the one letter the other
+  /// spelling is, then folded, which drops a mark Foundation counts as a diacritic. A
+  /// letter that is not a base letter and a mark, `ß`, `ø`, `æ`, is left as it is.
+  /// ASCII, most of the index, is only lowercased: there is nothing else to do to it.
+  static func folded(_ text: String) -> String {
+    if text.utf8.allSatisfy({ $0 < 0x80 }) { return text.lowercased() }
+    return text.precomposedStringWithCanonicalMapping.lowercased()
+      .folding(options: .diacriticInsensitive, locale: nil)
+  }
 }
