@@ -39,4 +39,13 @@ public enum OfflineMarkStore {
     }
     try context.save()
   }
+
+  /// Removes every mark, as Settings' Remove All Offline Documents does (#358), and
+  /// saves. The bodies are the reconciler's to move back into the cache.
+  /// Row by row rather than a batch delete, which skips the context's change tracking
+  /// that the save's notification, and so every other tab, reads.
+  public static func removeAll(in context: ModelContext) throws {
+    try context.fetch(FetchDescriptor<OfflineMark>()).forEach(context.delete)
+    try context.save()
+  }
 }

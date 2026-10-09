@@ -130,6 +130,46 @@
         }
       }
     },
+    "%lld documents" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokument"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokumente"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld document"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld documents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld documents." : {
       "localizations" : {
         "de" : {
@@ -530,6 +570,16 @@
         }
       }
     },
+    "Clear Cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache leeren"
+          }
+        }
+      }
+    },
     "Close" : {
       "localizations" : {
         "de" : {
@@ -881,6 +931,16 @@
         }
       }
     },
+    "Downloaded when the network is not metered, and kept while bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geladen, wenn das Netzwerk keine Datenbegrenzung hat, und behalten, solange ein Lesezeichen besteht."
+          }
+        }
+      }
+    },
     "Draw Diagrams" : {
       "localizations" : {
         "de" : {
@@ -1207,6 +1267,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eine Kopie behalten, um offline zu lesen."
+          }
+        }
+      }
+    },
+    "Keep bookmarked documents offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente mit Lesezeichen offline behalten"
+          }
+        }
+      }
+    },
+    "Kept Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline behalten"
           }
         }
       }
@@ -1991,6 +2071,16 @@
         }
       }
     },
+    "Reading Cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lese-Cache"
+          }
+        }
+      }
+    },
     "Reading Mode" : {
       "localizations" : {
         "de" : {
@@ -2067,6 +2157,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registry"
+          }
+        }
+      }
+    },
+    "Remove All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle entfernen"
+          }
+        }
+      }
+    },
+    "Remove All Offline Documents…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Offline-Dokumente entfernen …"
+          }
+        }
+      }
+    },
+    "Remove all offline documents?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Offline-Dokumente entfernen?"
           }
         }
       }
@@ -2401,6 +2521,16 @@
         }
       }
     },
+    "Storage" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicher"
+          }
+        }
+      }
+    },
     "Text Size" : {
       "localizations" : {
         "de" : {
@@ -2467,6 +2597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das installierte Indexpaket konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "They stay in the reading cache until it needs the room, and are downloaded again when opened." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie bleiben im Lese-Cache, bis er den Platz braucht, und werden beim Öffnen erneut geladen."
           }
         }
       }

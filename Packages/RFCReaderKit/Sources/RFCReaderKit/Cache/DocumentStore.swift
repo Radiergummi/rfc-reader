@@ -979,6 +979,29 @@ public actor DocumentStore {
     return victims
   }
 
+  // MARK: - Storage (#358)
+
+  /// What each tier holds: the documents kept offline, and the reading cache.
+  public func storageUsage() -> (kept: StorageUsage, cache: StorageUsage) {
+    (
+      StorageUsage(CacheEviction.entries(in: keptDirectory)),
+      StorageUsage(CacheEviction.entries(in: cacheDirectory))
+    )
+  }
+
+  /// Empties the reading cache, as Settings' Clear Cache does, but for a body wanted
+  /// offline, which is in the cache only until the reconciler moves it. The kept tier
+  /// is not looked at. Returns what it removed.
+  @discardableResult
+  public func clearCache() -> Set<DocumentID> {
+    cachedDocuments.revalidate()
+    let victims = cachedDocuments.all.subtracting(wanted)
+    for id in victims {
+      remove(id, from: [.cache])
+    }
+    return victims
+  }
+
   public func originalText(_ id: DocumentID, client: any DocumentFetching) async throws -> String {
     if let data = fileURLs(id, format: .text).lazy.compactMap({ try? Data(contentsOf: $0) }).first {
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))

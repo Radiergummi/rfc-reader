@@ -444,6 +444,54 @@ struct DocumentStoreTests {
     #expect(sandbox.exists(id, format: .xml, in: .cache))
   }
 
+  /// What Settings' Storage tab states: each tier's documents and their bodies' size.
+  @Test func `the storage usage counts each tier's documents and bytes`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let kept = DocumentID.rfc(8999)
+    try await store.keep(kept, formats: [.xml], client: fetcher)
+    for number in [9000, 9001] {
+      _ = try await store.document(.rfc(number), formats: [.xml], client: fetcher)
+    }
+
+    let usage = await store.storageUsage()
+
+    let size = try #require(
+      try sandbox.file(kept, format: .xml, in: .kept).resourceValues(forKeys: [.fileSizeKey])
+        .fileSize)
+    #expect(usage.kept == StorageUsage(documents: 1, bytes: size))
+    #expect(usage.cache == StorageUsage(documents: 2, bytes: 2 * size))
+  }
+
+  /// Clear Cache empties the reading cache, and never the kept tier, nor a body wanted
+  /// offline that waits in the cache for the reconciler to move it.
+  @Test func `clearing the cache leaves what is kept or wanted`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let kept = DocumentID.rfc(8999)
+    let wanted = DocumentID.rfc(9000)
+    let read = DocumentID.rfc(9001)
+    try await store.keep(kept, formats: [.xml], client: fetcher)
+    for id in [wanted, read] {
+      _ = try await store.document(id, formats: [.xml], client: fetcher)
+    }
+    await store.setWanted([kept, wanted])
+
+    let removed = await store.clearCache()
+
+    #expect(removed == [read])
+    #expect(await !store.isCached(read))
+    #expect(sandbox.exists(wanted, format: .xml, in: .cache))
+    #expect(await store.isKept(kept))
+    #expect(await store.storageUsage().cache.documents == 1)
+  }
+
   /// The kept tier can be downloaded again, so it stays out of backups.
   @Test func `the kept tier is excluded from backups`() async throws {
     let sandbox = Sandbox()
