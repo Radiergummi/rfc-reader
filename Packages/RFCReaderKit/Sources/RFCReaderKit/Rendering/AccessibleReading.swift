@@ -28,6 +28,9 @@ public enum AccessibleReading {
     case text(NSRange)
     /// A diagram, said in place of its characters.
     case label(String)
+    /// A chip said in place of its characters, an informative one (#457), which is
+    /// still a link: `range` is the chip's, whose attributes the label takes on.
+    case chipLabel(String, range: NSRange)
   }
 
   /// What an accessor returns for `range`: `text` reads characters as they are,
@@ -38,11 +41,16 @@ public enum AccessibleReading {
   /// AppKit gives VoiceOver, and so does a range with nothing in it, whose answer is
   /// AppKit's to give. Not "a range with no label": a diagram's later lines have
   /// none, and must still be silent rather than read out.
+  ///
+  /// `chipLabel` turns a chip's label into what the accessor returns, given the
+  /// chip's range, so it can keep what the accessor gives the chip itself, the link
+  /// among it; `label` where none is given.
   public static func reading<Reading>(
     _ range: NSRange,
     in text: NSAttributedString,
     text read: (NSRange) -> Reading?,
     label: (String) -> Reading,
+    chipLabel: ((String, NSRange) -> Reading)? = nil,
     join: ([Reading]) -> Reading
   ) -> Reading? {
     guard NSIntersectionRange(range, NSRange(location: 0, length: text.length)).length > 0
@@ -54,6 +62,7 @@ public enum AccessibleReading {
         switch piece {
         case .text(let range): read(range)
         case .label(let spoken): label(spoken)
+        case .chipLabel(let spoken, let chip): chipLabel?(spoken, chip) ?? label(spoken)
         }
       })
   }
@@ -98,7 +107,8 @@ public enum AccessibleReading {
         var run = NSRange(location: 0, length: 0)
         _ = text.attribute(.rfcSpoken, at: piece.location, longestEffectiveRange: &run, in: whole)
         if piece.location == run.location {
-          pieces.append(.label(spoken))
+          let isChip = text.attribute(.rfcChip, at: run.location, effectiveRange: nil) != nil
+          pieces.append(isChip ? .chipLabel(spoken, range: run) : .label(spoken))
         }
       }
     }

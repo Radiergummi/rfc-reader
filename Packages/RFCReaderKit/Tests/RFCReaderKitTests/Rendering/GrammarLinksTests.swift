@@ -133,7 +133,7 @@ struct GrammarLinksTests {
         == "item")
     let use = (built.text.string as NSString).range(of: "pair = item").location + 7
     let url = try #require(built.text.attribute(.link, at: use, effectiveRange: nil) as? URL)
-    #expect(DocumentTextBuilder.anchor(from: url) == "abnf-item")
+    #expect(ReaderLinkScheme.anchor(from: url) == "abnf-item")
   }
 
   @Test func `what is not a grammar is not linked`() {
@@ -185,7 +185,7 @@ struct GrammarLinksTests {
     let links = Self.grammarLinks(in: built)
     #expect(links.count > 20)
     for link in links {
-      if let anchor = DocumentTextBuilder.anchor(from: link.url) {
+      if let anchor = ReaderLinkScheme.anchor(from: link.url) {
         #expect(built.anchors.offset(of: anchor) != nil, "\(anchor) is not in the index")
         // The anchor lands on the definition's name, which the link spells.
         let offset = try #require(built.anchors.offset(of: anchor))
@@ -239,8 +239,8 @@ struct GrammarLinksTests {
   @Test func `a rule anchor's definition is on the built document`() throws {
     let built = try Self.rfc9682()
     let link = try #require(
-      Self.grammarLinks(in: built).first { DocumentTextBuilder.anchor(from: $0.url) != nil })
-    let anchor = try #require(DocumentTextBuilder.anchor(from: link.url))
+      Self.grammarLinks(in: built).first { ReaderLinkScheme.anchor(from: $0.url) != nil })
+    let anchor = try #require(ReaderLinkScheme.anchor(from: link.url))
     let definition = try #require(built.grammar.definition(of: anchor))
     #expect(built.text.string.contains(definition))
   }

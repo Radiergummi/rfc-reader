@@ -28,10 +28,10 @@ public enum PDFExport {
   ///
   /// - Parameter references: the document's bibliography entries, by anchor.
   public static func target(of url: URL, references: [String: Reference]) -> Target? {
-    if let anchor = DocumentTextBuilder.anchor(from: url) {
+    if let anchor = ReaderLinkScheme.anchor(from: url) {
       return .anchor(anchor)
     }
-    if let entry = DocumentTextBuilder.reference(from: url) {
+    if let entry = ReaderLinkScheme.reference(from: url) {
       guard let reference = references[entry] else { return nil }
       if let url = reference.url, let target = followable(url) { return target }
       return reference.documentID.map { .web(RFCLink(id: $0).webURL) }

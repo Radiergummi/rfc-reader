@@ -21,8 +21,9 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// written (issue #67). Both parsers collect them as their last step, so the
   /// expansion is read from the document the reader is shown.
   public var abbreviations: [String: Abbreviation] = [:]
-  /// The terms the document defines itself, keyed by the term as written (#176). See
-  /// `DefinedTerms`.
+  /// The terms the document defines itself (#176), keyed by each spelling prose would
+  /// use (`DefinedTerms.spellings(of:)`), so one term can have several keys, and each
+  /// with a definition to show (#396). See `DefinedTerms`.
   public var definedTerms: [String: DefinedTerm] = [:]
 
   public init(header: DocumentHeader, sections: [Section], source: DocumentSource) {
@@ -259,7 +260,7 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
   /// to compose: the number lives in `number`, not in the words.
   /// With no words after it, nothing follows the number (#683).
-  private var numberPrefix: String {
+  public var numberPrefix: String {
     guard let numberLabel else { return "" }
     return titleText.isEmpty ? numberLabel + "." : numberLabel + ". "
   }

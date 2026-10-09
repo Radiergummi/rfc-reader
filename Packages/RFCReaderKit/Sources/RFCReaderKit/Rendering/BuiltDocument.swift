@@ -40,16 +40,22 @@ public struct BuiltDocument: @unchecked Sendable {
   /// The rules the document's grammar blocks define, for what a rule link previews
   /// (#185).
   public let grammar: DocumentGrammar
+  /// How far the headings' numbers hang left of the column (#433), and every
+  /// paragraph is set in by: the text container is this much wider than the column,
+  /// on its leading side. Zero in a build that hangs nothing.
+  public let sectionNumberHang: CGFloat
 
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
-    backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar()
+    backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
+    sectionNumberHang: CGFloat = 0
   ) {
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext
     self.backlinks = backlinks
     self.grammar = grammar
+    self.sectionNumberHang = sectionNumberHang
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the

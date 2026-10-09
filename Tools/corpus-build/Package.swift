@@ -48,18 +48,12 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.0"),
   ],
   targets: [
-    // The system's SQLite, for the index database (#174): the SDK's on Apple
-    // platforms, libsqlite3-dev on Linux. Only corpus-build writes the database, so
-    // RFCKit takes no SQLite dependency until the app reads one (#36).
-    .systemLibrary(
-      name: "CSQLite",
-      pkgConfig: "sqlite3",
-      providers: [.apt(["libsqlite3-dev"])]
-    ),
     .target(
       name: "RFCCorpusKit",
       dependencies: [
-        "CSQLite",
+        // The system's SQLite, for the index database (#174), as RFCKit has it for
+        // the full-text index (#37).
+        .product(name: "CSQLite", package: "RFCKit"),
         .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "Crypto", package: "swift-crypto"),
       ],
@@ -80,7 +74,8 @@ let package = Package(
       // corpus-build is here to be built, not imported: the command-line tests run
       // the binary, as `make` does.
       dependencies: [
-        "CSQLite", "RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit"),
+        "RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit"),
+        .product(name: "CSQLite", package: "RFCKit"),
       ],
       swiftSettings: swiftSettings
     ),

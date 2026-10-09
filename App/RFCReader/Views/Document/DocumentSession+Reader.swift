@@ -9,10 +9,11 @@ import os
 ///
 /// Every closure here captures what it writes to — the reader state, the library,
 /// the navigation — and never the view or the session, for the reason `startLoad`
-/// gives. And none writes unless its reader is the one on screen
-/// (`NavigationModel.shows`): a replaced reader lives on through its fade
-/// (`ReaderHost`), and on iOS the readers below the top of the stack live on under
-/// it (#263), and none may write its document's details over the one on screen.
+/// gives. And each writes the reader state through its `ReaderState.Writer`, which
+/// writes only while its reader is the one on screen (`NavigationModel.shows`): a
+/// replaced reader lives on through its fade (`ReaderHost`), and on iOS the readers
+/// below the top of the stack live on under it (#263), and none may write its
+/// document's details over the one on screen.
 extension DocumentSession {
   /// Fetches the document, with the reader's panel made ready for it first.
   ///
@@ -23,11 +24,11 @@ extension DocumentSession {
   /// without touching the window's reader state, which is the top reader's; it puts
   /// its own there once it is on top (`reinstate`).
   func open(
-    into reader: ReaderState, library: LibraryModel, navigation: NavigationModel,
+    into reader: ReaderState.Writer, library: LibraryModel, navigation: NavigationModel,
     positions: ReadingPositionKeeper, showsOriginal: Bool
   ) {
-    let isShown = navigation.shows(id, at: depth)
-    if isShown {
+    let isShown = reader.isCurrent
+    reader { reader in
       // The scene's `ReaderState` must not carry the previous document's place into
       // this one; `install()` reports the real anchor a moment later.
       reader.clear()
@@ -37,10 +38,10 @@ extension DocumentSession {
       // of the toolbar rather than showing and then dropping (#281).
       reader.documentStartsLoading()
     }
-    markPublishedOriginal(into: reader, library: library, navigation: navigation)
+    markPublishedOriginal(into: reader, library: library)
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
-    deriveInfo(into: reader, library: library, navigation: navigation)
+    deriveInfo(into: reader, library: library)
     // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
     // the pack lists (#316), whose XML it left out.
     let pointerInPack = library.pointersInPack.contains(id)
@@ -66,15 +67,12 @@ extension DocumentSession {
       // opening still, if a reader was pushed over it meanwhile (#263); not a
       // reader made again below the top of the stack.
       if isShown, navigation.holds(id, at: depth) { positions.markOpened() }
-      guard navigation.shows(id, at: depth) else { return }
-      Self.present(loaded, id: id, into: reader, library: library) {
-        navigation.shows(id, at: depth)
-      }
-    } failed: { [reader, navigation, id, depth] in
+      Self.present(loaded, id: id, into: reader, library: library)
+    } failed: { [reader, navigation] in
       // No header is coming, so the toolbar names the RFC that failed; unless it is
       // a scan (`publishedOriginal`), whose page shows the header.
-      guard navigation.shows(id, at: depth) else { return }
-      reader.documentFailedToLoad()
+      guard reader.isCurrent else { return }
+      reader { $0.documentFailedToLoad() }
       // A jump waiting for the text is not coming.
       if let request = navigation.scrollRequest { navigation.settle(request) }
     }
@@ -87,76 +85,72 @@ extension DocumentSession {
   /// its own, the original text shown and what was unfolded, since those are the
   /// window's state while it is on top.
   func reinstate(
-    into reader: ReaderState, library: LibraryModel, navigation: NavigationModel,
-    showsOriginal: Bool, folding: Folding
+    into reader: ReaderState.Writer, library: LibraryModel, showsOriginal: Bool, folding: Folding
   ) {
-    guard navigation.shows(id, at: depth) else { return }
-    reader.clear()
-    reader.showOriginal = showsOriginal
-    // The mode is the window's, and stays from one document to the next.
-    reader.folding.expanded = folding.expanded
-    reader.folding.focused = folding.focused
-    reader.folding.openAsides = folding.openAsides
-    markPublishedOriginal(into: reader, library: library, navigation: navigation)
-    deriveInfo(into: reader, library: library, navigation: navigation)
+    guard reader.isCurrent else { return }
+    reader { reader in
+      reader.clear()
+      reader.showOriginal = showsOriginal
+      // The mode is the window's, and stays from one document to the next.
+      reader.folding.expanded = folding.expanded
+      reader.folding.focused = folding.focused
+      reader.folding.openAsides = folding.openAsides
+    }
+    markPublishedOriginal(into: reader, library: library)
+    deriveInfo(into: reader, library: library)
     switch state.phase {
     case .loading:
       reader.isLoading = awaitsDocument
-      reader.documentStartsLoading()
+      reader { $0.documentStartsLoading() }
     case .loaded(let document, let built):
       // The header is there, and its reader reports where it is once it is told it
       // is on top again (`RFCTextView.isShown`).
-      reader.documentStartsLoading()
-      Self.present(document, id: id, into: reader, library: library) { [navigation, id, depth] in
-        navigation.shows(id, at: depth)
-      }
+      reader { $0.documentStartsLoading() }
+      Self.present(document, id: id, into: reader, library: library)
       if let built { reader.sections = built.reachableSections(of: document) }
     case .failed:
-      reader.documentFailedToLoad()
+      reader { $0.documentFailedToLoad() }
     }
   }
 
-  /// What the reader state says about a document that has loaded. What is worked
-  /// out off the main actor arrives only while `isShown` holds.
+  /// What the reader state says about a document that has loaded: nothing, and no
+  /// work started for it, unless its reader is the one on screen. What is worked out
+  /// off the main actor arrives only if it still is.
   private static func present(
-    _ loaded: RFCDocument, id: DocumentID, into reader: ReaderState, library: LibraryModel,
-    isShown: @escaping @MainActor @Sendable () -> Bool
+    _ loaded: RFCDocument, id: DocumentID, into reader: ReaderState.Writer, library: LibraryModel
   ) {
-    reader.groups = ReferenceGroup.groups(in: loaded)
-    reader.info = info(for: id, authors: loaded.header.authors, in: library)
-    reader.documentTitle = loaded.header.title
-    reader.precedingDraft = loaded.header.precedingDraft
-    reader.hasDocument = true
-    reader.publishedOriginal = publishedOriginal(id, text: loaded, in: library)
+    guard reader.isCurrent else { return }
+    reader { reader in
+      reader.groups = ReferenceGroup.groups(in: loaded)
+      reader.info = info(for: id, authors: loaded.header.authors, in: library)
+      reader.documentTitle = loaded.header.title
+      reader.precedingDraft = loaded.header.precedingDraft
+      reader.hasDocument = true
+      reader.publishedOriginal = publishedOriginal(id, text: loaded, in: library)
+    }
     // Last and apart, so the first build does not wait for it.
     Task(name: "Extract requirements") { [reader] in
       let requirements = await Self.requirements(in: loaded)
-      guard isShown() else { return }
       reader.requirements = requirements
     }
     Task(name: "Find a grammar to export") { [reader] in
       let formats = await Self.exportFormats(for: loaded)
-      guard isShown() else { return }
       reader.exportFormats = formats
     }
   }
 
   /// Why this RFC is read as its original, if it is (#207): as the load starts, and
   /// again when the index loads, which may be after the fetch ended.
-  func markPublishedOriginal(
-    into reader: ReaderState, library: LibraryModel, navigation: NavigationModel
-  ) {
-    guard navigation.shows(id, at: depth) else { return }
-    reader.publishedOriginal = Self.publishedOriginal(id, text: state.document, in: library)
+  func markPublishedOriginal(into reader: ReaderState.Writer, library: LibraryModel) {
+    reader { $0.publishedOriginal = Self.publishedOriginal(id, text: state.document, in: library) }
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document
   /// opened before the index finished loading has none to show until it does. And
   /// again once the document is here, whose own authors carry the contact details
   /// their chips open.
-  func deriveInfo(into reader: ReaderState, library: LibraryModel, navigation: NavigationModel) {
-    guard navigation.shows(id, at: depth) else { return }
-    reader.info = Self.info(for: id, authors: state.document?.header.authors, in: library)
+  func deriveInfo(into reader: ReaderState.Writer, library: LibraryModel) {
+    reader { $0.info = Self.info(for: id, authors: state.document?.header.authors, in: library) }
   }
 
   private static func publishedOriginal(

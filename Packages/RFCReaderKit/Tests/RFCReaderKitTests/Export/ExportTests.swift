@@ -135,7 +135,7 @@ struct ExportLinkTests {
     // As sets: the paper's narrower column may lay a table out differently. A
     // heading's backlink caption goes nowhere, and paper has none (#183).
     let destinations = urls(.link, in: screen.text).filter {
-      $0.scheme != DocumentTextBuilder.backlinksScheme
+      $0.scheme != ReaderLinkScheme.backlinksScheme
     }
     #expect(Set(destinations) == Set(urls(.rfcLinkTarget, in: paper.text)))
     #expect(!urls(.link, in: screen.text).isEmpty)

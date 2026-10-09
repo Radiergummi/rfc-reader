@@ -23,11 +23,22 @@ let package = Package(
     .macOS(.v26),
   ],
   products: [
-    .library(name: "RFCKit", targets: ["RFCKit"])
+    .library(name: "RFCKit", targets: ["RFCKit"]),
+    // For corpus-build, which writes the index database with it, so there is one
+    // module of that name in its build.
+    .library(name: "CSQLite", targets: ["CSQLite"]),
   ],
   targets: [
+    // The system's SQLite: the SDK's on Apple platforms, libsqlite3-dev on Linux.
+    // The full-text index is read and written here (#37), so it is tested on Linux.
+    .systemLibrary(
+      name: "CSQLite",
+      pkgConfig: "sqlite3",
+      providers: [.apt(["libsqlite3-dev"])]
+    ),
     .target(
       name: "RFCKit",
+      dependencies: ["CSQLite"],
       // Every unsafe construct the compiler can name is a warning here (#147): the
       // byte scans read `Span`s and the regexes are behind `Pattern` (#146), so the few
       // left are marked `unsafe`, each with its reason, and a new one has to give its own.
@@ -35,7 +46,8 @@ let package = Package(
     ),
     .testTarget(
       name: "RFCKitTests",
-      dependencies: ["RFCKit"],
+      // CSQLite for a test that holds a write lock on the index from a connection of its own.
+      dependencies: ["RFCKit", "CSQLite"],
       resources: [.copy("Fixtures")],
       swiftSettings: swiftSettings
     ),

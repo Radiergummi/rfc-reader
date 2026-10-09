@@ -384,6 +384,11 @@ public struct RFCIndex: Sendable {
   public func series(_ id: DocumentID) -> SeriesEntry? {
     series.first { $0.id == id }
   }
+
+  /// The RFC numbers a document stands for: an RFC its own, a series its members'.
+  public func rfcNumbers(of id: DocumentID) -> [Int] {
+    id.series == .rfc ? [id.number] : (series(id)?.members.map(\.number) ?? [])
+  }
 }
 
 /// Coded as what the RFC Editor's index says, and nothing derived from it: the

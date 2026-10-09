@@ -157,7 +157,7 @@ struct InlineRunTests {
     let fallback = Fixtures.inlineRun([.crossReference(unlinked)])
     #expect(
       (fallback.attribute(.link, at: 0, effectiveRange: nil) as? URL)?.absoluteString
-        == "\(DocumentTextBuilder.referenceScheme):FETCH")
+        == "\(ReaderLinkScheme.referenceScheme):FETCH")
   }
 
   /// A reference with no text of its own is one the source left to us, so the

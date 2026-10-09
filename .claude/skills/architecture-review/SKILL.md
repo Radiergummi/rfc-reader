@@ -56,9 +56,9 @@ Read the output before you hand it on: the function lengths, fan-in and platform
 | Area | What it covers | Lenses |
 |---|---|---|
 | `model` | RFCKit `Document/`: `RFCDocument`, both parsers, the serializer, `SectionAlignment`, artwork and packet diagrams | 1–10, 11 (untrusted input) |
-| `kit` | the rest of RFCKit: `Models/`, `Index/`, `Client/`, `Registry/`, `Search/`, `Highlighting/`, `Citation/`, `Corpus/` | 1–10, 11, 12 (formatting), 14 (network failure) |
-| `rendering` | RFCReaderKit `Rendering/`, `Geometry/`, `Layout/`, printing and PDF export, accessibility | 1–10, 12, 13 |
-| `stores` | RFCReaderKit `Cache/`, `UserData/`, `Library/`, `Navigation/`, `Offline/`, `ReadingPath/` and the loose files at its root | 1–10, 11, 14 |
+| `kit` | the rest of RFCKit: `Models/`, `Index/`, `XML/`, `Client/`, `Registry/`, `Search/`, `Highlighting/`, `Citation/`, `Corpus/` | 1–10, 11, 12 (formatting), 14 (network failure) |
+| `rendering` | RFCReaderKit `Rendering/`, `Geometry/`, `Layout/`, `Print/` and PDF export, accessibility | 1–10, 12, 13 |
+| `stores` | RFCReaderKit `Cache/`, `UserData/`, `Library/`, `Navigation/`, `Offline/`, `ReadingPath/`, `Index/`, `Packs/` and `Preferences/` | 1–10, 11, 14 |
 | `app` | `App/RFCReader/Model/` and `Views/`: `LibraryModel`, `NavigationModel`, `ReaderState`, the reader's text views and coordinator, the iOS/macOS split | 1–15 |
 | `shell` | `App/RFCReader/Window/`, `Commands/`, `Scripting/`, `Intents/`, `RFCReaderApp.swift`, and RFCReaderKit `Chrome/` | 1–15 |
 | `build` | `Tools/` (corpus-build, benchmarks, trace), the `Makefile`, `project.yml`, `.github/workflows/`, lint and format configuration | 1–10, 11 (entitlements, signing), 15 |
