@@ -95,6 +95,12 @@ public final class OfflineKeeper {
     return current
   }
 
+  /// Until every run asked for so far has made its moves and started its fetches:
+  /// what a count of the tiers waits for, so it counts what the runs left.
+  public func untilRunsEnd() async {
+    await run?.value
+  }
+
   /// Until what has been asked for `id` is done: every run asked for so far, and a
   /// fetch of it that one of them or a reader started.
   public func untilSettled(_ id: DocumentID) async {

@@ -215,15 +215,19 @@ struct NotificationSettings: View {
 struct StorageSettings: View {
   let library: LibraryModel
 
-  /// Read when the tab shows and after each action, rather than watched: nothing
-  /// else changes the disk while Settings is in front.
+  /// Read when the tab shows and after each change made here, once the keeper has
+  /// moved what the change asked; not watched, so a document read meanwhile in a
+  /// window counts from the next time the tab shows.
   @State private var usage: (kept: StorageUsage, cache: StorageUsage)?
   @State private var confirmsRemoval = false
 
   private var keepsBookmarks: Binding<Bool> {
     Binding(
       get: { library.keepsBookmarksOffline },
-      set: { library.setKeepsBookmarksOffline($0) }
+      set: {
+        library.setKeepsBookmarksOffline($0)
+        Task { await refresh() }
+      }
     )
   }
 
@@ -247,7 +251,7 @@ struct StorageSettings: View {
         }
       } message: {
         Text(
-          "They stay in the reading cache until it needs the room, and are downloaded again when opened."
+          "Documents marked Keep Offline are unmarked on all your devices. Their copies stay in the reading cache until it needs the room."
         )
       }
       LabeledContent("Reading Cache") { UsageValue(usage: usage?.cache) }
@@ -257,7 +261,8 @@ struct StorageSettings: View {
           await refresh()
         }
       }
-      .disabled(usage?.cache.documents == 0)
+      // Until the cache is counted too, when there is nothing yet to say it empties.
+      .disabled((usage?.cache.documents ?? 0) == 0)
     }
     .task { await refresh() }
   }

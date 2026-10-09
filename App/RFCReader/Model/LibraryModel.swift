@@ -1454,29 +1454,52 @@ final class LibraryModel {
 
   // MARK: - Storage (#358)
 
-  /// What each tier holds, for Settings' Storage tab.
+  /// What each tier holds, for Settings' Storage tab, once the keeper has made the
+  /// moves asked of it so far; a fetch still running is counted when it lands.
   func storageUsage() async -> (kept: StorageUsage, cache: StorageUsage) {
-    await store.storageUsage()
+    await offlineKeeper.untilRunsEnd()
+    return await store.storageUsage()
   }
 
-  /// Empties the reading cache, but for what waits there to be kept offline.
+  /// Empties the reading cache, but for what a window has open and what is wanted
+  /// offline, whose body waits there for the keeper to move it. The marks are read
+  /// here, as for eviction, since the store learns them only when the keeper runs;
+  /// when they cannot be read, nothing is removed.
   func clearCache() async {
-    forgetPreviews(of: await store.clearCache())
-  }
-
-  /// Keeps nothing offline any more: removes every mark, and turns off keeping the
-  /// bookmarks. The bodies go back into the reading cache, as an unmarked one does,
-  /// where eviction or Clear Cache removes them. A removal that could not be saved is
-  /// logged, and leaves the marks as they were.
-  func removeAllOffline() {
+    let spared: Set<DocumentID>
     do {
-      try OfflineMarkStore.removeAll(in: container.mainContext)
+      spared = try OfflineMarkStore.markedDocuments(in: container.mainContext)
+        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.selection))
     } catch {
       libraryLog.error(
-        "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
+        "Clear Cache skipped, reading the marks failed: \(String(describing: error), privacy: .public)"
+      )
+      return
     }
-    setKeepsBookmarksOffline(false)
+    forgetPreviews(of: await store.clearCache(sparing: spared))
+  }
+
+  /// Keeps nothing offline any more: removes every mark, on every device, since marks
+  /// are synced, and turns off keeping this device's bookmarks. The bodies go back
+  /// into the reading cache, as an unmarked one does, where eviction or Clear Cache
+  /// removes them. A removal that could not be saved is logged and undone, and
+  /// changes nothing.
+  func removeAllOffline() {
+    let context = container.mainContext
+    do {
+      try OfflineMarkStore.removeAll(in: context)
+    } catch {
+      context.rollback()
+      libraryLog.error(
+        "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    UserDefaults.standard.set(false, forKey: ReaderPreferences.keepBookmarksOfflineKey)
+    keepsBookmarksOffline = false
+    // One reconciliation for both: the marks' refresh runs it when they changed.
+    let marks = offlineMarks
     refreshOfflineMarks()
+    if offlineMarks == marks { wantedOfflineChanged() }
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {

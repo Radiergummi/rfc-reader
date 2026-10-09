@@ -466,9 +466,10 @@ struct DocumentStoreTests {
     #expect(usage.cache == StorageUsage(documents: 2, bytes: 2 * size))
   }
 
-  /// Clear Cache empties the reading cache, and never the kept tier, nor a body wanted
-  /// offline that waits in the cache for the reconciler to move it.
-  @Test func `clearing the cache leaves what is kept or wanted`() async throws {
+  /// Clear Cache empties the reading cache, and never the kept tier, a pinned body such
+  /// as an open document's, nor a body wanted offline that waits in the cache for the
+  /// reconciler to move it.
+  @Test func `clearing the cache leaves what is kept, pinned or wanted`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
@@ -476,20 +477,22 @@ struct DocumentStoreTests {
     await fetcher.gate.open()
     let kept = DocumentID.rfc(8999)
     let wanted = DocumentID.rfc(9000)
-    let read = DocumentID.rfc(9001)
+    let open = DocumentID.rfc(9001)
+    let read = DocumentID.rfc(9002)
     try await store.keep(kept, formats: [.xml], client: fetcher)
-    for id in [wanted, read] {
+    for id in [wanted, open, read] {
       _ = try await store.document(id, formats: [.xml], client: fetcher)
     }
     await store.setWanted([kept, wanted])
 
-    let removed = await store.clearCache()
+    let removed = await store.clearCache(sparing: [open])
 
     #expect(removed == [read])
     #expect(await !store.isCached(read))
     #expect(sandbox.exists(wanted, format: .xml, in: .cache))
+    #expect(sandbox.exists(open, format: .xml, in: .cache))
     #expect(await store.isKept(kept))
-    #expect(await store.storageUsage().cache.documents == 1)
+    #expect(await store.storageUsage().cache.documents == 2)
   }
 
   /// The kept tier can be downloaded again, so it stays out of backups.

@@ -911,6 +911,16 @@
         }
       }
     },
+    "Documents marked Keep Offline are unmarked on all your devices. Their copies stay in the reading cache until it needs the room." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als „Offline behalten“ markierte Dokumente werden auf allen deinen Geräten freigegeben. Ihre Kopien bleiben im Lese-Cache, bis er den Platz braucht."
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "de" : {
@@ -2597,16 +2607,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das installierte Indexpaket konnte nicht gelesen werden."
-          }
-        }
-      }
-    },
-    "They stay in the reading cache until it needs the room, and are downloaded again when opened." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sie bleiben im Lese-Cache, bis er den Platz braucht, und werden beim Öffnen erneut geladen."
           }
         }
       }
