@@ -247,7 +247,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = Self.name(of: section, isNumbered: partNumber != nil)
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -266,21 +266,9 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("section")
   }
 
-  /// A section's `<name>`: its words, after its number where it has no `pn` to carry
-  /// one, and an appendix's qualifier ahead of them, as the document wrote it (#428).
-  private static func name(of section: Section, isNumbered: Bool) -> [Inline] {
-    var words = section.title
-    if let qualifier = section.qualifier {
-      let written = HeadingQualifier.written(qualifier)
-      words = words.isEmpty ? [.text(written)] : [.text(written + " ")] + words
-    }
-    guard !isNumbered, let label = section.numberLabel else { return words }
-    return words.isEmpty ? [.text(section.numberPrefix)] : [.text(label + ". ")] + words
-  }
-
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)

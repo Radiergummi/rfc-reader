@@ -199,7 +199,8 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// appendix's either way, so a citation of either resolves alike.
   public var appendixWord: AppendixWord
   /// The `(Normative)` or `(Informative)` an appendix's heading opens with, taken out
-  /// of its title (#428). Nil for one that says neither, and for every section.
+  /// of its title (#428), and set back ahead of it wherever the heading is read, by
+  /// `headingWords`. Nil for one that says neither, and for every section.
   public var qualifier: Qualifier?
 
   /// What an appendix's heading calls it.
@@ -220,15 +221,6 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   public enum Qualifier: String, Sendable, Hashable, Codable {
     case normative
     case informative
-
-    /// `Normative` or `Informative`: the document's own word, which stays English as
-    /// the reader body does.
-    public var label: String {
-      switch self {
-      case .normative: "Normative"
-      case .informative: "Informative"
-      }
-    }
   }
 
   public var id: String { anchor }
@@ -299,23 +291,33 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
     number.map { isAppendix ? "\(appendixWord.label) \($0)" : $0 }
   }
 
+  /// What a heading says after its number: an appendix's qualifier, as
+  /// `(Informative)`, then its title (#428). The serializer writes it as the section's
+  /// `<name>`, and the XML parser takes the qualifier out again.
+  public var headingWords: [Inline] {
+    guard let qualifier else { return title }
+    let written = HeadingQualifier.written(qualifier)
+    return titleText.isEmpty ? [.text(written)] : [.text(written + " ")] + title
+  }
+
   /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
   /// to compose: the number lives in `number`, not in the words.
   /// With no words after it, nothing follows the number (#683): a section is `4.`,
   /// and an appendix `Appendix A`, which its word already sets apart (#428).
   public var numberPrefix: String {
     guard let numberLabel else { return "" }
-    if titleText.isEmpty { return isAppendix ? numberLabel : numberLabel + "." }
+    if titleText.isEmpty, qualifier == nil { return isAppendix ? numberLabel : numberLabel + "." }
     return numberLabel + ". "
   }
 
-  /// `4.2. Title` or `Appendix A. Title` or just the title.
-  public var displayTitle: String { numberPrefix + titleText }
+  /// `4.2. Title`, `Annex B. (Informative) Title`, or just the title.
+  public var displayTitle: String { displayTitleInlines.plainText }
 
   /// `displayTitle` with its links intact, for a reader that draws them.
   public var displayTitleInlines: [Inline] {
-    if numberPrefix.isEmpty { return title }
-    return titleText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + title
+    let words = headingWords
+    if numberPrefix.isEmpty { return words }
+    return words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
   }
 
   public var depth: Int {

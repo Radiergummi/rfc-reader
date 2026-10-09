@@ -24,15 +24,16 @@ struct ContentsOutlineTests {
     ContentsOutline.rows(of: sections, filter: filter)
   }
 
-  /// An annex is listed as one, and its qualifier is set apart from its title (#428).
-  @Test func `an annex row names it and carries its qualifier`() throws {
+  /// An annex is listed as one, with its qualifier as its heading reads, and a filter
+  /// finds it by its qualifier (#428).
+  @Test func `an annex row reads as its heading and is found by its qualifier`() throws {
     let annex = Section(
       anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
       appendixWord: .annex, qualifier: .informative)
     let row = try #require(ContentsOutline.rows(of: [annex], filter: "").first)
-    #expect(row.title == "Annex B. Background")
-    #expect(row.qualifier == "Informative")
-    #expect(Self.rows("").allSatisfy { $0.qualifier == nil })
+    #expect(row.title == "Annex B. (Informative) Background")
+    #expect(
+      ContentsOutline.rows(of: [annex], filter: "informative").map(\.anchor) == ["appendix-B"])
   }
 
   @Test func `with no filter, document order lists every section at its depth`() {

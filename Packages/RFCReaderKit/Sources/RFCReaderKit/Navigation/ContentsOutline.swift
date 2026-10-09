@@ -21,19 +21,8 @@ public enum ContentsOutline {
     public let depth: Int
     /// An ancestor shown only so a match keeps its place in the hierarchy.
     public let isContext: Bool
-    /// `Normative` or `Informative`, where an appendix's heading says which, set beside
-    /// the title (#428). The document's word, as the title is, so it is not localized.
-    public let qualifier: String?
 
     public var id: String { anchor }
-
-    init(_ section: Section, depth: Int, isContext: Bool) {
-      self.anchor = section.anchor
-      self.title = section.displayTitle
-      self.depth = depth
-      self.isContext = isContext
-      self.qualifier = section.qualifier?.label
-    }
   }
 
   /// A section in A–Z.
@@ -66,14 +55,19 @@ public enum ContentsOutline {
     for section in sections {
       let depth = section.depth
       while let last = path.last, last.section.depth >= depth { path.removeLast() }
-      let isMatch = matches(section, title: section.titleText, text)
+      // The heading's words, an appendix's qualifier among them (#428).
+      let isMatch = matches(section, title: section.headingWords.plainText, text)
       if isMatch {
         for index in path.indices where !path[index].isListed {
           let ancestor = path[index]
-          rows.append(Row(ancestor.section, depth: ancestor.section.depth, isContext: true))
+          rows.append(
+            Row(
+              anchor: ancestor.section.anchor, title: ancestor.section.displayTitle,
+              depth: ancestor.section.depth, isContext: true))
           path[index].isListed = true
         }
-        rows.append(Row(section, depth: depth, isContext: false))
+        rows.append(
+          Row(anchor: section.anchor, title: section.displayTitle, depth: depth, isContext: false))
       }
       path.append(PathStep(section: section, isListed: isMatch))
     }

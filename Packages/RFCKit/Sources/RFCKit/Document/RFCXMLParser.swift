@@ -518,18 +518,22 @@ public enum RFCXMLParser {
           break
         }
       }
+      // An appendix that is a bibliography, `Appendix C -- References`, says so in its
+      // `pn` like any other appendix, and its name holds its qualifier as any does.
+      let (qualifier, words) =
+        numbering.isAppendix ? HeadingQualifier.split(title) : (nil, title)
       let blocks: [Block] =
         entries.isEmpty
-        ? [] : [.references(ReferenceList(title: title.plainText, entries: entries))]
+        ? [] : [.references(ReferenceList(title: words.plainText, entries: entries))]
       return Section(
         anchor: element["anchor"] ?? partNumber ?? "unanchored-references-\(position)",
         number: numbering.number,
-        title: title,
+        title: words,
         blocks: blocks,
         subsections: subsections,
-        // An appendix that is a bibliography, `Appendix C -- References`, says so in its
-        // `pn` like any other appendix.
-        isAppendix: numbering.isAppendix
+        isAppendix: numbering.isAppendix,
+        appendixWord: numbering.word,
+        qualifier: qualifier
       )
     }
 

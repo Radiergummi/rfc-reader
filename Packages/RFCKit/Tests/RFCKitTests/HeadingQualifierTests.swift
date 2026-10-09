@@ -83,6 +83,61 @@ struct HeadingQualifierTests {
     let readBare = try #require(reparsed.section(anchor: "appendix-C"))
     #expect(readBare.qualifier == .normative)
     #expect(readBare.titleText == "")
-    #expect(readBare.displayTitle == "Appendix C")
+    #expect(readBare.displayTitle == "Appendix C. (Normative)")
+  }
+
+  /// A heading reads with its qualifier wherever it is shown: the reader, a PDF, the
+  /// contents list. Only the title, the words the document gave the appendix, is
+  /// without it.
+  @Test func `a heading reads with its qualifier`() {
+    let annex = Section(
+      anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+      appendixWord: .annex, qualifier: .informative)
+    #expect(annex.displayTitle == "Annex B. (Informative) Background")
+    #expect(annex.titleText == "Background")
+    #expect(annex.headingWords == [.text("(Informative) "), .text("Background")])
+  }
+
+  /// An annex that is a bibliography keeps its word and its qualifier through the XML,
+  /// as any annex does, and its paragraphs count from its own part number.
+  @Test func `a bibliography annex survives a round trip`() throws {
+    let references = Section(
+      anchor: "appendix-C", number: "C", title: "Bibliography",
+      blocks: [
+        .references(
+          ReferenceList(
+            title: "Bibliography",
+            entries: [
+              Reference(anchor: "one", title: "One")
+            ]))
+      ],
+      isAppendix: true, appendixWord: .annex, qualifier: .informative)
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(9999), title: "Annexes"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Introduction",
+          blocks: [.paragraph(Paragraph(text: "Prose."))]),
+        references,
+      ],
+      source: .text)
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
+    let read = try #require(reparsed.section(anchor: "appendix-C"))
+    #expect(read.appendixWord == .annex)
+    #expect(read.qualifier == .informative)
+    #expect(read.titleText == "Bibliography")
+  }
+
+  /// An annex's paragraphs count from the part number it is written with.
+  @Test func `an annex's paragraphs count from its part number`() throws {
+    let annex = Section(
+      anchor: "appendix-B", number: "B", title: "Background",
+      blocks: [.paragraph(Paragraph(text: "Prose."))], isAppendix: true, appendixWord: .annex)
+    let numbered = LegacyTextParser.numberingParagraphs([annex], avoiding: [])
+    guard case .paragraph(let paragraph)? = numbered.first?.blocks.first else {
+      Issue.record("no paragraph")
+      return
+    }
+    #expect(paragraph.anchor?.hasPrefix("section-annex.b-") == true)
   }
 }
