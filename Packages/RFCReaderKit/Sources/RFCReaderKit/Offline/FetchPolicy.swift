@@ -1,3 +1,5 @@
+import Network
+
 /// Whether a document's body is fetched now, on the path the device has, or waits
 /// for a better one (#358).
 ///
@@ -9,7 +11,8 @@
 /// in Low Power Mode; otherwise it waits, and says what for.
 ///
 /// Pure, over a description of the path rather than `NWPath`, so the whole table is
-/// tested here; the App target reads `NWPathMonitor` and `ProcessInfo` into it.
+/// tested here; the App target reads `NWPathMonitor` and `ProcessInfo` into it,
+/// through `PathStatus.init(_:unsatisfiedReason:)`.
 public enum FetchPolicy {
   /// Why a body is being fetched.
   public enum Cause: Sendable, Hashable, CaseIterable {
@@ -45,6 +48,18 @@ public enum FetchPolicy {
     /// does. A fetch makes that attempt, so it counts as satisfied, and the path's cost
     /// still decides.
     case requiresConnection
+
+    /// `NWPath`'s status, which names only the per-app cellular switch of the
+    /// reasons a path is unsatisfied. A status this does not know is unsatisfied.
+    public init(_ status: NWPath.Status, unsatisfiedReason: NWPath.UnsatisfiedReason) {
+      self =
+        switch status {
+        case .satisfied: .satisfied
+        case .requiresConnection: .requiresConnection
+        case .unsatisfied: unsatisfiedReason == .cellularDenied ? .cellularDenied : .unsatisfied
+        @unknown default: .unsatisfied
+        }
+    }
   }
 
   /// What the policy needs to know of the network path: its status and its cost.
