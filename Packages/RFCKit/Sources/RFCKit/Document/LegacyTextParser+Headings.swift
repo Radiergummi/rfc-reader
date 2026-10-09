@@ -426,8 +426,10 @@ extension LegacyTextParser {
   /// and References)` in RFC 3275 is an example, and its lines of XML read as 26
   /// entries (#686).
   static func isReferencesTitle(_ title: String) -> Bool {
-    withoutAsides(title).lowercased().contains(#/\breferences\b/#)
+    withoutAsides(title).lowercased().contains(referencesWord)
   }
+
+  private static let referencesWord = Pattern(#/\breferences\b/#)
 
   private static let aside = Pattern(#/\([^)]*\)/#)
 
