@@ -34,6 +34,7 @@ struct InlineLinker: Sendable {
   /// sections, which linked them into the citing document (#768).
   static let sectionOfDocumentPattern = Gated(
     regex:
+      // swiftlint:disable:next line_length
       #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)(?<suffix>\w*)(?!\.[A-Z]))/#,
     gate: \.sectionOfDocument
   )
