@@ -95,15 +95,35 @@ extension DocumentTextBuilder {
         // Said, not only drawn (#457): the outline is no cue to VoiceOver. The
         // reader body is English, so this is too. Only macOS reads it, where the
         // text view's per-range accessors go through `AccessibleReading`; a
-        // `UITextView` has no such accessor, and iOS still says the chip as a
-        // normative one.
+        // `UITextView` has no such accessor, so iOS is given a pronunciation on
+        // the chip's icon instead (#862).
         chipAttributes[.rfcSpoken] = display.text + ", informative"
+        return informativeChip(chipRun(display.text, attributes: chipAttributes))
       }
       return chipRun(display.text, attributes: chipAttributes)
 
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)
     }
+  }
+
+  /// An informative chip as UIKit reads it, with its kind pronounced on its icon
+  /// (`AccessibleReading.informativeChipSpeech`), as a diagram's lines are
+  /// (`setDiagramSpeech`), and only in a build for the reader, as those are. The
+  /// chip unchanged anywhere else.
+  private func informativeChip(_ chip: NSAttributedString) -> NSAttributedString {
+    #if canImport(UIKit)
+      guard style.emitsLinks,
+        let line = AccessibleReading.informativeChipSpeech(
+          ofChip: NSRange(location: 0, length: chip.length), in: chip.string as NSString)
+      else { return chip }
+      let pronounced = NSMutableAttributedString(attributedString: chip)
+      pronounced.addAttribute(
+        .accessibilitySpeechIPANotation, value: line.pronunciation, range: line.range)
+      return pronounced
+    #else
+      return chip
+    #endif
   }
 
   /// What makes a run a link: the URL, and the underline when the reader asked
