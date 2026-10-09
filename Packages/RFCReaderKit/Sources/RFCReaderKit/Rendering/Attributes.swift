@@ -28,6 +28,14 @@ extension NSAttributedString.Key {
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on a numbered heading's number where it hangs in the gutter (#433): the
+  /// anchor of the heading it links to. A `String`, so the number's runs merge.
+  public static let rfcSectionNumber = NSAttributedString.Key("rfcSectionNumber")
+  /// What a run copies as, where the reader sets it otherwise (`SelectionText`): a
+  /// hung number and the tabs either side of it, which copy as the heading's own
+  /// `4.2. ` or `Appendix A. ` (#433). A `String`, on every character of the run;
+  /// a selection of any part of it copies all of it, as a chip's label does.
+  public static let rfcCopiedAs = NSAttributedString.Key("rfcCopiedAs")
   /// Set on every character of an aside, its "Note" caption first (#700): the
   /// aside's ordinal among the document's asides, which Implementer folds its body
   /// by (`FoldingIndex`). Only in a build with live links, which alone has the
@@ -287,6 +295,20 @@ extension NSAttributedString {
     // Its words carry their label, as the line break does not.
     _ = attribute(.rfcSpoken, at: run.location, longestEffectiveRange: &caption, in: run)
     return (anchor, caption)
+  }
+
+  /// The hung heading number at this character offset (#433): the anchor of the
+  /// heading it links to, and the number's own extent, which the pointer lights up
+  /// and a copy's feedback is shown over.
+  public func sectionNumber(at offset: Int) -> (anchor: String, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      let anchor = attribute(.rfcSectionNumber, at: offset, effectiveRange: nil) as? String
+    else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcSectionNumber, at: offset, longestEffectiveRange: &range,
+      in: NSRange(location: 0, length: length))
+    return (anchor, range)
   }
 
   /// The extent of every code block's copy button in `range`, in order: where the

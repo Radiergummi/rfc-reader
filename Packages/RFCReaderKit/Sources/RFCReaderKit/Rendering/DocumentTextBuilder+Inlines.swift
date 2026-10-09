@@ -289,10 +289,19 @@ extension DocumentTextBuilder {
   /// rather than made here, because a cursor is AppKit's to make on the main
   /// thread and TextKit may ask from another. Every other link is drawn as the
   /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
+  ///
+  /// A heading's hung number (#433) is no link to look at, but the heading's own
+  /// number: it keeps its quieter color, and comes up to the label's under the
+  /// pointer, as `sectionNumber` says it is.
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
-    caption: [NSAttributedString.Key: Any] = [:]
+    caption: [NSAttributedString.Key: Any] = [:], sectionNumber: SectionNumberState? = nil
   ) -> [NSAttributedString.Key: Any] {
+    if let sectionNumber {
+      var attributes = defaults
+      attributes[.foregroundColor] = sectionNumber == .hovered ? RFCColors.label : nil
+      return attributes
+    }
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
     guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }

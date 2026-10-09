@@ -78,6 +78,26 @@ public enum ReaderLayout {
     width - gutter(forWidth: width, measure: measure) * 2
   }
 
+  /// Whether the headings' numbers hang in the gutter (#433): where the gutter
+  /// beside the column holds `hang` and still leaves `margin` beside it. Never at
+  /// full width, or on a phone, whose gutter is the margin alone.
+  public static func hangs(_ hang: CGFloat, width: CGFloat, measure: MeasurePreference) -> Bool {
+    hang > 0 && gutter(forWidth: width, measure: measure) - hang >= margin
+  }
+
+  /// How far the text container reaches left into the gutter, for the build's
+  /// `hang`: the container is the column and this, and its leading inset is the
+  /// gutter less this, so the column stays where the gutter puts it.
+  ///
+  /// Never more than the gutter. The gutter is the live width's, and the hang is the
+  /// build's on screen until the rebuild lands: a resize, or Full Width, can narrow
+  /// the gutter below a hang that no longer fits, and a reach past the gutter would
+  /// put the numbers off the view's leading edge, or the text past its trailing one.
+  /// Until the rebuild, the text wraps short of the column instead.
+  public static func containerReach(gutter: CGFloat, hang: CGFloat) -> CGFloat {
+    min(gutter, hang)
+  }
+
   /// The inset a hosted header takes, given what it measured when `offered` a
   /// height. A header with no height of its own — `EmptyView`, as a link preview's
   /// reader has (#29) — answers with the height it was offered, 1.8e308, and that
