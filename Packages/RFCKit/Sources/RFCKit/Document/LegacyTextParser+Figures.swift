@@ -52,6 +52,10 @@ extension LegacyTextParser {
       return nil
     }
     let title = rest.drop { ".:-– ".contains($0) }
+    // A title is words: what opens with a quote or a brace is code a label stands in.
+    guard title.first.map({ $0.isLetter || $0.isNumber || $0 == "(" }) ?? true else {
+      return nil
+    }
     return Caption(
       isTable: match.word == "Table", number: Int(match.number),
       label: "\(match.word) \(match.number)", title: title.isEmpty ? nil : String(title))
@@ -113,10 +117,7 @@ extension LegacyTextParser {
     // A number is the document's once: its part number, `figure-3`, is an ID. A second
     // figure the document numbers the same, one continued over a page, keeps its label.
     let part = caption.number.map { "\(caption.isTable ? "table" : "figure")-\($0)" }
-    if let part, taken.contains(part) {
-      caption.title = caption.blockTitle
-      caption.number = nil
-    }
+    if let part, taken.contains(part) { caption.number = nil }
     switch result.last {
     case .table(var table)? where caption.isTable && table.title == nil:
       result.removeLast()
@@ -141,10 +142,7 @@ extension LegacyTextParser {
       }
       // A table's caption under a block that is no table names a figure, numbered as
       // none of the document's figures are.
-      if caption.isTable {
-        caption.title = caption.blockTitle
-        caption.number = nil
-      }
+      if caption.isTable { caption.number = nil }
       if caption.number != nil, let part { taken.insert(part) }
       return .figure(
         Figure(

@@ -49,6 +49,7 @@ struct FigureCaptionTests {
     ["See Figure 3: it shows the sequence"],
     ["Figure 3", "is the relay sequence", "over a congested path"],
     ["Figures 3 and 4"],
+    ["Table 4-2.\"", "::= { relayEntry 3 }"],
   ])
   func `a sentence about a figure is no caption`(lines: [String]) {
     #expect(LegacyTextParser.caption(lines) == nil)
@@ -148,6 +149,20 @@ struct FigureCaptionTests {
     #expect(titled.title == "Codes")
     #expect(titled.number == 3)
     #expect(titled.anchor == nil)
+  }
+
+  /// A table's caption under a block that is no table names a figure, which keeps the
+  /// label, since the figure has no number of the document's.
+  @Test func `a table's caption under artwork names a figure once`() throws {
+    let blocks = LegacyTextParser.figuring([
+      Self.artwork("code   meaning\n1      start\n2      stop"), Self.artwork("Table 3: Codes"),
+    ])
+    guard case .figure(let figure) = blocks.only else {
+      Issue.record("not one figure: \(blocks)")
+      return
+    }
+    #expect(figure.number == nil)
+    #expect(figure.title == "Table 3: Codes")
   }
 
   /// A caption under prose, or under a line of words that stands under no drawing,
