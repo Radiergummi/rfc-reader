@@ -133,10 +133,18 @@ public enum RFCXMLParser {
     /// inventing links the source declined to make.
     let linker: InlineLinker
 
+    /// Whether a section named in the prose before a citation is the citation's
+    /// (`foldingSection`): in a document the RFC Editor prepped, which carries its
+    /// `prepTime`. Not in one corpus-build converted from plain text, whose citations
+    /// the legacy parser has already read, so the XML reads back as the model it was
+    /// written from.
+    let foldsSectionsInProse: Bool
+
     init(referencesIn root: XMLTree.Element) {
       let (referenceTargets, referenceEntries) = Self.references(in: root)
       self.referenceTargets = referenceTargets
       self.referenceEntries = referenceEntries
+      self.foldsSectionsInProse = root["prepTime"] != nil
       self.linker = InlineLinker(
         sectionNumbers: [],
         referenceTargets: referenceTargets.mapValues {
@@ -897,15 +905,65 @@ public enum RFCXMLParser {
     /// link, and a cross reference nested in one is a link with two destinations.
     func parseInlines(_ nodes: [XMLTree.Node], linkBare: Bool = true) -> [Inline] {
       var result: [Inline] = []
-      for node in nodes {
+      // The citation a section named in the text before it was folded into, which
+      // stands in for the next node.
+      var folded: CrossReference?
+      for (offset, node) in nodes.enumerated() {
+        if let reference = folded {
+          result.append(.crossReference(reference))
+          folded = nil
+          continue
+        }
         switch node {
-        case .text(let text):
+        case .text(var text):
+          // Words set as the author typed them are not ours to rewrite.
+          if linkBare, offset + 1 < nodes.count, case .element(let next) = nodes[offset + 1],
+            let fold = foldingSection(before: next, from: text)
+          {
+            text = fold.text
+            folded = fold.reference
+          }
           result += linkBare ? linker.link(text) : [.text(text)]
         case .element(let element):
           result += parseInline(element, linkBare: linkBare)
         }
       }
       return result
+    }
+
+    /// A section named in the prose right before a citation, `Section 6.1 of` or
+    /// `Appendix B in`, ending `text`. A whole word: `Subsection 2 of` is not one.
+    private static let sectionBeforeCitation = Pattern(
+      #/\b(?:[Ss]ection\s+(?<section>\d+(?:\.\d+)*)|[Aa]ppendix\s+(?<appendix>[A-Z](?:\.\d+)*))\s+(?:of|in)\s+$/#
+    )
+
+    /// The citation `xref` with the section the prose before it names, and the prose
+    /// left before it, where `text` ends naming one and `xref` has none of its own:
+    /// `Section 6.1 of <xref target="RFC3550"/>` is cited as if the author had written
+    /// `<xref target="RFC3550" section="6.1"/>` (#445). The words fold into the
+    /// citation when it words the section itself; one in the author's own words keeps
+    /// them, and the prose before them, and only its target learns the section. A
+    /// citation the section changes nothing for, a place in this document, is nil.
+    private func foldingSection(before xref: XMLTree.Element, from text: String)
+      -> (text: String, reference: CrossReference)?
+    {
+      guard foldsSectionsInProse, xref.name == "xref" || xref.name == "relref",
+        xref["section"] == nil
+      else { return nil }
+      // Most text before a citation does not end in `of` or `in`, and is spared the scan.
+      let ending = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard ending.hasSuffix("of") || ending.hasSuffix("in"),
+        let match = text.firstMatch(of: Self.sectionBeforeCitation),
+        let section = match.section ?? match.appendix
+      else { return nil }
+      var sectioned = xref
+      sectioned.attributes["section"] = String(section)
+      sectioned.attributes["sectionFormat"] = "of"
+      let plain = parseCrossReference(xref)
+      let reference = parseCrossReference(sectioned)
+      guard reference.target != plain.target else { return nil }
+      guard reference.label != plain.label else { return (text, reference) }
+      return (String(text[..<match.range.lowerBound]), reference)
     }
 
     private func parseInline(_ element: XMLTree.Element, linkBare: Bool) -> [Inline] {
