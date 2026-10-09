@@ -290,15 +290,18 @@ ios-app: xcodeproj
 
 ## Sync the string catalogs with the strings in the code
 # Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
-# found either way, then adds new strings to the catalogs and marks removed ones
-# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# found either way, then adds new strings to the catalogs and removes the ones the
+# code no longer has (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# Always Debug, whatever CONFIGURATION says: a Release build lacks the strings
+# behind `#if DEBUG`, and the sync would remove them with their translations.
+strings: override CONFIGURATION = Debug
 strings: build-app ios-sim
 	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
 	  --configuration $(CONFIGURATION)
 
 ## Fail when a string catalog is out of date with the code, or lacks German
-# What CI runs: a string added to the code without `make strings` fails here, and
-# so does one without a German translation.
+# What CI runs: a string added to or removed from the code without `make strings`
+# fails here, and so does one without a German translation.
 strings-check: strings
 	@git diff --exit-code -- '*.xcstrings' || \
 	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
