@@ -41,9 +41,10 @@ struct IndexedTerm: Sendable, Hashable {
 /// describes that term's parts. A term introduced in running prose, where a sentence
 /// names a thing and then calls it something, is not read: that is a heuristic nothing
 /// has measured.
-/// The first definition of a term wins, except that an index entry with no definition
-/// text, one placed directly in a section, gives way to any entry that has one. A term
-/// still without a definition at the end has none to show, and is dropped (#396).
+/// The first definition of a term wins, except that one with a definition replaces one
+/// without, wherever each came from: an index entry placed directly in a section has
+/// none. A term still without a definition at the end has none to show, and is dropped
+/// (#396).
 ///
 /// A term is kept by each spelling prose would use on its own (`spellings(of:)`):
 /// `WGW (Widget Gateway)` as both `WGW` and `Widget Gateway`, a citation or the start
@@ -243,11 +244,7 @@ enum DefinedTerms {
   /// The spellings one name stands for, a list's item or the whole term: see
   /// `spellings(of:splittingLists:)`.
   private static func spellings(ofName written: String) -> [String] {
-    var term = withoutCitation(unquoted(written.trimmingCharacters(in: .whitespaces)))
-    // The colon or dash after it first: a citation is left off only at the end.
-    term = trimmingTrailingPunctuation(term)
-    term = trimmingTrailingPunctuation(term.replacing(Abbreviations.citationsPattern, with: ""))
-    term = unquoted(term)
+    let term = cleaned(written)
     guard !term.isEmpty else { return [] }
     if term.hasPrefix("(") { return [term] }
     if let (outside, inside) = parenthetical(term) {
@@ -259,6 +256,16 @@ enum DefinedTerms {
     return [term]
   }
 
+  /// `written` without the quotes around it, a citation after it, and the colon or
+  /// dash after it.
+  private static func cleaned(_ written: String) -> String {
+    var term = withoutCitation(unquoted(written.trimmingCharacters(in: .whitespaces)))
+    // The colon or dash after it first: a citation is left off only at the end.
+    term = trimmingTrailingPunctuation(term)
+    term = trimmingTrailingPunctuation(term.replacing(Abbreviations.citationsPattern, with: ""))
+    return unquoted(term)
+  }
+
   /// `text` before a bracketed citation after it: `Widget datagram [RFC9999]`.
   private static func withoutCitation(_ text: String) -> String {
     guard let citation = topLevelRanges(of: " [", in: text).first else { return text }
@@ -266,20 +273,34 @@ enum DefinedTerms {
   }
 
   /// The name before a parenthetical that ends `term`, and the parenthetical's own
-  /// text, without a citation it carries: `KMAC (Widget MAC [RFC9999])`.
+  /// text, without a citation it carries: `KMAC (Widget MAC [RFC9999])`. The
+  /// parenthetical opens where its closing parenthesis is matched, so one nested in it
+  /// stays inside: `Widget (WGW (version 2))`.
   private static func parenthetical(_ term: String) -> (outside: String, inside: String)? {
-    guard term.hasSuffix(")"), let open = term.range(of: " (", options: .backwards) else {
-      return nil
+    guard term.hasSuffix(")") else { return nil }
+    var depth = 0
+    var index = term.endIndex
+    while index > term.startIndex {
+      index = term.index(before: index)
+      switch term[index] {
+      case ")": depth += 1
+      case "(": depth -= 1
+      default: continue
+      }
+      guard depth == 0 else { continue }
+      guard index > term.startIndex, term[term.index(before: index)] == " " else { return nil }
+      return (
+        String(term[..<term.index(before: index)]),
+        withoutCitation(String(term[term.index(after: index)...].dropLast()))
+      )
     }
-    return (
-      String(term[..<open.lowerBound]), withoutCitation(String(term[open.upperBound...].dropLast()))
-    )
+    return nil
   }
 
   /// Whether `term` is a list that a short form after it abbreviates as a whole,
   /// `Widgets, Gadgets, and Gizmos (WGGs)`: one name, not a list of three.
   private static func isListExpanded(_ term: String) -> Bool {
-    guard let (outside, inside) = parenthetical(trimmingTrailingPunctuation(term)) else {
+    guard let (outside, inside) = parenthetical(cleaned(term)) else {
       return false
     }
     return expands(inside, outside)

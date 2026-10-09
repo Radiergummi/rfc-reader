@@ -92,6 +92,10 @@ struct DefinedTermsTests {
     // A list a short form abbreviates as a whole is one name.
     ("Widgets, Gadgets, and Gizmos (WGGs)", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
     ("Widgets, Gadgets, and Gizmos (WGGs):", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
+    ("Widgets, Gadgets, and Gizmos (WGGs) [RFC9999]", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
+    ("Widgets, Gadgets, and Gizmos (WGGs) RFC 9999", ["Widgets, Gadgets, and Gizmos", "WGGs"]),
+    // A parenthetical is the one the closing parenthesis closes, whatever it holds.
+    ("Widget Gateway (WGW (version 2))", ["Widget Gateway"]),
     // A citation inside the parenthetical is left off too.
     (
       "WMAC (Widget Message Authentication Code [W.1])",
