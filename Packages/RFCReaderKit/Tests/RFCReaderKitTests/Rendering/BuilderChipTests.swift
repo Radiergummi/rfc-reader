@@ -210,33 +210,13 @@ struct BuilderChipTests {
     #expect(spoken[.rfc(2119)]?.label == "", "a normative chip has no label of its own")
   }
 
-  /// Where iOS says an informative chip's kind (#862): `UITextView` has no
-  /// per-range accessor, so the kind is a pronunciation on the chip's icon, read
-  /// before its label. A normative chip has nowhere to say it.
-  @Test func `an informative chip's kind is pronounced on its icon`() throws {
-    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
-    let string = built.text.string as NSString
-    var speech: [DocumentID: AccessibleReading.SpokenLine] = [:]
-    built.text.enumerateAttribute(.rfcChip, in: NSRange(location: 0, length: string.length)) {
-      value, range, _ in
-      guard value != nil,
-        let box = built.text.attribute(.rfcReference, at: range.location, effectiveRange: nil)
-          as? ReferenceBox,
-        case .document(let id, _, _) = box.reference.target,
-        let line = AccessibleReading.informativeChipSpeech(ofChip: range, in: string)
-      else { return }
-      #expect(line.range == NSRange(location: range.location, length: 1))
-      #expect(string.character(at: line.range.location) == 0xFFFC, "the chip's icon")
-      speech[id] = line
-    }
-    #expect(speech[.rfc(5116)]?.pronunciation == AccessibleReading.informativePronunciation)
-  }
-
   #if canImport(UIKit)
-    /// The build puts the pronunciation on an informative chip's icon, and on no
-    /// other chip, where UIKit reads it.
-    @Test func `the build pronounces only an informative chip's kind`() throws {
+    /// iOS VoiceOver says an informative chip's kind (#862): `UITextView` has no
+    /// per-range accessor, so the build pronounces the chip's icon, and nothing
+    /// else, as "informative". A normative chip is pronounced as it reads.
+    @Test func `the build pronounces only an informative chip's icon`() throws {
       let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+      let string = built.text.string as NSString
       let whole = NSRange(location: 0, length: built.text.length)
       var pronounced: [DocumentID: String] = [:]
       built.text.enumerateAttribute(.rfcChip, in: whole) { value, range, _ in
@@ -245,13 +225,16 @@ struct BuilderChipTests {
             as? ReferenceBox,
           case .document(let id, _, _) = box.reference.target
         else { return }
-        pronounced[id] =
-          built.text.attribute(
-            .accessibilitySpeechIPANotation, at: range.location, effectiveRange: nil) as? String
-          ?? ""
+        built.text.enumerateAttribute(.accessibilitySpeechIPANotation, in: range) {
+          value, piece, _ in
+          guard let value = value as? String else { return }
+          #expect(piece == NSRange(location: range.location, length: 1), "the icon alone")
+          #expect(string.character(at: piece.location) == 0xFFFC, "the chip's icon")
+          pronounced[id] = value
+        }
       }
       #expect(pronounced[.rfc(5116)] == AccessibleReading.informativePronunciation)
-      #expect(pronounced[.rfc(2119)] == "")
+      #expect(pronounced[.rfc(2119)] == nil, "a normative chip")
     }
   #endif
 }

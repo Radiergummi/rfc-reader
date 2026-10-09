@@ -341,20 +341,11 @@ extension AccessibleReading {
   /// A pronunciation of nothing at all.
   static let silence = ""
 
-  /// Where VoiceOver says an informative chip's kind on iOS (#862), given the
-  /// chip's range: its icon, pronounced as "informative", so the chip is said as
-  /// "informative RFC 5116". As for a diagram, a speech attribute is the only way
-  /// to change what a range is said as there; macOS says the chip's `.rfcSpoken`
-  /// label instead. The icon, because it is the one character of the chip that
-  /// says nothing of its own, and an IPA pronunciation can't be made of the label.
-  /// Nil for a chip with no icon.
-  static func informativeChipSpeech(ofChip range: NSRange, in string: NSString) -> SpokenLine? {
-    guard range.length > 0, string.character(at: range.location) == 0xFFFC else { return nil }
-    return SpokenLine(
-      range: NSRange(location: range.location, length: 1),
-      pronunciation: informativePronunciation)
-  }
-
-  /// "Informative", in IPA.
+  /// What an informative chip's icon is pronounced as on iOS (#862), "informative"
+  /// in IPA, so the chip is said as "informative RFC 5116". As for a diagram, a
+  /// speech attribute is the only way to change what a range is said as there;
+  /// macOS says the chip's `.rfcSpoken` label instead. On the icon, because it is
+  /// the one character of the chip that says nothing of its own, and an IPA
+  /// pronunciation can't be made of the label.
   static let informativePronunciation = "ɪnˈfɔɹmətɪv"
 }

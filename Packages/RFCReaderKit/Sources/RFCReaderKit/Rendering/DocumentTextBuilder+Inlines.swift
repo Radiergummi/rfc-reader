@@ -90,40 +90,28 @@ extension DocumentTextBuilder {
         return NSAttributedString(string: display.text, attributes: attributes)
       }
       var chipAttributes = attributes
+      var iconAttributes: [NSAttributedString.Key: Any] = [:]
       if referenceKinds.kind(of: xref.target) == .informative {
         chipAttributes[.rfcInformative] = "informative"
         // Said, not only drawn (#457): the outline is no cue to VoiceOver. The
         // reader body is English, so this is too. Only macOS reads it, where the
         // text view's per-range accessors go through `AccessibleReading`; a
         // `UITextView` has no such accessor, so iOS is given a pronunciation on
-        // the chip's icon instead (#862).
+        // the chip's icon instead (#862), only in a build for the reader, as a
+        // diagram's is (`setDiagramSpeech`).
         chipAttributes[.rfcSpoken] = display.text + ", informative"
-        return informativeChip(chipRun(display.text, attributes: chipAttributes))
+        #if canImport(UIKit)
+          if style.emitsLinks {
+            iconAttributes[.accessibilitySpeechIPANotation] =
+              AccessibleReading.informativePronunciation
+          }
+        #endif
       }
-      return chipRun(display.text, attributes: chipAttributes)
+      return chipRun(display.text, attributes: chipAttributes, iconAttributes: iconAttributes)
 
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)
     }
-  }
-
-  /// An informative chip as UIKit reads it, with its kind pronounced on its icon
-  /// (`AccessibleReading.informativeChipSpeech`), as a diagram's lines are
-  /// (`setDiagramSpeech`), and only in a build for the reader, as those are. The
-  /// chip unchanged anywhere else.
-  private func informativeChip(_ chip: NSAttributedString) -> NSAttributedString {
-    #if canImport(UIKit)
-      guard style.emitsLinks,
-        let line = AccessibleReading.informativeChipSpeech(
-          ofChip: NSRange(location: 0, length: chip.length), in: chip.string as NSString)
-      else { return chip }
-      let pronounced = NSMutableAttributedString(attributedString: chip)
-      pronounced.addAttribute(
-        .accessibilitySpeechIPANotation, value: line.pronunciation, range: line.range)
-      return pronounced
-    #else
-      return chip
-    #endif
   }
 
   /// What makes a run a link: the URL, and the underline when the reader asked
@@ -155,14 +143,19 @@ extension DocumentTextBuilder {
   /// runs whose attribute values compare equal, and two adjacent chips
   /// (`[RFC9110][RFC9111]`) sharing one effective range would draw as a single
   /// rounded rect. Each chip therefore carries a value no other chip has.
+  ///
+  /// `iconAttributes` are the icon's alone, on top of the chip's.
   private func chipRun(
-    _ text: String, attributes: [NSAttributedString.Key: Any]
+    _ text: String, attributes: [NSAttributedString.Key: Any],
+    iconAttributes: [NSAttributedString.Key: Any] = [:]
   ) -> NSAttributedString {
     var chip = attributes
     nextChipID += 1
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
-    if let symbol = chipSymbolRun("doc.text", attributes: chip) {
+    if let symbol = chipSymbolRun(
+      "doc.text", attributes: chip.merging(iconAttributes) { _, icon in icon })
+    {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
       // offers a line-break opportunity on either side, so in a narrow column
