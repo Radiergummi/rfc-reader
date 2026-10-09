@@ -39,6 +39,7 @@ Python 3.9 or later, standard library only.
 
 import argparse
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -92,6 +93,9 @@ def remove_stale(catalog: Path) -> None:
     for key in stale:
         del strings[key]
     written = json.dumps(document, indent=2, separators=(",", " : "), ensure_ascii=False)
+    # The sync writes an empty object, a key added but not yet translated, open
+    # over a blank line: `"key" : {`, ``, `}`.
+    written = re.sub(r"^( *)(.*) : \{\}(,?)$", r"\1\2 : {\n\n\1}\3", written, flags=re.MULTILINE)
     if text.endswith("\n"):
         written += "\n"
     catalog.write_text(written)
