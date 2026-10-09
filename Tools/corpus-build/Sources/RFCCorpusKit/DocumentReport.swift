@@ -11,9 +11,10 @@ public struct DocumentReport: Codable, Sendable {
   public var lists: Int
   /// Artwork blocks: diagrams, tables drawn in text, anything not source code.
   public var artwork: Int
-  /// Source code blocks per language, keyed by the block's `type`, `untyped` for one
-  /// with none: the grammars the legacy parser types as ABNF among them (#418). Nil
-  /// in a report written before it was counted.
+  /// Source code blocks per language, keyed by the block's `type` in lowercase,
+  /// `untyped` for one with none: the grammars the legacy parser types as ABNF among
+  /// them (#418). Nil, and absent from the JSON, for a document with none, as in a
+  /// report written before it was counted.
   public var sourceCode: [String: Int]?
   public var references: Int
   public var resolvedDocuments: Int
@@ -57,8 +58,8 @@ public struct DocumentReport: Codable, Sendable {
       switch block {
       case .paragraph: paragraphs += 1
       case .list: lists += 1
-      case .preformatted(let block) where block.kind == .sourceCode:
-        sourceCode[block.type ?? "untyped", default: 0] += 1
+      case .preformatted(let code) where code.kind == .sourceCode:
+        sourceCode[code.type?.lowercased() ?? "untyped", default: 0] += 1
       case .preformatted: artwork += 1
       case .references(let list): references += list.entries.count
       case .definitionList, .figure, .blockQuote, .aside, .table, .index: break
@@ -82,7 +83,7 @@ public struct DocumentReport: Codable, Sendable {
     self.paragraphs = paragraphs
     self.lists = lists
     self.artwork = artwork
-    self.sourceCode = sourceCode
+    self.sourceCode = sourceCode.isEmpty ? nil : sourceCode
     self.references = references
     self.resolvedDocuments = document.referencedDocuments.count
     self.override = override

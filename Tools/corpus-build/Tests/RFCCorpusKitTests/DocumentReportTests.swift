@@ -92,12 +92,24 @@ struct DocumentReportTests {
       anchor: "section-1", number: "1", title: "Grammar",
       blocks: [
         .paragraph(Paragraph(text: "Prose.")), Self.artwork, code("abnf"), code("abnf"),
-        code(nil), code("c"),
+        code(nil), code("C"),
       ])
     let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
     #expect(report.artwork == 1)
     #expect(report.sourceCode == ["abnf": 2, "c": 1, "untyped": 1])
     #expect(report.warnings == [], "source code is not artwork misread from prose")
+  }
+
+  /// A document with no source code writes no `sourceCode`, so a report diff gains a
+  /// line only where there is some.
+  @Test func `a document without source code writes none`() throws {
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Prose",
+      blocks: [.paragraph(Paragraph(text: "Prose.")), Self.artwork])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.sourceCode == nil)
+    let json = String(decoding: try JSONEncoder().encode(report), as: UTF8.self)
+    #expect(!json.contains("sourceCode"))
   }
 
   /// A report written before #418 has no `sourceCode`; it still decodes, as the
