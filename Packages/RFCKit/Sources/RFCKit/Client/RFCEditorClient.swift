@@ -108,11 +108,11 @@ public struct CacheValidators: Codable, Sendable, Hashable {
   }
 }
 
-/// What asking for the index again found.
+/// What asking for the index, or the errata, again found.
 public enum IndexFetch: Sendable, Hashable {
-  /// A new index, and what identifies it for the next time.
+  /// A new file, and what identifies it for the next time.
   case changed(Data, CacheValidators?)
-  /// The server's `304`: the index kept is still the current one.
+  /// The server's `304`: the file kept is still the current one.
   case unchanged
 }
 
@@ -248,7 +248,28 @@ public struct RFCEditorClient: Sendable {
   public func fetchIndexData(unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool)
     async throws -> IndexFetch
   {
-    var request = Self.request(RFCEditorEndpoints.index)
+    try await fetchConditionally(
+      RFCEditorEndpoints.index, accepting: Self.xmlMediaTypes, unlessMatching: validators,
+      onExpensiveNetworks: onExpensiveNetworks)
+  }
+
+  /// The errata feed as bytes (#387), unless it still matches `validators`: as
+  /// `fetchIndexData(unlessMatching:onExpensiveNetworks:)` does for the index.
+  public func fetchErrataData(
+    unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool
+  )
+    async throws -> IndexFetch
+  {
+    try await fetchConditionally(
+      RFCEditorEndpoints.errata, accepting: ["application/json"], unlessMatching: validators,
+      onExpensiveNetworks: onExpensiveNetworks)
+  }
+
+  private func fetchConditionally(
+    _ url: URL, accepting mediaTypes: Set<String>, unlessMatching validators: CacheValidators?,
+    onExpensiveNetworks: Bool
+  ) async throws -> IndexFetch {
+    var request = Self.request(url)
     validators?.condition(&request)
     #if !canImport(FoundationNetworking)
       request.allowsExpensiveNetworkAccess = onExpensiveNetworks
@@ -259,10 +280,10 @@ public struct RFCEditorClient: Sendable {
     case 304:
       return .unchanged
     case 200..<300:
-      try Self.check(response, to: request, accepting: Self.xmlMediaTypes)
+      try Self.check(response, to: request, accepting: mediaTypes)
       return .changed(data, CacheValidators(response: response))
     default:
-      throw ClientError.httpStatus(response.statusCode, RFCEditorEndpoints.index)
+      throw ClientError.httpStatus(response.statusCode, url)
     }
   }
 

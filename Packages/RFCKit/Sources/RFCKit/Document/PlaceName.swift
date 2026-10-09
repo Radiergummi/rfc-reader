@@ -8,13 +8,20 @@ public enum PlaceName {
   /// `Section 4.2`, `Appendix A.1`, `Appendix 1`. A `separator` of a no-break space
   /// keeps the word with the place.
   public static func spelledOut(_ place: String, separator: String = " ") -> String {
+    if let appendix = appendixNumber(of: place) { return "Appendix\(separator)\(appendix)" }
+    return "Section\(separator)\(place)"
+  }
+
+  /// What the appendix `place` names is numbered, `A.1`, or `1` for `appendix-1`;
+  /// nil when `place` is a section.
+  public static func appendixNumber(of place: String) -> String? {
     if isAppendixAnchor(place) {
-      return "Appendix\(separator)\(place.dropFirst(SectionAnchor.appendixPrefix.count))"
+      return String(place.dropFirst(SectionAnchor.appendixPrefix.count))
     }
     // xml2rfc takes only an ASCII capital for an appendix's letter (#473).
     let isLettered =
       place.first.map { ("A"..."Z").contains($0) } == true && SectionAnchor.isSectionNumber(place)
-    return "\(isLettered ? "Appendix" : "Section")\(separator)\(place)"
+    return isLettered ? place : nil
   }
 
   /// `§ 4.2`, `§ A.1`, and `Appendix 1`, which a section sign would call section 1.

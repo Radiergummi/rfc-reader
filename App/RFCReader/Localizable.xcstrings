@@ -680,6 +680,16 @@
         }
       }
     },
+    "Corrected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrigiert"
+          }
+        }
+      }
+    },
     "Couldn't Read the Citation Index" : {
       "localizations" : {
         "de" : {
@@ -911,6 +921,16 @@
         }
       }
     },
+    "Errata" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errata"
+          }
+        }
+      }
+    },
     "Expanded" : {
       "localizations" : {
         "de" : {
@@ -1047,6 +1067,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Allgemein"
+          }
+        }
+      }
+    },
+    "Go to %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu %@"
           }
         }
       }
@@ -1492,6 +1522,16 @@
         }
       }
     },
+    "Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
+          }
+        }
+      }
+    },
     "Nothing in the index matches “%@”." : {
       "localizations" : {
         "de" : {
@@ -1712,6 +1752,16 @@
         }
       }
     },
+    "Open this erratum on the RFC Editor's site" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Erratum auf der Website des RFC Editor öffnen"
+          }
+        }
+      }
+    },
     "Opens a section of an RFC." : {
       "localizations" : {
         "de" : {
@@ -1758,6 +1808,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reihenfolge"
+          }
+        }
+      }
+    },
+    "Original" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original"
           }
         }
       }
