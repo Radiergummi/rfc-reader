@@ -108,7 +108,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935 rfc9051 rfc9111 rfc9499
 
@@ -290,15 +290,18 @@ ios-app: xcodeproj
 
 ## Sync the string catalogs with the strings in the code
 # Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
-# found either way, then adds new strings to the catalogs and marks removed ones
-# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# found either way, then adds new strings to the catalogs and removes the ones the
+# code no longer has (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# Always Debug, whatever CONFIGURATION says: a Release build lacks the strings
+# behind `#if DEBUG`, and the sync would remove them with their translations.
+strings: override CONFIGURATION = Debug
 strings: build-app ios-sim
 	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
 	  --configuration $(CONFIGURATION)
 
 ## Fail when a string catalog is out of date with the code, or lacks German
-# What CI runs: a string added to the code without `make strings` fails here, and
-# so does one without a German translation.
+# What CI runs: a string added to or removed from the code without `make strings`
+# fails here, and so does one without a German translation.
 strings-check: strings
 	@git diff --exit-code -- '*.xcstrings' || \
 	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }

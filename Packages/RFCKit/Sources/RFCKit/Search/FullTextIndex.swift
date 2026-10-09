@@ -265,11 +265,9 @@ public struct Snippet: Sendable, Hashable {
   /// string, so nothing typed is read as an operator, a column filter or a prefix.
   /// Nil when nothing in it is a word.
   static func matchExpression(for query: String) -> String? {
-    // `words(in:)` splits at spaces only, and a tab or a line break pasted from a
-    // document would hold two words together as a phrase. A NUL parts words too: FTS5
-    // reads its query only up to one, which would end it inside a quoted string.
-    let spaced = query.split { $0.isWhitespace || $0 == "\u{0}" }.joined(separator: " ")
-    let terms = SearchQuery.words(in: spaced)
+    // A NUL parts words: FTS5 reads its query only up to one, which would end it
+    // inside a quoted string.
+    let terms = SearchQuery.words(in: query.replacing("\u{0}", with: " "))
       .map(SearchQuery.unquoted)
       .filter { $0.contains { $0.isLetter || $0.isNumber } }
       .map { "\"" + $0.replacing("\"", with: "\"\"") + "\"" }

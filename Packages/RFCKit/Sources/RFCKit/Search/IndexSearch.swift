@@ -116,7 +116,8 @@ public struct IndexSearch: Sendable {
 
   /// Parses `wg:httpbis status:std author:fielding year:2020-2022 tls` into filters plus free text.
   ///
-  /// A value with spaces is quoted, `author:"Roy Fielding"`, and loses its quotes. A
+  /// Words are split at whitespace outside quotes. A value with spaces is quoted,
+  /// `author:"Roy Fielding"`, and loses its quotes. A
   /// quoted phrase of free text keeps them, so `search(text:filters:)` reads it as one
   /// term (#177). A qualifier this version doesn't know, or a value it can't read, is
   /// an unknown term, never free text: a saved query that searched for it as text

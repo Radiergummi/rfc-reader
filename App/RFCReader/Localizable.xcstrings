@@ -1201,17 +1201,6 @@
         }
       }
     },
-    "Keep Offline" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline behalten"
-          }
-        }
-      }
-    },
     "Keep a copy to read offline." : {
       "localizations" : {
         "de" : {
@@ -2398,17 +2387,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vergleich mit %@ beenden"
-          }
-        }
-      }
-    },
-    "Stop Keeping Offline" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht mehr offline behalten"
           }
         }
       }

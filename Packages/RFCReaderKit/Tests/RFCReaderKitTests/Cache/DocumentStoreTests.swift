@@ -44,9 +44,9 @@ struct DocumentStoreTests {
     var textFetches: Int { textCount.withLock { $0 } }
 
     @concurrent
-    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
-      -> RFCEditorClient.FetchedDocument
-    {
+    func fetchPreferredDocument(
+      _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+    ) async throws -> RFCEditorClient.FetchedDocument {
       documentCount.withLock { $0 += 1 }
       await gate.wait()
       let data = try Fixtures.data("rfc8999.xml")
@@ -169,6 +169,78 @@ struct DocumentStoreTests {
     #expect(try document == Fixtures.rfc2119())
     #expect(fetcher.documentFetches == 0)
     #expect(fetcher.textFetches == 0)
+  }
+
+  /// A legacy RFC read from its text takes its header from its index entry (#767), and
+  /// one parsed before the index is there is kept and takes the entry's header on the
+  /// next open, with the entry, without being fetched.
+  @Test func `a text body takes its header from the index entry, once there is one`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(2119)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
+    let entry = RFCMetadata(
+      id: id, title: "Key Words", authors: [Author(name: "B. Second", role: .editor)],
+      date: PublicationDate(year: 1997, month: 3), formats: [.text])
+
+    let before = try await store.document(id, formats: [.text], client: fetcher)
+    #expect(before.header.authors != entry.authors)
+    let after = try await store.document(id, formats: [.text], entry: entry, client: fetcher)
+    #expect(after.header.authors == entry.authors)
+    #expect(after.header.date == entry.date)
+    #expect(fetcher.textFetches == 0)
+  }
+
+  /// A text parsed with its index entry keeps the title the parse chose, as the
+  /// converter does (#767): an index title in capitals that the page doesn't set stays
+  /// in capitals, where choosing again from it title-cased it, on every open.
+  @Test func `a text parsed with its entry keeps the title the parse chose`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(793)
+    let data = try Fixtures.rfcKitData("rfc793.txt")
+    try data.write(to: sandbox.file(id, format: .text))
+    let entry = RFCMetadata(
+      id: id, title: "XYZZY PLUGH", date: PublicationDate(year: 1981, month: 9), formats: [.text])
+    let converted = LegacyTextParser.parse(data, entry: entry).header.title
+    #expect(converted == "XYZZY PLUGH")
+
+    let opened = try await store.document(id, formats: [.text], entry: entry, client: fetcher)
+    #expect(opened.header.title == converted)
+    let reopened = try await store.document(id, formats: [.text], entry: entry, client: fetcher)
+    #expect(reopened.header.title == converted)
+  }
+
+  /// A text parsed before its entry was there has its title chosen when the entry
+  /// comes, against the page's: a title the page and the index both set in capitals
+  /// is title-cased, as a parse with the entry does (#219).
+  @Test func `a text parsed before its entry title-cases a title both set in capitals`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(793)
+    let data = try Fixtures.rfcKitData("rfc793.txt")
+    try data.write(to: sandbox.file(id, format: .text))
+    let entry = RFCMetadata(
+      id: id, title: "TRANSMISSION CONTROL PROTOCOL", date: PublicationDate(year: 1981, month: 9),
+      formats: [.text])
+
+    _ = try await store.document(id, formats: [.text], client: fetcher)
+    let opened = try await store.document(id, formats: [.text], entry: entry, client: fetcher)
+    #expect(opened.header.title == "Transmission Control Protocol")
+    #expect(opened.header.title == LegacyTextParser.parse(data, entry: entry).header.title)
   }
 
   @Test func `a fetched document is written and reported as cached`() async throws {
@@ -475,9 +547,9 @@ struct DocumentStoreTests {
       ])
 
     @concurrent
-    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
-      -> RFCEditorClient.FetchedDocument
-    {
+    func fetchPreferredDocument(
+      _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+    ) async throws -> RFCEditorClient.FetchedDocument {
       await gate.wait()
       throw Self.refused
     }
