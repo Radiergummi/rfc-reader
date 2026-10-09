@@ -70,8 +70,8 @@ struct DocumentStoreTests {
     var caches: URL { root.appending(path: "Caches", directoryHint: .isDirectory) }
 
     /// A store whose disk has `freeSpace` bytes left for each tier, or as much as
-    /// the real volume has when that is nil, and which awaits `parsing` in each
-    /// parse of a body on disk.
+    /// the real volume has when that is nil, and which awaits `parsing` at the start
+    /// of each look at the disk for a body to parse.
     func store(
       freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
       parsing: (@Sendable () async -> Void)? = nil
@@ -662,7 +662,7 @@ struct DocumentStoreTests {
     let store = sandbox.store()
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(2119)
-    let pack = try Self.legacyPack(holding: id, in: sandbox.root)
+    let pack = try Self.legacyPack(in: sandbox.root)
 
     let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
     await untilWaiting(texts: 1, for: id, in: store)
@@ -685,7 +685,7 @@ struct DocumentStoreTests {
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(2119)
     try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
-    let pack = try Self.legacyPack(holding: id, in: sandbox.root)
+    let pack = try Self.legacyPack(in: sandbox.root)
 
     let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
     await untilWaiting(parses: 1, for: id, in: store)
@@ -706,7 +706,7 @@ struct DocumentStoreTests {
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(2119)
     try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
-    let pack = try Self.legacyPack(holding: id, in: sandbox.root)
+    let pack = try Self.legacyPack(in: sandbox.root)
 
     let first = Task { try await store.document(id, formats: [.text], client: fetcher) }
     await untilWaiting(parses: 1, for: id, in: store)
@@ -720,13 +720,13 @@ struct DocumentStoreTests {
     #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
   }
 
-  /// A legacy XML pack holding `id`, converted from the committed RFC 2119 text the
-  /// way corpus-build converts it, with a manifest listing it.
-  private static func legacyPack(holding id: DocumentID, in parent: URL) throws -> URL {
+  /// A legacy XML pack holding RFC 2119, converted from its committed text the way
+  /// corpus-build converts it, with a manifest listing it.
+  private static func legacyPack(in parent: URL) throws -> URL {
     let converted = RFCXMLSerializer().serialize(
       LegacyTextParser.parse(try Fixtures.data("rfc2119.txt")))
     return try DataPackTests.makePack(
-      in: parent, files: [DocumentCacheIndex.fileName(for: id, format: .xml): converted])
+      in: parent, files: [DocumentCacheIndex.fileName(for: .rfc(2119), format: .xml): converted])
   }
 }
 

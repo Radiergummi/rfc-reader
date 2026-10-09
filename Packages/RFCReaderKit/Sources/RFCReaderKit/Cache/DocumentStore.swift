@@ -37,7 +37,8 @@ public actor DocumentStore {
   private let cacheDirectory: URL
   /// The bytes free on the disk for a body in each tier; see `StorageTier.hasRoom`.
   private let freeSpace: @Sendable (StorageTier) -> Int?
-  /// Awaited before a body on disk is parsed: nil but in tests.
+  /// Awaited at the start of each look at the disk for a body to parse: nil but in
+  /// tests.
   private let parsing: (@Sendable () async -> Void)?
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
@@ -74,8 +75,8 @@ public actor DocumentStore {
   private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
-  /// A pack installed meanwhile marks the parses it replaces as a removal does, so
-  /// none of them is kept.
+  /// A pack installed meanwhile marks the parses of the documents it serves as a
+  /// removal does, so none of them is kept.
   private let parses = InFlightDownloads<RFCDocument?>()
 
   /// Whether a body has been written to the cache since eviction last looked, so a
@@ -138,9 +139,9 @@ public actor DocumentStore {
     self.init(directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil)
   }
 
-  /// The store above, with `parsing` awaited in each parse of a body on disk, once
-  /// it has chosen which files to read: for a test to hold the parse open as it
-  /// holds a fetch.
+  /// The store above, with `parsing` awaited at the start of each look at the disk
+  /// for a body to parse, once it has chosen which files to read, whether or not one
+  /// is there: for a test to hold the parse open as it holds a fetch.
   init(
     directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)?,
     parsing: (@Sendable () async -> Void)?
@@ -671,7 +672,8 @@ public actor DocumentStore {
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
   /// joined by a second open, and a body removed while it parsed is shown but not
   /// kept, like a fetch (#116), and so is one parsed from what a pack installed
-  /// meanwhile replaces: that open shows it, and the next reads the pack.
+  /// meanwhile replaces: every open that joins it before it ends, even after the
+  /// install, shows it, and the first open after it ends reads the pack.
   private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
     -> RFCDocument?
   {
