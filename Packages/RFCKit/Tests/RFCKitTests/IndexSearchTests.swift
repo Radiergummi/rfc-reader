@@ -49,7 +49,7 @@ struct IndexSearchTests {
   @Test func `filters parse`() {
     let parsed = IndexSearch.parseQuery("wg:httpbis status:std year:2020-2022 cache")
     #expect(parsed.text == "cache")
-    #expect(parsed.filters.workingGroup == "httpbis")
+    #expect(parsed.filters.workingGroups == ["httpbis"])
     #expect(parsed.filters.statuses == [.internetStandard, .draftStandard, .proposedStandard])
     #expect(parsed.filters.yearRange == 2020...2022)
   }
@@ -85,14 +85,14 @@ struct IndexSearchTests {
   /// empty the list; it is free text, as `wg:` is.
   @Test func `an empty quoted value is not a filter`() {
     let parsed = IndexSearch.parseQuery(#"cache wg:""#)
-    #expect(parsed.filters.workingGroup == nil)
+    #expect(parsed.filters.workingGroups.isEmpty)
     #expect(parsed.text == #"cache wg:""#)
   }
 
   /// A space typed inside the quotes, before or after the value, is not part of it.
   @Test func `a quoted value loses the spaces at its edges`() {
     #expect(IndexSearch.parseQuery(#"author:" "#).filters.author == nil)
-    #expect(IndexSearch.parseQuery(#"wg:"httpbis ""#).filters.workingGroup == "httpbis")
+    #expect(IndexSearch.parseQuery(#"wg:"httpbis ""#).filters.workingGroups == ["httpbis"])
   }
 
   /// The query is being typed: the closing quote has not arrived yet.
@@ -360,9 +360,9 @@ struct IndexSearchTests {
   /// parsed one: the prepared fields it is matched against are lowercased.
   @Test func `a text filter value is stored lowercased`() {
     var filters = SearchFilters()
-    filters.workingGroup = "HTTPBIS"
+    filters.workingGroups = ["HTTPBIS"]
     filters.author = "Fielding"
-    #expect(filters.workingGroup == "httpbis")
+    #expect(filters.workingGroups == ["httpbis"])
     #expect(filters.author == "fielding")
   }
 
@@ -372,7 +372,7 @@ struct IndexSearchTests {
   @Test func `a hand-built mixed-case filter finds what a typed one does`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     var filters = SearchFilters()
-    filters.workingGroup = "HTTPBIS"
+    filters.workingGroups = ["HTTPBIS"]
     filters.author = "Fielding"
     let handBuilt = search.search(text: "", filters: filters, limit: .max)
     #expect(!handBuilt.isEmpty)
@@ -392,14 +392,18 @@ struct IndexSearchTests {
     #expect(whole.isSubset(of: search.search("author:field", limit: .max).map(\.rfc.number)))
   }
 
-  /// An empty value is no filter: it is stored as nil, and matches every document.
+  /// An empty value is no filter: it is stored as nil, or left out of a set, and
+  /// matches every document.
   @Test func `an empty filter value matches like no filter`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     let everything = search.search(text: "", filters: SearchFilters(), limit: .max)
-    for keyPath in [\SearchFilters.workingGroup, \SearchFilters.author] {
-      var filters = SearchFilters()
-      filters[keyPath: keyPath] = ""
-      #expect(filters[keyPath: keyPath] == nil)
+    var author = SearchFilters()
+    author.author = ""
+    #expect(author.author == nil)
+    var group = SearchFilters()
+    group.workingGroups = [""]
+    #expect(group.workingGroups.isEmpty)
+    for filters in [author, group] {
       #expect(filters.isEmpty)
       let hits = search.search(text: "", filters: filters, limit: .max)
       #expect(hits.map(\.rfc.number) == everything.map(\.rfc.number))
@@ -470,5 +474,14 @@ struct IndexSearchTests {
     #expect(
       SearchQuery.suggestions(for: "wg:naiv", in: Self.accented.index).map(\.completion)
         == ["wg:naive"])
+  }
+
+  /// A group the index names, with or without its accents, is no unknown term (#355).
+  @Test func `a working group written without its accents is known`() {
+    #expect(SearchQuery.unknownTerms(in: "wg:naive", index: Self.accented.index).isEmpty)
+    #expect(SearchQuery.unknownTerms(in: "wg:Na\u{00EF}ve", index: Self.accented.index).isEmpty)
+    #expect(
+      SearchQuery.unknownTerms(in: "wg:naive,quic", index: Self.accented.index)
+        == [UnknownSearchTerm(word: "wg:naive,quic", reason: .workingGroup)])
   }
 }

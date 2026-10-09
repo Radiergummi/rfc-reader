@@ -34,6 +34,20 @@ struct ListedRowsTests {
     #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
   }
 
+  /// The iPhone sidebar's results for a query asking for the reader's data are
+  /// narrowed by it too, not every document the index holds (#355).
+  @Test func `the library's results narrow by the reader's data`() {
+    let list = LibraryList(filter: .recent, query: "is:bookmarked", bookmarked: [.rfc(3), .rfc(1)])
+    #expect(listed(list).librarySearch.map(\.id.number) == [3, 1])
+  }
+
+  /// The index answers nothing of `is:bookmarked`, so it is not searched for it.
+  @Test func `a query only of the reader's data searches nothing`() {
+    let list = LibraryList(filter: .all, query: "is:bookmarked", bookmarked: [.rfc(3)])
+    #expect(listed(list).hits.isEmpty)
+    #expect(listed(list).rows.map(\.id.number) == [3])
+  }
+
   @Test func `an unsearched list has no library results`() {
     #expect(listed(LibraryList(filter: .all, query: "")).librarySearch.isEmpty)
   }
@@ -95,6 +109,10 @@ struct LibraryListInputsTests {
       reads.append("members")
       return [4]
     }
+    func collection(named name: String) -> UUID? {
+      reads.append("collection \(name)")
+      return name == "Mine" ? UUID() : nil
+    }
   }
 
   private func reading(_ filter: LibraryFilter, from sources: Sources) -> LibraryList {
@@ -118,6 +136,23 @@ struct LibraryListInputsTests {
     let sources = Sources()
     _ = reading(filter, from: sources)
     #expect(sources.reads.isEmpty)
+  }
+
+  /// A query asking for the reader's data or a collection reads it, whatever the
+  /// filter, and only that.
+  @Test(arguments: [
+    ("is:bookmarked", ["bookmarked"]),
+    ("is:read", ["recentlyRead"]),
+    ("sort:last-read", ["recentlyRead"]),
+    ("is:offline", ["downloaded"]),
+    (#"in:"Mine""#, ["collection Mine", "members"]),
+    (#"in:"Gone""#, ["collection Gone"]),
+    ("in:9110 status:bcp", []),
+  ])
+  func `a query reads the input it asks for`(query: String, inputs: [String]) {
+    let sources = Sources()
+    _ = LibraryList.reading(.all, query: query, options: ListOptions(), from: sources)
+    #expect(sources.reads == inputs)
   }
 
   @Test func `what is read is what is listed from`() {
