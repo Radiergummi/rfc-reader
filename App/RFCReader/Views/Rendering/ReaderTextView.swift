@@ -527,6 +527,15 @@ import RFCReaderKit
         in: attributedString(),
         text: { super.accessibilityAttributedString(for: $0) },
         label: { NSAttributedString(string: $0) },
+        // A chip said as a label is still a link (#457): the label takes the
+        // attributes AppKit gives the chip's own words, its last character's.
+        chipLabel: { spoken, chip in
+          let last = super.accessibilityAttributedString(
+            for: NSRange(location: NSMaxRange(chip) - 1, length: 1))
+          guard let last, last.length > 0 else { return NSAttributedString(string: spoken) }
+          return NSAttributedString(
+            string: spoken, attributes: last.attributes(at: 0, effectiveRange: nil))
+        },
         join: { parts in
           let joined = NSMutableAttributedString()
           parts.forEach(joined.append)
