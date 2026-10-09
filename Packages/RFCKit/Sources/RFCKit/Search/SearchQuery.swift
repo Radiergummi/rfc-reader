@@ -254,7 +254,7 @@ public enum SearchQuery {
       let parsed = IndexSearch.parseQuery(word)
       let isTyped = typing && offset == words.count - 1
       let namesKnownGroup =
-        parsed.filters.workingGroup.map { workingGroups.contains(folded($0)) } ?? true
+        parsed.filters.workingGroup.map { workingGroups.contains(SearchText.folded($0)) } ?? true
       if !isTyped, parsed.text.isEmpty, !parsed.filters.isEmpty, namesKnownGroup {
         filtering.append(word)
       } else {
@@ -409,7 +409,7 @@ public enum SearchQuery {
     }
     // Folded as the names are, so `wg:naiv` is offered a group the index spells
     // with an accent.
-    let typed = folded(unquoted(parts.value))
+    let typed = SearchText.folded(unquoted(parts.value))
     guard let qualifier = Qualifier(spelling: parts.key) else {
       return [Suggestion(completion: query, isUnknown: true)]
     }
@@ -447,7 +447,7 @@ public enum SearchQuery {
   private static func workingGroups(in index: RFCIndex) -> [String] {
     var counts: [String: Int] = [:]
     for rfc in index.rfcs {
-      guard let group = rfc.workingGroup.map(folded) else { continue }
+      guard let group = rfc.workingGroup.map(SearchText.folded) else { continue }
       counts[group, default: 0] += 1
     }
     let groups = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
@@ -459,7 +459,7 @@ public enum SearchQuery {
   /// Every working group the index names, folded as the search matches them:
   /// the ones a `wg:` token may name in `tokenized(_:workingGroups:)`.
   public static func knownWorkingGroups(in index: RFCIndex) -> Set<String> {
-    Set(index.rfcs.compactMap { $0.workingGroup.map(folded) })
+    Set(index.rfcs.compactMap { $0.workingGroup.map(SearchText.folded) })
   }
 
   /// The working group the index files individual submissions under.

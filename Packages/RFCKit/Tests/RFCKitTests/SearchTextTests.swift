@@ -70,8 +70,8 @@ struct SearchTextTests {
   /// The one thing byte comparison gives up against `String.range(of:)`, pinned so
   /// it is a known trade rather than a surprise: the two spellings of `é` are
   /// canonically equivalent and don't match as bytes. The search folds both sides
-  /// first (`folded`, #425), so it never meets them unfolded.
-  @Test func `canonically equivalent spellings no longer match`() {
+  /// first (`SearchText.folded`, #425), so it never meets them unfolded.
+  @Test func `unfolded, canonically equivalent spellings differ as bytes`() {
     let composed = text("\u{00E9}")
     let decomposed = text("e\u{0301}")
     #expect(!composed.contains(decomposed))

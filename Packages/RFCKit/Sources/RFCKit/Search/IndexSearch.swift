@@ -6,7 +6,7 @@ public struct SearchFilters: Sendable, Hashable {
   public var streams: Set<PublicationStream> = []
   /// Lowercased when set, and nil when set empty, as an empty value is no filter. It
   /// keeps its diacritics, as it is shown, and is folded where it is matched
-  /// (`folded`), as the fields it is matched against are.
+  /// (`SearchText.folded`), as the fields it is matched against are.
   public var workingGroup: String? {
     didSet { workingGroup = Self.normalized(workingGroup) }
   }
@@ -45,8 +45,8 @@ public struct SearchHit: Sendable, Identifiable {
 public struct IndexSearch: Sendable {
   public let index: RFCIndex
 
-  /// Folded copies of the searchable fields (`folded`), built once so type-ahead stays
-  /// fast.
+  /// Folded copies of the searchable fields (`SearchText.folded`), built once so
+  /// type-ahead stays fast.
   private struct Entry: Sendable {
     var offset: Int
     var number: SearchText
@@ -64,7 +64,7 @@ public struct IndexSearch: Sendable {
   public init(index: RFCIndex) {
     self.index = index
     self.entries = index.rfcs.enumerated().map { offset, rfc in
-      let title = folded(rfc.title)
+      let title = SearchText.folded(rfc.title)
       let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
       return Entry(
         offset: offset,
@@ -149,7 +149,7 @@ public struct IndexSearch: Sendable {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
     // A quoted phrase is one term, so it has to match as it is written. Every term is
     // folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
-    let terms = SearchQuery.words(in: folded(trimmed)).map(SearchQuery.unquoted)
+    let terms = SearchQuery.words(in: SearchText.folded(trimmed)).map(SearchQuery.unquoted)
       .filter { !$0.isEmpty }
 
     if filters.isEmpty, let number = Self.number(in: trimmed) {
@@ -286,8 +286,9 @@ public struct IndexSearch: Sendable {
 /// scanning, not the hits.
 ///
 /// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
-/// as U+00E9. Both sides are folded on the way in (`folded`), which composes them
-/// first, so the two spellings of an accented letter end as the same bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
+/// as U+00E9. Both sides are folded on the way in (`SearchText.folded`), which
+/// composes them first, so the two spellings of an accented letter end as the same
+/// bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
 /// continuation byte a match cannot start in the middle of a character.
 struct SearchText: Hashable, Sendable {
   private let bytes: [UInt8]
@@ -300,7 +301,7 @@ struct SearchText: Hashable, Sendable {
 
   /// `text` folded (`folded`), as every field and needle a search compares is.
   init(folding text: String) {
-    self.init(alreadyFolded: folded(text))
+    self.init(alreadyFolded: Self.folded(text))
   }
 
   func hasPrefix(_ other: SearchText) -> Bool {
@@ -350,7 +351,7 @@ struct AuthorName: Sendable {
   init(_ name: String) {
     let words = name.split(separator: " ")
     let given = words.dropLast().prefix(while: Self.isInitials)
-    initials = Set(given.flatMap { word in folded(String(word)).filter(\.isLetter) })
+    initials = Set(given.flatMap { word in SearchText.folded(String(word)).filter(\.isLetter) })
     surname = SearchText(folding: words.dropFirst(given.count).joined(separator: " "))
   }
 
@@ -383,22 +384,24 @@ struct AuthorQuery: Sendable {
   let surnames: [SearchText]
 
   init(_ value: String) {
-    let words = folded(value).split(separator: " ")
+    let words = SearchText.folded(value).split(separator: " ")
     initials = words.compactMap(\.first)
     surnames = words.indices.map { SearchText(alreadyFolded: words[$0...].joined(separator: " ")) }
   }
 }
 
-/// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
-/// however its ü is spelled: what every field the search prepares, and every term
-/// and filter it matches against them, is compared as (#425), and what `wg:`
-/// completion and tokens compare names as. Composed first (NFC), so a letter and its
-/// marks typed apart, `u` and U+0308 or `か` and U+3099, are the one letter the other
-/// spelling is, then folded, which drops a mark Foundation counts as a diacritic. A
-/// letter that is not a base letter and a mark, `ß`, `ø`, `æ`, is left as it is.
-/// ASCII, most of the index, is only lowercased: there is nothing else to do to it.
-func folded(_ text: String) -> String {
-  if text.utf8.allSatisfy({ $0 < 0x80 }) { return text.lowercased() }
-  return text.precomposedStringWithCanonicalMapping.lowercased()
-    .folding(options: .diacriticInsensitive, locale: nil)
+extension SearchText {
+  /// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
+  /// however its ü is spelled: what every field the search prepares, and every term
+  /// and filter it matches against them, is compared as (#425), and what `wg:`
+  /// completion and tokens compare names as. Composed first (NFC), so a letter and its
+  /// marks typed apart, `u` and U+0308 or `か` and U+3099, are the one letter the other
+  /// spelling is, then folded, which drops a mark Foundation counts as a diacritic. A
+  /// letter that is not a base letter and a mark, `ß`, `ø`, `æ`, is left as it is.
+  /// ASCII, most of the index, is only lowercased: there is nothing else to do to it.
+  static func folded(_ text: String) -> String {
+    if text.utf8.allSatisfy({ $0 < 0x80 }) { return text.lowercased() }
+    return text.precomposedStringWithCanonicalMapping.lowercased()
+      .folding(options: .diacriticInsensitive, locale: nil)
+  }
 }
