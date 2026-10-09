@@ -108,9 +108,10 @@ final class LibraryModel {
   /// a check once a day. Nil until either has been read.
   private(set) var errata: Errata?
   @ObservationIgnored private var isRefreshingErrata = false
-  /// When this run last asked the RFC Editor for the feed, whatever came of it: a
-  /// feed that fails to arrive or to decode records no check, and would otherwise be
-  /// downloaded again at every activation.
+  /// When this run last had an answer from the RFC Editor for the feed, whatever came
+  /// of it: a feed that fails to decode or to be kept records no check, and would
+  /// otherwise be downloaded again at every activation. A request that fails is asked
+  /// again at the next activation, as the other refreshes are.
   @ObservationIgnored private var errataAskedAt: Date?
   @ObservationIgnored private var workingGroupsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingWorkingGroups = false
@@ -945,10 +946,10 @@ final class LibraryModel {
     let kept = errata == nil ? nil : store.errataCheck()
     if let kept, !IndexCheck.isDue(checkedAt: kept.checkedAt, now: .now) { return }
     if let errataAskedAt, !IndexCheck.isDue(checkedAt: errataAskedAt, now: .now) { return }
-    errataAskedAt = .now
     do {
       let fetched = try await clientOnCheapNetworks.fetchErrataData(
         unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
+      errataAskedAt = .now
       switch fetched {
       case .unchanged:
         if let kept { try await store.recordUnchangedErrata(kept) }

@@ -72,7 +72,7 @@ public struct Erratum: Sendable, Hashable, Identifiable {
     self.status = status
     self.type = type
     self.section = section
-    self.sections = Self.sections(in: section)
+    self.sections = Self.sections(in: section, of: document)
     self.original = original
     self.corrected = corrected
     self.notes = notes
@@ -91,8 +91,9 @@ public struct Erratum: Sendable, Hashable, Identifiable {
   /// 3.4`; an anchor's spelling, `section-4.1`, `appendix-C`; and every one a
   /// `Section`, `Sections`, `Appendix` or `Appendices` names in prose, `In Sections
   /// 7.8, 7.9, and 8.4.1`. Anything else, `Figure 1`, `Abstract`, `GLOBAL`, names
-  /// none, and so does a list of another RFC's, `Section 4 of RFC 5234`.
-  public static func sections(in field: String) -> [String] {
+  /// none, and so does a list of another RFC's than `document`, `Section 4 of RFC
+  /// 5234`.
+  public static func sections(in field: String, of document: DocumentID) -> [String] {
     let words = field.split(whereSeparator: \.isWhitespace).map(String.init)
     guard let first = words.first else { return [] }
     var named: [String] = []
@@ -106,7 +107,9 @@ public struct Erratum: Sendable, Hashable, Identifiable {
       // letter, "A typo", is not.
       add([letter])
     } else {
-      add(list(in: words, from: 0, namesAppendix: false, accepting: opensField).sections)
+      add(
+        list(in: words, from: 0, of: document, namesAppendix: false, accepting: opensField)
+          .sections)
     }
     var index = 0
     while index < words.count {
@@ -116,7 +119,7 @@ public struct Erratum: Sendable, Hashable, Identifiable {
         continue
       }
       let read = list(
-        in: words, from: index + 1, namesAppendix: keyword.hasPrefix("appendi"),
+        in: words, from: index + 1, of: document, namesAppendix: keyword.hasPrefix("appendi"),
         accepting: { _ in true })
       add(read.sections)
       index = read.end
@@ -135,9 +138,10 @@ public struct Erratum: Sendable, Hashable, Identifiable {
 
   /// The sections the list starting at `words[start]` names, joined by commas, `and`,
   /// `or` and `&`, and the index of the word after it. A list followed by `of RFC
-  /// 5234` or `of [RFC5234]` is another RFC's, and names none of this one's.
+  /// 5234` or `of [RFC5234]` is that RFC's, and names none of `document`'s unless it
+  /// is `document`.
   private static func list(
-    in words: [String], from start: Int, namesAppendix: Bool,
+    in words: [String], from start: Int, of document: DocumentID, namesAppendix: Bool,
     accepting accepts: (String) -> Bool
   ) -> (sections: [String], end: Int) {
     var sections: [String] = []
@@ -158,10 +162,20 @@ public struct Erratum: Sendable, Hashable, Identifiable {
         || (index < words.count && conjunctions.contains(words[index].lowercased()))
       if !goesOn { break }
     }
-    let namesAnotherRFC =
-      index + 1 < words.count && words[index].lowercased() == "of"
-      && words[index + 1].lowercased().trimmingCharacters(in: ["[", "("]).hasPrefix("rfc")
-    return (namesAnotherRFC ? [] : sections, index)
+    return (namesRFC(in: words, at: index, otherThan: document) ? [] : sections, index)
+  }
+
+  /// Whether `words[index]` opens `of RFC 5234` or `of [RFC5234]` naming an RFC other
+  /// than `document`.
+  private static func namesRFC(
+    in words: [String], at index: Int, otherThan document: DocumentID
+  ) -> Bool {
+    guard index + 1 < words.count, words[index].lowercased() == "of" else { return false }
+    let cited = words[(index + 1)...].prefix(2).joined(separator: " ")
+      .trimmingCharacters(in: ["[", "("])
+    guard cited.lowercased().hasPrefix("rfc") else { return false }
+    let number = cited.dropFirst(3).drop(while: \.isWhitespace).prefix(while: \.isASCIIDigit)
+    return Int(number) != document.number
   }
 
   /// What ends a section's number within a word: `2.1,1st para`, `4.1)`.
@@ -223,9 +237,18 @@ public struct Errata: Sendable {
   /// The feed as the RFC Editor serves it: a list of entries. An entry whose
   /// document or number can't be read, or that isn't shaped as one, is skipped
   /// rather than failing the feed.
+  /// A feed none of whose entries can be read has changed its shape, and fails,
+  /// rather than reading as one without errata.
   public static func decode(_ data: Data) throws -> Errata {
     let entries = try JSONDecoder().decode([SkippingMalformed].self, from: data)
-    return Errata(entries.compactMap { $0.entry?.erratum })
+    let errata = entries.compactMap { $0.entry?.erratum }
+    if errata.isEmpty, !entries.isEmpty { throw DecodingError.unreadableEntries(entries.count) }
+    return Errata(errata)
+  }
+
+  public enum DecodingError: Error, Equatable {
+    /// Not one of this many entries could be read as an erratum.
+    case unreadableEntries(Int)
   }
 }
 

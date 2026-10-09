@@ -102,6 +102,18 @@ struct ErrataTests {
     #expect(errata[.rfc(9999)].map(\.id) == [2])
   }
 
+  /// A feed none of whose entries can be read is a feed whose shape has changed, not
+  /// one without errata, and fails, so the copy kept is kept.
+  @Test func `a feed of only malformed entries fails`() {
+    #expect(throws: (any Error).self) {
+      try Errata.decode(Data(#"[{"errata_id": 3, "doc-id": "RFC9999"}]"#.utf8))
+    }
+  }
+
+  @Test func `an empty feed has no errata`() throws {
+    #expect(try Errata.decode(Data("[]".utf8))[.rfc(9999)].isEmpty)
+  }
+
   @Test func `a feed that is not a list fails`() {
     #expect(throws: (any Error).self) { try Errata.decode(Data(#"{"a": 1}"#.utf8)) }
   }
@@ -112,7 +124,13 @@ struct ErrataTests {
   /// that names none stays at the document level, never guessed onto a section.
   @Test(arguments: sectionFields)
   func `the sections a field names`(field: String, sections: [String]) {
-    #expect(Erratum.sections(in: field) == sections)
+    #expect(Erratum.sections(in: field, of: .rfc(9999)) == sections)
+  }
+
+  /// A list followed by the erratum's own RFC is this one's.
+  @Test func `a list of the erratum's own RFC names its sections`() {
+    #expect(Erratum.sections(in: "as detailed in Appendix B of RFC 2373", of: .rfc(2373)) == ["B"])
+    #expect(Erratum.sections(in: "Section 4 of [RFC2373]", of: .rfc(2373)) == ["4"])
   }
 
   private static let sectionFields: [(String, [String])] = [
