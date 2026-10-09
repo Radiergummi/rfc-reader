@@ -29,6 +29,76 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A section of a document the bibliography names by a tag is a section of that
+  /// document, not of this one, though this one has a section of that number too
+  /// (#768). The tag is the document's own name for the entry, so it is the label.
+  @Test func `a section of a cited tag is a section of the document the tag names`() {
+    let entry = CrossReference.Target.document(.rfc(9000), section: nil, entry: "ref-5")
+    let linker = InlineLinker(sectionNumbers: ["3.2"], referenceTargets: ["5": entry])
+    #expect(
+      linker.link("as Section 3.2 of [5] describes") == [
+        .text("as "),
+        .crossReference(
+          CrossReference(
+            target: .document(.rfc(9000), section: "3.2", entry: "ref-5"),
+            text: CrossReference.nonBreakingLabel("Section 3.2 of [5]"))),
+        .text(" describes"),
+      ])
+  }
+
+  /// An entry outside the series has no sections to open, but a section of it is
+  /// still not one of this document's: it is the entry's (#473), worded as written.
+  @Test func `a section of an entry outside the series is the entry's`() {
+    let linker = InlineLinker(
+      sectionNumbers: ["4"], referenceTargets: ["WIDGET": .anchor("ref-WIDGET")])
+    #expect(
+      linker.link("per Section 4 of [WIDGET].") == [
+        .text("per "),
+        .crossReference(
+          CrossReference(
+            target: .entrySection(entry: "ref-WIDGET", tag: "WIDGET", section: "4", url: nil))),
+        .text("."),
+      ])
+  }
+
+  /// A tag nothing resolves names some other document all the same: the section is
+  /// left unlinked rather than linked into this one.
+  @Test func `a section of an unknown tag is not this document's`() {
+    let linker = InlineLinker(sectionNumbers: ["4"], referenceTargets: [:])
+    #expect(linker.link("per Section 4 of [WIDGET].") == [.text("per Section 4 of [WIDGET].")])
+  }
+
+  /// Several sections of one RFC: each number is a section of it, read as the list
+  /// wrote it, and the RFC is linked where it stands.
+  @Test func `sections of an RFC each link into it`() {
+    let linker = InlineLinker(sectionNumbers: ["3.2", "4"], referenceTargets: [:])
+    #expect(
+      linker.link("Sections 3.2 and 4 of RFC 793 apply") == [
+        .text("Sections "),
+        .crossReference(CrossReference(target: reference(793, section: "3.2"), text: "3.2")),
+        .text(" and "),
+        .crossReference(CrossReference(target: reference(793, section: "4"), text: "4")),
+        .text(" of "),
+        .crossReference(CrossReference(target: reference(793))),
+        .text(" apply"),
+      ])
+  }
+
+  /// The older spelling with a hyphen is a section of the RFC too, and keeps its
+  /// hyphen.
+  @Test func `a section of a hyphenated RFC links into it`() {
+    let linker = InlineLinker(sectionNumbers: ["4"], referenceTargets: [:])
+    #expect(
+      linker.link("see Section 4 of RFC-793.") == [
+        .text("see "),
+        .crossReference(
+          CrossReference(
+            target: reference(793, section: "4"),
+            text: CrossReference.nonBreakingLabel("Section 4 of RFC-793"))),
+        .text("."),
+      ])
+  }
+
   /// A bracket starts a character before the RFC it holds, so the bracket wins.
   @Test func `a bracketed RFC is one reference to the document`() {
     #expect(

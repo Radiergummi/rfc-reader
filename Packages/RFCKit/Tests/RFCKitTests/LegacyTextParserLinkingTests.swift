@@ -65,7 +65,7 @@ struct LegacyTextParserLinkingTests {
     var fragments = [
       "RFC\u{0301} 1", "\u{FEFF}RFC 1", "ＲＦＣ 1", "rfc 1", "section 2", "HTTP://x", "RFC\r\n1",
       "RFC\u{00A0}1", "Section\u{00A0}2 of RFC 1", "R", "RF", "Sectio", "[", "[RFC1]",
-      "RFCs 1, 2 and 3", "",
+      "RFCs 1, 2 and 3", "Section 2 of [A]", "Sections 1 and 2 of RFC-3", "",
     ]
     for fixture in try FileManager.default.contentsOfDirectory(atPath: directory.path)
     where fixture.hasSuffix(".txt") {
@@ -78,7 +78,7 @@ struct LegacyTextParserLinkingTests {
       func check<Output>(_ pattern: InlineLinker.Gated<Output>) {
         if fragment.contains(pattern.regex) { #expect(literals[keyPath: pattern.gate], "\(label)") }
       }
-      check(InlineLinker.sectionOfRFCPattern)
+      check(InlineLinker.sectionOfDocumentPattern)
       check(InlineLinker.bracketPattern)
       check(InlineLinker.bareRFCPattern)
       check(InlineLinker.rfcListPattern)

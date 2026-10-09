@@ -27,10 +27,17 @@ struct InlineLinker: Sendable {
     }
   }
 
-  static let sectionOfRFCPattern = Gated(
-    regex: #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#,
-    gate: \.sectionOfRFC
+  /// Sections of another document: "Section 4.2 of [RFC9110]", "Section 3.2 of [5]",
+  /// "Sections 3.2 and 4 of RFC-793". The document is an RFC by number or an entry of
+  /// the bibliography by its tag. Matched whether or not it resolves, so that
+  /// `sectionPattern` never takes the section words for one of this document's own
+  /// sections, which linked them into the citing document (#768).
+  static let sectionOfDocumentPattern = Gated(
+    regex:
+      #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)\b(?!\.[A-Z]))/#,
+    gate: \.sectionOfDocument
   )
+  private static let sectionNumberPattern = Pattern(#/\d+(?:\.\d+)*/#)
   /// A bracket holding a single citation tag. The tag may carry internal spaces,
   /// because roughly a seventh of the corpus sets its citations as `[RFC 2211]`
   /// rather than `[RFC2211]`; a class that admitted no space left those matching
@@ -88,7 +95,7 @@ struct InlineLinker: Sendable {
   struct Literals {
     var bracket = false, rfc = false, rfcs = false, section = false, http = false
     var any: Bool { bracket || rfc || section || http }
-    var sectionOfRFC: Bool { rfc && section }
+    var sectionOfDocument: Bool { section && (rfc || bracket) }
 
     init(in text: String) {
       let bytes = text.utf8Span.span
@@ -121,18 +128,46 @@ struct InlineLinker: Sendable {
 
     var candidates: [Candidate] = []
 
-    for match in Self.sectionOfRFCPattern.matches(in: text, given: literals) {
-      guard let number = Int(match.number) else { continue }
-      candidates.append(
-        Candidate(
-          range: match.range,
-          inline: .crossReference(
-            // The matched prose *is* the label we compose, so it is left to be
-            // composed rather than copied: "Section 4.2 of [RFC9110]" reads back
-            // out the same, and the reader is free to draw it as one chip.
-            CrossReference(
-              target: .document(.rfc(number), section: String(match.section)), sectionFormat: .of)
-          )))
+    // The words of every section of another document, linked or not: none of them
+    // is a section of this one.
+    var citedSections: [Range<String.Index>] = []
+    for match in Self.sectionOfDocumentPattern.matches(in: text, given: literals) {
+      citedSections.append(match.range)
+      guard
+        let cited = citedDocument(tag: match.tag, number: match.number, hyphen: match.hyphen)
+      else { continue }
+      let tag = match.tag.map(String.init) ?? ""
+      let numbers = text[match.sections.startIndex..<match.sections.endIndex]
+        .matches(of: Self.sectionNumberPattern)
+      if numbers.count == 1 {
+        guard let target = Self.target(cited.target, section: String(match.sections), tag: tag)
+        else { continue }
+        // The matched prose *is* the label we compose when the document is named as
+        // the series names it, so it is left to be composed rather than copied:
+        // "Section 4.2 of [RFC9110]" reads back out the same, and the reader is free to
+        // draw it as one chip. An entry outside the series composes around its tag.
+        let isEntrySection = if case .entrySection = target { true } else { false }
+        let composed = cited.isCanonical || isEntrySection
+        candidates.append(
+          Candidate(
+            range: match.range,
+            inline: .crossReference(
+              CrossReference(
+                target: target,
+                text: composed ? nil : CrossReference.nonBreakingLabel(String(text[match.range])))
+            )))
+        continue
+      }
+      // A list of sections reads as it was written: each number is linked where it
+      // stands, and the document after "of" by the passes below.
+      for number in numbers {
+        guard let target = Self.target(cited.target, section: String(number.output), tag: tag)
+        else { continue }
+        candidates.append(
+          Candidate(
+            range: number.range,
+            inline: .crossReference(CrossReference(target: target, text: String(number.output)))))
+      }
     }
     for match in Self.bracketPattern.matches(in: text, given: literals) {
       let anchor = String(match.anchor)
@@ -185,7 +220,9 @@ struct InlineLinker: Sendable {
     // every match of this pass would be filtered out again.
     if !sectionNumbers.isEmpty {
       for match in Self.sectionPattern.matches(in: text, given: literals)
-      where sectionNumbers.contains(String(match.section)) {
+      where sectionNumbers.contains(String(match.section))
+        && !citedSections.contains(where: { $0.overlaps(match.range) })
+      {
         candidates.append(
           Candidate(
             range: match.range,
@@ -234,5 +271,39 @@ struct InlineLinker: Sendable {
       inlines.append(.text(String(text[cursor...])))
     }
     return inlines
+  }
+
+  /// The document a section citation names after "of": an RFC by number, or the
+  /// bibliography entry under `tag`, which a tag in the series' own form names
+  /// without one. Whether the words name it as the series spells itself, so that the
+  /// label is ours to compose.
+  private func citedDocument(tag: Substring?, number: Substring?, hyphen: Substring?) -> (
+    target: CrossReference.Target, isCanonical: Bool
+  )? {
+    if let number, let number = Int(number) {
+      // The hyphen in `RFC-793` is the author's spelling, not the series'.
+      return (.document(.rfc(number), section: nil), hyphen == nil)
+    }
+    guard let tag else { return nil }
+    let parsed = DocumentID(parsing: String(tag))
+    let isCanonical = parsed.map { CrossReference.isCanonicalTag("[\(tag)]", for: $0) } ?? false
+    if let known = referenceTargets[String(tag)] { return (known, isCanonical) }
+    guard let parsed, parsed.series == .rfc,
+      tag.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame
+    else { return nil }
+    return (.document(parsed, section: nil), isCanonical)
+  }
+
+  /// `section` of the document `target` names: a section of an RFC, or of a
+  /// bibliography entry outside the series (#473), worded around the `tag` the prose
+  /// cites it by. Nil for a target that is neither.
+  private static func target(_ target: CrossReference.Target, section: String, tag: String)
+    -> CrossReference.Target?
+  {
+    switch target {
+    case .document(let id, nil, let entry): .document(id, section: section, entry: entry)
+    case .anchor(let entry): .entrySection(entry: entry, tag: tag, section: section, url: nil)
+    default: nil
+    }
   }
 }
