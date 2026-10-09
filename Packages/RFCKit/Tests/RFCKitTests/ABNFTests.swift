@@ -293,6 +293,15 @@ struct ABNFTests {
     #expect(ABNF.recognizes(text, dialect: .rfc822))
   }
 
+  /// A grammar of that time names rules with `_` too, which RFC 5234 does not allow.
+  @Test func `RFC 822's dialect allows an underscore in a name`() throws {
+    let text = "first_rule = second_rule | %x20\nsecond_rule = 1*DIGIT"
+    #expect(ABNF.parse(text) == nil)
+    let rules = try #require(ABNF.parse(text, dialect: .rfc822))
+    #expect(rules.map(\.name) == ["first_rule", "second_rule"])
+    #expect(rules[0].references == ["second_rule"])
+  }
+
   /// A block that alternates with both is neither dialect's grammar.
   @Test func `a grammar mixing slash and bar is no grammar`() {
     let text = "first-rule = second-rule / third-rule | %x20\nsecond-rule = 1*DIGIT"

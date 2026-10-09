@@ -287,16 +287,20 @@ public enum ABNF {
     private mutating func ruleName() -> String? {
       guard let first = next, first.isASCII, first.isLetter else { return nil }
       var name = ""
-      while let next, Self.isNameCharacter(next) {
+      while let next, isNameCharacter(next) {
         name.append(next)
         position += 1
       }
       return name
     }
 
-    /// A character a rule name may continue with: `ALPHA / DIGIT / "-"`.
-    private static func isNameCharacter(_ character: Character) -> Bool {
-      character.isASCII && (character.isLetter || character.isNumber || character == "-")
+    /// A character a rule name may continue with: `ALPHA / DIGIT / "-"`, and in RFC
+    /// 822's dialect `_` too, which grammars of that time name rules with (RFC 1808's
+    /// `net_loc`).
+    private func isNameCharacter(_ character: Character) -> Bool {
+      character.isASCII
+        && (character.isLetter || character.isNumber || character == "-"
+          || dialect == .rfc822 && character == "_")
     }
 
     /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`, with `|` in RFC 822's
@@ -357,7 +361,7 @@ public enum ABNF {
     /// Whether what follows a count reads as the rest of a hex number: hex digits, perhaps
     /// after an `x` and perhaps in parts joined by hyphens, as in `0x7f` or `7e0c-11ab`.
     private func startsHexNumber() -> Bool {
-      var name = characters[position...].prefix(while: Self.isNameCharacter)
+      var name = characters[position...].prefix(while: isNameCharacter)
       if name.first == "x" || name.first == "X" { name = name.dropFirst() }
       return name.split(separator: "-", omittingEmptySubsequences: false).allSatisfy { part in
         !part.isEmpty && part.allSatisfy(\.isHexDigit)
