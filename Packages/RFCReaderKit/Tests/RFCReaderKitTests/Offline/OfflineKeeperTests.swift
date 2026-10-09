@@ -356,6 +356,30 @@ struct OfflineKeeperTests {
     #expect(sandbox.exists(id, format: .xml, in: .kept))
   }
 
+  /// A cached body that could not be moved into the kept tier is only cached, so its
+  /// row says so and offers Retry rather than reading as kept.
+  @MainActor @Test func `a cached body that cannot be moved is failed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+    // A file where the kept tier's folder goes, so the move cannot make it.
+    let keptFolder = sandbox.file(id, format: .xml, in: .kept).deletingLastPathComponent()
+    try? FileManager.default.removeItem(at: keptFolder)
+    try FileManager.default.createDirectory(
+      at: keptFolder.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: keptFolder)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+    #expect(keeper.status.state(of: id) == .failed)
+  }
+
   /// Download Now refused by the path: somebody is waiting, so the row offers Retry
   /// rather than falling silent until a path change that may never come.
   @MainActor @Test func `a fetch somebody waits for that the path refuses is failed`()

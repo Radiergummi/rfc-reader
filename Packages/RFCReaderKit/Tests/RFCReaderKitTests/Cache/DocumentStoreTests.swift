@@ -432,6 +432,33 @@ struct DocumentStoreTests {
     #expect(anyNetwork.documentFetches == 1)
   }
 
+  /// The fetch again of an open whose joined download the path refused is the same
+  /// open's, so a removal made while the refused one ran is not undone by it (#116).
+  @Test
+  func `a removal before the path refused a joined download is not undone by its fetch again`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let cheapNetworks = PathRefusedFetcher()
+    let anyNetwork = GatedFetcher()
+    await anyNetwork.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    let keeping = Task { try await store.keep(id, formats: [.xml], client: cheapNetworks) }
+    await untilWaiting(documents: 1, for: id, in: store)
+    let opening = Task { try await store.document(id, formats: [.xml], client: anyNetwork) }
+    await untilWaiting(documents: 2, for: id, in: store)
+    await store.remove(id)
+    await cheapNetworks.gate.open()
+
+    #expect(try await opening.value == Fixtures.rfc8999())
+    await #expect(throws: URLError.self) { try await keeping.value }
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(!sandbox.exists(id, format: .xml, in: .kept))
+  }
+
   /// Waits at its gate, then fails as a session that may not use an expensive path
   /// does when the device moves to one.
   final class PathRefusedFetcher: DocumentFetching {

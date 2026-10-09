@@ -73,6 +73,9 @@ public actor DocumentStore {
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
   private let parses = InFlightDownloads<RFCDocument?>()
+  /// How many removals each document has had, so a download started again for a
+  /// reader whose joined one the path refused knows whether one came meanwhile.
+  private var removals: [DocumentID: Int] = [:]
 
   /// Whether a body has been written to the cache since eviction last looked, so a
   /// cache that has not grown is not enumerated again.
@@ -459,6 +462,7 @@ public actor DocumentStore {
   }
 
   private func remove(_ id: DocumentID, from tiers: [StorageTier]) {
+    removals[id, default: 0] += 1
     downloads.removed(id)
     texts.removed(id)
     parses.removed(id)
@@ -877,19 +881,22 @@ public actor DocumentStore {
   /// what nobody waits for on a session that may not use an expensive path, and a
   /// reader who joined it, whose own client may, should not fail because the device
   /// moved to one. Once, and only for a download this caller did not start, whose
-  /// own client could only be refused again.
+  /// own client could only be refused again. A removal while the refused one ran
+  /// leaves the second unkept, as it would have the first (#116).
   private func value<Value>(
     of downloads: InFlightDownloads<Value>, for id: DocumentID,
     start: () -> Task<Value, any Error>
   ) async throws -> (value: Value, isKept: Bool) {
     var isOwn = false
+    let removalsBefore = removals[id]
     do {
       return try await downloads.value(for: id) {
         isOwn = true
         return start()
       }
     } catch let error as URLError where error.networkUnavailableReason != nil && !isOwn {
-      return try await downloads.value(for: id, start: start)
+      let (value, isKept) = try await downloads.value(for: id, start: start)
+      return (value, isKept && removals[id] == removalsBefore)
     }
   }
 

@@ -128,7 +128,10 @@ public final class OfflineKeeper {
       do {
         try await store.keepCached(id)
       } catch {
+        // Only cached, so eviction may still take it: the row offers Retry, which
+        // moves it, rather than reading as kept.
         status.kept.remove(id)
+        status.failed.insert(id)
         offlineLog.error(
           "\(id.displayName, privacy: .public): not moved into the kept tier: \(String(describing: error), privacy: .public)"
         )
