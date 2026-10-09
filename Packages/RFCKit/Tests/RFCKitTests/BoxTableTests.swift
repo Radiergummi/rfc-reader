@@ -110,4 +110,61 @@ struct BoxTableTests {
         "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
       ]) == nil)
   }
+
+  /// An author draws a header with a single `-` rule: a grid ruled once inside, under
+  /// its first stretch, is headed by it, and the rest is a row a line.
+  @Test func `a grid ruled once under its first line is headed by it`() {
+    let table = LegacyTextParser.boxTable([
+      "+------+------+", "| Flag | Mask |", "+------+------+", "| ONE  | 1xx  |",
+      "| TWO  | x1x  |", "| SIX  | xx1  |", "+------+------+",
+    ])
+    #expect(table?.header == [["Flag", "Mask"]])
+    #expect(table?.rows == [["ONE", "1xx"], ["TWO", "x1x"], ["SIX", "xx1"]])
+  }
+
+  /// A grid closed with a `=` rule has no header for it: the bottom rule closes the
+  /// grid, and the body is never empty.
+  @Test func `a double bottom rule makes no header`() {
+    let table = LegacyTextParser.boxTable([
+      "+------+------+", "| one  | 1    |", "+------+------+", "| two  | 2    |",
+      "+------+------+", "| six  | 6    |", "+======+======+",
+    ])
+    #expect(table?.header == [])
+    #expect(table?.rows.count == 3)
+  }
+
+  /// A `-` standing on its own at a cell's line end keeps its space; one ending a
+  /// broken word does not.
+  @Test func `a dash on its own keeps its space`() {
+    let table = LegacyTextParser.boxTable([
+      "+------+-----------+", "| one  | 0x00 -    |", "|      | 0x3F      |",
+      "| two  | Client-   |", "|      | Initiated |", "+------+-----------+",
+    ])
+    #expect(table?.rows == [["one", "0x00 - 0x3F"], ["two", "Client-Initiated"]])
+  }
+
+  // MARK: Through parse
+
+  /// RFC 2371 draws its state table with a header above a `=` rule and its rows ruled
+  /// apart: it is a table, headed so.
+  @Test func `RFC 2371's state table is a table`() throws {
+    let document = try Fixtures.document("rfc2371.txt")
+    let tables = document.blocks.compactMap { block -> Table? in
+      if case .table(let table) = block { table } else { nil }
+    }
+    let state = try #require(
+      tables.first { $0.header.first?.cells.first?.plainText == "Entry State" })
+    #expect(state.header.first?.cells.count == 4)
+    #expect(state.rows.contains { $0.cells.first?.plainText == "OpenSynRead" })
+  }
+
+  /// RFC 1540's grids have a heading spanning their columns, or row labels outside
+  /// the box: drawings, which stay artwork.
+  @Test func `RFC 1540's drawn grids stay artwork`() throws {
+    let document = try Fixtures.document("rfc1540.txt")
+    let tables = document.blocks.filter { block in
+      if case .table = block { true } else { false }
+    }
+    #expect(tables.isEmpty)
+  }
 }

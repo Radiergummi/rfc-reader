@@ -252,7 +252,10 @@ extension LegacyTextParser {
       {
         continue
       }
-      for parsed in classify(block, marker: marker, catalogEntries: entries, in: context) {
+      for parsed in classify(
+        block, marker: marker, catalogEntries: entries, belowArtwork: artworkAbove != nil,
+        in: context)
+      {
         // Merge adjacent list blocks of the same style into one list, and adjacent
         // catalog blocks into one catalog: RFC 1012 sets a blank line between
         // every entry, so each arrives as a block of its own. A numbered block
@@ -937,9 +940,11 @@ extension LegacyTextParser {
     return (ordinary, words.count)
   }
 
+  /// `belowArtwork` is whether the block stands a blank line under artwork it may be
+  /// one drawing with (#437): a grid there is the drawing's, not a table.
   private static func classify(
     _ block: RawBlock, marker: ListMarker?, catalogEntries: [(term: String, text: String)]?,
-    in context: ParseContext
+    belowArtwork: Bool = false, in context: ParseContext
   ) -> [Block] {
     let lines = block.lines
     guard !lines.isEmpty else { return [] }
@@ -968,10 +973,11 @@ extension LegacyTextParser {
     }
 
     // Anything else is preserved verbatim, minus the common indentation.
-    let text = verbatimText(lines)
+    let verbatim = verbatimLines(lines)
+    let text = verbatim.joined(separator: "\n")
     // Unless it is a grid drawn with rules and bars, which is a table (#438), its
     // cells linked as prose is.
-    if let grid = boxTable(text.components(separatedBy: "\n")) {
+    if !belowArtwork, let grid = boxTable(verbatim) {
       func row(_ cells: [String]) -> Table.Row {
         Table.Row(cells: cells.map { context.linker.link($0) })
       }
@@ -1020,10 +1026,13 @@ extension LegacyTextParser {
   /// Lines as a verbatim block holds them: less the indentation every line that is
   /// not blank shares.
   private static func verbatimText(_ lines: [String]) -> String {
+    verbatimLines(lines).joined(separator: "\n")
+  }
+
+  /// The lines without the indentation they all share.
+  private static func verbatimLines(_ lines: [String]) -> [String] {
     let indent = lines.filter { !$0.isBlank }.map(\.leadingSpaceCount).min() ?? 0
-    return lines.map { line in
-      String(line.dropFirst(min(indent, line.leadingSpaceCount)))
-    }.joined(separator: "\n")
+    return lines.map { line in String(line.dropFirst(min(indent, line.leadingSpaceCount))) }
   }
 
   /// Joins wrapped lines with spaces, except after a trailing hyphen, which in the
