@@ -102,11 +102,12 @@ extension LegacyTextParser {
   /// Each paragraph's part number, as prep gives authored XML's (#491): `section-4.2-3` for
   /// the third part of section 4.2. Prep numbers a section's parts in one sequence,
   /// paragraphs, lists, artwork, figures and tables alike, so every block uses up a number
-  /// but only a paragraph keeps its. A number already declared, by a heading spelled `Foo
-  /// 2` beside `Foo`, or by an entry, is left to it, and the paragraph goes without.
-  static func numberingParagraphs(_ sections: [Section]) -> [Section] {
-    let declared = declaredAnchors(sections)
-    return sections.map { section in
+  /// but only a paragraph keeps its. A number in `declared` (`declaredAnchors`), a heading
+  /// spelled `Foo 2` beside `Foo` or an entry, is left to it, and the paragraph goes without.
+  static func numberingParagraphs(_ sections: [Section], avoiding declared: Set<String>)
+    -> [Section]
+  {
+    sections.map { section in
       var section = section
       section.blocks = numberingParagraphs(section.blocks, of: section.anchor, avoiding: declared)
       return section

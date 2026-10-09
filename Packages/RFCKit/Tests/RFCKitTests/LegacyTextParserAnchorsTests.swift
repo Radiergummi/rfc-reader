@@ -153,10 +153,12 @@ struct LegacyTextParserAnchorsTests {
   @Test func `a paragraph is numbered among its section's parts`() {
     let paragraph = Block.paragraph(Paragraph([.text("words")]))
     let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
-    let numbered = LegacyTextParser.numberingParagraphs([
+    let sections = [
       Section(anchor: "section-2", title: "", blocks: [paragraph, artwork, paragraph]),
       Section(anchor: "name-acknowledgements", title: "", blocks: [paragraph]),
-    ])
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
     #expect(numbered[0].blocks.map(\.anchors) == [["section-2-1"], [], ["section-2-3"]])
     #expect(numbered[1].blocks.map(\.anchors) == [["name-acknowledgements-1"]])
   }
@@ -165,10 +167,12 @@ struct LegacyTextParserAnchorsTests {
   /// paragraph goes without one rather than take the section's anchor.
   @Test func `a paragraph never takes an anchor something else is declared under`() {
     let paragraph = Block.paragraph(Paragraph([.text("words")]))
-    let numbered = LegacyTextParser.numberingParagraphs([
+    let sections = [
       Section(anchor: "name-foo", title: "", blocks: [paragraph, paragraph]),
       Section(anchor: "name-foo-2", title: "", blocks: [paragraph]),
-    ])
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
     #expect(numbered[0].blocks.map(\.anchors) == [["name-foo-1"], []])
     #expect(numbered[1].blocks.map(\.anchors) == [["name-foo-2-1"]])
   }
