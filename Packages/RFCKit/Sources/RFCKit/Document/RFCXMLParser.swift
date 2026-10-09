@@ -87,7 +87,7 @@ public enum RFCXMLParser {
   // MARK: - Builder
 
   /// The terms primary index entries define; see `Builder.primaryIndexTerms(in:)`.
-  static func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
+  static func primaryIndexTerms(in root: XMLTree.Element) -> [IndexedTerm] {
     Builder(referencesIn: root).primaryIndexTerms(in: root)
   }
 
@@ -624,15 +624,19 @@ public enum RFCXMLParser {
     }
 
     /// The terms primary index entries define (#176): `<iref primary="true">` without a
-    /// subitem, each defined by the block it sits in, at that block's anchor or its
-    /// section's. With a subitem an entry files a name under a group (`Grammar` /
-    /// `ALPHA`, `Fields` / `Content-Type`), an index heading rather than a term. An
-    /// entry directly in a section marks the section, and has no one block to show as
-    /// its definition. One in an inline element is the block's around it, and one in a
-    /// `<dt>` is defined by the `<dd>` after it.
-    func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
-      var terms: [DefinedTerm] = []
-      func record(entriesIn element: XMLTree.Element, anchor: String?, definition: () -> [Block]) {
+    /// subitem, each with the anchors it may be defined at, innermost first: the
+    /// element it sits in, then each element around it. `DefinedTerms` takes the first
+    /// of them the built model holds, and what holds it as the definition (#455), so
+    /// which anchors the model keeps is said once, by the model. With a subitem an
+    /// entry files a name under a group (`Grammar` / `ALPHA`, `Fields` /
+    /// `Content-Type`), an index heading rather than a term. One in an inline element
+    /// is the block's around it, and one in a `<dt>` is defined by the `<dd>` after
+    /// it, whose anchors follow the term's.
+    func primaryIndexTerms(in root: XMLTree.Element) -> [IndexedTerm] {
+      var terms: [IndexedTerm] = []
+      func record(
+        entriesIn element: XMLTree.Element, anchors: [String], definition: () -> [Block]
+      ) {
         let items = Self.indexEntries(in: element).compactMap { entry -> String? in
           guard entry["primary"] == "true", entry["subitem"] == nil else { return nil }
           return entry["item"]
@@ -640,28 +644,29 @@ public enum RFCXMLParser {
         guard !items.isEmpty else { return }
         // Built once, however many entries the block holds.
         let definition = definition()
-        terms += items.map { DefinedTerm(term: $0, anchor: anchor, definition: definition) }
+        terms += items.map { IndexedTerm(term: $0, anchors: anchors, definition: definition) }
       }
-      func visit(_ element: XMLTree.Element, anchor: String?) {
-        let anchor = Self.modelAnchor(of: element) ?? anchor
-        record(entriesIn: element, anchor: anchor) {
-          element.name == "li" || element.name == "dd"
+      func visit(_ element: XMLTree.Element, around: [String]) {
+        let anchors = Self.anchors(of: element) + around
+        record(entriesIn: element, anchors: anchors) {
+          ["li", "dd", "td", "th"].contains(element.name)
             ? parseBlocks(in: element) : parseBlock(element).map { [$0] } ?? []
         }
         let children = element.elements.filter { !Self.inlineElements.contains($0.name) }
         for (position, child) in children.enumerated() {
           guard child.name == "dt" else {
-            visit(child, anchor: anchor)
+            visit(child, around: anchors)
             continue
           }
           let next = children.dropFirst(position + 1).first
           let description = next?.name == "dd" ? next : nil
-          record(entriesIn: child, anchor: Self.modelAnchor(of: child) ?? anchor) {
-            description.map(parseBlocks(in:)) ?? []
-          }
+          record(
+            entriesIn: child,
+            anchors: Self.anchors(of: child) + (description.map(Self.anchors(of:)) ?? []) + anchors
+          ) { description.map(parseBlocks(in:)) ?? [] }
         }
       }
-      visit(root, anchor: nil)
+      visit(root, around: [])
       return terms
     }
 
@@ -674,18 +679,9 @@ public enum RFCXMLParser {
       }
     }
 
-    /// The anchor the model gives the block `element` becomes, where it gives one:
-    /// the author's, else the part number, but only the author's for a figure, a
-    /// table or a table row, and none for a quotation, an aside or a list as a whole.
-    private static func modelAnchor(of element: XMLTree.Element) -> String? {
-      switch element.name {
-      case "section", "t", "li", "dt", "dd", "artwork", "sourcecode":
-        element["anchor"] ?? element["pn"]
-      case "figure", "table", "tr":
-        element["anchor"]
-      default:
-        nil
-      }
+    /// The anchors an element may be known by: the author's, then the part number.
+    private static func anchors(of element: XMLTree.Element) -> [String] {
+      [element["anchor"], element["pn"]].compactMap { $0 }
     }
 
     /// Converts the children of a container element into blocks. Runs of loose text
