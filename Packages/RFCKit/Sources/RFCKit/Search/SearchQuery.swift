@@ -508,11 +508,12 @@ public enum SearchQuery {
   }
 
   /// Whether a word with a colon this version doesn't know as a qualifier reads as
-  /// one from another version: a word of letters, then a value with no other colon
-  /// and no slash after it. `urn:ietf:params`, `http://…`, `::1` and `10:30` are text,
-  /// and so is a word beginning with a URI scheme RFCs are full of, `mailto:…`.
+  /// one from another version: a word of lowercase letters, as `format` writes every
+  /// qualifier, then a value with no other colon and no slash after it.
+  /// `urn:ietf:params`, `http://…`, `::1`, `10:30` and `Cache-Control:no-store` are
+  /// text, and so is a word beginning with a URI scheme RFCs are full of, `mailto:…`.
   static func looksLikeQualifier(_ word: (key: Substring, value: Substring)) -> Bool {
-    !word.key.isEmpty && word.key.allSatisfy { $0.isLetter || $0 == "-" }
+    !word.key.isEmpty && word.key.allSatisfy { $0.isLowercase || $0 == "-" }
       && !uriSchemes.contains(word.key.lowercased())
       && !word.value.contains(":") && !word.value.contains("/")
   }

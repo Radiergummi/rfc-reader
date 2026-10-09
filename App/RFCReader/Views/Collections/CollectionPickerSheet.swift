@@ -19,15 +19,19 @@ struct CollectionPickerSheet: View {
   /// listing with the `.all` filter, made off the main actor (#597).
   @State private var rows: [LibraryRow] = []
 
-  /// What the rows are listed again for: the query, normalized, so a space typed
-  /// after a word searches nothing again, and a new index.
+  /// What the rows are listed again for: the list, whose query is normalized, so a
+  /// space typed after a word searches nothing again, and whose reader's data is the
+  /// part the query asks for; and a new index.
   private struct Listing: Equatable {
-    let query: String
+    let list: LibraryList
     let indexVersion: Int
   }
 
   var body: some View {
     let members = Set(library.collections[collection]?.members ?? [])
+    let listing = Listing(
+      list: LibraryList.reading(.all, query: query, options: ListOptions(), from: navigation),
+      indexVersion: library.indexVersion)
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     NavigationStack {
       List(rows.prefix(limit)) { row in
@@ -55,15 +59,13 @@ struct CollectionPickerSheet: View {
       }
       .searchable(text: $query, prompt: "Search RFCs")
       .onChange(of: query) { limit = ListWindow.page }
-      .task(
-        id: Listing(query: AppliedSearch.query(for: query), indexVersion: library.indexVersion)
-      ) {
-        let list = LibraryList.reading(
-          .all, query: query, options: ListOptions(), from: navigation)
+      .task(id: listing) {
+        let list = listing.list
         guard await Debounce.outlasted(AppliedSearch.pause(before: list.query)),
           let listed = await library.listed(list), !Task.isCancelled
         else { return }
-        rows = listed.rows
+        // A collection holds RFCs: `is:bookmarked` lists a bookmarked series too.
+        rows = listed.rows.filter { $0.rfc != nil }
       }
       // Deleted elsewhere — another window, a script, sync — there is nothing left
       // to add to.

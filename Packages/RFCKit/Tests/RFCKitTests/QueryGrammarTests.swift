@@ -191,6 +191,15 @@ struct QueryGrammarTests {
     #expect(parsed.text == "cache \(word)")
   }
 
+  /// A query is saved as `format` writes it, with its qualifiers in lower case, so a
+  /// word whose key has a capital, a header field's, was typed as text.
+  @Test(arguments: ["Cache-Control:no-store", "Strict-Transport-Security:max-age", "Foo:bar"])
+  func `a word with a capital before its colon is text`(word: String) {
+    let parsed = IndexSearch.parseQuery("cache \(word)")
+    #expect(parsed.unknown.isEmpty)
+    #expect(parsed.text == "cache \(word)")
+  }
+
   /// A word that reads as a qualifier and names none this version knows is unknown.
   @Test func `a word that reads as an unknown qualifier is unknown`() {
     let parsed = IndexSearch.parseQuery("foo:bar cache")

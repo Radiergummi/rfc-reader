@@ -146,7 +146,10 @@ public struct LibraryList: Hashable, Sendable {
   ) -> [LibraryRow] {
     let parsed = IndexSearch.parseQuery(query)
     guard unknownTerms(of: parsed, in: index).isEmpty else { return [] }
-    var base = rows(of: filter, in: index)
+    // In the whole library the reader's data is the list (`narrowing`), so the
+    // index's every row would be made only to be thrown away.
+    let isReplaced = filter == .all && !parsed.filters.readerData.isEmpty
+    var base = isReplaced ? [] : rows(of: filter, in: index)
     let narrowed = narrowing(base, in: index, by: parsed.filters)
     base = narrowed.rows
     // A query of only what was narrowed by, and a sort, searches for nothing more,
@@ -244,8 +247,8 @@ public struct LibraryList: Hashable, Sendable {
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter, !isNarrowed { return found.map(LibraryRow.rfc) }
     // In order of relevance, a series row where its best hit is: it is found when
-    // any of the RFCs it names is. Only Bookmarks and Recently Read hold one, so
-    // the RFC rows, thousands in a stream or a group, go in a set.
+    // any of the RFCs it names is. Only the reader's data holds one, so the RFC
+    // rows, thousands in a stream or a group, go in a set.
     var allowed: Set<Int> = []
     var seriesByMember: [Int: [LibraryRow]] = [:]
     for row in base {
