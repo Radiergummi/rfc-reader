@@ -395,12 +395,16 @@ struct AuthorQuery: Sendable {
     endsInInitial = words.last.map(Self.isInitial) ?? false
   }
 
+  /// The suffixes and titles that are written like an initial, folded.
+  private static let notInitials: Set<Substring> = ["jr.", "sr.", "st.", "dr.", "mr."]
+
   /// A dot, and groups of at most two letters between dots and hyphens, as the index
-  /// writes initials: `r.`, `j.k.`, `jp.`, `l-e.`. That takes in `st.` and `jr.` as
-  /// well, which still match as a surname.
+  /// writes initials: `r.`, `j.k.`, `jp.`, `l-e.`. A suffix or a title of that shape,
+  /// `jr.` or `st.`, is no initial: it is part of a surname, `Smith Jr.` or
+  /// `St. Johns`, and read as an initial it would match every author of its letter.
   private static func isInitial(_ word: Substring) -> Bool {
     let groups = word.split { $0 == "." || $0 == "-" }
-    return word.contains(".") && !groups.isEmpty
+    return word.contains(".") && !groups.isEmpty && !notInitials.contains(word)
       && groups.allSatisfy { $0.count <= 2 && $0.allSatisfy(\.isLetter) }
   }
 }
