@@ -163,6 +163,34 @@ struct LegacyTextParserAnchorsTests {
     #expect(numbered[1].blocks.map(\.anchors) == [["name-acknowledgements-1"]])
   }
 
+  /// An appendix's paragraphs are numbered as prep numbers them, from its part number,
+  /// `section-appendix.a-3`, not from its legacy anchor, `appendix-A`. A repeat of an
+  /// appendix's number, which the first holder's part number already names, counts from
+  /// its own anchor, as the serializer gives the repeat no part number.
+  @Test func `an appendix's paragraphs are numbered from its part number`() {
+    let paragraph = Block.paragraph(Paragraph([.text("words")]))
+    let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
+    let sections = [
+      Section(
+        anchor: "appendix-A", number: "A", title: "", blocks: [paragraph, artwork, paragraph],
+        isAppendix: true),
+      Section(
+        anchor: "appendix-A.1", number: "A.1", title: "", blocks: [paragraph], isAppendix: true),
+      Section(anchor: "appendix-1", number: "1", title: "", blocks: [paragraph], isAppendix: true),
+      Section(
+        anchor: "appendix-A_2", number: "A", title: "", blocks: [paragraph], isAppendix: true),
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
+    #expect(
+      numbered[0].blocks.map(\.anchors) == [
+        ["section-appendix.a-1"], [], ["section-appendix.a-3"],
+      ])
+    #expect(numbered[1].blocks.map(\.anchors) == [["section-appendix.a.1-1"]])
+    #expect(numbered[2].blocks.map(\.anchors) == [["section-appendix.1-1"]])
+    #expect(numbered[3].blocks.map(\.anchors) == [["appendix-A_2-1"]])
+  }
+
   /// A heading can spell what would be a paragraph's number, `Foo 2` beside `Foo`; the
   /// paragraph goes without one rather than take the section's anchor.
   @Test func `a paragraph never takes an anchor something else is declared under`() {
@@ -186,10 +214,16 @@ struct LegacyTextParserAnchorsTests {
       let anchors = document.blocks.flatMap(\.anchors) + document.allSections.map(\.anchor)
       let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }
       #expect(repeated.isEmpty, "\(fixture): \(repeated.keys.sorted())")
+      var claimed: Set<String> = []
       for section in document.allSections {
+        var prefix = section.anchor
+        if section.isAppendix, let number = section.number {
+          let partNumber = PartNumber(sectionNumber: number, isAppendix: true).attribute
+          if claimed.insert(partNumber).inserted { prefix = partNumber }
+        }
         for (offset, block) in section.blocks.enumerated() {
           guard case .paragraph(let paragraph) = block else { continue }
-          #expect(paragraph.anchor == "\(section.anchor)-\(offset + 1)", "\(fixture)")
+          #expect(paragraph.anchor == "\(prefix)-\(offset + 1)", "\(fixture)")
           numbered += 1
         }
       }
@@ -203,7 +237,7 @@ struct LegacyTextParserAnchorsTests {
       .filter(\.isAppendix)
     #expect(
       appendices.contains { section in
-        section.blocks.flatMap(\.anchors).contains { $0.hasPrefix("\(section.anchor)-") }
+        section.blocks.flatMap(\.anchors).contains { $0.hasPrefix("section-appendix.") }
       })
     let abstract = try Fixtures.document("rfc2119.txt").header.abstract
     #expect(abstract.first?.anchors == ["section-abstract-1"])

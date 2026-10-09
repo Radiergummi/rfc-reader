@@ -104,12 +104,22 @@ extension LegacyTextParser {
   /// paragraphs, lists, artwork, figures and tables alike, so every block uses up a number
   /// but only a paragraph keeps its. A number in `declared` (`declaredAnchors`), a heading
   /// spelled `Foo 2` beside `Foo` or an entry, is left to it, and the paragraph goes without.
+  ///
+  /// An appendix's parts count from its part number, as prep's do, `section-appendix.a-3`,
+  /// since its anchor, `appendix-A`, is not one. The first appendix with a number holds
+  /// that part number, as in the serializer, and a repeat counts from its own anchor.
   static func numberingParagraphs(_ sections: [Section], avoiding declared: Set<String>)
     -> [Section]
   {
-    sections.map { section in
+    var claimed: Set<String> = []
+    return sections.map { section in
       var section = section
-      section.blocks = numberingParagraphs(section.blocks, of: section.anchor, avoiding: declared)
+      var prefix = section.anchor
+      if section.isAppendix, let number = section.number {
+        let partNumber = PartNumber(sectionNumber: number, isAppendix: true).attribute
+        if claimed.insert(partNumber).inserted { prefix = partNumber }
+      }
+      section.blocks = numberingParagraphs(section.blocks, of: prefix, avoiding: declared)
       return section
     }
   }
@@ -120,7 +130,8 @@ extension LegacyTextParser {
     Set(sections.flatMap { [$0.anchor] + $0.blocks.flattened.flatMap(\.anchors) })
   }
 
-  /// `blocks`' paragraphs numbered as the parts of the section that goes by `anchor`.
+  /// `blocks`' paragraphs numbered as the parts of the section whose parts count from
+  /// `anchor`.
   static func numberingParagraphs(
     _ blocks: [Block], of anchor: String, avoiding declared: Set<String>
   ) -> [Block] {
