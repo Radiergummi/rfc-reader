@@ -969,6 +969,14 @@ extension LegacyTextParser {
 
     // Anything else is preserved verbatim, minus the common indentation.
     let text = verbatimText(lines)
+    // Unless it is a grid drawn with rules and bars, which is a table (#438), its
+    // cells linked as prose is.
+    if let grid = boxTable(text.components(separatedBy: "\n")) {
+      func row(_ cells: [String]) -> Table.Row {
+        Table.Row(cells: cells.map { context.linker.link($0) })
+      }
+      return [.table(Table(title: nil, header: grid.header.map(row), rows: grid.rows.map(row)))]
+    }
     // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
     // typed `abnf` (#45), or `abnf2616` in the bar dialect (#696). Only what would
     // otherwise be artwork; no prose verdict changes.
