@@ -185,7 +185,46 @@ struct ChipLineGeometryTests {
     #expect(below >= FragmentGeometry.chipVerticalPadding - 0.01)
   }
 
-  /// The fragment draws an informative citation's chip lighter (#184), and learns
+  /// A wrapped chip's outline stays open where it continues, so its two pieces read
+  /// as one chip and no line is drawn against the glyphs at the break (#457).
+  @Test func `a wrapped chip's outline is open where it continues`() {
+    func shape(leading: Bool, trailing: Bool) -> (moves: Int, closes: Int) {
+      let rect = CGRect(x: 0, y: 0, width: 60, height: 18)
+      let path = FragmentGeometry.chipOutlinePath(
+        in: rect, cornerRadius: 6, leading: leading, trailing: trailing)
+      var moves = 0
+      var closes = 0
+      path.applyWithBlock { element in
+        switch element.pointee.type {
+        case .moveToPoint: moves += 1
+        case .closeSubpath: closes += 1
+        default: break
+        }
+      }
+      return (moves, closes)
+    }
+    let whole = shape(leading: true, trailing: true)
+    #expect(whole.moves == 1 && whole.closes == 1)
+    let first = shape(leading: true, trailing: false)
+    #expect(first.moves == 1 && first.closes == 0)
+    let last = shape(leading: false, trailing: true)
+    #expect(last.moves == 1 && last.closes == 0)
+    let middle = shape(leading: false, trailing: false)
+    #expect(middle.moves == 2 && middle.closes == 0, "a top and a bottom, and no ends")
+  }
+
+  /// An outline on a chip set at fractional positions is stroked on whole device
+  /// pixels, inside the chip's box (#457).
+  @Test func `a chip's outline is stroked on whole pixels`() {
+    let rect = FragmentGeometry.chipOutlineRect(
+      CGRect(x: 10.3, y: 20.6, width: 40.4, height: 17.2), lineWidth: 2)
+    #expect(rect == CGRect(x: 11, y: 22, width: 39, height: 15))
+    let thin = FragmentGeometry.chipOutlineRect(
+      CGRect(x: 10.3, y: 20.6, width: 40.4, height: 17.2), lineWidth: 1)
+    #expect(thin.minX == 10.5, "a one-pixel line centered on a pixel's middle")
+  }
+
+  /// The fragment draws an informative citation's chip as an outline (#184, #457), and learns
   /// which it is from the rect, as it learns everything else about a chip.
   @Test func `a chip says whether it is informative`() throws {
     let inlines: [Inline] = [

@@ -17,6 +17,7 @@ struct RFCTextView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  @Environment(\.colorSchemeContrast) private var contrast
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -83,7 +84,9 @@ struct RFCTextView: View {
         inputs: inputs,
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
+        // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
         palette: settings.palette,
+        outlinesEveryChip: contrast == .increased,
         width: geometry.size.width)
     }
   }
@@ -269,6 +272,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -347,7 +352,7 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -369,6 +374,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -488,7 +495,7 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

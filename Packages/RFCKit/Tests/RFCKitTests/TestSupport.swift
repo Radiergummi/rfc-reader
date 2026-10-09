@@ -25,6 +25,33 @@ extension HTTPURLResponse {
   }
 }
 
+/// Answers every request with a scripted status and headers, and `body` for a `200`,
+/// and keeps the last request it was sent.
+final class ScriptedTransport: HTTPTransport, @unchecked Sendable {
+  private let status: Int
+  private let body: Data
+  private let headers: [String: String]
+  private let lock = NSLock()
+  private var sent: URLRequest?
+
+  init(status: Int, body: Data, headers: [String: String] = [:]) {
+    self.status = status
+    self.body = body
+    self.headers = headers
+  }
+
+  var request: URLRequest? {
+    lock.withLock { sent }
+  }
+
+  func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    lock.withLock { sent = request }
+    let response = HTTPURLResponse.served(
+      from: request.url!, statusCode: status, headerFields: headers)
+    return (status == 200 ? body : Data(), response)
+  }
+}
+
 extension Block {
   /// The paragraph this block is, if it is one: what a test filters a block list by,
   /// written once instead of as an `if case` at every call site.

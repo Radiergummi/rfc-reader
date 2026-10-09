@@ -147,9 +147,11 @@ public struct IndexSearch: Sendable {
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written. Every term is
-    // folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
-    let terms = SearchQuery.words(in: SearchText.folded(trimmed)).map(SearchQuery.unquoted)
+    // A quoted phrase is one term, so it has to match as it is written, less the
+    // spaces inside its quotes that French typography puts there, `« key words »`.
+    // Every term is folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
+    let terms = SearchQuery.words(in: SearchText.folded(trimmed))
+      .map { SearchQuery.unquoted($0).trimmingCharacters(in: .whitespaces) }
       .filter { !$0.isEmpty }
 
     if filters.isEmpty, let number = Self.number(in: trimmed) {
@@ -159,8 +161,10 @@ public struct IndexSearch: Sendable {
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
     let needles = terms.map(SearchText.init(alreadyFolded:))
-    // The query as the title bonus compares it, without the quotes of its phrases.
-    let foldedQuery = SearchText(alreadyFolded: terms.joined(separator: " "))
+    // The query as the title bonus compares it, without the quotes of its phrases,
+    // when it is more than one word: several terms, or one phrase.
+    let isWords = terms.count > 1 || terms.first?.contains(" ") == true
+    let titleQuery = isWords ? SearchText(alreadyFolded: terms.joined(separator: " ")) : nil
     let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
@@ -170,7 +174,7 @@ public struct IndexSearch: Sendable {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
       }
-      if let score = score(entry, rfc: rfc, terms: needles, foldedQuery: foldedQuery) {
+      if let score = score(entry, rfc: rfc, terms: needles, titleQuery: titleQuery) {
         hits.append(SearchHit(rfc: rfc, score: score))
       }
     }
@@ -237,9 +241,10 @@ public struct IndexSearch: Sendable {
     }
   }
 
-  /// Every term must match somewhere; where it matches decides the weight.
+  /// Every term must match somewhere; where it matches decides the weight. A title
+  /// holding `titleQuery`, when there is one, earns a bonus.
   private func score(
-    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], foldedQuery: SearchText
+    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], titleQuery: SearchText?
   ) -> Int? {
     var total = 0
     for term in terms {
@@ -267,7 +272,7 @@ public struct IndexSearch: Sendable {
       guard best > 0 else { return nil }
       total += best
     }
-    if terms.count > 1, entry.title.contains(foldedQuery) { total += 50 }
+    if let titleQuery, entry.title.contains(titleQuery) { total += 50 }
     if rfc.isObsolete { total -= 10 }
     if rfc.currentStatus.isStandardsTrack || rfc.currentStatus == .bestCurrentPractice {
       total += 5
@@ -364,29 +369,54 @@ struct AuthorName: Sendable {
     return word.contains(".") || letters.count <= 2
   }
 
-  /// Each word of the query matches the surname, or is a given name or an initial
-  /// that fits one of the author's initials and comes before the surname. The
-  /// surname is matched in part, as the query is still being typed.
+  /// The query's last words match the surname, in part, as the query is still being
+  /// typed, and the words before them are given names or initials. Only the first
+  /// of those has to fit one of the author's initials: the index holds one initial
+  /// for most authors, so `Roy T. Fielding` finds "R. Fielding".
+  ///
+  /// A query that ends in an initial, `r.` or `Roy T.`, is on its way to a surname
+  /// it has not reached, so the authors its first given name fits match, whatever
+  /// their surname.
   func matches(_ query: AuthorQuery) -> Bool {
-    query.surnames.indices.contains { split in
-      surname.contains(query.surnames[split])
-        && query.initials[..<split].allSatisfy(initials.contains)
+    let fitsFirst = query.firstInitial.map(initials.contains) ?? false
+    if query.endsInInitial, fitsFirst { return true }
+    return query.surnames.indices.contains { split in
+      surname.contains(query.surnames[split]) && (split == 0 || fitsFirst)
     }
   }
 }
 
 /// An `author:` value prepared once per search for `AuthorName.matches`.
 struct AuthorQuery: Sendable {
-  /// The first letter of each word of the value, as a given name or an initial.
-  let initials: [Character]
+  /// The first letter of the value's first word, as a given name or an initial: the
+  /// one word before the surname that has to fit one of the author's initials.
+  let firstInitial: Character?
   /// For each word of the value, it and the words after it: the surname, if the
   /// words before it are given names.
   let surnames: [SearchText]
+  /// Whether the value's last word is an initial with a dot, `r.`, `j.k` or `jp.`, so
+  /// that no surname has been typed yet. A word without a dot, `r`, is the start of
+  /// a surname.
+  let endsInInitial: Bool
 
   init(_ value: String) {
     let words = SearchText.folded(value).split(separator: " ")
-    initials = words.compactMap(\.first)
+    firstInitial = words.first?.first
     surnames = words.indices.map { SearchText(alreadyFolded: words[$0...].joined(separator: " ")) }
+    endsInInitial = words.last.map(Self.isInitial) ?? false
+  }
+
+  /// The suffixes and titles that are written like an initial, folded.
+  private static let notInitials: Set<Substring> = ["jr.", "sr.", "st.", "dr.", "mr."]
+
+  /// A dot, and groups of at most two letters between dots and hyphens, as the index
+  /// writes initials: `r.`, `j.k.`, `jp.`, `l-e.`. A suffix or a title of that shape,
+  /// `jr.` or `st.`, is no initial: it is part of a surname, `Smith Jr.` or
+  /// `St. Johns`, and read as an initial it would match every author of its letter.
+  private static func isInitial(_ word: Substring) -> Bool {
+    let groups = word.split { $0 == "." || $0 == "-" }
+    return word.contains(".") && !groups.isEmpty && !notInitials.contains(word)
+      && groups.allSatisfy { $0.count <= 2 && $0.allSatisfy(\.isLetter) }
   }
 }
 

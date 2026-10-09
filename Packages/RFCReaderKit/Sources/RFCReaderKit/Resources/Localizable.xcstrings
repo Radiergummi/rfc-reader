@@ -235,12 +235,32 @@
         }
       }
     },
+    "%lld not yet reviewed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld noch nicht geprüft"
+          }
+        }
+      }
+    },
     "%lld obsolete" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld veraltet"
+          }
+        }
+      }
+    },
+    "%lld rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld abgelehnt"
           }
         }
       }
@@ -501,6 +521,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jeder kann mitmachen, meist über die Mailingliste, und Entscheidungen fallen im Rough Consensus."
+          }
+        }
+      }
+    },
+    "Appendices %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge %@"
+          }
+        }
+      }
+    },
+    "Appendix %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhang %@"
           }
         }
       }
@@ -915,6 +955,16 @@
         }
       }
     },
+    "Editorial" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redaktionell"
+          }
+        }
+      }
+    },
     "Editorial Stream" : {
       "localizations" : {
         "de" : {
@@ -1031,6 +1081,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empfehlungen der IETF für den Betrieb des Internets oder für ihre eigenen Prozesse."
+          }
+        }
+      }
+    },
+    "Held for Document Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für die nächste Revision vorgemerkt"
           }
         }
       }
@@ -1805,6 +1865,16 @@
         }
       }
     },
+    "Rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgelehnt"
+          }
+        }
+      }
+    },
     "Relationships" : {
       "localizations" : {
         "de" : {
@@ -1841,6 +1911,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ersetzt"
+          }
+        }
+      }
+    },
+    "Reported" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeldet"
           }
         }
       }
@@ -1955,6 +2035,26 @@
         }
       }
     },
+    "Section %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt %@"
+          }
+        }
+      }
+    },
+    "Sections %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitte %@"
+          }
+        }
+      }
+    },
     "Short" : {
       "localizations" : {
         "de" : {
@@ -2051,6 +2151,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Team"
+          }
+        }
+      }
+    },
+    "Technical" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technisch"
           }
         }
       }
@@ -2437,6 +2547,16 @@
         }
       }
     },
+    "Verified" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigt"
+          }
+        }
+      }
+    },
     "Waiting for Wi-Fi" : {
       "localizations" : {
         "de" : {
@@ -2493,6 +2613,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wenn die Gruppe das Dokument für fertig hält, bitten ihre Chairs die ganze Gruppe um letzte Kommentare. Gibt es Rough Consensus, bittet die Gruppe die IESG, es zu veröffentlichen."
+          }
+        }
+      }
+    },
+    "Whole document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganzes Dokument"
           }
         }
       }
