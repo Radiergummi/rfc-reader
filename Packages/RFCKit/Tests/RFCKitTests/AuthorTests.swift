@@ -34,8 +34,8 @@ struct AuthorTests {
         document.referenceLists.flatMap(\.entries).first { $0.anchor == "QUIC-TRANSPORT" })
       #expect(
         entry.authors == [
-          Author(name: "Jana Iyengar", role: .editor),
-          Author(name: "Martin Thomson", role: .editor),
+          Author(name: "Jana Iyengar", role: .editor, statedSurname: "Iyengar"),
+          Author(name: "Martin Thomson", role: .editor, statedSurname: "Thomson"),
         ])
     }
   }
@@ -74,5 +74,35 @@ struct AuthorTests {
     let author = Author(name: name, role: .editor)
     #expect(author.givenNames == given)
     #expect(author.surname == surname)
+  }
+
+  /// A name RFCXML writes out, "Ryan Hamilton", has no initials to split at; its
+  /// `surname` attribute says where the surname starts, and survives a round trip
+  /// through the serializer, in the header and the references alike (#768).
+  @Test func `a document's stated surname is the surname`() throws {
+    let document = try Fixtures.document("rfc9220.xml")
+    let author = try #require(document.header.authors.first)
+    #expect(author.name == "Ryan Hamilton")
+    #expect(author.statedSurname == "Hamilton")
+    #expect(author.surname == "Hamilton")
+    #expect(author.givenNames == "Ryan")
+
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(reparsed.header.authors == document.header.authors)
+    let referenceAuthors = Self.referenceAuthors(document)
+    #expect(referenceAuthors.contains { $0.statedSurname != nil })
+    #expect(Self.referenceAuthors(reparsed) == referenceAuthors)
+  }
+
+  private static func referenceAuthors(_ document: RFCDocument) -> [Author] {
+    document.referenceLists.flatMap(\.entries).flatMap(\.authors)
+  }
+
+  /// A stated surname the name doesn't end with leaves the given names to the split.
+  @Test func `given names past a stated surname the name doesn't end with`() {
+    let author = Author(name: "R. Fielding", statedSurname: "Other")
+    #expect(author.surname == "Other")
+    #expect(author.givenNames == "R.")
   }
 }

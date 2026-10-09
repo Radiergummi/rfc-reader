@@ -110,11 +110,18 @@ public struct Author: Hashable, Sendable, Codable {
   /// every author the RFC index or a legacy header names. Nothing here is looked
   /// up or inferred (#19).
   public var contact: AuthorContact?
+  /// The surname the document states, RFCXML's `surname` attribute, which `surname`
+  /// gives in place of splitting the name: "Roy T. Fielding" or "Adam Roach" has no
+  /// initials to split at. Nil for every author the RFC index or a legacy header names.
+  public var statedSurname: String?
 
-  public init(name: String, role: Role? = nil, contact: AuthorContact? = nil) {
+  public init(
+    name: String, role: Role? = nil, contact: AuthorContact? = nil, statedSurname: String? = nil
+  ) {
     self.name = name
     self.role = role
     self.contact = contact
+    self.statedSurname = statedSurname
   }
 
   public var isEditor: Bool {
@@ -126,19 +133,23 @@ public struct Author: Hashable, Sendable, Codable {
     isEditor ? "\(name), Ed." : name
   }
 
-  /// The name past its given names, which is what a citation inverts, a page footer
-  /// names and the `author:` filter matches: "R. Fielding" is "Fielding", "F. Le
+  /// The name past its given names, which is what a citation inverts and a page
+  /// footer names: the stated surname when the document states one, and otherwise
+  /// the name past its leading initials. "R. Fielding" is "Fielding", "F. Le
   /// Faucheur" is "Le Faucheur", "D. Eastlake 3rd" is "Eastlake 3rd". A name with no
   /// initials before its last word, one word or an organization's ("Internet
   /// Architecture Board"), is all surname.
   public var surname: String {
-    Self.split(name).surname.joined(separator: " ")
+    statedSurname ?? Self.split(name).surname.joined(separator: " ")
   }
 
-  /// The initials before the surname, "R." or "J.K. L.": empty when the name is all
+  /// The words before the surname, "R." or "Roy T.": empty when the name is all
   /// surname.
   public var givenNames: String {
-    Self.split(name).given.joined(separator: " ")
+    if let statedSurname, name.hasSuffix(statedSurname) {
+      return name.dropLast(statedSurname.count).trimmingCharacters(in: .whitespaces)
+    }
+    return Self.split(name).given.joined(separator: " ")
   }
 
   /// The leading words that are initials, "J.K." or "SN", are the given names; the

@@ -161,6 +161,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { attributes.append(("surname", surname)) }
       if let role = author.role { attributes.append(("role", role.rawValue)) }
       if let contact = author.contact {
         writer.open("author", attributes)
@@ -316,6 +317,7 @@ public struct RFCXMLSerializer: Sendable {
       text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
       var authorAttributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { authorAttributes.append(("surname", surname)) }
       if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
       writer.empty("author", authorAttributes)
     }

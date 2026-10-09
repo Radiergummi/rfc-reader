@@ -246,7 +246,10 @@ public enum RFCXMLParser {
       }
       guard let name, !name.isEmpty else { return nil }
       let role = element["role"].flatMap(Author.Role.init(parsing:))
-      return Author(name: name, role: role, contact: parseContact(element))
+      let surname = element["surname"].map { $0.trimmingCharacters(in: .whitespaces) }
+      return Author(
+        name: name, role: role, contact: parseContact(element),
+        statedSurname: surname?.isEmpty == false ? surname : nil)
     }
 
     /// `<organization>` and `<address>`, when the author has either. Every element
@@ -539,10 +542,10 @@ public enum RFCXMLParser {
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
-      // Name and role only: an entry's `<author>` may carry an address, and the
-      // bibliography has no use for one.
+      // No contact: an entry's `<author>` may carry an address, and the bibliography
+      // has no use for one.
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
-        Author(name: author.name, role: author.role)
+        Author(name: author.name, role: author.role, statedSurname: author.statedSurname)
       }
       let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
