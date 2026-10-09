@@ -2,6 +2,9 @@
 
 *Decided 24 September 2026 (issue #37).
 None of it is built yet; this is the configuration it is built to.*
+
+**Superseded for its ranking and its delivery in October 2026, its measurements standing — see [Full-text search is built on the device, and ranked by flat BM25](2026-10-07-full-text-search-is-built-on-the-device-and-ranked-flat.md).**
+
 Search over document bodies is SQLite FTS5 with BM25, one row per section — the hit is a section, because a section is what deep-links — over the complete corpus, legacy and modern XML alike: 9,835 documents and 340,838 sections when measured.
 On top of BM25:
 

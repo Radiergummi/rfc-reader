@@ -775,6 +775,16 @@
         }
       }
     },
+    "Couldn't download" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden fehlgeschlagen"
+          }
+        }
+      }
+    },
     "Datatracker" : {
       "localizations" : {
         "de" : {
@@ -861,6 +871,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ruhend"
+          }
+        }
+      }
+    },
+    "Download Now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt laden"
+          }
+        }
+      }
+    },
+    "Downloading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird geladen …"
           }
         }
       }
@@ -1825,6 +1855,16 @@
         }
       }
     },
+    "Retry" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederholen"
+          }
+        }
+      }
+    },
     "STD Series" : {
       "localizations" : {
         "de" : {
@@ -2393,6 +2433,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktualisiert und Aktualisiert durch"
+          }
+        }
+      }
+    },
+    "Waiting for Wi-Fi" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf WLAN"
+          }
+        }
+      }
+    },
+    "Waiting for a connection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf eine Verbindung"
+          }
+        }
+      }
+    },
+    "Waiting: Low Data Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Datensparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: Low Power Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Stromsparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: cellular data is off for this app" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Mobile Daten sind für diese App aus"
           }
         }
       }

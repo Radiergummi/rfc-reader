@@ -74,11 +74,12 @@ public struct PasteboardContent: Equatable, Sendable {
   /// A selection of the reader's text: rich text with the chips' images, rich text,
   /// HTML and plain text. The rich flavors and the HTML link a reference to the URL
   /// `publicURL` gives for its link, or to nothing, never to the reader's own
-  /// (`LinkCopy.publicURL`).
+  /// (`LinkCopy.publicURL`). `hang` is the build's, which the rich flavors leave
+  /// out (`SelectionText.richCopy`).
   public static func selection(
-    _ selection: NSAttributedString, publicURL: (URL) -> URL?
+    _ selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0
   ) -> PasteboardContent {
-    let rich = SelectionText.richCopy(of: selection, publicURL: publicURL)
+    let rich = SelectionText.richCopy(of: selection, publicURL: publicURL, hang: hang)
     let whole = NSRange(location: 0, length: rich.length)
     var flavors: [Flavor] = []
     if let rtfd = try? rich.data(

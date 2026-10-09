@@ -38,14 +38,23 @@ struct BuildInputs: Equatable {
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
+  /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
+  ///   or zero where they don't (#433). Asked of the style rather than given, since
+  ///   how far they hang depends on its sizes; and the hang rather than the gutter's
+  ///   width, so a resize rebuilds only where the numbers come or go.
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
-    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices
+    legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
+    hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
     self.column = column
-    style = column.map { settings.style(column: $0, textSize: textSize) }
+    style = column.map { column in
+      var style = settings.style(column: column, textSize: textSize)
+      style.sectionNumberHang = hang(style)
+      return style
+    }
     self.choices = choices
   }
 }
@@ -76,6 +85,32 @@ final class DocumentSession {
   /// `DocumentView`'s `onVisibleAnchorChange` for why it is not asked of the
   /// document each time.
   private(set) var sectionPlaces: [String: String] = [:]
+
+  /// How far the document's heading numbers hang in a style (#433), measured once
+  /// per set of fonts: asked on every update pass, for whether they fit the gutter.
+  @ObservationIgnored private var measuredHang: (fonts: HangFonts, hang: CGFloat)?
+
+  /// What a measured hang depends on.
+  private struct HangFonts: Equatable {
+    let style: ReadingStyle
+    let legibilityWeight: LegibilityWeight?
+  }
+
+  /// `legibilityWeight` is Bold Text, which UIKit applies to the fonts as it makes
+  /// them, and so widens the numbers without changing the style.
+  func sectionNumberHang(in style: ReadingStyle, legibilityWeight: LegibilityWeight?) -> CGFloat {
+    guard let document = state.document else { return 0 }
+    // Kept by the fonts alone: the column moves on every step of a resize, and the
+    // numbers' widths do not move with it.
+    var style = style
+    style.measure = ReaderLayout.idealMeasure
+    style.sectionNumberHang = 0
+    let fonts = HangFonts(style: style, legibilityWeight: legibilityWeight)
+    if let measuredHang, measuredHang.fonts == fonts { return measuredHang.hang }
+    let hang = SectionNumberHang.width(of: document, style: style)
+    measuredHang = (fonts, hang)
+    return hang
+  }
 
   /// The original text (`reader.showOriginal`), fetched the first time it is shown,
   /// and why it could not be.
@@ -189,6 +224,7 @@ final class DocumentSession {
           },
           uniquingKeysWith: { first, _ in first }
         )
+        measuredHang = nil
         state.finish(document)
         loaded(document)
         trace("loaded")
