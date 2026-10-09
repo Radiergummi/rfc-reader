@@ -157,7 +157,7 @@ struct GrammarLinksTests {
   }
 
   @Test func `what is not a grammar is not linked`() {
-    #expect(ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [])) == nil)
+    #expect(ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [String]())) == nil)
   }
 
   /// The preview of a rule is its definition, continuation lines included, without
