@@ -4,8 +4,8 @@ import RFCKit
 
 /// The corpus's index database, `indexes.sqlite` (#174): what is computed over every
 /// document offline, because no one document can say it, for the app to ship as a
-/// pack. It holds metadata and anchors only, never RFC text: the full-text index is a
-/// pack of its own (#37).
+/// pack. It holds metadata and anchors only, never RFC text: the full-text index is
+/// built on the device (#37).
 ///
 /// Written in one transaction, and only once `close()` commits it is it whole.
 ///

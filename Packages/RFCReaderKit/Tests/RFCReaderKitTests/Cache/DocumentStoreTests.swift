@@ -70,9 +70,13 @@ struct DocumentStoreTests {
     var caches: URL { root.appending(path: "Caches", directoryHint: .isDirectory) }
 
     /// A store whose disk has `freeSpace` bytes left for each tier, or as much as
-    /// the real volume has when that is nil.
-    func store(freeSpace: (@Sendable (StorageTier) -> Int?)? = nil) -> DocumentStore {
-      DocumentStore(directory: directory, caches: caches, freeSpace: freeSpace)
+    /// the real volume has when that is nil, and which awaits `parsing` at the start
+    /// of each look at the disk for a body to parse.
+    func store(
+      freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
+      parsing: (@Sendable () async -> Void)? = nil
+    ) -> DocumentStore {
+      DocumentStore(directory: directory, caches: caches, freeSpace: freeSpace, parsing: parsing)
     }
 
     /// Where the store keeps `id`'s body in `format`, in `tier`.
@@ -407,6 +411,83 @@ struct DocumentStoreTests {
     #expect(!sandbox.exists(id, format: .xml, in: .cache))
   }
 
+  /// A keep nobody waits for runs on a session that refuses an expensive path, and
+  /// the device moves to one while a reader who joined its download waits (#358):
+  /// the reader's own client may take that path, so the reader fetches again with it.
+  @Test func `an open that joined a download the path refused fetches again on its own client`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let cheapNetworks = PathRefusedFetcher()
+    let anyNetwork = GatedFetcher()
+    await anyNetwork.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    let keeping = Task { try await store.keep(id, formats: [.xml], client: cheapNetworks) }
+    await untilWaiting(documents: 1, for: id, in: store)
+    let opening = Task { try await store.document(id, formats: [.xml], client: anyNetwork) }
+    await untilWaiting(documents: 2, for: id, in: store)
+    await cheapNetworks.gate.open()
+
+    #expect(try await opening.value == Fixtures.rfc8999())
+    await #expect(throws: URLError.self) { try await keeping.value }
+    #expect(anyNetwork.documentFetches == 1)
+  }
+
+  /// The fetch again of an open whose joined download the path refused is the same
+  /// open's, so a removal made while the refused one ran is not undone by it (#116).
+  @Test
+  func `a removal before the path refused a joined download is not undone by its fetch again`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let cheapNetworks = PathRefusedFetcher()
+    let anyNetwork = GatedFetcher()
+    await anyNetwork.gate.open()
+    let id = DocumentID.rfc(8999)
+
+    let keeping = Task { try await store.keep(id, formats: [.xml], client: cheapNetworks) }
+    await untilWaiting(documents: 1, for: id, in: store)
+    let opening = Task { try await store.document(id, formats: [.xml], client: anyNetwork) }
+    await untilWaiting(documents: 2, for: id, in: store)
+    await store.remove(id)
+    await cheapNetworks.gate.open()
+
+    #expect(try await opening.value == Fixtures.rfc8999())
+    await #expect(throws: URLError.self) { try await keeping.value }
+    #expect(!sandbox.exists(id, format: .xml, in: .cache))
+    #expect(!sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Waits at its gate, then fails as a session that may not use an expensive path
+  /// does when the device moves to one.
+  final class PathRefusedFetcher: DocumentFetching {
+    let gate = Gate()
+
+    static let refused = URLError(
+      .notConnectedToInternet,
+      userInfo: [
+        NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue
+      ])
+
+    @concurrent
+    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
+      -> RFCEditorClient.FetchedDocument
+    {
+      await gate.wait()
+      throw Self.refused
+    }
+
+    func fetchDocumentData(_ id: DocumentID, format: FileFormat) async throws -> Data {
+      await gate.wait()
+      throw Self.refused
+    }
+  }
+
   /// A disk too full for the cache's reserve still shows the document; it is only
   /// not written, so it is fetched again next time.
   @Test func `a read document is not cached when the disk is low`() async throws {
@@ -588,16 +669,153 @@ struct DocumentStoreTests {
 
     #expect(await !store.isCached(id))
   }
+
+  // MARK: - Overlapping a fetch or a parse (#614)
+
+  /// Eviction runs while a document is being fetched: it bounds the cache by what is
+  /// on disk, which the document being fetched is not yet, and the fetch writes its
+  /// body once it lands.
+  @Test func `eviction during a fetch evicts what is on disk and the fetch still writes`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let older = DocumentID.rfc(2119)
+    let fetched = DocumentID.rfc(8999)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(older, format: .text))
+    _ = try await store.document(older, formats: [.text], client: fetcher)
+
+    let opening = Task { try await store.document(fetched, formats: [.xml], client: fetcher) }
+    await untilWaiting(documents: 1, for: fetched, in: store)
+    let evicted = await store.evict(pinned: [], bound: 0)
+    await fetcher.gate.open()
+
+    #expect(evicted == [older])
+    #expect(try await opening.value == Fixtures.rfc8999())
+    #expect(await store.isCached(fetched))
+    #expect(await !store.isCached(older))
+  }
+
+  /// A second open of a body on disk joins the parse the first started, rather than
+  /// parsing it again, and both get the document.
+  @Test func `a second open joins the parse of a cached body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let gate = Gate()
+    let parses = Mutex(0)
+    let store = sandbox.store(
+      parsing: {
+        parses.withLock { $0 += 1 }
+        await gate.wait()
+      })
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    try Fixtures.data("rfc8999.xml").write(to: sandbox.file(id, format: .xml))
+
+    let first = Task { try await store.document(id, formats: [.xml], client: fetcher) }
+    await untilWaiting(parses: 1, for: id, in: store)
+    let second = Task { try await store.document(id, formats: [.xml], client: fetcher) }
+    await untilWaiting(parses: 2, for: id, in: store)
+    await gate.open()
+
+    let expected = try Fixtures.rfc8999()
+    #expect(try await first.value == expected)
+    #expect(try await second.value == expected)
+    #expect(parses.withLock { $0 } == 1)
+    #expect(fetcher.documentFetches == 0)
+  }
+
+  /// A legacy document is downloading as text when the legacy XML pack is
+  /// installed: once the text is on disk, the open reads the document from the pack,
+  /// which is the one XML path the pack exists for. The pack is made here from the
+  /// committed text fixture, converted as corpus-build converts it.
+  @Test func `a pack installed while a document downloads serves it from the pack`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(2119)
+    let pack = try Self.legacyPack(in: sandbox.root)
+
+    let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(texts: 1, for: id, in: store)
+    _ = try await store.installLegacyPack(from: pack)
+    await fetcher.gate.open()
+
+    #expect(try await opening.value.source == .xml)
+    #expect(fetcher.textFetches == 1)
+    #expect(sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  /// A cached legacy text is being parsed when the pack is installed: that open
+  /// shows the text's document, and the next reads the pack's, rather than the
+  /// parse the pack replaced being kept in memory for every open after.
+  @Test func `a pack installed while a cached body parses serves the next open`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let gate = Gate()
+    let store = sandbox.store(parsing: { await gate.wait() })
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(2119)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
+    let pack = try Self.legacyPack(in: sandbox.root)
+
+    let opening = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(parses: 1, for: id, in: store)
+    _ = try await store.installLegacyPack(from: pack)
+    await gate.open()
+
+    #expect(try await opening.value.source == .text)
+    #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
+  }
+
+  /// As above, with a second open joining the held parse after the install: neither
+  /// open keeps the parse the pack replaced, whichever of them finishes first.
+  @Test func `an open joining a parse a pack replaced does not keep it`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let gate = Gate()
+    let store = sandbox.store(parsing: { await gate.wait() })
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(2119)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
+    let pack = try Self.legacyPack(in: sandbox.root)
+
+    let first = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(parses: 1, for: id, in: store)
+    _ = try await store.installLegacyPack(from: pack)
+    let second = Task { try await store.document(id, formats: [.text], client: fetcher) }
+    await untilWaiting(parses: 2, for: id, in: store)
+    await gate.open()
+
+    #expect(try await first.value.source == .text)
+    #expect(try await second.value.source == .text)
+    #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
+  }
+
+  /// A legacy XML pack holding RFC 2119, converted from its committed text the way
+  /// corpus-build converts it, with a manifest listing it.
+  private static func legacyPack(in parent: URL) throws -> URL {
+    let converted = RFCXMLSerializer().serialize(
+      LegacyTextParser.parse(try Fixtures.data("rfc2119.txt")))
+    return try DataPackTests.makePack(
+      in: parent, files: [DocumentCacheIndex.fileName(for: .rfc(2119), format: .xml): converted])
+  }
 }
 
-/// Until as many readers wait for `id`'s fetches as given: an open started is not
-/// yet an open that has joined one.
+/// Until as many readers wait for `id`'s fetches and parse as given: an open
+/// started is not yet an open that has joined one.
 func untilWaiting(
-  documents: Int = 0, texts: Int = 0, for id: DocumentID, in store: DocumentStore
+  documents: Int = 0, texts: Int = 0, parses: Int = 0, for id: DocumentID,
+  in store: DocumentStore
 ) async {
+  let expected = DocumentStore.Waiters(documents: documents, texts: texts, parses: parses)
   while true {
-    let waiting = await store.waiters(id)
-    if waiting.documents == documents, waiting.texts == texts { return }
+    if await store.waiters(id) == expected { return }
     await Task.yield()
   }
 }

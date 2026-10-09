@@ -193,7 +193,7 @@ struct ReaderInputs {
       coordinator.headerIdentity = headerIdentity
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
-    coordinator.layOut(width: width, measure: measure)
+    coordinator.layOut(width: width, measure: measure, hang: built.sectionNumberHang)
     if let requirements { coordinator.setRequirements(requirements) }
     let installs = coordinator.built?.text !== built.text
     if installs {
@@ -306,6 +306,9 @@ struct ReaderInputs {
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
+      textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.sectionNumberHang ?? 0
+      }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // Found or sent to its end, this side leads a side-by-side reading (#187).
@@ -409,6 +412,12 @@ struct ReaderInputs {
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
       }
+      textView.copySectionLink = { [weak coordinator = context.coordinator] event in
+        coordinator?.copySectionLink(under: event) ?? false
+      }
+      textView.hoverSectionNumber = { [weak coordinator = context.coordinator] event in
+        coordinator?.hoverSectionNumber(under: event)
+      }
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
@@ -424,6 +433,9 @@ struct ReaderInputs {
       }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
+      }
+      textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.sectionNumberHang ?? 0
       }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation

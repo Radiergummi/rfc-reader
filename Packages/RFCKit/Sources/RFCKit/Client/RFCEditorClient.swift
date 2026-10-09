@@ -53,16 +53,27 @@ extension URLSession {
   /// `rfcEditor`'s, except that it does not use a cellular, hotspot or Low Data
   /// Mode path, and waits for one it may use rather than failing (#314). On Linux,
   /// whose `FoundationNetworking` has none of the three settings, it is `rfcEditor`'s.
-  public static let rfcEditorOnCheapNetworks: URLSession = {
+  public static let rfcEditorOnCheapNetworks = onCheapNetworks(waitingForConnectivity: true)
+
+  /// The session for a document kept offline that nobody on this device is waiting
+  /// for (#358): `rfcEditorOnCheapNetworks`'s, except that a request fails, with a
+  /// `networkUnavailableReason`, rather than waiting, when the path becomes one it
+  /// may not use. A reader who opens the document joins its download, and would
+  /// otherwise wait with it for Wi-Fi.
+  public static let rfcEditorFailingOnExpensiveNetworks = onCheapNetworks(
+    waitingForConnectivity: false)
+
+  /// `rfcEditor`'s configuration without a cellular, hotspot or Low Data Mode path.
+  private static func onCheapNetworks(waitingForConnectivity: Bool) -> URLSession {
     let configuration = URLSessionConfiguration.default
     configuration.urlCache = nil
     #if !canImport(FoundationNetworking)
-      configuration.waitsForConnectivity = true
+      configuration.waitsForConnectivity = waitingForConnectivity
       configuration.allowsExpensiveNetworkAccess = false
       configuration.allowsConstrainedNetworkAccess = false
     #endif
     return URLSession(configuration: configuration)
-  }()
+  }
 }
 
 /// What a server said identifies the version of a resource it sent, so a later

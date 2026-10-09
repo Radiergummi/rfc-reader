@@ -37,6 +37,9 @@ public actor DocumentStore {
   private let cacheDirectory: URL
   /// The bytes free on the disk for a body in each tier; see `StorageTier.hasRoom`.
   private let freeSpace: @Sendable (StorageTier) -> Int?
+  /// Awaited at the start of each look at the disk for a body to parse: nil but in
+  /// tests.
+  private let parsing: (@Sendable () async -> Void)?
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
   /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
@@ -72,7 +75,12 @@ public actor DocumentStore {
   private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
+  /// A pack installed meanwhile marks the parses of the documents it serves as a
+  /// removal does, so none of them is kept.
   private let parses = InFlightDownloads<RFCDocument?>()
+  /// How many removals each document has had, so a download started again for a
+  /// reader whose joined one the path refused knows whether one came meanwhile.
+  private var removals: [DocumentID: Int] = [:]
 
   /// Whether a body has been written to the cache since eviction last looked, so a
   /// cache that has not grown is not enumerated again.
@@ -131,6 +139,17 @@ public actor DocumentStore {
   public init(
     directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil
   ) {
+    self.init(directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil)
+  }
+
+  /// The store above, with `parsing` awaited at the start of each look at the disk
+  /// for a body to parse, once it has chosen which files to read, whether or not one
+  /// is there: for a test to hold the parse open as it holds a fetch.
+  init(
+    directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)?,
+    parsing: (@Sendable () async -> Void)?
+  ) {
+    self.parsing = parsing
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
     let cacheDirectory = caches.appending(path: "Documents", directoryHint: .isDirectory)
     self.directory = directory
@@ -459,6 +478,7 @@ public actor DocumentStore {
   }
 
   private func remove(_ id: DocumentID, from tiers: [StorageTier]) {
+    removals[id, default: 0] += 1
     downloads.removed(id)
     texts.removed(id)
     parses.removed(id)
@@ -639,7 +659,7 @@ public actor DocumentStore {
   private func fetchDocument(
     _ id: DocumentID, formats: [FileFormat], client: any DocumentFetching
   ) async throws -> RFCDocument {
-    let (fetched, isKept) = try await downloads.value(for: id) {
+    let (fetched, isKept) = try await value(of: downloads, for: id) {
       Task { try await Self.fetch(id, formats: formats, client: client) }
     }
     // A removal while this was in flight, or another reader of the same fetch has
@@ -655,16 +675,20 @@ public actor DocumentStore {
 
   /// The body on disk, parsed and kept, or nil when there is none: the parse is
   /// joined by a second open, and a body removed while it parsed is shown but not
-  /// kept, like a fetch (#116).
+  /// kept, like a fetch (#116), and so is one parsed from what a pack installed
+  /// meanwhile replaces: every open that joins it before it ends, even after the
+  /// install, shows it, and the first open after it ends reads the pack.
   private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
     -> RFCDocument?
   {
     let xmlURLs = fileURLs(id, format: .xml)
     let textURLs = fileURLs(id, format: .text)
     let packURL = legacyPack?.file(for: id)
+    let parsing = parsing
     let (cached, isCachedKept) = try await parses.value(for: id) {
       Task {
-        await Self.parseCached(
+        await parsing?()
+        return await Self.parseCached(
           id, xml: xmlURLs, pack: packURL, text: textURLs, signpostID: signpostID)
       }
     }
@@ -756,7 +780,12 @@ public actor DocumentStore {
     let pack = try await installPack(source, as: Self.legacyPackName)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
+    // A parse running now read what the pack replaces, and is not kept either, by
+    // whichever open joined it (#116).
     parsed.removeAll { pack.file(for: $0) != nil }
+    for id in parses.runningDocuments where pack.file(for: id) != nil {
+      parses.removed(id)
+    }
     return pack
   }
 
@@ -863,7 +892,7 @@ public actor DocumentStore {
   /// removal cannot slip in before the write, and the others find it on disk once
   /// they have it (#116).
   private func text(_ id: DocumentID, client: any DocumentFetching) async throws -> Data {
-    let (data, isKept) = try await texts.value(for: id) {
+    let (data, isKept) = try await value(of: texts, for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
     }
     if isKept {
@@ -872,11 +901,43 @@ public actor DocumentStore {
     return data
   }
 
+  /// `downloads.value(for:start:)`, started again with `start` when the download
+  /// joined was somebody else's and the path refused it (#358): the keeper fetches
+  /// what nobody waits for on a session that may not use an expensive path, and a
+  /// reader who joined it, whose own client may, should not fail because the device
+  /// moved to one. Once, and only for a download this caller did not start, whose
+  /// own client could only be refused again. A removal while the refused one ran
+  /// leaves the second unkept, as it would have the first (#116).
+  private func value<Value>(
+    of downloads: InFlightDownloads<Value>, for id: DocumentID,
+    start: () -> Task<Value, any Error>
+  ) async throws -> (value: Value, isKept: Bool) {
+    var isOwn = false
+    let removalsBefore = removals[id]
+    do {
+      return try await downloads.value(for: id) {
+        isOwn = true
+        return start()
+      }
+    } catch let error as URLError where error.networkUnavailableReason != nil && !isOwn {
+      let (value, isKept) = try await downloads.value(for: id, start: start)
+      return (value, isKept && removals[id] == removalsBefore)
+    }
+  }
+
   // MARK: - Tests
 
-  /// How many readers wait for the fetch of `id`'s document, and for its `.txt`, so
-  /// a test acts once the readers it started have joined them.
-  func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
-    (downloads.waiters(id), texts.waiters(id))
+  /// How many readers wait for the fetch of `id`'s document, for its `.txt`, and for
+  /// the parse of its body on disk, so a test acts once the readers it started have
+  /// joined them.
+  func waiters(_ id: DocumentID) -> Waiters {
+    Waiters(
+      documents: downloads.waiters(id), texts: texts.waiters(id), parses: parses.waiters(id))
+  }
+
+  struct Waiters: Equatable {
+    var documents: Int
+    var texts: Int
+    var parses: Int
   }
 }

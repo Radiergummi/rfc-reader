@@ -48,6 +48,11 @@ public struct ReadingStyle: Sendable, Hashable {
   public var references: ReferenceStyle
   /// The colors of a highlighted code block's tokens.
   public var syntaxTheme: SyntaxTheme
+  /// How far a numbered heading's number hangs in the gutter (#433): the document's
+  /// `SectionNumberHang.width`, where the reader's gutter has room for it
+  /// (`ReaderLayout.hangs`), and zero where it hangs nothing. Zero by default, and
+  /// never used on paper, which has no gutter to hang it in and no link to make of it.
+  public var sectionNumberHang: CGFloat = 0
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.

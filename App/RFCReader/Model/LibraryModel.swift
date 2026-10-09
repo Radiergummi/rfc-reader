@@ -154,12 +154,24 @@ final class LibraryModel {
   /// rather than worked out on every read: the sidebar counts it as it draws.
   private(set) var availableOfflineNumbers: Set<Int> = []
 
-  /// Moves, releases and fetches bodies to match `offlineMarks`.
+  /// Moves, releases and fetches bodies to match `offlineMarks`. Its fetches that
+  /// nobody waits for take only a path that is neither metered nor in Low Data Mode,
+  /// and fail rather than wait when the device moves to one.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
-    store: store, client: client
+    store: store, client: client,
+    clientFailingOnExpensiveNetworks: RFCEditorClient(
+      transport: URLSessionTransport(session: .rfcEditorFailingOnExpensiveNetworks))
   ) { [weak self] id in
     self?.index?[id]?.formats ?? []
   }
+
+  /// Where each document marked Keep Offline stands while its body is not on the
+  /// device: waiting and why, downloading, or failed.
+  var offlineStatus: OfflineStatus { offlineKeeper.status }
+
+  /// The path and Low Power Mode, which decide whether the keeper fetches a mark
+  /// that arrived from another device now or waits.
+  @ObservationIgnored private let network = NetworkConditions()
 
   /// The RFCs the installed legacy pack lists as text that only points to its
   /// original (#316): the reader shows their original without a load, offline too.
@@ -211,6 +223,12 @@ final class LibraryModel {
         self.recheckSpotlight()
       }
     }
+    network.start(
+      // A new path: what waited may go ahead, what runs may have to wait, and what
+      // failed may succeed on it.
+      pathChanged: { [weak self] in self?.reconcileOffline(forgettingFailures: true) },
+      // Low Power Mode decides whether a fetch waits, not whether it fails.
+      powerChanged: { [weak self] in self?.reconcileOffline() })
   }
 
   private func refresh(_ changed: UserDataMirrors) {
@@ -247,9 +265,21 @@ final class LibraryModel {
   /// lists, and applying the index runs this; nor before the marks have been read.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
   /// saved: reconciling against them would move every kept body into the cache.
-  private func reconcileOffline() {
-    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory else { return }
-    offlineKeeper.reconcile(wanted: offlineMarks)
+  /// Nor before the network path is known, which decides whether the fetches it
+  /// owes start now: every one of them is a mark nobody on this device is waiting
+  /// for, since a tapped one is fetched at once.
+  private func reconcileOffline(forgettingFailures: Bool = false) {
+    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
+      let policy = network.decision(for: .syncedMark)
+    else { return }
+    offlineKeeper.reconcile(
+      wanted: offlineMarks, policy: policy, forgettingFailures: forgettingFailures)
+  }
+
+  /// Fetches a document marked Keep Offline on whatever path the device has, from
+  /// its row's Download Now or Retry. The keeper logs a failure, and its row says it.
+  func downloadNow(_ id: DocumentID) {
+    Task(name: "Download now") { try? await offlineKeeper.fetchNow(id) }
   }
 
   private func refreshRecentlyReadCount() {
@@ -947,7 +977,7 @@ final class LibraryModel {
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
-  /// Every working group the index names, lowercased, derived with the index for the
+  /// Every working group the index names, folded, derived with the index for the
   /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
   /// them on every body pass (#21).
   private(set) var knownWorkingGroups: Set<String> = []
@@ -1398,10 +1428,11 @@ final class LibraryModel {
   /// Marks `id` Keep Offline, or removes its mark, as the Info pane's toggle does
   /// (#358). Marking moves a copy already read, or downloads one now, on any
   /// network, since somebody is waiting for it, and throws when that fails: the mark
-  /// stays, and the next reconciliation tries again. Unmarking moves the body back
-  /// into the reading cache rather than deleting it, and leaves a download running
-  /// for it. A mark that could not be saved is logged, as a bookmark's is (#125),
-  /// and leaves the toggle as it was.
+  /// stays, and its row in Available Offline offers Retry until the device moves to
+  /// another network, when the keeper tries again by itself. Unmarking moves the
+  /// body back into the reading cache rather than deleting it, and leaves a download
+  /// running for it. A mark that could not be saved is logged, as a bookmark's is
+  /// (#125), and leaves the toggle as it was.
   func setKeptOffline(_ id: DocumentID, _ isKept: Bool) async throws {
     guard mark(id, keptOffline: isKept), isKept else { return }
     try await offlineKeeper.fetchNow(id)
