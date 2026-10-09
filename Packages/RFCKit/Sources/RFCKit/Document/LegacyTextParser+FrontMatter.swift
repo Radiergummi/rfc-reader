@@ -507,6 +507,10 @@ extension LegacyTextParser {
     #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#
       .ignoresCase())
 
+  /// The indent from which a header line that holds one column holds the right one:
+  /// past the middle of a 72-column line, where no left-column continuation reaches.
+  static let rightColumnIndent = 36
+
   static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
     var header = DocumentHeader(title: "")
     var index = 0
@@ -528,19 +532,29 @@ extension LegacyTextParser {
       runStart = runEnd
       while runStart < lines.count, lines[runStart].isEmpty { runStart += 1 }
     }
+    // What it obsoletes and updates, read as a draft's are: a list continued on an
+    // indented line, and `BCP 14` not read as RFC 14 (#767).
+    let lists = DraftHeader.parse(frontPage: Array(lines[index...]))
+    header.obsoletes = lists.obsoletes.map(DocumentID.rfc)
+    header.updates = lists.updates.map(DocumentID.rfc)
     while index < lines.count, !lines[index].isEmpty {
       let line = lines[index]
       index += 1
       let columns = line.components(separatedBy: "   ").map {
         $0.trimmingCharacters(in: .whitespaces)
       }.filter { !$0.isEmpty }
-      guard let left = columns.first else { continue }
-      let right = columns.count > 1 ? columns.last! : nil
+      guard let first = columns.first else { continue }
+      // A line set in the right half alone is the right column, its left one having run
+      // out: an author past the last line of the left column's labels (#767). An
+      // indented continuation of a left-column label sits well left of it.
+      let isRightOnly =
+        columns.count == 1
+        && line.leadingSpaceCount >= rightColumnIndent
+      let left = isRightOnly ? "" : first
+      let right = isRightOnly ? first : columns.count > 1 ? columns.last! : nil
 
-      if left.hasPrefix("Obsoletes:") {
-        header.obsoletes = documentIDs(in: left)
-      } else if left.hasPrefix("Updates:") {
-        header.updates = documentIDs(in: left)
+      if left.hasPrefix("Obsoletes:") || left.hasPrefix("Updates:") {
+        // Read above, with the lines that continue them.
       } else if left.hasPrefix("Category:") {
         header.category = DocumentHeader.Category(
           parsing: String(left.dropFirst("Category:".count)))
@@ -579,11 +593,5 @@ extension LegacyTextParser {
     line.trimmingCharacters(in: .whitespaces).firstMatch(of: numberLinePattern).flatMap {
       Int($0.1)
     }
-  }
-
-  private static let digitsPattern = Pattern(#/\d+/#)
-
-  private static func documentIDs(in text: String) -> [DocumentID] {
-    text.matches(of: digitsPattern).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
   }
 }

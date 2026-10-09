@@ -72,6 +72,18 @@ struct DocumentFallbackTests {
     #expect(transport.requested == ["xml", "txt"])
   }
 
+  /// The text's header is the index entry's where the caller has it, as a converted
+  /// document's is (#767): its authors, here ones the title page doesn't have.
+  @Test func `the text fallback takes its header from the index entry`() async throws {
+    let transport = Transport(xml: .status(404), text: .body(try Fixtures.data("rfc1149.txt")))
+    var entry = try #require(try Fixtures.sampleIndex()[1149])
+    entry.authors = [Author(name: "B. Second", role: .editor), Author(name: "A. First")]
+    let fetched = try await RFCEditorClient(transport: transport)
+      .fetchPreferredDocument(.rfc(1149), entry: entry)
+    #expect(fetched.document.header.authors == entry.authors)
+    #expect(fetched.document.header.date == entry.date)
+  }
+
   /// The index says which formats exist; one without XML is not asked for it.
   @Test func `a document the index lists without XML is fetched as text alone`() async throws {
     let transport = Transport(text: .body(try Fixtures.data("rfc1149.txt")))

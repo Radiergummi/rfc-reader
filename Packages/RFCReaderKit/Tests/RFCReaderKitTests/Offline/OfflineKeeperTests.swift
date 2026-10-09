@@ -456,9 +456,9 @@ struct OfflineKeeperTests {
     var fetches: Int { state.withLock { $0.fetches } }
 
     @concurrent
-    func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]?) async throws
-      -> RFCEditorClient.FetchedDocument
-    {
+    func fetchPreferredDocument(
+      _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+    ) async throws -> RFCEditorClient.FetchedDocument {
       let fails = state.withLock { state in
         state.fetches += 1
         defer { state.failuresLeft = max(0, state.failuresLeft - 1) }

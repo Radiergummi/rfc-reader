@@ -155,6 +155,26 @@ struct CorpusBackedTitlePageTests {
   }
 }
 
+@Suite("Corpus-backed: the header block", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedHeaderBlockTests {
+  /// An author whose left column ran out stands alone at the right of the line, and is
+  /// read as the right column (#767): RFC 2616's page names seven, and five of them
+  /// stand alone.
+  @Test func `an author alone on a line is an author`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc2616")).header
+    #expect(header.authors.count == 7)
+    #expect(header.authors.first?.name == "R. Fielding")
+    #expect(header.authors.contains { $0.name == "J. Mogul" })
+  }
+
+  /// A list continued on an indented line is read whole (#767): RFC 1140's obsoletes
+  /// run on under `Obsoletes: RFCs`.
+  @Test func `an obsoletes list continued on the next line is read whole`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc1140")).header
+    #expect(header.obsoletes == [.rfc(1130), .rfc(1100), .rfc(1083)])
+  }
+}
+
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedAppendixHeadingTests {
   /// RFC 2326 heads its appendices `Appendix A: Title`, as about 150 legacy RFCs do.

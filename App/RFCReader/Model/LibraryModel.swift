@@ -1362,7 +1362,9 @@ final class LibraryModel {
   // MARK: - Documents
 
   func document(for id: DocumentID) async throws -> RFCDocument {
-    let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    let entry = index?[id]
+    let document = try await store.document(
+      id, formats: entry?.formats ?? [], entry: entry, client: client)
     await evictIfGrown()
     return document
   }
