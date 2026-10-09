@@ -1065,16 +1065,6 @@
         }
       }
     },
-    "Group" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gruppe"
-          }
-        }
-      }
-    },
     "Guidance the IETF recommends, for operating the Internet or for its own processes." : {
       "localizations" : {
         "de" : {
@@ -1201,16 +1191,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Im Working Group Last Call"
-          }
-        }
-      }
-    },
-    "Independent" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Independent"
           }
         }
       }
@@ -1735,6 +1715,16 @@
         }
       }
     },
+    "Provenance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herkunft"
+          }
+        }
+      }
+    },
     "Publication" : {
       "localizations" : {
         "de" : {
@@ -1755,12 +1745,12 @@
         }
       }
     },
-    "Published as" : {
+    "Published %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Veröffentlicht als"
+            "value" : "Veröffentlicht %@"
           }
         }
       }
@@ -2085,6 +2075,32 @@
         }
       }
     },
+    "Status: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status: %@"
+          }
+        }
+      }
+    },
+    "Status: %@, now %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status: %1$@, jetzt %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Status: %1$@, now %2$@"
+          }
+        }
+      }
+    },
     "Stop Keeping Offline" : {
       "localizations" : {
         "de" : {
@@ -2095,12 +2111,12 @@
         }
       }
     },
-    "Stream" : {
+    "Stream: %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stream"
+            "value" : "Stream: %@"
           }
         }
       }
@@ -2653,6 +2669,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Group %@"
+          }
+        }
+      }
+    },
+    "Working group: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group: %@"
           }
         }
       }

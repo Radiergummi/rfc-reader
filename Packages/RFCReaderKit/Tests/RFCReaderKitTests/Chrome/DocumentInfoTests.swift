@@ -91,19 +91,19 @@ struct DocumentInfoTests {
   }
 
   /// The strip under the header: what someone deciding whether this is the right
-  /// document looks for first, each a short value over its caption.
-  @Test func `the key facts are when, how long, from whom and which group`() {
+  /// document looks for first, each a short value over its caption. The stream and
+  /// the group are the provenance's (#364), so nothing is shown twice.
+  @Test func `the key facts are when and how long`() {
     #expect(
       info(rich).facts == [
         DocumentInfo.Fact(value: "2022", label: "Published"),
         DocumentInfo.Fact(value: "194", label: "Pages"),
-        DocumentInfo.Fact(value: "IETF", label: "Stream", term: .stream(.ietf)),
-        DocumentInfo.Fact(value: "httpbis", label: "Group", term: .process(.workingGroup)),
       ])
+    #expect(info(rich).provenance == Provenance(rich, locale: .english))
   }
 
-  /// A label the glossary explains opens its entry (#362): the stream and the group in
-  /// the strip, each relationship, and a series the document is part of.
+  /// A label the glossary explains opens its entry (#362): each relationship, and a
+  /// series the document is part of.
   @Test func `a label the glossary explains carries its term`() {
     let relationships = section("Relationships", of: rich)?.rows ?? []
     #expect(
@@ -116,15 +116,6 @@ struct DocumentInfoTests {
     #expect(
       info(rich).statusSummary
         == Glossary.entry(for: .status(.internetStandard), locale: .english).summary)
-  }
-
-  /// A fact is a word or two in a quarter of a narrow panel.
-  @Test func `the independent stream is short enough for the strip`() {
-    var metadata = bare
-    metadata.stream = .independent
-    #expect(
-      info(metadata).facts.contains(
-        DocumentInfo.Fact(value: "Independent", label: "Stream", term: .stream(.independent))))
   }
 
   @Test func `the sections come in a fixed order`() {
@@ -152,28 +143,12 @@ struct DocumentInfoTests {
     #expect(unknown.sections.first?.rows.first?.value == .authors(rich.authors))
   }
 
-  /// The status it was published with only where it differs from the current one:
-  /// RFC 9110 went out a Proposed Standard and is an Internet Standard now.
-  @Test func `the details hold what the header and the strip leave out`() {
+  /// The date and the status it was published with are the provenance's (#364).
+  @Test func `the details hold what the header, the strip and the provenance leave out`() {
     let details = section("Details", of: rich)
-    #expect(
-      value("Published as", in: details) == .text(PublicationStatus.proposedStandard.displayName))
-    #expect(value("Published", in: details) == .text("June 2022"))
+    #expect(details?.rows.map(\.label) == ["Area", "Keywords"])
     #expect(value("Area", in: details) == .text("Applications and Real-Time"))
     #expect(value("Keywords", in: details) == .keywords(["HTTP", "semantics"]))
-    #expect(value("Formats", in: details) == nil)
-
-    var unchanged = rich
-    unchanged.publicationStatus = unchanged.currentStatus
-    #expect(value("Published as", in: section("Details", of: unchanged)) == nil)
-  }
-
-  /// The index fills the field for a document from no group with a sentence rather
-  /// than leaving it empty, and that is not a group's name.
-  @Test func `a document from no working group has no working group fact`() {
-    var metadata = rich
-    metadata.workingGroup = "NON WORKING GROUP"
-    #expect(!info(metadata).facts.contains { $0.label == "Group" })
   }
 
   /// A series member links to the others, not to itself.
@@ -212,8 +187,8 @@ struct DocumentInfoTests {
   /// shown.
   @Test func `what is not known is not shown`() {
     let info = info(bare)
-    #expect(info.facts.map(\.label) == ["Published", "Stream"])
-    #expect(info.sections.map(\.title) == ["Links", "Details"])
+    #expect(info.facts.map(\.label) == ["Published"])
+    #expect(info.sections.map(\.title) == ["Links"])
     let rows = info.sections.flatMap(\.rows).map(\.label)
     for absent in ["Keywords", "Area", "DOI", "Errata", "Published as"] {
       #expect(!rows.contains(absent), "\(absent) shown for a document that has none")

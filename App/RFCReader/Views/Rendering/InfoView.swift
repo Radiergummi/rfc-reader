@@ -29,6 +29,7 @@ struct InfoView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
           header(info)
+          ProvenanceSection(provenance: info.provenance, library: library, open: open)
           FactStrip(facts: info.facts)
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
@@ -123,6 +124,127 @@ private struct StandingBox: View {
   }
 }
 
+/// How the document got here (#364): its stream, working group and status as one path
+/// that wraps, each step opening what it names, then when it was published and what
+/// replaces it. The words are `Provenance`'s; this is only their layout.
+private struct ProvenanceSection: View {
+  let provenance: Provenance
+  let library: LibraryModel
+  let open: (DocumentID) -> Void
+
+  var body: some View {
+    InfoSection(title: provenance.title) {
+      VStack(alignment: .leading, spacing: 6) {
+        WrappingRowLayout(spacing: 6) {
+          ForEach(Array(provenance.steps.enumerated()), id: \.offset) { index, step in
+            if index > 0 {
+              // The steps say what they are to VoiceOver; the arrow says nothing more.
+              Image(systemName: "arrow.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            }
+            ProvenanceStep(step: step, library: library)
+          }
+        }
+        Text(verbatim: provenance.published)
+          .font(.infoCaption)
+          .foregroundStyle(.secondary)
+        if !provenance.obsoletedBy.isEmpty {
+          VStack(alignment: .leading, spacing: 4) {
+            GlossaryButton(term: .process(.obsoletes), presentation: .here) {
+              Text(verbatim: provenance.obsoletedByLabel)
+                .font(.infoCaption)
+                .foregroundStyle(.secondary)
+            }
+            WrappingRowLayout(spacing: 6) {
+              ForEach(provenance.obsoletedBy, id: \.self) { id in
+                DocumentChip(id: id) { open(id) }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// One step of the chain: the stream or the status opening its glossary entry (#362),
+/// the working group its card (#363), in a popover on macOS and a sheet on iOS.
+private struct ProvenanceStep: View {
+  let step: Provenance.Step
+  let library: LibraryModel
+
+  /// The card's summary, made when it is asked for: the library caches a group's
+  /// RFCs as it makes one, which a view body must not.
+  @State private var summary: WorkingGroupSummary?
+
+  var body: some View {
+    switch step.target {
+    case .glossary(let term):
+      GlossaryButton(term: term, presentation: .here) { label }
+        .accessibilityLabel(Text(verbatim: step.accessibilityLabel))
+    case .workingGroup(let acronym):
+      Button {
+        summary = library.workingGroupSummary(acronym)
+      } label: {
+        label
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text(verbatim: step.accessibilityLabel))
+      #if os(macOS)
+        .popover(isPresented: isPresented, arrowEdge: .bottom) {
+          if let summary {
+            WorkingGroupCard(summary: summary)
+            .frame(width: GlossaryCard.width)
+          }
+        }
+      #else
+        .sheet(isPresented: isPresented) {
+          if let summary {
+            WorkingGroupSheet(summary: summary)
+          }
+        }
+      #endif
+    }
+  }
+
+  private var label: some View {
+    Text(verbatim: step.text)
+      .foregroundStyle(.tint)
+      .fixedSize(horizontal: false, vertical: true)
+      .contentShape(.rect)
+  }
+
+  private var isPresented: Binding<Bool> {
+    Binding(get: { summary != nil }, set: { if !$0 { summary = nil } })
+  }
+}
+
+#if os(iOS)
+  /// A working group's card as a sheet, as a glossary entry is one: a medium detent,
+  /// so the document stays in view above it.
+  private struct WorkingGroupSheet: View {
+    let summary: WorkingGroupSummary
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+      NavigationStack {
+        ScrollView {
+          WorkingGroupCard(summary: summary)
+            .padding()
+        }
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { dismiss() }
+          }
+        }
+      }
+      .presentationDetents([.medium, .large])
+    }
+  }
+#endif
+
 /// A few short values over their captions, side by side, as the App Store sets an
 /// app's age rating, size and category under its name.
 private struct FactStrip: View {
@@ -135,8 +257,8 @@ private struct FactStrip: View {
           Divider().frame(height: 28)
         }
         if let term = fact.term {
-          // The stream or the group: the fact opens what it names, from anywhere in
-          // its quarter of the strip (#362).
+          // A fact the glossary explains opens its entry, from anywhere in its share
+          // of the strip (#362).
           GlossaryButton(term: term, presentation: .here) { factView(fact) }
         } else {
           factView(fact)
