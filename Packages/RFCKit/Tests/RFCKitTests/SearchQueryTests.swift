@@ -225,6 +225,31 @@ struct SearchQueryTests {
     #expect(suggestions.map(\.isUnknown) == [true])
     #expect(suggestions.first?.completion == "cache color:red")
   }
+
+  // MARK: - Words
+
+  /// A query pasted across a wrapped line holds a line break where a space was, and
+  /// a tab is whitespace as much as a space is (#852).
+  @Test(arguments: [
+    ("key\twords", ["key", "words"]),
+    ("key\nwords", ["key", "words"]),
+    ("key\r\nwords\u{00A0}cache", ["key", "words", "cache"]),
+    ("\"key\twords\" cache", ["\"key\twords\"", "cache"]),
+  ])
+  func `any whitespace outside quotes separates words`(query: String, words: [String]) {
+    #expect(SearchQuery.words(in: query) == words)
+  }
+
+  @Test func `a filter after a line break is still a filter`() {
+    let parsed = IndexSearch.parseQuery("key words\nstatus:bcp")
+    #expect(parsed.filters.statuses == [.bestCurrentPractice])
+    #expect(parsed.text == "key words")
+  }
+
+  @Test func `a word is finished by a line break as by a space`() {
+    #expect(SearchQuery.wordBeingTyped(in: "status:bcp\n") == nil)
+    #expect(SearchQuery.wordBeingTyped(in: "cache\tst") == "st")
+  }
 }
 
 /// The active filters as the search field shows them (#21): chips under the Mac's
