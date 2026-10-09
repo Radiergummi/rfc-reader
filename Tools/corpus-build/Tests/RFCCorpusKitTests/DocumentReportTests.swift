@@ -81,6 +81,37 @@ struct DocumentReportTests {
       ])
   }
 
+  /// Source code is counted apart from artwork, per language, so a report shows the
+  /// grammars the legacy parser typed as ABNF (#418); a block with no type is
+  /// `untyped`, a value RFCXML never uses.
+  @Test func `source code is counted per language, apart from artwork`() {
+    func code(_ type: String?) -> Block {
+      .preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: type))
+    }
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Grammar",
+      blocks: [
+        .paragraph(Paragraph(text: "Prose.")), Self.artwork, code("abnf"), code("abnf"),
+        code(nil), code("c"),
+      ])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.artwork == 1)
+    #expect(report.sourceCode == ["abnf": 2, "c": 1, "untyped": 1])
+    #expect(report.warnings == [], "source code is not artwork misread from prose")
+  }
+
+  /// A report written before #418 has no `sourceCode`; it still decodes, as the
+  /// baseline a full run compares with.
+  @Test func `a report without source code still decodes`() throws {
+    let json = #"""
+      [{"id": "rfc1000", "title": "A Title", "sections": 1, "paragraphs": 1, "lists": 0,
+        "artwork": 2, "references": 0, "resolvedDocuments": 0, "warnings": []}]
+      """#
+    let reports = try JSONDecoder().decode([DocumentReport].self, from: Data(json.utf8))
+    #expect(reports.first?.artwork == 2)
+    #expect(reports.first?.sourceCode == nil)
+  }
+
   @Test func `more artwork than prose is flagged`() {
     let section = Section(
       anchor: "section-1", number: "1", title: "Diagrams",
