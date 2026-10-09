@@ -73,7 +73,7 @@ struct DocumentInspector: View {
     case .info:
       InfoView(
         info: info, document: document, library: library, open: openDocument, search: search,
-        showReadingPath: showReadingPath)
+        showReadingPath: showReadingPath, sections: sections, selectSection: selectSection)
     }
   }
 

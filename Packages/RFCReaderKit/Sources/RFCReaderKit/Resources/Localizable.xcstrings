@@ -235,12 +235,32 @@
         }
       }
     },
+    "%lld not yet reviewed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld noch nicht geprüft"
+          }
+        }
+      }
+    },
     "%lld obsolete" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld veraltet"
+          }
+        }
+      }
+    },
+    "%lld rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld abgelehnt"
           }
         }
       }
@@ -375,6 +395,16 @@
         }
       }
     },
+    "A working group whose charter covers the work can adopt a draft, and from then on the group decides what it says, not only its authors. A draft can also go ahead without a group, as an individual submission an area director sponsors." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Working Group, deren Charter die Arbeit abdeckt, kann einen Draft übernehmen, und von da an entscheidet die Gruppe, was er sagt, nicht nur seine Autoren. Ein Draft kann auch ohne Gruppe weitergehen, als Individual Submission, die ein Area Director unterstützt."
+          }
+        }
+      }
+    },
     "ABNF Grammar" : {
       "localizations" : {
         "de" : {
@@ -401,6 +431,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktiv"
+          }
+        }
+      }
+    },
+    "Adoption by a Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übernahme durch eine Working Group"
           }
         }
       }
@@ -445,6 +485,16 @@
         }
       }
     },
+    "An Internet-Draft" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Internet-Draft"
+          }
+        }
+      }
+    },
     "An RFC never changes once published: a correction is recorded as an erratum, and a revision is a new RFC." : {
       "localizations" : {
         "de" : {
@@ -471,6 +521,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jeder kann mitmachen, meist über die Mailingliste, und Entscheidungen fallen im Rough Consensus."
+          }
+        }
+      }
+    },
+    "Appendices %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge %@"
+          }
+        }
+      }
+    },
+    "Appendix %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhang %@"
           }
         }
       }
@@ -745,6 +815,16 @@
         }
       }
     },
+    "Couldn't download" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden fehlgeschlagen"
+          }
+        }
+      }
+    },
     "Datatracker" : {
       "localizations" : {
         "de" : {
@@ -835,6 +915,26 @@
         }
       }
     },
+    "Download Now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt laden"
+          }
+        }
+      }
+    },
+    "Downloading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird geladen …"
+          }
+        }
+      }
+    },
     "Drafts expire after six months unless revised, and are not meant to be cited as anything but work in progress. Many are revised until a stream approves them for publication as an RFC." : {
       "localizations" : {
         "de" : {
@@ -851,6 +951,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Editor"
+          }
+        }
+      }
+    },
+    "Editorial" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redaktionell"
           }
         }
       }
@@ -975,6 +1085,26 @@
         }
       }
     },
+    "Held for Document Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für die nächste Revision vorgemerkt"
+          }
+        }
+      }
+    },
+    "How an RFC Is Made" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie ein RFC entsteht"
+          }
+        }
+      }
+    },
     "IAB Program" : {
       "localizations" : {
         "de" : {
@@ -991,6 +1121,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "IAB-Stream"
+          }
+        }
+      }
+    },
+    "IETF Last Call and IESG Review" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IETF Last Call und Prüfung durch die IESG"
           }
         }
       }
@@ -1245,6 +1385,16 @@
         }
       }
     },
+    "Most RFCs come from the IETF, and go through the same stages on their way from a first draft to a published document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die meisten RFCs kommen von der IETF und durchlaufen auf dem Weg vom ersten Entwurf zum veröffentlichten Dokument dieselben Stationen."
+          }
+        }
+      }
+    },
     "Most such documents are early RFCs, published before the IETF defined its statuses." : {
       "localizations" : {
         "de" : {
@@ -1341,6 +1491,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ohne Lesezeichen"
+          }
+        }
+      }
+    },
+    "Not every RFC comes from the IETF. The IAB, the IRTF, the Independent Submissions Editor and, for the RFC Series' own policies, the Editorial stream each publish RFCs through a review of their own, and none of them publishes standards. The earliest RFCs, from before there were streams, are filed under Legacy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht jeder RFC kommt von der IETF. Das IAB, die IRTF, der Independent Submissions Editor und, für die Regeln der RFC-Reihe selbst, der Editorial Stream veröffentlichen RFCs jeweils nach eigener Prüfung, und keiner von ihnen veröffentlicht Standards. Die frühesten RFCs, aus der Zeit vor den Streams, stehen unter Legacy."
           }
         }
       }
@@ -1495,6 +1655,16 @@
         }
       }
     },
+    "Other Streams" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Streams"
+          }
+        }
+      }
+    },
     "Outline" : {
       "localizations" : {
         "de" : {
@@ -1561,6 +1731,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorgeschlagen"
+          }
+        }
+      }
+    },
+    "Publication" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlichung"
           }
         }
       }
@@ -1685,6 +1865,16 @@
         }
       }
     },
+    "Rejected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgelehnt"
+          }
+        }
+      }
+    },
     "Relationships" : {
       "localizations" : {
         "de" : {
@@ -1725,12 +1915,32 @@
         }
       }
     },
+    "Reported" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeldet"
+          }
+        }
+      }
+    },
     "Research Group" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Research Group"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederholen"
           }
         }
       }
@@ -1821,6 +2031,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zuletzt gelesene durchsuchen"
+          }
+        }
+      }
+    },
+    "Section %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt %@"
+          }
+        }
+      }
+    },
+    "Sections %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitte %@"
           }
         }
       }
@@ -1925,6 +2155,16 @@
         }
       }
     },
+    "Technical" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technisch"
+          }
+        }
+      }
+    },
     "The IETF's highest maturity level: a stable standard, widely implemented and deployed." : {
       "localizations" : {
         "de" : {
@@ -1945,12 +2185,32 @@
         }
       }
     },
+    "The RFC Editor" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor"
+          }
+        }
+      }
+    },
     "The RFC Editor doesn't have this document." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der RFC Editor hat dieses Dokument nicht."
+          }
+        }
+      }
+    },
+    "The RFC Editor edits the approved document for clarity and consistency. The authors then check the result one last time, a step called AUTH48." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC Editor redigiert das genehmigte Dokument auf Klarheit und Einheitlichkeit. Die Autoren prüfen das Ergebnis dann ein letztes Mal, ein Schritt namens AUTH48."
           }
         }
       }
@@ -1991,6 +2251,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der RFC-Index konnte nicht gelesen werden. Versuche es später erneut."
+          }
+        }
+      }
+    },
+    "The document is published with an RFC number and its status, and its text never changes again, though its status can. Errors are recorded beside it as errata, and later work updates or obsoletes it with an RFC of its own." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Dokument wird mit einer RFC-Nummer und seinem Status veröffentlicht, und sein Text ändert sich danach nie wieder, sein Status aber schon. Fehler werden daneben als Errata festgehalten, und spätere Arbeit aktualisiert oder ersetzt es mit einem eigenen RFC."
           }
         }
       }
@@ -2057,6 +2327,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die beiden müssen zusammen gelesen werden."
+          }
+        }
+      }
+    },
+    "The whole IETF then has a few weeks to comment, and the area directors of the IESG review the document. They approve it, ask for changes or decline it, and decide its status, such as Proposed Standard, Best Current Practice or Informational." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dann hat die ganze IETF einige Wochen Zeit für Kommentare, und die Area Directors der IESG prüfen das Dokument. Sie genehmigen es, verlangen Änderungen oder lehnen es ab und legen seinen Status fest, etwa Proposed Standard, Best Current Practice oder Informational."
           }
         }
       }
@@ -2177,6 +2457,16 @@
         }
       }
     },
+    "Today every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heute beginnt jeder RFC als Internet-Draft, den jeder schreiben und einreichen kann. Ein Draft ist ein Zwischenstand, kein Standard: Er verfällt nach sechs Monaten, wenn er nicht überarbeitet wird, und viele werden nie veröffentlicht."
+          }
+        }
+      }
+    },
     "Try again in a moment." : {
       "localizations" : {
         "de" : {
@@ -2257,12 +2547,102 @@
         }
       }
     },
+    "Verified" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigt"
+          }
+        }
+      }
+    },
+    "Waiting for Wi-Fi" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf WLAN"
+          }
+        }
+      }
+    },
+    "Waiting for a connection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf eine Verbindung"
+          }
+        }
+      }
+    },
+    "Waiting: Low Data Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Datensparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: Low Power Mode is on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Stromsparmodus ist an"
+          }
+        }
+      }
+    },
+    "Waiting: cellular data is off for this app" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet: Mobile Daten sind für diese App aus"
+          }
+        }
+      }
+    },
+    "When the group thinks the document is done, its chairs ask the whole group for final comments. If there is rough consensus, the group asks the IESG to publish it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn die Gruppe das Dokument für fertig hält, bitten ihre Chairs die ganze Gruppe um letzte Kommentare. Gibt es Rough Consensus, bittet die Gruppe die IESG, es zu veröffentlichen."
+          }
+        }
+      }
+    },
+    "Whole document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganzes Dokument"
+          }
+        }
+      }
+    },
     "Working Group" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Group"
+          }
+        }
+      }
+    },
+    "Working Group Last Call" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group Last Call"
           }
         }
       }

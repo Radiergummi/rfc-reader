@@ -4,6 +4,67 @@ extension FragmentGeometry {
   /// The corner radius of a reference chip, in the reader and wherever a chip is
   /// drawn to look like one.
   public static let chipRadius: CGFloat = 6
+  /// The hairline an informative chip is drawn with, and every chip under Increase
+  /// Contrast (#457): a point, which holds 3:1 where a pixel-wide line would read
+  /// fainter than its color.
+  public static let chipOutlineWidth: CGFloat = 1
+
+  /// Where a chip's outline is stroked, in device pixels: `chip`, a chip's box in
+  /// device pixels, with its edges on whole pixels, and in by half the `lineWidth`,
+  /// in device pixels too, so the stroke covers whole pixels inside the box. A
+  /// hairline across two half-covered pixels is antialiased to half its color, and
+  /// an outline held to 3:1 then draws fainter than that.
+  public static func chipOutlineRect(_ chip: CGRect, lineWidth: CGFloat) -> CGRect {
+    let minX = chip.minX.rounded()
+    let minY = chip.minY.rounded()
+    let snapped = CGRect(
+      x: minX, y: minY, width: chip.maxX.rounded() - minX, height: chip.maxY.rounded() - minY)
+    return snapped.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+  }
+
+  /// The outline of a chip's piece on one line (#457): a closed rounded box where
+  /// the chip is whole, and open where it continues onto the next line or from the
+  /// previous one. A fill there meets nothing; a line there would close a wrapped
+  /// chip into two boxes, with a stroke against the glyphs at the break.
+  public static func chipOutlinePath(
+    in rect: CGRect, cornerRadius: CGFloat, leading: Bool, trailing: Bool
+  ) -> CGPath {
+    if leading, trailing {
+      return roundedPath(
+        in: rect, cornerRadius: cornerRadius, corners: Corners(leading: true, trailing: true))
+    }
+    let radius = max(0, min(cornerRadius, min(rect.width, rect.height) / 2))
+    let path = CGMutablePath()
+    switch (leading, trailing) {
+    case (false, true):
+      // Along the top, round the trailing end, back along the bottom.
+      path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+      path.addArc(
+        tangent1End: CGPoint(x: rect.maxX, y: rect.minY),
+        tangent2End: CGPoint(x: rect.maxX, y: rect.minY + radius), radius: radius)
+      path.addArc(
+        tangent1End: CGPoint(x: rect.maxX, y: rect.maxY),
+        tangent2End: CGPoint(x: rect.maxX - radius, y: rect.maxY), radius: radius)
+      path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+    case (true, false):
+      // Along the bottom, round the leading end, back along the top.
+      path.move(to: CGPoint(x: rect.maxX, y: rect.maxY))
+      path.addArc(
+        tangent1End: CGPoint(x: rect.minX, y: rect.maxY),
+        tangent2End: CGPoint(x: rect.minX, y: rect.maxY - radius), radius: radius)
+      path.addArc(
+        tangent1End: CGPoint(x: rect.minX, y: rect.minY),
+        tangent2End: CGPoint(x: rect.minX + radius, y: rect.minY), radius: radius)
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+    default:
+      // A line the chip runs right across: its top and its bottom.
+      path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+      path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    }
+    return path
+  }
 
   /// The corner radius of a card behind artwork and tables.
   public static let cardRadius: CGFloat = 8

@@ -140,7 +140,7 @@ enum Abbreviations {
   /// and a linked one as the parser writes it, `RFC 4655 § 4` with no-break spaces
   /// (`CrossReference.nonBreakingLabel`), which `\s` matches. The phrase has already
   /// ended at the `.` of a section number such as `4.2`.
-  private static let citationsPattern = Pattern(
+  static let citationsPattern = Pattern(
     #/(\s+((RFC|BCP|STD|FYI)[\s-]?\d+(\s*§\s*\d+)?|I-D))+\s*$/#)
 
   /// Two to ten characters, with no spaces, starting with a letter or digit, and

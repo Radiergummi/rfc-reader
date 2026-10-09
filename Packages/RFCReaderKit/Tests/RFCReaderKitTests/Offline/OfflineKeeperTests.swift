@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import Synchronization
 import Testing
 
 @testable import RFCReaderKit
@@ -106,19 +107,20 @@ struct OfflineKeeperTests {
     #expect(await !store.isCached(id))
   }
 
-  @MainActor @Test func `a fetch a reader asked for joins the reconciler's`() async throws {
+  @MainActor @Test func `a second fetch a reader asks for joins the first`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
     let fetcher = GatedFetcher()
     let id = DocumentID.rfc(8999)
     let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
-    await keeper.reconcile(wanted: [id]).value
+    let first = Task { try await keeper.fetchNow(id) }
     await untilWaiting(documents: 1, for: id, in: store)
 
-    let tapped = Task { try await keeper.fetchNow(id) }
+    let second = Task { try await keeper.fetchNow(id) }
     await fetcher.gate.open()
-    try await tapped.value
+    try await first.value
+    try await second.value
 
     #expect(fetcher.documentFetches == 1)
     #expect(sandbox.exists(id, format: .xml, in: .kept))
@@ -194,5 +196,282 @@ struct OfflineKeeperTests {
 
     #expect(!sandbox.exists(id, format: .xml, in: .cache))
     #expect(fetcher.documentFetches == 0)
+  }
+
+  // MARK: - The network
+
+  /// A path the policy does not allow starts nothing, and the status says what the
+  /// documents wait for.
+  @MainActor @Test func `a deferred path fetches nothing and says why`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id], policy: .deferred(.waitingForWiFi)).value
+    await keeper.untilSettled(id)
+
+    #expect(fetcher.documentFetches == 0)
+    #expect(keeper.status.state(of: id) == .waiting(.waitingForWiFi))
+  }
+
+  /// A fetch nobody waits for goes through the session that never uses an
+  /// expensive or constrained path; one somebody waits for, through the other.
+  @MainActor @Test func `only a fetch nobody waits for uses the client for cheap networks`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let anyNetwork = GatedFetcher()
+    let cheapNetworks = GatedFetcher()
+    await anyNetwork.gate.open()
+    await cheapNetworks.gate.open()
+    let synced = DocumentID.rfc(8999)
+    let tapped = DocumentID.rfc(9000)
+    let keeper = OfflineKeeper(
+      store: store, client: anyNetwork, clientFailingOnExpensiveNetworks: cheapNetworks
+    ) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [synced]).value
+    await keeper.untilSettled(synced)
+    try await keeper.fetchNow(tapped)
+
+    #expect(cheapNetworks.documentFetches == 1)
+    #expect(anyNetwork.documentFetches == 1)
+  }
+
+  /// Keep Offline tapped on cellular: the run its mark starts finds a path that
+  /// allows no fetch nobody waits for, and leaves the tapped one running.
+  @MainActor @Test func `a deferred path leaves running a fetch somebody waits for`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await keeper.reconcile(wanted: [id], policy: .deferred(.waitingForWiFi)).value
+    #expect(await store.waiters(id).documents == 1)
+    await fetcher.gate.open()
+    try await tapped.value
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Keep Offline tapped while a run asked for before the mark is still under way:
+  /// that run's wanted is older than the tapped fetch, which it leaves running.
+  @MainActor @Test func `a run asked for before the mark leaves running the fetch it tapped`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let earlier = keeper.reconcile(wanted: [])
+    keeper.reconcile(wanted: [id])
+    let tapped = Task { try await keeper.fetchNow(id) }
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    await earlier.value
+    await fetcher.gate.open()
+    try await tapped.value
+
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Download Now on a document the keeper is fetching on cheap networks only: that
+  /// fetch is left, and one that takes any path starts.
+  @MainActor @Test func `fetching now replaces a fetch nobody waits for`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let anyNetwork = GatedFetcher()
+    let cheapNetworks = GatedFetcher()
+    await anyNetwork.gate.open()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(
+      store: store, client: anyNetwork, clientFailingOnExpensiveNetworks: cheapNetworks
+    ) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id]).value
+    await untilWaiting(documents: 1, for: id, in: store)
+
+    try await keeper.fetchNow(id)
+    await cheapNetworks.gate.open()
+
+    #expect(anyNetwork.documentFetches == 1)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  @MainActor @Test func `a kept document says nothing once its fetch has written it`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await untilWaiting(documents: 1, for: id, in: store)
+    #expect(keeper.status.state(of: id) == .downloading)
+    await fetcher.gate.open()
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.kept == [id])
+    #expect(keeper.status.state(of: id) == nil)
+  }
+
+  /// A failed fetch is not started again by the next run, whatever starts it: its
+  /// row offers Retry, which fetches on any path.
+  @MainActor @Test func `a failed fetch waits for Retry`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+    #expect(keeper.status.state(of: id) == .failed)
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+    #expect(fetcher.fetches == 1)
+
+    try await keeper.fetchNow(id)
+
+    #expect(fetcher.fetches == 2)
+    #expect(keeper.status.state(of: id) == nil)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// A cached body that could not be moved into the kept tier is only cached, so its
+  /// row says so and offers Retry rather than reading as kept.
+  @MainActor @Test func `a cached body that cannot be moved is failed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+    // A file where the kept tier's folder goes, so the move cannot make it.
+    let keptFolder = sandbox.file(id, format: .xml, in: .kept).deletingLastPathComponent()
+    try? FileManager.default.removeItem(at: keptFolder)
+    try FileManager.default.createDirectory(
+      at: keptFolder.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: keptFolder)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+    #expect(keeper.status.state(of: id) == .failed)
+  }
+
+  /// Download Now refused by the path: somebody is waiting, so the row offers Retry
+  /// rather than falling silent until a path change that may never come.
+  @MainActor @Test func `a fetch somebody waits for that the path refuses is failed`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1, error: Self.pathRefused)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await #expect(throws: URLError.self) { try await keeper.fetchNow(id) }
+
+    #expect(keeper.status.state(of: id) == .failed)
+  }
+
+  /// A discretionary fetch the path refuses is not failed: the run the path change
+  /// starts says it waits.
+  @MainActor @Test func `a fetch nobody waits for that the path refuses is not failed`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1, error: Self.pathRefused)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.state(of: id) == nil)
+  }
+
+  /// What a session that may not use an expensive path throws when the device moves
+  /// to one.
+  private static let pathRefused = URLError(
+    .notConnectedToInternet,
+    userInfo: [
+      NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue
+    ])
+
+  /// A new path is a reason to try a failed fetch again: the failure may have been
+  /// the old one's.
+  @MainActor @Test func `forgetting the failures lets the next run fetch again`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    await keeper.reconcile(wanted: [id], forgettingFailures: true).value
+    await keeper.untilSettled(id)
+
+    #expect(fetcher.fetches == 2)
+    #expect(sandbox.exists(id, format: .xml, in: .kept))
+  }
+
+  /// Fails its first `failures` fetches with `error`, a server's by default, then serves RFC
+  /// 8999's XML, at once.
+  private final class FailingFetcher: DocumentFetching {
+    private let state: Mutex<(fetches: Int, failuresLeft: Int)>
+    private let error: URLError
+
+    init(failures: Int, error: URLError = URLError(.badServerResponse)) {
+      state = Mutex((0, failures))
+      self.error = error
+    }
+
+    var fetches: Int { state.withLock { $0.fetches } }
+
+    @concurrent
+    func fetchPreferredDocument(
+      _ id: DocumentID, availableFormats: [FileFormat]?, entry: RFCMetadata?
+    ) async throws -> RFCEditorClient.FetchedDocument {
+      let fails = state.withLock { state in
+        state.fetches += 1
+        defer { state.failuresLeft = max(0, state.failuresLeft - 1) }
+        return state.failuresLeft > 0
+      }
+      if fails { throw error }
+      let data = try Fixtures.data("rfc8999.xml")
+      return RFCEditorClient.FetchedDocument(
+        data: data, format: .xml, document: try RFCXMLParser.parse(data), xmlParseFailure: nil)
+    }
+
+    func fetchDocumentData(_ id: DocumentID, format: FileFormat) async throws -> Data {
+      throw URLError(.badServerResponse)
+    }
   }
 }

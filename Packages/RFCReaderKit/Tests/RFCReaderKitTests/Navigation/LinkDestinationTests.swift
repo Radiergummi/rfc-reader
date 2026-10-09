@@ -18,7 +18,7 @@ struct LinkDestinationTests {
   // MARK: - Inside this document
 
   @Test func `an anchor jumps within the document`() {
-    #expect(resolve("\(DocumentTextBuilder.anchorScheme):section-4.2") == .jump("section-4.2"))
+    #expect(resolve("\(ReaderLinkScheme.anchorScheme):section-4.2") == .jump("section-4.2"))
   }
 
   /// The rule the enum exists to pin: a jump inside this document has nowhere else
@@ -26,7 +26,7 @@ struct LinkDestinationTests {
   /// scrolled elsewhere.
   @Test func `an anchor still jumps when command is held`() {
     #expect(
-      resolve("\(DocumentTextBuilder.anchorScheme):section-4.2", .newTab(inBackground: true))
+      resolve("\(ReaderLinkScheme.anchorScheme):section-4.2", .newTab(inBackground: true))
         == .jump("section-4.2"))
   }
 
@@ -34,7 +34,7 @@ struct LinkDestinationTests {
   /// an entry that names no RFC had nothing to scroll to and did nothing.
   @Test func `a citation of a bibliography entry reveals it`() {
     #expect(
-      resolve("\(DocumentTextBuilder.referenceScheme):IEEE.802.3_2018")
+      resolve("\(ReaderLinkScheme.referenceScheme):IEEE.802.3_2018")
         == .reference("IEEE.802.3_2018"))
   }
 

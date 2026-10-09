@@ -131,7 +131,12 @@
     @objc(mouseExited:)
     private func mouseExited(with event: NSEvent) {
       send(.pointerExited)
+      pointerExited()
     }
+
+    /// Told when the pointer leaves the text view, which no other tracking area of
+    /// the view says: a heading's lit number goes out (#433).
+    var pointerExited: () -> Void = {}
 
     private func startDwell(_ dwell: ReferenceHover.Dwell) {
       dwellTask?.cancel()

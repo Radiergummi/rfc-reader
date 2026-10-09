@@ -23,6 +23,7 @@ extension RFCTextViewCoordinator {
       // A preview timing or shown belongs to the document being replaced, and its
       // range means nothing in the new one.
       hover.send(.reset)
+      forgetHoveredSectionNumber()
     #endif
     self.built = built
     lastReportedAnchor = nil
@@ -179,7 +180,11 @@ extension RFCTextViewCoordinator {
   /// as a flip takes to rebuild, exactly as the width does during a resize: the
   /// text re-wraps at the new column at once and the rebuild re-measures artwork
   /// and tables for it when it lands.
-  func layOut(width: CGFloat, measure: MeasurePreference) {
+  ///
+  /// `hang` is the build's (`BuiltDocument.sectionNumberHang`, #433): the container
+  /// reaches that far into the leading gutter, for the headings' numbers, and every
+  /// paragraph is set in by it, so the text still starts and wraps on the column.
+  func layOut(width: CGFloat, measure: MeasurePreference, hang: CGFloat) {
     guard let textView, width > 0 else { return }
     let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)
     let column = ReaderLayout.column(forWidth: width, measure: measure)
@@ -191,25 +196,33 @@ extension RFCTextViewCoordinator {
     let measured =
       headerHost?.sizeThatFits(in: CGSize(width: column, height: offered)).height ?? 0
     let headerHeight = ReaderLayout.headerHeight(measured: measured, offered: offered)
-    guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
+    guard
+      column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
+        || hang != laidOutHang
     else { return }
-    let columnChanged = column != laidOutColumn
+    let reach = ReaderLayout.containerReach(gutter: gutter, hang: hang)
+    let containerChanged = column != laidOutColumn || reach != laidOutReach
     laidOutColumn = column
     laidOutGutter = gutter
     laidOutHeaderHeight = headerHeight
+    laidOutHang = hang
+    laidOutReach = reach
+    let leading = gutter - reach
 
     #if canImport(UIKit)
       textView.textContainerInset = UIEdgeInsets(
-        top: headerHeight, left: gutter, bottom: ReaderLayout.margin, right: gutter)
+        top: headerHeight, left: leading, bottom: ReaderLayout.margin, right: gutter)
     #else
       // AppKit's inset is symmetric, so the header's height is echoed as padding
       // under the last line. NSTextView has no asymmetric equivalent.
       textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
+      // Symmetric too, so the container's reach into the gutter is its origin's.
+      (textView as? ReaderTextView)?.leadingHang = reach
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
-    // The container is the column, set here and nowhere else. Tracking the text
+    // The container is the column and its reach, set here and nowhere else. Tracking the text
     // view's width instead re-wrapped the storage on *every* resize: the frame
     // and the inset cannot change in one step, so the container passed through a
     // width that was neither the old column nor the new one, and TextKit threw
@@ -220,11 +233,13 @@ extension RFCTextViewCoordinator {
     // `DocumentView` derives the column from the same width and rebuilds, which
     // lands in `install()`; until it does, the engine holds the reader's line on
     // the storage re-wrapped at the new column.
-    if columnChanged {
+    if containerChanged {
       #if canImport(UIKit)
-        textView.textContainer.size = CGSize(width: column, height: .greatestFiniteMagnitude)
+        textView.textContainer.size = CGSize(
+          width: column + reach, height: .greatestFiniteMagnitude)
       #else
-        textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
+        textView.textContainer?.size = NSSize(
+          width: column + reach, height: .greatestFiniteMagnitude)
       #endif
       engine.columnChanged()
     } else {

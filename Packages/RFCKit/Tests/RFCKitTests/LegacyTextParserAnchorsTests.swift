@@ -10,8 +10,9 @@ struct LegacyTextParserAnchorsTests {
   /// and the XML declares each one as an ID. Headings that repeat gave two sections one
   /// anchor -- RFC 1 has two `Introduction`s, RFC 19 two sections numbered 1 -- and a
   /// bibliography that lists a label twice gave two entries one: 526 documents in all
-  /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
-  /// the first keeps its anchor, so every link that landed on it still does.
+  /// (#65). A repeated section takes the next free `_2`, `_3`, leaving `-2` to its
+  /// paragraphs' part numbers (#491), and the first keeps its anchor, so every link
+  /// that landed on it still does.
   @Test func `no two elements share an anchor`() throws {
     let fixtures = try Fixtures.legacyTexts()
     #expect(fixtures.count > 20)
@@ -25,11 +26,11 @@ struct LegacyTextParserAnchorsTests {
 
     let first = try Fixtures.document("rfc1.txt").allSections.map(\.anchor)
     let original = try #require(first.firstIndex(of: "name-introduction"))
-    let second = try #require(first.firstIndex(of: "name-introduction-2"))
+    let second = try #require(first.firstIndex(of: "name-introduction_2"))
     #expect(original < second)
     #expect(
       try Fixtures.document("rfc19.txt").allSections.map(\.anchor).contains(
-        "section-1-2"))
+        "section-1_2"))
 
     let entries = try Fixtures.document("rfc1556.txt").referenceLists.flatMap(
       \.entries)
@@ -110,25 +111,25 @@ struct LegacyTextParserAnchorsTests {
 
   /// A heading that repeats is renamed after the prose is linked, so what an entry must
   /// not take is every anchor a section can be renamed to, not only the ones it starts
-  /// with: an entry settled onto `section-1-2` beside two sections numbered 1 lost it to
-  /// the second, and its citations to a rename. Every suffix a repeat can reach is held,
-  /// past the ones another heading already spells (`name-foo-2`, for `Foo 2`).
+  /// with: an entry settled onto a rename beside two sections numbered 1 lost it to the
+  /// second, and its citations to a rename. Every suffix a repeat can reach is held. No
+  /// heading spells an underscore, so none of them is taken before it.
   @Test func `a repeated heading holds every anchor it can be renamed to`() {
     #expect(
-      LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1-2"])
+      LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1_2"])
     #expect(
       LegacyTextParser.reservedAnchors(["name-foo", "name-foo", "name-foo-2"]) == [
-        "name-foo", "name-foo-2", "name-foo-3",
+        "name-foo", "name-foo_2", "name-foo-2",
       ])
     #expect(
       LegacyTextParser.reservedAnchors(["section-1", "section-2"]) == ["section-1", "section-2"])
   }
 
   /// What `parse` reserves is every anchor its sections end with, and no entry holds one:
-  /// RFC 19 numbers two sections 1, and the second is `section-1-2`.
+  /// RFC 19 numbers two sections 1, and the second is `section-1_2`.
   @Test func `every section anchor is reserved and no entry holds one`() throws {
     #expect(
-      try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1-2")
+      try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1_2")
     )
     for fixture in try Fixtures.legacyTexts() {
       let text = try Fixtures.string(fixture)
@@ -141,5 +142,104 @@ struct LegacyTextParserAnchorsTests {
       ).sorted()
       #expect(held.isEmpty, "\(fixture): \(held)")
     }
+  }
+
+  // MARK: Part numbers (#491)
+
+  /// Prep numbers a section's parts in one sequence, whatever their kind, and a paragraph
+  /// goes by its number: `section-2-3` is the third part of section 2. Only a paragraph
+  /// keeps its number, but every part uses one up, so a paragraph's is the one prep
+  /// would give it.
+  @Test func `a paragraph is numbered among its section's parts`() {
+    let paragraph = Block.paragraph(Paragraph([.text("words")]))
+    let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
+    let sections = [
+      Section(anchor: "section-2", title: "", blocks: [paragraph, artwork, paragraph]),
+      Section(anchor: "name-acknowledgements", title: "", blocks: [paragraph]),
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
+    #expect(numbered[0].blocks.map(\.anchors) == [["section-2-1"], [], ["section-2-3"]])
+    #expect(numbered[1].blocks.map(\.anchors) == [["name-acknowledgements-1"]])
+  }
+
+  /// An appendix's paragraphs are numbered as prep numbers them, from its part number,
+  /// `section-appendix.a-3`, not from its legacy anchor, `appendix-A`. A repeat of an
+  /// appendix's number, which the first holder's part number already names, counts from
+  /// its own anchor, as the serializer gives the repeat no part number.
+  @Test func `an appendix's paragraphs are numbered from its part number`() {
+    let paragraph = Block.paragraph(Paragraph([.text("words")]))
+    let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
+    let sections = [
+      Section(
+        anchor: "appendix-A", number: "A", title: "", blocks: [paragraph, artwork, paragraph],
+        isAppendix: true),
+      Section(
+        anchor: "appendix-A.1", number: "A.1", title: "", blocks: [paragraph], isAppendix: true),
+      Section(anchor: "appendix-1", number: "1", title: "", blocks: [paragraph], isAppendix: true),
+      Section(
+        anchor: "appendix-A_2", number: "A", title: "", blocks: [paragraph], isAppendix: true),
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
+    #expect(
+      numbered[0].blocks.map(\.anchors) == [
+        ["section-appendix.a-1"], [], ["section-appendix.a-3"],
+      ])
+    #expect(numbered[1].blocks.map(\.anchors) == [["section-appendix.a.1-1"]])
+    #expect(numbered[2].blocks.map(\.anchors) == [["section-appendix.1-1"]])
+    #expect(numbered[3].blocks.map(\.anchors) == [["appendix-A_2-1"]])
+  }
+
+  /// A heading can spell what would be a paragraph's number, `Foo 2` beside `Foo`; the
+  /// paragraph goes without one rather than take the section's anchor.
+  @Test func `a paragraph never takes an anchor something else is declared under`() {
+    let paragraph = Block.paragraph(Paragraph([.text("words")]))
+    let sections = [
+      Section(anchor: "name-foo", title: "", blocks: [paragraph, paragraph]),
+      Section(anchor: "name-foo-2", title: "", blocks: [paragraph]),
+    ]
+    let numbered = LegacyTextParser.numberingParagraphs(
+      sections, avoiding: LegacyTextParser.declaredAnchors(sections))
+    #expect(numbered[0].blocks.map(\.anchors) == [["name-foo-1"], []])
+    #expect(numbered[1].blocks.map(\.anchors) == [["name-foo-2-1"]])
+  }
+
+  /// Every section's paragraphs, the abstract's, a repeat's and an appendix's, go by
+  /// their part numbers, and no anchor in the document is declared twice.
+  @Test func `parsed paragraphs go by their part numbers`() throws {
+    var numbered = 0
+    for fixture in try Fixtures.legacyTexts() {
+      let document = try Fixtures.document(fixture)
+      let anchors = document.blocks.flatMap(\.anchors) + document.allSections.map(\.anchor)
+      let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }
+      #expect(repeated.isEmpty, "\(fixture): \(repeated.keys.sorted())")
+      var claimed: Set<String> = []
+      for section in document.allSections {
+        var prefix = section.anchor
+        if section.isAppendix, let number = section.number {
+          let partNumber = PartNumber(sectionNumber: number, isAppendix: true).attribute
+          if claimed.insert(partNumber).inserted { prefix = partNumber }
+        }
+        for (offset, block) in section.blocks.enumerated() {
+          guard case .paragraph(let paragraph) = block else { continue }
+          #expect(paragraph.anchor == "\(prefix)-\(offset + 1)", "\(fixture)")
+          numbered += 1
+        }
+      }
+    }
+    #expect(numbered > 1000)
+
+    let rfc1 = try Fixtures.document("rfc1.txt").allSections
+    let second = try #require(rfc1.first { $0.anchor == "name-introduction_2" })
+    #expect(second.blocks.first?.anchors == ["name-introduction_2-1"])
+    let appendices = try Fixtures.legacyTexts().flatMap { try Fixtures.document($0).allSections }
+      .filter(\.isAppendix)
+    #expect(
+      appendices.contains { section in
+        section.blocks.flatMap(\.anchors).contains { $0.hasPrefix("section-appendix.") }
+      })
+    let abstract = try Fixtures.document("rfc2119.txt").header.abstract
+    #expect(abstract.first?.anchors == ["section-abstract-1"])
   }
 }

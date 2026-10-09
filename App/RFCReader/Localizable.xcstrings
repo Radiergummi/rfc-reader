@@ -680,6 +680,16 @@
         }
       }
     },
+    "Corrected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrigiert"
+          }
+        }
+      }
+    },
     "Couldn't Read the Citation Index" : {
       "localizations" : {
         "de" : {
@@ -911,6 +921,16 @@
         }
       }
     },
+    "Errata" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errata"
+          }
+        }
+      }
+    },
     "Expanded" : {
       "localizations" : {
         "de" : {
@@ -1051,6 +1071,16 @@
         }
       }
     },
+    "Go to %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu %@"
+          }
+        }
+      }
+    },
     "Go to RFC" : {
       "localizations" : {
         "de" : {
@@ -1167,17 +1197,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gerade veröffentlicht"
-          }
-        }
-      }
-    },
-    "Keep Offline" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline behalten"
           }
         }
       }
@@ -1492,6 +1511,16 @@
         }
       }
     },
+    "Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
+          }
+        }
+      }
+    },
     "Nothing in the index matches “%@”." : {
       "localizations" : {
         "de" : {
@@ -1712,6 +1741,16 @@
         }
       }
     },
+    "Open this erratum on the RFC Editor's site" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Erratum auf der Website des RFC Editor öffnen"
+          }
+        }
+      }
+    },
     "Opens a section of an RFC." : {
       "localizations" : {
         "de" : {
@@ -1742,12 +1781,32 @@
         }
       }
     },
+    "Option-click to copy link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit gedrückter Wahltaste klicken, um den Link zu kopieren"
+          }
+        }
+      }
+    },
     "Order" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reihenfolge"
+          }
+        }
+      }
+    },
+    "Original" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original"
           }
         }
       }
@@ -2328,17 +2387,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vergleich mit %@ beenden"
-          }
-        }
-      }
-    },
-    "Stop Keeping Offline" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht mehr offline behalten"
           }
         }
       }

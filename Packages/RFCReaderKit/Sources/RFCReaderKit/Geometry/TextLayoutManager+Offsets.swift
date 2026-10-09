@@ -30,6 +30,19 @@ extension NSTextLayoutManager {
     return FragmentGeometry.drawsCard(in: attributedText, at: offset(of: location))
   }
 
+  /// How the hung heading number at `location` is drawn (#433), lit where it is in
+  /// `hovered`, the number under the pointer; nil where there is no number.
+  public func sectionNumberState(at location: any NSTextLocation, hovered: NSRange?)
+    -> SectionNumberState?
+  {
+    guard let attributedText else { return nil }
+    let offset = offset(of: location)
+    guard offset >= 0, offset < attributedText.length,
+      attributedText.attribute(.rfcSectionNumber, at: offset, effectiveRange: nil) != nil
+    else { return nil }
+    return hovered.map { NSLocationInRange(offset, $0) } == true ? .hovered : .resting
+  }
+
   /// The inverse: the location `offset` characters into the document.
   public func location(atOffset offset: Int) -> (any NSTextLocation)? {
     location(documentRange.location, offsetBy: offset)

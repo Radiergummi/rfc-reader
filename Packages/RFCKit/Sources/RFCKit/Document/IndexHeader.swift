@@ -1,7 +1,6 @@
-import RFCKit
-
-/// What a converted legacy document's header takes from the RFC index rather than from
-/// its title page.
+/// What a legacy document's header takes from the RFC index rather than from its title
+/// page: a converted one's in corpus-build, and one the app parses from its text,
+/// through `LegacyTextParser.parse(_:entry:)` (#767).
 ///
 /// The index is the RFC Editor's own record, and a title page states these facts less
 /// reliably than anything else in the document: RFC 5's date is `June 2, l969`, with a

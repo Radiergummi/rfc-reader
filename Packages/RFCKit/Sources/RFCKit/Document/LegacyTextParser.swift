@@ -8,8 +8,32 @@ import Foundation
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
 public enum LegacyTextParser {
-  public static func parse(_ data: Data) -> RFCDocument {
-    parse(text(decoding: data))
+  /// `entry` is the document's RFC index entry, where the caller has it. Its title is
+  /// the parse's (`parse(_:title:)`), and its number, authors, date, obsoletes and
+  /// updates replace the page's (`IndexHeader`), as a converted document's do: the app
+  /// parses a legacy RFC from its text too, and showed the page's guess (#767).
+  public static func parse(_ data: Data, entry: RFCMetadata? = nil) -> RFCDocument {
+    var document = parse(text(decoding: data), title: entry?.title)
+    // The title is chosen once, by the parse: choosing it again from what it chose can
+    // title-case an index title the parse kept in capitals.
+    if let entry { _ = IndexHeader.apply(entry, to: &document.header) }
+    return document
+  }
+
+  /// `document`, read from a legacy text, with its header taken from `entry`: what a
+  /// parse with the entry gives, for a document parsed before the entry was at hand.
+  /// The title is chosen as the parse chooses it, but from the page's title alone: the
+  /// title page's other runs are the parse's. Not for a document parsed with the
+  /// entry, whose title is chosen already: choosing again from an index title the
+  /// parse kept in capitals title-cases it. A document read from XML is left as it is
+  /// (#767).
+  public static func applying(_ entry: RFCMetadata, to document: RFCDocument) -> RFCDocument {
+    guard document.source == .text else { return document }
+    var document = document
+    _ = IndexHeader.apply(entry, to: &document.header)
+    document.header.title = title(page: document.header.title, index: entry.title, titlePage: [])
+      .collapsingWhitespace()
+    return document
   }
 
   /// The text of a legacy RFC file: UTF-8, or Windows-1252 for the 34 older documents
@@ -761,10 +785,17 @@ public enum LegacyTextParser {
   }
 
   /// The document the sections make: nested by their numbers, their anchors made
-  /// unique, and its abbreviations and defined terms collected.
+  /// unique, their paragraphs and the abstract's numbered, and its abbreviations and
+  /// defined terms collected.
   private static func finished(_ sections: [Section], header: DocumentHeader) -> RFCDocument {
-    var document = RFCDocument(
-      header: header, sections: Self.nest(Self.makingAnchorsUnique(sections)), source: .text)
+    let unique = Self.makingAnchorsUnique(sections)
+    let declared = Self.declaredAnchors(unique)
+    let sections = Self.numberingParagraphs(unique, avoiding: declared)
+    var header = header
+    // Prep's abstract goes by `section-abstract`, which no legacy heading's anchor is.
+    header.abstract = Self.numberingParagraphs(
+      header.abstract, of: "section-abstract", avoiding: declared)
+    var document = RFCDocument(header: header, sections: Self.nest(sections), source: .text)
     document.abbreviations = Abbreviations.defined(in: document)
     document.definedTerms = DefinedTerms.defined(in: document)
     return document

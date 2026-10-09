@@ -69,6 +69,7 @@ struct GlossaryCard: View {
   static let width: CGFloat = 320
 
   @State private var term: Glossary.Term
+  @Environment(\.offersPrimer) private var offersPrimer
 
   init(term: Glossary.Term) {
     _term = State(initialValue: term)
@@ -94,6 +95,15 @@ struct GlossaryCard: View {
               .foregroundStyle(.tint)
           }
         }
+      }
+      // Where the term sits in the whole process (#365): pushed on iOS, where the
+      // card is in a sheet's navigation stack.
+      if offersPrimer {
+        Divider()
+        PrimerLink(pushes: true)
+          .buttonStyle(.plain)
+          .foregroundStyle(.tint)
+          .font(.callout)
       }
     }
     .padding()

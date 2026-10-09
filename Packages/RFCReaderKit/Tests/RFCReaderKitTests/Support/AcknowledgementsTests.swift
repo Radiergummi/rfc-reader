@@ -7,10 +7,10 @@ import Testing
 struct AcknowledgementsTests {
   /// The app shows what the repository says; one is the other.
   @Test func `the app's notices are the repository's`() throws {
-    // Packages/RFCReaderKit/Tests/RFCReaderKitTests/Chrome/AcknowledgementsTests.swift
+    // Packages/RFCReaderKit/Tests/RFCReaderKitTests/Support/AcknowledgementsTests.swift
     let root = URL(filePath: #filePath)
       .deletingLastPathComponent()  // AcknowledgementsTests.swift
-      .deletingLastPathComponent()  // Chrome
+      .deletingLastPathComponent()  // Support
       .deletingLastPathComponent()  // RFCReaderKitTests
       .deletingLastPathComponent()  // Tests
       .deletingLastPathComponent()  // RFCReaderKit

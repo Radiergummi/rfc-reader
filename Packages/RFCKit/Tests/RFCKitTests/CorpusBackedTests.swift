@@ -155,6 +155,26 @@ struct CorpusBackedTitlePageTests {
   }
 }
 
+@Suite("Corpus-backed: the header block", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedHeaderBlockTests {
+  /// An author whose left column ran out stands alone at the right of the line, and is
+  /// read as the right column (#767): RFC 2616's page names seven, and five of them
+  /// stand alone.
+  @Test func `an author alone on a line is an author`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc2616")).header
+    #expect(header.authors.count == 7)
+    #expect(header.authors.first?.name == "R. Fielding")
+    #expect(header.authors.contains { $0.name == "J. Mogul" })
+  }
+
+  /// A list continued on an indented line is read whole (#767): RFC 1140's obsoletes
+  /// run on under `Obsoletes: RFCs`.
+  @Test func `an obsoletes list continued on the next line is read whole`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc1140")).header
+    #expect(header.obsoletes == [.rfc(1130), .rfc(1100), .rfc(1083)])
+  }
+}
+
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedAppendixHeadingTests {
   /// RFC 2326 heads its appendices `Appendix A: Title`, as about 150 legacy RFCs do.
@@ -689,9 +709,10 @@ struct CorpusBackedDefinedTermsTests {
     let upstream = try #require(document.definedTerms["upstream"])
     #expect(upstream.anchor == "section-3.7-4")
     #expect(upstream.definition.count == 1)
-    let status = try #require(document.definedTerms["100 Continue (status code)"])
-    #expect(status.anchor == "status.100")
-    #expect(status.definition.isEmpty, "an entry directly in a section has no one block")
+    // An entry directly in a section has no one block to show, and so no definition:
+    // nothing else defines a status code, and it is no term to show (#396).
+    #expect(document.definedTerms["100 Continue"] == nil)
+    #expect(document.definedTerms["100 Continue (status code)"] == nil)
   }
 
   /// RFC 9114 marks `connection error` in its section and defines it in its
@@ -706,6 +727,26 @@ struct CorpusBackedDefinedTermsTests {
       #expect(!defined.definition.isEmpty, "\(term)")
     }
   }
+
+  /// What every term the listed documents define holds to, once cleaned (#396): a
+  /// definition to show, an anchor the model holds, and no citation or start of a
+  /// definition carried in the term.
+  @Test(arguments: [
+    "rfc9110", "rfc9112", "rfc9114", "rfc9393", "rfc9457", "rfc8927", "rfc8727", "rfc9635",
+    "rfc9022", "rfc8935", "rfc9051", "rfc9111", "rfc9499",
+  ])
+  func `every defined term has a definition at an anchor the model holds`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let held = Set(document.allSections.map(\.anchor) + document.blocks.flatMap(\.anchors))
+    for (spelling, defined) in document.definedTerms {
+      #expect(defined.term == spelling)
+      #expect(!defined.definition.isEmpty, "\(stem): \(spelling)")
+      #expect(defined.anchor.map(held.contains) == true, "\(stem): \(spelling)")
+      #expect(!spelling.contains(" ["), "\(stem): \(spelling)")
+      #expect(!spelling.contains(": "), "\(stem): \(spelling)")
+    }
+  }
+
 }
 
 @Suite("Corpus-backed: citations", .enabled(if: CorpusText.isXMLAvailable))
