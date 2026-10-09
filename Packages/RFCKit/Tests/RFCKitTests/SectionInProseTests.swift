@@ -115,7 +115,7 @@ struct SectionInProseTests {
     let (tagged, tag) = try Self.citation("tag")
     #expect(tag.target == .document(.rfc(9000), section: "4", entry: "QUIC-T"))
     #expect(tag.label == "Section\u{00A0}4 of [QUIC-T]")
-    #expect(tagged.inlines.first != .text("Section 4 of "))
+    #expect(tagged.inlines == [.crossReference(tag), .text(" applies.")])
     let (_, entry) = try Self.citation("entry")
     guard case .entrySection(let anchor, _, let section, _) = entry.target else {
       Issue.record("expected a section of the entry, got \(entry.target)")
