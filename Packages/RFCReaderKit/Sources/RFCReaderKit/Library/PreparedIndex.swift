@@ -15,7 +15,7 @@ public struct PreparedIndex: Sendable {
   /// The working groups with the most RFCs, most first and equal counts by name, for
   /// the sidebar.
   public let topWorkingGroups: [String]
-  /// Every working group the index names, lowercased: the ones the iOS search
+  /// Every working group the index names, folded: the ones the iOS search
   /// field's `wg:` token may name (#21).
   public let knownWorkingGroups: Set<String>
   /// How many RFCs each filter the index decides lists, for the sidebar's rows
