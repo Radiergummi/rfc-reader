@@ -32,7 +32,7 @@ public enum Lexers {
     names[type.name] ?? type.suffix.flatMap { suffixes[$0] }
   }
 
-  public static func highlighter(for language: Language) -> any Highlighter {
+  static func highlighter(for language: Language) -> any Highlighter {
     switch language {
     case .json: JSONLexer.lexer
     case .xml: XMLLexer.lexer

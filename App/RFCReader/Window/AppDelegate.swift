@@ -73,10 +73,22 @@
       }
     }
 
-    /// The dock icon, with every window closed.
+    /// The dock icon, with every window closed, or every reader window: the primer's
+    /// window or the settings left open alone do not count as one (#365). AppKit
+    /// brings back a minimized window only when no window at all is visible, so with
+    /// one of those open a minimized reader is brought back here.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
       if !hasVisibleWindows {
         openWindow(tabbedWith: nil, inBackground: false)
+      } else {
+        let readers = controllers.compactMap(\.window)
+        if !readers.contains(where: \.isVisible) {
+          if let minimized = readers.first(where: \.isMiniaturized) {
+            minimized.deminiaturize(nil)
+          } else {
+            openWindow(tabbedWith: nil, inBackground: false)
+          }
+        }
       }
       return true
     }

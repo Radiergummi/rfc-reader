@@ -223,7 +223,7 @@ extension DocumentTextBuilder {
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
     let words = Self.backlinksCaption(count: count)
     attributes[.rfcSpoken] = words
-    if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
+    if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
     let result = NSMutableAttributedString()
@@ -273,48 +273,6 @@ extension DocumentTextBuilder {
     case 3: "Three Backlinks"
     default: "\(count) Backlinks"
     }
-  }
-
-  /// A text view's link attributes, `defaults`, for a link on a card: in
-  /// `RFCColors.cardLink`, since the text view's color may fall below the minimum
-  /// contrast on a card's fill in dark (#694). Made once, with the text view's.
-  public static func cardLinkAttributes(
-    _ defaults: [NSAttributedString.Key: Any]
-  ) -> [NSAttributedString.Key: Any] {
-    var attributes = defaults
-    attributes[.foregroundColor] = RFCColors.cardLink(
-      over: defaults[.foregroundColor] as? PlatformColor ?? RFCColors.link)
-    return attributes
-  }
-
-  /// The attributes a text view draws the link `link` with, given its own
-  /// `defaults`: a text view colors every link itself, over the storage's color,
-  /// which a backlink caption has to keep to stay in the background. The caption
-  /// is drawn with `caption` on top: on macOS the ordinary pointer, not a link's
-  /// pointing hand, since it opens a list beside it as a control does. Passed in
-  /// rather than made here, because a cursor is AppKit's to make on the main
-  /// thread and TextKit may ask from another. Every other link is drawn as the
-  /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
-  ///
-  /// A heading's hung number (#433) is no link to look at, but the heading's own
-  /// number: it keeps its quieter color, and comes up to the label's under the
-  /// pointer, as `sectionNumber` says it is.
-  public static func linkRenderingAttributes(
-    for link: Any, defaults: [NSAttributedString.Key: Any],
-    caption: [NSAttributedString.Key: Any] = [:], sectionNumber: SectionNumberState? = nil
-  ) -> [NSAttributedString.Key: Any] {
-    if let sectionNumber {
-      var attributes = defaults
-      attributes[.foregroundColor] = sectionNumber == .hovered ? RFCColors.label : nil
-      return attributes
-    }
-    // The scheme alone: asked of every link TextKit draws, where decoding the
-    // anchor would allocate for an answer nobody reads.
-    guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }
-    var attributes = defaults
-    attributes[.foregroundColor] = nil
-    attributes.merge(caption) { _, caption in caption }
-    return attributes
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's
@@ -377,47 +335,18 @@ extension DocumentTextBuilder {
     return symbol
   }
 
-  /// The other half of `url(for:)`'s anchor case: nil when the URL is not one of
-  /// ours. Kept beside the encoder, because a scheme whose two halves live in
-  /// different modules is one percent-encoding rule away from silently failing on
-  /// an anchor containing `?` or `#`.
-  public static func anchor(from url: URL) -> String? {
-    decoded(url, scheme: anchorScheme)
-  }
-
-  /// The same for `referenceScheme`: the bibliography entry a citation names.
-  public static func reference(from url: URL) -> String? {
-    decoded(url, scheme: referenceScheme)
-  }
-
-  /// The same for `backlinksScheme`: the section whose backlinks a caption lists.
-  public static func backlinks(from url: URL) -> String? {
-    decoded(url, scheme: backlinksScheme)
-  }
-
-  private static func decoded(_ url: URL, scheme: String) -> String? {
-    guard url.scheme == scheme else { return nil }
-    let encoded = url.absoluteString.dropFirst(scheme.count + 1)
-    return String(encoded).removingPercentEncoding ?? String(encoded)
-  }
-
   func url(for xref: CrossReference) -> URL? {
     switch xref.target {
     case .document(let id, let section, _):
       return RFCLink(id: id, section: section).appURL
     case .anchor(let anchor):
-      let scheme = referenceAnchors.contains(anchor) ? Self.referenceScheme : Self.anchorScheme
-      return Self.url(anchor, scheme: scheme)
+      let scheme =
+        referenceAnchors.contains(anchor)
+        ? ReaderLinkScheme.referenceScheme : ReaderLinkScheme.anchorScheme
+      return ReaderLinkScheme.url(anchor, scheme: scheme)
     case .entrySection(let entry, _, _, let url):
-      return url ?? Self.url(entry, scheme: Self.referenceScheme)
+      return url ?? ReaderLinkScheme.url(entry, scheme: ReaderLinkScheme.referenceScheme)
     }
-  }
-
-  /// The encoding half of `decoded(_:scheme:)`: `anchor` as a link of one of our
-  /// schemes, which `anchor(from:)` and its siblings read back.
-  public static func url(_ anchor: String, scheme: String) -> URL? {
-    let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
-    return URL(string: "\(scheme):\(encoded)")
   }
 
   /// The font a run's context carries, or the body's where it carries none.

@@ -519,4 +519,9 @@ extension NavigationModel: ListSources {
   func members(of collection: UUID) -> [Int] {
     library.collections[collection]?.rfcNumbers ?? []
   }
+
+  func collection(named name: String) -> UUID? {
+    library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
+      .id
+  }
 }

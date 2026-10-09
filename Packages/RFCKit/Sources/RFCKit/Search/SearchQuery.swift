@@ -14,7 +14,12 @@ public enum SearchQuery {
   /// `IndexSearch.parseQuery` reads a qualifier by any of its spellings, completion
   /// offers it by its name, and `format` writes it back by its name.
   enum Qualifier: CaseIterable, Sendable {
-    case workingGroup, status, author, stream, year, has
+    case workingGroup, status, author, stream, year, after, before, published, has
+    /// `is:`: the reader's own data, and, as an alias of `status:`, a status.
+    case readerData
+    /// `in:`: a document or a collection.
+    case scope
+    case sort
 
     /// The long spelling, written back and offered.
     var name: String {
@@ -24,7 +29,13 @@ public enum SearchQuery {
       case .author: "author"
       case .stream: "stream"
       case .year: "year"
+      case .after: "after"
+      case .before: "before"
+      case .published: "published"
       case .has: "has"
+      case .readerData: "is"
+      case .scope: "in"
+      case .sort: "sort"
       }
     }
 
@@ -32,9 +43,17 @@ public enum SearchQuery {
     var spellings: [String] {
       switch self {
       case .workingGroup: [name, "group"]
-      case .status: [name, "is"]
       case .author: [name, "by"]
-      case .stream, .year, .has: [name]
+      default: [name]
+      }
+    }
+
+    /// Whether it is a union of values, so a comma separates them and each is a
+    /// term of its own.
+    var isUnion: Bool {
+      switch self {
+      case .workingGroup, .status, .stream, .readerData, .scope: true
+      case .author, .year, .after, .before, .published, .has, .sort: false
       }
     }
 
@@ -56,8 +75,8 @@ public enum SearchQuery {
     /// name filters.
     var isClosed: Bool {
       switch self {
-      case .status, .stream, .has: true
-      case .workingGroup, .author, .year: false
+      case .status, .stream, .has, .readerData, .sort: true
+      case .workingGroup, .author, .year, .after, .before, .published, .scope: false
       }
     }
   }
@@ -82,6 +101,8 @@ public enum SearchQuery {
         name: "std", longSpellings: ["standard", "standards"],
         statuses: [.internetStandard, .draftStandard, .proposedStandard],
         label: "Standards Track"),
+      StatusValue(
+        name: "internet-standard", longSpellings: ["full"], status: .internetStandard),
       StatusValue(name: "bcp", longSpellings: [], status: .bestCurrentPractice),
       StatusValue(name: "info", longSpellings: ["informational"], status: .informational),
       StatusValue(name: "exp", longSpellings: ["experimental"], status: .experimental),
@@ -125,30 +146,88 @@ public enum SearchQuery {
   /// The one value `has:` takes.
   static let xmlValue = "xml"
 
+  /// An `after:` or `before:` value: `2023`, or `2023-06`.
+  static func month(spelled spelling: String) -> PublicationDate? {
+    let parts = spelling.split(separator: "-", omittingEmptySubsequences: false)
+    guard (1...2).contains(parts.count), parts[0].count == 4, let year = Int(parts[0]) else {
+      return nil
+    }
+    guard parts.count == 2 else { return PublicationDate(year: year) }
+    guard let month = Int(parts[1]), (1...12).contains(month) else { return nil }
+    return PublicationDate(year: year, month: month)
+  }
+
+  /// How `after:` and `before:` write a year or a month.
+  static func spelling(of month: PublicationDate) -> String {
+    guard let number = month.month else { return "\(month.year)" }
+    return "\(month.year)-" + (number < 10 ? "0\(number)" : "\(number)")
+  }
+
+  /// A `published:` value, `<90d`: within that many days.
+  static func days(spelled spelling: String) -> Int? {
+    guard spelling.hasPrefix("<"), spelling.hasSuffix("d"),
+      let days = Int(spelling.dropFirst().dropLast()), days > 0
+    else { return nil }
+    return days
+  }
+
+  /// How `in:` writes a scope: a document by its file stem, `rfc9110` or `bcp14`, and
+  /// a collection by its name.
+  static func spelling(of scope: SearchFilters.Scope) -> String {
+    switch scope {
+    case .document(let id): id.fileStem
+    case .collection(let name): written(name)
+    }
+  }
+
   /// A query as `IndexSearch.parseQuery` reads it: the filters its qualifiers name,
-  /// and the free text left over.
+  /// the terms it could not read, and the free text left over.
   public struct Parsed: Sendable, Hashable {
     public var text: String
     public var filters: SearchFilters
+    /// The words naming a qualifier or a value this version doesn't know, as written.
+    public var unknown: [UnknownSearchTerm]
 
-    public init(text: String, filters: SearchFilters) {
+    public init(text: String, filters: SearchFilters, unknown: [UnknownSearchTerm] = []) {
       self.text = text
       self.filters = filters
+      self.unknown = unknown
     }
+  }
+
+  /// The terms of `query` this version can't read, and then each word naming a
+  /// working group `index` doesn't, as written: a group the index dropped since the
+  /// query was saved.
+  public static func unknownTerms(in query: String, index: RFCIndex) -> [UnknownSearchTerm] {
+    let parsed = IndexSearch.parseQuery(query)
+    // Every list asks, so the index is read only for a query that names a group.
+    guard !parsed.filters.workingGroups.isEmpty else { return parsed.unknown }
+    let known = knownWorkingGroups(in: index)
+    // Folded, as `knownWorkingGroups(in:)` are.
+    func namesKnown(_ filters: SearchFilters) -> Bool {
+      Set(filters.workingGroups.map(SearchText.folded)).isSubset(of: known)
+    }
+    guard !namesKnown(parsed.filters) else { return parsed.unknown }
+    let missing = words(in: query).filter { word in
+      !namesKnown(IndexSearch.parseQuery(word).filters)
+    }
+    return parsed.unknown + missing.map { UnknownSearchTerm(word: $0, reason: .workingGroup) }
   }
 
   // MARK: - Writing a query back out
 
-  /// The canonical form of a parsed query; see `format(text:filters:)`.
+  /// The canonical form of a parsed query; see `format(text:filters:unknown:)`.
   public static func format(_ query: Parsed) -> String {
-    format(text: query.text, filters: query.filters)
+    format(text: query.text, filters: query.filters, unknown: query.unknown)
   }
 
   /// The canonical form of a parsed query: one qualifier per filter, long spellings,
-  /// in a fixed order, then the free text. `parseQuery` reads it back to the same
-  /// filters and text.
-  public static func format(text: String, filters: SearchFilters) -> String {
-    var words = terms(of: filters).map(\.word)
+  /// in a fixed order, then the unknown terms as they were written, then the free
+  /// text. `parseQuery` reads it back to the same filters, unknown terms and text.
+  public static func format(
+    text: String, filters: SearchFilters, unknown: [UnknownSearchTerm] = []
+  ) -> String {
+    var words = terms(of: filters).map(\.word) + unknown.map(\.word)
     let text = text.trimmingCharacters(in: .whitespaces)
     if !text.isEmpty { words.append(text) }
     return words.joined(separator: " ")
@@ -171,16 +250,21 @@ public enum SearchQuery {
     func term(_ qualifier: Qualifier, _ value: String, label: String) -> Term {
       Term(word: "\(qualifier.name):\(value)", label: label)
     }
-    var terms: [Term] = []
-    if let group = filters.workingGroup {
-      terms.append(term(.workingGroup, written(group), label: "WG: \(group)"))
+    var terms: [Term] = filters.workingGroups.sorted().map { group in
+      term(.workingGroup, written(group), label: "WG: \(group)")
     }
     // The `status:` values whose statuses together make up the filter's, in
-    // `StatusValue.all` order: `parseQuery` only ever produces unions of them.
-    terms += StatusValue.all.filter { value in
-      !value.excludesObsolete && value.statuses.isSubset(of: filters.statuses)
+    // `StatusValue.all` order: `parseQuery` only ever produces unions of them. One
+    // whose statuses an earlier one wrote is not written again: Internet Standard is
+    // on the standards track.
+    var covered: Set<PublicationStatus> = []
+    for value in StatusValue.all
+    where !value.excludesObsolete && value.statuses.isSubset(of: filters.statuses)
+      && !value.statuses.isSubset(of: covered)
+    {
+      covered.formUnion(value.statuses)
+      terms.append(term(.status, value.name, label: value.label))
     }
-    .map { term(.status, $0.name, label: $0.label) }
     if filters.excludeObsolete, let current = StatusValue.all.first(where: \.excludesObsolete) {
       terms.append(term(.status, current.name, label: current.label))
     }
@@ -198,26 +282,84 @@ public enum SearchQuery {
             .year, "\(years.lowerBound)-\(years.upperBound)",
             label: "Year: \(years.lowerBound)–\(years.upperBound)"))
     }
+    if let after = filters.publishedAfter {
+      terms.append(term(.after, spelling(of: after), label: "After: \(after.formatted)"))
+    }
+    if let before = filters.publishedBefore {
+      terms.append(term(.before, spelling(of: before), label: "Before: \(before.formatted)"))
+    }
+    if let days = filters.publishedWithinDays {
+      let span = days == 1 ? "Day" : "\(days) Days"
+      terms.append(term(.published, "<\(days)d", label: "Published: Last \(span)"))
+    }
     if filters.requiresXML { terms.append(term(.has, xmlValue, label: "Has XML")) }
+    terms += SearchFilters.ReaderData.allCases.filter(filters.readerData.contains).map {
+      term(.readerData, $0.rawValue, label: label(of: $0))
+    }
+    terms += filters.scopes.sorted(by: isOrdered).map { scope in
+      term(.scope, spelling(of: scope), label: "In: \(label(of: scope))")
+    }
+    if let sort = filters.sort {
+      terms.append(term(.sort, sort.rawValue, label: "Sort: \(label(of: sort))"))
+    }
     return terms
+  }
+
+  private static func label(of data: SearchFilters.ReaderData) -> String {
+    switch data {
+    case .bookmarked: "Bookmarked"
+    case .read: "Read"
+    case .offline: "Available Offline"
+    }
+  }
+
+  private static func label(of scope: SearchFilters.Scope) -> String {
+    switch scope {
+    case .document(let id): id.displayName
+    case .collection(let name): name
+    }
+  }
+
+  private static func label(of sort: SearchFilters.Sort) -> String {
+    switch sort {
+    case .newest: "Newest First"
+    case .oldest: "Oldest First"
+    case .lastRead: "Last Read"
+    }
+  }
+
+  /// Documents first, in order, then collections by name.
+  private static func isOrdered(_ lhs: SearchFilters.Scope, _ rhs: SearchFilters.Scope) -> Bool {
+    switch (lhs, rhs) {
+    case (.document(let lhs), .document(let rhs)): lhs < rhs
+    case (.document, .collection): true
+    case (.collection, .document): false
+    case (.collection(let lhs), .collection(let rhs)): lhs < rhs
+    }
   }
 
   /// `query` without `term`: a chip removed. The words that set its filter are taken
   /// out, and every other word is left as the reader typed it, a word `parseQuery`
   /// ignores included.
   ///
-  /// A working group, an author, a year and `has:` hold one value, the last word's,
-  /// so every word naming one goes, or an earlier one would take over. A status or a
-  /// stream is a union, so only the words naming this one go.
+  /// An author, a date, `has:` and a sort hold one value, the last word's, so every
+  /// word naming one goes, or an earlier one would take over. A working group, a
+  /// status, a stream, the reader's data and `in:` are unions, so only the words
+  /// naming this one go.
   public static func removing(_ term: Term, from query: String) -> String {
     let removed = qualifier(in: term.word).flatMap { Qualifier(spelling: $0.key) }
-    let kept = words(in: query).filter { word in
+    let kept = words(in: query).flatMap { word -> [String] in
       let parsed = IndexSearch.parseQuery(word)
-      guard parsed.text.isEmpty, !parsed.filters.isEmpty,
-        let key = qualifier(in: word)?.key, Qualifier(spelling: key) == removed
-      else { return true }
-      let isUnion = removed == .status || removed == .stream
-      return isUnion && !terms(of: parsed.filters).contains(term)
+      guard parsed.text.isEmpty, let removed else { return [word] }
+      // What the word sets, written as terms are: `is:bcp` sets `status:bcp`.
+      let set = terms(of: parsed.filters)
+      guard removed.isUnion else {
+        return set.contains { qualifier(in: $0.word)?.key == removed.name[...] } ? [] : [word]
+      }
+      // A word naming several values of a union loses only this one: `wg:quic,tls`
+      // without `wg:quic` is `wg:tls`.
+      let left = set.filter { !removes(term, $0) }
+      return left.count < set.count ? left.map(\.word) : [word]
     }
     // The space the reader typed last stays, so the next keystroke begins a word.
     let trailingSpace = wordBeingTyped(in: query) == nil && !kept.isEmpty ? " " : ""
@@ -253,8 +395,8 @@ public enum SearchQuery {
     for (offset, word) in words.enumerated() {
       let parsed = IndexSearch.parseQuery(word)
       let isTyped = typing && offset == words.count - 1
-      let namesKnownGroup =
-        parsed.filters.workingGroup.map { workingGroups.contains(SearchText.folded($0)) } ?? true
+      let namesKnownGroup = Set(parsed.filters.workingGroups.map(SearchText.folded))
+        .isSubset(of: workingGroups)
       if !isTyped, parsed.text.isEmpty, !parsed.filters.isEmpty, namesKnownGroup {
         filtering.append(word)
       } else {
@@ -305,7 +447,7 @@ public enum SearchQuery {
   /// A quote opens a run only at the start of a word or right after `key:`. Anywhere
   /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
   /// mark, and `status:bcp` is still a filter.
-  static func words(in query: String) -> [String] {
+  public static func words(in query: String) -> [String] {
     var words: [String] = []
     var word = ""
     var quoted = false
@@ -367,8 +509,45 @@ public enum SearchQuery {
 
   /// A qualifier's value as written back: in quotes when it has a space, or it would
   /// read back as a shorter value and a word of free text.
+  /// A comma would split it into two values of a union, so a value with one is
+  /// quoted too.
   private static func written(_ value: String) -> String {
-    value.contains(" ") ? "\"\(value)\"" : value
+    value.contains(" ") || value.contains(",") ? "\"\(value)\"" : value
+  }
+
+  /// Whether a word with a colon this version doesn't know as a qualifier reads as
+  /// one from another version: a word of lowercase letters, as `format` writes every
+  /// qualifier, then a value with no other colon and no slash after it.
+  /// `urn:ietf:params`, `http://…`, `::1`, `10:30` and `Cache-Control:no-store` are
+  /// text, and so is a word beginning with a URI scheme RFCs are full of, `mailto:…`.
+  static func looksLikeQualifier(_ word: (key: Substring, value: Substring)) -> Bool {
+    !word.key.isEmpty && word.key.allSatisfy { $0.isLowercase || $0 == "-" }
+      && !uriSchemes.contains(word.key.lowercased())
+      && !word.value.contains(":") && !word.value.contains("/")
+  }
+
+  /// The URI schemes whose words are searched for as text, never read as a qualifier
+  /// of another version: no qualifier will ever be named like one.
+  private static let uriSchemes: Set<String> = [
+    "urn", "mailto", "sip", "sips", "tel", "data", "doi", "tag",
+  ]
+
+  /// Whether removing `removed` takes `term` with it: the same term, or a status the
+  /// removed one's statuses include, which `terms(of:)` gave no chip of its own.
+  /// Removing the standards track takes `status:internet-standard` with it.
+  private static func removes(_ removed: Term, _ term: Term) -> Bool {
+    guard removed != term else { return true }
+    guard let removedStatus = statusValue(of: removed), let status = statusValue(of: term),
+      !status.excludesObsolete
+    else { return false }
+    return status.statuses.isSubset(of: removedStatus.statuses)
+  }
+
+  /// The `status:` value a term names, or nil for another qualifier's.
+  private static func statusValue(of term: Term) -> StatusValue? {
+    guard let written = qualifier(in: term.word), written.key == Qualifier.status.name[...]
+    else { return nil }
+    return StatusValue(spelling: String(written.value))
   }
 
   // MARK: - Completion
@@ -424,12 +603,22 @@ public enum SearchQuery {
         StatusValue.all.filter { $0.spellings.contains { $0.hasPrefix(typed) } }.map(\.name)
       case .stream: PublicationStream.allCases.map(spelling(of:)).filter { $0.hasPrefix(typed) }
       case .has: [xmlValue].filter { $0.hasPrefix(typed) }
-      case .author, .year: []
+      // The reader's data, then the statuses `is:` is also an alias for.
+      case .readerData:
+        SearchFilters.ReaderData.allCases.map(\.rawValue).filter { $0.hasPrefix(typed) }
+          + StatusValue.all.filter { $0.spellings.contains { $0.hasPrefix(typed) } }.map(\.name)
+      case .sort: SearchFilters.Sort.allCases.map(\.rawValue).filter { $0.hasPrefix(typed) }
+      case .author, .year, .after, .before, .published, .scope: []
       }
     if matching.isEmpty, !typed.isEmpty, qualifier.isClosed {
       return [Suggestion(completion: query, isUnknown: true)]
     }
-    return offer(matching.map { "\(qualifier.name):\(written($0))" })
+    return offer(
+      matching.map { value in
+        // A status is written as `status:`, whichever qualifier it was typed after.
+        let name = StatusValue(spelling: value) != nil ? Qualifier.status.name : qualifier.name
+        return "\(name):\(written(value))"
+      })
   }
 
   /// The completions a search field shows as the reader types: `suggestions(for:in:)`,
@@ -467,4 +656,65 @@ public enum SearchQuery {
 
   /// The working group the index files individual submissions under.
   private static let individualSubmissions = "non working group"
+}
+
+extension SearchFilters {
+  /// Whether these ask for what the index doesn't hold: the reader's data, or a
+  /// collection to search in.
+  public var asksReader: Bool {
+    !readerData.isEmpty || !collectionNames.isEmpty
+  }
+
+  /// The documents `in:` names, in no order.
+  public var documentScopes: [DocumentID] {
+    scopes.compactMap { scope in
+      guard case .document(let id) = scope else { return nil }
+      return id
+    }
+  }
+
+  /// The names of the collections `in:` names, in order.
+  public var collectionNames: [String] {
+    scopes.compactMap { scope in
+      guard case .collection(let name) = scope else { return nil }
+      return name
+    }
+    .sorted()
+  }
+
+  /// Adds what a `status:` value stands for: its statuses, or for `current` the
+  /// obsolete filter.
+  mutating func insert(_ status: SearchQuery.StatusValue) {
+    if status.excludesObsolete {
+      excludeObsolete = true
+    } else {
+      statuses.formUnion(status.statuses)
+    }
+  }
+}
+
+/// A word of a query that names something this version, or this index, or this
+/// library doesn't know. It filters nothing and is searched for as nothing: the
+/// query finds nothing and says why, and keeps the word, so a query from a newer
+/// version works once this one learns it.
+public struct UnknownSearchTerm: Sendable, Hashable {
+  public enum Reason: Sendable, Hashable {
+    /// A qualifier this version doesn't know: `released:2024`.
+    case qualifier
+    /// A value the qualifier doesn't take: `status:nonsense`, `after:June`.
+    case value
+    /// A working group the index doesn't name.
+    case workingGroup
+    /// A collection `in:` names that the library doesn't hold.
+    case collection
+  }
+
+  /// The word as written in the query.
+  public var word: String
+  public var reason: Reason
+
+  public init(word: String, reason: Reason) {
+    self.word = word
+    self.reason = reason
+  }
 }

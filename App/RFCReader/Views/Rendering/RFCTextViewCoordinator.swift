@@ -128,7 +128,7 @@ final class RFCTextViewCoordinator: NSObject {
 
     init(attributes: [NSAttributedString.Key: Any], caption: [NSAttributedString.Key: Any]) {
       self.attributes = attributes
-      self.card = DocumentTextBuilder.cardLinkAttributes(attributes)
+      self.card = LinkRendering.cardAttributes(attributes)
       self.caption = caption
     }
   }
@@ -469,7 +469,7 @@ final class RFCTextViewCoordinator: NSObject {
       if let documentID,
         let number = textView.textLayoutManager?.attributedText?.sectionNumber(
           at: textItem.range.location),
-        let url = DocumentTextBuilder.url(number.anchor, scheme: DocumentTextBuilder.anchorScheme)
+        let url = ReaderLinkScheme.url(number.anchor, scheme: ReaderLinkScheme.anchorScheme)
       {
         let link = LinkCopy.forLink(
           url, from: documentID, in: environment?.library.index, bibliography: bibliography)
@@ -809,7 +809,7 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
-    return DocumentTextBuilder.linkRenderingAttributes(
+    return LinkRendering.attributes(
       for: link,
       defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
       caption: textView.caption,

@@ -55,7 +55,7 @@ struct LinkCopyTests {
 
   @Test func `an anchor in this document is this document's page at that anchor`() {
     #expect(
-      copy("\(DocumentTextBuilder.anchorScheme):section-4.2")
+      copy("\(ReaderLinkScheme.anchorScheme):section-4.2")
         == LinkCopy(
           url: URL(string: "https://www.rfc-editor.org/rfc/rfc9110#section-4.2")!,
           label: "RFC 9110: HTTP Semantics"))
@@ -67,14 +67,14 @@ struct LinkCopyTests {
 
   @Test func `a bibliography entry is the URL it names, labelled with its title`() {
     #expect(
-      copy("\(DocumentTextBuilder.referenceScheme):ISO.8601")
+      copy("\(ReaderLinkScheme.referenceScheme):ISO.8601")
         == LinkCopy(
           url: URL(string: "https://www.iso.org/iso-8601-date-and-time-format.html")!,
           label: "Date and time format"))
   }
 
   @Test func `a bibliography entry that names no URL has nothing to copy`() {
-    #expect(copy("\(DocumentTextBuilder.referenceScheme):Unlinked") == nil)
+    #expect(copy("\(ReaderLinkScheme.referenceScheme):Unlinked") == nil)
   }
 
   @Test func `a link to the web is not the reader's to copy`() {
