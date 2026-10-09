@@ -49,7 +49,8 @@ struct GrammarLinksTests {
       return
     }
     #expect(linked.definitions.map(\.anchor) == ["abnf-greeting", "abnf-name"])
-    #expect(linked.links.map { Self.substring(text, $0.range) } == ["name"])
+    // A core rule links to RFC 5234's in either dialect.
+    #expect(linked.links.map { Self.substring(text, $0.range) } == ["name", "ALPHA"])
     // A block typed as RFC 5234's grammar is read as one, a stray `|` and all.
     #expect(ABNFPresentation.render(text, grammar: DocumentGrammar(blocks: [text])) == nil)
   }
