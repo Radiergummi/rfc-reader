@@ -343,14 +343,21 @@ public enum RFCXMLParser {
       // is a section's, and it is announced as one: `11.`, not `Appendix 11.` (#683).
       let isAppendixByPlace = numbering.number == nil ? appendix : numbering.isAppendix
       let subsections = parseSections(in: element, appendix: isAppendixByPlace, position: position)
+      // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
+      let isAppendix = isNumbered && isAppendixByPlace
+      // An appendix's `(Normative)` or `(Informative)` is in its `<name>`, as the
+      // document wrote it, and comes out of the title as the legacy parser takes it
+      // out (#428).
+      let (qualifier, words) = isAppendix ? HeadingQualifier.split(title) : (nil, title)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
-        title: title,
+        title: words,
         blocks: blocks,
         subsections: subsections,
-        // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
-        isAppendix: isNumbered && isAppendixByPlace
+        isAppendix: isAppendix,
+        appendixWord: numbering.word,
+        qualifier: qualifier
       )
     }
 
@@ -363,14 +370,14 @@ public enum RFCXMLParser {
       return inlines.isEmpty ? [.text(fallback)] : inlines
     }
 
-    /// `section-4.2` → `4.2`; `section-appendix.a.1` → `A.1`.
-    private func sectionNumber(fromPartNumber partNumber: String?) -> (
-      number: String?, isAppendix: Bool
-    ) {
+    /// `section-4.2` → `4.2`; `section-appendix.a.1` → `A.1`; `section-annex.a` → `A`,
+    /// an annex.
+    private func sectionNumber(fromPartNumber partNumber: String?) -> SectionNumbering {
       switch partNumber.flatMap(PartNumber.init) {
-      case .section(let number): (number, false)
-      case .appendix(let number): (number, true)
-      case .figure, .table, nil: (nil, false)
+      case .section(let number): SectionNumbering(number: number)
+      case .appendix(let number): SectionNumbering(number: number, isAppendix: true)
+      case .annex(let number): SectionNumbering(number: number, isAppendix: true, word: .annex)
+      case .figure, .table, nil: SectionNumbering()
       }
     }
 
@@ -1212,4 +1219,11 @@ extension RFCXMLParser {
     components.path = address
     return components.url
   }
+}
+
+/// What a section's part number says of it.
+private struct SectionNumbering {
+  var number: String?
+  var isAppendix = false
+  var word = Section.AppendixWord.appendix
 }

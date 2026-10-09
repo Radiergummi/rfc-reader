@@ -247,7 +247,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = Self.name(of: section, isNumbered: partNumber != nil)
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -264,6 +264,18 @@ public struct RFCXMLSerializer: Sendable {
       writeOrLift(subsection, writer: &writer, context: &context)
     }
     writer.close("section")
+  }
+
+  /// A section's `<name>`: its words, after its number where it has no `pn` to carry
+  /// one, and an appendix's qualifier ahead of them, as the document wrote it (#428).
+  private static func name(of section: Section, isNumbered: Bool) -> [Inline] {
+    var words = section.title
+    if let qualifier = section.qualifier {
+      let written = HeadingQualifier.written(qualifier)
+      words = words.isEmpty ? [.text(written)] : [.text(written + " ")] + words
+    }
+    guard !isNumbered, let label = section.numberLabel else { return words }
+    return words.isEmpty ? [.text(section.numberPrefix)] : [.text(label + ". ")] + words
   }
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
@@ -588,9 +600,15 @@ public struct RFCXMLSerializer: Sendable {
       func claim(_ sections: [Section]) {
         for section in sections {
           if let number = section.number, partNumbers[section.anchor] == nil {
-            let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
-              .attribute
-            if claimed.insert(partNumber).inserted { partNumbers[section.anchor] = partNumber }
+            // Claimed by the number, whatever the word: an annex and an appendix both
+            // `A` share their anchor.
+            let claim = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
+            let partNumber = PartNumber(
+              sectionNumber: number, isAppendix: section.isAppendix,
+              word: section.appendixWord)
+            if claimed.insert(claim.attribute).inserted {
+              partNumbers[section.anchor] = partNumber.attribute
+            }
           }
           claim(section.subsections)
         }

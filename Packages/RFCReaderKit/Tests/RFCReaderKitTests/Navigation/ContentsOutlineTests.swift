@@ -24,6 +24,17 @@ struct ContentsOutlineTests {
     ContentsOutline.rows(of: sections, filter: filter)
   }
 
+  /// An annex is listed as one, and its qualifier is set apart from its title (#428).
+  @Test func `an annex row names it and carries its qualifier`() throws {
+    let annex = Section(
+      anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+      appendixWord: .annex, qualifier: .informative)
+    let row = try #require(ContentsOutline.rows(of: [annex], filter: "").first)
+    #expect(row.title == "Annex B. Background")
+    #expect(row.qualifier == "Informative")
+    #expect(Self.rows("").allSatisfy { $0.qualifier == nil })
+  }
+
   @Test func `with no filter, document order lists every section at its depth`() {
     let rows = Self.rows("")
     #expect(rows.map(\.anchor) == Self.sections.map(\.anchor))
@@ -162,7 +173,7 @@ struct ContentsOutlineTests {
       Section(anchor: "b", number: "B", title: "", isAppendix: true),
     ])
     #expect(groups.map(\.label) == ["A", "#"])
-    #expect(groups[1].entries[0].title == "Appendix B.")
+    #expect(groups[1].entries[0].title == "Appendix B")
   }
 
   @Test func `the filter applies in A–Z too, with no context rows`() {

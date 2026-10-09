@@ -57,9 +57,18 @@ struct TableOfContentsView: View {
     List {
       ForEach(rows) { row in
         button(anchor: row.anchor, isContext: row.isContext) {
-          Text(row.title)
-            .lineLimit(2)
-            .padding(.leading, CGFloat(max(0, row.depth - 1)) * 12)
+          HStack(alignment: .firstTextBaseline) {
+            Text(row.title)
+              .lineLimit(2)
+            // The document's own word, as the title is: not looked up (#428).
+            if let qualifier = row.qualifier {
+              Spacer(minLength: 8)
+              Text(verbatim: qualifier)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+          .padding(.leading, CGFloat(max(0, row.depth - 1)) * 12)
         }
       }
     }
