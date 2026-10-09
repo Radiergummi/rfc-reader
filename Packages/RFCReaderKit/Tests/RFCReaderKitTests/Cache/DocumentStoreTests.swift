@@ -172,8 +172,8 @@ struct DocumentStoreTests {
   }
 
   /// A legacy RFC read from its text takes its header from its index entry (#767), and
-  /// one read before the index is there is not kept, so the next open, with the entry,
-  /// reads it again and takes the entry's header.
+  /// one parsed before the index is there is kept and takes the entry's header on the
+  /// next open, with the entry, without being fetched.
   @Test func `a text body takes its header from the index entry, once there is one`()
     async throws
   {

@@ -13,8 +13,11 @@ public enum LegacyTextParser {
   /// updates replace the page's (`IndexHeader`), as a converted document's do: the app
   /// parses a legacy RFC from its text too, and showed the page's guess (#767).
   public static func parse(_ data: Data, entry: RFCMetadata? = nil) -> RFCDocument {
-    let document = parse(text(decoding: data), title: entry?.title)
-    return entry.map { applying($0, to: document) } ?? document
+    var document = parse(text(decoding: data), title: entry?.title)
+    // The title is chosen once, by the parse: choosing it again from what it chose can
+    // title-case an index title the parse kept in capitals.
+    if let entry { _ = IndexHeader.apply(entry, to: &document.header) }
+    return document
   }
 
   /// `document`, read from a legacy text, with its header taken from `entry`: what a

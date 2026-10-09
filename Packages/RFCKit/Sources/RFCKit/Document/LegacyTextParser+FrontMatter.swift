@@ -549,12 +549,12 @@ extension LegacyTextParser {
       // indented continuation of a left-column label sits well left of it.
       let isRightOnly =
         columns.count == 1
-        && line.prefix(while: { $0 == " " }).count >= rightColumnIndent
+        && line.leadingSpaceCount >= rightColumnIndent
       let left = isRightOnly ? "" : first
       let right = isRightOnly ? first : columns.count > 1 ? columns.last! : nil
 
       if left.hasPrefix("Obsoletes:") || left.hasPrefix("Updates:") {
-        // Read below, with the lines that continue them.
+        // Read above, with the lines that continue them.
       } else if left.hasPrefix("Category:") {
         header.category = DocumentHeader.Category(
           parsing: String(left.dropFirst("Category:".count)))
