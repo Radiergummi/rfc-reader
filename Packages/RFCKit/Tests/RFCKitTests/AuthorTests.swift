@@ -57,10 +57,22 @@ struct AuthorTests {
     #expect(LegacyTextParser.author(in: "Some Company, Inc.") == nil)
   }
 
-  /// What a citation inverts and a printed page's footer names (#375).
-  @Test func `a surname is the name's last word`() {
-    #expect(Author(name: "A. Writer").surname == "Writer")
-    #expect(Author(name: "Anne B. Writer", role: .editor).surname == "Writer")
-    #expect(Author(name: "Writer").surname == "Writer")
+  /// What a citation inverts and a printed page's footer names (#375): the name past
+  /// its leading initials, however many words that is (#768).
+  @Test(arguments: [
+    ("A. Writer", "A.", "Writer"),
+    ("J.K. L. Writer", "J.K. L.", "Writer"),
+    ("SN Writer", "SN", "Writer"),
+    ("D. Eastlake 3rd", "D.", "Eastlake 3rd"),
+    ("F. Le Faucheur", "F.", "Le Faucheur"),
+    ("M. St. Johns", "M.", "St. Johns"),
+    ("Writer", "", "Writer"),
+    ("Internet Architecture Board", "", "Internet Architecture Board"),
+    ("RFC Editor", "", "RFC Editor"),
+  ])
+  func `a surname is the name past its initials`(name: String, given: String, surname: String) {
+    let author = Author(name: name, role: .editor)
+    #expect(author.givenNames == given)
+    #expect(author.surname == surname)
   }
 }

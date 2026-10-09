@@ -126,11 +126,37 @@ public struct Author: Hashable, Sendable, Codable {
     isEditor ? "\(name), Ed." : name
   }
 
-  /// The last word of the name, which is what a citation inverts and a page footer
-  /// names: "R. Fielding" is "Fielding". The whole name when it is one word.
+  /// The name past its given names, which is what a citation inverts, a page footer
+  /// names and the `author:` filter matches: "R. Fielding" is "Fielding", "F. Le
+  /// Faucheur" is "Le Faucheur", "D. Eastlake 3rd" is "Eastlake 3rd". A name with no
+  /// initials before its last word, one word or an organization's ("Internet
+  /// Architecture Board"), is all surname.
   public var surname: String {
-    guard let lastSpace = name.lastIndex(of: " ") else { return name }
-    return String(name[name.index(after: lastSpace)...])
+    Self.split(name).surname.joined(separator: " ")
+  }
+
+  /// The initials before the surname, "R." or "J.K. L.": empty when the name is all
+  /// surname.
+  public var givenNames: String {
+    Self.split(name).given.joined(separator: " ")
+  }
+
+  /// The leading words that are initials, "J.K." or "SN", are the given names; the
+  /// rest is the surname, "Le Faucheur" or "St. Johns". The last word is always
+  /// surname.
+  static func split(_ name: String) -> (given: [Substring], surname: [Substring]) {
+    let words = name.split(separator: " ")
+    let given = words.dropLast().prefix(while: isInitials)
+    return (Array(given), Array(words.dropFirst(given.count)))
+  }
+
+  /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
+  /// are at most two letters without one ("SN"). "St." has a small letter, and
+  /// "RFC" or "IAB" is three capitals without a dot, so both are surname.
+  static func isInitials(_ word: Substring) -> Bool {
+    let letters = word.filter(\.isLetter)
+    guard !letters.isEmpty, letters.allSatisfy(\.isUppercase) else { return false }
+    return word.contains(".") || letters.count <= 2
   }
 }
 

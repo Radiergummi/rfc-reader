@@ -350,23 +350,12 @@ struct AuthorName: Sendable {
   let initials: Set<Character>
   let surname: SearchText
 
-  /// The leading words that are initials, "J.K." or "SN", are the given names; the
-  /// rest is the surname, "Le Faucheur" or "St. Johns". A name that is one word, or
-  /// an organization's ("RFC Editor", "IAB and IESG"), is all surname.
+  /// The name split as `Author.surname` splits it: "Le Faucheur" or "St. Johns" is
+  /// the surname, and "RFC Editor" or "IAB and IESG" is all surname.
   init(_ name: String) {
-    let words = name.split(separator: " ")
-    let given = words.dropLast().prefix(while: Self.isInitials)
+    let (given, surname) = Author.split(name)
     initials = Set(given.flatMap { word in SearchText.folded(String(word)).filter(\.isLetter) })
-    surname = SearchText(folding: words.dropFirst(given.count).joined(separator: " "))
-  }
-
-  /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
-  /// are at most two letters without one ("SN"). "St." has a small letter, and
-  /// "RFC" or "IAB" is three capitals without a dot, so both are surname.
-  private static func isInitials(_ word: Substring) -> Bool {
-    let letters = word.filter(\.isLetter)
-    guard !letters.isEmpty, letters.allSatisfy(\.isUppercase) else { return false }
-    return word.contains(".") || letters.count <= 2
+    self.surname = SearchText(folding: surname.joined(separator: " "))
   }
 
   /// The query's last words match the surname, in part, as the query is still being
