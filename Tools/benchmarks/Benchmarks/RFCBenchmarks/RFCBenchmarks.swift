@@ -18,11 +18,10 @@ import RFCReaderKit
 // which runs before the memory baseline is taken. So a benchmark pays only for
 // its own input, and its peak memory is the work's, not the inputs'.
 //
-// The build and highlight benchmarks drain an autorelease pool after each
-// iteration: the builder's attributed strings and the lexer's regular expression
-// matches autorelease enough that, freed only when the benchmark ended, their peak
-// memory grew with the iteration count (#420). The others have none; one whose
-// peak memory climbs from p0 to p100 in `make benchmark` wants one too.
+// Every benchmark runs its iterations through `iterate`, which drains an
+// autorelease pool after each one. Without it, what the work autoreleases is freed
+// only when the benchmark ends, and its peak memory grows with the iteration count
+// rather than saying what one iteration costs (#420).
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
@@ -34,7 +33,7 @@ let benchmarks: @Sendable () -> Void = {
   let corpus = Corpus()
 
   Benchmark("Index: parse") { benchmark, data in
-    for _ in benchmark.scaledIterations {
+    try iterate(benchmark) {
       blackHole(try RFCIndexParser.parse(data))
     }
   } setup: {
@@ -42,7 +41,7 @@ let benchmarks: @Sendable () -> Void = {
   }
 
   Benchmark("Index: decode snapshot") { benchmark, snapshot in
-    for _ in benchmark.scaledIterations {
+    try iterate(benchmark) {
       blackHole(try IndexSnapshot.decode(snapshot))
     }
   } setup: {
@@ -50,7 +49,7 @@ let benchmarks: @Sendable () -> Void = {
   }
 
   Benchmark("Index: encode snapshot") { benchmark, index in
-    for _ in benchmark.scaledIterations {
+    try iterate(benchmark) {
       blackHole(try IndexSnapshot.encode(index))
     }
   } setup: {
@@ -58,7 +57,7 @@ let benchmarks: @Sendable () -> Void = {
   }
 
   Benchmark("Index: prepare") { benchmark, index in
-    for _ in benchmark.scaledIterations {
+    iterate(benchmark) {
       blackHole(PreparedIndex(index: index))
     }
   } setup: {
@@ -67,7 +66,7 @@ let benchmarks: @Sendable () -> Void = {
 
   for query in ["http", "author:fielding", "transport layer security"] {
     Benchmark("Search: \(query)") { benchmark, search in
-      for _ in benchmark.scaledIterations {
+      iterate(benchmark) {
         blackHole(search.search(query, limit: .max))
       }
     } setup: {
@@ -77,7 +76,7 @@ let benchmarks: @Sendable () -> Void = {
 
   for number in [9110, 9000] {
     Benchmark("Parse XML: RFC \(number)") { benchmark, data in
-      for _ in benchmark.scaledIterations {
+      try iterate(benchmark) {
         blackHole(try RFCXMLParser.parse(data))
       }
     } setup: {
@@ -87,7 +86,7 @@ let benchmarks: @Sendable () -> Void = {
 
   for number in [5661, 793] {
     Benchmark("Parse text: RFC \(number)") { benchmark, data in
-      for _ in benchmark.scaledIterations {
+      iterate(benchmark) {
         blackHole(LegacyTextParser.parse(data))
       }
     } setup: {
@@ -101,10 +100,8 @@ let benchmarks: @Sendable () -> Void = {
   let style = ReadingStyle(measure: ReaderLayout.idealMeasure)
   for number in [9110, 9000, 8927, 8727] {
     Benchmark("Build: RFC \(number)") { benchmark, document in
-      for _ in benchmark.scaledIterations {
-        autoreleasepool {
-          blackHole(DocumentTextBuilder.build(document, style: style))
-        }
+      iterate(benchmark) {
+        blackHole(DocumentTextBuilder.build(document, style: style))
       }
     } setup: {
       try RFCXMLParser.parse(corpus.data("rfc\(number).xml"))
@@ -112,11 +109,9 @@ let benchmarks: @Sendable () -> Void = {
   }
   // Every block RFC 8727 highlights, its 53 KB JSON block among them.
   Benchmark("Highlight: RFC 8727") { benchmark, blocks in
-    for _ in benchmark.scaledIterations {
-      autoreleasepool {
-        for (text, type) in blocks {
-          blackHole(Lexers.highlight(text, as: type))
-        }
+    iterate(benchmark) {
+      for (text, type) in blocks {
+        blackHole(Lexers.highlight(text, as: type))
       }
     }
   } setup: {
@@ -129,13 +124,19 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
   Benchmark("Build: RFC 5661") { benchmark, document in
-    for _ in benchmark.scaledIterations {
-      autoreleasepool {
-        blackHole(DocumentTextBuilder.build(document, style: style))
-      }
+    iterate(benchmark) {
+      blackHole(DocumentTextBuilder.build(document, style: style))
     }
   } setup: {
     LegacyTextParser.parse(corpus.data("rfc5661.txt"))
+  }
+}
+
+/// Runs `body` once per iteration the benchmark asks for, draining an autorelease
+/// pool after each, so what an iteration autoreleases is freed before the next.
+func iterate(_ benchmark: Benchmark, _ body: () throws -> Void) rethrows {
+  for _ in benchmark.scaledIterations {
+    try autoreleasepool(invoking: body)
   }
 }
 
