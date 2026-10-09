@@ -104,7 +104,9 @@ public struct DraftHeader: Equatable, Sendable {
   /// `BCP 14`, `STD 3`, or an old header's `NIC 5893` (#767). `RFC #733` is an RFC.
   private static func listedNumbers(_ value: String) -> [Int] {
     var numbers: [Int] = []
-    var isOtherSeries = false
+    // How many of the numbers to come are another series': one after `BCP`, all of
+    // them after a plural, `IENs`, until an RFC is named.
+    var otherSeriesNumbers = 0
     let tokens = value.replacingOccurrences(
       of: "(if approved)", with: "", options: .caseInsensitive
     )
@@ -114,18 +116,27 @@ public struct DraftHeader: Equatable, Sendable {
       var token = token.trimmingPrefix("[")
       if token.hasSuffix("]") { token = token.dropLast() }
       if let label = otherSeriesLabels.first(where: { token.uppercased().hasPrefix($0) }) {
-        // "BCP14", glued to its number, is one token; "BCP 14" is two.
-        isOtherSeries = Int(token.dropFirst(label.count)) == nil
+        let rest = token.dropFirst(label.count)
+        // "BCP14", glued to its number, is the whole of the series' share.
+        if rest.contains(where: \.isNumber) {
+          otherSeriesNumbers = 0
+        } else {
+          otherSeriesNumbers = rest.uppercased() == "S" ? .max : 1
+        }
         continue
       }
       // "RFC-9993": a hyphen, not a minus sign.
-      if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3).trimmingPrefix("-") }
-      guard let number = Int(token.trimmingPrefix("#")), number > 0 else { continue }
-      if isOtherSeries {
-        isOtherSeries = false
-      } else {
-        numbers.append(number)
+      if token.uppercased().hasPrefix("RFC") {
+        otherSeriesNumbers = 0
+        token = token.dropFirst(3).trimmingPrefix("-")
+        if token.uppercased() == "S" { continue }
       }
+      guard let number = Int(token.trimmingPrefix("#")), number > 0 else { continue }
+      guard otherSeriesNumbers == 0 else {
+        otherSeriesNumbers -= 1
+        continue
+      }
+      numbers.append(number)
     }
     return numbers
   }
@@ -156,9 +167,17 @@ public struct DraftHeader: Equatable, Sendable {
   /// The value after `label`, when the line starts with it. The column gap is looked
   /// for past the label, so padding that lines a value up with its neighbors is not
   /// taken for it.
+  ///
+  /// An old header spaces a number from its `RFC` as widely as a column gap, `RFC  760`,
+  /// and the two are closed up first, so the number stays in the value (#767).
   private static func value(of label: String, in line: String) -> String? {
     let trimmed = line.drop(while: \.isWhitespace)
     guard trimmed.hasPrefix(label) else { return nil }
-    return leftColumn(String(trimmed.dropFirst(label.count)))
+    let value = String(trimmed.dropFirst(label.count))
+      .replacing(spacedRFCNumber) { "RFC \($0.output.1)" }
+    return leftColumn(value)
   }
+
+  /// `RFC`, then two spaces or more, then a number.
+  private static let spacedRFCNumber = Pattern(#/RFC {2,}(\d)/#)
 }

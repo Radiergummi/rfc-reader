@@ -44,6 +44,18 @@ struct LegacyHeaderBlockTests {
     #expect(header.updates == [.rfc(2000)])
   }
 
+  /// A series label covers every number after it, until an RFC is named again; and a
+  /// label repeated on a second line adds to the first, whatever spaces the value has.
+  @Test func `a series list is not RFCs, and a repeated label adds to it`() {
+    let header = LegacyTextParser.parseFrontMatter([
+      "Network Working Group                                          A. Author",
+      "Request for Comments: 999                                       May 1980",
+      "Updates:  IENs 100, 200, RFC 300",
+      "Updates:  RFC  400",
+    ])
+    #expect(header.updates == [.rfc(300), .rfc(400)])
+  }
+
   /// Older headers write the number after a `#`.
   @Test func `a number after a hash is read`() {
     let header = LegacyTextParser.parseFrontMatter([
