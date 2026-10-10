@@ -7,13 +7,24 @@ import RFCKit
 /// B.1. A name defined nowhere in the document, as one imported from another, stays
 /// plain.
 enum ABNFPresentation {
-  static let types: Set<String> = ["abnf", "abnf9110"]
+  /// `abnf2616` is a grammar in the bar dialect, alternating with `|` (#696): its rules
+  /// link, and it is no RFC 5234 grammar, so no `.abnf` file takes it.
+  static let types: Set<String> = ["abnf", "abnf9110", barDialectType]
+
+  /// The type the legacy parser sets on a grammar in the bar dialect.
+  static let barDialectType = "abnf2616"
+
+  /// The dialect a block of `type` is written in: the bar dialect's own type says so,
+  /// and every other grammar is RFC 5234's.
+  static func dialect(ofType type: String?) -> ABNF.Dialect {
+    ArtworkType.canonical(type)?.name == barDialectType ? .rfc2616 : .rfc5234
+  }
 
   static let entry = RendererEntry(
     types: types,
     presentations: [
       Presentation(id: "abnf-links") { block, _, context in
-        render(block.text, grammar: context.grammar)
+        render(block.text, dialect: dialect(ofType: block.type), grammar: context.grammar)
       }
     ])
 
@@ -29,8 +40,10 @@ enum ABNFPresentation {
     "lwsp", "octet", "sp", "vchar", "wsp",
   ]
 
-  static func render(_ text: String, grammar: DocumentGrammar) -> Rendition? {
-    guard let rules = ABNF.parse(text) else { return nil }
+  static func render(
+    _ text: String, dialect: ABNF.Dialect = .rfc5234, grammar: DocumentGrammar
+  ) -> Rendition? {
+    guard let rules = ABNF.parse(text, dialect: dialect) else { return nil }
     var definitions: [LinkedText.Definition] = []
     var links: [LinkedText.Link] = []
     for rule in rules {
@@ -70,8 +83,8 @@ public struct DocumentGrammar: Sendable, Equatable {
   public init() {}
 
   /// The document's grammar blocks, each with the section it is in (nil for the
-  /// abstract), in document order: a block the document or a hint types `abnf` or
-  /// `abnf9110`. One the reader shows other than as written, folded by RFC 8792 or
+  /// abstract), in document order: a block the document or a hint types `abnf`,
+  /// `abnf9110` or the bar dialect's `abnf2616`. One the reader shows other than as written, folded by RFC 8792 or
   /// set with tabs, is left out: its rules could not be anchored in its own text, and
   /// a link to an anchor that is never set would go nowhere.
   static func blocks(of document: RFCDocument, hints: ArtworkHints)
@@ -98,15 +111,24 @@ public struct DocumentGrammar: Sendable, Equatable {
   init(of document: RFCDocument, hints: ArtworkHints) {
     self.init(
       blocks: Self.blocks(of: document, hints: hints).map { _, content in
-        content.kind == .sourceCode
-          ? DocumentTextBuilder.removingSharedIndent(content.text) : content.text
+        (
+          text: content.kind == .sourceCode
+            ? DocumentTextBuilder.removingSharedIndent(content.text) : content.text,
+          dialect: ABNFPresentation.dialect(ofType: content.type)
+        )
       })
   }
 
-  /// The grammar of `blocks`, the texts of a document's grammar blocks in order.
+  /// The grammar of `blocks`, the texts of a document's grammar blocks in order, in
+  /// RFC 5234's dialect.
   public init(blocks: [String]) {
-    for block in blocks {
-      guard let rules = ABNF.parse(block) else { continue }
+    self.init(blocks: blocks.map { (text: $0, dialect: ABNF.Dialect.rfc5234) })
+  }
+
+  /// The grammar of `blocks`, each in the dialect it is written in.
+  init(blocks: [(text: String, dialect: ABNF.Dialect)]) {
+    for (block, dialect) in blocks {
+      guard let rules = ABNF.parse(block, dialect: dialect) else { continue }
       let starts = rules.map(\.nameRange.location)
       for (index, rule) in rules.enumerated() where !rule.isIncremental {
         let anchor = ABNFPresentation.anchor(for: rule.name)

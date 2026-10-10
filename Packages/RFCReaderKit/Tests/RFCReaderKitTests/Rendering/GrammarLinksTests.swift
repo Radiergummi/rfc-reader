@@ -34,6 +34,27 @@ struct GrammarLinksTests {
 
   // MARK: Guards
 
+  /// A grammar in the bar dialect, alternating with `|`, links as one in RFC 5234's
+  /// does (#696); its type says which it is.
+  @Test func `a grammar that alternates with a bar links its rules`() throws {
+    let text = Self.text("greeting = salutation | name", "name     = 1*ALPHA")
+    #expect(ABNFPresentation.dialect(ofType: "abnf2616") == .rfc2616)
+    #expect(ABNFPresentation.dialect(ofType: "abnf") == .rfc5234)
+    let grammar = DocumentGrammar(blocks: [(text: text, dialect: ABNF.Dialect.rfc2616)])
+    guard
+      case .linked(let linked)? = ABNFPresentation.render(
+        text, dialect: .rfc2616, grammar: grammar)
+    else {
+      Issue.record("no linked rendition")
+      return
+    }
+    #expect(linked.definitions.map(\.anchor) == ["abnf-greeting", "abnf-name"])
+    // A core rule links to RFC 5234's in either dialect.
+    #expect(linked.links.map { Self.substring(text, $0.range) } == ["name", "ALPHA"])
+    // A block typed as RFC 5234's grammar is read as one, a stray `|` and all.
+    #expect(ABNFPresentation.render(text, grammar: DocumentGrammar(blocks: [text])) == nil)
+  }
+
   @Test func `a definition is an anchor named for the rule`() throws {
     let text = Self.text("greeting = salutation SP name", "Name     = 1*ALPHA")
     let linked = try Self.linked(text)
@@ -137,7 +158,8 @@ struct GrammarLinksTests {
   }
 
   @Test func `what is not a grammar is not linked`() {
-    #expect(ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [])) == nil)
+    #expect(
+      ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [String]())) == nil)
   }
 
   /// The preview of a rule is its definition, continuation lines included, without

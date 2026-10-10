@@ -58,7 +58,8 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     -> [ExportFormat]
   {
     let hasGrammar = DocumentGrammar.blocks(of: document, hints: hints).contains {
-      ABNF.parse($0.content.text) != nil
+      ABNFPresentation.dialect(ofType: $0.content.type) == .rfc5234
+        && ABNF.parse($0.content.text) != nil
     }
     return hasGrammar ? [.pdf, .abnf] : [.pdf]
   }

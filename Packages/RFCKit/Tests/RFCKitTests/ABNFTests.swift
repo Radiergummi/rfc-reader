@@ -280,6 +280,112 @@ struct ABNFTests {
     #expect(Self.substring(text, rules[0].uses[0].range) == "second")
   }
 
+  // MARK: RFC 2616's dialect (#696)
+
+  /// A grammar written before RFC 5234, as RFC 1945's and RFC 2616's are,
+  /// alternates with `|`: no RFC 5234 grammar, and a grammar in RFC 2616's dialect.
+  @Test func `a grammar that alternates with a bar is RFC 2616's`() throws {
+    let text = "first-rule = second-rule | third-rule\nsecond-rule = 1*DIGIT"
+    #expect(ABNF.parse(text) == nil)
+    #expect(!ABNF.recognizes(text))
+    let rules = try #require(ABNF.parse(text, dialect: .rfc2616))
+    #expect(rules.map(\.name) == ["first-rule", "second-rule"])
+    #expect(ABNF.recognizes(text, dialect: .rfc2616))
+  }
+
+  /// A grammar of that time names rules with `_` too, which RFC 5234 does not allow.
+  @Test func `RFC 2616's dialect allows an underscore in a name`() throws {
+    let text = "first_rule = second_rule | %x20\nsecond_rule = 1*DIGIT"
+    #expect(ABNF.parse(text) == nil)
+    let rules = try #require(ABNF.parse(text, dialect: .rfc2616))
+    #expect(rules.map(\.name) == ["first_rule", "second_rule"])
+    #expect(rules[0].references == ["second_rule"])
+  }
+
+  /// `|` is C's bitwise or too, and identifiers name one another in any code, so in
+  /// the bar dialect neither an alternative alone nor plain rules that refer to one
+  /// another make a grammar; a literal, a repetition or an option does.
+  @Test func `the bar dialect needs more than an alternative`() {
+    #expect(!ABNF.recognizes("flags = SYN | ACK", dialect: .rfc2616))
+    #expect(!ABNF.recognizes("tmp_len = buf_len\nout_len = tmp_len", dialect: .rfc2616))
+    #expect(ABNF.recognizes(#"answer = "yes" | "no""#, dialect: .rfc2616))
+  }
+
+  /// A grammar in the bar dialect set as several blocks is one grammar: its artwork
+  /// RFC 5234 reads too, a plain rule, is typed with it; a stretch with no block in the
+  /// bar dialect alone stays as it was, and so does one whose only sign is an `_`.
+  @Test func `a bar-dialect grammar's blocks are typed alike`() {
+    let blocks = [
+      Self.verbatim(#"answer = "yes" | "no""#), Self.verbatim("choice = answer count"),
+    ]
+    let typed = LegacyTextParser.typingGrammars(blocks)
+    #expect(
+      typed.allSatisfy { block in
+        if case .preformatted(let verbatim) = block { verbatim.type == "abnf2616" } else { false }
+      })
+    let rfc5234 = [Self.verbatim("count = 1*DIGIT", abnf: true), Self.verbatim("+--+")]
+    #expect(LegacyTextParser.typingGrammars(rfc5234) == rfc5234)
+    let settings = [Self.verbatim("wait_time=100ms")]
+    #expect(LegacyTextParser.typingGrammars(settings) == settings)
+  }
+
+  /// Between prose too: where more of a document's grammar blocks are in the bar
+  /// dialect alone than in RFC 5234's, its blocks typed as RFC 5234's that the bar
+  /// dialect reads are that grammar's; one with a `/` alternative stays RFC 5234's.
+  @Test func `a document's grammar is in one dialect`() {
+    let bar = Preformatted(kind: .sourceCode, text: #"answer = "yes" | "no""#, type: "abnf2616")
+    let plain = Preformatted(kind: .sourceCode, text: "count = 1*DIGIT", type: "abnf")
+    let slash = Preformatted(kind: .sourceCode, text: "pick = this / that", type: "abnf")
+    let sections = [
+      Section(anchor: "section-1", number: "1", title: "One", blocks: [.preformatted(bar)]),
+      Section(
+        anchor: "section-2", number: "2", title: "Two",
+        blocks: [.preformatted(plain), .preformatted(slash)]),
+    ]
+    let unified = LegacyTextParser.unifyingGrammarDialect(
+      [sections[0], sections[0]] + [sections[1]])
+    let types = unified[2].blocks.compactMap { block -> String? in
+      if case .preformatted(let verbatim) = block { verbatim.type } else { nil }
+    }
+    #expect(types == ["abnf2616", "abnf"])
+    #expect(LegacyTextParser.unifyingGrammarDialect([sections[1]]) == [sections[1]])
+    // An RFC 5234 grammar that slips into `|` once stays RFC 5234's.
+    #expect(LegacyTextParser.unifyingGrammarDialect(sections) == sections)
+  }
+
+  /// A block that alternates with both is neither dialect's grammar.
+  @Test func `a grammar mixing slash and bar is no grammar`() {
+    let text = "first-rule = second-rule / third-rule | %x20\nsecond-rule = 1*DIGIT"
+    #expect(!ABNF.recognizes(text))
+    #expect(!ABNF.recognizes(text, dialect: .rfc2616))
+  }
+
+  /// RFC 2371 writes its grammar with `|`: it is typed as RFC 2616's, which the reader
+  /// links and an export as RFC 5234 ABNF leaves out.
+  @Test func `RFC 2371's grammar is typed as RFC 2616's`() throws {
+    let document = try Fixtures.document("rfc2371.txt")
+    let grammar = try #require(
+      document.blocks.lazy.compactMap { block -> Preformatted? in
+        if case .preformatted(let preformatted) = block { preformatted } else { nil }
+      }
+      .first { $0.text.contains("pchar") })
+    #expect(grammar.kind == .sourceCode)
+    #expect(grammar.type == "abnf2616")
+  }
+
+  /// RFC 2511's `|` is concatenation in pseudocode, not an alternative.
+  @Test func `RFC 2511's pseudocode is no grammar`() throws {
+    let document = try Fixtures.document("rfc2511.txt")
+    let typed = document.blocks.filter { block in
+      if case .preformatted(let preformatted) = block {
+        preformatted.type == "abnf2616"
+      } else {
+        false
+      }
+    }
+    #expect(typed.isEmpty)
+  }
+
   // MARK: Through parse
 
   /// RFC 5234 sets its own grammar and its core rules as ABNF: both come out as
