@@ -340,4 +340,12 @@ extension AccessibleReading {
 
   /// A pronunciation of nothing at all.
   static let silence = ""
+
+  /// What an informative chip's icon is pronounced as on iOS (#862), "informative"
+  /// in IPA, so the chip is said as "informative RFC 5116". As for a diagram, a
+  /// speech attribute is the only way to change what a range is said as there;
+  /// macOS says the chip's `.rfcSpoken` label instead. On the icon, because it is
+  /// the one character of the chip that says nothing of its own, and an IPA
+  /// pronunciation can't be made of the label.
+  static let informativePronunciation = "ɪnˈfɔɹmətɪv"
 }

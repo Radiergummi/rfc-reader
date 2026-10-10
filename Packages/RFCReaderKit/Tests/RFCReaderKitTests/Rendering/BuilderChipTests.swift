@@ -209,4 +209,58 @@ struct BuilderChipTests {
     #expect(informative.label == informative.shown + ", informative")
     #expect(spoken[.rfc(2119)]?.label == "", "a normative chip has no label of its own")
   }
+
+  #if canImport(UIKit)
+    /// Whether each chip is informative, and what its icon is pronounced as; a
+    /// pronunciation anywhere else in a chip fails.
+    private func iconPronunciations(
+      _ built: BuiltDocument
+    ) -> [(informative: Bool, pronunciation: String?)] {
+      let string = built.text.string as NSString
+      let whole = NSRange(location: 0, length: built.text.length)
+      var chips: [(informative: Bool, pronunciation: String?)] = []
+      built.text.enumerateAttribute(.rfcChip, in: whole) { value, range, _ in
+        guard value != nil else { return }
+        let informative =
+          built.text.attribute(.rfcInformative, at: range.location, effectiveRange: nil) != nil
+        var pronunciation: String?
+        built.text.enumerateAttribute(.accessibilitySpeechIPANotation, in: range) {
+          value, piece, _ in
+          guard let value = value as? String else { return }
+          #expect(piece == NSRange(location: range.location, length: 1), "the icon alone")
+          #expect(string.character(at: piece.location) == 0xFFFC, "the chip's icon")
+          pronunciation = value
+        }
+        chips.append((informative, pronunciation))
+      }
+      return chips
+    }
+
+    /// iOS VoiceOver says an informative chip's kind (#862): `UITextView` has no
+    /// per-range accessor, so the build pronounces every informative chip's icon,
+    /// and nothing else, as "informative". A normative chip is pronounced as it reads.
+    @Test func `the build pronounces only an informative chip's icon`() throws {
+      let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+      let chips = iconPronunciations(built)
+      #expect(chips.contains { $0.informative }, "RFC 5116 is cited informatively")
+      #expect(chips.contains { !$0.informative }, "and RFC 2119 normatively")
+      for (index, chip) in chips.enumerated() {
+        #expect(
+          chip.pronunciation
+            == (chip.informative ? AccessibleReading.informativePronunciation : nil),
+          "chip \(index)")
+      }
+    }
+
+    /// Only the reader is spoken; a build for paper carries no speech, as a
+    /// diagram's does not (`DiagramSpeechTests`).
+    @Test func `a printed page pronounces no chip`() throws {
+      var paper = style
+      paper.emitsLinks = false
+      let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: paper)
+      let chips = iconPronunciations(built)
+      #expect(chips.contains { $0.informative })
+      #expect(chips.allSatisfy { $0.pronunciation == nil })
+    }
+  #endif
 }

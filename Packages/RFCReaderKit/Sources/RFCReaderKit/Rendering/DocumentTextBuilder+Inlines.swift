@@ -90,16 +90,24 @@ extension DocumentTextBuilder {
         return NSAttributedString(string: display.text, attributes: attributes)
       }
       var chipAttributes = attributes
+      var iconAttributes: [NSAttributedString.Key: Any] = [:]
       if referenceKinds.kind(of: xref.target) == .informative {
         chipAttributes[.rfcInformative] = "informative"
         // Said, not only drawn (#457): the outline is no cue to VoiceOver. The
         // reader body is English, so this is too. Only macOS reads it, where the
         // text view's per-range accessors go through `AccessibleReading`; a
-        // `UITextView` has no such accessor, and iOS still says the chip as a
-        // normative one.
+        // `UITextView` has no such accessor, so iOS is given a pronunciation on
+        // the chip's icon instead (#862), only in a build for the reader, as a
+        // diagram's is (`setDiagramSpeech`).
         chipAttributes[.rfcSpoken] = display.text + ", informative"
+        #if canImport(UIKit)
+          if style.emitsLinks {
+            iconAttributes[.accessibilitySpeechIPANotation] =
+              AccessibleReading.informativePronunciation
+          }
+        #endif
       }
-      return chipRun(display.text, attributes: chipAttributes)
+      return chipRun(display.text, attributes: chipAttributes, iconAttributes: iconAttributes)
 
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)
@@ -135,14 +143,19 @@ extension DocumentTextBuilder {
   /// runs whose attribute values compare equal, and two adjacent chips
   /// (`[RFC9110][RFC9111]`) sharing one effective range would draw as a single
   /// rounded rect. Each chip therefore carries a value no other chip has.
+  ///
+  /// `iconAttributes` are the icon's alone, on top of the chip's.
   private func chipRun(
-    _ text: String, attributes: [NSAttributedString.Key: Any]
+    _ text: String, attributes: [NSAttributedString.Key: Any],
+    iconAttributes: [NSAttributedString.Key: Any] = [:]
   ) -> NSAttributedString {
     var chip = attributes
     nextChipID += 1
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
-    if let symbol = chipSymbolRun("doc.text", attributes: chip) {
+    if let symbol = chipSymbolRun(
+      "doc.text", attributes: chip.merging(iconAttributes) { _, icon in icon })
+    {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
       // offers a line-break opportunity on either side, so in a narrow column
