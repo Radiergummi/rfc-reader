@@ -149,21 +149,33 @@ final class LibraryModel {
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
   /// Every document marked Keep Offline, fetched again on every save of a mark
-  /// (#358), and synced, so a mark made on another device arrives here too. What
-  /// is wanted offline, and what Available Offline lists, whether or not a body has
-  /// arrived yet.
+  /// (#358), and synced, so a mark made on another device arrives here too. With the
+  /// bookmarks when `keepsBookmarksOffline` is on, what is wanted offline, and what
+  /// Available Offline lists, whether or not a body has arrived yet.
   private(set) var offlineMarks: Set<DocumentID> = []
+
+  /// "Keep bookmarked documents offline", from Settings' Storage tab (#358). Per
+  /// device, as storage is, so a default rather than synced user data.
+  private(set) var keepsBookmarksOffline =
+    (UserDefaults.standard.object(forKey: ReaderPreferences.keepBookmarksOfflineKey) as? Bool)
+    ?? ReaderPreferences.defaultKeepBookmarksOffline
+
+  /// What is wanted offline: the marks, and the bookmarks when they are kept too.
+  private var wantedOffline: Set<DocumentID> {
+    OfflineReconciler.wanted(
+      marks: offlineMarks, bookmarks: bookmarkedDocuments, keepsBookmarks: keepsBookmarksOffline)
+  }
 
   /// Whether `offlineMarks` has been read from the store at least once. Until it
   /// has, its emptiness means nothing, and reconciling against it would move every
   /// kept body back into the cache.
   @ObservationIgnored private var hasReadOfflineMarks = false
 
-  /// The RFCs of `offlineMarks`, which is what the library lists, kept beside it
+  /// The RFCs wanted offline, which is what the library lists, kept beside the marks
   /// rather than worked out on every read: the sidebar counts it as it draws.
   private(set) var availableOfflineNumbers: Set<Int> = []
 
-  /// Moves, releases and fetches bodies to match `offlineMarks`. Its fetches that
+  /// Moves, releases and fetches bodies to match `wantedOffline`. Its fetches that
   /// nobody waits for take only a path that is neither metered nor in Low Data Mode,
   /// and fail rather than wait when the device moves to one.
   @ObservationIgnored private lazy var offlineKeeper = OfflineKeeper(
@@ -266,11 +278,31 @@ final class LibraryModel {
     hasReadOfflineMarks = true
     guard isFirstRead || marks != offlineMarks else { return }
     offlineMarks = marks
-    availableOfflineNumbers = Set(marks.filter { $0.series == .rfc }.map(\.number))
+    wantedOfflineChanged()
+  }
+
+  /// Lists what is wanted offline, and brings the disk in line with it.
+  private func wantedOfflineChanged() {
+    availableOfflineNumbers = Set(wantedOffline.filter { $0.series == .rfc }.map(\.number))
     reconcileOffline()
   }
 
-  /// Brings the disk in line with `offlineMarks`, after any reconciliation already
+  /// Turns "Keep bookmarked documents offline" on or off. On, a bookmarked document's
+  /// body is moved into the kept tier, or fetched there once the network allows a
+  /// fetch nobody waits for; off, it goes back into the cache.
+  func setKeepsBookmarksOffline(_ isOn: Bool) {
+    guard isOn != keepsBookmarksOffline else { return }
+    storeKeepsBookmarksOffline(isOn)
+    wantedOfflineChanged()
+  }
+
+  /// Records the setting, leaving reconciling to the caller.
+  private func storeKeepsBookmarksOffline(_ isOn: Bool) {
+    UserDefaults.standard.set(isOn, forKey: ReaderPreferences.keepBookmarksOfflineKey)
+    keepsBookmarksOffline = isOn
+  }
+
+  /// Brings the disk in line with `wantedOffline`, after any reconciliation already
   /// running. Not before the index has loaded, since a fetch needs the formats it
   /// lists, and applying the index runs this; nor before the marks have been read.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
@@ -283,7 +315,7 @@ final class LibraryModel {
       let policy = network.decision(for: .syncedMark)
     else { return }
     offlineKeeper.reconcile(
-      wanted: offlineMarks, policy: policy, forgettingFailures: forgettingFailures)
+      wanted: wantedOffline, policy: policy, forgettingFailures: forgettingFailures)
   }
 
   /// Fetches a document marked Keep Offline on whatever path the device has, from
@@ -397,6 +429,7 @@ final class LibraryModel {
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
+    if keepsBookmarksOffline { wantedOfflineChanged() }
     // So that the baseline holds a new bookmark from now on, and reports a change to
     // it from the next refresh rather than taking it for one from before (#191).
     compareBookmarks()
@@ -1422,6 +1455,55 @@ final class LibraryModel {
     let marked = try OfflineMarkStore.markedDocuments(in: context)
     let open = sceneRegistry.open.compactMap(\.selection)
     return bookmarked.union(read).union(marked).union(open)
+  }
+
+  // MARK: - Storage (#358)
+
+  /// What each tier holds, for Settings' Storage tab, once the keeper has made the
+  /// moves asked of it so far; a fetch still running is counted when it lands.
+  func storageUsage() async -> (kept: StorageUsage, cache: StorageUsage) {
+    await offlineKeeper.untilRunsEnd()
+    return await store.storageUsage()
+  }
+
+  /// Empties the reading cache, but for what a window has open and what is wanted
+  /// offline, whose body waits there for the keeper to move it. The marks are read
+  /// here, as for eviction, since the store learns them only when the keeper runs;
+  /// when they cannot be read, nothing is removed.
+  func clearCache() async {
+    let spared: Set<DocumentID>
+    do {
+      spared = try OfflineMarkStore.markedDocuments(in: container.mainContext)
+        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.selection))
+    } catch {
+      libraryLog.error(
+        "Clear Cache skipped, reading the marks failed: \(String(describing: error), privacy: .public)"
+      )
+      return
+    }
+    forgetPreviews(of: await store.clearCache(sparing: spared))
+  }
+
+  /// Keeps nothing offline any more: removes every mark, on every device, since marks
+  /// are synced, and turns off keeping this device's bookmarks. The bodies go back
+  /// into the reading cache, as an unmarked one does, where eviction or Clear Cache
+  /// removes them. A removal that could not be saved is logged and changes nothing:
+  /// it is made in a context of its own, discarded with it, since rolling back the
+  /// app's context would discard whatever else waits there to be saved, such as a
+  /// bookmark whose save failed.
+  func removeAllOffline() {
+    do {
+      try OfflineMarkStore.removeAll(in: ModelContext(container))
+    } catch {
+      libraryLog.error(
+        "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    storeKeepsBookmarksOffline(false)
+    // One reconciliation for both: the marks' refresh runs it when they changed.
+    let marks = offlineMarks
+    refreshOfflineMarks()
+    if offlineMarks == marks { wantedOfflineChanged() }
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {

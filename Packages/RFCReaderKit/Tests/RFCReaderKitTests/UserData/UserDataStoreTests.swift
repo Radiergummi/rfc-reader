@@ -31,6 +31,16 @@ struct UserDataStoreTests {
     #expect(try OfflineMarkStore.markedDocuments(in: context).isEmpty)
   }
 
+  @Test func `removing every mark leaves none`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: context)
+    try OfflineMarkStore.setMarked(.rfc(9111), true, in: context)
+    try OfflineMarkStore.removeAll(in: context)
+    #expect(try OfflineMarkStore.markedDocuments(in: context).isEmpty)
+    #expect(try rowCount(OfflineMark.self, in: context) == 0)
+  }
+
   @Test func `marking a marked document again adds no second mark`() throws {
     let container = try makeContainer()
     let context = container.mainContext

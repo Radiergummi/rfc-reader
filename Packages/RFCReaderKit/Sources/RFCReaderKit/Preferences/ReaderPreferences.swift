@@ -67,6 +67,11 @@ public enum ReaderPreferences {
   public static let notifyAboutBookmarksKey = "notifyAboutBookmarks"
   public static let defaultNotifyAboutBookmarks = false
 
+  /// Keep every bookmarked document offline, as well as the marked ones (#358). Per
+  /// device, as storage is, so not synced; off until turned on in Storage.
+  public static let keepBookmarksOfflineKey = "keepBookmarksOffline"
+  public static let defaultKeepBookmarksOffline = false
+
   /// The order the Contents tab lists sections in: a `ContentsOutline.Order`'s raw
   /// value.
   public static let contentsOrderKey = "contentsOrder"

@@ -971,12 +971,37 @@ public actor DocumentStore {
   public func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
     guard hasGrown else { return [] }
     hasGrown = false
+    return removeFromCache(sparing: pinned, bound: bound)
+  }
+
+  /// The cache's least recently opened bodies past `bound`, removed: never a pinned
+  /// one, nor one wanted offline. What eviction and Clear Cache both remove.
+  private func removeFromCache(sparing pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
     let victims = CacheEviction.victims(
       of: CacheEviction.entries(in: cacheDirectory), pinned: pinned.union(wanted), bound: bound)
     for id in victims {
       remove(id, from: [.cache])
     }
     return victims
+  }
+
+  // MARK: - Storage (#358)
+
+  /// What each tier holds: the documents kept offline, and the reading cache.
+  public func storageUsage() -> (kept: StorageUsage, cache: StorageUsage) {
+    (
+      StorageUsage(CacheEviction.entries(in: keptDirectory)),
+      StorageUsage(CacheEviction.entries(in: cacheDirectory))
+    )
+  }
+
+  /// Empties the reading cache, as Settings' Clear Cache does, but for the `pinned`
+  /// bodies and any wanted offline, which is in the cache only until the reconciler
+  /// moves it: eviction with no room at all. The kept tier is not looked at. Returns
+  /// what it removed.
+  @discardableResult
+  public func clearCache(sparing pinned: Set<DocumentID>) -> [DocumentID] {
+    removeFromCache(sparing: pinned, bound: 0)
   }
 
   public func originalText(_ id: DocumentID, client: any DocumentFetching) async throws -> String {

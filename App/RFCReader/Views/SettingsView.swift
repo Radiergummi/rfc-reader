@@ -9,6 +9,10 @@ import SwiftUI
 /// Apple Books; Advanced will hold the rest, and never the quick panel (#702). The
 /// same sections make up `SettingsScreen`, iOS's, so the two cannot drift.
 struct SettingsView: View {
+  /// Handed in rather than read from the environment: the Settings scene is a root of
+  /// its own on macOS.
+  let library: LibraryModel
+
   var body: some View {
     TabView {
       Tab("Reading", systemImage: "textformat.size") {
@@ -29,6 +33,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
       }
+      Tab("Storage", systemImage: "internaldrive") {
+        Form { StorageSettings(library: library) }
+          .formStyle(.grouped)
+      }
     }
     // A grouped form is scroll-backed and has no height of its own to offer, so
     // the window is told to size to it rather than left to guess.
@@ -45,6 +53,7 @@ struct SettingsView: View {
 /// Apple keeps it for settings changed rarely. What the Settings app will hold is
 /// the system-level kind, such as downloads.
 struct SettingsScreen: View {
+  let library: LibraryModel
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
@@ -54,6 +63,7 @@ struct SettingsScreen: View {
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
         Section("Notifications") { NotificationSettings() }
+        Section("Storage") { StorageSettings(library: library) }
       }
       .navigationTitle("Settings")
       #if !os(macOS)
@@ -195,6 +205,87 @@ struct NotificationSettings: View {
     if wasRefused {
       Text("Notifications for RFC Reader are turned off in System Settings.")
         .foregroundStyle(.secondary)
+    }
+  }
+}
+
+/// Where documents are kept (#358): what the kept tier and the reading cache each
+/// hold, keeping the bookmarks offline as well as the marked documents, and emptying
+/// either. On the Mac a tab of its own, on iOS a section of `SettingsScreen`.
+struct StorageSettings: View {
+  let library: LibraryModel
+
+  /// Read when the tab shows and after each change made here, once the keeper has
+  /// moved what the change asked; not watched, so a document read meanwhile in a
+  /// window counts from the next time the tab shows.
+  @State private var usage: (kept: StorageUsage, cache: StorageUsage)?
+  @State private var confirmsRemoval = false
+
+  private var keepsBookmarks: Binding<Bool> {
+    Binding(
+      get: { library.keepsBookmarksOffline },
+      set: {
+        library.setKeepsBookmarksOffline($0)
+        Task { await refresh() }
+      }
+    )
+  }
+
+  var body: some View {
+    Group {
+      Toggle(isOn: keepsBookmarks) {
+        Text("Keep bookmarked documents offline")
+        Text("Downloaded when the network is not metered, and kept while bookmarked.")
+      }
+      LabeledContent("Kept Offline") { UsageValue(usage: usage?.kept) }
+      Button("Remove All Offline Documents…", role: .destructive) {
+        confirmsRemoval = true
+      }
+      .disabled(library.offlineMarks.isEmpty && !library.keepsBookmarksOffline)
+      .confirmationDialog(
+        "Remove all offline documents?", isPresented: $confirmsRemoval, titleVisibility: .visible
+      ) {
+        Button("Remove All", role: .destructive) {
+          library.removeAllOffline()
+          Task { await refresh() }
+        }
+      } message: {
+        Text(
+          "Documents marked Keep Offline are unmarked on all your devices. Their copies stay in the reading cache until it needs the room."
+        )
+      }
+      LabeledContent("Reading Cache") { UsageValue(usage: usage?.cache) }
+      Button("Clear Cache") {
+        Task {
+          await library.clearCache()
+          await refresh()
+        }
+      }
+      // Until the cache is counted too, when there is nothing yet to say it empties.
+      .disabled((usage?.cache.documents ?? 0) == 0)
+    }
+    .task { await refresh() }
+  }
+
+  private func refresh() async {
+    usage = await library.storageUsage()
+  }
+}
+
+/// A tier's size over how many documents it holds; nothing until it has been read.
+private struct UsageValue: View {
+  let usage: StorageUsage?
+
+  var body: some View {
+    if let usage {
+      VStack(alignment: .trailing, spacing: 1) {
+        Text(Int64(usage.bytes), format: .byteCount(style: .file))
+        Text("\(usage.documents) documents")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    } else {
+      ProgressView().controlSize(.small)
     }
   }
 }

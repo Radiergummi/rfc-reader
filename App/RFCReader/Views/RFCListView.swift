@@ -313,7 +313,7 @@ struct RFCListView: View {
       // end (#348).
       .refreshable { await library.refreshIndex() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
-      .sheet(isPresented: $showsSettings) { SettingsScreen() }
+      .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
     #endif
   }
 

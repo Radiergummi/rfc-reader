@@ -130,6 +130,46 @@
         }
       }
     },
+    "%lld documents" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokument"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Dokumente"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld document"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld documents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld documents." : {
       "localizations" : {
         "de" : {
@@ -530,6 +570,16 @@
         }
       }
     },
+    "Clear Cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache leeren"
+          }
+        }
+      }
+    },
     "Close" : {
       "localizations" : {
         "de" : {
@@ -861,6 +911,16 @@
         }
       }
     },
+    "Documents marked Keep Offline are unmarked on all your devices. Their copies stay in the reading cache until it needs the room." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als „Offline behalten“ markierte Dokumente werden auf allen deinen Geräten freigegeben. Ihre Kopien bleiben im Lese-Cache, bis er den Platz braucht."
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "de" : {
@@ -877,6 +937,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laden"
+          }
+        }
+      }
+    },
+    "Downloaded when the network is not metered, and kept while bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geladen, wenn das Netzwerk keine Datenbegrenzung hat, und behalten, solange ein Lesezeichen besteht."
           }
         }
       }
@@ -1207,6 +1277,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eine Kopie behalten, um offline zu lesen."
+          }
+        }
+      }
+    },
+    "Keep bookmarked documents offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente mit Lesezeichen offline behalten"
+          }
+        }
+      }
+    },
+    "Kept Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline behalten"
           }
         }
       }
@@ -1991,6 +2081,16 @@
         }
       }
     },
+    "Reading Cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lese-Cache"
+          }
+        }
+      }
+    },
     "Reading Mode" : {
       "localizations" : {
         "de" : {
@@ -2067,6 +2167,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registry"
+          }
+        }
+      }
+    },
+    "Remove All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle entfernen"
+          }
+        }
+      }
+    },
+    "Remove All Offline Documents…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Offline-Dokumente entfernen …"
+          }
+        }
+      }
+    },
+    "Remove all offline documents?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Offline-Dokumente entfernen?"
           }
         }
       }
@@ -2397,6 +2527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht mehr offline behalten. Die Kopie kommt in den Lese-Cache, der sie entfernen kann, wenn er Platz braucht."
+          }
+        }
+      }
+    },
+    "Storage" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicher"
           }
         }
       }
