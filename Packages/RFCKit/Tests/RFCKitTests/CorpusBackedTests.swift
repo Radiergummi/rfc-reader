@@ -913,3 +913,19 @@ struct CorpusBackedIndexTests {
     #expect(entries.contains { !$0.locators.isEmpty })
   }
 }
+
+@Suite("Corpus-backed: grammars", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedGrammarTests {
+  /// RFC 3261's page break falls inside a rule's alternatives, and the next page opens
+  /// with the rest of them, set deeper. The two halves are one grammar block, not a
+  /// grammar and an artwork that opens with a continuation (#423).
+  @Test func `a grammar cut by a page break is one block`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc3261"))
+    let blocks = document.blocks.compactMap { block -> Preformatted? in
+      if case .preformatted(let preformatted) = block { preformatted } else { nil }
+    }
+    let block = try #require(blocks.first { $0.text.contains("/  Require") })
+    #expect(block.type == "abnf")
+    #expect(block.text.split(separator: "\n").first?.hasPrefix("/") == false)
+  }
+}

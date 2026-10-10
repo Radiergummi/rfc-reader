@@ -60,8 +60,26 @@ public enum ABNF {
   /// no repetition or numeric value, parse but are not recognized: test vectors,
   /// listings of settings and message layouts read that way.
   static func recognizes(_ text: String) -> Bool {
-    guard let (rules, definesANameTwice) = parsed(text, locatingNames: false),
-      !rules.contains(where: \.readsAsHexNumber),
+    recognizes(blocks: [text])
+  }
+
+  /// Whether `blocks`, each parsed as a block of its own, with its own indentation, are
+  /// one grammar together, as `recognizes(_:)` asks of one block: a grammar set a rule
+  /// or a few at a time with blank lines between (#423). A name defined in two of them
+  /// counts as one defined twice.
+  static func recognizes(blocks: [String]) -> Bool {
+    var rules: [Rule] = []
+    var definesANameTwice = false
+    var defined: Set<String> = []
+    for block in blocks {
+      guard let parsed = parsed(block, locatingNames: false) else { return false }
+      rules += parsed.rules
+      definesANameTwice = definesANameTwice || parsed.definesANameTwice
+      for rule in parsed.rules where !rule.isIncremental {
+        if !defined.insert(rule.name.lowercased()).inserted { definesANameTwice = true }
+      }
+    }
+    guard !rules.contains(where: \.readsAsHexNumber),
       !definesANameTwice || rules.contains(where: \.usesRepetitionOrNumericValue)
     else { return false }
     if rules.contains(where: \.usesGrammarSyntax) { return true }
@@ -73,6 +91,12 @@ public enum ABNF {
           return reference != rule.name.lowercased() && names.contains(reference)
         }
       }
+  }
+
+  /// Whether `text` parses as ABNF, grammar or not, without locating the names the
+  /// reader links.
+  static func parses(_ text: String) -> Bool {
+    parsed(text, locatingNames: false) != nil
   }
 
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
