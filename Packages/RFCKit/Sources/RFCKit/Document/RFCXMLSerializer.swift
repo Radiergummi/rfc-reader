@@ -127,9 +127,9 @@ public struct RFCXMLSerializer: Sendable {
   static func backStart(
     _ sections: [Section], isNumbered: (Section) -> Bool = { $0.number != nil }
   ) -> Int {
-    if let last = sections.lastIndex(where: isReferences) {
+    if let last = sections.lastIndex(where: \.holdsReferences) {
       var first = last
-      while first > 0, isReferences(sections[first - 1]) { first -= 1 }
+      while first > 0, sections[first - 1].holdsReferences { first -= 1 }
       return first
     }
     var first = sections.count
@@ -161,6 +161,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { attributes.append(("surname", surname)) }
       if let role = author.role { attributes.append(("role", role.rawValue)) }
       if let contact = author.contact {
         writer.open("author", attributes)
@@ -238,7 +239,7 @@ public struct RFCXMLSerializer: Sendable {
   /// its list in a second, unnumbered `<references>`, and read back as a section
   /// holding a subsection it never had.
   private func writeOrLift(_ section: Section, writer: inout Writer, context: inout Context) {
-    if Self.isReferences(section) {
+    if section.holdsReferences {
       context.lifted.append(section)
     } else {
       writeSection(section, writer: &writer, context: &context)
@@ -316,6 +317,7 @@ public struct RFCXMLSerializer: Sendable {
       text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
       var authorAttributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { authorAttributes.append(("surname", surname)) }
       if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
       writer.empty("author", authorAttributes)
     }
@@ -645,16 +647,6 @@ public struct RFCXMLSerializer: Sendable {
       }
     }
     return (anchors, documents)
-  }
-
-  static func isReferences(_ section: Section) -> Bool {
-    if section.blocks.contains(where: {
-      if case .references = $0 { return true } else { return false }
-    }) {
-      return true
-    }
-    return !section.subsections.isEmpty && section.blocks.isEmpty
-      && section.subsections.allSatisfy(isReferences)
   }
 
   /// `anchor` and `pn` are both `xsd:ID`, so an anchor that is the part number would

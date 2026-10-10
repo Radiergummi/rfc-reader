@@ -77,7 +77,8 @@ public struct RFCLink: Hashable, Sendable {
   /// anchor that names no section, which a citation has no place for and would open
   /// at the document's top instead (#683).
   public init?(citing url: URL) {
-    guard let link = RFCLink(url: url), link.id.series == .rfc, link.anchor == nil,
+    guard let link = RFCLink(url: url, strictly: true), link.id.series == .rfc,
+      link.anchor == nil,
       !url.pathComponents.contains(where: { ["errata", "inline-errata"].contains($0) }),
       DocumentID(parsing: url.deletingPathExtension().lastPathComponent) == link.id
     else { return nil }
@@ -87,18 +88,22 @@ public struct RFCLink: Hashable, Sendable {
   /// The link `url` makes where it is the document's own page, which the Safari
   /// extension may send to the app on its own (#194): its text at the RFC Editor in
   /// any format, or its page at Datatracker, with the section or anchor it was
-  /// opened at. Nil for a page about the document, its info page, errata or history,
-  /// which someone following the link wants to read on the web.
+  /// opened at. Nil for a page about the document, its info page, errata, history or
+  /// AUTH48 status, which someone following the link wants to read on the web.
   public init?(documentPage url: URL) {
     let name = url.lastPathComponent
     let stem = Self.stem(of: name)
     guard url.scheme?.lowercased() != Self.scheme, let link = RFCLink(url: url),
-      !url.pathComponents.contains(where: { ["info", "errata", "inline-errata"].contains($0) }),
+      !url.pathComponents.contains(where: Self.pagesAbout.contains),
       DocumentID(parsing: stem) == link.id,
       Self.documentExtensions.contains(String(name.dropFirst(stem.count)))
     else { return nil }
     self = link
   }
+
+  /// The RFC Editor's directories of pages about a document: its info page, errata,
+  /// and the AUTH48 pages before it is published.
+  private static let pagesAbout: Set = ["info", "errata", "inline-errata", "auth48", "authors"]
 
   /// The formats a document's own page comes in; any other, such as the RFC Editor's
   /// `.json` of its metadata, is a page about it.
@@ -109,7 +114,15 @@ public struct RFCLink: Hashable, Sendable {
     String(name.prefix { $0 != "." })
   }
 
+  /// The link `url` makes: any address of a document at the RFC Editor, Datatracker
+  /// or `ietf.org`, or the app's own, with the section or anchor it was opened at.
   public init?(url: URL) {
+    self.init(url: url, strictly: false)
+  }
+
+  /// Strictly, as a citation reads a URL: at the RFC Editor only the `rfc/`, `info/`
+  /// and `errata/` pages, and nothing at `ietf.org`.
+  private init?(url: URL, strictly: Bool) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
@@ -133,9 +146,21 @@ public struct RFCLink: Hashable, Sendable {
     switch host {
     case "www.rfc-editor.org", "rfc-editor.org":
       // /rfc/rfc9110.html, /rfc/rfc9110, /info/rfc9110, /rfc/rfc9110.txt, /errata/rfc9110,
-      // and the PDF, /rfc/rfc9110.pdf or a legacy RFC's /rfc/pdfrfc/rfc2616.txt.pdf
-      guard components.count >= 2, ["rfc", "info", "errata"].contains(components[0]),
-        let id = DocumentID(parsing: Self.stem(of: components[components.count - 1]))
+      // and the PDF, /rfc/rfc9110.pdf or a legacy RFC's /rfc/pdfrfc/rfc2616.txt.pdf;
+      // and, except strictly, any other path whose last component names a document
+      // with its series, as /bcp/bcp14.txt or /in-notes/rfc2119.txt does. A bare
+      // number elsewhere on the site is no RFC.
+      let last = components.last ?? ""
+      guard components.count >= 2,
+        ["rfc", "info", "errata"].contains(components[0])
+          || (!strictly && last.first?.isLetter == true),
+        let id = DocumentID(parsing: Self.stem(of: last))
+      else { return nil }
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
+    case "www.ietf.org", "ietf.org":
+      // /rfc/rfc2119.txt, the IETF's own copy.
+      guard !strictly, components.count == 2, components[0] == "rfc",
+        let id = DocumentID(parsing: Self.stem(of: components[1]))
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":

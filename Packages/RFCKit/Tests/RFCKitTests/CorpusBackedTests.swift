@@ -484,7 +484,7 @@ struct CorpusBackedReferencesSectionTests {
       #expect(!bibliographies.isEmpty, "\(stem) has no bibliography")
       for bibliography in bibliographies {
         #expect(
-          bibliography.subsections.allSatisfy(RFCXMLSerializer.isReferences),
+          bibliography.subsections.allSatisfy { $0.holdsReferences },
           "\(stem) \(bibliography.anchor)")
       }
     }

@@ -48,7 +48,7 @@ public enum Amendments {
     let updated = Set(document.header.updates)
     guard let amending = document.header.id, !updated.isEmpty else { return [] }
     let bibliographies: Set<String?> = Set(
-      document.allSections.filter(RFCXMLSerializer.isReferences).map(\.anchor))
+      document.allSections.filter(\.holdsReferences).map(\.anchor))
     var seen: Set<Amendment> = []
     var links: [Amendment] = []
     for place in document.proseInlinesBySection

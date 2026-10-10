@@ -34,8 +34,8 @@ struct AuthorTests {
         document.referenceLists.flatMap(\.entries).first { $0.anchor == "QUIC-TRANSPORT" })
       #expect(
         entry.authors == [
-          Author(name: "Jana Iyengar", role: .editor),
-          Author(name: "Martin Thomson", role: .editor),
+          Author(name: "Jana Iyengar", role: .editor, statedSurname: "Iyengar"),
+          Author(name: "Martin Thomson", role: .editor, statedSurname: "Thomson"),
         ])
     }
   }
@@ -57,10 +57,61 @@ struct AuthorTests {
     #expect(LegacyTextParser.author(in: "Some Company, Inc.") == nil)
   }
 
-  /// What a citation inverts and a printed page's footer names (#375).
-  @Test func `a surname is the name's last word`() {
-    #expect(Author(name: "A. Writer").surname == "Writer")
-    #expect(Author(name: "Anne B. Writer", role: .editor).surname == "Writer")
-    #expect(Author(name: "Writer").surname == "Writer")
+  /// What a citation inverts and a printed page's footer names (#375): the name past
+  /// its leading initials, however many words that is (#768).
+  @Test(arguments: [
+    ("A. Writer", "A.", "Writer"),
+    ("J.K. L. Writer", "J.K. L.", "Writer"),
+    ("SN Writer", "SN", "Writer"),
+    ("D. Eastlake 3rd", "D.", "Eastlake 3rd"),
+    ("F. Le Faucheur", "F.", "Le Faucheur"),
+    ("M. St. Johns", "M.", "St. Johns"),
+    ("Writer", "", "Writer"),
+    ("Internet Architecture Board", "", "Internet Architecture Board"),
+    ("RFC Editor", "", "RFC Editor"),
+  ])
+  func `a surname is the name past its initials`(name: String, given: String, surname: String) {
+    let author = Author(name: name, role: .editor)
+    #expect(author.givenNames == given)
+    #expect(author.surname == surname)
+  }
+
+  /// A name RFCXML writes out, "Ryan Hamilton", has no initials to split at; its
+  /// `surname` attribute says where the surname starts, and survives a round trip
+  /// through the serializer, in the header and the references alike (#768).
+  @Test func `a document's stated surname is the surname`() throws {
+    let document = try Fixtures.document("rfc9220.xml")
+    let author = try #require(document.header.authors.first)
+    #expect(author.name == "Ryan Hamilton")
+    #expect(author.statedSurname == "Hamilton")
+    #expect(author.surname == "Hamilton")
+    #expect(author.givenNames == "Ryan")
+
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(reparsed.header.authors == document.header.authors)
+    let referenceAuthors = Self.referenceAuthors(document)
+    #expect(referenceAuthors.contains { $0.statedSurname != nil })
+    #expect(Self.referenceAuthors(reparsed) == referenceAuthors)
+  }
+
+  private static func referenceAuthors(_ document: RFCDocument) -> [Author] {
+    document.referenceLists.flatMap(\.entries).flatMap(\.authors)
+  }
+
+  /// Beside a stated surname, the given names are the words before it, or after it
+  /// where it comes first; a stated surname the name doesn't hold leaves them to the
+  /// split.
+  @Test(arguments: [
+    ("A. Writer 3rd", "Writer", "A."),
+    ("Anne B. Writer 3rd", "Writer", "Anne B."),
+    ("Writer Anne", "Writer", "Anne"),
+    ("Anne van Writer", "van Writer", "Anne"),
+    ("R. Fielding", "Other", "R."),
+  ])
+  func `given names beside a stated surname`(name: String, surname: String, given: String) {
+    let author = Author(name: name, statedSurname: surname)
+    #expect(author.surname == surname)
+    #expect(author.givenNames == given)
   }
 }
