@@ -21,13 +21,21 @@ extension NSAttributedString.Key {
   /// stay two runs. Only its distinctness is meaningful; nothing reads the number.
   public static let rfcChip = NSAttributedString.Key("rfcChip")
   /// Set on the chip of a citation that only an informative list holds, which is
-  /// drawn with a lighter tint than a normative one (#184). A `String`, so adjacent
+  /// drawn as an outline where a normative one is filled (#184, #457). A `String`, so adjacent
   /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
   /// Set on every character of a heading's backlink caption, its line break
   /// included (#183, #584): the anchor of the section the caption lists the
   /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on a numbered heading's number where it hangs in the gutter (#433): the
+  /// anchor of the heading it links to. A `String`, so the number's runs merge.
+  public static let rfcSectionNumber = NSAttributedString.Key("rfcSectionNumber")
+  /// What a run copies as, where the reader sets it otherwise (`SelectionText`): a
+  /// hung number and the tabs either side of it, which copy as the heading's own
+  /// `4.2. ` or `Appendix A. ` (#433). A `String`, on every character of the run;
+  /// a selection of any part of it copies all of it, as a chip's label does.
+  public static let rfcCopiedAs = NSAttributedString.Key("rfcCopiedAs")
   /// Set on every character of an aside, its "Note" caption first (#700): the
   /// aside's ordinal among the document's asides, which Implementer folds its body
   /// by (`FoldingIndex`). Only in a build with live links, which alone has the
@@ -48,7 +56,8 @@ extension NSAttributedString.Key {
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow
   /// would otherwise be read out, carried by every character of the caption but its
-  /// line break. A `String`. A code block's copy button has none, and is not read.
+  /// line break; and an informative chip, said as its label and ", informative"
+  /// (#457). A `String`. A code block's copy button has none, and is not read.
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
@@ -287,6 +296,20 @@ extension NSAttributedString {
     // Its words carry their label, as the line break does not.
     _ = attribute(.rfcSpoken, at: run.location, longestEffectiveRange: &caption, in: run)
     return (anchor, caption)
+  }
+
+  /// The hung heading number at this character offset (#433): the anchor of the
+  /// heading it links to, and the number's own extent, which the pointer lights up
+  /// and a copy's feedback is shown over.
+  public func sectionNumber(at offset: Int) -> (anchor: String, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      let anchor = attribute(.rfcSectionNumber, at: offset, effectiveRange: nil) as? String
+    else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcSectionNumber, at: offset, longestEffectiveRange: &range,
+      in: NSRange(location: 0, length: length))
+    return (anchor, range)
   }
 
   /// The extent of every code block's copy button in `range`, in order: where the

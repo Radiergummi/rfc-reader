@@ -127,9 +127,9 @@ public struct RFCXMLSerializer: Sendable {
   static func backStart(
     _ sections: [Section], isNumbered: (Section) -> Bool = { $0.number != nil }
   ) -> Int {
-    if let last = sections.lastIndex(where: isReferences) {
+    if let last = sections.lastIndex(where: \.holdsReferences) {
       var first = last
-      while first > 0, isReferences(sections[first - 1]) { first -= 1 }
+      while first > 0, sections[first - 1].holdsReferences { first -= 1 }
       return first
     }
     var first = sections.count
@@ -161,6 +161,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { attributes.append(("surname", surname)) }
       if let role = author.role { attributes.append(("role", role.rawValue)) }
       if let contact = author.contact {
         writer.open("author", attributes)
@@ -238,7 +239,7 @@ public struct RFCXMLSerializer: Sendable {
   /// its list in a second, unnumbered `<references>`, and read back as a section
   /// holding a subsection it never had.
   private func writeOrLift(_ section: Section, writer: inout Writer, context: inout Context) {
-    if Self.isReferences(section) {
+    if section.holdsReferences {
       context.lifted.append(section)
     } else {
       writeSection(section, writer: &writer, context: &context)
@@ -247,7 +248,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -268,7 +269,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
@@ -316,6 +317,7 @@ public struct RFCXMLSerializer: Sendable {
       text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
       var authorAttributes: [(String, String)] = [("fullname", author.name)]
+      if let surname = author.statedSurname { authorAttributes.append(("surname", surname)) }
       if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
       writer.empty("author", authorAttributes)
     }
@@ -453,7 +455,30 @@ public struct RFCXMLSerializer: Sendable {
         writeReference(reference, writer: &writer, context: &context)
       }
       writer.close("references")
+    case .index(let index):
+      writeIndex(index, writer: &writer, context: &context)
     }
+  }
+
+  /// An index in the shape prep generates and `RFCXMLParser` reads back: the
+  /// anchored paragraph, then a list item per letter group, each holding the `<dl>`
+  /// of its entries that `IndexBlock.definitionList` makes.
+  private func writeIndex(_ index: IndexBlock, writer: inout Writer, context: inout Context) {
+    writer.empty("t", [("anchor", IndexBlock.anchor)])
+    writer.open("ul", [("empty", "true")])
+    for group in index.groups {
+      writer.open("li")
+      writer.empty("t", [("anchor", group.anchor)])
+      writer.open("ul", [("empty", "true")])
+      writer.open("li")
+      writeBlock(
+        .definitionList(IndexBlock.definitionList(group.entries)), writer: &writer,
+        context: &context)
+      writer.close("li")
+      writer.close("ul")
+      writer.close("li")
+    }
+    writer.close("ul")
   }
 
   // MARK: - Inlines
@@ -565,9 +590,12 @@ public struct RFCXMLSerializer: Sendable {
       func claim(_ sections: [Section]) {
         for section in sections {
           if let number = section.number, partNumbers[section.anchor] == nil {
-            let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
-              .attribute
-            if claimed.insert(partNumber).inserted { partNumbers[section.anchor] = partNumber }
+            let partNumber = PartNumber(
+              sectionNumber: number, isAppendix: section.isAppendix,
+              word: section.appendixWord)
+            if claimed.insert(partNumber.claim.attribute).inserted {
+              partNumbers[section.anchor] = partNumber.attribute
+            }
           }
           claim(section.subsections)
         }
@@ -619,16 +647,6 @@ public struct RFCXMLSerializer: Sendable {
       }
     }
     return (anchors, documents)
-  }
-
-  static func isReferences(_ section: Section) -> Bool {
-    if section.blocks.contains(where: {
-      if case .references = $0 { return true } else { return false }
-    }) {
-      return true
-    }
-    return !section.subsections.isEmpty && section.blocks.isEmpty
-      && section.subsections.allSatisfy(isReferences)
   }
 
   /// `anchor` and `pn` are both `xsd:ID`, so an anchor that is the part number would

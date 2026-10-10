@@ -48,6 +48,20 @@
       }
     }
 
+    /// The Keep Offline mark (#358). Setting it saves the mark before it returns, and
+    /// a download it starts goes on after; the store being in memory is reported as
+    /// a bookmark's is.
+    @objc var isKeptOffline: Bool {
+      get { LibraryModel.shared.offlineMarks.contains(id) }
+      set {
+        if AppData.isStoredInMemory {
+          ScriptError.report(AppData.storeWarning.message)
+        }
+        guard newValue != isKeptOffline else { return }
+        LibraryModel.shared.setKeptOfflineInBackground(id, newValue)
+      }
+    }
+
     /// Where the object lives, which is how a script gets a reference it can use
     /// again: the application's `rfcs`, by number.
     nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
@@ -70,8 +84,7 @@
     /// The application's `windows`, less any reader window that has closed but is
     /// still alive (#432). Closing empties such a window, so a script would see an
     /// invisible window that answers nothing. Open means still registered here, not
-    /// still having a controller: a print or export under way keeps the controller
-    /// of a window that has closed.
+    /// still alive: a print or export under way keeps a window that has closed.
     @objc var orderedWindows: [NSWindow] {
       NSApp.orderedWindows.filter { window in
         !(window is ReaderWindow) || controllers.contains { $0.window === window }
@@ -105,7 +118,8 @@
   }
 
   /// A reader window's properties. Every window and tab is a `ReaderWindow`; a script
-  /// asking one of these of any other window — the settings — gets an error.
+  /// asking one of these of any other window — the settings, or the primer — gets an
+  /// error.
   extension ReaderWindow {
     private var controller: ReaderWindowController? {
       ReaderWindowController.controller(for: self)

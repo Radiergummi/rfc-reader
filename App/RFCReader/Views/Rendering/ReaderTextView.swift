@@ -71,6 +71,8 @@ import RFCReaderKit
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
+    /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
+    var sectionNumberHang: () -> CGFloat = { 0 }
 
     /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
     func copyAsQuote() {
@@ -94,7 +96,9 @@ import RFCReaderKit
         return
       }
       Clipboard.write(
-        .selection(attributed.attributedSubstring(from: selection), publicURL: publicURL))
+        .selection(
+          attributed.attributedSubstring(from: selection), publicURL: publicURL,
+          hang: sectionNumberHang()))
     }
   }
 
@@ -134,9 +138,29 @@ import RFCReaderKit
     /// The link, and the character it is on, that a click at a mouse-down follows
     /// when the mouse-down is on a reference, or nil anywhere else.
     var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
+    /// Copies a link to the heading whose hung number an Option-click is on (#433),
+    /// answering whether there was one.
+    var copySectionLink: (NSEvent) -> Bool = { _ in false }
+    /// Told where the pointer is, so a hung number under it can light up. That it
+    /// left the view, the hover controller's tracking area says.
+    var hoverSectionNumber: (NSEvent) -> Void = { _ in }
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
+
+    /// How far the text container reaches left into the gutter, for the headings'
+    /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
+    /// the container's origin instead.
+    var leadingHang: CGFloat = 0 {
+      didSet {
+        if leadingHang != oldValue { invalidateTextContainerOrigin() }
+      }
+    }
+
+    override var textContainerOrigin: NSPoint {
+      let origin = super.textContainerOrigin
+      return NSPoint(x: origin.x - leadingHang, y: origin.y)
+    }
     /// Opens or closes the section of a heading clicked in the outline (#698);
     /// answers whether the click was on one.
     var toggleSection: (NSEvent) -> Bool = { _ in false }
@@ -172,6 +196,8 @@ import RFCReaderKit
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
+    /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
+    var sectionNumberHang: () -> CGFloat = { 0 }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
     var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
@@ -229,6 +255,7 @@ import RFCReaderKit
     }
 
     override func mouseMoved(with event: NSEvent) {
+      hoverSectionNumber(event)
       guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
@@ -258,6 +285,14 @@ import RFCReaderKit
     /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
+      // An Option-click on a hung heading number copies a link to the heading,
+      // rather than following it (#433).
+      if event.clickCount == 1,
+        event.modifierFlags.intersection([.option, .control, .shift, .command]) == .option,
+        copySectionLink(event)
+      {
+        return
+      }
       // A copy button is a button: a click on it copies, and selects nothing.
       if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
         return
@@ -325,7 +360,8 @@ import RFCReaderKit
         super.copy(sender)
         return
       }
-      Clipboard.write(.selection(selectedSubstring, publicURL: publicURL))
+      Clipboard.write(
+        .selection(selectedSubstring, publicURL: publicURL, hang: sectionNumberHang()))
     }
 
     /// A drag and a service get the HTML a copy carries too.
@@ -356,7 +392,8 @@ import RFCReaderKit
       guard selectedRanges.count == 1 else {
         return super.writeSelection(to: pboard, type: type)
       }
-      let content = PasteboardContent.selection(selectedSubstring, publicURL: publicURL)
+      let content = PasteboardContent.selection(
+        selectedSubstring, publicURL: publicURL, hang: sectionNumberHang())
       switch content.value(for: flavor.type) {
       case .text(let text)?: return pboard.setString(text, forType: type)
       case .data(let data)?: return pboard.setData(data, forType: type)
@@ -500,6 +537,15 @@ import RFCReaderKit
         in: attributedString(),
         text: { super.accessibilityAttributedString(for: $0) },
         label: { NSAttributedString(string: $0) },
+        // A chip said as a label is still a link (#457): the label takes the
+        // attributes AppKit gives the chip's own words, its last character's.
+        chipLabel: { spoken, chip in
+          let last = super.accessibilityAttributedString(
+            for: NSRange(location: NSMaxRange(chip) - 1, length: 1))
+          guard let last, last.length > 0 else { return NSAttributedString(string: spoken) }
+          return NSAttributedString(
+            string: spoken, attributes: last.attributes(at: 0, effectiveRange: nil))
+        },
         join: { parts in
           let joined = NSMutableAttributedString()
           parts.forEach(joined.append)

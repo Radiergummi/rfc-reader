@@ -11,8 +11,9 @@ Everything goes through the `Makefile`:
 | `make check` | `lint build test`, plus `test-app` on a Mac — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK; part of `make check` on a Mac) |
+| `make build-app-tests-ios` | RFCReaderKit's test target, built for the iOS Simulator without running it (#821); CI does it too |
 | `make test-corpus` | the `Corpus-backed:` suites, over the documents in the Makefile's `CORPUS_TEST_DOCUMENTS` and `CORPUS_TEST_XML_DOCUMENTS`, fetched into `corpus/` and passed as `RFC_CORPUS_TEXT` and `RFC_CORPUS_XML`; not part of `make check` |
-| `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
+| `swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`); the flag is the one `make test` passes, so switching between them rebuilds nothing |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
@@ -24,7 +25,7 @@ Everything goes through the `Makefile`:
 | `make run-sim` | build, install and launch in the iOS Simulator, headless (`IOS_SIMULATOR=` for another device than the iPhone 18 Pro); `xcrun simctl io booted screenshot x.png` to see it |
 | `make install` | build Release and copy it into `/Applications` |
 | `make trace` | build Release, record a Time Profiler trace of a scripted session into `traces/`, and print the app's signpost intervals; `TRACE_SCENARIO='wait 6; open 9110; wait 5'` for another session |
-| `make benchmark` | Release benchmarks of the index and document parsers, the search and the builder over real RFCs (`Tools/benchmarks`); `BENCHMARK_ARGS='baseline update before'`, then `'baseline compare before'` after a change |
+| `make benchmark` | Release benchmarks of the index and document parsers, the search and the builder over real RFCs (`Tools/benchmarks`); `BENCHMARK_ARGS='baseline update before'`, then `'baseline compare before'` after a change; `make build-benchmarks` only compiles them, as `make build` does on a Mac |
 | `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,457 |
 
 The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle ID `me.mazetti.rfc-reader`) and may create provisioning profiles as they go. CI has no certificates and passes `CODE_SIGNING_ALLOWED=NO`, which does the same locally.

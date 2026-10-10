@@ -2,26 +2,61 @@ import Foundation
 
 /// Filters that can be combined with a free-text query.
 public struct SearchFilters: Sendable, Hashable {
+  /// The reader's own data a query can ask for (`is:`), which the index does not hold:
+  /// RFCReaderKit narrows by it, and `IndexSearch` leaves it alone.
+  public enum ReaderData: String, Sendable, Hashable, CaseIterable {
+    case bookmarked, read, offline
+  }
+
+  /// What a query searches in (`in:`): a document, or a collection of the reader's.
+  public enum Scope: Sendable, Hashable {
+    /// An RFC is itself, and a series is its member RFCs.
+    case document(DocumentID)
+    /// A collection by its name, as written: RFCReaderKit finds it.
+    case collection(String)
+  }
+
+  /// The order a query asks for (`sort:`).
+  public enum Sort: String, Sendable, Hashable, CaseIterable {
+    case newest, oldest
+    case lastRead = "last-read"
+  }
+
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<PublicationStream> = []
-  /// Lowercased when set, and nil when set empty, as the prepared fields it is
-  /// matched against are lowercased and an empty value is no filter.
-  public var workingGroup: String? {
-    didSet { workingGroup = Self.normalized(workingGroup) }
+  /// Lowercased, and without empty names, as an empty value is no filter. They keep
+  /// their diacritics, as they are shown, and are folded where they are matched
+  /// (`SearchText.folded`), as the fields they are matched against are.
+  public var workingGroups: Set<String> = [] {
+    didSet {
+      let normalized = Set(workingGroups.filter { !$0.isEmpty }.map { $0.lowercased() })
+      if normalized != workingGroups { workingGroups = normalized }
+    }
   }
-  /// Lowercased when set, and nil when set empty, as `workingGroup` is.
+  /// Lowercased when set, and nil when set empty, as `workingGroups` are.
   public var author: String? {
     didSet { author = Self.normalized(author) }
   }
   public var yearRange: ClosedRange<Int>?
+  /// Published in this year or month, or later.
+  public var publishedAfter: PublicationDate?
+  /// Published before this year or month begins.
+  public var publishedBefore: PublicationDate?
+  /// Published within this many days of the moment the search is made.
+  public var publishedWithinDays: Int?
   public var excludeObsolete = false
   public var requiresXML = false
+  public var readerData: Set<ReaderData> = []
+  public var scopes: Set<Scope> = []
+  public var sort: Sort?
 
   public init() {}
 
   public var isEmpty: Bool {
-    statuses.isEmpty && streams.isEmpty && workingGroup == nil && author == nil
-      && yearRange == nil && !excludeObsolete && !requiresXML
+    statuses.isEmpty && streams.isEmpty && workingGroups.isEmpty && author == nil
+      && yearRange == nil && publishedAfter == nil && publishedBefore == nil
+      && publishedWithinDays == nil && !excludeObsolete && !requiresXML && readerData.isEmpty
+      && scopes.isEmpty && sort == nil
   }
 
   private static func normalized(_ value: String?) -> String? {
@@ -44,7 +79,8 @@ public struct SearchHit: Sendable, Identifiable {
 public struct IndexSearch: Sendable {
   public let index: RFCIndex
 
-  /// Lowercased copies of the searchable fields, built once so type-ahead stays fast.
+  /// Folded copies of the searchable fields (`SearchText.folded`), built once so
+  /// type-ahead stays fast.
   private struct Entry: Sendable {
     var offset: Int
     var number: SearchText
@@ -62,30 +98,34 @@ public struct IndexSearch: Sendable {
   public init(index: RFCIndex) {
     self.index = index
     self.entries = index.rfcs.enumerated().map { offset, rfc in
-      let title = rfc.title.lowercased()
+      let title = SearchText.folded(rfc.title)
       let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
       return Entry(
         offset: offset,
-        number: SearchText(String(rfc.number)),
-        title: SearchText(title),
-        titleWords: Set(words.map { SearchText(String($0)) }),
-        keywords: rfc.keywords.map { SearchText($0.lowercased()) },
-        authors: rfc.authors.map { SearchText($0.name.lowercased()) },
+        number: SearchText(alreadyFolded: String(rfc.number)),
+        title: SearchText(alreadyFolded: title),
+        titleWords: Set(words.map { SearchText(alreadyFolded: String($0)) }),
+        keywords: rfc.keywords.map { SearchText(folding: $0) },
+        authors: rfc.authors.map { SearchText(folding: $0.name) },
         authorNames: rfc.authors.map { AuthorName($0.name) },
-        abstract: SearchText(rfc.abstract?.lowercased() ?? ""),
-        group: SearchText(rfc.workingGroup?.lowercased() ?? "")
+        abstract: SearchText(folding: rfc.abstract ?? ""),
+        group: SearchText(folding: rfc.workingGroup ?? "")
       )
     }
   }
 
   /// Parses `wg:httpbis status:std author:fielding year:2020-2022 tls` into filters plus free text.
   ///
-  /// A value with spaces is quoted, `author:"Roy Fielding"`, and loses its quotes. A
+  /// Words are split at whitespace outside quotes. A value with spaces is quoted,
+  /// `author:"Roy Fielding"`, and loses its quotes. A
   /// quoted phrase of free text keeps them, so `search(text:filters:)` reads it as one
-  /// term (#177).
+  /// term (#177). A qualifier this version doesn't know, or a value it can't read, is
+  /// an unknown term, never free text: a saved query that searched for it as text
+  /// would silently mean something else (#355).
   public static func parseQuery(_ query: String) -> SearchQuery.Parsed {
     var filters = SearchFilters()
     var words: [String] = []
+    var unknown: [UnknownSearchTerm] = []
     for token in SearchQuery.words(in: query) {
       guard let written = SearchQuery.qualifier(in: token) else {
         words.append(token)
@@ -98,55 +138,107 @@ public struct IndexSearch: Sendable {
         continue
       }
       guard let qualifier = SearchQuery.Qualifier(spelling: written.key) else {
-        words.append(token)
-        continue
-      }
-      switch qualifier {
-      case .workingGroup:
-        filters.workingGroup = value
-      case .author:
-        filters.author = value
-      case .stream:
-        if let stream = SearchQuery.stream(spelled: value) {
-          filters.streams.insert(stream)
-        }
-      case .status:
-        if let status = SearchQuery.StatusValue(spelling: value) {
-          if status.excludesObsolete {
-            filters.excludeObsolete = true
-          } else {
-            filters.statuses.formUnion(status.statuses)
-          }
+        // A word that only has a colon in it, a URN, an address or a time, is text.
+        if SearchQuery.looksLikeQualifier(written) {
+          unknown.append(UnknownSearchTerm(word: token, reason: .qualifier))
         } else {
           words.append(token)
+        }
+        continue
+      }
+      // A comma separates the values of a union, unless the value is quoted.
+      let isQuoted = written.value.first.map(SearchQuery.quotes.contains) ?? false
+      let values =
+        qualifier.isUnion && !isQuoted ? value.split(separator: ",").map(String.init) : [value]
+      if !read(values, as: qualifier, into: &filters) {
+        unknown.append(UnknownSearchTerm(word: token, reason: .value))
+      }
+    }
+    return SearchQuery.Parsed(
+      text: words.joined(separator: " "), filters: filters, unknown: unknown)
+  }
+
+  /// Sets the filter `values` of `qualifier` name, or returns false, leaving `filters`
+  /// as they were, when one of them is not a value it takes.
+  private static func read(
+    _ values: [String], as qualifier: SearchQuery.Qualifier, into filters: inout SearchFilters
+  ) -> Bool {
+    // `wg:,` names no value; it is no more readable than `wg:nothing`.
+    guard !values.isEmpty else { return false }
+    var read = filters
+    for value in values {
+      let lowered = value.lowercased()
+      switch qualifier {
+      case .workingGroup:
+        read.workingGroups.insert(lowered)
+      case .author:
+        read.author = value
+      case .stream:
+        guard let stream = SearchQuery.stream(spelled: value) else { return false }
+        read.streams.insert(stream)
+      case .status:
+        guard let status = SearchQuery.StatusValue(spelling: value) else { return false }
+        read.insert(status)
+      case .readerData:
+        if let data = SearchFilters.ReaderData(rawValue: lowered) {
+          read.readerData.insert(data)
+        } else if let status = SearchQuery.StatusValue(spelling: value) {
+          read.insert(status)
+        } else {
+          return false
         }
       case .year:
         let bounds = value.split(separator: "-").compactMap { Int($0) }
         if bounds.count == 2 {
-          filters.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
+          read.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
         } else if bounds.count == 1 {
-          filters.yearRange = bounds[0]...bounds[0]
-        }
-      case .has:
-        if value.lowercased() == SearchQuery.xmlValue {
-          filters.requiresXML = true
+          read.yearRange = bounds[0]...bounds[0]
         } else {
-          words.append(token)
+          return false
         }
+      case .after:
+        guard let date = SearchQuery.month(spelled: value) else { return false }
+        read.publishedAfter = date
+      case .before:
+        guard let date = SearchQuery.month(spelled: value) else { return false }
+        read.publishedBefore = date
+      case .published:
+        guard let days = SearchQuery.days(spelled: lowered) else { return false }
+        read.publishedWithinDays = days
+      case .scope:
+        read.scopes.insert(
+          DocumentID(parsing: value).map(SearchFilters.Scope.document) ?? .collection(value))
+      case .has:
+        guard lowered == SearchQuery.xmlValue else { return false }
+        read.requiresXML = true
+      case .sort:
+        guard let sort = SearchFilters.Sort(rawValue: lowered) else { return false }
+        read.sort = sort
       }
     }
-    return SearchQuery.Parsed(text: words.joined(separator: " "), filters: filters)
+    filters = read
+    return true
   }
 
-  public func search(_ query: String, limit: Int = 100) -> [SearchHit] {
+  /// The hits for `query`. A query naming something unknown, or asking for the
+  /// reader's data or a collection, which the index doesn't hold, finds nothing:
+  /// a list that holds them narrows by them itself, through `search(text:filters:)`.
+  public func search(_ query: String, limit: Int = 100, now: Date = Date()) -> [SearchHit] {
     let parsed = Self.parseQuery(query)
-    return search(text: parsed.text, filters: parsed.filters, limit: limit)
+    guard parsed.unknown.isEmpty, !parsed.filters.asksReader else { return [] }
+    return search(text: parsed.text, filters: parsed.filters, limit: limit, now: now)
   }
 
-  public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
+  /// - Parameter now: The moment a relative date (`published:<90d`) counts back from.
+  public func search(
+    text: String, filters: SearchFilters, limit: Int = 100, now: Date = Date()
+  ) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    // A quoted phrase is one term, so it has to match as it is written.
-    let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
+    // A quoted phrase is one term, so it has to match as it is written, less the
+    // spaces inside its quotes that French typography puts there, `« key words »`.
+    // Every term is folded as the fields are, so `kuhlewind` finds "Kühlewind" (#425).
+    let terms = SearchQuery.words(in: SearchText.folded(trimmed))
+      .map { SearchQuery.unquoted($0).trimmingCharacters(in: .whitespaces) }
       .filter { !$0.isEmpty }
 
     if filters.isEmpty, let number = Self.number(in: trimmed) {
@@ -155,10 +247,12 @@ public struct IndexSearch: Sendable {
 
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
-    let needles = terms.map(SearchText.init)
-    // The query as the title bonus compares it, without the quotes of its phrases.
-    let lowered = SearchText(terms.joined(separator: " "))
-    let filter = PreparedFilters(filters)
+    let needles = terms.map(SearchText.init(alreadyFolded:))
+    // The query as the title bonus compares it, without the quotes of its phrases,
+    // when it is more than one word: several terms, or one phrase.
+    let isWords = terms.count > 1 || terms.first?.contains(" ") == true
+    let titleQuery = isWords ? SearchText(alreadyFolded: terms.joined(separator: " ")) : nil
+    let filter = PreparedFilters(filters, index: index, now: now)
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]
@@ -167,7 +261,7 @@ public struct IndexSearch: Sendable {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
       }
-      if let score = score(entry, rfc: rfc, terms: needles, loweredQuery: lowered) {
+      if let score = score(entry, rfc: rfc, terms: needles, titleQuery: titleQuery) {
         hits.append(SearchHit(rfc: rfc, score: score))
       }
     }
@@ -212,31 +306,75 @@ public struct IndexSearch: Sendable {
   /// over the full index, twice a free-text query's.
   private struct PreparedFilters {
     let filters: SearchFilters
-    let group: SearchText?
+    let groups: Set<SearchText>
     let author: AuthorQuery?
+    /// The RFCs `in:` a document names, or nil when it names none. A collection is
+    /// the reader's, so once `in:` names one, RFCReaderKit narrows by the whole union
+    /// and this by none of it.
+    let scope: Set<Int>?
+    /// The earliest day a document published within `publishedWithinDays` can end on.
+    let publishedSince: PublicationDate?
 
-    init(_ filters: SearchFilters) {
+    init(_ filters: SearchFilters, index: RFCIndex, now: Date) {
       self.filters = filters
-      group = filters.workingGroup.map(SearchText.init)
+      groups = Set(filters.workingGroups.map { SearchText(folding: $0) })
       author = filters.author.map(AuthorQuery.init)
+      let documents = filters.documentScopes
+      scope =
+        documents.isEmpty || !filters.collectionNames.isEmpty
+        ? nil
+        : Set(documents.flatMap(index.rfcNumbers(of:)))
+      publishedSince = filters.publishedWithinDays.flatMap { days in
+        Self.calendar.date(byAdding: .day, value: -days, to: now).map { start in
+          let day = Self.calendar.dateComponents([.year, .month, .day], from: start)
+          return PublicationDate(year: day.year ?? 0, month: day.month, day: day.day)
+        }
+      }
     }
+
+    private static let calendar: Calendar = {
+      var calendar = Calendar(identifier: .gregorian)
+      calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
+      return calendar
+    }()
 
     func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
       if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
       if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
       if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
+      if let scope, !scope.contains(rfc.number) { return false }
+      if let after = filters.publishedAfter, !Self.date(rfc.date, isOnOrAfter: after) {
+        return false
+      }
+      if let before = filters.publishedBefore, Self.date(rfc.date, isOnOrAfter: before) {
+        return false
+      }
+      if let publishedSince, Self.lastDay(of: rfc.date) < publishedSince { return false }
       if filters.excludeObsolete, rfc.isObsolete { return false }
       if filters.requiresXML, !rfc.hasXMLSource { return false }
       // The text filters come last, so the cheap checks above spare them their scan.
-      if let group, entry.group != group { return false }
+      if !groups.isEmpty, !groups.contains(entry.group) { return false }
       if let author, !entry.authorNames.contains(where: { $0.matches(author) }) { return false }
       return true
     }
+
+    /// Whether `date` falls in the year or month `bound` names, or later.
+    private static func date(_ date: PublicationDate, isOnOrAfter bound: PublicationDate) -> Bool {
+      guard let month = bound.month else { return date.year >= bound.year }
+      return (date.year, date.month ?? 1) >= (bound.year, month)
+    }
+
+    /// The last day `date` can be: a date without a day is its month's last, and one
+    /// without a month its year's.
+    private static func lastDay(of date: PublicationDate) -> PublicationDate {
+      PublicationDate(year: date.year, month: date.month ?? 12, day: date.day ?? 31)
+    }
   }
 
-  /// Every term must match somewhere; where it matches decides the weight.
+  /// Every term must match somewhere; where it matches decides the weight. A title
+  /// holding `titleQuery`, when there is one, earns a bonus.
   private func score(
-    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], loweredQuery: SearchText
+    _ entry: Entry, rfc: RFCMetadata, terms: [SearchText], titleQuery: SearchText?
   ) -> Int? {
     var total = 0
     for term in terms {
@@ -264,7 +402,7 @@ public struct IndexSearch: Sendable {
       guard best > 0 else { return nil }
       total += best
     }
-    if terms.count > 1, entry.title.contains(loweredQuery) { total += 50 }
+    if let titleQuery, entry.title.contains(titleQuery) { total += 50 }
     if rfc.isObsolete { total -= 10 }
     if rfc.currentStatus.isStandardsTrack || rfc.currentStatus == .bestCurrentPractice {
       total += 5
@@ -273,7 +411,7 @@ public struct IndexSearch: Sendable {
   }
 }
 
-/// A lowercased field held as UTF-8, so searching it is a byte scan.
+/// A folded field held as UTF-8, so searching it is a byte scan.
 ///
 /// `String.range(of:)` was the whole cost of search. It is a Foundation call with
 /// per-call setup and Unicode-correct matching, and the scoring loop makes roughly
@@ -282,15 +420,23 @@ public struct IndexSearch: Sendable {
 /// query cost 96 ms, and a query matching *nothing* cost 93: the work was the
 /// scanning, not the hits.
 ///
-/// What this gives up is canonical equivalence: `e` + U+0301 no longer finds `é`
-/// spelled as U+00E9. Case is unaffected — both sides are lowercased on the way in —
-/// and UTF-8 is self-synchronizing, so since a needle never begins with a
+/// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
+/// as U+00E9. Both sides are folded on the way in (`SearchText.folded`), which
+/// composes them first, so the two spellings of an accented letter end as the same
+/// bytes. UTF-8 is self-synchronizing, so since a needle never begins with a
 /// continuation byte a match cannot start in the middle of a character.
 struct SearchText: Hashable, Sendable {
   private let bytes: [UInt8]
 
-  init(_ string: String) {
+  /// `string` as it is: text already folded, such as a term split from a folded
+  /// query, or digits.
+  init(alreadyFolded string: String) {
     bytes = Array(string.utf8)
+  }
+
+  /// `text` folded (`folded`), as every field and needle a search compares is.
+  init(folding text: String) {
+    self.init(alreadyFolded: Self.folded(text))
   }
 
   func hasPrefix(_ other: SearchText) -> Bool {
@@ -334,53 +480,77 @@ struct AuthorName: Sendable {
   let initials: Set<Character>
   let surname: SearchText
 
-  /// The leading words that are initials, "J.K." or "SN", are the given names; the
-  /// rest is the surname, "Le Faucheur" or "St. Johns". A name that is one word, or
-  /// an organization's ("RFC Editor", "IAB and IESG"), is all surname.
+  /// The name split as `Author.surname` splits it: "Le Faucheur" or "St. Johns" is
+  /// the surname, and "RFC Editor" or "IAB and IESG" is all surname.
   init(_ name: String) {
-    let words = name.split(separator: " ")
-    let given = words.dropLast().prefix(while: Self.isInitials)
-    initials = Set(given.flatMap { word in folded(String(word)).filter(\.isLetter) })
-    surname = SearchText(folded(words.dropFirst(given.count).joined(separator: " ")))
+    let (given, surname) = Author.split(name)
+    initials = Set(given.flatMap { word in SearchText.folded(String(word)).filter(\.isLetter) })
+    self.surname = SearchText(folding: surname.joined(separator: " "))
   }
 
-  /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
-  /// are at most two letters without one ("SN"). "St." has a small letter, and
-  /// "RFC" or "IAB" is three capitals without a dot, so both are surname.
-  private static func isInitials(_ word: Substring) -> Bool {
-    let letters = word.filter(\.isLetter)
-    guard !letters.isEmpty, letters.allSatisfy(\.isUppercase) else { return false }
-    return word.contains(".") || letters.count <= 2
-  }
-
-  /// Each word of the query matches the surname, or is a given name or an initial
-  /// that fits one of the author's initials and comes before the surname. The
-  /// surname is matched in part, as the query is still being typed.
+  /// The query's last words match the surname, in part, as the query is still being
+  /// typed, and the words before them are given names or initials. Only the first
+  /// of those has to fit one of the author's initials: the index holds one initial
+  /// for most authors, so `Roy T. Fielding` finds "R. Fielding".
+  ///
+  /// A query that ends in an initial, `r.` or `Roy T.`, is on its way to a surname
+  /// it has not reached, so the authors its first given name fits match, whatever
+  /// their surname.
   func matches(_ query: AuthorQuery) -> Bool {
-    query.surnames.indices.contains { split in
-      surname.contains(query.surnames[split])
-        && query.initials[..<split].allSatisfy(initials.contains)
+    let fitsFirst = query.firstInitial.map(initials.contains) ?? false
+    if query.endsInInitial, fitsFirst { return true }
+    return query.surnames.indices.contains { split in
+      surname.contains(query.surnames[split]) && (split == 0 || fitsFirst)
     }
   }
 }
 
 /// An `author:` value prepared once per search for `AuthorName.matches`.
 struct AuthorQuery: Sendable {
-  /// The first letter of each word of the value, as a given name or an initial.
-  let initials: [Character]
+  /// The first letter of the value's first word, as a given name or an initial: the
+  /// one word before the surname that has to fit one of the author's initials.
+  let firstInitial: Character?
   /// For each word of the value, it and the words after it: the surname, if the
   /// words before it are given names.
   let surnames: [SearchText]
+  /// Whether the value's last word is an initial with a dot, `r.`, `j.k` or `jp.`, so
+  /// that no surname has been typed yet. A word without a dot, `r`, is the start of
+  /// a surname.
+  let endsInInitial: Bool
 
   init(_ value: String) {
-    let words = folded(value).split(separator: " ")
-    initials = words.compactMap(\.first)
-    surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
+    let words = SearchText.folded(value).split(separator: " ")
+    firstInitial = words.first?.first
+    surnames = words.indices.map { SearchText(alreadyFolded: words[$0...].joined(separator: " ")) }
+    endsInInitial = words.last.map(Self.isInitial) ?? false
+  }
+
+  /// The suffixes and titles that are written like an initial, folded.
+  private static let notInitials: Set<Substring> = ["jr.", "sr.", "st.", "dr.", "mr."]
+
+  /// A dot, and groups of at most two letters between dots and hyphens, as the index
+  /// writes initials: `r.`, `j.k.`, `jp.`, `l-e.`. A suffix or a title of that shape,
+  /// `jr.` or `st.`, is no initial: it is part of a surname, `Smith Jr.` or
+  /// `St. Johns`, and read as an initial it would match every author of its letter.
+  private static func isInitial(_ word: Substring) -> Bool {
+    let groups = word.split { $0 == "." || $0 == "-" }
+    return word.contains(".") && !groups.isEmpty && !notInitials.contains(word)
+      && groups.allSatisfy { $0.count <= 2 && $0.allSatisfy(\.isLetter) }
   }
 }
 
-/// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
-/// however its ü is spelled.
-private func folded(_ text: String) -> String {
-  text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+extension SearchText {
+  /// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
+  /// however its ü is spelled: what every field the search prepares, and every term
+  /// and filter it matches against them, is compared as (#425), and what `wg:`
+  /// completion and tokens compare names as. Composed first (NFC), so a letter and its
+  /// marks typed apart, `u` and U+0308 or `か` and U+3099, are the one letter the other
+  /// spelling is, then folded, which drops a mark Foundation counts as a diacritic. A
+  /// letter that is not a base letter and a mark, `ß`, `ø`, `æ`, is left as it is.
+  /// ASCII, most of the index, is only lowercased: there is nothing else to do to it.
+  static func folded(_ text: String) -> String {
+    if text.utf8.allSatisfy({ $0 < 0x80 }) { return text.lowercased() }
+    return text.precomposedStringWithCanonicalMapping.lowercased()
+      .folding(options: .diacriticInsensitive, locale: nil)
+  }
 }

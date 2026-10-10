@@ -1,6 +1,8 @@
 # Three things RFCXML says that the model now keeps
 
-*Decided September 2026 (issue #66).* Auditing the parser against the RFCXML vocabulary turned up three things a reader has a use for that it dropped. Each is carried as data, not interpreted:
+*Decided September 2026 (issue #66).*
+Auditing the parser against the RFCXML vocabulary turned up three things a reader has a use for that it dropped.
+Each is carried as data, not interpreted:
 
 - **`<link rel="prev">` is `DocumentHeader.precedingDraft`**, the Datatracker URL of the draft the RFC was published from. It is in every prepped RFC, beside the `rel="alternate"` links for the DOI and the ISSN, which are not lineage. It is the start of the drafts tier's "what changed between a draft and the RFC it became"; for now the More menu opens it. It is a URL rather than a draft name because that is what the source gives: `docName` already sits in `draftName`, and the link does not always name the same revision. `rel` is read as HTML's: a space-separated keyword list, compared without regard to case.
 - **`<annotation>` is `Reference.annotation`**, inlines, empty when absent. Its usual job is pinning a living standard to the commit the RFC was written against, which the entry otherwise loses, leaving only the moving target. It is prose, so it is read by the builder instance that links prose; `referenceTargets(in:)` still reads entries before there is one, through the static half that knows nothing of it. A `<referencegroup>` has no annotation of its own in the schema, only its members: a group of one keeps its member's, and a group of several keeps every member's, each on its own line after that member's name. The contents panel shows it under an entry's provenance line, and `Reference.annotationText` in `RFCReaderKit` keeps its external links as links.

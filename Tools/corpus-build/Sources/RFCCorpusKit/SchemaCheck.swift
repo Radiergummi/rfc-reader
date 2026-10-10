@@ -54,7 +54,7 @@ public enum SchemaCheck {
     let finder = CauseFinder()
     let parser = XMLParser(data: data)
     parser.delegate = finder
-    parser.parse()
+    _ = parser.parse()
     return Cause.allCases.filter(finder.found.contains)
   }
 }

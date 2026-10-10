@@ -27,7 +27,7 @@ public struct SyntaxToken: Sendable, Hashable {
 
 /// Turns a block's text into tokens that cover it exactly once, in order, with no
 /// empty token. Never fails: what it cannot read is `plain`.
-public protocol Highlighter: Sendable {
+protocol Highlighter: Sendable {
   func tokens(in text: String) -> [SyntaxToken]
 }
 

@@ -18,6 +18,11 @@ struct InfoView: View {
   let open: (DocumentID) -> Void
   let search: (String) -> Void
   let showReadingPath: (DocumentID) -> Void
+  /// The body's sections, which an erratum's section is found in; empty before the
+  /// body has loaded.
+  let sections: [RFCKit.Section]
+  /// Goes to a section of the document, by its anchor.
+  let selectSection: (String) -> Void
 
   var body: some View {
     if let info {
@@ -28,6 +33,13 @@ struct InfoView: View {
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
               SectionRows(section: section, library: library, open: open, search: search)
+            }
+          }
+          if let document, let errata = library.errata?[document], !errata.isEmpty {
+            let summary = ErrataSummary(errata: errata, sections: sections)
+            // Errata of only a status a later feed adds are neither listed nor counted.
+            if !summary.items.isEmpty || summary.notListed != nil {
+              ErrataSection(summary: summary, selectSection: selectSection)
             }
           }
           if let document, document.series == .rfc {
@@ -162,6 +174,82 @@ private struct InfoSection<Content: View>: View {
         .font(.infoHeading)
         .accessibilityAddTraits(.isHeader)
       content
+    }
+  }
+}
+
+/// A document's errata (#387): each verified or held one with its status, type and
+/// place, a link to the section it names, and the original and corrected text; then
+/// how many more there are, which the RFC Editor's page, among the links, lists.
+private struct ErrataSection: View {
+  let summary: ErrataSummary
+  let selectSection: (String) -> Void
+
+  var body: some View {
+    InfoSection(title: String(localized: "Errata")) {
+      VStack(alignment: .leading, spacing: 14) {
+        ForEach(summary.items) { item in
+          ErratumView(item: item, selectSection: selectSection)
+        }
+        if let notListed = summary.notListed {
+          Text(verbatim: notListed)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+}
+
+private struct ErratumView: View {
+  let item: ErrataSummary.Item
+  let selectSection: (String) -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .firstTextBaseline) {
+        if let anchor = item.anchor {
+          Button {
+            selectSection(anchor)
+          } label: {
+            Text(verbatim: item.place)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(.tint)
+          .help("Go to \(item.place)")
+        } else {
+          Text(verbatim: item.place)
+        }
+        Spacer(minLength: 8)
+        Link(destination: item.page) {
+          Text(verbatim: "\(item.status) · \(item.type)")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .help("Open this erratum on the RFC Editor's site")
+      }
+      .font(.subheadline.weight(.medium))
+      text(String(localized: "Original"), item.original)
+      text(String(localized: "Corrected"), item.corrected)
+      text(String(localized: "Notes"), item.notes, isCode: false)
+    }
+  }
+
+  /// One of the erratum's texts, the RFC's own in the reader's code font, as it is set
+  /// there; nothing when the reporter left it empty.
+  @ViewBuilder
+  private func text(_ label: String, _ text: String, isCode: Bool = true) -> some View {
+    let trimmed = text.trimmingCharacters(in: .newlines)
+    if !trimmed.trimmingCharacters(in: .whitespaces).isEmpty {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(verbatim: label)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Text(verbatim: trimmed)
+          .font(isCode ? .caption.monospaced() : .caption)
+          .textSelection(.enabled)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
   }
 }
@@ -445,13 +533,14 @@ private struct LinkRow: View {
 /// pane that is the store's rather than the index's.
 ///
 /// One row whose icon is the control, as a download is in Safari's list: the filled
-/// arrow turns to a cross under the pointer and removes the copy, and the outline
-/// arrow of a document not kept downloads it. Removing leaves the document on
-/// screen, since it is already in memory, and deletes the file, so the next open
-/// downloads it again; the tooltip says so. Whether it is kept is the library's set,
-/// so it is right the moment the pane shows, and a download or a removal re-reads
-/// the size. Only an RFC has a body of its own; a series number the index has not
-/// resolved yet has none.
+/// arrow turns to a cross under the pointer and stops keeping the copy, and the
+/// outline arrow of a document not kept keeps it, moving a copy already read or
+/// downloading one (#358). A copy no longer kept goes to the reading cache, which
+/// may remove it when it needs the room; the tooltip says so. Whether it is kept is
+/// the document's Keep Offline mark, from the library's set, so it is right the
+/// moment the pane shows, wherever the mark was made, and the size is read once
+/// what the mark started has ended. Only an RFC has a body of its own; a series
+/// number the index has not resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
   let library: LibraryModel
@@ -461,9 +550,11 @@ private struct OfflineSection: View {
   @State private var isWorking = false
   /// A warning for a moment after a download that failed, as `LinkRow` shows one.
   @State private var downloadFailed = false
+  /// Whether that was for want of room on the disk rather than a failed fetch.
+  @State private var hadNoRoom = false
 
   private var isKept: Bool {
-    document.series == .rfc && library.downloadedNumbers.contains(document.number)
+    document.series == .rfc && library.offlineMarks.contains(document)
   }
 
   var body: some View {
@@ -480,10 +571,14 @@ private struct OfflineSection: View {
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
-        .accessibilityLabel(isKept ? "Remove Offline Copy" : "Keep Offline")
+        .accessibilityLabel(Text(verbatim: DocumentActions.keepOfflineCommand(isKept: isKept)))
         .accessibilityHint(help)
-        Text(downloadFailed ? "Couldn't download" : isKept ? "Kept offline" : "Not kept offline")
-          .foregroundStyle(isKept ? .primary : .secondary)
+        Text(
+          downloadFailed
+            ? (hadNoRoom ? "Not enough space" : "Couldn't download")
+            : isKept ? "Kept offline" : "Not kept offline"
+        )
+        .foregroundStyle(isKept ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))
@@ -493,7 +588,13 @@ private struct OfflineSection: View {
     }
     // Per document already: the section is given the document's identity.
     .task(id: isKept) {
-      size = isKept ? await library.downloadedSize(document) : nil
+      guard isKept else {
+        size = nil
+        return
+      }
+      let size = await library.keptSize(document)
+      // A wait that outlasted the mark reads a size that is no longer shown.
+      if !Task.isCancelled { self.size = size }
     }
     .resets($downloadFailed, to: false, after: .seconds(1.5))
   }
@@ -508,23 +609,23 @@ private struct OfflineSection: View {
     isKept
       ? String(
         localized:
-          "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
+          "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room."
       )
       : String(localized: "Keep a copy to read offline.")
   }
 
   private func toggle() {
     isWorking = true
+    let keeps = !isKept
     Task {
-      if isKept {
-        await library.removeDownload(document)
-      } else {
-        do {
-          try await library.download(document)
-        } catch {
-          readerLog.failure(of: document, "keeping offline failed", error)
-          downloadFailed = true
-        }
+      do {
+        try await library.setKeptOffline(document, keeps)
+      } catch is CancellationError {
+        // Unmarked elsewhere while it downloaded: nothing failed.
+      } catch {
+        readerLog.failure(of: document, "keeping offline failed", error)
+        hadNoRoom = error is DocumentStore.NotEnoughSpace
+        downloadFailed = true
       }
       isWorking = false
     }

@@ -79,6 +79,7 @@ struct DocumentTraversalTests {
     case .blockQuote: "quote"
     case .aside: "aside"
     case .references: "references"
+    case .index: "index"
     }
   }
 
@@ -119,5 +120,22 @@ struct DocumentTraversalTests {
     #expect(document.anchor(forPlace: "1.1") == "s1.1")
     #expect(document.anchor(forPlace: "s2") == "s2")
     #expect(document.anchor(forPlace: "figure-3") == "figure-3")
+  }
+
+  /// A bibliography may hold prose beside its list, and is one all the same; only a
+  /// section with nothing but entries below it `holdsOnlyReferences` (#768).
+  @Test func `a section with prose beside its references holds references, not only them`() {
+    let list = Block.references(ReferenceList(title: "References", entries: []))
+    let note = Block.paragraph(Paragraph([.text("Entries are listed by tag.")]))
+    let withNote = Section(anchor: "refs", title: "References", blocks: [note, list])
+    let only = Section(anchor: "refs", title: "References", blocks: [list])
+    let around = Section(
+      anchor: "references", title: "References", subsections: [only, withNote])
+    #expect(withNote.holdsReferences)
+    #expect(!withNote.holdsOnlyReferences)
+    #expect(only.holdsReferences && only.holdsOnlyReferences)
+    #expect(around.holdsReferences)
+    #expect(!around.holdsOnlyReferences)
+    #expect(!Section(anchor: "intro", title: "Introduction", blocks: [note]).holdsReferences)
   }
 }

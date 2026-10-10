@@ -13,7 +13,7 @@ public enum LinkDestination: Equatable, Sendable {
   /// either.
   case jump(String)
   /// Show this entry of the document's bibliography, which the body leaves out;
-  /// see `DocumentTextBuilder.referenceScheme`.
+  /// see `ReaderLinkScheme.referenceScheme`.
   case reference(String)
   /// Show the linked document. How — here or in a tab of its own — is the
   /// activation the caller already holds; `LibraryModel.open(_:activation:in:)` is
@@ -29,10 +29,10 @@ public enum LinkDestination: Equatable, Sendable {
     // An anchor is a position in the document already on screen, so it has nowhere
     // else to go: a tab of its own showing the same document scrolled elsewhere is
     // not what Command means.
-    if let anchor = DocumentTextBuilder.anchor(from: url) {
+    if let anchor = ReaderLinkScheme.anchor(from: url) {
       return .jump(anchor)
     }
-    if let entry = DocumentTextBuilder.reference(from: url) {
+    if let entry = ReaderLinkScheme.reference(from: url) {
       return .reference(entry)
     }
     guard let link = RFCLink(url: url) else { return .unhandled }

@@ -48,13 +48,17 @@ jobs:
             Packages/RFCKit/.build
             Packages/RFCReaderKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
-          restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
-      - run: swift test --package-path Packages/RFCKit
-      - run: make test-app
+            Tools/benchmarks/.build
+          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
+      # RFCKit and corpus-build, with the Makefile's flags (RFCKit's warnings, #440).
       # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
       # run on both.
-      - run: swift test --package-path Tools/corpus-build
+      - run: make test
+      - run: make test-app
+      # Nothing else builds Tools/benchmarks, so an API change in RFCKit or
+      # RFCReaderKit would break it silently (#419).
+      - run: make build-benchmarks
       - name: Save the SwiftPM builds
         if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -63,7 +67,8 @@ jobs:
             Packages/RFCKit/.build
             Packages/RFCReaderKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
+            Tools/benchmarks/.build
+          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
 
   app-build:
     name: App build (macOS + iOS)
@@ -110,6 +115,10 @@ jobs:
         run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
         run: make ios-sim CODE_SIGNING_ALLOWED=NO
+      # `make test-app` builds RFCReaderKit's tests for macOS only (#568). Built,
+      # not run, until #821's Simulator failures are fixed; then this should test.
+      - name: Build RFCReaderKit's tests for the iOS Simulator
+        run: make build-app-tests-ios CODE_SIGNING_ALLOWED=NO
       # After both builds, whose records of the strings in the code it reads; the
       # builds it starts first have nothing left to do.
       - name: Check the string catalogs

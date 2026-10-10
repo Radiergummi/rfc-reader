@@ -27,7 +27,7 @@ extension RFCTextViewCoordinator {
 
   /// A row's jump, the way a click on a reference to that section makes it.
   func followBacklink(to anchor: String) {
-    guard let url = DocumentTextBuilder.url(anchor, scheme: DocumentTextBuilder.anchorScheme)
+    guard let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
     else { return }
     _ = onLink(url, .current)
   }

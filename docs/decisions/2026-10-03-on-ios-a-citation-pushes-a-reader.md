@@ -1,15 +1,33 @@
 # On iOS, a citation pushes a reader
 
-*Decided October 2026 (issue #263).* Following a citation of another RFC in a reader on iOS pushes a reader of the cited RFC onto a `NavigationStack` in the detail column, with the system's transition, and the system back button returns to the citing reader where it was left. Swapping the document under a single reader would show the loading view at once: in a collapsed split view, changing what the detail column shows is not a navigation UIKit can animate. A cross-fade in place of the swap was the smaller change, and was set aside because a push is what the platform does for following a link to another page.
+*Decided October 2026 (issue #263).*
+Following a citation of another RFC in a reader on iOS pushes a reader of the cited RFC onto a `NavigationStack` in the detail column, with the system's transition, and the system back button returns to the citing reader where it was left.
+Swapping the document under a single reader would show the loading view at once: in a collapsed split view, changing what the detail column shows is not a navigation UIKit can animate.
+A cross-fade in place of the swap was the smaller change, and was set aside because a push is what the platform does for following a link to another page.
 
-**The stack is the history, projected.** There is one record of where a tab has been, `NavigationHistory`, which Back and Forward, "Back to §…" (#254) and the tab's snapshot (#155) all read; a stack kept beside it would be a second one, and the two would disagree. So each `HistoryEntry` says how the tab arrived at it: from outside the reader (a row in the list, Go to RFC, a link from another app) or by a link followed inside it (a citation, or a jump within the document). `ReaderPath` stacks one reader for each run of entries in one document since the last arrival from outside, and the stack's path is read from it. The stack's own back, the button or a swipe from the edge, is handed to the history, which steps back past the popped reader and every jump made in it; Forward pushes it again. A jump within a document pushes nothing, so "Back to §…" is about the document on screen and the back button about documents.
+**The stack is the history, projected.**
+There is one record of where a tab has been, `NavigationHistory`, which Back and Forward, "Back to §…" (#254) and the tab's snapshot (#155) all read; a stack kept beside it would be a second one, and the two would disagree.
+So each `HistoryEntry` says how the tab arrived at it: from outside the reader (a row in the list, Go to RFC, a link from another app) or by a link followed inside it (a citation, or a jump within the document).
+`ReaderPath` stacks one reader for each run of entries in one document since the last arrival from outside, and the stack's path is read from it.
+The stack's own back, the button or a swipe from the edge, is handed to the history, which steps back past the popped reader and every jump made in it; Forward pushes it again.
+A jump within a document pushes nothing, so "Back to §…" is about the document on screen and the back button about documents.
 
-**A link from another app replaces the stack** (decision 1 on the issue). It is a new task, not a step in the one on screen, and pushing it would land it in the middle of an unrelated chain of citations. Every arrival from outside does the same. A link to a place in the document already on screen stays a jump within it.
+**A link from another app replaces the stack** (decision 1 on the issue).
+It is a new task, not a step in the one on screen, and pushing it would land it in the middle of an unrelated chain of citations.
+Every arrival from outside does the same.
+A link to a place in the document already on screen stays a jump within it.
 
-**On an iPad beside other columns too** (decision 2), for one model on iOS; the back button is in the detail column's bar there, beside the window's Back and Forward, which pop as well when they cross to the reader below. The Mac is unchanged: its reader is `ReaderHost`, in a window AppKit makes.
+**On an iPad beside other columns too** (decision 2), for one model on iOS; the back button is in the detail column's bar there, beside the window's Back and Forward, which pop as well when they cross to the reader below.
+The Mac is unchanged: its reader is `ReaderHost`, in a window AppKit makes.
 
-**The readers below the top stay**, so going back costs nothing and keeps the place without restoring it. The window has one `ReaderState`, the top reader's: a reader below writes nothing to it, and when it is on top again it puts its document's details back from what its session holds, and the original text and unfolded sections it kept of its own. Each keeps its build, the largest thing the app holds for a long RFC, so the stack keeps **eight** (decision 3); a reader deeper than that is let go, and made again at its saved reading place if the stack is popped back to it.
+**The readers below the top stay**, so going back costs nothing and keeps the place without restoring it.
+The window has one `ReaderState`, the top reader's: a reader below writes nothing to it, and when it is on top again it puts its document's details back from what its session holds, and the original text and unfolded sections it kept of its own.
+Each keeps its build, the largest thing the app holds for a long RFC, so the stack keeps **eight** (decision 3); a reader deeper than that is let go, and made again at its saved reading place if the stack is popped back to it.
 
-**Two SwiftUI traps, measured on the device and the Simulator (#679).** The list's selection is the stack's root, not the reader on top (`NavigationModel.listSelection`): a collapsed split view whose list selection changed took it for a new row and emptied the stack's path as the citation pushed, so nothing slid in and Back went to the list. And the panel is an `.inspector` on the split view, not on a reader or on the stack: on the root view of a `NavigationStack` it removed that view's whole navigation bar, title and toolbar, and on the stack it kept the stack from popping when Back shortened its path.
+**Two SwiftUI traps, measured on the device and the Simulator (#679).**
+The list's selection is the stack's root, not the reader on top (`NavigationModel.listSelection`): a collapsed split view whose list selection changed took it for a new row and emptied the stack's path as the citation pushed, so nothing slid in and Back went to the list.
+And the panel is an `.inspector` on the split view, not on a reader or on the stack: on the root view of a `NavigationStack` it removed that view's whole navigation bar, title and toolbar, and on the stack it kept the stack from popping when Back shortened its path.
 
-**No flash of progress.** A reader on iOS waits 0.4 s with nothing on screen before it says it is loading (`LoadState.progressDelay`). A document in the cache normally builds within that, so a pushed reader slides in with its text; one that has to be fetched says so a moment later.
+**No flash of progress.**
+A reader on iOS waits 0.4 s with nothing on screen before it says it is loading (`LoadState.progressDelay`).
+A document in the cache normally builds within that, so a pushed reader slides in with its text; one that has to be fetched says so a moment later.

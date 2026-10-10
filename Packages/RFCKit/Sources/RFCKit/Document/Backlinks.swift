@@ -22,8 +22,10 @@ public struct Backlink: Sendable, Hashable {
 /// bibliography entry as a target, since a citation names the work, not the row that
 /// lists it. Only what the reader draws in the body refers, since a backlink has to
 /// lead somewhere: not a section that `holdsOnlyReferences`, and not a bibliography's
-/// annotations, which are the references panel's. A section with prose beside its
-/// bibliography is drawn, and its prose counts like any other.
+/// annotations, which are the references panel's. Nor an index's locators, which are
+/// not prose (`IndexBlock.proseRuns`): an index's mention of a section is not one the
+/// text makes. A section with prose beside its bibliography is drawn, and its prose
+/// counts like any other.
 /// Only references to anchors count; which other documents cite this one is the
 /// corpus's to answer (#174).
 public enum Backlinks {

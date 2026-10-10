@@ -34,6 +34,8 @@ import SwiftUI
             Label("Reading Path", systemImage: "list.number")
           }
           .labelStyle(.titleAndIcon)
+          KeepOfflineButton(document: row.id, library: library)
+            .labelStyle(.titleAndIcon)
         }
         if collection != nil {
           Button("Remove from Collection") { remove(row.id) }

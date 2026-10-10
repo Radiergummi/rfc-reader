@@ -99,12 +99,25 @@ struct SectionHeadingTests {
   }
 
   /// A heading with no words is its number alone, with nothing after it: written into
-  /// a `<name>`, a trailing space read back without it (#683).
+  /// a `<name>`, a trailing space read back without it (#683). An appendix's word sets
+  /// it apart, so it has no full stop either (#428).
   @Test func `a heading with no words is its number alone`() {
     let appendix = Section(anchor: "appendix-A", number: "A", title: "", isAppendix: true)
-    #expect(appendix.displayTitle == "Appendix A.")
-    #expect(appendix.displayTitleInlines == [.text("Appendix A.")])
+    #expect(appendix.displayTitle == "Appendix A")
+    #expect(appendix.displayTitleInlines == [.text("Appendix A")])
     let section = Section(anchor: "section-4.2", number: "4.2", title: "")
     #expect(section.displayTitle == "4.2.")
+  }
+
+  /// An annex is named as its heading names it, and its anchor is an appendix's (#428).
+  @Test func `an annex is named an annex`() {
+    let annex = Section(
+      anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+      appendixWord: .annex)
+    #expect(annex.numberLabel == "Annex B")
+    #expect(annex.displayTitle == "Annex B. Background")
+    let section = Section(
+      anchor: "section-2", number: "2", title: "Terms", appendixWord: .annex)
+    #expect(section.displayTitle == "2. Terms", "the word is an appendix's alone")
   }
 }

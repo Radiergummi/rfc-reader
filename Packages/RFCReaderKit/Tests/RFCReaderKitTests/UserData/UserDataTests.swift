@@ -154,6 +154,41 @@ struct UserDataTests {
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).isEmpty)
   }
 
+  /// V4 to V5 only adds the Keep Offline marks' table (#358): every existing row
+  /// survives.
+  @Test func `a version 4 store migrates to version 5 without losing a row`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let collection: UUID
+
+    do {
+      let previous = try ModelContainer(
+        for: Schema(versionedSchema: SchemaV4.self), configurations: ModelConfiguration(url: url))
+      let context = ModelContext(previous)
+      context.insert(SchemaV4.Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+      context.insert(
+        SchemaV4.ReadingPosition(
+          document: .rfc(9110), place: ReadingPlace(anchor: "section-8.3", offset: 4)))
+      let made = SchemaV4.DocumentCollection(name: "HTTP", color: .blue, position: 1)
+      collection = made.identifier
+      context.insert(made)
+      context.insert(
+        SchemaV4.DocumentCollectionItem(collection: collection, document: .rfc(9110), position: 1))
+      try context.save()
+    }
+
+    let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
+    let context = ModelContext(migrated)
+    #expect(try context.fetch(FetchDescriptor<Bookmark>()).map(\.document) == [.rfc(9110)])
+    let positions = try context.fetch(FetchDescriptor<ReadingPosition>())
+    #expect(positions.map(\.place) == [ReadingPlace(anchor: "section-8.3", offset: 4)])
+    let collections = try context.fetch(FetchDescriptor<DocumentCollection>())
+    #expect(collections.map(\.identifier) == [collection])
+    let items = try context.fetch(FetchDescriptor<DocumentCollectionItem>())
+    #expect(items.map(\.document) == [.rfc(9110)])
+    #expect(try context.fetch(FetchDescriptor<OfflineMark>()).isEmpty)
+  }
+
   /// A constant default would give every row one identifier.
   @Test func `two new collections get different identifiers`() {
     let first = DocumentCollection(name: "HTTP/3", color: .blue, position: 1)
@@ -261,5 +296,22 @@ struct UserDataTests {
     #expect(bookmarks.map(\.title) == ["other", "new"])
     let positions = try context.fetch(FetchDescriptor<ReadingPosition>())
     #expect(positions.map(\.place) == [ReadingPlace(anchor: "s", offset: 1)])
+  }
+
+  /// Two devices that each marked one document sync a mark each: one stays.
+  @Test func `duplicate Keep Offline marks are merged into one`() throws {
+    let container = try UserData.container(
+      configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    context.insert(OfflineMark(document: .rfc(9110), markedAt: Date(timeIntervalSince1970: 2_000)))
+    context.insert(OfflineMark(document: .rfc(9110), markedAt: Date(timeIntervalSince1970: 1_000)))
+    context.insert(OfflineMark(document: .rfc(2119)))
+    try context.save()
+
+    try UserData.deduplicate(context)
+
+    let marks = try context.fetch(
+      FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.documentKey)]))
+    #expect(marks.map(\.document) == [.rfc(2119), .rfc(9110)])
   }
 }

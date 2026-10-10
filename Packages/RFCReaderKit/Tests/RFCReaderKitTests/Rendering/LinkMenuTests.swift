@@ -58,7 +58,7 @@
     /// An anchor scrolls the document already on screen, and a tab of the same
     /// document is not what a tab means (`LinkDestination`).
     @Test func `an anchor in this document copies its public URL and opens no tab`() {
-      let items = items("\(DocumentTextBuilder.anchorScheme):section-4.2")
+      let items = items("\(ReaderLinkScheme.anchorScheme):section-4.2")
       #expect(
         items.copyLink.publicLink?.url.absoluteString
           == "https://www.rfc-editor.org/rfc/rfc9110#section-4.2")
@@ -66,7 +66,7 @@
     }
 
     @Test func `a bibliography entry copies the URL it names and opens no tab`() {
-      let items = items("\(DocumentTextBuilder.referenceScheme):ISO.8601")
+      let items = items("\(ReaderLinkScheme.referenceScheme):ISO.8601")
       #expect(
         items.copyLink.publicLink?.url.absoluteString
           == "https://www.iso.org/iso-8601-date-and-time-format.html")
@@ -74,7 +74,7 @@
     }
 
     @Test func `a bibliography entry that names no URL has no Copy Link`() {
-      #expect(items("\(DocumentTextBuilder.referenceScheme):Unlinked").copyLink == .none)
+      #expect(items("\(ReaderLinkScheme.referenceScheme):Unlinked").copyLink == .none)
     }
 
     @Test func `a link to the web keeps the text view's Copy Link`() {

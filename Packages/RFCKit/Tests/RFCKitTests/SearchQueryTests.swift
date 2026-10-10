@@ -31,6 +31,7 @@ struct SearchQueryTests {
     #""key words" status:bcp"#,
     #"wg:"NON WORKING GROUP" cache"#,
     #"author:"" cache"#,
+    "author:\"Roy\tFielding\" cache",
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
@@ -79,7 +80,13 @@ struct SearchQueryTests {
     case .author: "fielding"
     case .stream: "ietf"
     case .year: "2020"
+    case .after: "2023-06"
+    case .before: "2024"
+    case .published: "<90d"
     case .has: "xml"
+    case .readerData: "bookmarked"
+    case .scope: "rfc9110"
+    case .sort: "newest"
     }
   }
 
@@ -108,12 +115,23 @@ struct SearchQueryTests {
     #expect(try completions("w") == ["wg:"])
   }
 
-  /// `parseQuery` reads `by:`, `is:` and `group:` as well; a reader who types one
-  /// is offered the qualifier it stands for, by its long name.
+  /// `parseQuery` reads `by:` and `group:` as well; a reader who types one is
+  /// offered the qualifier it stands for, by its long name.
   @Test func `a word that begins an alias is offered its qualifier`() throws {
     #expect(try completions("cache by") == ["cache author:"])
-    #expect(try completions("is") == ["status:"])
     #expect(try completions("gro") == ["wg:"])
+  }
+
+  /// `is:` takes the reader's data, and is also an alias of `status:`: it is offered
+  /// as itself, and a status typed after it completes to `status:`.
+  @Test func `is completes to the reader's data and to statuses`() throws {
+    #expect(try completions("is") == ["is:"])
+    #expect(
+      try completions("is:") == [
+        "is:bookmarked", "is:read", "is:offline", "status:std", "status:internet-standard",
+        "status:bcp", "status:info", "status:exp", "status:historic", "status:current",
+      ])
+    #expect(try completions("is:b") == ["is:bookmarked", "status:bcp"])
   }
 
   @Test func `an empty last word is offered every qualifier`() throws {
@@ -121,7 +139,8 @@ struct SearchQueryTests {
       try completions("cache ")
         == [
           "cache wg:", "cache status:", "cache author:", "cache stream:", "cache year:",
-          "cache has:xml",
+          "cache after:", "cache before:", "cache published:", "cache has:xml", "cache is:",
+          "cache in:", "cache sort:",
         ])
   }
 
@@ -145,14 +164,14 @@ struct SearchQueryTests {
     #expect(try completions("cache wg:no") == [#"cache wg:"non working group""#])
     #expect(try completions(#"wg:"non w"#) == [#"wg:"non working group""#])
     let completed = try #require(try completions("wg:no").first)
-    #expect(IndexSearch.parseQuery(completed).filters.workingGroup == "non working group")
+    #expect(IndexSearch.parseQuery(completed).filters.workingGroups == ["non working group"])
   }
 
   @Test func `statuses and streams are completed from their vocabulary`() throws {
     #expect(
       try completions("status:") == [
-        "status:std", "status:bcp", "status:info", "status:exp", "status:historic",
-        "status:current",
+        "status:std", "status:internet-standard", "status:bcp", "status:info", "status:exp",
+        "status:historic", "status:current",
       ])
     #expect(try completions("is:e") == ["status:exp"])
     #expect(
@@ -206,6 +225,42 @@ struct SearchQueryTests {
       for: "cache color:red", in: try Fixtures.sampleIndex())
     #expect(suggestions.map(\.isUnknown) == [true])
     #expect(suggestions.first?.completion == "cache color:red")
+  }
+
+  // MARK: - Words
+
+  /// A query pasted across a wrapped line holds a line break where a space was, and
+  /// a tab is whitespace as much as a space is (#852).
+  @Test(arguments: [
+    ("key\twords", ["key", "words"]),
+    ("key\nwords", ["key", "words"]),
+    ("key\r\nwords\u{00A0}cache", ["key", "words", "cache"]),
+    ("\"key\twords\" cache", ["\"key\twords\"", "cache"]),
+  ])
+  func `any whitespace outside quotes separates words`(query: String, words: [String]) {
+    #expect(SearchQuery.words(in: query) == words)
+  }
+
+  @Test func `a filter after a line break is still a filter`() {
+    let parsed = IndexSearch.parseQuery("key words\nstatus:bcp")
+    #expect(parsed.filters.statuses == [.bestCurrentPractice])
+    #expect(parsed.text == "key words")
+  }
+
+  /// Inside quotes the whitespace stays part of the word, and reads as one space, so
+  /// a name or a phrase pasted across a wrapped line matches as typed on one.
+  @Test func `whitespace inside quotes reads as one space`() {
+    let parsed = IndexSearch.parseQuery("author:\"Roy\tFielding\" wg:\"non\nworking group\"")
+    #expect(parsed.filters.author == "roy fielding")
+    #expect(parsed.filters.workingGroups == ["non working group"])
+    #expect(SearchQuery.format(parsed) == #"wg:"non working group" author:"roy fielding""#)
+    #expect(SearchQuery.unquoted("\"congestion\r\n  control\"") == "congestion control")
+    #expect(IndexSearch.parseQuery("author:\"\n\"").filters.author == nil)
+  }
+
+  @Test func `a word is finished by a line break as by a space`() {
+    #expect(SearchQuery.wordBeingTyped(in: "status:bcp\n") == nil)
+    #expect(SearchQuery.wordBeingTyped(in: "cache\tst") == "st")
   }
 }
 
@@ -265,12 +320,19 @@ struct SearchQueryTermTests {
     #expect(SearchQuery.removing(status, from: query) == "stream:iab-x cache wg:tls is:standard")
   }
 
-  /// Only the last working group filters; removing its chip removes the earlier ones
-  /// too, or one would take its place.
-  @Test func `removing a working group removes every word naming one`() throws {
+  /// Working groups are a union (#355); removing one's chip leaves the others.
+  @Test func `removing a working group leaves the others`() throws {
     let query = "wg:quic cache wg:tls"
     let group = try #require(terms(query).first)
-    #expect(SearchQuery.removing(group, from: query) == "cache")
+    #expect(SearchQuery.removing(group, from: query) == "cache wg:tls")
+  }
+
+  /// An author holds one value, the last word's: removing its chip removes every
+  /// word naming one, or an earlier one would take its place.
+  @Test func `removing an author removes every word naming one`() throws {
+    let query = "by:quic cache author:tls"
+    let author = try #require(terms(query).first)
+    #expect(SearchQuery.removing(author, from: query) == "cache")
   }
 
   /// The Mac field's caret is after the space the reader typed; removing a chip keeps
@@ -342,11 +404,11 @@ struct SearchQueryTermTests {
     #expect(split.text == "color:red status:stnd cache ")
   }
 
-  /// A second working group replaces the first, as `parseQuery` reads the last one.
-  @Test func `a later working group replaces the token of an earlier one`() {
+  /// A second working group joins the first, as working groups are a union.
+  @Test func `a later working group joins the token of an earlier one`() {
     let split = tokenized(
       SearchQuery.joined(terms: terms("wg:tls"), text: "wg:quic "))
-    #expect(split.terms.map(\.word) == ["wg:quic"])
+    #expect(split.terms.map(\.word) == ["wg:quic", "wg:tls"])
   }
 
   /// The one search text is what the list filters on; tokens and text are a view of

@@ -99,19 +99,51 @@ public struct DraftHeader: Equatable, Sendable {
   /// "RFC" or the brackets around any. One reading for the XML attribute and the text
   /// line alike: drafts write the prefix in both, where a published RFC's own header
   /// never does.
+  ///
+  /// A number after a label that names something other than an RFC is not one:
+  /// `BCP 14`, `STD 3`, or an old header's `NIC 5893` (#767). `RFC #733` is an RFC.
   private static func listedNumbers(_ value: String) -> [Int] {
-    value.replacingOccurrences(of: "(if approved)", with: "", options: .caseInsensitive)
-      .split(whereSeparator: { $0 == "," || $0.isWhitespace })
-      .compactMap { token -> Int? in
-        // "[6265]" as a citation would write it.
-        var token = token.trimmingPrefix("[")
-        if token.hasSuffix("]") { token = token.dropLast() }
-        // "RFC-9993": a hyphen, not a minus sign.
-        if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3).trimmingPrefix("-") }
-        guard let number = Int(token), number > 0 else { return nil }
-        return number
+    var numbers: [Int] = []
+    // How many of the numbers to come are another series': one after `BCP`, all of
+    // them after a plural, `IENs`, until an RFC is named.
+    var otherSeriesNumbers = 0
+    let tokens = value.replacingOccurrences(
+      of: "(if approved)", with: "", options: .caseInsensitive
+    )
+    .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+    for token in tokens {
+      // "[6265]" as a citation would write it.
+      var token = token.trimmingPrefix("[")
+      if token.hasSuffix("]") { token = token.dropLast() }
+      if let label = otherSeriesLabels.first(where: { token.uppercased().hasPrefix($0) }) {
+        let rest = token.dropFirst(label.count)
+        // "BCP14", glued to its number, is the whole of the series' share.
+        if rest.contains(where: \.isNumber) {
+          otherSeriesNumbers = 0
+        } else {
+          otherSeriesNumbers = rest.uppercased() == "S" ? .max : 1
+        }
+        continue
       }
+      // "RFC-9993": a hyphen, not a minus sign.
+      if token.uppercased().hasPrefix("RFC") {
+        otherSeriesNumbers = 0
+        token = token.dropFirst(3).trimmingPrefix("-")
+        if token.uppercased() == "S" { continue }
+      }
+      guard let number = Int(token.trimmingPrefix("#")), number > 0 else { continue }
+      guard otherSeriesNumbers == 0 else {
+        otherSeriesNumbers -= 1
+        continue
+      }
+      numbers.append(number)
+    }
+    return numbers
   }
+
+  /// Labels whose numbers are not RFCs: the series, and the NIC and IEN documents old
+  /// headers cite beside RFCs.
+  private static let otherSeriesLabels = ["BCP", "STD", "FYI", "NIC", "IEN"]
 
   /// Whether a left column carries on a list: numbers, and nothing else but the
   /// spellings `listedNumbers` reads past. A date alone in the right column,
@@ -126,18 +158,29 @@ public struct DraftHeader: Equatable, Sendable {
   /// author column on the right never reaches it.
   private static func leftColumn(_ line: String) -> String {
     let trimmed = line.drop(while: \.isWhitespace)
-    guard let gap = trimmed.firstRange(of: /\t| {2}/) else {
+    guard let gap = trimmed.firstRange(of: columnGap) else {
       return String(trimmed).trimmingCharacters(in: .whitespaces)
     }
     return String(trimmed[..<gap.lowerBound])
   }
 
+  /// A tab or a run of two spaces: where a header line's left column ends.
+  private static let columnGap = Pattern(#/\t| {2}/#)
+
   /// The value after `label`, when the line starts with it. The column gap is looked
   /// for past the label, so padding that lines a value up with its neighbors is not
   /// taken for it.
+  ///
+  /// An old header spaces a number from its `RFC` as widely as a column gap, `RFC  760`,
+  /// and the two are closed up first, so the number stays in the value (#767).
   private static func value(of label: String, in line: String) -> String? {
     let trimmed = line.drop(while: \.isWhitespace)
     guard trimmed.hasPrefix(label) else { return nil }
-    return leftColumn(String(trimmed.dropFirst(label.count)))
+    let value = String(trimmed.dropFirst(label.count))
+      .replacing(spacedRFCNumber) { "RFC \($0.output.1)" }
+    return leftColumn(value)
   }
+
+  /// `RFC`, then two spaces or more, then a number.
+  private static let spacedRFCNumber = Pattern(#/RFC {2,}(\d)/#)
 }

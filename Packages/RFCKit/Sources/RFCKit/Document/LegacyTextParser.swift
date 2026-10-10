@@ -8,8 +8,32 @@ import Foundation
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
 public enum LegacyTextParser {
-  public static func parse(_ data: Data) -> RFCDocument {
-    parse(text(decoding: data))
+  /// `entry` is the document's RFC index entry, where the caller has it. Its title is
+  /// the parse's (`parse(_:title:)`), and its number, authors, date, obsoletes and
+  /// updates replace the page's (`IndexHeader`), as a converted document's do: the app
+  /// parses a legacy RFC from its text too, and showed the page's guess (#767).
+  public static func parse(_ data: Data, entry: RFCMetadata? = nil) -> RFCDocument {
+    var document = parse(text(decoding: data), title: entry?.title)
+    // The title is chosen once, by the parse: choosing it again from what it chose can
+    // title-case an index title the parse kept in capitals.
+    if let entry { _ = IndexHeader.apply(entry, to: &document.header) }
+    return document
+  }
+
+  /// `document`, read from a legacy text, with its header taken from `entry`: what a
+  /// parse with the entry gives, for a document parsed before the entry was at hand.
+  /// The title is chosen as the parse chooses it, but from the page's title alone: the
+  /// title page's other runs are the parse's. Not for a document parsed with the
+  /// entry, whose title is chosen already: choosing again from an index title the
+  /// parse kept in capitals title-cases it. A document read from XML is left as it is
+  /// (#767).
+  public static func applying(_ entry: RFCMetadata, to document: RFCDocument) -> RFCDocument {
+    guard document.source == .text else { return document }
+    var document = document
+    _ = IndexHeader.apply(entry, to: &document.header)
+    document.header.title = title(page: document.header.title, index: entry.title, titlePage: [])
+      .collapsingWhitespace()
+    return document
   }
 
   /// The text of a legacy RFC file: UTF-8, or Windows-1252 for the 34 older documents
@@ -37,6 +61,11 @@ public enum LegacyTextParser {
     var title: String
     var isAppendix: Bool
     var anchor: String
+    /// The word an appendix heading names itself by, nil where it states none, as
+    /// `A.1. Title` does (#428).
+    var appendixWord: Section.AppendixWord?
+    /// The `(Normative)` or `(Informative)` taken out of an appendix's title.
+    var qualifier: Section.Qualifier?
   }
 
   struct RawSection {
@@ -79,17 +108,27 @@ public enum LegacyTextParser {
   /// named (`namedAppendixHeadingPattern`), by its letter, or as a lettered subsection.
   /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
   /// lines rather than through a whole document.
-  static func appendixHeading(in line: String) -> (number: String, title: String)? {
+  static func appendixHeading(in line: String) -> AppendixHeading? {
     if let match = line.firstMatch(of: namedAppendixHeadingPattern) {
-      return (String(match.number), String(match.title))
+      let word: Section.AppendixWord =
+        match.output.0.lowercased().hasPrefix("annex") ? .annex : .appendix
+      return AppendixHeading(number: String(match.number), title: String(match.title), word: word)
     }
     if let match = line.firstMatch(of: letteredAppendixHeadingPattern) {
-      return (String(match.number), String(match.title))
+      return AppendixHeading(number: String(match.number), title: String(match.title))
     }
     if let match = line.firstMatch(of: appendixSubsectionHeadingPattern) {
-      return (String(match.number), String(match.title))
+      return AppendixHeading(number: String(match.number), title: String(match.title))
     }
     return nil
+  }
+
+  /// What `appendixHeading(in:)` reads of a line.
+  struct AppendixHeading {
+    var number: String
+    var title: String
+    /// The word the heading names itself by, nil for a heading by its letter alone.
+    var word: Section.AppendixWord?
   }
 
   /// Diagnoses every block of a document without building one: what the prose test
@@ -629,6 +668,9 @@ public enum LegacyTextParser {
     // protocol's, and a catalog (RFC 1292, 1632, 2116) gives every entry one (#72).
     // A later one is the body's, and stays where it is.
     var abstractTaken = false
+    // The word each appendix names itself by, by its letter or numeral, which its
+    // subsections, `A.1. Title`, do not repeat (#428).
+    var appendixWords: [Substring: Section.AppendixWord] = [:]
     for (index, raw) in prepared.sections.enumerated() {
       guard let heading = raw.heading else {
         // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
@@ -655,8 +697,13 @@ public enum LegacyTextParser {
           continue
         }
       }
-      flat.append(
-        Self.section(from: raw, heading: heading, references: bibliographies[index], in: context))
+      var section = Self.section(
+        from: raw, heading: heading, references: bibliographies[index], in: context)
+      if heading.isAppendix, let first = heading.number?.split(separator: ".").first {
+        if let stated = heading.appendixWord { appendixWords[first] = stated }
+        section.appendixWord = heading.appendixWord ?? appendixWords[first] ?? .appendix
+      }
+      flat.append(section)
     }
     return Self.finished(flat, header: header)
   }
@@ -748,7 +795,8 @@ public enum LegacyTextParser {
       // cross reference. The words, not the columns they were set in: a classifier
       // reads a heading's gaps, a title does not (#683).
       title: context.linker.link(heading.title.collapsingWhitespace()),
-      isAppendix: heading.isAppendix
+      isAppendix: heading.isAppendix,
+      qualifier: heading.qualifier
     )
     if let references, !references.isEmpty {
       let leading = Self.blocks(from: Self.blocksBeforeFirstEntry(raw.blocks), in: context)
@@ -761,10 +809,17 @@ public enum LegacyTextParser {
   }
 
   /// The document the sections make: nested by their numbers, their anchors made
-  /// unique, and its abbreviations and defined terms collected.
+  /// unique, their paragraphs and the abstract's numbered, and its abbreviations and
+  /// defined terms collected.
   private static func finished(_ sections: [Section], header: DocumentHeader) -> RFCDocument {
-    var document = RFCDocument(
-      header: header, sections: Self.nest(Self.makingAnchorsUnique(sections)), source: .text)
+    let unique = Self.makingAnchorsUnique(sections)
+    let declared = Self.declaredAnchors(unique)
+    let sections = Self.numberingParagraphs(unique, avoiding: declared)
+    var header = header
+    // Prep's abstract goes by `section-abstract`, which no legacy heading's anchor is.
+    header.abstract = Self.numberingParagraphs(
+      header.abstract, of: "section-abstract", avoiding: declared)
+    var document = RFCDocument(header: header, sections: Self.nest(sections), source: .text)
     document.abbreviations = Abbreviations.defined(in: document)
     document.definedTerms = DefinedTerms.defined(in: document)
     return document

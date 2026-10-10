@@ -28,6 +28,7 @@ struct RFCXMLSerializerTests {
         "R:"
           + list.entries.map { "\($0.anchor)=\($0.documentID, default: "-")" }.joined(
             separator: ",")
+      case .index(let index): "I:" + index.groups.map(\.label).joined()
       }
     }
     func visit(_ section: Section, depth: Int) {

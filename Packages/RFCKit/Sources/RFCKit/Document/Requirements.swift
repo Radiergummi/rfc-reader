@@ -22,7 +22,7 @@ public struct Requirement: Sendable, Hashable {
   public var keywords: [BCP14Keyword]
   public var sentence: String
   /// Where to go to read it: its paragraph's anchor, or its section's where the
-  /// paragraph has none, as in every document parsed from legacy text.
+  /// paragraph has none, as a legacy paragraph nested in a list or a quote does.
   public var anchor: String
   public var sectionAnchor: String
   public var sectionNumber: String?
@@ -141,7 +141,7 @@ public enum Requirements {
             for cell in cells { record(cell, anchor) }
           }
         }
-      case .preformatted, .figure, .blockQuote, .references:
+      case .preformatted, .figure, .blockQuote, .references, .index:
         break
       }
     }

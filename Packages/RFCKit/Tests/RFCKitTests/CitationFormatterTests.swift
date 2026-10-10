@@ -22,6 +22,19 @@ struct CitationFormatterTests {
       ))
   }
 
+  /// A surname of more than one word is inverted whole, and a name that is all
+  /// surname, an organization's, is not inverted at all (#768).
+  @Test func `a surname of several words is inverted whole`() {
+    let authors = [
+      Author(name: "D. Eastlake 3rd"), Author(name: "F. Le Faucheur"),
+      Author(name: "Internet Architecture Board"), Author(name: "M. St. Johns"),
+    ]
+    #expect(
+      CitationFormatter.authorList(authors)
+        == "Eastlake 3rd, D., Le Faucheur, F., Internet Architecture Board, and M. St. Johns")
+    #expect(CitationFormatter.authorList([authors[2]]) == "Internet Architecture Board")
+  }
+
   @Test func `short forms`() throws {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     #expect(CitationFormatter.cite(http, section: "4.2", style: .short) == "RFC 9110, Section 4.2")

@@ -1,3 +1,4 @@
+import Network
 import RFCReaderKit
 import Testing
 
@@ -69,5 +70,16 @@ struct FetchPolicyTests {
     let deniedAndExpensive = FetchPolicy.Path(
       status: .cellularDenied, isExpensive: true, isConstrained: true)
     #expect(decide(deniedAndExpensive, lowPower: true) == .deferred(.cellularDenied))
+  }
+
+  @Test func `an unsatisfied path names only the per-app cellular switch`() {
+    #expect(FetchPolicy.PathStatus(.satisfied, unsatisfiedReason: .notAvailable) == .satisfied)
+    #expect(
+      FetchPolicy.PathStatus(.requiresConnection, unsatisfiedReason: .notAvailable)
+        == .requiresConnection)
+    #expect(
+      FetchPolicy.PathStatus(.unsatisfied, unsatisfiedReason: .cellularDenied) == .cellularDenied)
+    #expect(FetchPolicy.PathStatus(.unsatisfied, unsatisfiedReason: .wifiDenied) == .unsatisfied)
+    #expect(FetchPolicy.PathStatus(.unsatisfied, unsatisfiedReason: .notAvailable) == .unsatisfied)
   }
 }

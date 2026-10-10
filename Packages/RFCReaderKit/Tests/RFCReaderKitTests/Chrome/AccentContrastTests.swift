@@ -32,6 +32,47 @@ struct AccentContrastTests {
 
   private static func color(_ hex: UInt32) -> SRGBColor { SRGBColor(hex: hex) }
 
+  // MARK: - A chip's outline (#457)
+
+  /// An informative chip is an outline, and so is every chip under Increase
+  /// Contrast: held to what a symbol needs against what it is drawn on, whatever the
+  /// accent, the appearance or the card.
+  @Test(arguments: lightAccents)
+  func `a chip's outline clears 3:1 on every light backdrop`(hex: UInt32) {
+    for backdrop in Self.lightPages.map(Self.color) + Self.lightCards {
+      let outline = AccentContrast.chipOutline(accent: Self.color(hex), backdrop: backdrop)
+      #expect(outline.contrast(with: backdrop) >= AccentContrast.symbolContrast)
+    }
+  }
+
+  @Test(arguments: darkAccents)
+  func `a chip's outline clears 3:1 on every dark backdrop`(hex: UInt32) {
+    for backdrop in Self.darkPages.map(Self.color) + Self.darkCards {
+      let outline = AccentContrast.chipOutline(accent: Self.color(hex), backdrop: backdrop)
+      #expect(outline.contrast(with: backdrop) >= AccentContrast.symbolContrast)
+    }
+  }
+
+  /// A dark accent on a dark page is darker than the page, and darkened it only
+  /// reaches black, which is no outline there: it is lightened instead.
+  @Test func `an outline goes whichever way clears 3:1`() {
+    let page = Self.color(0x1E_1E1E)
+    let outline = AccentContrast.chipOutline(accent: Self.color(0x00_1A33), backdrop: page)
+    #expect(outline.contrast(with: page) >= AccentContrast.symbolContrast)
+  }
+
+  @Test func `an accent that already clears 3:1 is the outline as it is`() {
+    let blue = Self.color(0x00_68DA)
+    #expect(AccentContrast.chipOutline(accent: blue, backdrop: .white) == blue)
+  }
+
+  @Test func `a lightened color clears the contrast against a darker one`() {
+    let dark = Self.color(0x1E_1E1E)
+    let lightened = Self.color(0x00_3366).lightened(toContrast: 3, against: dark)
+    #expect(lightened.contrast(with: dark) >= 3)
+    #expect(lightened.contrast(with: dark) < 3.1, "no lighter than it has to be")
+  }
+
   // MARK: - Compositing and darkening
 
   @Test func `a fill at no opacity is the page and at full opacity the fill`() {
@@ -104,13 +145,11 @@ struct AccentContrastTests {
     let accent = color(hex)
     let opacity = AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
     #expect(opacity >= 0 && opacity <= AccentContrast.chipTint)
-    // A normative chip, and an informative one at half the tint (#184).
-    for drawn in [opacity, opacity / 2] {
-      let tint = accent.composited(opacity: drawn, over: backdrop)
-      #expect(
-        link.contrast(with: tint) >= AccentContrast.minimumContrast,
-        "accent \(String(hex, radix: 16)) on \(backdrop) at \(drawn)")
-    }
+    // A normative chip's fill: an informative chip has none (#457).
+    let tint = accent.composited(opacity: opacity, over: backdrop)
+    #expect(
+      link.contrast(with: tint) >= AccentContrast.minimumContrast,
+      "accent \(String(hex, radix: 16)) on \(backdrop) at \(opacity)")
   }
 
   /// Only an accent that fails gets a lighter tint: orange keeps the 15% it had.

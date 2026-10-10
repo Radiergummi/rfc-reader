@@ -180,6 +180,15 @@ struct RFCLinkTests {
     #expect(link.appURL.absoluteString == "rfc://9000#\(fragment)")
   }
 
+  /// A repeated legacy section is `section-1_2` (#491): the second section 1, an anchor,
+  /// not section `1_2`, and so is a paragraph of it.
+  @Test(arguments: ["section-1_2", "appendix-A_2", "section-1_2-3"])
+  func `a repeated section's fragment is an anchor, not a section`(fragment: String) throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://19#\(fragment)")!))
+    #expect(link.section == nil)
+    #expect(link.anchor == fragment)
+  }
+
   /// Prep spells a top-level appendix's part number `section-appendix.a`; it is the
   /// same appendix as `appendix-A`.
   @Test(
@@ -245,6 +254,8 @@ struct RFCLinkTests {
     "https://datatracker.ietf.org/doc/rfc4321/bibtex/",
     "https://www.rfc-editor.org/rfc/rfc4321.json",
     "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
+    "https://www.rfc-editor.org/auth48/rfc4321",
+    "https://www.rfc-editor.org/authors/rfc4321.html",
   ])
   func `a page about a document is no document page`(address: String) throws {
     let url = try #require(URL(string: address))
@@ -275,6 +286,47 @@ struct RFCLinkTests {
   func `a BCP's or an STD's text is a document page`(address: String, id: DocumentID) throws {
     let url = try #require(URL(string: address))
     #expect(RFCLink(documentPage: url) == RFCLink(id: id))
+  }
+
+  /// ⌘L takes any RFC Editor or IETF address of a document (#768): the RFC Editor's
+  /// series directories and old paths, whose last component names it, and
+  /// `ietf.org`'s `/rfc/`.
+  @Test(arguments: [
+    ("https://www.rfc-editor.org/bcp/bcp14.txt", DocumentID(series: .bcp, number: 14)),
+    ("https://www.rfc-editor.org/std/std1.txt", DocumentID(series: .std, number: 1)),
+    ("https://www.rfc-editor.org/in-notes/rfc2119.txt", DocumentID.rfc(2119)),
+    ("https://www.rfc-editor.org/rfc/inline-errata/rfc9110.html", DocumentID.rfc(9110)),
+    ("https://www.ietf.org/rfc/rfc2119.txt", DocumentID.rfc(2119)),
+    ("https://ietf.org/rfc/rfc2119.html", DocumentID.rfc(2119)),
+  ])
+  func `any published address of a document opens it`(address: String, id: DocumentID) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(url: url) == RFCLink(id: id))
+  }
+
+  /// A citation stays with the addresses it always read: what ⌘L takes besides is
+  /// left a link.
+  @Test(arguments: [
+    "https://www.rfc-editor.org/in-notes/rfc2119.txt",
+    "https://www.ietf.org/rfc/rfc2119.txt",
+  ])
+  func `a citation reads no more addresses than before`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(citing: url) == nil)
+  }
+
+  /// Elsewhere on `ietf.org` a document's name is no document of the series, and a
+  /// bare number elsewhere on the RFC Editor's site is no RFC.
+  @Test(arguments: [
+    "https://www.rfc-editor.org/news/2024",
+    "https://www.rfc-editor.org/2024",
+    "https://www.ietf.org/",
+    "https://www.ietf.org/standards/rfcs/",
+    "https://www.ietf.org/archive/id/draft-ietf-httpbis-semantics-19.txt",
+  ])
+  func `other pages name no document`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(url: url) == nil)
   }
 
   /// Nor is the app's own link, which the extension never has to send anywhere.

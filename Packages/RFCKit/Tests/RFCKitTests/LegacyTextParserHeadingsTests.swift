@@ -174,6 +174,34 @@ struct LegacyTextParserHeadingsTests {
     #expect(LegacyTextParser.appendixHeading(in: "D.2. Second Example")?.number == "D.2")
   }
 
+  /// The word an appendix heading names itself by is kept, so an annex shows as one;
+  /// a heading by its letter alone states none (#428).
+  @Test func `an appendix heading keeps the word it names itself by`() {
+    #expect(
+      LegacyTextParser.appendixHeading(in: "Annex B (informative): Background")?.word == .annex)
+    #expect(LegacyTextParser.appendixHeading(in: "ANNEX C - SAMPLE CODE")?.word == .annex)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A. Examples")?.word == .appendix)
+    #expect(LegacyTextParser.appendixHeading(in: "B.1. Examples")?.word == nil)
+  }
+
+  /// A `(Normative)` or `(Informative)` after an appendix's number is no part of its
+  /// title; it is the heading's qualifier, in any case and whatever sets the title off
+  /// (#428).
+  @Test func `an appendix heading's qualifier is taken out of its title`() throws {
+    let heading = try #require(
+      LegacyTextParser.heading(from: "Annex B (informative): Background", separators: []))
+    #expect(heading.isAppendix)
+    #expect(heading.number == "B")
+    #expect(heading.anchor == "appendix-B")
+    #expect(heading.appendixWord == .annex)
+    #expect(heading.qualifier == .informative)
+    #expect(heading.title == "Background")
+    let bare = try #require(
+      LegacyTextParser.heading(from: "Appendix A. (Normative)", separators: []))
+    #expect(bare.qualifier == .normative)
+    #expect(bare.title == "")
+  }
+
   /// However a legacy RFC names an appendix, it is one (#201): with `Appendix` or
   /// `Annex` in any case, a letter, a Roman or an Arabic numeral, and a title set off by
   /// a full stop, a colon, dashes or spaces, or no title at all. These were unnumbered

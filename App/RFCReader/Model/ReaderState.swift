@@ -206,7 +206,7 @@ final class ReaderState {
   @ObservationIgnored var openPanel: () -> Void = {}
 
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
-  /// (`DocumentTextBuilder.referenceScheme`). The reader beside a compared document
+  /// (`ReaderLinkScheme.referenceScheme`). The reader beside a compared document
   /// has no panel, and `BesideReader` shows the entry in a popover instead (#187).
   func reveal(reference anchor: String) {
     pane = .navigation
@@ -244,5 +244,17 @@ final class ReaderState {
     hasSelection = false
     documentTitle = nil
     precedingDraft = nil
+  }
+}
+
+extension ReaderState {
+  /// What a reader writes the window's reader state through: only while it is the
+  /// reader on screen (#772). See `ScopedWriter`.
+  typealias Writer = ScopedWriter<ReaderState>
+
+  /// The writer of the reader of `id`, at `depth` in the iOS stack, in `navigation`'s
+  /// tab.
+  func writer(showing id: DocumentID, at depth: Int?, in navigation: NavigationModel) -> Writer {
+    ScopedWriter(self) { navigation.shows(id, at: depth) }
   }
 }

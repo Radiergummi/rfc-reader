@@ -96,12 +96,12 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
-      # SQLite's headers, for corpus-build's index database (#174): the image has
-      # the library but not them. make and curl for the patch check below.
+      # SQLite's headers, for RFCKit's full-text index (#37) and corpus-build's index
+      # database (#174): the image has the library but not them. make and curl for the patch check below.
       - name: Install tools
         run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
-      - run: swift test --package-path Packages/RFCKit
-      - run: swift test --package-path Tools/corpus-build
+      # RFCKit and corpus-build, with the Makefile's flags (RFCKit's warnings, #440).
+      - run: make test
       # Before the patch check, which needs the network on a cache miss: a fetch that
       # fails there fails the job, and should not cost main its builds.
       - name: Save the SwiftPM builds

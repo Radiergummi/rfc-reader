@@ -155,6 +155,26 @@ struct CorpusBackedTitlePageTests {
   }
 }
 
+@Suite("Corpus-backed: the header block", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedHeaderBlockTests {
+  /// An author whose left column ran out stands alone at the right of the line, and is
+  /// read as the right column (#767): RFC 2616's page names seven, and five of them
+  /// stand alone.
+  @Test func `an author alone on a line is an author`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc2616")).header
+    #expect(header.authors.count == 7)
+    #expect(header.authors.first?.name == "R. Fielding")
+    #expect(header.authors.contains { $0.name == "J. Mogul" })
+  }
+
+  /// A list continued on an indented line is read whole (#767): RFC 1140's obsoletes
+  /// run on under `Obsoletes: RFCs`.
+  @Test func `an obsoletes list continued on the next line is read whole`() throws {
+    let header = LegacyTextParser.parse(try CorpusText.text("rfc1140")).header
+    #expect(header.obsoletes == [.rfc(1130), .rfc(1100), .rfc(1083)])
+  }
+}
+
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedAppendixHeadingTests {
   /// RFC 2326 heads its appendices `Appendix A: Title`, as about 150 legacy RFCs do.
@@ -167,6 +187,23 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(!appendix.titleText.hasPrefix("Appendix"))
     #expect(document.section(anchor: "appendix-B") != nil)
     #expect(document.section(anchor: "appendix-C") != nil)
+  }
+
+  /// RFC 5126 heads its annexes `Annex A (Normative): Title`, and their subsections by
+  /// letter alone, `A.1.`. Each is an annex, named as one, with its qualifier apart
+  /// from its title; its subsections are its annex's (#428).
+  @Test func `an annex keeps its word and its qualifier`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5126"))
+    let annex = try #require(document.section(anchor: "appendix-A"))
+    #expect(annex.numberLabel == "Annex A")
+    #expect(annex.qualifier == .normative)
+    #expect(annex.titleText == "ASN.1 Definitions")
+    let child = try #require(annex.subsections.first { $0.number == "A.1" })
+    #expect(child.numberLabel == "Annex A.1")
+    #expect(child.qualifier == nil)
+    let informative = try #require(document.section(anchor: "appendix-B"))
+    #expect(informative.qualifier == .informative)
+    #expect(!informative.titleText.contains("nformative"))
   }
 
   /// RFC 8011 names its status codes as lettered subsections, `B.1.4.1.  ` and a code
@@ -447,7 +484,7 @@ struct CorpusBackedReferencesSectionTests {
       #expect(!bibliographies.isEmpty, "\(stem) has no bibliography")
       for bibliography in bibliographies {
         #expect(
-          bibliography.subsections.allSatisfy(RFCXMLSerializer.isReferences),
+          bibliography.subsections.allSatisfy { $0.holdsReferences },
           "\(stem) \(bibliography.anchor)")
       }
     }
@@ -689,9 +726,10 @@ struct CorpusBackedDefinedTermsTests {
     let upstream = try #require(document.definedTerms["upstream"])
     #expect(upstream.anchor == "section-3.7-4")
     #expect(upstream.definition.count == 1)
-    let status = try #require(document.definedTerms["100 Continue (status code)"])
-    #expect(status.anchor == "status.100")
-    #expect(status.definition.isEmpty, "an entry directly in a section has no one block")
+    // An entry directly in a section has no one block to show, and so no definition:
+    // nothing else defines a status code, and it is no term to show (#396).
+    #expect(document.definedTerms["100 Continue"] == nil)
+    #expect(document.definedTerms["100 Continue (status code)"] == nil)
   }
 
   /// RFC 9114 marks `connection error` in its section and defines it in its
@@ -706,6 +744,26 @@ struct CorpusBackedDefinedTermsTests {
       #expect(!defined.definition.isEmpty, "\(term)")
     }
   }
+
+  /// What every term the listed documents define holds to, once cleaned (#396): a
+  /// definition to show, an anchor the model holds, and no citation or start of a
+  /// definition carried in the term.
+  @Test(arguments: [
+    "rfc9110", "rfc9112", "rfc9114", "rfc9393", "rfc9457", "rfc8927", "rfc8727", "rfc9635",
+    "rfc9022", "rfc8935", "rfc9051", "rfc9111", "rfc9499",
+  ])
+  func `every defined term has a definition at an anchor the model holds`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let held = Set(document.allSections.map(\.anchor) + document.blocks.flatMap(\.anchors))
+    for (spelling, defined) in document.definedTerms {
+      #expect(defined.term == spelling)
+      #expect(!defined.definition.isEmpty, "\(stem): \(spelling)")
+      #expect(defined.anchor.map(held.contains) == true, "\(stem): \(spelling)")
+      #expect(!spelling.contains(" ["), "\(stem): \(spelling)")
+      #expect(!spelling.contains(": "), "\(stem): \(spelling)")
+    }
+  }
+
 }
 
 @Suite("Corpus-backed: citations", .enabled(if: CorpusText.isXMLAvailable))
@@ -775,5 +833,83 @@ struct CorpusBackedJoinedArtworkTests {
     let terms = document.definitionLists.flatMap { $0 }.map(\.term.plainText)
     #expect(terms.filter { $0.hasPrefix("Attribute name") }.count >= 3)
     #expect(!document.artworkText.contains { $0.contains("Attribute name") })
+  }
+}
+
+@Suite("Corpus-backed: index", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedIndexTests {
+  /// Every RFC authored in RFCXML that prep gave an index, when this was written.
+  static let documents = ["rfc9051", "rfc9110", "rfc9111", "rfc9112", "rfc9114", "rfc9499"]
+
+  static func indexes(in document: RFCDocument) -> [IndexBlock] {
+    document.blocks.compactMap(\.index)
+  }
+
+  @Test(arguments: documents)
+  func `prep's index reads as one index block`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let indexes = Self.indexes(in: document)
+    #expect(indexes.count == 1)
+    let groups = try #require(indexes.first).groups
+    #expect(!groups.isEmpty)
+    #expect(Set(groups.map(\.label)).count == groups.count, "one group per letter")
+    #expect(groups.allSatisfy { !$0.entries.isEmpty })
+  }
+
+  /// A locator can point at a paragraph rather than a section (RFC 9499's do); either
+  /// way the document declares the anchor.
+  @Test(arguments: documents)
+  func `every locator leads to an anchor the document declares`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let declared = AnchorResolutionTests.anchors(in: document)
+    let index = try #require(Self.indexes(in: document).first)
+    for entry in index.allEntries {
+      for locator in entry.locators {
+        guard case .anchor(let anchor) = locator.reference.target else {
+          Issue.record("\(stem): \(entry.term.plainText) leads outside the document")
+          continue
+        }
+        #expect(declared.contains(anchor), "\(stem): \(anchor)")
+      }
+    }
+  }
+
+  @Test(arguments: documents)
+  func `an index is a fixed point of writing and reading`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let written = RFCXMLSerializer().serialize(document)
+    let read = try RFCXMLParser.parse(Data(written.utf8))
+    #expect(Self.indexes(in: read) == Self.indexes(in: document))
+  }
+
+  @Test(arguments: documents)
+  func `no backlink comes from the index`(stem: String) throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml(stem))
+    let indexSection = try #require(
+      document.allSections.first {
+        $0.blocks.contains { $0.index != nil }
+      })
+    let citing = Backlinks.within(document).values.flatMap { $0 }.map(\.section)
+    #expect(!citing.contains(indexSection.anchor))
+  }
+
+  /// RFC 9110 heads its grammar's rule names with `Grammar`, which has no locator of
+  /// its own, and gives `URI` its own locators beside its subitems; RFC 9499 gives
+  /// every term's locators in a subentry without a term.
+  @Test func `both ways prep writes an item's own locators give them to the item`() throws {
+    let http = try #require(
+      Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9110"))).first)
+    let grammar = try #require(
+      http.groups.flatMap(\.entries).first { $0.term.plainText == "Grammar" })
+    #expect(grammar.locators.isEmpty)
+    #expect(grammar.subentries.contains { $0.term.plainText == "ALPHA" })
+    let uri = try #require(http.groups.flatMap(\.entries).first { $0.term.plainText == "URI" })
+    #expect(!uri.locators.isEmpty, "its own locators, in its <dd>")
+    #expect(!uri.subentries.isEmpty, "its subitems, after an entry without a term")
+    let dns = try #require(
+      Self.indexes(in: try RFCXMLParser.parse(try CorpusText.xml("rfc9499"))).first)
+    let entries = dns.groups.flatMap(\.entries)
+    #expect(entries.allSatisfy { !$0.locators.isEmpty || !$0.subentries.isEmpty })
+    #expect(entries.contains { !$0.locators.isEmpty })
   }
 }

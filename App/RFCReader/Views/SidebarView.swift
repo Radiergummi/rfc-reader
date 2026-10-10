@@ -359,7 +359,7 @@ struct SidebarView: View {
   private func count(_ filter: LibraryFilter) -> Int? {
     switch filter {
     case .bookmarks: library.bookmarkedDocuments.count
-    case .downloaded: library.downloadedNumbers.count
+    case .downloaded: library.availableOfflineNumbers.count
     case .recent: library.recentlyReadCount
     default: library.indexCounts[filter]
     }

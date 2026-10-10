@@ -63,6 +63,7 @@ import SwiftUI
             } label: {
               Label("Reading Path", systemImage: "list.number")
             }
+            KeepOfflineButton(document: rfc.id, library: library)
             ShareLink(
               item: RFCEditorEndpoints.infoPage(rfc.id),
               subject: Text(verbatim: "\(rfc.id.displayName): \(rfc.title)"))

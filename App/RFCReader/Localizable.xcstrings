@@ -420,6 +420,16 @@
         }
       }
     },
+    "A–Z" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–Z"
+          }
+        }
+      }
+    },
     "Back" : {
       "localizations" : {
         "de" : {
@@ -570,6 +580,16 @@
         }
       }
     },
+    "Contains a match" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält einen Treffer"
+          }
+        }
+      }
+    },
     "Contents" : {
       "localizations" : {
         "de" : {
@@ -656,6 +676,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Zitat kopieren"
+          }
+        }
+      }
+    },
+    "Corrected" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrigiert"
           }
         }
       }
@@ -821,6 +851,16 @@
         }
       }
     },
+    "Document Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumentreihenfolge"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "de" : {
@@ -877,6 +917,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bearbeiten …"
+          }
+        }
+      }
+    },
+    "Errata" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errata"
           }
         }
       }
@@ -1021,6 +1071,16 @@
         }
       }
     },
+    "Go to %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu %@"
+          }
+        }
+      }
+    },
     "Go to RFC" : {
       "localizations" : {
         "de" : {
@@ -1137,16 +1197,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gerade veröffentlicht"
-          }
-        }
-      }
-    },
-    "Keep Offline" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline behalten"
           }
         }
       }
@@ -1421,6 +1471,16 @@
         }
       }
     },
+    "Not enough space" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht genug Speicherplatz"
+          }
+        }
+      }
+    },
     "Not kept offline" : {
       "localizations" : {
         "de" : {
@@ -1447,6 +1507,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In dieser Sitzung nicht gesichert"
+          }
+        }
+      }
+    },
+    "Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
           }
         }
       }
@@ -1671,6 +1741,16 @@
         }
       }
     },
+    "Open this erratum on the RFC Editor's site" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Erratum auf der Website des RFC Editor öffnen"
+          }
+        }
+      }
+    },
     "Opens a section of an RFC." : {
       "localizations" : {
         "de" : {
@@ -1697,6 +1777,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Öffnet das Dokument"
+          }
+        }
+      }
+    },
+    "Option-click to copy link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit gedrückter Wahltaste klicken, um den Link zu kopieren"
+          }
+        }
+      }
+    },
+    "Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reihenfolge"
+          }
+        }
+      }
+    },
+    "Original" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original"
           }
         }
       }
@@ -1961,16 +2071,6 @@
         }
       }
     },
-    "Remove Offline Copy" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline-Kopie entfernen"
-          }
-        }
-      }
-    },
     "Remove filter %@" : {
       "localizations" : {
         "de" : {
@@ -1987,16 +2087,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aus Sammlung entfernen"
-          }
-        }
-      }
-    },
-    "Remove the offline copy. It stays open here, and is downloaded again the next time you open it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Offline-Kopie entfernen. Sie bleibt hier geöffnet und wird beim nächsten Öffnen erneut geladen."
           }
         }
       }
@@ -2297,6 +2387,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vergleich mit %@ beenden"
+          }
+        }
+      }
+    },
+    "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr offline behalten. Die Kopie kommt in den Lese-Cache, der sie entfernen kann, wenn er Platz braucht."
           }
         }
       }

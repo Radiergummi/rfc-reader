@@ -96,6 +96,10 @@ struct DocumentView: View {
   /// Whether this is the reader on screen, whose the window's reader state is.
   private var isShown: Bool { navigation.shows(id, at: depth) }
 
+  /// The window's reader state, written only while this is the reader on screen:
+  /// not while it fades out, nor under the top of the stack.
+  private var writer: ReaderState.Writer { reader.writer(showing: id, at: depth, in: navigation) }
+
   /// Whether what the window's reader state says is this reader's to show: it is on
   /// screen, and has put its own there.
   private var showsReaderState: Bool { ownsReader && isShown }
@@ -178,7 +182,12 @@ struct DocumentView: View {
     BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
-      choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams))
+      choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
+      hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
+        guard let paneWidth else { return 0 }
+        let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
+        return ReaderLayout.hangs(hang, width: paneWidth, measure: measure) ? hang : 0
+      })
   }
 
   /// The folding index of the build on screen, and in Focus the References tab's
@@ -262,8 +271,7 @@ struct DocumentView: View {
       // for a reader under the top of the stack, which says it on top again
       // (`DocumentSession.reinstate`).
       .onChange(of: session.state.isLoading) { _, isLoading in
-        guard isShown else { return }
-        reader.isLoading = isLoading
+        writer.isLoading = isLoading
       }
   }
 
@@ -284,22 +292,21 @@ struct DocumentView: View {
   var body: some View {
     readerStateTracking
       .onChange(of: buildInputs, initial: true) {
-        session.requestBuild(
-          for: buildInputs, resizeIsLive: resize.isLive, into: reader, navigation: navigation)
+        session.requestBuild(for: buildInputs, resizeIsLive: resize.isLive, into: writer)
       }
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) {
-        session.deriveInfo(into: reader, library: library, navigation: navigation)
-        session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
+        session.deriveInfo(into: writer, library: library)
+        session.markPublishedOriginal(into: writer, library: library)
       }
       // A pack installed while the document is open can make it a pointer (#316).
       .onChange(of: library.pointersInPack) {
-        session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
+        session.markPublishedOriginal(into: writer, library: library)
       }
       .onChange(of: library.revisions) {
-        session.deriveInfo(into: reader, library: library, navigation: navigation)
+        session.deriveInfo(into: writer, library: library)
       }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader, nor under the top
@@ -309,9 +316,9 @@ struct DocumentView: View {
         // Sent somewhere, the reader leads a side-by-side reading (#187).
         reader.coupling?.lead(id)
         if request.isUnrecorded {
-          follow(request, animated: true)
+          follow(request)
         } else {
-          jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
+          jump(toSection: request.section, revealingReferences: true)
         }
       }
       // Not only on the way out: quitting, or iOS ending an app in the background,
@@ -475,45 +482,37 @@ struct DocumentView: View {
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
-        onVisibleAnchorChange: {
+        onVisibleAnchorChange: { anchor in
           // Not while fading out, nor under the top of the stack: the reader state
-          // is the reader on screen's.
-          guard isShown else { return }
-          reader.currentAnchor = $0
-          // Resolved here, where the document is: the toolbar's citation and
-          // section link need the place, and on macOS the toolbar is in the
-          // window rather than in this view. Through the map rather than
-          // `document.section(anchor:)`, which searches the section tree
-          // depth first — 305 sections on RFC 9110 — and this runs on every
-          // section crossing while scrolling.
-          reader.currentSection = session.sectionPlaces[$0]
-          // Recorded on the history entry when navigating away, so coming
-          // back returns here rather than to the top of the document.
-          navigation.visiblePosition = $0
+          // is the reader on screen's, and so is the history entry's place.
+          writer { reader in
+            reader.currentAnchor = anchor
+            // Resolved here, where the document is: the toolbar's citation and
+            // section link need the place, and on macOS the toolbar is in the
+            // window rather than in this view. Through the map rather than
+            // `document.section(anchor:)`, which searches the section tree
+            // depth first — 305 sections on RFC 9110 — and this runs on every
+            // section crossing while scrolling.
+            reader.currentSection = session.sectionPlaces[anchor]
+            // Recorded on the history entry when navigating away, so coming
+            // back returns here rather than to the top of the document.
+            navigation.visiblePosition = anchor
+          }
         },
         onLink: openInApp,
         // Not while fading out over the next document's reader, nor under the top
-        // of the stack, as the load's and the build's callbacks guard: the title is
+        // of the stack, as the load's and the build's writes are not: the title is
         // the reader on screen's.
-        onToolbarTitle: { state, source in
-          guard isShown else { return }
-          reader.report(title: state, from: source)
-        },
+        onToolbarTitle: { state, source in writer { $0.report(title: state, from: source) } },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
-        onSelectionChange: {
-          guard isShown else { return }
-          reader.hasSelection = $0
-        },
+        onSelectionChange: { writer.hasSelection = $0 },
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
         // Not while fading out, nor under the top of the stack until the reader
         // state is this reader's again: it is the reader on screen's.
         folding: showsReaderState ? reader.folding : nil,
-        onFoldingChange: {
-          guard isShown else { return }
-          reader.folding = $0
-        },
+        onFoldingChange: { writer.folding = $0 },
         isShown: showsReaderState,
         coupling: showsReaderState ? reader.coupling : nil,
         // None until they are extracted, which a text view made with its document
@@ -652,7 +651,7 @@ struct DocumentView: View {
   private func startLoad() {
     keptOriginal = settings.preferOriginalText
     session.open(
-      into: reader, library: library, navigation: navigation, positions: positions,
+      into: writer, library: library, navigation: navigation, positions: positions,
       showsOriginal: settings.preferOriginalText)
   }
 
@@ -676,13 +675,13 @@ struct DocumentView: View {
   /// where the reader is, and one just opened stays at its top (#276). In a document
   /// already open, a place naming a bibliography entry shows it; see
   /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
-  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
+  private func jump(toSection section: String?, revealingReferences: Bool = false) {
     guard let section else { return }
     switch landing(at: section) {
     case .reference(let anchor) where revealingReferences:
       reader.reveal(reference: anchor)
     case .reference(let anchor), .jump(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+      scrollTarget = ReaderScrollTarget(anchor: anchor)
     case .document, .unhandled, nil:
       break
     }
@@ -693,7 +692,7 @@ struct DocumentView: View {
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
   /// leaves the history as it is. False while there is no build to look in.
   @discardableResult
-  private func follow(_ place: String, animated: Bool = true) -> Bool {
+  private func follow(_ place: String) -> Bool {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
@@ -702,8 +701,7 @@ struct DocumentView: View {
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
-        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors),
-        animated: animated)
+        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:
@@ -713,9 +711,9 @@ struct DocumentView: View {
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there, unanimated.
-  private func follow(_ request: NavigationModel.ScrollRequest, animated: Bool) {
-    if follow(request.section, animated: animated) {
+  /// waits for the text to appear, and is followed there.
+  private func follow(_ request: NavigationModel.ScrollRequest) {
+    if follow(request.section) {
       navigation.settle(request)
     }
   }
@@ -738,14 +736,14 @@ struct DocumentView: View {
         })
     switch arrival {
     case .place(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+      scrollTarget = ReaderScrollTarget(anchor: anchor)
     case .request(let request) where request.isUnrecorded:
-      follow(request, animated: false)
+      follow(request)
     case .request(let request):
-      jump(toSection: request.section, animated: false)
+      jump(toSection: request.section)
     case .stored(let saved):
       if let anchor = saved.anchor {
-        scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false, offset: saved.offset)
+        scrollTarget = ReaderScrollTarget(anchor: anchor, offset: saved.offset)
       }
     case .stay:
       break
@@ -757,8 +755,7 @@ struct DocumentView: View {
   private func takeReaderState() {
     guard !ownsReader, isShown, session.hasStartedLoading else { return }
     session.reinstate(
-      into: reader, library: library, navigation: navigation, showsOriginal: keptOriginal,
-      folding: keptFolding)
+      into: writer, library: library, showsOriginal: keptOriginal, folding: keptFolding)
     ownsReader = true
     updateFolding()
   }

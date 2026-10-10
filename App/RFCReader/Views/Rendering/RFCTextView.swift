@@ -17,6 +17,7 @@ struct RFCTextView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  @Environment(\.colorSchemeContrast) private var contrast
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -83,20 +84,20 @@ struct RFCTextView: View {
         inputs: inputs,
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
+        // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
         palette: settings.palette,
+        outlinesEveryChip: contrast == .increased,
         width: geometry.size.width)
     }
   }
 }
 
-/// Where the reader is asked to scroll, and whether it should get there smoothly.
+/// Where the reader is asked to scroll.
 ///
-/// Smoothly only within a document already on screen — a link, a contents row, Back
-/// within it — where the motion says which way the jump went. Arriving at a
-/// document, or at a restored reading position, is not a movement the reader made.
+/// A jump is never animated: the layout engine settles its line in several passes,
+/// each followed by a layout, so there is no single scroll to animate (#585).
 struct ReaderScrollTarget: Equatable {
   let anchor: String
-  let animated: Bool
   /// Characters past the anchor: a saved reading position's line (#322).
   var offset: Int = 0
 }
@@ -195,7 +196,7 @@ struct ReaderInputs {
       coordinator.headerIdentity = headerIdentity
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
-    coordinator.layOut(width: width, measure: measure)
+    coordinator.layOut(width: width, measure: measure, hang: built.sectionNumberHang)
     if let requirements { coordinator.setRequirements(requirements) }
     let installs = coordinator.built?.text !== built.text
     if installs {
@@ -205,8 +206,7 @@ struct ReaderInputs {
     }
     coordinator.couple(to: coupling, installed: installs)
     if let scrollTarget {
-      coordinator.scroll(
-        to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
+      coordinator.scroll(to: scrollTarget.anchor, offset: scrollTarget.offset)
     }
     if isShown, !coordinator.isShown { coordinator.reportAgain() }
     coordinator.isShown = isShown
@@ -272,6 +272,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -308,6 +310,9 @@ struct ReaderInputs {
       }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
+      }
+      textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.sectionNumberHang ?? 0
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -347,7 +352,7 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -369,6 +374,8 @@ struct ReaderInputs {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
     let palette: ReaderPalette
+    /// Increase Contrast, which outlines every chip (#457).
+    let outlinesEveryChip: Bool
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -412,6 +419,12 @@ struct ReaderInputs {
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
       }
+      textView.copySectionLink = { [weak coordinator = context.coordinator] event in
+        coordinator?.copySectionLink(under: event) ?? false
+      }
+      textView.hoverSectionNumber = { [weak coordinator = context.coordinator] event in
+        coordinator?.hoverSectionNumber(under: event)
+      }
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
@@ -427,6 +440,9 @@ struct ReaderInputs {
       }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
+      }
+      textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.sectionNumberHang ?? 0
       }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation
@@ -483,7 +499,7 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette)
+      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

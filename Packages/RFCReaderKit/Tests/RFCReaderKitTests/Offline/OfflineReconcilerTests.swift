@@ -25,6 +25,31 @@ struct OfflineReconcilerTests {
     #expect(StorageTier.of(.rfc(2), wanted: wanted) == .cache)
   }
 
+  /// A kept body is a promise, written whenever it fits; a cached one is skipped when
+  /// it would leave the disk with less than the reserve. Unknown capacity blocks
+  /// neither.
+  @Test func `a kept body needs only its own room, a cached one the reserve as well`() {
+    let size = 1_000
+    #expect(StorageTier.kept.hasRoom(for: size, available: size))
+    #expect(!StorageTier.kept.hasRoom(for: size, available: size - 1))
+    #expect(StorageTier.cache.hasRoom(for: size, available: size + StorageTier.cacheReserve))
+    #expect(!StorageTier.cache.hasRoom(for: size, available: size + StorageTier.cacheReserve - 1))
+    #expect(StorageTier.kept.hasRoom(for: size, available: nil))
+    #expect(StorageTier.cache.hasRoom(for: size, available: nil))
+  }
+
+  /// A volume that reports no capacity for important or opportunistic usage is read
+  /// by its plain available capacity instead: a full disk still reads 0 and blocks
+  /// the write, and a volume that does not report the usage keys still has room.
+  @Test func `a capacity of 0 for the usage falls back to the volume's available capacity`() {
+    #expect(StorageTier.freeSpace(forUsage: 5_000, available: 9_000) == 5_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: 9_000) == 9_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: 0) == 0)
+    #expect(StorageTier.freeSpace(forUsage: nil, available: 9_000) == 9_000)
+    #expect(StorageTier.freeSpace(forUsage: 0, available: nil) == nil)
+    #expect(StorageTier.freeSpace(forUsage: nil, available: nil) == nil)
+  }
+
   /// Marking a document already read moves its body across and fetches nothing.
   @Test func `a wanted body already cached is moved, not fetched`() {
     let plan = OfflineReconciler.plan(wanted: [.rfc(1)], kept: [], cached: [.rfc(1)])
@@ -112,5 +137,25 @@ struct OfflineReconcilerTests {
     #expect(
       OfflineReconciler.plan(wanted: withoutBookmarks, kept: kept, cached: [])
         == OfflineReconciler.Plan(release: [.rfc(2)]))
+  }
+
+  /// A fetch that failed is not started again by the next run: its row says so, with
+  /// Retry. Nor is it listed as waiting, which would name a path to wait for.
+  @Test func `a document whose fetch failed is neither fetched again nor waiting`() {
+    #expect(
+      OfflineReconciler.plan(wanted: [.rfc(1), .rfc(2)], kept: [], cached: [], failed: [.rfc(1)])
+        == OfflineReconciler.Plan(fetch: [.rfc(2)]))
+    #expect(
+      OfflineReconciler.plan(
+        wanted: [.rfc(1), .rfc(2)], kept: [], cached: [], failed: [.rfc(1)],
+        policy: .deferred(.lowPowerMode))
+        == OfflineReconciler.Plan(waiting: [.rfc(2)], deferral: .lowPowerMode))
+  }
+
+  /// A failure is of a fetch; a body that is on disk anyway is moved as any other.
+  @Test func `a failed document whose body is cached is still moved`() {
+    #expect(
+      OfflineReconciler.plan(wanted: [.rfc(1)], kept: [], cached: [.rfc(1)], failed: [.rfc(1)])
+        == OfflineReconciler.Plan(keep: [.rfc(1)]))
   }
 }

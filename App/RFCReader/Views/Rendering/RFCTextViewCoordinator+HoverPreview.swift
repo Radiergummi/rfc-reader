@@ -12,6 +12,7 @@
       hover.attach(to: textView)
       hover.target = { [weak self] point in self?.reference(atWindowPoint: point) }
       hover.restingTarget = { [weak self] in self?.referenceUnderRestingPointer() }
+      hover.pointerExited = { [weak self] in self?.hoverSectionNumber(under: nil) }
       hover.card = { [weak self] target in
         guard let self, let environment = self.environment,
           let preview = self.preview(for: target.box.reference),
@@ -113,7 +114,6 @@
         // whatever lands under the pointer, which is now over the reader.
         self.hover.send(.previewCommitted(pointer: NSEvent.mouseLocation))
         if sameDocument {
-          // The reader's own jump is animated already.
           _ = self.onLink(url, .current)
         } else {
           // Another document replaces this one; `ReaderHost` cross-fades the two.

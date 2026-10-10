@@ -50,6 +50,10 @@ struct UserDataMirrorsTests {
     #expect(UserDataMirrors.changed(byEntities: ["Bookmark"]) == .bookmarks)
   }
 
+  @Test func `a Keep Offline mark save refreshes only the marks`() {
+    #expect(UserDataMirrors.changed(byEntities: ["OfflineMark"]) == .offlineMarks)
+  }
+
   @Test func `a collection or an item in one refreshes only the collections`() {
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollection"]) == .collections)
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollectionItem"]) == .collections)
@@ -73,8 +77,8 @@ struct UserDataMirrorsTests {
   /// The names in the table are SwiftData's own, and a model added to the schema
   /// without a mirror for it fails here rather than going unrefreshed.
   @Test func `every entity of the schema feeds a mirror`() {
-    let entities = Schema(versionedSchema: SchemaV4.self).entities.map(\.name)
-    #expect(entities.count == SchemaV4.models.count)
+    let entities = Schema(versionedSchema: SchemaV5.self).entities.map(\.name)
+    #expect(entities.count == SchemaV5.models.count)
     for entity in entities {
       #expect(!UserDataMirrors.changed(byEntities: [entity]).isEmpty, "\(entity)")
     }
@@ -128,5 +132,16 @@ struct UserDataMirrorsTests {
     }
     #expect(!saves.isEmpty)
     #expect(saves.allSatisfy { UserDataMirrors.changed(byEntities: $0) == .collections })
+  }
+
+  @Test func `marking a document offline names only the mark`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let saves = try recordingSaves(of: context) {
+      try OfflineMarkStore.setMarked(.rfc(9110), true, in: context)
+      try OfflineMarkStore.setMarked(.rfc(9110), false, in: context)
+    }
+    // An insert, then a delete.
+    #expect(saves == [["OfflineMark"], ["OfflineMark"]])
   }
 }

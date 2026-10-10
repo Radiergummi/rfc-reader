@@ -42,6 +42,19 @@ public enum DocumentActions {
       ? String(kit: "Remove Bookmark", locale: locale) : String(kit: "Bookmark", locale: locale)
   }
 
+  /// What a list row's Keep Offline item, and the Info pane's toggle to VoiceOver,
+  /// are called: what they will do (#358).
+  public static func keepOfflineCommand(isKept: Bool, locale: Locale = .interface) -> String {
+    isKept
+      ? String(kit: "Stop Keeping Offline", locale: locale)
+      : String(kit: "Keep Offline", locale: locale)
+  }
+
+  /// The SF Symbol beside `keepOfflineCommand`.
+  public static func keepOfflineSymbol(isKept: Bool) -> String {
+    isKept ? "xmark.circle" : "arrow.down.circle"
+  }
+
   /// What the document is called, under its designation in the reader's title.
   ///
   /// The same sources as `bookmarkTitle`, in the same order, without its last

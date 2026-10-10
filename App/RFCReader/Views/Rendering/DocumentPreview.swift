@@ -125,8 +125,7 @@ struct DocumentPreview: View {
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
-        scrollTarget = ReaderScrollTarget(
-          anchor: shown.document.anchor(forPlace: place), animated: false)
+        scrollTarget = ReaderScrollTarget(anchor: shown.document.anchor(forPlace: place))
       }
       // After the text is shown: asking whether the document is still downloaded
       // waits for the store, which may be parsing another document.

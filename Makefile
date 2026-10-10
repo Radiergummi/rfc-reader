@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app strings strings-check run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -9,6 +9,9 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
+# RFCKit, built as the root package, fails on a warning; the other packages say so
+# in their manifests. See RFCKit's manifest for why it cannot (#440).
+RFCKIT_WARNINGS := -Xswiftc -warnings-as-errors
 # Release for a corpus run. CI checks the patches with the debug build its tests
 # already made (CORPUS_CONFIGURATION=debug), rather than building again.
 CORPUS_CONFIGURATION ?= release
@@ -67,18 +70,19 @@ fmt:
 	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
-# RFCReaderKit only on a Mac; elsewhere it cannot build.
+# RFCReaderKit and the benchmarks only on a Mac; elsewhere they cannot build.
 build:
-	swift build --package-path $(RFCKIT)
+	swift build --package-path $(RFCKIT) $(RFCKIT_WARNINGS)
 	swift build --package-path $(CORPUS_BUILD)
 ifneq ($(DARWIN),)
 	swift build --package-path $(RFCREADERKIT) --build-system swiftbuild
+	$(MAKE) build-benchmarks
 endif
 
 ## Run the RFCKit and corpus-build test suites
 # The fast loop: no simulator, no Xcode project.
 test:
-	swift test --package-path $(RFCKIT)
+	swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS)
 	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
@@ -104,9 +108,9 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
-CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935 rfc9051 rfc9111 rfc9499 rfc9692
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
@@ -123,7 +127,7 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCKIT) --filter CorpusBacked
+	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
@@ -145,6 +149,13 @@ BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+## Build the benchmarks without running them
+# Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
+# in RFCKit or RFCReaderKit that breaks them fails there rather than when someone
+# next wants a baseline (#419). Debug: it checks that they compile, not how fast.
+build-benchmarks:
+	swift build --package-path $(BENCHMARKS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
@@ -262,6 +273,16 @@ ios-sim: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
+## Build RFCReaderKit's tests for the iOS Simulator
+# `test-app` builds them for macOS only, so code behind `#if canImport(UIKit)`
+# could stop compiling unseen (#568). Builds without running: the suite has
+# failures on the Simulator that macOS doesn't (#821), and once they are fixed
+# this should run the tests too. xcodebuild finds the package's scheme only
+# from inside the package.
+build-app-tests-ios:
+	cd $(RFCREADERKIT) && xcodebuild build-for-testing -scheme RFCReaderKit \
+	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
 ## Build the app for an iOS device
 ios-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
@@ -269,15 +290,18 @@ ios-app: xcodeproj
 
 ## Sync the string catalogs with the strings in the code
 # Builds for macOS and the iOS Simulator, so a string behind `#if os(...)` is
-# found either way, then adds new strings to the catalogs and marks removed ones
-# stale (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# found either way, then adds new strings to the catalogs and removes the ones the
+# code no longer has (Tools/strings/sync.py). xcodebuild alone never touches a catalog.
+# Always Debug, whatever CONFIGURATION says: a Release build lacks the strings
+# behind `#if DEBUG`, and the sync would remove them with their translations.
+strings: override CONFIGURATION = Debug
 strings: build-app ios-sim
 	@Tools/strings/sync.py --objroot '$(call build_setting,$(MAC_DESTINATION),OBJROOT)' \
 	  --configuration $(CONFIGURATION)
 
 ## Fail when a string catalog is out of date with the code, or lacks German
-# What CI runs: a string added to the code without `make strings` fails here, and
-# so does one without a German translation.
+# What CI runs: a string added to or removed from the code without `make strings`
+# fails here, and so does one without a German translation.
 strings-check: strings
 	@git diff --exit-code -- '*.xcstrings' || \
 	  { echo "The string catalogs are out of date: run make strings and commit them." >&2; exit 1; }
