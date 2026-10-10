@@ -19,6 +19,9 @@ public enum GroundTruth {
     case artwork
     case sourceCode
     case heading
+    /// A table, by its cells (#438): xml2rfc draws a `<table>` as a grid, and the
+    /// parser reads one back.
+    case table
     /// Artwork and source code alike, matched whatever they were called. Plain text
     /// cannot say what is code, so the parser calls every verbatim block artwork,
     /// and a grammar it kept whole is still a block it got right. The per-kind
@@ -91,16 +94,19 @@ public enum GroundTruth {
 
   // MARK: - Extraction
 
-  /// Every heading of `document`, then every artwork and source code block, each
-  /// in document order. Scoring does not depend on the order. Artwork with no text
-  /// is left out: xml2rfc prints a placeholder for artwork it has only as SVG, so
-  /// the text can never hold it.
+  /// Every heading of `document`, then every artwork, source code and table block,
+  /// each in document order. Scoring does not depend on the order. Artwork with no
+  /// text is left out: xml2rfc prints a placeholder for artwork it has only as SVG,
+  /// so the text can never hold it.
   public static func blocks(of document: RFCDocument) -> [Block] {
     let headings = document.allSections.map { section in
       Block(
         kind: .heading, content: normalize(number: section.number, title: printed(section.title)))
     }
     let verbatim = document.blocks.compactMap { block -> Block? in
+      if case .table(let table) = block {
+        return Block(kind: .table, content: normalize(table: table))
+      }
       guard case .preformatted(let content) = block, content.type != "svg" else { return nil }
       let text = normalize(verbatim: content.text)
       guard !text.isEmpty else { return nil }
@@ -147,6 +153,19 @@ public enum GroundTruth {
     return lines.map { String($0.dropFirst(margin)) }.joined(separator: "\n")
   }
 
+  /// A table as it compares: a line a row, its header's first, each cell's text with
+  /// every run of white space one space, and the cells set off by ` | `. A cell
+  /// the text runs over several lines is one cell either way.
+  public static func normalize(table: Table) -> String {
+    (table.header + table.rows).map { row in
+      row.cells.map { cell in
+        cell.plainText.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+      }
+      .joined(separator: " | ")
+    }
+    .joined(separator: "\n")
+  }
+
   /// A heading as it compares: its number without a trailing dot, which the
   /// legacy text writes and the XML does not, then its title, with every run of
   /// white space one space. A non-breaking hyphen is a hyphen and the invisible
@@ -172,7 +191,8 @@ public enum GroundTruth {
   public static func score(found: [Block], expected: [Block]) -> [Kind: Counts] {
     var counts = match(found: found, expected: expected)
     let asVerbatim = { (blocks: [Block]) in
-      blocks.filter { $0.kind != .heading }.map { Block(kind: .verbatim, content: $0.content) }
+      blocks.filter { $0.kind != .heading && $0.kind != .table }
+        .map { Block(kind: .verbatim, content: $0.content) }
     }
     counts[.verbatim] = match(found: asVerbatim(found), expected: asVerbatim(expected))[.verbatim]
     return counts
@@ -221,8 +241,8 @@ public struct GroundTruthReport: Encodable, Sendable {
   public struct Document: Encodable, Sendable {
     /// The file stem, `rfc9110`.
     public var document: String
-    /// Its headings' errors and its verbatim blocks', so a grammar kept whole as
-    /// artwork counts as the block it is, not as a miss and an invention.
+    /// Its headings' errors, its tables' and its verbatim blocks', so a grammar kept
+    /// whole as artwork counts as the block it is, not as a miss and an invention.
     public var errors: Int
     public var kinds: [String: GroundTruth.Counts]
   }
@@ -243,8 +263,10 @@ public struct GroundTruthReport: Encodable, Sendable {
     kinds = Dictionary(uniqueKeysWithValues: totals.map { ($0.key.rawValue, $0.value) })
     var ranked: [(number: Int, document: Document)] = []
     for (id, counts) in scored {
-      let errors = [GroundTruth.Kind.heading, .verbatim].compactMap { counts[$0]?.errors }
-        .reduce(0, +)
+      let errors = [GroundTruth.Kind.heading, .table, .verbatim].compactMap {
+        counts[$0]?.errors
+      }
+      .reduce(0, +)
       var byName: [String: GroundTruth.Counts] = [:]
       for (kind, count) in counts { byName[kind.rawValue] = count }
       ranked.append((id.number, Document(document: id.fileStem, errors: errors, kinds: byName)))
