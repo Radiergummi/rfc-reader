@@ -136,19 +136,14 @@ extension LegacyTextParser {
         let split = splittingTitle(above)
       {
         caption.title = split.title
-        blocks = [.preformatted(split.drawing)]
+        blocks = [.preformatted(typingDrawing(split.drawing))]
       }
       // A table's caption under a block that is no table names a figure, numbered as
       // none of the document's figures are.
       if caption.isTable { caption.number = nil }
       if caption.number != nil, let part { taken.insert(part) }
-      return .figure(
-        Figure(
-          title: caption.blockTitle, number: caption.number,
-          blocks: blocks.map { block in
-            guard case .preformatted(let verbatim) = block else { return block }
-            return .preformatted(typingDrawing(verbatim))
-          }))
+      // Every block taken off `result` was typed as it was set there.
+      return .figure(Figure(title: caption.blockTitle, number: caption.number, blocks: blocks))
     default:
       return nil
     }
