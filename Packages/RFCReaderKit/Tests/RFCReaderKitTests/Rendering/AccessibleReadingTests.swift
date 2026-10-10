@@ -278,79 +278,6 @@ struct AccessibleReadingTests {
     #expect(labels == diagrams + chips)
   }
 
-  /// Guard level: what makes a block of artwork a drawing, over hand-written lines
-  /// in the shape of an RFC's.
-  @Test(arguments: [
-    """
-    +--------+          +--------+
-    | Client | -------> | Server |
-    +--------+          +--------+
-    """,
-    """
-     0                   1                   2
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |    Kind Field     |       Length Field    |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    """,
-    """
-    Sender                  Receiver
-      |                         |
-      |------- Request -------->|
-      |<------ Reply -----------|
-    """,
-    """
-    ┌──────┐     ┌──────┐
-    │ Left │ ──> │ Right│
-    └──────┘     └──────┘
-    """,
-  ])
-  func `a drawing is a diagram`(artwork: String) {
-    #expect(AccessibleReading.looksLikeDrawing(artwork))
-  }
-
-  @Test(arguments: [
-    """
-    message   = start-line *( field CRLF ) CRLF [ body ]
-    field     = field-name ":" OWS field-value OWS
-    delimiter = "/" / "," / ";" / "=" / "<" / ">"
-    """,
-    """
-    Example Record {
-      Kind (8) = 2,
-      Length (16),
-      Value (..),
-    }
-    """,
-    """
-    GET /index.html HTTP/1.1
-    Host: www.example.com
-    Accept-Language: en-US
-    """,
-    """
-    0x00 0x1f 0x2e 0x41 0x5b 0x60 0x7e 0x80
-    """,
-    """
-    +-------+--------------------+-----------+
-    | Value | Name               | Reference |
-    +-------+--------------------+-----------+
-    | 0     | Reserved           | [RFCxxxx] |
-    | 1     | Echo Request       | [RFCxxxx] |
-    | 2     | Echo Reply         | [RFCxxxx] |
-    +-------+--------------------+-----------+
-    """,
-    """
-    Value   Name              Reference
-    -----   ---------------   ---------
-    0       Reserved          [RFCxxxx]
-    1       Echo Request      [RFCxxxx]
-    """,
-    "",
-  ])
-  func `text set as artwork is not a diagram`(artwork: String) {
-    #expect(!AccessibleReading.looksLikeDrawing(artwork))
-  }
-
   /// Source code is never a diagram, whatever it looks like.
   @Test func `source code that looks like a drawing is not a diagram`() {
     let box = VerbatimBox(Preformatted(kind: .sourceCode, text: diagram))
@@ -385,11 +312,22 @@ struct AccessibleReadingTests {
   }
 
   /// Whether a block is said as a diagram is its rendering's to say where it has
-  /// one, and the drawing-share heuristic's only where it has none.
+  /// one, then its type's, and the drawing-share heuristic's only where it has neither
+  /// (`DrawingShapeTests` in RFCKit).
   @Test func `a rendered block with a spoken label is a diagram whatever it draws with`() {
     let box = VerbatimBox(
       Preformatted(kind: .artwork, text: "mostly words and few lines"), shown: .rendered,
       spokenLabel: "Packet diagram")
     #expect(AccessibleReading.isDiagram(box))
+  }
+
+  /// Artwork typed as a drawing, as the legacy parser types one (#361), is a diagram
+  /// whatever its shape; untyped artwork of words is not.
+  @Test func `artwork typed as a drawing is a diagram`() {
+    let words = "client sends HELLO\nserver sends WELCOME"
+    #expect(
+      AccessibleReading.isDiagram(
+        VerbatimBox(Preformatted(kind: .artwork, text: words, type: "ascii-art"))))
+    #expect(!AccessibleReading.isDiagram(VerbatimBox(Preformatted(kind: .artwork, text: words))))
   }
 }

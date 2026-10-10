@@ -119,7 +119,8 @@ extension RFCDocument {
   /// quotes and asides as well as directly in a section.
   var nestedParagraphs: [Paragraph] { everyBlock.flattened.compactMap(\.paragraph) }
 
-  var artworkText: [String] { everyBlock.compactMap(\.preformatted).map(\.text) }
+  /// Every verbatim block's text, a figure's included (#361).
+  var artworkText: [String] { everyBlock.flattened.compactMap(\.preformatted).map(\.text) }
 
   var lists: [ListBlock] { everyBlock.compactMap(\.list) }
 

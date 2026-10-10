@@ -24,14 +24,36 @@ public struct ArtworkType: Sendable, Hashable {
   /// for a drawing of any kind.
   static let generic: Set<String> = ["", "ascii-art", "drawing", "ascii", "text", "plain", "none"]
 
+  /// Types that say a block is a drawing: RFCXML's `ascii-art`, which the legacy
+  /// parser sets on artwork shaped like one (#361), and the `drawing` some authors
+  /// write. Still `generic` to `canonical`: a drawing of what is left to a
+  /// recognizer, so a packet diagram typed `ascii-art` is still recognized as one.
+  static let drawings: Set<String> = ["ascii-art", "drawing"]
+
+  /// Whether `declared` says its block is a drawing.
+  public static func declaresDrawing(_ declared: String?) -> Bool {
+    guard let declared else { return false }
+    return drawings.contains(name(of: parts(of: declared)))
+  }
+
+  /// `declared` split at its `;`s, each part trimmed: the name, then the parameters.
+  private static func parts(of declared: String) -> [String] {
+    declared.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+  }
+
+  /// The name the parts of a declared type open with, lowercased.
+  private static func name(of parts: [String]) -> String {
+    (parts.first ?? "").lowercased()
+  }
+
   /// Spellings authors use for a type the RPC spells otherwise.
   static let aliases: [String: String] = ["cbordiag": "cbor-diag"]
 
   /// The type `declared` names, or nil when it names none.
   public static func canonical(_ declared: String?) -> ArtworkType? {
     guard let declared else { return nil }
-    let parts = declared.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
-    let name = (parts.first ?? "").lowercased()
+    let parts = Self.parts(of: declared)
+    let name = Self.name(of: parts)
     guard !generic.contains(name) else { return nil }
     var parameters: [String: String] = [:]
     for part in parts.dropFirst() {
