@@ -21,6 +21,31 @@ struct SVGArtworkTests {
     #expect(!artworks.isEmpty)
     #expect(!artworks.contains { $0.type == "svg" })
   }
+
+  /// An `<artset>` with only an SVG alternative names the gap, and source code that
+  /// is SVG markup is code to read, kept as written. The document is hand-written in
+  /// the shape of an RFC, quoting none.
+  @Test func `an SVG-only artset names the gap and SVG source code stays`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3"><front><title>Drawings</title></front>
+      <middle><section anchor="s1"><name>Figures</name>
+      <artset><artwork type="svg"><svg xmlns="http://www.w3.org/2000/svg"><text>A to B</text></svg></artwork></artset>
+      <sourcecode type="svg">&lt;svg&gt;&lt;text&gt;C&lt;/text&gt;&lt;/svg&gt;</sourcecode>
+      </section></middle></rfc>
+      """
+    let blocks = try RFCXMLParser.parse(Data(xml.utf8)).sections.first?.blocks ?? []
+    let preformatted = blocks.compactMap {
+      if case .preformatted(let block) = $0 { block } else { nil }
+    }
+    #expect(
+      preformatted.map(\.kind) == [.artwork, .sourceCode]
+        && preformatted.allSatisfy { $0.type == "svg" })
+    #expect(
+      preformatted.first?.text
+        == "(Artwork only available as SVG: see https://www.rfc-editor.org/rfc/rfc9999.html)")
+    #expect(preformatted.last?.text == "<svg><text>C</text></svg>")
+  }
 }
 
 @Suite("Corpus-backed: SVG-only artwork", .enabled(if: CorpusText.isXMLAvailable))

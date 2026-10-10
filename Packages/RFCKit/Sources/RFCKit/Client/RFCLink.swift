@@ -88,18 +88,22 @@ public struct RFCLink: Hashable, Sendable {
   /// The link `url` makes where it is the document's own page, which the Safari
   /// extension may send to the app on its own (#194): its text at the RFC Editor in
   /// any format, or its page at Datatracker, with the section or anchor it was
-  /// opened at. Nil for a page about the document, its info page, errata or history,
-  /// which someone following the link wants to read on the web.
+  /// opened at. Nil for a page about the document, its info page, errata, history or
+  /// AUTH48 status, which someone following the link wants to read on the web.
   public init?(documentPage url: URL) {
     let name = url.lastPathComponent
     let stem = Self.stem(of: name)
     guard url.scheme?.lowercased() != Self.scheme, let link = RFCLink(url: url),
-      !url.pathComponents.contains(where: { ["info", "errata", "inline-errata"].contains($0) }),
+      !url.pathComponents.contains(where: Self.pagesAbout.contains),
       DocumentID(parsing: stem) == link.id,
       Self.documentExtensions.contains(String(name.dropFirst(stem.count)))
     else { return nil }
     self = link
   }
+
+  /// The RFC Editor's directories of pages about a document: its info page, errata,
+  /// and the AUTH48 pages before it is published.
+  private static let pagesAbout: Set = ["info", "errata", "inline-errata", "auth48", "authors"]
 
   /// The formats a document's own page comes in; any other, such as the RFC Editor's
   /// `.json` of its metadata, is a page about it.

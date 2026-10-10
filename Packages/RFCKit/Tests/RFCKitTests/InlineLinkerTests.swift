@@ -105,6 +105,28 @@ struct InlineLinkerTests {
     #expect(linker.link("Section 3 of RFC 1000bis") == [.text("Section 3 of RFC 1000bis")])
   }
 
+  /// A section of a bracket of several tags is a section of one of them, never of
+  /// this document; each RFC in the bracket is linked where it stands.
+  @Test func `a section of a bracket of several tags is not this document's`() {
+    let linker = InlineLinker(sectionNumbers: ["3"], referenceTargets: [:])
+    #expect(
+      linker.link("see Section 3 of [RFC1000, RFC2000]") == [
+        .text("see Section 3 of ["),
+        .crossReference(CrossReference(target: reference(1000))),
+        .text(", "),
+        .crossReference(CrossReference(target: reference(2000))),
+        .text("]"),
+      ])
+  }
+
+  /// An RFC run into a name with a period and a capital, as a fetch item is named
+  /// after a format, is neither that RFC nor a shorter number, and the section words
+  /// before it are not this document's.
+  @Test func `a section of an RFC run into a name links nowhere`() {
+    let linker = InlineLinker(sectionNumbers: ["3"], referenceTargets: [:])
+    #expect(linker.link("Section 3 of RFC822.SIZE") == [.text("Section 3 of RFC822.SIZE")])
+  }
+
   /// The older spelling with a hyphen is a section of the RFC too, and keeps its
   /// hyphen.
   @Test func `a section of a hyphenated RFC links into it`() {

@@ -254,6 +254,8 @@ struct RFCLinkTests {
     "https://datatracker.ietf.org/doc/rfc4321/bibtex/",
     "https://www.rfc-editor.org/rfc/rfc4321.json",
     "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
+    "https://www.rfc-editor.org/auth48/rfc4321",
+    "https://www.rfc-editor.org/authors/rfc4321.html",
   ])
   func `a page about a document is no document page`(address: String) throws {
     let url = try #require(URL(string: address))

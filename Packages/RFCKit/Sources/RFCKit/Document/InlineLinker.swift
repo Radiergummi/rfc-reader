@@ -31,11 +31,13 @@ struct InlineLinker: Sendable {
   /// "Sections 3.2 and 4 of RFC-793". The document is an RFC by number or an entry of
   /// the bibliography by its tag. Matched whether or not it resolves, so that
   /// `sectionPattern` never takes the section words for one of this document's own
-  /// sections, which linked them into the citing document (#768).
+  /// sections, which linked them into the citing document (#768): a bracket of
+  /// several tags, and an RFC run into a name (`RFC822.SIZE`, as `bareRFCPattern`
+  /// reads one), are matched too and link nowhere.
   static let sectionOfDocumentPattern = Gated(
     regex:
       // swiftlint:disable:next line_length
-      #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)(?<suffix>\w*)(?!\.[A-Z]))/#,
+      #/\bSections?\s+(?<sections>\d+(?:\.\d+)*(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\d+(?:\.\d+)*)*)\s+of\s+(?:\[(?<tag>[A-Za-z0-9][^\[\]\n]*)\]|RFC(?<hyphen>-)?\s?(?<number>\d+)(?<suffix>\w*)(?<name>\.[A-Z])?)/#,
     gate: \.sectionOfDocument
   )
   private static let sectionNumberPattern = Pattern(#/\d+(?:\.\d+)*/#)
@@ -136,12 +138,11 @@ struct InlineLinker: Sendable {
       citedSections.append(match.range)
       // "RFC 2223bis" is a draft that revises RFC 2223: another document, and not one
       // whose sections are RFC 2223's.
-      guard match.suffix?.isEmpty ?? true,
+      guard match.suffix?.isEmpty ?? true, match.name == nil,
         let cited = citedDocument(tag: match.tag, number: match.number, hyphen: match.hyphen)
       else { continue }
       let tag = match.tag.map(String.init) ?? ""
-      let numbers = text[match.sections.startIndex..<match.sections.endIndex]
-        .matches(of: Self.sectionNumberPattern)
+      let numbers = match.sections.matches(of: Self.sectionNumberPattern)
       if numbers.count == 1 {
         guard let target = Self.target(cited.target, section: String(match.sections), tag: tag)
         else { continue }
@@ -176,16 +177,7 @@ struct InlineLinker: Sendable {
       let anchor = String(match.anchor)
       // Parsed once: the label needs it on every path, so the hit path's is free.
       let parsed = DocumentID(parsing: anchor)
-      let target: CrossReference.Target
-      if let known = referenceTargets[anchor] {
-        target = known
-      } else if let id = parsed,
-        id.series != .rfc || anchor.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame
-      {
-        target = .document(id, section: nil)
-      } else {
-        continue
-      }
+      guard let target = self.target(ofTag: anchor, parsed: parsed) else { continue }
       candidates.append(
         Candidate(
           range: match.range,
@@ -295,12 +287,23 @@ struct InlineLinker: Sendable {
       guard let parsed, case .document(parsed, _, _) = target else { return false }
       return CrossReference.isCanonicalTag("[\(tag)]", for: parsed)
     }
-    if let known = referenceTargets[String(tag)] { return (known, isCanonical(for: known)) }
-    guard let parsed, parsed.series == .rfc,
-      tag.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame
+    // A series tag the bibliography lacks, `[BCP14]`, names a collection of RFCs,
+    // none of whose sections it can say.
+    guard let target = self.target(ofTag: String(tag), parsed: parsed),
+      referenceTargets[String(tag)] != nil || parsed?.series == .rfc
     else { return nil }
-    let target = CrossReference.Target.document(parsed, section: nil)
     return (target, isCanonical(for: target))
+  }
+
+  /// What a bracketed tag names: its entry in the bibliography, or else the document
+  /// the tag names itself, an RFC only when spelled with its series (`[2119]` is a
+  /// numbered entry's tag, not RFC 2119). `parsed` is the tag read as a document.
+  private func target(ofTag tag: String, parsed: DocumentID?) -> CrossReference.Target? {
+    if let known = referenceTargets[tag] { return known }
+    guard let parsed,
+      parsed.series != .rfc || tag.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame
+    else { return nil }
+    return .document(parsed, section: nil)
   }
 
   /// `section` of the document `target` names: a section of an RFC, or of a

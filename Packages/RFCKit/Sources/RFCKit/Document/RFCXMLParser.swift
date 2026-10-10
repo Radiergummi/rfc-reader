@@ -871,8 +871,10 @@ public enum RFCXMLParser {
     private func parseArtwork(_ element: XMLTree.Element, kind: Preformatted.Kind) -> Preformatted {
       // An SVG drawing's text nodes, run together, are neither the drawing nor text
       // to read; the block says where the drawing is, as xml2rfc's text rendering
-      // does, and keeps its type for a renderer to come (#768).
-      var text = element["type"]?.lowercased() == "svg" ? svgOnlyNote : element.text
+      // does, and keeps its type for a renderer to come (#768). Source code typed
+      // `svg` is markup to read, and stays.
+      let isDrawing = kind == .artwork && element["type"]?.lowercased() == "svg"
+      var text = isDrawing ? svgOnlyNote : element.text
       // The RFC Editor wraps artwork in newlines for readability of the XML itself.
       while text.hasPrefix("\n") { text.removeFirst() }
       while text.hasSuffix("\n") || text.hasSuffix(" ") { text.removeLast() }
