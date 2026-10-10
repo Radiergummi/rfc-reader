@@ -460,6 +460,10 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      textView.keepingPlace = { [weak coordinator = context.coordinator] scroll in
+        guard let coordinator else { return scroll() }
+        coordinator.engine.keepPlace(through: scroll)
+      }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
       }
