@@ -6,7 +6,7 @@ import RFCKit
 /// what it names. The inspector's first section after its header; the facts are the
 /// index's, and only arranged here.
 public struct Provenance: Equatable, Sendable {
-  public enum Kind: Equatable, Sendable {
+  public enum Kind: Hashable, Sendable {
     case stream
     case workingGroup
     case status
@@ -41,13 +41,13 @@ public struct Provenance: Equatable, Sendable {
   public let title: String
 
   public init(_ metadata: RFCMetadata, locale: Locale = .interface) {
-    var steps: [Step] = []
     let stream = metadata.stream.displayName
-    steps.append(
+    var steps = [
       Step(
         kind: .stream, text: stream,
         accessibilityLabel: String(kit: "Stream: \(stream)", locale: locale),
-        target: .glossary(.stream(metadata.stream))))
+        target: .glossary(.stream(metadata.stream)))
+    ]
     if let group = metadata.namedWorkingGroup {
       steps.append(
         Step(

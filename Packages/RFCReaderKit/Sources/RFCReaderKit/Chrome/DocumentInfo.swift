@@ -27,14 +27,10 @@ public struct DocumentInfo: Equatable, Sendable {
   public struct Fact: Equatable, Sendable {
     public let value: String
     public let label: String
-    /// What the fact names, where the glossary explains it: the strip opens its entry
-    /// (#362).
-    public let term: Glossary.Term?
 
-    public init(value: String, label: String, term: Glossary.Term? = nil) {
+    public init(value: String, label: String) {
       self.value = value
       self.label = label
-      self.term = term
     }
   }
 

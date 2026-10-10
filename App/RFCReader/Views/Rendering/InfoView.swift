@@ -140,7 +140,9 @@ private struct ProvenanceSection: View {
     InfoSection(title: provenance.title) {
       VStack(alignment: .leading, spacing: 6) {
         WrappingRowLayout(spacing: 6) {
-          ForEach(Array(provenance.steps.enumerated()), id: \.offset) { index, step in
+          // By kind, which is unique in a chain, so a card's state stays with its step
+          // when a refreshed index adds or drops one.
+          ForEach(Array(provenance.steps.enumerated()), id: \.element.kind) { index, step in
             // An arrow wraps with the step it points to, never alone at a line's end.
             HStack(spacing: 6) {
               if index > 0 {
@@ -250,13 +252,7 @@ private struct FactStrip: View {
         if index > 0 {
           Divider().frame(height: 28)
         }
-        if let term = fact.term {
-          // A fact the glossary explains opens its entry, from anywhere in its share
-          // of the strip (#362).
-          GlossaryButton(term: term, presentation: .here) { factView(fact) }
-        } else {
-          factView(fact)
-        }
+        factView(fact)
       }
     }
     .padding(.vertical, 10)
