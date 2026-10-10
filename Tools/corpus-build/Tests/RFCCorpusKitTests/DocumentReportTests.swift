@@ -10,6 +10,10 @@ import Testing
 struct DocumentReportTests {
   private static let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
 
+  private static func code(_ type: String?) -> Block {
+    .preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: type))
+  }
+
   private static func document(
     title: String = "A Title", abstract: [Block] = [], sections: [Section]
   ) -> RFCDocument {
@@ -79,6 +83,61 @@ struct DocumentReportTests {
         "no RFC number recognized in front matter", "no title", "no sections",
         "no prose paragraphs",
       ])
+  }
+
+  /// Source code is counted apart from artwork, per language, so a report shows the
+  /// grammars the legacy parser typed as ABNF (#418); a block with no type is
+  /// `untyped`, a value RFCXML never uses.
+  @Test func `source code is counted per language, apart from artwork`() {
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Grammar",
+      blocks: [
+        .paragraph(Paragraph(text: "Prose.")), Self.artwork, Self.code("abnf"), Self.code("abnf"),
+        Self.code(nil), Self.code("C"),
+      ])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.artwork == 1)
+    #expect(report.sourceCode == ["abnf": 2, "c": 1, "untyped": 1])
+    #expect(report.warnings == [], "source code is not artwork misread from prose")
+  }
+
+  /// A language is keyed as RFCKit's `ArtworkType` names it, so the spellings of one
+  /// type count together and a type that names none counts as `untyped`.
+  @Test func `a language is keyed by its canonical type`() {
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Grammar",
+      blocks: [
+        .paragraph(Paragraph(text: "Prose.")), Self.code("ABNF "), Self.code("abnf"), Self.code(""),
+        Self.code("text"),
+        Self.code("message/http; msgtype=\"request\""), Self.code("cbordiag"),
+        Self.code("cbor-diag"),
+      ])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.sourceCode == ["abnf": 2, "untyped": 2, "message/http": 1, "cbor-diag": 2])
+  }
+
+  /// A document with no source code writes no `sourceCode`, so a report diff gains a
+  /// line only where there is some.
+  @Test func `a document without source code writes none`() throws {
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Prose",
+      blocks: [.paragraph(Paragraph(text: "Prose.")), Self.artwork])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.sourceCode == nil)
+    let json = String(decoding: try JSONEncoder().encode(report), as: UTF8.self)
+    #expect(!json.contains("sourceCode"))
+  }
+
+  /// A report written before #418 has no `sourceCode`; it still decodes, as the
+  /// baseline a full run compares with.
+  @Test func `a report without source code still decodes`() throws {
+    let json = #"""
+      [{"id": "rfc1000", "title": "A Title", "sections": 1, "paragraphs": 1, "lists": 0,
+        "artwork": 2, "references": 0, "resolvedDocuments": 0, "warnings": []}]
+      """#
+    let reports = try JSONDecoder().decode([DocumentReport].self, from: Data(json.utf8))
+    #expect(reports.first?.artwork == 2)
+    #expect(reports.first?.sourceCode == nil)
   }
 
   @Test func `more artwork than prose is flagged`() {
