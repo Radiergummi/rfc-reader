@@ -349,12 +349,13 @@ extension LegacyTextParser {
   /// one grammar in it only where a block of it is written in it alone, with a `|` RFC
   /// 5234 does not read; its artwork is typed with it, and which of the two a block RFC
   /// 5234 has typed belongs to is the document's call (`unifyingGrammarDialect`). Only
-  /// a document that has a `|` or an `_` in a verbatim block is asked the second time.
+  /// blocks of which one has a `|` are asked the second time: no stretch is anchored
+  /// in the bar dialect without one.
   static func typingGrammars(_ blocks: [Block]) -> [Block] {
     let typed = typingGrammars(blocks, in: .rfc5234)
     let hasBarDialect = blocks.contains { block in
       guard case .preformatted(let verbatim) = block else { return false }
-      return verbatim.text.contains { $0 == "|" || $0 == "_" }
+      return verbatim.text.contains("|")
     }
     return hasBarDialect ? typingGrammars(typed, in: .rfc822) : typed
   }
@@ -379,7 +380,8 @@ extension LegacyTextParser {
         blocks[index] = verbatimBlock(text, grammar: dialect)
       }
     }
-    // The bar dialect's pass may take a block RFC 5234's typed: one grammar's.
+    // The bar dialect's pass lets a block RFC 5234's typed into a stretch, as one
+    // grammar's, and leaves its type to `unifyingGrammarDialect`.
     let retypes: Set<String> = dialect == .rfc5234 ? [type] : [type, grammarType(.rfc5234)]
     for index in blocks.indices {
       guard case .preformatted(let block) = blocks[index],
@@ -404,16 +406,17 @@ extension LegacyTextParser {
   static func unifyingGrammarDialect(_ sections: [Section]) -> [Section] {
     let bar = grammarType(.rfc822)
     let rfc5234 = grammarType(.rfc5234)
-    var barOnly = 0
-    var rfc5234Only = 0
-    for section in sections {
-      for case .preformatted(let verbatim) in section.blocks {
-        if verbatim.type == bar, !ABNF.parses(verbatim.text) {
-          barOnly += 1
-        } else if verbatim.type == rfc5234, !ABNF.parses(verbatim.text, dialect: .rfc822) {
-          rfc5234Only += 1
-        }
+    let verbatim = sections.flatMap { section in
+      section.blocks.compactMap { block -> Preformatted? in
+        if case .preformatted(let verbatim) = block { verbatim } else { nil }
       }
+    }
+    // A document with no block only the bar dialect reads, nearly every one, is asked
+    // no more.
+    let barOnly = verbatim.count { $0.type == bar && !ABNF.parses($0.text) }
+    guard barOnly > 0 else { return sections }
+    let rfc5234Only = verbatim.count { verbatim in
+      verbatim.type == rfc5234 && !ABNF.parses(verbatim.text, dialect: .rfc822)
     }
     guard barOnly > rfc5234Only else { return sections }
     return sections.map { section in
