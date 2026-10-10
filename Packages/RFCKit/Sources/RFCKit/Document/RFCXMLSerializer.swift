@@ -247,7 +247,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -268,7 +268,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    let title = partNumber == nil ? section.displayTitleInlines : section.headingWords
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
@@ -588,9 +588,12 @@ public struct RFCXMLSerializer: Sendable {
       func claim(_ sections: [Section]) {
         for section in sections {
           if let number = section.number, partNumbers[section.anchor] == nil {
-            let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
-              .attribute
-            if claimed.insert(partNumber).inserted { partNumbers[section.anchor] = partNumber }
+            let partNumber = PartNumber(
+              sectionNumber: number, isAppendix: section.isAppendix,
+              word: section.appendixWord)
+            if claimed.insert(partNumber.claim.attribute).inserted {
+              partNumbers[section.anchor] = partNumber.attribute
+            }
           }
           claim(section.subsections)
         }

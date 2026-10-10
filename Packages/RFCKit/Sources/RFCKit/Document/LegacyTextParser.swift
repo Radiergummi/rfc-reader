@@ -61,6 +61,11 @@ public enum LegacyTextParser {
     var title: String
     var isAppendix: Bool
     var anchor: String
+    /// The word an appendix heading names itself by, nil where it states none, as
+    /// `A.1. Title` does (#428).
+    var appendixWord: Section.AppendixWord?
+    /// The `(Normative)` or `(Informative)` taken out of an appendix's title.
+    var qualifier: Section.Qualifier?
   }
 
   struct RawSection {
@@ -103,17 +108,27 @@ public enum LegacyTextParser {
   /// named (`namedAppendixHeadingPattern`), by its letter, or as a lettered subsection.
   /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
   /// lines rather than through a whole document.
-  static func appendixHeading(in line: String) -> (number: String, title: String)? {
+  static func appendixHeading(in line: String) -> AppendixHeading? {
     if let match = line.firstMatch(of: namedAppendixHeadingPattern) {
-      return (String(match.number), String(match.title))
+      let word: Section.AppendixWord =
+        match.output.0.lowercased().hasPrefix("annex") ? .annex : .appendix
+      return AppendixHeading(number: String(match.number), title: String(match.title), word: word)
     }
     if let match = line.firstMatch(of: letteredAppendixHeadingPattern) {
-      return (String(match.number), String(match.title))
+      return AppendixHeading(number: String(match.number), title: String(match.title))
     }
     if let match = line.firstMatch(of: appendixSubsectionHeadingPattern) {
-      return (String(match.number), String(match.title))
+      return AppendixHeading(number: String(match.number), title: String(match.title))
     }
     return nil
+  }
+
+  /// What `appendixHeading(in:)` reads of a line.
+  struct AppendixHeading {
+    var number: String
+    var title: String
+    /// The word the heading names itself by, nil for a heading by its letter alone.
+    var word: Section.AppendixWord?
   }
 
   /// Diagnoses every block of a document without building one: what the prose test
@@ -653,6 +668,9 @@ public enum LegacyTextParser {
     // protocol's, and a catalog (RFC 1292, 1632, 2116) gives every entry one (#72).
     // A later one is the body's, and stays where it is.
     var abstractTaken = false
+    // The word each appendix names itself by, by its letter or numeral, which its
+    // subsections, `A.1. Title`, do not repeat (#428).
+    var appendixWords: [Substring: Section.AppendixWord] = [:]
     for (index, raw) in prepared.sections.enumerated() {
       guard let heading = raw.heading else {
         // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
@@ -679,8 +697,13 @@ public enum LegacyTextParser {
           continue
         }
       }
-      flat.append(
-        Self.section(from: raw, heading: heading, references: bibliographies[index], in: context))
+      var section = Self.section(
+        from: raw, heading: heading, references: bibliographies[index], in: context)
+      if heading.isAppendix, let first = heading.number?.split(separator: ".").first {
+        if let stated = heading.appendixWord { appendixWords[first] = stated }
+        section.appendixWord = heading.appendixWord ?? appendixWords[first] ?? .appendix
+      }
+      flat.append(section)
     }
     return Self.finished(flat, header: header)
   }
@@ -772,7 +795,8 @@ public enum LegacyTextParser {
       // cross reference. The words, not the columns they were set in: a classifier
       // reads a heading's gaps, a title does not (#683).
       title: context.linker.link(heading.title.collapsingWhitespace()),
-      isAppendix: heading.isAppendix
+      isAppendix: heading.isAppendix,
+      qualifier: heading.qualifier
     )
     if let references, !references.isEmpty {
       let leading = Self.blocks(from: Self.blocksBeforeFirstEntry(raw.blocks), in: context)

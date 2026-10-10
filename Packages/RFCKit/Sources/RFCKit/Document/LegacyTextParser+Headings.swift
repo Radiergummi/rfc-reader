@@ -330,11 +330,13 @@ extension LegacyTextParser {
         number: number, title: title, isAppendix: false,
         anchor: SectionAnchor.anchor(forSectionNumber: number))
     }
-    if let (number, matched) = appendixHeading(in: trimmed) {
-      let title = matched.trimmingTrailingDots().collapsingWhitespace()
+    if let appendix = appendixHeading(in: trimmed) {
+      let (qualifier, title) = HeadingQualifier.split(
+        appendix.title.trimmingTrailingDots().collapsingWhitespace())
       return HeadingInfo(
-        number: number, title: title, isAppendix: true,
-        anchor: SectionAnchor.anchor(forAppendixNumber: number))
+        number: appendix.number, title: title, isAppendix: true,
+        anchor: SectionAnchor.anchor(forAppendixNumber: appendix.number),
+        appendixWord: appendix.word, qualifier: qualifier)
     }
     // Unnumbered heading: "Abstract", "Security Considerations", "Author's Address".
     let firstWord = trimmed.split(separator: " ").first.map { String($0).lowercased() } ?? ""

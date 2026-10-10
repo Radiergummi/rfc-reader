@@ -116,8 +116,9 @@ extension LegacyTextParser {
       var section = section
       var prefix = section.anchor
       if section.isAppendix, let number = section.number {
-        let partNumber = PartNumber(sectionNumber: number, isAppendix: true).attribute
-        if claimed.insert(partNumber).inserted { prefix = partNumber }
+        let partNumber = PartNumber(
+          sectionNumber: number, isAppendix: true, word: section.appendixWord)
+        if claimed.insert(partNumber.claim.attribute).inserted { prefix = partNumber.attribute }
       }
       section.blocks = numberingParagraphs(section.blocks, of: prefix, avoiding: declared)
       return section

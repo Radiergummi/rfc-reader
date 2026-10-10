@@ -189,6 +189,23 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(document.section(anchor: "appendix-C") != nil)
   }
 
+  /// RFC 5126 heads its annexes `Annex A (Normative): Title`, and their subsections by
+  /// letter alone, `A.1.`. Each is an annex, named as one, with its qualifier apart
+  /// from its title; its subsections are its annex's (#428).
+  @Test func `an annex keeps its word and its qualifier`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5126"))
+    let annex = try #require(document.section(anchor: "appendix-A"))
+    #expect(annex.numberLabel == "Annex A")
+    #expect(annex.qualifier == .normative)
+    #expect(annex.titleText == "ASN.1 Definitions")
+    let child = try #require(annex.subsections.first { $0.number == "A.1" })
+    #expect(child.numberLabel == "Annex A.1")
+    #expect(child.qualifier == nil)
+    let informative = try #require(document.section(anchor: "appendix-B"))
+    #expect(informative.qualifier == .informative)
+    #expect(!informative.titleText.contains("nformative"))
+  }
+
   /// RFC 8011 names its status codes as lettered subsections, `B.1.4.1.  ` and a code
   /// in lower case. The appendix pattern wanted a capital after the number, and they
   /// were unnumbered sections beside their parents, titled with the whole line. They
