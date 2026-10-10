@@ -283,6 +283,9 @@ struct PrintFurnitureTests {
       PrintFurniture.byline([
         Author(name: "A. Writer"), Author(name: "B. Scribe"), Author(name: "C. Author"),
       ]) == "Writer, et al.")
+    #expect(
+      PrintFurniture.byline([Author(name: "F. Le Faucheur"), Author(name: "D. Eastlake 3rd")])
+        == "Le Faucheur & Eastlake 3rd")
   }
 
   @Test func `the title block carries the identity line and the authors`() {

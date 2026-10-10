@@ -158,11 +158,14 @@ public struct DraftHeader: Equatable, Sendable {
   /// author column on the right never reaches it.
   private static func leftColumn(_ line: String) -> String {
     let trimmed = line.drop(while: \.isWhitespace)
-    guard let gap = trimmed.firstRange(of: /\t| {2}/) else {
+    guard let gap = trimmed.firstRange(of: columnGap) else {
       return String(trimmed).trimmingCharacters(in: .whitespaces)
     }
     return String(trimmed[..<gap.lowerBound])
   }
+
+  /// A tab or a run of two spaces: where a header line's left column ends.
+  private static let columnGap = Pattern(#/\t| {2}/#)
 
   /// The value after `label`, when the line starts with it. The column gap is looked
   /// for past the label, so padding that lines a value up with its neighbors is not

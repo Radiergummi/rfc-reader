@@ -82,12 +82,13 @@ public enum CitationFormatter {
     return citation
   }
 
-  /// `S. Bradner` → `Bradner, S.`; last author gets `and` with initials first.
+  /// `S. Bradner` → `Bradner, S.`, `F. Le Faucheur` → `Le Faucheur, F.`; last author
+  /// gets `and` with initials first. A name that is all surname, an organization's,
+  /// is not inverted.
   static func authorList(_ authors: [Author]) -> String {
     func inverted(_ author: Author) -> String {
-      let name = author.name
-      guard let lastSpace = name.lastIndex(of: " ") else { return name + roleSuffix(author) }
-      let initials = String(name[..<lastSpace])
+      let initials = author.givenNames
+      guard !initials.isEmpty else { return author.name + roleSuffix(author) }
       return "\(author.surname), \(initials)\(roleSuffix(author))"
     }
     func roleSuffix(_ author: Author) -> String {

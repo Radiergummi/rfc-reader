@@ -140,7 +140,20 @@ public enum RFCXMLParser {
     /// written from.
     let foldsSectionsInProse: Bool
 
+    /// The RFC being parsed, whose page at the RFC Editor shows what an artwork
+    /// published only as SVG draws.
+    let documentID: DocumentID?
+
+    /// The RFC the document is, from its `number` or its front's `<seriesInfo>`; nil for
+    /// a draft.
+    static func documentID(of rfc: XMLTree.Element) -> DocumentID? {
+      if let number = rfc["number"].flatMap(Int.init) { return .rfc(number) }
+      let series = rfc.first("front")?.all("seriesInfo").first { $0["name"] == "RFC" }
+      return series?["value"].flatMap(Int.init).map(DocumentID.rfc)
+    }
+
     init(referencesIn root: XMLTree.Element) {
+      self.documentID = Self.documentID(of: root)
       let (referenceTargets, referenceEntries) = Self.references(in: root)
       self.referenceTargets = referenceTargets
       self.referenceEntries = referenceEntries
@@ -198,13 +211,7 @@ public enum RFCXMLParser {
       var header = DocumentHeader(title: titleElement?.normalizedText ?? "")
       header.abbreviatedTitle = titleElement?["abbrev"]
 
-      if let number = rfc["number"].flatMap(Int.init) {
-        header.id = .rfc(number)
-      } else if let series = front?.all("seriesInfo").first(where: { $0["name"] == "RFC" }),
-        let number = series["value"].flatMap(Int.init)
-      {
-        header.id = .rfc(number)
-      }
+      header.id = Self.documentID(of: rfc)
 
       header.authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor)
       if let date = front?.first("date") {
@@ -246,7 +253,10 @@ public enum RFCXMLParser {
       }
       guard let name, !name.isEmpty else { return nil }
       let role = element["role"].flatMap(Author.Role.init(parsing:))
-      return Author(name: name, role: role, contact: parseContact(element))
+      let surname = element["surname"].map { $0.trimmingCharacters(in: .whitespaces) }
+      return Author(
+        name: name, role: role, contact: parseContact(element),
+        statedSurname: surname?.isEmpty == false ? surname : nil)
     }
 
     /// `<organization>` and `<address>`, when the author has either. Every element
@@ -343,14 +353,21 @@ public enum RFCXMLParser {
       // is a section's, and it is announced as one: `11.`, not `Appendix 11.` (#683).
       let isAppendixByPlace = numbering.number == nil ? appendix : numbering.isAppendix
       let subsections = parseSections(in: element, appendix: isAppendixByPlace, position: position)
+      // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
+      let isAppendix = isNumbered && isAppendixByPlace
+      // An appendix's `(Normative)` or `(Informative)` is in its `<name>`, as the
+      // document wrote it, and comes out of the title as the legacy parser takes it
+      // out (#428).
+      let (qualifier, words) = isAppendix ? HeadingQualifier.split(title) : (nil, title)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
-        title: title,
+        title: words,
         blocks: blocks,
         subsections: subsections,
-        // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
-        isAppendix: isNumbered && isAppendixByPlace
+        isAppendix: isAppendix,
+        appendixWord: numbering.word,
+        qualifier: qualifier
       )
     }
 
@@ -363,14 +380,14 @@ public enum RFCXMLParser {
       return inlines.isEmpty ? [.text(fallback)] : inlines
     }
 
-    /// `section-4.2` → `4.2`; `section-appendix.a.1` → `A.1`.
-    private func sectionNumber(fromPartNumber partNumber: String?) -> (
-      number: String?, isAppendix: Bool
-    ) {
+    /// `section-4.2` → `4.2`; `section-appendix.a.1` → `A.1`; `section-annex.a` → `A`,
+    /// an annex.
+    private func sectionNumber(fromPartNumber partNumber: String?) -> SectionNumbering {
       switch partNumber.flatMap(PartNumber.init) {
-      case .section(let number): (number, false)
-      case .appendix(let number): (number, true)
-      case .figure, .table, nil: (nil, false)
+      case .section(let number): SectionNumbering(number: number)
+      case .appendix(let number): SectionNumbering(number: number, isAppendix: true)
+      case .annex(let number): SectionNumbering(number: number, isAppendix: true, word: .annex)
+      case .figure, .table, nil: SectionNumbering()
       }
     }
 
@@ -511,18 +528,22 @@ public enum RFCXMLParser {
           break
         }
       }
+      // An appendix that is a bibliography, `Appendix C -- References`, says so in its
+      // `pn` like any other appendix, and its name holds its qualifier as any does.
+      let (qualifier, words) =
+        numbering.isAppendix ? HeadingQualifier.split(title) : (nil, title)
       let blocks: [Block] =
         entries.isEmpty
-        ? [] : [.references(ReferenceList(title: title.plainText, entries: entries))]
+        ? [] : [.references(ReferenceList(title: words.plainText, entries: entries))]
       return Section(
         anchor: element["anchor"] ?? partNumber ?? "unanchored-references-\(position)",
         number: numbering.number,
-        title: title,
+        title: words,
         blocks: blocks,
         subsections: subsections,
-        // An appendix that is a bibliography, `Appendix C -- References`, says so in its
-        // `pn` like any other appendix.
-        isAppendix: numbering.isAppendix
+        isAppendix: numbering.isAppendix,
+        appendixWord: numbering.word,
+        qualifier: qualifier
       )
     }
 
@@ -539,10 +560,10 @@ public enum RFCXMLParser {
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
-      // Name and role only: an entry's `<author>` may carry an address, and the
-      // bibliography has no use for one.
+      // No contact: an entry's `<author>` may carry an address, and the bibliography
+      // has no use for one.
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
-        Author(name: author.name, role: author.role)
+        Author(name: author.name, role: author.role, statedSurname: author.statedSurname)
       }
       let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
@@ -755,7 +776,8 @@ public enum RFCXMLParser {
       case "sourcecode":
         return .preformatted(parseArtwork(element, kind: .sourceCode))
       case "artset":
-        // Prefer the ASCII alternative; SVG needs a dedicated renderer.
+        // Prefer the ASCII alternative; SVG needs a dedicated renderer, and an artset
+        // without one shows the gap, as an SVG artwork alone does.
         let alternatives = element.all("artwork")
         let chosen = alternatives.first { $0["type"] == "ascii-art" } ?? alternatives.first
         return chosen.map { .preformatted(parseArtwork($0, kind: .artwork)) }
@@ -858,7 +880,12 @@ public enum RFCXMLParser {
     }
 
     private func parseArtwork(_ element: XMLTree.Element, kind: Preformatted.Kind) -> Preformatted {
-      var text = element.text
+      // An SVG drawing's text nodes, run together, are neither the drawing nor text
+      // to read; the block says where the drawing is, as xml2rfc's text rendering
+      // does, and keeps its type for a renderer to come (#768). Source code typed
+      // `svg` is markup to read, and stays.
+      let isDrawing = kind == .artwork && element["type"]?.lowercased() == "svg"
+      var text = isDrawing ? svgOnlyNote : element.text
       // The RFC Editor wraps artwork in newlines for readability of the XML itself.
       while text.hasPrefix("\n") { text.removeFirst() }
       while text.hasSuffix("\n") || text.hasSuffix(" ") { text.removeLast() }
@@ -866,6 +893,13 @@ public enum RFCXMLParser {
       let name = element["name"].flatMap { $0.isEmpty ? nil : $0 }
       return Preformatted(
         kind: kind, text: text, type: type, name: name, anchor: element["anchor"] ?? element["pn"])
+    }
+
+    /// What xml2rfc's text rendering sets in place of a drawing it has only as SVG.
+    private var svgOnlyNote: String {
+      guard let documentID else { return "(Artwork only available as SVG)" }
+      let page = RFCEditorEndpoints.base.appending(path: "rfc/\(documentID.fileStem).html")
+      return "(Artwork only available as SVG: see \(page.absoluteString))"
     }
 
     private func parseTable(_ element: XMLTree.Element) -> Table {
@@ -1212,4 +1246,11 @@ extension RFCXMLParser {
     components.path = address
     return components.url
   }
+}
+
+/// What a section's part number says of it.
+private struct SectionNumbering {
+  var number: String?
+  var isAppendix = false
+  var word = Section.AppendixWord.appendix
 }

@@ -342,7 +342,7 @@ extension DocumentTextBuilder {
     if let hangingNumber {
       appendHangingNumber(
         hangingNumber, of: section.anchor, copiedAs: section.numberPrefix, attributes: attributes)
-      output.append(inlineRuns(section.title, base: attributes))
+      output.append(inlineRuns(section.headingWords, base: attributes))
     } else {
       output.append(inlineRuns(section.displayTitleInlines, base: attributes))
     }

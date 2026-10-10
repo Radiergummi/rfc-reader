@@ -9,7 +9,13 @@ public struct DocumentReport: Codable, Sendable {
   public var sections: Int
   public var paragraphs: Int
   public var lists: Int
+  /// Artwork blocks: diagrams, tables drawn in text, anything not source code.
   public var artwork: Int
+  /// Source code blocks per language, keyed by the block's type as `ArtworkType` names
+  /// it, `untyped` for one that names none: the grammars the legacy parser types as ABNF among
+  /// them (#418). Nil, and absent from the JSON, for a document with none, as in a
+  /// report written before it was counted.
+  public var sourceCode: [String: Int]?
   public var references: Int
   public var resolvedDocuments: Int
   /// Lines dropped as page furniture. Compared across runs, this is what shows
@@ -44,6 +50,7 @@ public struct DocumentReport: Codable, Sendable {
     var paragraphs = 0
     var lists = 0
     var artwork = 0
+    var sourceCode: [String: Int] = [:]
     var references = 0
     // The sections' blocks, not `document.blocks`: the abstract has never been counted,
     // and counting it now would move every document's numbers against older reports.
@@ -51,6 +58,8 @@ public struct DocumentReport: Codable, Sendable {
       switch block {
       case .paragraph: paragraphs += 1
       case .list: lists += 1
+      case .preformatted(let code) where code.kind == .sourceCode:
+        sourceCode[ArtworkType.canonical(code.type)?.name ?? "untyped", default: 0] += 1
       case .preformatted: artwork += 1
       case .references(let list): references += list.entries.count
       case .definitionList, .figure, .blockQuote, .aside, .table, .index: break
@@ -62,6 +71,8 @@ public struct DocumentReport: Codable, Sendable {
     if document.header.title.isEmpty { warnings.append("no title") }
     if document.sections.isEmpty { warnings.append("no sections") }
     if paragraphs == 0 { warnings.append("no prose paragraphs") }
+    // Artwork alone: the warning is for prose misread as drawing, and a document that is
+    // mostly grammar is not that.
     if artwork > paragraphs {
       warnings.append("more artwork than prose (\(artwork) vs \(paragraphs)); check classification")
     }
@@ -72,6 +83,7 @@ public struct DocumentReport: Codable, Sendable {
     self.paragraphs = paragraphs
     self.lists = lists
     self.artwork = artwork
+    self.sourceCode = sourceCode.isEmpty ? nil : sourceCode
     self.references = references
     self.resolvedDocuments = document.referencedDocuments.count
     self.override = override

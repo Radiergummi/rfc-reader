@@ -53,7 +53,7 @@ struct BacklinksTests {
   @Test func `a citation is no backlink of the references section`() throws {
     let document = try Self.rfc9290()
     let backlinks = Backlinks.within(document)
-    let bibliographies = document.allSections.filter(RFCXMLSerializer.isReferences)
+    let bibliographies = document.allSections.filter(\.holdsReferences)
     #expect(!bibliographies.isEmpty)
     #expect(bibliographies.allSatisfy { backlinks[$0.anchor] == nil })
   }

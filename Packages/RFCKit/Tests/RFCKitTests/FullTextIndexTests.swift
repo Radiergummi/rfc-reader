@@ -75,7 +75,7 @@ final class FullTextIndexTests {
     try index.add(document)
 
     let bibliographies = Set(
-      document.allSections.filter(RFCXMLSerializer.isReferences).map(\.anchor))
+      document.allSections.filter(\.holdsReferences).map(\.anchor))
     #expect(!bibliographies.isEmpty)
     let hits = try index.search("quic", limit: 100)
     #expect(!hits.isEmpty)
@@ -133,6 +133,21 @@ final class FullTextIndexTests {
       source: .xml)
 
     #expect(FullTextIndex.rows(of: document).map(\.anchor) == ["section-1"])
+  }
+
+  /// An appendix's heading is searched as it reads, its qualifier ahead of its title
+  /// (#428), so `informative` finds an annex that says it is.
+  @Test func `an appendix's heading is searched with its qualifier`() {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(1), title: "A document"),
+      sections: [
+        Section(
+          anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+          appendixWord: .annex, qualifier: .informative)
+      ],
+      source: .text)
+
+    #expect(FullTextIndex.rows(of: document).map(\.heading) == ["(Informative) Background"])
   }
 
   /// `snippet()` puts its marker before whatever follows the match, a variation

@@ -19,7 +19,8 @@ struct RFCXMLParserTests {
       document.header.authors == [
         Author(
           name: "Martin Thomson",
-          contact: AuthorContact(organization: "Mozilla", emails: ["mt@lowentropy.net"]))
+          contact: AuthorContact(organization: "Mozilla", emails: ["mt@lowentropy.net"]),
+          statedSurname: "Thomson")
       ])
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
@@ -406,7 +407,7 @@ struct RFCXMLParserTests {
     #expect(normative.entries.map(\.anchor) == ["RFC2119", "RFC8174"])
     let bcp = normative.entries[0]
     #expect(bcp.title == "Key words for use in RFCs to Indicate Requirement Levels")
-    #expect(bcp.authors == [Author(name: "S. Bradner")])
+    #expect(bcp.authors == [Author(name: "S. Bradner", statedSurname: "Bradner")])
     #expect(bcp.date == PublicationDate(year: 1997, month: 3))
     #expect(bcp.documentID == .rfc(2119))
     #expect(bcp.url?.absoluteString == "https://www.rfc-editor.org/info/rfc2119")

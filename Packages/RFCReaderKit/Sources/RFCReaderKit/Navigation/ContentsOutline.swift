@@ -55,7 +55,8 @@ public enum ContentsOutline {
     for section in sections {
       let depth = section.depth
       while let last = path.last, last.section.depth >= depth { path.removeLast() }
-      let isMatch = matches(section, title: section.titleText, text)
+      // The heading's words, an appendix's qualifier among them (#428).
+      let isMatch = matches(section, title: section.headingWords.plainText, text)
       if isMatch {
         for index in path.indices where !path[index].isListed {
           let ancestor = path[index]
