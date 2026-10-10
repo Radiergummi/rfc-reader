@@ -357,7 +357,7 @@ extension LegacyTextParser {
       guard case .preformatted(let verbatim) = block else { return false }
       return verbatim.text.contains("|")
     }
-    return hasBarDialect ? typingGrammars(typed, in: .rfc822) : typed
+    return hasBarDialect ? typingGrammars(typed, in: .rfc2616) : typed
   }
 
   private static func typingGrammars(_ blocks: [Block], in dialect: ABNF.Dialect) -> [Block] {
@@ -404,7 +404,7 @@ extension LegacyTextParser {
   /// alternative or `=/`, stays; and an RFC 5234 grammar that slips into `|` in a rule
   /// or two (RFC 6455) stays RFC 5234's.
   static func unifyingGrammarDialect(_ sections: [Section]) -> [Section] {
-    let bar = grammarType(.rfc822)
+    let bar = grammarType(.rfc2616)
     let rfc5234 = grammarType(.rfc5234)
     let verbatim = sections.flatMap { section in
       section.blocks.compactMap { block -> Preformatted? in
@@ -416,16 +416,16 @@ extension LegacyTextParser {
     let barOnly = verbatim.count { $0.type == bar && !ABNF.parses($0.text) }
     guard barOnly > 0 else { return sections }
     let rfc5234Only = verbatim.count { verbatim in
-      verbatim.type == rfc5234 && !ABNF.parses(verbatim.text, dialect: .rfc822)
+      verbatim.type == rfc5234 && !ABNF.parses(verbatim.text, dialect: .rfc2616)
     }
     guard barOnly > rfc5234Only else { return sections }
     return sections.map { section in
       var section = section
       section.blocks = section.blocks.map { block in
         guard case .preformatted(let verbatim) = block, verbatim.type == rfc5234,
-          ABNF.parses(verbatim.text, dialect: .rfc822)
+          ABNF.parses(verbatim.text, dialect: .rfc2616)
         else { return block }
-        return verbatimBlock(verbatim.text, grammar: .rfc822)
+        return verbatimBlock(verbatim.text, grammar: .rfc2616)
       }
       return section
     }
@@ -445,7 +445,7 @@ extension LegacyTextParser {
     else { return false }
     let rest = verbatimText(next)
     let joined = verbatimText(lines + next)
-    return [ABNF.Dialect.rfc5234, .rfc822].contains { dialect in
+    return [ABNF.Dialect.rfc5234, .rfc2616].contains { dialect in
       !ABNF.parses(rest, dialect: dialect) && ABNF.parses(joined, dialect: dialect)
     }
   }
@@ -453,21 +453,21 @@ extension LegacyTextParser {
   /// The dialect `text` is a grammar in, RFC 5234's before the bar dialect, or nil.
   private static func grammarDialect(of text: String) -> ABNF.Dialect? {
     if ABNF.recognizes(text) { return .rfc5234 }
-    return isBarDialectGrammar(text) ? .rfc822 : nil
+    return isBarDialectGrammar(text) ? .rfc2616 : nil
   }
 
   /// Whether `text` is a grammar in the bar dialect alone: one with a `|`, which RFC
   /// 5234 does not read. An `_` in a name says nothing alone, as `T_r=100ms` does not.
   private static func isBarDialectGrammar(_ text: String) -> Bool {
-    text.contains("|") && ABNF.recognizes(text, dialect: .rfc822) && !ABNF.parses(text)
+    text.contains("|") && ABNF.recognizes(text, dialect: .rfc2616) && !ABNF.parses(text)
   }
 
   /// The type a grammar in `dialect` is set with: `abnf`, as RFCXML sets one, or
-  /// `abnf822`, which says it is no RFC 5234 grammar (#696).
+  /// `abnf2616`, which says it is no RFC 5234 grammar (#696).
   private static func grammarType(_ dialect: ABNF.Dialect) -> String {
     switch dialect {
     case .rfc5234: "abnf"
-    case .rfc822: "abnf822"
+    case .rfc2616: "abnf2616"
     }
   }
 
@@ -970,7 +970,7 @@ extension LegacyTextParser {
     // Anything else is preserved verbatim, minus the common indentation.
     let text = verbatimText(lines)
     // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
-    // typed `abnf` (#45), or `abnf822` in the bar dialect (#696). Only what would
+    // typed `abnf` (#45), or `abnf2616` in the bar dialect (#696). Only what would
     // otherwise be artwork; no prose verdict changes.
     return [verbatimBlock(text, grammar: grammarDialect(of: text))]
   }

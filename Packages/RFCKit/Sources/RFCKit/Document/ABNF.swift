@@ -17,16 +17,16 @@ public enum ABNF {
   /// The notation a grammar is written in: RFC 5234's, which alternates with `/`, or
   /// the one HTTP's grammars were written in before it (RFC 1945, RFC 2616), which
   /// alternates with `|`, names rules with `_` too, and has no `=/` (#696). The legacy
-  /// parser types a grammar in the second as `abnf822`, which no RFC 5234 tool reads.
+  /// parser types a grammar in the second as `abnf2616`, which no RFC 5234 tool reads.
   public enum Dialect: Sendable {
     case rfc5234
-    case rfc822
+    case rfc2616
 
     /// What sets one alternative off from the next.
     var alternative: Character {
       switch self {
       case .rfc5234: "/"
-      case .rfc822: "|"
+      case .rfc2616: "|"
       }
     }
   }
@@ -298,15 +298,15 @@ public enum ABNF {
     }
 
     /// A character a rule name may continue with: `ALPHA / DIGIT / "-"`, and in RFC
-    /// 822's dialect `_` too, which grammars of that time name rules with (RFC 1808's
+    /// 2616's dialect `_` too, which grammars of that time name rules with (RFC 1808's
     /// `net_loc`).
     private func isNameCharacter(_ character: Character) -> Bool {
       character.isASCII
         && (character.isLetter || character.isNumber || character == "-"
-          || dialect == .rfc822 && character == "_")
+          || dialect == .rfc2616 && character == "_")
     }
 
-    /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`, with `|` in RFC 822's
+    /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`, with `|` in RFC 2616's
     /// dialect.
     private mutating func alternation() -> Bool {
       guard concatenation() else { return false }

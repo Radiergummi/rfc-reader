@@ -38,12 +38,12 @@ struct GrammarLinksTests {
   /// does (#696); its type says which it is.
   @Test func `a grammar that alternates with a bar links its rules`() throws {
     let text = Self.text("greeting = salutation | name", "name     = 1*ALPHA")
-    #expect(ABNFPresentation.dialect(ofType: "abnf822") == .rfc822)
+    #expect(ABNFPresentation.dialect(ofType: "abnf2616") == .rfc2616)
     #expect(ABNFPresentation.dialect(ofType: "abnf") == .rfc5234)
-    let grammar = DocumentGrammar(blocks: [(text: text, dialect: ABNF.Dialect.rfc822)])
+    let grammar = DocumentGrammar(blocks: [(text: text, dialect: ABNF.Dialect.rfc2616)])
     guard
       case .linked(let linked)? = ABNFPresentation.render(
-        text, dialect: .rfc822, grammar: grammar)
+        text, dialect: .rfc2616, grammar: grammar)
     else {
       Issue.record("no linked rendition")
       return

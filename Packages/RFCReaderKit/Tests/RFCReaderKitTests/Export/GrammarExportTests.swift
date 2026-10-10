@@ -32,7 +32,7 @@ struct GrammarExportTests {
   /// grammar's (#696).
   @Test(arguments: ["greeting = salutation | name\nname = 1*ALPHA", "name = 1*ALPHA"])
   func `a grammar in the bar dialect is not exported`(text: String) {
-    let grammar = Preformatted(kind: .sourceCode, text: text, type: "abnf822")
+    let grammar = Preformatted(kind: .sourceCode, text: text, type: "abnf2616")
     let document = RFCDocument(
       header: DocumentHeader(id: .rfc(999), title: "Old Grammar"),
       sections: [

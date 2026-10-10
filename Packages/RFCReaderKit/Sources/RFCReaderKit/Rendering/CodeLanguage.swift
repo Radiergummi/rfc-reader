@@ -9,7 +9,7 @@ enum CodeLanguage {
   /// their `ArtworkType` name. A type whose capitals read well, `ABNF` or `YANG`,
   /// needs none, and neither does an author's typo.
   private static let names: [String: String] = [
-    "abnf822": "ABNF",
+    "abnf2616": "ABNF",
     "abnf9110": "ABNF",
     "application/jsonpath": "JSON Path",
     "application/pgp-encrypted": "OpenPGP Message",

@@ -589,7 +589,7 @@ struct CorpusBackedABNFTests {
   func `a grammar that defines one name twice is still ABNF`(stem: String, rule: String) throws {
     let blocks = try Self.preformatted(stem).filter { $0.text.contains(rule) }
     #expect(
-      blocks.contains { $0.kind == .sourceCode && ["abnf", "abnf822"].contains($0.type) },
+      blocks.contains { $0.kind == .sourceCode && ["abnf", "abnf2616"].contains($0.type) },
       "\(stem)")
   }
 
@@ -939,7 +939,7 @@ struct CorpusBackedGrammarTests {
     let types = document.blocks.compactMap { block -> String? in
       if case .preformatted(let preformatted) = block { preformatted.type } else { nil }
     }
-    #expect(types.filter { $0 == "abnf" }.count > types.filter { $0 == "abnf822" }.count)
+    #expect(types.filter { $0 == "abnf" }.count > types.filter { $0 == "abnf2616" }.count)
   }
 
   /// RFC 2616 writes its grammar with `|`, a rule or a few at a time between prose.
@@ -950,7 +950,7 @@ struct CorpusBackedGrammarTests {
     let types = document.blocks.compactMap { block -> String? in
       if case .preformatted(let preformatted) = block { preformatted.type } else { nil }
     }
-    #expect(types.filter { $0 == "abnf822" }.count > 20)
+    #expect(types.filter { $0 == "abnf2616" }.count > 20)
     #expect(!types.contains("abnf"))
   }
 }

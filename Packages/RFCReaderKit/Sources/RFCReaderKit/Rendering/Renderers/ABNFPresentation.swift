@@ -7,17 +7,17 @@ import RFCKit
 /// B.1. A name defined nowhere in the document, as one imported from another, stays
 /// plain.
 enum ABNFPresentation {
-  /// `abnf822` is a grammar in the bar dialect, alternating with `|` (#696): its rules
+  /// `abnf2616` is a grammar in the bar dialect, alternating with `|` (#696): its rules
   /// link, and it is no RFC 5234 grammar, so no `.abnf` file takes it.
   static let types: Set<String> = ["abnf", "abnf9110", barDialectType]
 
   /// The type the legacy parser sets on a grammar in the bar dialect.
-  static let barDialectType = "abnf822"
+  static let barDialectType = "abnf2616"
 
   /// The dialect a block of `type` is written in: the bar dialect's own type says so,
   /// and every other grammar is RFC 5234's.
   static func dialect(ofType type: String?) -> ABNF.Dialect {
-    ArtworkType.canonical(type)?.name == barDialectType ? .rfc822 : .rfc5234
+    ArtworkType.canonical(type)?.name == barDialectType ? .rfc2616 : .rfc5234
   }
 
   static let entry = RendererEntry(
@@ -84,7 +84,7 @@ public struct DocumentGrammar: Sendable, Equatable {
 
   /// The document's grammar blocks, each with the section it is in (nil for the
   /// abstract), in document order: a block the document or a hint types `abnf`,
-  /// `abnf9110` or the bar dialect's `abnf822`. One the reader shows other than as written, folded by RFC 8792 or
+  /// `abnf9110` or the bar dialect's `abnf2616`. One the reader shows other than as written, folded by RFC 8792 or
   /// set with tabs, is left out: its rules could not be anchored in its own text, and
   /// a link to an anchor that is never set would go nowhere.
   static func blocks(of document: RFCDocument, hints: ArtworkHints)
