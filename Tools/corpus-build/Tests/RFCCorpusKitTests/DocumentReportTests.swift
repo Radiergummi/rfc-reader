@@ -10,6 +10,10 @@ import Testing
 struct DocumentReportTests {
   private static let artwork = Block.preformatted(Preformatted(kind: .artwork, text: "+--+"))
 
+  private static func code(_ type: String?) -> Block {
+    .preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: type))
+  }
+
   private static func document(
     title: String = "A Title", abstract: [Block] = [], sections: [Section]
   ) -> RFCDocument {
@@ -85,19 +89,31 @@ struct DocumentReportTests {
   /// grammars the legacy parser typed as ABNF (#418); a block with no type is
   /// `untyped`, a value RFCXML never uses.
   @Test func `source code is counted per language, apart from artwork`() {
-    func code(_ type: String?) -> Block {
-      .preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: type))
-    }
     let section = Section(
       anchor: "section-1", number: "1", title: "Grammar",
       blocks: [
-        .paragraph(Paragraph(text: "Prose.")), Self.artwork, code("abnf"), code("abnf"),
-        code(nil), code("C"),
+        .paragraph(Paragraph(text: "Prose.")), Self.artwork, Self.code("abnf"), Self.code("abnf"),
+        Self.code(nil), Self.code("C"),
       ])
     let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
     #expect(report.artwork == 1)
     #expect(report.sourceCode == ["abnf": 2, "c": 1, "untyped": 1])
     #expect(report.warnings == [], "source code is not artwork misread from prose")
+  }
+
+  /// A language is keyed as RFCKit's `ArtworkType` names it, so the spellings of one
+  /// type count together and a type that names none counts as `untyped`.
+  @Test func `a language is keyed by its canonical type`() {
+    let section = Section(
+      anchor: "section-1", number: "1", title: "Grammar",
+      blocks: [
+        .paragraph(Paragraph(text: "Prose.")), Self.code("ABNF "), Self.code("abnf"), Self.code(""),
+        Self.code("text"),
+        Self.code("message/http; msgtype=\"request\""), Self.code("cbordiag"),
+        Self.code("cbor-diag"),
+      ])
+    let report = DocumentReport(document: Self.document(sections: [section]), id: "rfc1000")
+    #expect(report.sourceCode == ["abnf": 2, "untyped": 2, "message/http": 1, "cbor-diag": 2])
   }
 
   /// A document with no source code writes no `sourceCode`, so a report diff gains a
