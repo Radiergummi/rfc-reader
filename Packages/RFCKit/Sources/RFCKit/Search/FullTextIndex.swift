@@ -195,7 +195,7 @@ public struct Snippet: Sendable, Hashable {
     }
     rows += sections.map { section in
       Row(
-        anchor: section.anchor, number: section.number, heading: section.titleText,
+        anchor: section.anchor, number: section.number, heading: section.headingWords.plainText,
         body: text(of: section.blocks))
     }
     return rows

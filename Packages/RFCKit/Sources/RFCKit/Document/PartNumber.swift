@@ -58,6 +58,14 @@ enum PartNumber: Hashable, Sendable {
     }
   }
 
+  /// What a document claims this part number by, so that no two sections hold it:
+  /// an annex's is its appendix's, since an annex `A` and an appendix `A` share their
+  /// anchor (#428). The serializer and the paragraphs' numbering claim by it alike.
+  var claim: PartNumber {
+    if case .annex(let number) = self { return .appendix(number) }
+    return self
+  }
+
   /// `a.1` after `prefix` → `A.1`: only the letter is raised.
   private static func appendixNumber(_ attribute: String, prefix: String) -> String? {
     guard attribute.hasPrefix(prefix) else { return nil }

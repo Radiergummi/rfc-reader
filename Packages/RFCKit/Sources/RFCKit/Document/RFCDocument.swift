@@ -311,7 +311,7 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   }
 
   /// `4.2. Title`, `Annex B. (Informative) Title`, or just the title.
-  public var displayTitle: String { displayTitleInlines.plainText }
+  public var displayTitle: String { numberPrefix + headingWords.plainText }
 
   /// `displayTitle` with its links intact, for a reader that draws them.
   public var displayTitleInlines: [Inline] {

@@ -135,6 +135,21 @@ final class FullTextIndexTests {
     #expect(FullTextIndex.rows(of: document).map(\.anchor) == ["section-1"])
   }
 
+  /// An appendix's heading is searched as it reads, its qualifier ahead of its title
+  /// (#428), so `informative` finds an annex that says it is.
+  @Test func `an appendix's heading is searched with its qualifier`() {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(1), title: "A document"),
+      sections: [
+        Section(
+          anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+          appendixWord: .annex, qualifier: .informative)
+      ],
+      source: .text)
+
+    #expect(FullTextIndex.rows(of: document).map(\.heading) == ["(Informative) Background"])
+  }
+
   /// `snippet()` puts its marker before whatever follows the match, a variation
   /// selector or a combining mark included, which makes one character with it.
   @Test func `a match marker followed by a combining scalar is still read`() {

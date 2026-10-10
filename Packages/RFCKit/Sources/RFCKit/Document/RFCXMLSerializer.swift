@@ -588,13 +588,10 @@ public struct RFCXMLSerializer: Sendable {
       func claim(_ sections: [Section]) {
         for section in sections {
           if let number = section.number, partNumbers[section.anchor] == nil {
-            // Claimed by the number, whatever the word: an annex and an appendix both
-            // `A` share their anchor.
-            let claim = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
             let partNumber = PartNumber(
               sectionNumber: number, isAppendix: section.isAppendix,
               word: section.appendixWord)
-            if claimed.insert(claim.attribute).inserted {
+            if claimed.insert(partNumber.claim.attribute).inserted {
               partNumbers[section.anchor] = partNumber.attribute
             }
           }

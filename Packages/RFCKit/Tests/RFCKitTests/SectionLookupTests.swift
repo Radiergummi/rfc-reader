@@ -54,6 +54,27 @@ struct SectionLookupTests {
       SectionLookup.sections(matching: "Section 1", in: document).map(\.anchor) == ["section-1"])
   }
 
+  /// An annex is named by the word its heading reads with (#428), `Annex B`, and one
+  /// numbered like a section by that word, not the section of its number.
+  @Test func `an annex is named by its word`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Annexes"),
+      sections: [
+        Section(anchor: "section-1", number: "1", title: "Introduction"),
+        Section(
+          anchor: "appendix-1", number: "1", title: "Examples", isAppendix: true,
+          appendixWord: .annex),
+        Section(
+          anchor: "appendix-B", number: "B", title: "Background", isAppendix: true,
+          appendixWord: .annex),
+      ],
+      source: .text)
+    #expect(
+      SectionLookup.sections(matching: "Annex B", in: document).map(\.anchor) == ["appendix-B"])
+    #expect(
+      SectionLookup.sections(matching: "Annex 1", in: document).map(\.anchor) == ["appendix-1"])
+  }
+
   @Test func `an anchor names its section`() throws {
     let document = try Fixtures.document("rfc8999.xml")
     let found = SectionLookup.sections(matching: "long-header", in: document)

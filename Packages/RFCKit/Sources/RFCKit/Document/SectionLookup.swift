@@ -30,11 +30,12 @@ public struct SectionIdentifier: Hashable, Sendable, CustomStringConvertible {
 /// The sections of a document an App Intent's section query finds (#192).
 public enum SectionLookup {
   /// What a number is announced by, `Section 4.2` or `§ 4.2`, and dropped before it
-  /// is matched. An appendix's word goes too: its letter is its number.
-  private static let numberWords: Set<String> = ["section", "sec", "§", "appendix"]
+  /// is matched. An appendix's word goes too, or an annex's (#428): its letter is its
+  /// number.
+  private static let numberWords: Set<String> = ["section", "sec", "§", "appendix", "annex"]
 
   /// The sections `query` names, in document order: the one whose number it is,
-  /// however it is announced (`4.2`, `Section 4.2.`, `§ 4.2`, `Appendix A`); else the
+  /// however it is announced (`4.2`, `Section 4.2.`, `§ 4.2`, `Appendix A`, `Annex A`); else the
   /// one whose anchor it is; else every section whose title holds all its words.
   /// Nothing typed lists them all, as the contents do.
   public static func sections(matching query: String, in document: RFCDocument) -> [Section] {
@@ -47,7 +48,7 @@ public enum SectionLookup {
     let numbered = all.filter { $0.number?.lowercased() == number }
     // An appendix numbered like a section (#429) is named by its word, and the
     // section of that number by its number alone.
-    let namesAppendix = announcement.contains { $0.hasPrefix("appendix") }
+    let namesAppendix = announcement.contains { $0.hasPrefix("appendix") || $0.hasPrefix("annex") }
     if let named = numbered.first(where: { $0.isAppendix == namesAppendix }) ?? numbered.first {
       return [named]
     }
