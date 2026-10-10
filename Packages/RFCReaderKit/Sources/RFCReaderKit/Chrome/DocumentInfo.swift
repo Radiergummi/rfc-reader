@@ -17,21 +17,20 @@ public struct DocumentInfo: Equatable, Sendable {
   /// Today's status, for the header's badge.
   public let status: PublicationStatus
   public let isObsolete: Bool
-  /// When, how long, from whom and which group: each a word or two over a caption.
+  /// How long: a word or two over a caption. When, who it is from and which group are
+  /// `provenance`'s (#364); empty when the index does not know the length.
   public let facts: [Fact]
+  /// Stream, working group and status, as one path (#364).
+  public let provenance: Provenance
   public let sections: [Section]
 
   public struct Fact: Equatable, Sendable {
     public let value: String
     public let label: String
-    /// What the fact names, for a stream or a working group: the strip opens its
-    /// entry (#362).
-    public let term: Glossary.Term?
 
-    public init(value: String, label: String, term: Glossary.Term? = nil) {
+    public init(value: String, label: String) {
       self.value = value
       self.label = label
-      self.term = term
     }
   }
 
@@ -116,6 +115,7 @@ public struct DocumentInfo: Equatable, Sendable {
     status = metadata.currentStatus
     isObsolete = metadata.isObsolete
     facts = Self.facts(metadata, locale: locale)
+    provenance = Provenance(metadata, locale: locale)
     sections = [
       Self.section(
         String(kit: "Authors", locale: locale), .list,
@@ -137,27 +137,8 @@ public struct DocumentInfo: Equatable, Sendable {
   }
 
   private static func facts(_ metadata: RFCMetadata, locale: Locale) -> [Fact] {
-    var facts = [
-      Fact(value: String(metadata.date.year), label: String(kit: "Published", locale: locale))
-    ]
-    if let pages = metadata.pageCount {
-      facts.append(Fact(value: String(pages), label: String(kit: "Pages", locale: locale)))
-    }
-    // "Independent Submission" does not fit a quarter of the panel.
-    let stream =
-      metadata.stream == .independent
-      ? String(kit: "Independent", locale: locale) : metadata.stream.displayName
-    facts.append(
-      Fact(
-        value: stream, label: String(kit: "Stream", locale: locale), term: .stream(metadata.stream))
-    )
-    if let group = metadata.namedWorkingGroup {
-      // "Working Group" is wider than a quarter of the panel.
-      facts.append(
-        Fact(
-          value: group, label: String(kit: "Group", locale: locale), term: .process(.workingGroup)))
-    }
-    return facts
+    guard let pages = metadata.pageCount else { return [] }
+    return [Fact(value: String(pages), label: String(kit: "Pages", locale: locale))]
   }
 
   private static func authors(_ own: [Author]?, else indexed: [Author]) -> [Row] {
@@ -246,20 +227,10 @@ public struct DocumentInfo: Equatable, Sendable {
     }
   }
 
-  /// What the header and the strip leave out. The status it was published with
-  /// only where it differs from today's: that is the interesting case, a Proposed
-  /// Standard since advanced, or a document since made historic.
+  /// What the header, the strip and the provenance leave out. The date and the status
+  /// it was published with are the provenance's.
   private static func details(_ metadata: RFCMetadata, locale: Locale) -> [Row] {
-    var rows = [
-      Row(
-        label: String(kit: "Published", locale: locale),
-        value: .text(metadata.date.formatted(in: locale)))
-    ]
-    let original = metadata.publicationStatus
-    if original != .unknown, original != metadata.currentStatus {
-      rows.append(
-        Row(label: String(kit: "Published as", locale: locale), value: .text(original.displayName)))
-    }
+    var rows: [Row] = []
     if let area = metadata.area {
       rows.append(Row(label: String(kit: "Area", locale: locale), value: .text(areaName(area))))
     }
