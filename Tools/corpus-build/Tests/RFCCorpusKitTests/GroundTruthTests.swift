@@ -50,15 +50,15 @@ struct GroundTruthTests {
   @Test func `a table is extracted as its rows of cells`() {
     let table = Table(
       title: nil,
-      header: [Table.Row(cells: [[.text("Bits")], [.text("Stream  Type")]])],
-      rows: [Table.Row(cells: [[.text("0x00")], [.text("Client-Initiated,"), .text(" Bidi")]])])
+      header: [Table.Row(cells: [[.text("Code")], [.text("Message  Kind")]])],
+      rows: [Table.Row(cells: [[.text("0x07")], [.text("Sender-Chosen,"), .text(" Fixed")]])])
     let blocks = GroundTruth.blocks(
       of: document([Section(anchor: "s1", number: "1", title: "Types", blocks: [.table(table)])]))
     #expect(
       blocks == [
         GroundTruth.Block(kind: .heading, content: "1 Types"),
         GroundTruth.Block(
-          kind: .table, content: "Bits | Stream Type\n0x00 | Client-Initiated, Bidi"),
+          kind: .table, content: "Code | Message Kind\n0x07 | Sender-Chosen, Fixed"),
       ])
   }
 

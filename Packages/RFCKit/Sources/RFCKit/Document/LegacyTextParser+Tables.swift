@@ -24,6 +24,11 @@ extension LegacyTextParser {
   /// A table has two columns and two rows at least: a box of one cell, or a row of
   /// fields with their widths (RFC 810's address layouts), is a drawing.
   static func boxTable(_ lines: [String]) -> BoxTable? {
+    // Nearly every block asked is no grid: told by its first line, before the rest is
+    // trimmed.
+    guard let first = lines.first(where: { !$0.isBlank }),
+      ruleColumns(first.trimmingTrailingWhitespace()) != nil
+    else { return nil }
     let lines = lines.map { $0.trimmingTrailingWhitespace() }.filter { !$0.isBlank }
     guard lines.count >= 3, let columns = ruleColumns(lines[0]), columns.count >= 3 else {
       return nil
