@@ -277,10 +277,12 @@ ios-sim: xcodeproj
 # `test-app` runs them for macOS only, so code behind `#if canImport(UIKit)` could
 # break unseen (#568). A test run needs a simulated device by name, which
 # `generic/platform=iOS Simulator` is not: `IOS_SIMULATOR`, as `run-sim` boots.
-# xcodebuild finds the package's scheme only from inside the package.
+# Not `-quiet`, which keeps Swift Testing's report of an issue out of the log and
+# names only the failing test. xcodebuild finds the package's scheme only from
+# inside the package.
 test-app-ios:
 	cd $(RFCREADERKIT) && xcodebuild test -scheme RFCReaderKit \
-	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) $(SIGNING)
 
 ## Build the app for an iOS device
 ios-app: xcodeproj
