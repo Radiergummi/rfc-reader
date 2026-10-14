@@ -4,26 +4,32 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// Which uses of a document's defined terms the reader marks (#396): the first in a
-/// paragraph, matched case-sensitively, as a whole word, the longest term where two
-/// start together, and never a common English word.
-struct DefinedTermMatcherTests {
+/// Which uses of a document's defined terms and abbreviations the reader marks
+/// (#396, #67): the first not yet marked, matched case-sensitively, as a whole word,
+/// the longest where two start together, never a common English word, nor an
+/// abbreviation right after its own expansion.
+struct GlossMatcherTests {
   private static func term(_ spelling: String) -> DefinedTerm {
     DefinedTerm(
       term: spelling, anchor: "def-\(spelling)",
       definition: [.paragraph(Paragraph(text: "What \(spelling) means."))])
   }
 
-  private static func matcher(_ spellings: String..., common: Set<String> = [])
-    -> DefinedTermMatcher
-  {
-    DefinedTermMatcher(
-      Dictionary(uniqueKeysWithValues: spellings.map { ($0, term($0)) }), commonWords: common)
+  private static func matcher(
+    _ spellings: String..., abbreviations: [Abbreviation] = [], common: Set<String> = []
+  ) -> GlossMatcher {
+    GlossMatcher(
+      Dictionary(uniqueKeysWithValues: spellings.map { ($0, term($0)) }),
+      abbreviations: Dictionary(uniqueKeysWithValues: abbreviations.map { ($0.short, $0) }),
+      commonWords: common)
   }
+
+  private static let tls = Abbreviation(
+    short: "TLS", expansion: "Transport Layer Security", sectionAnchor: "section-2")
 
   /// The words `uses` marks, in order.
   private static func marked(
-    _ matcher: DefinedTermMatcher, in text: String, skipping: Set<String> = []
+    _ matcher: GlossMatcher, in text: String, skipping: Set<String> = []
   ) -> [String] {
     matcher.uses(in: text, skipping: skipping).map { (text as NSString).substring(with: $0.range) }
   }
@@ -95,11 +101,54 @@ struct DefinedTermMatcherTests {
     let matcher = Self.matcher("relay")
     let use = try #require(matcher.uses(in: "😀 relay", skipping: []).first)
     #expect(use.range == NSRange(location: 3, length: 5))
-    #expect(use.term.term == "relay")
+    #expect(use.gloss == .term(Self.term("relay")))
+  }
+
+  @Test func `an abbreviation is marked by its short form`() throws {
+    let matcher = Self.matcher(abbreviations: [Self.tls])
+    let use = try #require(matcher.uses(in: "over TLS 1.3", skipping: []).first)
+    #expect(use.range == NSRange(location: 5, length: 3))
+    #expect(use.gloss == .abbreviation(Self.tls))
+  }
+
+  /// The card would say the words right beside it.
+  @Test func `an abbreviation in parentheses where it is expanded is not marked`() {
+    let matcher = Self.matcher(abbreviations: [Self.tls])
+    let text = "Transport Layer Security (TLS) protects it, and TLS"
+    let uses = matcher.uses(in: text, skipping: [], expanded: ["TLS"])
+    #expect(
+      uses.map(\.range.location) == [
+        (text as NSString).range(of: "TLS", options: .backwards).location
+      ])
+  }
+
+  @Test func `an abbreviation after other words in parentheses is marked`() {
+    let matcher = Self.matcher(abbreviations: [Self.tls])
+    #expect(Self.marked(matcher, in: "a secure channel (TLS)") == ["TLS"])
+  }
+
+  @Test func `an abbreviation marked in the section is not marked again`() {
+    let matcher = Self.matcher(abbreviations: [Self.tls])
+    #expect(matcher.uses(in: "over TLS", skipping: [], markedInSection: ["TLS"]).isEmpty)
+  }
+
+  /// An acronym is never a common word, as a term's is not: `ID` is marked, whatever
+  /// `id` is.
+  @Test func `an abbreviation is never common`() {
+    let matcher = Self.matcher(
+      abbreviations: [Abbreviation(short: "ID", expansion: "Identifier")], common: ["id"])
+    #expect(Self.marked(matcher, in: "the ID") == ["ID"])
+  }
+
+  /// A term's definition says more than an abbreviation's expansion.
+  @Test func `a defined term beats an abbreviation of the same spelling`() throws {
+    let matcher = Self.matcher("TLS", abbreviations: [Self.tls])
+    let use = try #require(matcher.uses(in: "over TLS", skipping: []).first)
+    #expect(use.gloss == .term(Self.term("TLS")))
   }
 
   @Test func `the bundled common words are read`() {
-    #expect(DefinedTermMatcher.bundledCommonWords.contains("client"))
-    #expect(!DefinedTermMatcher.bundledCommonWords.contains("upstream"))
+    #expect(GlossMatcher.bundledCommonWords.contains("client"))
+    #expect(!GlossMatcher.bundledCommonWords.contains("upstream"))
   }
 }
