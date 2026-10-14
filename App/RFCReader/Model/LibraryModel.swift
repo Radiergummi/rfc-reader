@@ -1459,29 +1459,41 @@ final class LibraryModel {
 
   // MARK: - Storage (#358)
 
-  /// What each tier holds, for Settings' Storage tab, once the keeper has made the
-  /// moves asked of it so far; a fetch still running is counted when it lands.
-  func storageUsage() async -> (kept: StorageUsage, cache: StorageUsage) {
+  /// What each tier holds, and what of the cache Clear Cache would remove, for
+  /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
+  /// fetch still running is counted when it lands. Nothing is clearable when the
+  /// marks cannot be read, as Clear Cache then removes nothing.
+  func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
-    return await store.storageUsage()
+    guard let spared = sparedFromClearing() else {
+      var report = await store.storageUsage(sparing: [])
+      report.clearable = StorageUsage(documents: 0, bytes: 0)
+      return report
+    }
+    return await store.storageUsage(sparing: spared)
   }
 
-  /// Empties the reading cache, but for what a window has open and what is wanted
-  /// offline, whose body waits there for the keeper to move it. The marks are read
-  /// here, as for eviction, since the store learns them only when the keeper runs;
-  /// when they cannot be read, nothing is removed.
+  /// Empties the reading cache, but for what `sparedFromClearing` spares; when that
+  /// cannot be told, nothing is removed.
   func clearCache() async {
-    let spared: Set<DocumentID>
+    guard let spared = sparedFromClearing() else { return }
+    forgetPreviews(of: await store.clearCache(sparing: spared))
+  }
+
+  /// What Clear Cache leaves in the reading cache: what a window has open, and what
+  /// is wanted offline, whose body waits there for the keeper to move it. The marks
+  /// are read here, as for eviction, since the store learns them only when the keeper
+  /// runs; nil when they cannot be read.
+  private func sparedFromClearing() -> Set<DocumentID>? {
     do {
-      spared = try OfflineMarkStore.markedDocuments(in: container.mainContext)
+      return try OfflineMarkStore.markedDocuments(in: container.mainContext)
         .union(wantedOffline).union(sceneRegistry.open.compactMap(\.selection))
     } catch {
       libraryLog.error(
-        "Clear Cache skipped, reading the marks failed: \(String(describing: error), privacy: .public)"
+        "Clear Cache spares everything, reading the marks failed: \(String(describing: error), privacy: .public)"
       )
-      return
+      return nil
     }
-    forgetPreviews(of: await store.clearCache(sparing: spared))
   }
 
   /// Keeps nothing offline any more: removes every mark, on every device, since marks

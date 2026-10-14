@@ -218,7 +218,7 @@ struct StorageSettings: View {
   /// Read when the tab shows and after each change made here, once the keeper has
   /// moved what the change asked; not watched, so a document read meanwhile in a
   /// window counts from the next time the tab shows.
-  @State private var usage: (kept: StorageUsage, cache: StorageUsage)?
+  @State private var usage: StorageReport?
   @State private var confirmsRemoval = false
 
   private var keepsBookmarks: Binding<Bool> {
@@ -261,8 +261,16 @@ struct StorageSettings: View {
           await refresh()
         }
       }
-      // Until the cache is counted too, when there is nothing yet to say it empties.
-      .disabled((usage?.cache.documents ?? 0) == 0)
+      // Until the cache is counted too, when there is nothing yet to say it empties,
+      // and while all it holds is in use.
+      .disabled((usage?.clearable.documents ?? 0) == 0)
+      if let usage, usage.cache.documents > usage.clearable.documents {
+        Text(
+          "\(usage.cache.documents - usage.clearable.documents) documents in use stay in the cache."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
     }
     .task { await refresh() }
   }

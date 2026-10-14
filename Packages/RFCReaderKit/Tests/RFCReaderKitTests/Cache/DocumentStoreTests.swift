@@ -457,13 +457,14 @@ struct DocumentStoreTests {
       _ = try await store.document(.rfc(number), formats: [.xml], client: fetcher)
     }
 
-    let usage = await store.storageUsage()
+    let usage = await store.storageUsage(sparing: [])
 
     let size = try #require(
       try sandbox.file(kept, format: .xml, in: .kept).resourceValues(forKeys: [.fileSizeKey])
         .fileSize)
     #expect(usage.kept == StorageUsage(documents: 1, bytes: size))
     #expect(usage.cache == StorageUsage(documents: 2, bytes: 2 * size))
+    #expect(usage.clearable == usage.cache, "nothing spared, so all of it")
   }
 
   /// Clear Cache empties the reading cache, and never the kept tier, a pinned body such
@@ -484,6 +485,7 @@ struct DocumentStoreTests {
       _ = try await store.document(id, formats: [.xml], client: fetcher)
     }
     await store.setWanted([kept, wanted])
+    #expect(await store.storageUsage(sparing: [open]).clearable.documents == 1, "the one read")
 
     let removed = await store.clearCache(sparing: [open])
 
@@ -492,7 +494,10 @@ struct DocumentStoreTests {
     #expect(sandbox.exists(wanted, format: .xml, in: .cache))
     #expect(sandbox.exists(open, format: .xml, in: .cache))
     #expect(await store.isKept(kept))
-    #expect(await store.storageUsage().cache.documents == 2)
+    // What is left is spared, so Settings has nothing more to offer to clear.
+    let usage = await store.storageUsage(sparing: [open])
+    #expect(usage.cache.documents == 2)
+    #expect(usage.clearable == StorageUsage(documents: 0, bytes: 0))
   }
 
   /// The kept tier can be downloaded again, so it stays out of backups.

@@ -170,6 +170,46 @@
         }
       }
     },
+    "%lld documents in use stay in the cache." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld verwendetes Dokument bleibt im Cache."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld verwendete Dokumente bleiben im Cache."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld document in use stays in the cache."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld documents in use stay in the cache."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld documents." : {
       "localizations" : {
         "de" : {

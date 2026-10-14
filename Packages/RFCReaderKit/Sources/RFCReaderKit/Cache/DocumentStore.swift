@@ -987,12 +987,15 @@ public actor DocumentStore {
 
   // MARK: - Storage (#358)
 
-  /// What each tier holds: the documents kept offline, and the reading cache.
-  public func storageUsage() -> (kept: StorageUsage, cache: StorageUsage) {
-    (
-      StorageUsage(CacheEviction.entries(in: keptDirectory)),
-      StorageUsage(CacheEviction.entries(in: cacheDirectory))
-    )
+  /// What each tier holds, the documents kept offline and the reading cache, and
+  /// what of the cache `clearCache(sparing:)` would remove given the same `pinned`.
+  public func storageUsage(sparing pinned: Set<DocumentID>) -> StorageReport {
+    let cache = CacheEviction.entries(in: cacheDirectory)
+    let spared = pinned.union(wanted)
+    return StorageReport(
+      kept: StorageUsage(CacheEviction.entries(in: keptDirectory)),
+      cache: StorageUsage(cache),
+      clearable: StorageUsage(cache.filter { !spared.contains($0.id) }))
   }
 
   /// Empties the reading cache, as Settings' Clear Cache does, but for the `pinned`

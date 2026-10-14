@@ -16,3 +16,18 @@ public struct StorageUsage: Sendable, Equatable {
     self.init(documents: entries.count, bytes: entries.reduce(0) { $0 + $1.bytes })
   }
 }
+
+/// What Settings' Storage tab states (#358): what each tier holds, and what of the
+/// reading cache Clear Cache would remove, which is less than all of it while a
+/// document there is open or wanted offline.
+public struct StorageReport: Sendable, Equatable {
+  public var kept: StorageUsage
+  public var cache: StorageUsage
+  public var clearable: StorageUsage
+
+  public init(kept: StorageUsage, cache: StorageUsage, clearable: StorageUsage) {
+    self.kept = kept
+    self.cache = cache
+    self.clearable = clearable
+  }
+}
