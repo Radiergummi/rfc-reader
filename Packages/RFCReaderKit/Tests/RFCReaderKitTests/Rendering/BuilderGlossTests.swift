@@ -142,6 +142,16 @@ struct BuilderGlossTests {
     #expect(Self.glossed(text) == ["relay", "relay"])
   }
 
+  /// The dotted underline is the reader's, not the document's: a rich copy leaves it
+  /// behind, as it does the reader's own text.
+  @Test func `a rich copy of a gloss carries no underline`() throws {
+    let text = build(Self.document(.paragraph(Paragraph(text: "The relay waits."))))
+    let rich = SelectionText.richCopy(of: text, publicURL: { $0 })
+    let offset = try Fixtures.offset(of: "relay", in: rich)
+    #expect(rich.attribute(.underlineStyle, at: offset, effectiveRange: nil) == nil)
+    #expect(rich.attribute(.underlineColor, at: offset, effectiveRange: nil) == nil)
+  }
+
   @Test func `a page for paper glosses nothing`() {
     var paper = style
     paper.emitsLinks = false

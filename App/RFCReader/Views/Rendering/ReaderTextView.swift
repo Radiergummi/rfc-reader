@@ -147,9 +147,9 @@ import RFCReaderKit
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
-    /// Go to Definition for the defined term glossed at a character (#396), or nil
-    /// where there is none, or its definition has no anchor.
-    var goToDefinition: (Int) -> (() -> Void)? = { _ in nil }
+    /// Go to Definition for the defined term glossed under the event's pointer
+    /// (#396), or nil where there is none, or its definition has no anchor.
+    var goToDefinition: (NSEvent) -> (() -> Void)? = { _ in nil }
 
     /// How far the text container reaches left into the gutter, for the headings'
     /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
@@ -422,16 +422,16 @@ import RFCReaderKit
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
       let quotes = selectedRange().length > 0
-      let definition = goToDefinition(clicked) != nil
-      guard figure != nil || quotes || definition else { return standard }
+      let definition = goToDefinition(event)
+      guard figure != nil || quotes || definition != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
-      if definition {
+      if let definition {
         let item = NSMenuItem(
           title: String(localized: "Go to Definition"), action: #selector(goToDefinitionItem(_:)),
           keyEquivalent: "")
         item.target = self
-        item.representedObject = clicked
+        item.representedObject = definition
         if !result.items.isEmpty {
           result.insertItem(.separator(), at: 0)
         }
@@ -469,8 +469,7 @@ import RFCReaderKit
     }
 
     @objc private func goToDefinitionItem(_ sender: NSMenuItem) {
-      guard let clicked = sender.representedObject as? Int else { return }
-      goToDefinition(clicked)?()
+      (sender.representedObject as? () -> Void)?()
     }
 
     @objc private func choosePresentationItem(_ sender: NSMenuItem) {

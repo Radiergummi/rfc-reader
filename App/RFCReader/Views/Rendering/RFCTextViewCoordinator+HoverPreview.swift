@@ -32,6 +32,15 @@
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
     }
 
+    /// Go to Definition for the gloss under `event`'s pointer, found as hover finds
+    /// it, by the character under the pointer rather than the nearest caret position.
+    func goToDefinition(under event: NSEvent) -> (() -> Void)? {
+      guard let textView, event.window === textView.window,
+        let gloss = reference(atWindowPoint: event.locationInWindow)?.gloss
+      else { return nil }
+      return goToDefinition(of: gloss.gloss)
+    }
+
     /// Called from `dismantleNSView`.
     func tearDownHoverTracking() {
       hover.tearDown()

@@ -428,9 +428,8 @@ struct ReaderInputs {
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
-      textView.goToDefinition = { [weak coordinator = context.coordinator] offset in
-        guard let coordinator, let gloss = coordinator.gloss(at: offset) else { return nil }
-        return coordinator.goToDefinition(of: gloss.box.gloss)
+      textView.goToDefinition = { [weak coordinator = context.coordinator] event in
+        coordinator?.goToDefinition(under: event)
       }
       textView.toggleSection = { [weak coordinator = context.coordinator] event in
         coordinator?.toggleSection(under: event) ?? false

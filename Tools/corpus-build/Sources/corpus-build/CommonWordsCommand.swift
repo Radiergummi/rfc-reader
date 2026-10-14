@@ -26,7 +26,7 @@ struct CommonWordsCommand: ParsableCommand {
   var list: String?
 
   @Option(help: "The share of documents a word must be used in to be common.")
-  var threshold: Double = 0.05
+  var threshold: Double = 0.1
 
   func run() throws {
     let corpus = try ConvertedCorpus(directory: URL(fileURLWithPath: input))

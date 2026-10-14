@@ -24,15 +24,8 @@
       // sized to its content until something lays it out.
       host.view.frame.size = host.sizeThatFits(
         in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
-      host.view.backgroundColor = .systemBackground
-      // Held as a reference's card is, and let go of when the menu ends.
-      referencePreviewHost = host
-      // A controller's view cannot be the preview itself; see the reference's.
-      let container = UIView(frame: host.view.frame)
-      host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      container.addSubview(host.view)
       return UITextItem.MenuConfiguration(
-        preview: .view(container), menu: UIMenu(title: "", children: children))
+        preview: .view(previewView(hosting: host)), menu: UIMenu(title: "", children: children))
     }
   }
 #endif

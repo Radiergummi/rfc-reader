@@ -9,20 +9,24 @@ import RFCKit
 /// the same word, the longer is the use, so `origin server` is one gloss, not `origin`.
 /// A term of one word that is a common English word, `client` or `message`, is not
 /// marked: every reader knows it, and it would be underlined in nearly every
-/// paragraph. The common words are the lower-case words used in at least a tenth of
-/// the corpus's documents, which `corpus-build common-words` measures; an acronym is
-/// never one.
+/// paragraph, nor is one capitalized, `Server`. The common words are the lower-case
+/// words used in at least a tenth of the corpus's documents, which `corpus-build
+/// common-words` measures; an acronym is never one.
 struct DefinedTermMatcher {
-  /// The terms that may be marked, grouped by their first word, longest first.
+  /// The terms that may be marked, grouped by their first word as `uses` reads words,
+  /// longest first: `X.509 certificate` under `X`.
   private let byFirstWord: [String: [DefinedTerm]]
 
   init(_ terms: [String: DefinedTerm], commonWords: Set<String> = Self.bundledCommonWords) {
     var byFirstWord: [String: [DefinedTerm]] = [:]
     for (spelling, term) in terms {
-      let words = spelling.split(whereSeparator: \.isWhitespace)
-      guard let first = words.first else { continue }
-      if words.count == 1, commonWords.contains(spelling) { continue }
-      byFirstWord[String(first), default: []].append(term)
+      let string = spelling as NSString
+      let first = Self.word(in: string, at: 0)
+      guard first.length > 0 else { continue }
+      if !spelling.contains(where: \.isWhitespace), Self.isCommon(spelling, in: commonWords) {
+        continue
+      }
+      byFirstWord[string.substring(with: first), default: []].append(term)
     }
     self.byFirstWord = byFirstWord.mapValues {
       $0.sorted { $0.term.utf16.count > $1.term.utf16.count }
@@ -47,20 +51,27 @@ struct DefinedTermMatcher {
         continue
       }
       let first = string.substring(with: word)
-      let candidates = byFirstWord[first] ?? []
-      if let term = candidates.first(where: { candidate in
-        !marked.contains(candidate.term)
-          && Self.isWholeWord(candidate.term, in: string, at: location)
-      }) {
+      // The longest term used here is the use, marked or not: once marked, it is
+      // passed over whole, and the shorter one inside it is not its use.
+      let used = byFirstWord[first]?.first { Self.isWholeWord($0.term, in: string, at: location) }
+      if let term = used {
         let range = NSRange(location: location, length: term.term.utf16.count)
+        location = NSMaxRange(range)
+        guard !marked.contains(term.term) else { continue }
         found.append((range, term))
         marked.insert(term.term)
-        location = NSMaxRange(range)
       } else {
         location = NSMaxRange(word)
       }
     }
     return found
+  }
+
+  /// Whether `word` is a common word, or one capitalized: `Server` as `server`. An
+  /// acronym is neither, `IP` not `iP`.
+  private static func isCommon(_ word: String, in commonWords: Set<String>) -> Bool {
+    guard let first = word.first else { return false }
+    return commonWords.contains(first.lowercased() + word.dropFirst())
   }
 
   /// The word starting at `location`, as `uses` reads words: letters and digits, with

@@ -60,6 +60,27 @@ struct DefinedTermMatcherTests {
       Self.marked(matcher, in: "an origin server and an origin") == ["origin server", "origin"])
   }
 
+  /// Once marked, the longer term is passed over whole: the shorter one starting at
+  /// the same word is not its use.
+  @Test func `a longer term already marked is not glossed as the shorter term`() {
+    let matcher = Self.matcher("origin", "origin server")
+    #expect(
+      Self.marked(matcher, in: "an origin server, an origin server", skipping: ["origin server"])
+        .isEmpty)
+  }
+
+  @Test func `a common word capitalized as a term is common too, an acronym is not`() {
+    let matcher = Self.matcher("Server", "IP", common: ["server", "ip"])
+    #expect(Self.marked(matcher, in: "Server and IP") == ["IP"])
+  }
+
+  @Test func `a term whose first word holds punctuation is found`() {
+    let matcher = Self.matcher("X.509 certificate", "TCP/IP stack")
+    #expect(
+      Self.marked(matcher, in: "an X.509 certificate on a TCP/IP stack")
+        == ["X.509 certificate", "TCP/IP stack"])
+  }
+
   @Test func `a common word is not marked, but a term of several common words is`() {
     let matcher = Self.matcher("client", "user agent", common: ["client", "user", "agent"])
     #expect(Self.marked(matcher, in: "a client and a user agent") == ["user agent"])

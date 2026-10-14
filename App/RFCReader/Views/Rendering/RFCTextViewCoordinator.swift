@@ -527,8 +527,20 @@ final class RFCTextViewCoordinator: NSObject {
         host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         host.view.frame.size = size
       }
-      // Opaque, as a context-menu preview's view is expected to be: neither preview
-      // has a background of its own, because on macOS the popover supplies one.
+      let container = previewView(hosting: host)
+      let menu = referenceMenu(
+        defaultMenu,
+        sharing: LinkCopy.forLink(
+          url, from: documentID, in: environment.library.index, bibliography: bibliography),
+        from: textView, at: range)
+      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+    }
+
+    /// `host`'s view as a long-press preview: a reference's card or document, or a
+    /// gloss's card (#396). Opaque, as a context-menu preview's view is expected to
+    /// be: none has a background of its own, because on macOS the popover supplies
+    /// one. Held until the menu ends (`textItemMenuWillEndFor`).
+    func previewView(hosting host: UIHostingController<AnyView>) -> UIView {
       host.view.backgroundColor = .systemBackground
       referencePreviewHost = host
       // UIKit makes the preview view the view of a controller of its own, which
@@ -538,12 +550,7 @@ final class RFCTextViewCoordinator: NSObject {
       let container = UIView(frame: host.view.frame)
       host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       container.addSubview(host.view)
-      let menu = referenceMenu(
-        defaultMenu,
-        sharing: LinkCopy.forLink(
-          url, from: documentID, in: environment.library.index, bibliography: bibliography),
-        from: textView, at: range)
-      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+      return container
     }
 
     /// A document preview holds a whole second build, so it goes with its menu

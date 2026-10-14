@@ -117,10 +117,6 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// What makes a run a link: the URL, and the underline when the reader asked
-  /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
-  /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
-  /// the link color with the underline, since nothing else colors it there.
   /// `text` in `attributes`, with the first use in the paragraph of each defined term
   /// glossed (#396): a box of its own, and a dotted underline in the secondary color,
   /// quieter than a link's. Outside a paragraph, and inside a link, it is plain.
@@ -151,6 +147,10 @@ extension DocumentTextBuilder {
     return result
   }
 
+  /// What makes a run a link: the URL, and the underline when the reader asked
+  /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
+  /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
+  /// the link color with the underline, since nothing else colors it there.
   func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }

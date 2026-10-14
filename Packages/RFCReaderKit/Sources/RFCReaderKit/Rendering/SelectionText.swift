@@ -162,6 +162,12 @@ public enum SelectionText {
         result.removeAttribute(.link, range: range)
       }
     }
+    // A gloss's dotted underline is the reader's mark, not the document's (#396).
+    result.enumerateAttribute(.rfcGloss, in: whole) { value, range, _ in
+      guard value != nil else { return }
+      result.removeAttribute(.underlineStyle, range: range)
+      result.removeAttribute(.underlineColor, range: range)
+    }
     return result
   }
 
