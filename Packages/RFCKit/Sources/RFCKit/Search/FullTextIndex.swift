@@ -228,37 +228,78 @@ public struct Snippet: Sendable, Hashable {
 
   /// The sections that hold every word of `query`, best first. A quoted run is a
   /// phrase; everything else is words, whatever FTS5 would make of it.
-  public func search(_ query: String, limit: Int = 50) throws -> [SectionHit] {
-    guard let match = Self.matchExpression(for: query) else { return [] }
-    // `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
-    // `snippet()` runs for the rows returned only, not for every section that matched.
-    // The snippet is the body's (column 4): left to choose, FTS5 takes a heading that
-    // matches as often, which the result shows already.
+  ///
+  /// `includes`, when given, says which documents a hit may be in: a query's
+  /// qualifiers narrow its section hits as they narrow its RFC rows (#37). Up to
+  /// `limit` of the hits it allows are returned, in the order of the whole search.
+  public func search(
+    _ query: String, limit: Int = 50, where includes: ((DocumentID) -> Bool)? = nil
+  ) throws -> [SectionHit] {
+    guard let match = Self.matchExpression(for: query), limit > 0 else { return [] }
+    let rows = try rankedRows(matching: match, limit: limit, where: includes)
+    guard !rows.isEmpty else { return [] }
+    // `snippet()` is made only for the rows kept, in a second statement: in the first
+    // it would be made for every row the predicate refuses too. It needs the match in
+    // its own statement. The snippet is the body's (column 4): left to choose, FTS5
+    // takes a heading that matches as often, which the result shows already.
     let statement = try unsafe prepare(
       """
-      SELECT document, anchor, number, heading,
+      SELECT rowid, document, anchor, number, heading,
         snippet(sections, 4, char(57344), char(57345), '…', 16)
-      FROM sections WHERE sections MATCH ? ORDER BY rank LIMIT ?
+      FROM sections WHERE sections MATCH ?
+        AND rowid IN (\(Array(repeating: "?", count: rows.count).joined(separator: ",")))
       """)
     defer { unsafe sqlite3_finalize(statement) }
     try unsafe bind(match, at: 1, in: statement)
-    try check(unsafe sqlite3_bind_int64(statement, 2, Int64(limit)))
-    var hits: [SectionHit] = []
+    for (offset, row) in rows.enumerated() {
+      try check(unsafe sqlite3_bind_int64(statement, Int32(offset + 2), row))
+    }
+    var hits: [Int64: SectionHit] = [:]
     while true {
       let result = unsafe sqlite3_step(statement)
       guard result == SQLITE_ROW else {
         guard result == SQLITE_DONE else { throw Failure(description: message) }
-        return hits
+        return rows.compactMap { hits[$0] }
       }
-      guard let id = unsafe column(0, of: statement).flatMap(DocumentID.init(fileStem:)),
-        let anchor = unsafe column(1, of: statement)
+      guard let id = unsafe column(1, of: statement).flatMap(DocumentID.init(fileStem:)),
+        let anchor = unsafe column(2, of: statement)
       else { continue }
-      hits.append(
-        SectionHit(
-          document: id, anchor: anchor, number: unsafe column(2, of: statement),
-          heading: unsafe column(3, of: statement) ?? "",
-          snippet: Self.snippet(marked: unsafe column(4, of: statement) ?? "")))
+      hits[unsafe sqlite3_column_int64(statement, 0)] = SectionHit(
+        document: id, anchor: anchor, number: unsafe column(3, of: statement),
+        heading: unsafe column(4, of: statement) ?? "",
+        snippet: Self.snippet(marked: unsafe column(5, of: statement) ?? ""))
     }
+  }
+
+  /// The rows of up to `limit` sections matching `match` that `includes` allows, best
+  /// first. `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself,
+  /// so the rows are read only until `limit` are allowed.
+  private func rankedRows(
+    matching match: String, limit: Int, where includes: ((DocumentID) -> Bool)?
+  ) throws -> [Int64] {
+    let statement = try unsafe prepare(
+      "SELECT rowid, document FROM sections WHERE sections MATCH ? ORDER BY rank")
+    defer { unsafe sqlite3_finalize(statement) }
+    try unsafe bind(match, at: 1, in: statement)
+    var rows: [Int64] = []
+    // Each document asked about once, however many of its sections match.
+    var allowed: [String: Bool] = [:]
+    while rows.count < limit {
+      let result = unsafe sqlite3_step(statement)
+      guard result == SQLITE_ROW else {
+        guard result == SQLITE_DONE else { throw Failure(description: message) }
+        break
+      }
+      if let includes {
+        guard let stem = unsafe column(1, of: statement) else { continue }
+        if allowed[stem] == nil {
+          allowed[stem] = DocumentID(fileStem: stem).map(includes) ?? false
+        }
+        guard allowed[stem] == true else { continue }
+      }
+      rows.append(unsafe sqlite3_column_int64(statement, 0))
+    }
+    return rows
   }
 
   /// `query` as an FTS5 match expression: each word, or each quoted run, as an FTS5

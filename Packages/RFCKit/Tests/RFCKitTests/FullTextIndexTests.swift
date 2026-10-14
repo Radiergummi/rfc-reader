@@ -166,6 +166,31 @@ final class FullTextIndexTests {
     #expect(try index.search("\"negotiation intermediaries\"").isEmpty)
   }
 
+  /// A query's qualifiers narrow the section hits to the RFCs they allow (#37,
+  /// 2026-10-14): the hits the predicate refuses are skipped, and up to `limit` of
+  /// the rest are returned, not `limit` less those it refused.
+  @Test func `a predicate narrows the hits and still fills the limit`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+    try index.add(Fixtures.document("rfc2119.txt"))
+    #expect(try Set(index.search("the", limit: 100).map(\.document)) == [.rfc(8999), .rfc(2119)])
+
+    let hits = try index.search("the", limit: 3) { $0 == .rfc(2119) }
+    #expect(hits.count == 3)
+    #expect(hits.allSatisfy { $0.document == .rfc(2119) })
+  }
+
+  /// The hits a predicate keeps are in the order the whole search ranks them.
+  @Test func `a predicate keeps the hits in rank order`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    let ranked = try index.search("the", limit: 1_000).filter { $0.document == .rfc(8999) }
+    let narrowed = try index.search("the", limit: 1_000) { $0 == .rfc(8999) }
+    #expect(narrowed == ranked)
+  }
+
   @Test func `adding a document again replaces it`() throws {
     let index = try index()
     let document = try Fixtures.document("rfc8999.xml")
