@@ -235,9 +235,9 @@ public struct Snippet: Sendable, Hashable {
   /// phrase; everything else is words, whatever FTS5 would make of it.
   ///
   /// `section`, when given, keeps only the sections whose heading holds it, as a
-  /// phrase, or whose anchor does (`section:`, #37). With no words, those sections are
-  /// the hits, in the order they were indexed, each with its opening words for a
-  /// snippet.
+  /// phrase, or that it names by anchor or number, with the sections under them
+  /// (`section:`, #37). With no words, those sections are the hits, newest RFC first
+  /// and each RFC's in its own order, each with its opening words for a snippet.
   ///
   /// `includes`, when given, says which documents a hit may be in: a query's
   /// qualifiers narrow its section hits as they narrow its RFC rows (#37). Up to
@@ -259,7 +259,7 @@ public struct Snippet: Sendable, Hashable {
     let statement = try unsafe prepare(
       match == nil
         ? """
-        SELECT rowid, document, anchor, number, heading, substr(body, 1, 400)
+        SELECT rowid, document, anchor, number, heading, substr(body, 1, \(Self.openingLength + 1))
         FROM sections WHERE rowid IN (\(placeholders))
         """
         : """
@@ -296,7 +296,8 @@ public struct Snippet: Sendable, Hashable {
   }
 
   /// The rows of up to `limit` sections matching `match` and `section` that `includes`
-  /// allows, best first, or in the order they were indexed when there is no match.
+  /// allows, best first, or with no match newest RFC first and each RFC's in the order
+  /// its sections were indexed, which is the document's.
   /// `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
   /// the rows are read only until `limit` are allowed.
   private func rankedRows(
@@ -316,7 +317,9 @@ public struct Snippet: Sendable, Hashable {
     }
     let statement = try unsafe prepare(
       "SELECT rowid, document FROM sections WHERE \(conditions.joined(separator: " AND ")) "
-        + (match == nil ? "ORDER BY rowid" : "ORDER BY rank"))
+        + (match == nil
+          ? "ORDER BY CAST(ltrim(document, 'abcdefghijklmnopqrstuvwxyz') AS INTEGER) DESC, rowid"
+          : "ORDER BY rank"))
     defer { unsafe sqlite3_finalize(statement) }
     for (offset, value) in values.enumerated() {
       try unsafe bind(value, at: Int32(offset + 1), in: statement)
@@ -343,31 +346,43 @@ public struct Snippet: Sendable, Hashable {
   }
 
   /// What `section:` asks of a row: that its heading holds `section` as a phrase, or
-  /// its anchor holds it as it is written, `content-negotiation` or `section-6`. The
-  /// heading is matched in a subquery, as FTS5 takes no match beside an `OR`; a value
-  /// with no word in it is matched against the anchor alone.
+  /// that `section` is its anchor or number, or the anchor or number of a section it is
+  /// under: `section-1` and `1` are section 1 and 1.2, never 10. The heading is matched
+  /// in a subquery, as FTS5 takes no match beside an `OR`; a value with no word in it
+  /// is matched against the anchor and the number alone.
   static func condition(forSection section: String) -> (sql: String, values: [String]) {
     let escaped = section.replacing("\\", with: "\\\\").replacing("%", with: "\\%")
       .replacing("_", with: "\\_")
-    let anchor = "anchor LIKE ? ESCAPE '\\'"
-    let pattern = "%\(escaped)%"
+    let names = """
+      anchor = ? OR anchor LIKE ? ESCAPE '\\' OR anchor LIKE ? ESCAPE '\\'
+        OR number = ? OR number LIKE ? ESCAPE '\\'
+      """
+    let values = [section, "\(escaped).%", "\(escaped)-%", section, "\(escaped).%"]
     guard section.contains(where: { $0.isLetter || $0.isNumber }) else {
-      return (anchor, [pattern])
+      return ("(\(names))", values)
     }
     let heading = "heading : \"" + section.replacing("\"", with: "\"\"") + "\""
     return (
-      "(rowid IN (SELECT rowid FROM sections WHERE sections MATCH ?) OR \(anchor))",
-      [heading, pattern]
+      "(rowid IN (SELECT rowid FROM sections WHERE sections MATCH ?) OR \(names))",
+      [heading] + values
     )
   }
+
+  /// How much of a section's text is read for its opening words.
+  private static let openingLength = 400
 
   /// The opening words of a section's text, for a hit with no words to show around:
   /// its white space as a snippet's, cut at a word a little short of a row's three
   /// lines.
+  /// `text` is the first `openingLength` characters of the section and one more, so
+  /// a text cut there says so with an ellipsis too.
   static func opening(of text: String) -> Snippet {
-    let whole = snippet(marked: text).text
+    let isCut = text.count > openingLength
+    let whole = snippet(marked: String(text.prefix(openingLength))).text
     let length = 160
-    guard whole.count > length else { return Snippet(text: whole, matches: []) }
+    guard whole.count > length else {
+      return Snippet(text: isCut ? whole + "…" : whole, matches: [])
+    }
     let cut = whole.prefix(length)
     let words = cut.lastIndex(of: " ").map { cut[..<$0] } ?? cut
     return Snippet(text: words + "…", matches: [])

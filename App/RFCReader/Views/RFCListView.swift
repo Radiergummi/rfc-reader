@@ -98,6 +98,10 @@ struct RFCListView: View {
     let rows = self.rows
     let textFound = self.textFound
     let hasTextHits = textFound.map { !$0.hits.isEmpty } ?? false
+    // A query naming a section has no RFC rows, only section hits: until they arrive
+    // it has found nothing yet, not nothing.
+    let awaitsSections =
+      textFound == nil && IndexSearch.parseQuery(shown.query).filters.section != nil
     // How much the full-text index holds of what the search could look in, so a hit
     // it does not have does not read as "no RFC says this".
     let searched = textFound.map { found in
@@ -236,7 +240,7 @@ struct RFCListView: View {
     .overlay {
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
-      if rows.isEmpty, navigation.listed != nil, !hasTextHits {
+      if rows.isEmpty, navigation.listed != nil, !hasTextHits, !awaitsSections {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery

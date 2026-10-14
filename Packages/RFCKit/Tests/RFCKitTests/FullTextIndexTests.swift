@@ -209,6 +209,37 @@ final class FullTextIndexTests {
     #expect(try index.search("interoperation", section: "section-6").map(\.number) == ["6"])
   }
 
+  /// An anchor or a number names a section and the ones under it, never one that only
+  /// holds it: `section-1` and `1` are not section 10.
+  @Test func `a section's anchor or number matches it and its subsections only`() throws {
+    let index = try index()
+    let sections = [("section-1", "1"), ("section-1.2", "1.2"), ("section-10", "10")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: "Body", blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(
+      try index.search("words", section: "section-1").map(\.anchor) == ["section-1", "section-1.2"])
+    #expect(try index.search("words", section: "1").map(\.anchor) == ["section-1", "section-1.2"])
+    #expect(try index.search("", section: "1.2").map(\.anchor) == ["section-1.2"])
+  }
+
+  /// With no words to rank them, sections are listed newest RFC first, each RFC's in
+  /// its own order, whatever order the documents were indexed in.
+  @Test func `a section without words lists the newest RFC first`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    let hits = try index.search("", section: "security")
+    #expect(hits.map(\.document).first == .rfc(8999))
+    #expect(hits.map(\.document).last == .rfc(2119))
+  }
+
   /// `section:security in:9110` goes to a section without a word to search for. The
   /// snippet is the section's opening words, with nothing marked.
   @Test func `a section without words lists the sections that match`() throws {
