@@ -34,7 +34,7 @@ The hover card of a rule link shows the rule's definition, its lines as the bloc
 `ABNF.parse` reports the UTF-16 range of every definition and use in the text as given.
 A name defined twice, and a count running into hex digits (`4c0ffee`), parse: a block its author typed `abnf` is linked whatever its mistakes.
 Only `ABNF.recognizes` refuses them, so what the legacy parser types as ABNF does not change.
-`|` alternation, as RFC 822 and RFC 2616 write it, is still not ABNF: accepting it would change what thousands of legacy blocks are typed as, and needs its own corpus-measured change.
+`|` alternation, as RFC 1945 and RFC 2616 write it, is still not ABNF: accepting it would change what thousands of legacy blocks are typed as, and needs its own corpus-measured change.
 
 **The collected grammar.**
 A document with a grammar can be saved as one `.abnf` file (`GrammarExport`, offered beside PDF): every grammar block in document order, without the indentation the document set it at, each headed by its section in a comment.
