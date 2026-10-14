@@ -1191,6 +1191,16 @@
         }
       }
     },
+    "Go to Definition" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Definition"
+          }
+        }
+      }
+    },
     "Go to RFC" : {
       "localizations" : {
         "de" : {

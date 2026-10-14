@@ -374,6 +374,24 @@ final class RFCTextViewCoordinator: NSObject {
     textView?.textLayoutManager?.attributedText?.reference(at: offset)
   }
 
+  // MARK: - Glosses (#396)
+
+  /// The gloss at this absolute character offset, and its whole extent: what its
+  /// card is anchored to, on hover and force click on macOS and long press on iOS.
+  func gloss(at offset: Int) -> (box: GlossBox, range: NSRange)? {
+    textView?.textLayoutManager?.attributedText?.gloss(at: offset)
+  }
+
+  /// Go to Definition for `gloss`, from its menu: the definition's anchor followed
+  /// here, as a link to it would be, so Back returns. Nil for a definition with no
+  /// anchor, which has nowhere to go.
+  func goToDefinition(of gloss: Gloss) -> (() -> Void)? {
+    guard let anchor = gloss.anchor,
+      let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
+    else { return nil }
+    return { [weak self] in _ = self?.onLink(url, .here) }
+  }
+
   /// The link a reference's runs carry. Read from the storage rather than from
   /// what the platform says was pressed: a chip's leading glyph is an attachment,
   /// which UIKit reports as one, not as the link it is part of. Nil past the end,
@@ -459,7 +477,9 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
-      if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
+      if case .tag = textItem.content {
+        return glossMenu(for: textItem, in: textView) ?? figureMenu(for: textItem, in: textView)
+      }
       // A backlink caption's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
       if backlinkCaption(at: textItem.range.location) != nil { return nil }
@@ -507,8 +527,20 @@ final class RFCTextViewCoordinator: NSObject {
         host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         host.view.frame.size = size
       }
-      // Opaque, as a context-menu preview's view is expected to be: neither preview
-      // has a background of its own, because on macOS the popover supplies one.
+      let container = previewView(hosting: host)
+      let menu = referenceMenu(
+        defaultMenu,
+        sharing: LinkCopy.forLink(
+          url, from: documentID, in: environment.library.index, bibliography: bibliography),
+        from: textView, at: range)
+      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+    }
+
+    /// `host`'s view as a long-press preview: a reference's card or document, or a
+    /// gloss's card (#396). Opaque, as a context-menu preview's view is expected to
+    /// be: none has a background of its own, because on macOS the popover supplies
+    /// one. Held until the menu ends (`textItemMenuWillEndFor`).
+    func previewView(hosting host: UIHostingController<AnyView>) -> UIView {
       host.view.backgroundColor = .systemBackground
       referencePreviewHost = host
       // UIKit makes the preview view the view of a controller of its own, which
@@ -518,12 +550,7 @@ final class RFCTextViewCoordinator: NSObject {
       let container = UIView(frame: host.view.frame)
       host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       container.addSubview(host.view)
-      let menu = referenceMenu(
-        defaultMenu,
-        sharing: LinkCopy.forLink(
-          url, from: documentID, in: environment.library.index, bibliography: bibliography),
-        from: textView, at: range)
-      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+      return container
     }
 
     /// A document preview holds a whole second build, so it goes with its menu

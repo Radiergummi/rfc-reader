@@ -1,16 +1,28 @@
 import CoreGraphics
 import Foundation
 
-/// A reference under the pointer: the box that identifies it, and its whole extent,
-/// which a preview is anchored to.
+/// A reference or a gloss under the pointer: the box that identifies it, and its
+/// whole extent, which a preview is anchored to. A gloss (#396) previews as a card,
+/// as a reference to a place in the document does, and never as a document.
 public struct HoverTarget: Equatable {
-  public let box: ReferenceBox
+  /// The `ReferenceBox` or `GlossBox` it is, compared by identity.
+  public let box: NSObject
   public let range: NSRange
 
   public init(box: ReferenceBox, range: NSRange) {
     self.box = box
     self.range = range
   }
+
+  public init(gloss: GlossBox, range: NSRange) {
+    self.box = gloss
+    self.range = range
+  }
+
+  /// The reference it is, if it is one.
+  public var reference: ReferenceBox? { box as? ReferenceBox }
+  /// The gloss it is, if it is one.
+  public var gloss: GlossBox? { box as? GlossBox }
 
   /// By the box's identity: there is one per reference, so two adjacent references
   /// to the same target are still two hovers.
@@ -37,6 +49,16 @@ public struct ReferenceHover {
     case card(HoverTarget)
     /// After a scroll: whatever reference the text came to rest under the pointer.
     case restingPointer
+
+    /// How long the pointer must rest. A reference is a chip or a link, pointed at
+    /// on purpose; a gloss is a word of the prose the pointer passes over as it
+    /// reads, so its card waits longer, and a force click shows it at once (#396).
+    public var duration: Duration {
+      switch self {
+      case .card(let target) where target.gloss != nil: .seconds(2)
+      case .card, .restingPointer: .milliseconds(500)
+      }
+    }
   }
 
   public enum Presentation: Equatable {
@@ -119,11 +141,11 @@ public struct ReferenceHover {
   /// from the text. A force click still previews.
   public var previewsOnHover = true
 
-  /// The reference the pointer is over, timing or already previewed.
-  public private(set) var hovered: ReferenceBox?
+  /// The reference or gloss the pointer is over, timing or already previewed.
+  public private(set) var hovered: NSObject?
   /// The reference a force click just previewed, whose own mouse-up must not
   /// follow it. The next mouse-down starts a click of its own, and forgets it.
-  public private(set) var forceClicked: ReferenceBox?
+  public private(set) var forceClicked: NSObject?
   public private(set) var dwell: Dwell?
   public private(set) var presentation: Presentation?
   /// The card on its way to the screen was chosen from the menu.

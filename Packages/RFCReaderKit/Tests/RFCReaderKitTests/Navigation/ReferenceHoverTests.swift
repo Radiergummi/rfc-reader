@@ -15,6 +15,11 @@ struct ReferenceHoverTests {
   private let second = HoverTarget(
     box: ReferenceBox(CrossReference(target: .anchor("RFC8174"))),
     range: NSRange(location: 40, length: 9))
+  /// A defined term's first use in a paragraph (#396).
+  private let gloss = HoverTarget(
+    gloss: GlossBox(
+      .term(DefinedTerm(term: "relay", anchor: "def-relay", definition: []))),
+    range: NSRange(location: 60, length: 5))
   private let here = CGPoint(x: 100, y: 100)
   private let elsewhere = CGPoint(x: 300, y: 100)
 
@@ -34,6 +39,43 @@ struct ReferenceHoverTests {
     #expect(
       hover.handle(.pointerMoved(location: here, target: first)) == [.startDwell(.card(first))])
     #expect(hover.handle(.cardDwellElapsed(buttonPressed: false)) == [.showCard(first)])
+  }
+
+  // MARK: - Glosses (#396)
+
+  @Test func `a gloss under the pointer shows its card once the dwell ends`() {
+    var hover = ReferenceHover()
+    #expect(
+      hover.handle(.pointerMoved(location: here, target: gloss)) == [.startDwell(.card(gloss))])
+    #expect(hover.handle(.cardDwellElapsed(buttonPressed: false)) == [.showCard(gloss)])
+    #expect(hover.hovered === gloss.box)
+  }
+
+  @Test func `moving from a gloss to a reference closes its card and times the reference`() {
+    var hover = showingCard(gloss)
+    #expect(
+      hover.handle(.pointerMoved(location: elsewhere, target: first)) == [
+        .closePopover, .startDwell(.card(first)),
+      ])
+  }
+
+  /// A gloss is plain text, passed over as the pointer reads: its card waits
+  /// longer, and a force click shows it at once (#396).
+  @Test func `a gloss's card waits longer than a reference's`() {
+    #expect(ReferenceHover.Dwell.card(gloss).duration == .seconds(2))
+    #expect(ReferenceHover.Dwell.card(first).duration == .milliseconds(500))
+    #expect(ReferenceHover.Dwell.restingPointer.duration == .milliseconds(500))
+  }
+
+  @Test func `a force click on a gloss shows its card`() {
+    var hover = ReferenceHover()
+    #expect(hover.handle(.forceClickCard(gloss)) == [.showCard(gloss)])
+  }
+
+  @Test func `a gloss and a reference are told apart by their boxes`() {
+    #expect(gloss.gloss != nil && gloss.reference == nil)
+    #expect(first.reference != nil && first.gloss == nil)
+    #expect(gloss != first)
   }
 
   @Test func `moving within the same reference does not restart its dwell`() {
@@ -171,7 +213,7 @@ struct ReferenceHoverTests {
     var hover = ReferenceHover()
     _ = hover.handle(.pointerMoved(location: here, target: first))
     #expect(
-      hover.handle(.clickedLink(reference: first.box, pointer: here)) == [
+      hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [
         .cancelDwell, .followLink,
       ])
   }
@@ -179,7 +221,7 @@ struct ReferenceHoverTests {
   @Test
   func `nothing previews after following a link until the pointer moves from where it clicked`() {
     var hover = ReferenceHover()
-    _ = hover.handle(.clickedLink(reference: first.box, pointer: here))
+    _ = hover.handle(.clickedLink(reference: first.reference, pointer: here))
     // The jump the click caused is not the reader resting on what it landed on.
     #expect(hover.handle(.scrolled).isEmpty)
     // A move event is not proof the pointer moved.
@@ -193,7 +235,7 @@ struct ReferenceHoverTests {
 
   @Test func `a move whose target the rules would drop asks for no hit test`() {
     var afterLink = ReferenceHover()
-    _ = afterLink.handle(.clickedLink(reference: first.box, pointer: here))
+    _ = afterLink.handle(.clickedLink(reference: first.reference, pointer: here))
     #expect(!afterLink.wantsTarget(at: here))
     #expect(afterLink.wantsTarget(at: elsewhere))
 
@@ -212,10 +254,11 @@ struct ReferenceHoverTests {
     var hover = ReferenceHover()
     #expect(hover.handle(.forceClickCard(first)) == [.showCard(first)])
     _ = hover.handle(.cardShown)
-    #expect(hover.handle(.clickedLink(reference: first.box, pointer: here)) == [.swallowClick])
+    #expect(
+      hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [.swallowClick])
     // Swallowed once: the next click on it follows.
     #expect(
-      hover.handle(.clickedLink(reference: first.box, pointer: here)) == [
+      hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [
         .closePopover, .followLink,
       ])
   }
@@ -223,7 +266,8 @@ struct ReferenceHoverTests {
   @Test func `a force click on a card showing adds nothing, and swallows its click`() {
     var hover = showingCard(first)
     #expect(hover.handle(.forceClickCard(first)).isEmpty)
-    #expect(hover.handle(.clickedLink(reference: first.box, pointer: here)) == [.swallowClick])
+    #expect(
+      hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [.swallowClick])
   }
 
   @Test func `a mouse-down after a force click is a click of its own, and follows`() {
@@ -231,13 +275,14 @@ struct ReferenceHoverTests {
     _ = hover.handle(.forceClickCard(first))
     _ = hover.handle(.cardShown)
     _ = hover.handle(.mouseDown(withControl: false))
-    #expect(hover.handle(.clickedLink(reference: first.box, pointer: here)) == [.followLink])
+    #expect(hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [.followLink])
   }
 
   @Test func `a click on another reference after a force click follows it`() {
     var hover = ReferenceHover()
     _ = hover.handle(.forceClickCard(first))
-    #expect(hover.handle(.clickedLink(reference: second.box, pointer: here)).contains(.followLink))
+    #expect(
+      hover.handle(.clickedLink(reference: second.reference, pointer: here)).contains(.followLink))
   }
 
   @Test func `a force click on a document replaces a hover card with the document preview`() {
@@ -301,7 +346,7 @@ struct ReferenceHoverTests {
     _ = hover.handle(.cardChosen(first))
     _ = hover.handle(.cardShown)
     #expect(hover.handle(.mouseDown(withControl: false)) == [.closePopover])
-    #expect(hover.handle(.clickedLink(reference: first.box, pointer: here)) == [.followLink])
+    #expect(hover.handle(.clickedLink(reference: first.reference, pointer: here)) == [.followLink])
   }
 
   @Test func `a card shown after a chosen one closes as a hover card does`() {

@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -531,6 +531,18 @@ corpus-index: corpus-tool
 # expansions (#67). Not part of `corpus`: it measures the corpus rather than builds it.
 corpus-abbreviations: corpus-tool
 	$(CORPUS_BIN) abbreviations --in $(CORPUS)/xml.noindex --out $(CORPUS)/abbreviations.json
+
+## Measure word frequency across the converted corpus, and write the common words
+# The reader skips a defined term that is a common English word (#396): the lower-case
+# words used in at least COMMON_WORDS_THRESHOLD of the documents, committed as
+# RFCReaderKit's CommonWords.txt, a word list and no RFC text. corpus/common-words.json
+# reports what each candidate threshold would skip. Not part of `corpus`: the list is
+# made again only when the threshold or the corpus moves.
+COMMON_WORDS_THRESHOLD ?= 0.1
+corpus-common-words: corpus-tool
+	$(CORPUS_BIN) common-words --in $(CORPUS)/xml.noindex --report $(CORPUS)/common-words.json \
+	  --list Packages/RFCReaderKit/Sources/RFCReaderKit/Resources/CommonWords.txt \
+	  --threshold $(COMMON_WORDS_THRESHOLD)
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

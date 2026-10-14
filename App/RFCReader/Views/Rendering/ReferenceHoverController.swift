@@ -26,6 +26,14 @@
     /// apart by the button still held, which `ReferenceHover` checks.
     private var dwellTask: Task<Void, Never>?
     private var popover: NSPopover?
+    /// What each popover is shown from: a view of its own over the anchor, never the
+    /// text view (#396). AppKit finds a popover's accessibility parent by hit-testing
+    /// the view it is shown from at the anchor, and the text view answers that, over
+    /// plain text, by listing every link in the document as a child, again for each
+    /// child it registers: over a gloss in RFC 9110 the main thread never came back.
+    /// Over a link it finds the link at once, which is why a reference's card never
+    /// hung. Clicks go through it to the text.
+    private var anchorView: PopoverAnchor?
 
     /// The reference under a point in window coordinates.
     var target: (NSPoint) -> HoverTarget? = { _ in nil }
@@ -71,6 +79,8 @@
       send(.reset)
       if let trackingArea { textView?.removeTrackingArea(trackingArea) }
       trackingArea = nil
+      anchorView?.removeFromSuperview()
+      anchorView = nil
     }
 
     // MARK: - Events
@@ -141,7 +151,7 @@
     private func startDwell(_ dwell: ReferenceHover.Dwell) {
       dwellTask?.cancel()
       dwellTask = Task { [weak self] in
-        try? await Task.sleep(for: .milliseconds(500))
+        try? await Task.sleep(for: dwell.duration)
         guard !Task.isCancelled, let self else { return }
         self.dwellTask = nil
         switch dwell {
@@ -183,10 +193,20 @@
       shown.behavior = .transient
       shown.delegate = self
       shown.contentViewController = content.content
-      if let size = content.size { shown.contentSize = size }
+      // Sized before it is shown, to its content where the caller gives no size. A
+      // card shown at the popover's default size and shrunk to its content once on
+      // screen kept its top edge: below its anchor that is the edge touching it, but
+      // above one, as near the window's foot, it stood off by what it lost (#396).
+      shown.contentSize = content.size ?? content.content.view.fittingSize
       let anchor = content.anchor.offsetBy(
         dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
-      shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+      // A view of its own for each popover: one moved to the next anchor kept placing
+      // the next popover where the last one had been.
+      self.anchorView?.removeFromSuperview()
+      let anchorView = PopoverAnchor(frame: anchor)
+      textView.addSubview(anchorView)
+      self.anchorView = anchorView
+      shown.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
       popover = shown
       return true
     }
@@ -200,5 +220,13 @@
       popover = nil
       send(.popoverClosedItself)
     }
+  }
+
+  /// `ReferenceHoverController.anchorView`: where a popover is shown from, and
+  /// nothing a click can land on. Flipped, as the text view is, so `.maxY` is the
+  /// anchor's lower edge and the popover opens below it, where it always did.
+  private final class PopoverAnchor: NSView {
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
   }
 #endif
