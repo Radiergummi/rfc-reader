@@ -12,7 +12,7 @@ import RFCKit
 /// paragraph, nor is one capitalized, `Server`. The common words are the lower-case
 /// words used in at least a tenth of the corpus's documents, which `corpus-build
 /// common-words` measures; an acronym is never one.
-struct DefinedTermMatcher {
+struct GlossMatcher {
   /// The terms that may be marked, grouped by their first word as `uses` reads words,
   /// longest first: `X.509 certificate` under `X`.
   private let byFirstWord: [String: [DefinedTerm]]

@@ -81,7 +81,7 @@ public final class DocumentTextBuilder {
 
   /// The document's defined terms, marked at their first use in each paragraph
   /// (#396). Empty in a build with no live links: on paper there is no card to show.
-  var termMatcher = DefinedTermMatcher([:])
+  var glossMatcher = GlossMatcher([:])
   /// The terms each paragraph of a definition defines, which it does not mark.
   var ownTerms: [Paragraph: Set<String>] = [:]
   /// The terms already marked in the paragraph being emitted, or nil outside one: a
@@ -240,7 +240,7 @@ extension DocumentTextBuilder {
     grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
-      termMatcher = DefinedTermMatcher(document.definedTerms)
+      glossMatcher = GlossMatcher(document.definedTerms)
       for term in document.definedTerms.values {
         for case .paragraph(let paragraph) in term.definition.flattened {
           ownTerms[paragraph, default: []].insert(term.term)
@@ -460,7 +460,7 @@ extension DocumentTextBuilder {
   func appendParagraph(_ paragraph: Paragraph, attributes: [NSAttributedString.Key: Any]) {
     mark(paragraph.anchor)
     // A term defined here is not marked here: its definition is what a card would show.
-    glossedInParagraph = termMatcher.isEmpty ? nil : ownTerms[paragraph] ?? []
+    glossedInParagraph = glossMatcher.isEmpty ? nil : ownTerms[paragraph] ?? []
     output.append(inlineRuns(paragraph.inlines, base: attributes))
     glossedInParagraph = nil
     append("\n", attributes)
