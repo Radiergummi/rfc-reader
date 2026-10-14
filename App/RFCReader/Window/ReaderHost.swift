@@ -16,7 +16,9 @@
           // A BCP, STD or FYI shows its first member, once the index names it (#656).
           if let shown = library.documentShown(for: selection) {
             DocumentView(id: shown, identity: selection)
-              .id(selection)
+              // Made again when the RFC shown changes for the same selection, as an
+              // index arriving after one that failed changes a series' (#656).
+              .id([selection, shown])
               // Faded only when the change is animated: following a document preview
               // (`RFCTextViewCoordinator.documentCrossFade`). Every other open cuts.
               .transition(.opacity)

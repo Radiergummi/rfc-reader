@@ -197,6 +197,12 @@ final class NavigationModel: Identifiable {
   /// belongs in this tab: routing reads this, not `selection` (#256).
   var heldDocument: DocumentID? { history.current?.id }
 
+  /// The RFC whose text the tab's reader shows (#656): `selection`, or the first
+  /// member of the BCP, STD or FYI selected; nil while a series waits for the index.
+  /// What acts on the text -- Print, Export, Cite, a collection -- acts on this, and
+  /// what keeps the place -- Bookmark, Recently Read, the history -- on `selection`.
+  var shown: DocumentID? { selection.flatMap(library.documentShown) }
+
   private(set) var scrollRequest: ScrollRequest? {
     didSet {
       // A jump waited on is done once the reader has recorded it, which replaces
@@ -237,7 +243,7 @@ final class NavigationModel: Identifiable {
     // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
     // and only the reader can tell a section's number from its anchor (#482). An
     // anchor leaves the list as it is.
-    if let place = link.place, id == selection {
+    if let place = link.place, id == selection || id == shown {
       jump(toSection: place)
       guard link.section != nil else { return }
     } else {

@@ -10,6 +10,14 @@ extension RFCIndex {
     guard id.series != .rfc else { return id }
     return series(id)?.members.first
   }
+
+  /// `documents`, each series with its members beside it: the bodies a bookmark kept
+  /// offline, or a series open in a window, stands for (#656). A series has no body of
+  /// its own.
+  public func withMembers(of documents: Set<DocumentID>) -> Set<DocumentID> {
+    documents.union(
+      documents.filter { $0.series != .rfc }.flatMap { series($0)?.members ?? [] })
+  }
 }
 
 /// How a series' reader is titled (#656): "BCP 14", over the RFCs it names.

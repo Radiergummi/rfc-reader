@@ -163,7 +163,14 @@ final class LibraryModel {
   /// What is wanted offline: the marks, and the bookmarks when they are kept too.
   private var wantedOffline: Set<DocumentID> {
     OfflineReconciler.wanted(
-      marks: offlineMarks, bookmarks: bookmarkedDocuments, keepsBookmarks: keepsBookmarksOffline)
+      marks: withMembers(of: offlineMarks), bookmarks: withMembers(of: bookmarkedDocuments),
+      keepsBookmarks: keepsBookmarksOffline)
+  }
+
+  /// `documents`, a series with its members: a bookmarked or open BCP, STD or FYI
+  /// stands for its members' bodies (#656). As they are while there is no index.
+  private func withMembers(of documents: Set<DocumentID>) -> Set<DocumentID> {
+    index?.withMembers(of: documents) ?? documents
   }
 
   /// Whether `offlineMarks` has been read from the store at least once. Until it
@@ -1472,8 +1479,8 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
-    let open = sceneRegistry.open.compactMap(\.selection)
-    return bookmarked.union(read).union(marked).union(open)
+    let open = Set(sceneRegistry.open.compactMap(\.shown))
+    return withMembers(of: bookmarked.union(read).union(marked)).union(open)
   }
 
   // MARK: - Storage (#358)
@@ -1506,7 +1513,7 @@ final class LibraryModel {
   private func sparedFromClearing() -> Set<DocumentID>? {
     do {
       return try OfflineMarkStore.markedDocuments(in: container.mainContext)
-        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.selection))
+        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.shown))
     } catch {
       libraryLog.error(
         "Clear Cache spares everything, reading the marks failed: \(String(describing: error), privacy: .public)"

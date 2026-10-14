@@ -128,9 +128,7 @@
     /// The RFC on screen: a BCP, STD or FYI's first member, as its reader shows it
     /// (#656). A script's RFC is named by its number, so a series is never one.
     @objc var scriptCurrentRFC: ScriptableRFC? {
-      guard let controller, let selection = controller.navigation.selection,
-        let shown = controller.library.documentShown(for: selection), shown.series == .rfc
-      else { return nil }
+      guard let shown = controller?.navigation.shown, shown.series == .rfc else { return nil }
       return ScriptableRFC(shown)
     }
 

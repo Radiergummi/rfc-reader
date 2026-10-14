@@ -60,7 +60,8 @@
           DocumentView(
             id: shown, identity: reader.id, depth: reader.depth, showsInspector: $showsInspector
           )
-          .id(reader)
+          // Made again when the RFC shown changes for the same reader (#656).
+          .id(ShownReader(reader: reader, shown: shown))
         } else {
           ProgressView("Loading \(reader.id.displayName)…")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,5 +74,12 @@
           .navigationTitle(reader.id.displayName)
       }
     }
+  }
+
+  /// A reader of the stack, with the RFC it shows: a view's identity, so a series
+  /// reader whose first member changes is made again (#656).
+  private struct ShownReader: Hashable {
+    let reader: ReaderPath.Reader
+    let shown: DocumentID
   }
 #endif

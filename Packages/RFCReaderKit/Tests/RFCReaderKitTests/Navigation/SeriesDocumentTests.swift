@@ -30,6 +30,14 @@ struct SeriesDocumentTests {
     #expect(index.documentShown(for: DocumentID(series: .fyi, number: 1)) == nil)
   }
 
+  /// A bookmarked or open series keeps its members' bodies, offline and on disk: the
+  /// series has none of its own.
+  @Test func `a series stands for its members' bodies`() {
+    #expect(
+      index.withMembers(of: [Self.bcp14, .rfc(9110)])
+        == [Self.bcp14, .rfc(2119), .rfc(8174), .rfc(9110)])
+  }
+
   @Test func `a series' subtitle names its members`() {
     #expect(
       SeriesTitle.members(of: Self.bcp14, in: index, locale: .english) == "RFC 2119 and RFC 8174")

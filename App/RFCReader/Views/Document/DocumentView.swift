@@ -109,7 +109,9 @@ struct DocumentView: View {
 
   /// The window's reader state, written only while this is the reader on screen:
   /// not while it fades out, nor under the top of the stack.
-  private var writer: ReaderState.Writer { reader.writer(showing: id, at: depth, in: navigation) }
+  private var writer: ReaderState.Writer {
+    reader.writer(showing: identity, at: depth, in: navigation)
+  }
 
   /// Whether what the window's reader state says is this reader's to show: it is on
   /// screen, and has put its own there.
