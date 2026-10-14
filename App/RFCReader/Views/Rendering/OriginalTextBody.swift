@@ -21,7 +21,7 @@ struct OriginalTextBody {
   /// The monospaced face the text is set in, a little smaller than the reader's
   /// body so a 72-column page fits beside it.
   fileprivate var font: PlatformFont {
-    .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
+    .monospacedFont(ofSize: fontSize * 0.85, weight: .regular)
   }
 
   fileprivate var attributed: NSAttributedString {
