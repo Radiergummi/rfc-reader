@@ -26,6 +26,14 @@
     /// apart by the button still held, which `ReferenceHover` checks.
     private var dwellTask: Task<Void, Never>?
     private var popover: NSPopover?
+    /// What each popover is shown from: a view of its own over the anchor, never the
+    /// text view (#396). AppKit finds a popover's accessibility parent by hit-testing
+    /// the view it is shown from at the anchor, and the text view answers that, over
+    /// plain text, by listing every link in the document as a child, again for each
+    /// child it registers: over a gloss in RFC 9110 the main thread never came back.
+    /// Over a link it finds the link at once, which is why a reference's card never
+    /// hung. Clicks go through it to the text.
+    private var anchorView: PopoverAnchor?
 
     /// The reference under a point in window coordinates.
     var target: (NSPoint) -> HoverTarget? = { _ in nil }
@@ -71,6 +79,8 @@
       send(.reset)
       if let trackingArea { textView?.removeTrackingArea(trackingArea) }
       trackingArea = nil
+      anchorView?.removeFromSuperview()
+      anchorView = nil
     }
 
     // MARK: - Events
@@ -186,7 +196,11 @@
       if let size = content.size { shown.contentSize = size }
       let anchor = content.anchor.offsetBy(
         dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
-      shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+      let anchorView = self.anchorView ?? PopoverAnchor()
+      if anchorView.superview !== textView { textView.addSubview(anchorView) }
+      anchorView.frame = anchor
+      self.anchorView = anchorView
+      shown.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
       popover = shown
       return true
     }
@@ -200,5 +214,11 @@
       popover = nil
       send(.popoverClosedItself)
     }
+  }
+
+  /// `ReferenceHoverController.anchorView`: where a popover is shown from, and
+  /// nothing a click can land on.
+  private final class PopoverAnchor: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
   }
 #endif
