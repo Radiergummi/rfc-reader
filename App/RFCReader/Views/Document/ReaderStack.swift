@@ -21,6 +21,7 @@
   ///
   /// The Mac has one reader, `ReaderHost`, in a window of its own making.
   struct ReaderStack: View {
+    @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     /// The panel, the tab's rather than each reader's, so that an open panel stays
     /// open from one reader to the next.
@@ -54,8 +55,17 @@
     @ViewBuilder
     private func readerView(_ reader: ReaderPath.Reader, in path: ReaderPath) -> some View {
       if path.retains(reader) {
-        DocumentView(id: reader.id, depth: reader.depth, showsInspector: $showsInspector)
+        // A BCP, STD or FYI shows its first member, once the index names it (#656).
+        if let shown = library.documentShown(for: reader.id) {
+          DocumentView(
+            id: shown, identity: reader.id, depth: reader.depth, showsInspector: $showsInspector
+          )
           .id(reader)
+        } else {
+          ProgressView("Loading \(reader.id.displayName)…")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle(reader.id.displayName)
+        }
       } else {
         // Out of sight under the readers kept, and made again if the stack is
         // popped back to it. Its title is what the back button above it says.

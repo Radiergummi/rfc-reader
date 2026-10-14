@@ -31,7 +31,8 @@ struct SeriesDocumentTests {
   }
 
   @Test func `a series' subtitle names its members`() {
-    #expect(SeriesTitle.members(of: Self.bcp14, in: index, locale: .english) == "RFC 2119 and RFC 8174")
+    #expect(
+      SeriesTitle.members(of: Self.bcp14, in: index, locale: .english) == "RFC 2119 and RFC 8174")
   }
 
   @Test func `an RFC has no members to name`() {

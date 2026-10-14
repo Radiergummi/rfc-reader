@@ -1,4 +1,5 @@
 #if os(macOS)
+  import RFCKit
   import SwiftUI
 
   /// What the detail column of `NavigationSplitView` used to hold, and the scene's
@@ -12,11 +13,17 @@
     var body: some View {
       Group {
         if let selection = navigation.selection {
-          DocumentView(id: selection)
-            .id(selection)
-            // Faded only when the change is animated: following a document preview
-            // (`RFCTextViewCoordinator.documentCrossFade`). Every other open cuts.
-            .transition(.opacity)
+          // A BCP, STD or FYI shows its first member, once the index names it (#656).
+          if let shown = library.documentShown(for: selection) {
+            DocumentView(id: shown, identity: selection)
+              .id(selection)
+              // Faded only when the change is animated: following a document preview
+              // (`RFCTextViewCoordinator.documentCrossFade`). Every other open cuts.
+              .transition(.opacity)
+          } else {
+            ProgressView("Loading \(selection.displayName)…")
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
         } else {
           EmptyDetailView()
         }
