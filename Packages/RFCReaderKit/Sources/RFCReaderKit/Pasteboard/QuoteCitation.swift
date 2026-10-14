@@ -103,7 +103,7 @@ public enum QuoteCitation {
     // which RTF can only name by a private name no other platform resolves.
     let fixedPitch =
       PlatformFont(name: "Menlo-Regular", size: 12)
-      ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+      ?? .monospacedFont(ofSize: 12, weight: .regular)
     let rich = NSMutableAttributedString()
     for block in blocks {
       rich.append(

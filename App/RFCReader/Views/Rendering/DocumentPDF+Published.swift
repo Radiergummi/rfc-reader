@@ -19,7 +19,7 @@ nonisolated extension DocumentPDF {
   /// `PublishedPages` has decided every line of every sheet, wrapping included.
   static func publishedPDF(_ source: String, layout: PrintLayout) -> Data {
     let published = PublishedPages(source)
-    let preferred = PlatformFont.monospacedSystemFont(
+    let preferred = PlatformFont.monospacedFont(
       ofSize: PrintLayout.originalTextSize, weight: .regular)
     // Lines are spaced by the measurements the size was worked out from, so a
     // page that was found to fit does.
@@ -28,7 +28,7 @@ nonisolated extension DocumentPDF {
     let size = sheets.fontSize
     let lineHeight = metrics.lineHeight * size
     let attributes: [NSAttributedString.Key: Any] = [
-      .font: PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular),
+      .font: PlatformFont.monospacedFont(ofSize: size, weight: .regular),
       NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
     ]
     var ascent: CGFloat = 0

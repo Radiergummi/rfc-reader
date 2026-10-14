@@ -97,3 +97,21 @@ custom_rules:
       - doccomment
     message: 'Make the font with systemFont(ofSize:weight:): the other two can return Helvetica 12 pt when first made on several threads at once (#326).'
     severity: error
+  # While no monospaced system font is alive in a process, monospaced fonts made on
+  # many threads at once can crash CoreText when it measures them: a `CTLine` raises
+  # an uncaught `NSInvalidArgumentException` (#732). RFCReaderKit builds and the
+  # app's PDF export make them off the main actor, and the tests in parallel.
+  # `PlatformFont.monospacedFont(ofSize:weight:)` keeps one alive for good first.
+  monospaced_font_kept:
+    name: Monospaced font kept alive
+    included:
+      - Packages/RFCReaderKit/.*\.swift
+      - App/.*\.swift
+    excluded:
+      - Packages/RFCReaderKit/Sources/RFCReaderKit/Rendering/MonospacedFont\.swift
+    regex: '\bmonospacedSystemFont\('
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Make the font with PlatformFont.monospacedFont(ofSize:weight:): while none is alive, monospaced fonts made on many threads at once can crash CoreText (#732).'
+    severity: error
