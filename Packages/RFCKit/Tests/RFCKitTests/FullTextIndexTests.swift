@@ -228,6 +228,52 @@ final class FullTextIndexTests {
     #expect(try index.search("", section: "1.2").map(\.anchor) == ["section-1.2"])
   }
 
+  /// The value comes lowercased (`SearchFilters.section`): an appendix's number and
+  /// anchor match it whatever their case, the appendix itself as well as what is under it.
+  @Test func `a section's number or anchor matches whatever its case`() throws {
+    let index = try index()
+    let sections = [("appendix-A.1", "A.1"), ("appendix-A.1.2", "A.1.2")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: "Body", blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(
+      try index.search("", section: "a.1").map(\.anchor) == ["appendix-A.1", "appendix-A.1.2"])
+    #expect(
+      try index.search("", section: "appendix-a.1").map(\.anchor) == [
+        "appendix-A.1", "appendix-A.1.2",
+      ])
+  }
+
+  /// A number names a section by its number alone: a heading holding the same token,
+  /// as "Version 1" does, is not that section.
+  @Test func `a number is not looked for in the headings`() throws {
+    let index = try index()
+    let sections = [("section-1", "1", "Body"), ("section-2", "2", "Version 1")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: $0.2, blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(try index.search("", section: "version").map(\.anchor) == ["section-2"])
+    #expect(try index.search("", section: "1").map(\.anchor) == ["section-1"])
+  }
+
+  /// SQLite cuts the opening by Unicode scalars, which may be fewer characters than the
+  /// opening's length: a text cut there still ends with an ellipsis.
+  @Test func `an opening cut inside combining marks says it was cut`() {
+    let scalars = String(repeating: "e\u{301}\u{302}", count: 134).unicodeScalars.prefix(401)
+    let text = String(String.UnicodeScalarView(scalars))
+    #expect(FullTextIndex.opening(of: text).text.hasSuffix("…"))
+  }
+
   /// With no words to rank them, sections are listed newest RFC first, each RFC's in
   /// its own order, whatever order the documents were indexed in.
   @Test func `a section without words lists the newest RFC first`() throws {

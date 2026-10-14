@@ -513,6 +513,9 @@ final class LibraryModel {
         return
       }
       self?.textIndexer = indexer
+      // A list made before the index opened has no section hits, and an index that is
+      // already up to date never reports a change: its tabs search the text now.
+      self?.textIndexChanged()
       await indexer.run(changed: changed)
     }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would

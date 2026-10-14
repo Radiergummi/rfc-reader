@@ -30,10 +30,10 @@ struct RFCListView: View {
       ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
   }
 
-  /// What the full-text search found for the rows on show (#37), once it has: the
-  /// search follows the list, and until it arrives the last one is for another.
-  private var textFound: TextIndexer.Found? {
-    navigation.textFound.flatMap { $0.list == shown ? $0.found : nil }
+  /// The full-text search for the rows on show (#37), once it has ended: the search
+  /// follows the list, and until it ends the last one is for another.
+  private var textSearched: NavigationModel.TextFound? {
+    navigation.textFound.flatMap { $0.list == shown ? $0 : nil }
   }
 
   @Environment(\.undoManager) private var undoManager
@@ -96,12 +96,13 @@ struct RFCListView: View {
     let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
-    let textFound = self.textFound
+    let textSearched = self.textSearched
+    let textFound = textSearched?.found
     let hasTextHits = textFound.map { !$0.hits.isEmpty } ?? false
-    // A query naming a section has no RFC rows, only section hits: until they arrive
-    // it has found nothing yet, not nothing.
+    // A query naming a section has no RFC rows, only section hits: until the search
+    // ends it has found nothing yet, not nothing.
     let awaitsSections =
-      textFound == nil && IndexSearch.parseQuery(shown.query).filters.section != nil
+      textSearched == nil && IndexSearch.parseQuery(shown.query).filters.section != nil
     // How much the full-text index holds of what the search could look in, so a hit
     // it does not have does not read as "no RFC says this".
     let searched = textFound.map { found in

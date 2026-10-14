@@ -348,17 +348,19 @@ public struct Snippet: Sendable, Hashable {
   /// What `section:` asks of a row: that its heading holds `section` as a phrase, or
   /// that `section` is its anchor or number, or the anchor or number of a section it is
   /// under: `section-1` and `1` are section 1 and 1.2, never 10. The heading is matched
-  /// in a subquery, as FTS5 takes no match beside an `OR`; a value with no word in it
-  /// is matched against the anchor and the number alone.
+  /// in a subquery, as FTS5 takes no match beside an `OR`; a value with no word in it,
+  /// or that is a section number, is matched against the anchor and the number alone.
+  /// The value comes lowercased, so the anchor and the number are compared in any case.
   static func condition(forSection section: String) -> (sql: String, values: [String]) {
     let escaped = section.replacing("\\", with: "\\\\").replacing("%", with: "\\%")
       .replacing("_", with: "\\_")
     let names = """
-      anchor = ? OR anchor LIKE ? ESCAPE '\\' OR anchor LIKE ? ESCAPE '\\'
-        OR number = ? OR number LIKE ? ESCAPE '\\'
+      anchor = ? COLLATE NOCASE OR anchor LIKE ? ESCAPE '\\' OR anchor LIKE ? ESCAPE '\\'
+        OR number = ? COLLATE NOCASE OR number LIKE ? ESCAPE '\\'
       """
     let values = [section, "\(escaped).%", "\(escaped)-%", section, "\(escaped).%"]
-    guard section.contains(where: { $0.isLetter || $0.isNumber }) else {
+    let isNumber = section.allSatisfy { $0.isNumber || $0 == "." }
+    guard section.contains(where: { $0.isLetter || $0.isNumber }), !isNumber else {
       return ("(\(names))", values)
     }
     let heading = "heading : \"" + section.replacing("\"", with: "\"\"") + "\""
@@ -374,10 +376,10 @@ public struct Snippet: Sendable, Hashable {
   /// The opening words of a section's text, for a hit with no words to show around:
   /// its white space as a snippet's, cut at a word a little short of a row's three
   /// lines.
-  /// `text` is the first `openingLength` characters of the section and one more, so
+  /// `text` is the first `openingLength` Unicode scalars of the section and one more, so
   /// a text cut there says so with an ellipsis too.
   static func opening(of text: String) -> Snippet {
-    let isCut = text.count > openingLength
+    let isCut = text.unicodeScalars.count > openingLength
     let whole = snippet(marked: String(text.prefix(openingLength))).text
     let length = 160
     guard whole.count > length else {

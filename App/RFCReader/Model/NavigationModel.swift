@@ -80,7 +80,9 @@ final class NavigationModel: Identifiable {
 
   struct TextFound {
     let list: LibraryList
-    let found: TextIndexer.Found
+    /// Nil when the search has nothing to say of the list: there is no index, or the
+    /// list asks the text nothing (`LibraryModel.textSearch`).
+    let found: TextIndexer.Found?
   }
 
   /// The query the list, its count and the sidebar's results are for: the one whose
@@ -397,8 +399,10 @@ final class NavigationModel: Identifiable {
       for await request in requests {
         guard let request, let self else { continue }
         let found = await self.library.textSearch(request.list)
-        guard !Task.isCancelled, self.textRequest() == request else { continue }
-        self.textFound = found.map { TextFound(list: request.list, found: $0) }
+        // Kept while the index changed under it, as the first pass changes it every
+        // few documents: it is newer than what is on show, and the next search follows.
+        guard !Task.isCancelled, self.textRequest()?.list == request.list else { continue }
+        self.textFound = TextFound(list: request.list, found: found)
       }
     }
   }
