@@ -8,6 +8,8 @@
   /// and Save to Files. On the Mac all of it is the window's (`ReaderWindowController`).
   struct IOSDocumentChrome: ViewModifier {
     let id: DocumentID
+    /// What the tab opened, which the bar names and ⌘D bookmarks (#656).
+    let identity: DocumentID
     let metadata: RFCMetadata?
     /// What the return offer names its place in.
     let document: RFCDocument?
@@ -37,16 +39,18 @@
         .toolbar {
           ToolbarItem(placement: .principal) {
             DocumentTitle(
-              title: id.displayName,
-              subtitle: DocumentActions.subtitle(
-                metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
+              title: identity.displayName,
+              subtitle: library.seriesMembers(identity)
+                ?? DocumentActions.subtitle(
+                  metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
               reader: reader, isShown: isShown)
           }
         }
         .toolbar {
           DocumentToolbar(
-            id: id, metadata: metadata, library: library, navigation: navigation,
-            reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
+            id: id, identity: identity, metadata: metadata, library: library,
+            navigation: navigation, reader: reader,
+            isBookmarked: library.bookmarkedDocuments.contains(identity),
             showsInspector: $showsInspector,
             exportDocument: { output.exportDocument(id, as: $0, library: library) },
             printDocument: {

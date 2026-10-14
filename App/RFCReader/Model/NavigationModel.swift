@@ -197,6 +197,12 @@ final class NavigationModel: Identifiable {
   /// belongs in this tab: routing reads this, not `selection` (#256).
   var heldDocument: DocumentID? { history.current?.id }
 
+  /// The RFC whose text the tab's reader shows (#656): `selection`, or the first
+  /// member of the BCP, STD or FYI selected; nil while a series waits for the index.
+  /// What acts on the text -- Print, Export, Cite, a collection -- acts on this, and
+  /// what keeps the place -- Bookmark, Recently Read, the history -- on `selection`.
+  var shown: DocumentID? { selection.flatMap(library.documentShown) }
+
   private(set) var scrollRequest: ScrollRequest? {
     didSet {
       // A jump waited on is done once the reader has recorded it, which replaces
@@ -227,14 +233,17 @@ final class NavigationModel: Identifiable {
   /// A link from outside the current document: the sidebar, a deep link, a citation
   /// in the prose, or Go to RFC. A citation, or anything else followed inside the
   /// reader, arrives as `.citation`, which on iOS pushes a reader (#263).
-  func open(_ link: RFCLink, in index: RFCIndex?, arrival: HistoryEntry.Arrival = .root) {
-    let id = Self.resolved(link.id, in: index)
+  ///
+  /// A BCP, STD or FYI is opened as itself, so it is bookmarked and recorded as the
+  /// series; its reader shows its first member (#656).
+  func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
+    let id = link.id
     // A place in the document on screen is a jump within it, which the reader
     // resolves: an anchor may name nothing in its body, as the RFC Editor's
     // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
     // and only the reader can tell a section's number from its anchor (#482). An
     // anchor leaves the list as it is.
-    if let place = link.place, id == selection {
+    if let place = link.place, id == selection || id == shown {
       jump(toSection: place)
       guard link.section != nil else { return }
     } else {
@@ -245,8 +254,8 @@ final class NavigationModel: Identifiable {
     sidebarSelection = .all
   }
 
-  func open(_ id: DocumentID, section: String? = nil, in index: RFCIndex?) {
-    open(RFCLink(id: id, section: section), in: index)
+  func open(_ id: DocumentID, section: String? = nil) {
+    open(RFCLink(id: id, section: section))
   }
 
   /// Searches the whole library: a question asked from one document, such as a
@@ -368,16 +377,10 @@ final class NavigationModel: Identifiable {
   /// resetting to `.all` would swap the Bookmarks list they were working in for
   /// the whole library with that one row highlighted somewhere inside it.
   ///
-  /// A series row, which Bookmarks and Recently Read can show (#321), opens its
-  /// first member RFC, as `open` does: the series has no document of its own.
+  /// A series row, which Bookmarks and Recently Read can show (#321), opens the
+  /// series, as `open` does: its reader shows its first member (#656).
   func select(_ id: DocumentID) {
-    go(to: HistoryEntry(id: Self.resolved(id, in: library.index)))
-  }
-
-  /// A BCP, STD or FYI as the RFC it opens: its first member.
-  private static func resolved(_ id: DocumentID, in index: RFCIndex?) -> DocumentID {
-    guard id.series != .rfc, let first = index?.series(id)?.members.first else { return id }
-    return first
+    go(to: HistoryEntry(id: id))
   }
 
   /// A jump within the document already open — a section link in the prose, a row

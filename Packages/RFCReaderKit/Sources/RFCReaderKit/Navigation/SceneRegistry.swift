@@ -177,9 +177,9 @@ public struct SceneRegistry<Scene: AnyObject> {
     return deliveries
   }
 
-  /// Whether `link` is still to wait for the index: a BCP, STD or FYI link, which
-  /// `NavigationModel.open(_:in:)` resolves to its first RFC through the index (#241),
-  /// before the index has arrived or failed to. A plain RFC link never does.
+  /// Whether `link` is still to wait for the index: a BCP, STD or FYI link, whose
+  /// reader shows its first member, which only the index names (#241, #656), before the
+  /// index has arrived or failed to. A plain RFC link never does.
   private func waitsForIndex(_ link: RFCLink) -> Bool {
     link.id.series != .rfc && !isIndexSettled
   }

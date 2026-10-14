@@ -7,6 +7,8 @@ import SwiftUI
   /// toolbar is the window's (`ReaderToolbar`).
   struct DocumentToolbar: ToolbarContent {
     let id: DocumentID
+    /// What the tab opened, which Bookmark bookmarks (#656).
+    let identity: DocumentID
     let metadata: RFCMetadata?
     let library: LibraryModel
     let navigation: NavigationModel
@@ -150,7 +152,7 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      library.toggleBookmark(id, documentTitle: reader.documentTitle)
+      library.toggleBookmark(identity, documentTitle: reader.documentTitle)
     }
   }
 

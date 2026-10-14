@@ -28,7 +28,11 @@ struct DocumentView: View {
   /// build again, never an input to the style.
   @Environment(\.legibilityWeight) private var legibilityWeight
 
+  /// The RFC whose text the reader shows.
   let id: DocumentID
+  /// What the tab opened (#656): `id`, or the BCP, STD or FYI whose first member
+  /// `id` is. It is what is bookmarked, recorded as read, and titled.
+  let identity: DocumentID
   /// The reader's place in the tab's stack of readers on iOS (#263), from 0 at the
   /// root; nil on the Mac, whose one reader is not stacked, and for a reader beside
   /// another.
@@ -62,21 +66,27 @@ struct DocumentView: View {
   @State private var arrivesOnTop = false
 
   #if os(macOS)
-    init(id: DocumentID, isBeside: Bool = false) {
+    init(id: DocumentID, identity: DocumentID? = nil, isBeside: Bool = false) {
       self.id = id
+      self.identity = identity ?? id
       self.isBeside = isBeside
       depth = nil
-      _session = State(initialValue: DocumentSession(id: id, depth: nil))
+      _session = State(
+        initialValue: DocumentSession(id: id, identity: identity ?? id, depth: nil))
       _ownsReader = State(initialValue: true)
     }
   #else
     /// A reader in the tab's stack. The panel is the stack's, so that an open panel
     /// stays open from one reader to the next.
-    init(id: DocumentID, depth: Int, showsInspector: Binding<Bool>) {
+    init(
+      id: DocumentID, identity: DocumentID? = nil, depth: Int, showsInspector: Binding<Bool>
+    ) {
       self.id = id
+      self.identity = identity ?? id
       self.depth = depth
       isBeside = false
-      _session = State(initialValue: DocumentSession(id: id, depth: depth))
+      _session = State(
+        initialValue: DocumentSession(id: id, identity: identity ?? id, depth: depth))
       _ownsReader = State(initialValue: false)
       _showsInspector = showsInspector
     }
@@ -85,20 +95,23 @@ struct DocumentView: View {
     /// of its own.
     init(id: DocumentID, isBeside: Bool) {
       self.id = id
+      identity = id
       self.isBeside = isBeside
       depth = nil
-      _session = State(initialValue: DocumentSession(id: id, depth: nil))
+      _session = State(initialValue: DocumentSession(id: id, identity: id, depth: nil))
       _ownsReader = State(initialValue: true)
       _showsInspector = .constant(false)
     }
   #endif
 
   /// Whether this is the reader on screen, whose the window's reader state is.
-  private var isShown: Bool { navigation.shows(id, at: depth) }
+  private var isShown: Bool { navigation.shows(identity, at: depth) }
 
   /// The window's reader state, written only while this is the reader on screen:
   /// not while it fades out, nor under the top of the stack.
-  private var writer: ReaderState.Writer { reader.writer(showing: id, at: depth, in: navigation) }
+  private var writer: ReaderState.Writer {
+    reader.writer(showing: identity, at: depth, in: navigation)
+  }
 
   /// Whether what the window's reader state says is this reader's to show: it is on
   /// screen, and has put its own there.
@@ -175,7 +188,7 @@ struct DocumentView: View {
   private var metadata: RFCMetadata? { library.metadata(id) }
 
   private var positions: ReadingPositionKeeper {
-    ReadingPositionKeeper(id: id, context: modelContext)
+    ReadingPositionKeeper(id: identity, context: modelContext)
   }
 
   private var buildInputs: BuildInputs {
@@ -365,13 +378,14 @@ struct DocumentView: View {
       requestingContent
     } else {
       #if os(macOS)
-        requestingContent.navigationTitle(id.displayName)
+        requestingContent.navigationTitle(identity.displayName)
       #else
         withReaderBeside
-          .navigationTitle(id.displayName)
+          .navigationTitle(identity.displayName)
           .modifier(
             IOSDocumentChrome(
-              id: id, metadata: metadata, document: session.state.document, library: library,
+              id: id, identity: identity, metadata: metadata, document: session.state.document,
+              library: library,
               navigation: navigation, reader: reader, showsInspector: $showsInspector,
               barsHidden: $barsHidden, output: output, isShown: showsReaderState))
       #endif
@@ -566,7 +580,7 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
+        Label("Couldn't load \(identity.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
         Text(failure.kind.recoverySuggestion(for: .document))
@@ -580,7 +594,7 @@ struct DocumentView: View {
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else if session.state.showsProgress(isDue: session.isProgressDue) {
-      ProgressView("Loading \(id.displayName)…")
+      ProgressView("Loading \(identity.displayName)…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
       // Nothing yet, for a moment: a document in the cache normally builds before
@@ -663,7 +677,7 @@ struct DocumentView: View {
   /// reader of the same RFC (#263): the request would be taken by the wrong one.
   private func showRequestedTab() {
     guard isShown else { return }
-    if let tab = library.takeInspectorRequest(for: id, in: navigation) { requestedTab = tab }
+    if let tab = library.takeInspectorRequest(for: identity, in: navigation) { requestedTab = tab }
     guard reader.canDescribe, let tab = requestedTab else { return }
     requestedTab = nil
     reader.show(tab)
