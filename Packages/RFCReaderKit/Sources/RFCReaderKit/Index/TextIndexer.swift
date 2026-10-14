@@ -38,11 +38,12 @@ public actor TextIndexer {
   }
 
   /// Reconciles once, then again after each change to the store's bodies, until the
-  /// task is cancelled.
-  public func run() async {
-    await reconcile()
+  /// task is cancelled. `changed` is called after each reconcile that changed the
+  /// index, for a search on show to be made again.
+  public func run(changed: @Sendable () async -> Void = {}) async {
+    if await reconcile() { await changed() }
     for await _ in store.bodiesChanged {
-      await reconcile()
+      if await reconcile() { await changed() }
     }
   }
 
@@ -50,8 +51,10 @@ public actor TextIndexer {
   /// document the index holds that the store no longer has a body of.
   ///
   /// A body removed while it was being parsed here is indexed all the same; the
-  /// removal is a change of its own, and the reconcile after it drops it.
-  public func reconcile() async {
+  /// removal is a change of its own, and the reconcile after it drops it. Answers
+  /// whether a document was added or removed.
+  @discardableResult
+  public func reconcile() async -> Bool {
     let state = await store.offlineState()
     let stored = state.kept.union(state.cached)
     let indexed: Set<DocumentID>
@@ -60,11 +63,13 @@ public actor TextIndexer {
     } catch {
       indexerLog.error(
         "reading what is indexed failed: \(String(describing: error), privacy: .public)")
-      return
+      return false
     }
+    var changed = false
     for id in indexed.subtracting(stored) {
       do {
         try index.remove(id)
+        changed = true
       } catch {
         indexerLog.error(
           "\(id.displayName, privacy: .public): not removed from the index: \(String(describing: error), privacy: .public)"
@@ -72,18 +77,20 @@ public actor TextIndexer {
       }
     }
     for id in stored.subtracting(indexed).sorted() {
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else { return changed }
       guard var document = await store.storedDocument(id) else { continue }
       // A legacy text whose header names no number is still the body it was stored as.
       if document.header.id == nil { document.header.id = id }
       do {
         try index.add(document)
+        changed = true
       } catch {
         indexerLog.error(
           "\(id.displayName, privacy: .public): not indexed: \(String(describing: error), privacy: .public)"
         )
       }
     }
+    return changed
   }
 
   /// What a search found, and how many documents it searched.
@@ -99,7 +106,8 @@ public actor TextIndexer {
   public func search(
     _ query: String, limit: Int = 50, in allowed: Set<DocumentID>? = nil
   ) throws -> Found {
-    let hits = try index.search(query, limit: limit, where: allowed.map { allowed in allowed.contains })
+    let hits = try index.search(
+      query, limit: limit, where: allowed.map { allowed in allowed.contains })
     return Found(hits: hits, searched: try index.indexed().count)
   }
 }

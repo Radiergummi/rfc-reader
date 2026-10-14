@@ -1261,6 +1261,16 @@
         }
       }
     },
+    "In the Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Text"
+          }
+        }
+      }
+    },
     "Info" : {
       "localizations" : {
         "de" : {

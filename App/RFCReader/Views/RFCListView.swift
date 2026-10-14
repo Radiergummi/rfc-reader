@@ -30,6 +30,12 @@ struct RFCListView: View {
       ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
   }
 
+  /// What the full-text search found for the rows on show (#37), once it has: the
+  /// search follows the list, and until it arrives the last one is for another.
+  private var textFound: TextIndexer.Found? {
+    navigation.textFound.flatMap { $0.list == shown ? $0.found : nil }
+  }
+
   @Environment(\.undoManager) private var undoManager
   #if !os(macOS)
     @Environment(\.editMode) private var editMode
@@ -90,6 +96,8 @@ struct RFCListView: View {
     let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
+    let textFound = self.textFound
+    let hasTextHits = textFound.map { !$0.hits.isEmpty } ?? false
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
@@ -171,12 +179,40 @@ struct RFCListView: View {
           unsectioned
         }
       #endif
+      // The sections whose text holds the query's words (#37), under the RFC rows and
+      // only once every row is in the window, as the status line below: after a
+      // partial page they would sit in the middle of the list.
+      if limit >= rows.count, let textFound {
+        Section {
+          ForEach(textFound.hits, id: \.self) { hit in
+            Button {
+              navigation.select(hit)
+            } label: {
+              SectionHitRow(hit: hit, title: library.index?[hit.document]?.title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .selectionDisabled()
+          }
+        } header: {
+          if !textFound.hits.isEmpty {
+            Text("In the Text")
+          }
+        } footer: {
+          // How much the full-text index holds, so a hit it does not have does not
+          // read as "no RFC says this".
+          Text(
+            verbatim: SectionResults.searched(
+              textFound.searched, of: library.index?.rfcs.count ?? 0))
+        }
+      }
       // Where Mail says when it last checked: after the last row, scrolled to
       // rather than pinned. Only once every row is in the window — after a
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil) {
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
         IndexStatusView()
           .frame(maxWidth: .infinity)
           .padding(.vertical, 8)
@@ -197,7 +233,7 @@ struct RFCListView: View {
     .overlay {
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
-      if rows.isEmpty, navigation.listed != nil {
+      if rows.isEmpty, navigation.listed != nil, !hasTextHits {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery

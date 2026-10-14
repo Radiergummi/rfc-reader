@@ -20,6 +20,11 @@ public struct Snippet: Sendable, Hashable {
   /// Where the matched words are, on Unicode scalar boundaries: a match may end inside
   /// a character, before a combining mark, so read them through `text.unicodeScalars`.
   public var matches: [Range<String.Index>]
+
+  public init(text: String, matches: [Range<String.Index>]) {
+    self.text = text
+    self.matches = matches
+  }
 }
 
 /// Full-text search over document bodies (#37): one row per section, in SQLite FTS5,
