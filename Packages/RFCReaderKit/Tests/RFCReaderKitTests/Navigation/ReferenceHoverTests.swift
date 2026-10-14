@@ -59,6 +59,14 @@ struct ReferenceHoverTests {
       ])
   }
 
+  /// A gloss is plain text, passed over as the pointer reads: its card waits
+  /// longer, and a force click shows it at once (#396).
+  @Test func `a gloss's card waits longer than a reference's`() {
+    #expect(ReferenceHover.Dwell.card(gloss).duration == .seconds(2))
+    #expect(ReferenceHover.Dwell.card(first).duration == .milliseconds(500))
+    #expect(ReferenceHover.Dwell.restingPointer.duration == .milliseconds(500))
+  }
+
   @Test func `a force click on a gloss shows its card`() {
     var hover = ReferenceHover()
     #expect(hover.handle(.forceClickCard(gloss)) == [.showCard(gloss)])

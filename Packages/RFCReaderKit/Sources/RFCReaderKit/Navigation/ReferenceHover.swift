@@ -49,6 +49,16 @@ public struct ReferenceHover {
     case card(HoverTarget)
     /// After a scroll: whatever reference the text came to rest under the pointer.
     case restingPointer
+
+    /// How long the pointer must rest. A reference is a chip or a link, pointed at
+    /// on purpose; a gloss is a word of the prose the pointer passes over as it
+    /// reads, so its card waits longer, and a force click shows it at once (#396).
+    public var duration: Duration {
+      switch self {
+      case .card(let target) where target.gloss != nil: .seconds(2)
+      case .card, .restingPointer: .milliseconds(500)
+      }
+    }
   }
 
   public enum Presentation: Equatable {

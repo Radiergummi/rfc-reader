@@ -151,7 +151,7 @@
     private func startDwell(_ dwell: ReferenceHover.Dwell) {
       dwellTask?.cancel()
       dwellTask = Task { [weak self] in
-        try? await Task.sleep(for: .milliseconds(500))
+        try? await Task.sleep(for: dwell.duration)
         guard !Task.isCancelled, let self else { return }
         self.dwellTask = nil
         switch dwell {
@@ -193,12 +193,18 @@
       shown.behavior = .transient
       shown.delegate = self
       shown.contentViewController = content.content
-      if let size = content.size { shown.contentSize = size }
+      // Sized before it is shown, to its content where the caller gives no size. A
+      // card shown at the popover's default size and shrunk to its content once on
+      // screen kept its top edge: below its anchor that is the edge touching it, but
+      // above one, as near the window's foot, it stood off by what it lost (#396).
+      shown.contentSize = content.size ?? content.content.view.fittingSize
       let anchor = content.anchor.offsetBy(
         dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
-      let anchorView = self.anchorView ?? PopoverAnchor()
-      if anchorView.superview !== textView { textView.addSubview(anchorView) }
-      anchorView.frame = anchor
+      // A view of its own for each popover: one moved to the next anchor kept placing
+      // the next popover where the last one had been.
+      self.anchorView?.removeFromSuperview()
+      let anchorView = PopoverAnchor(frame: anchor)
+      textView.addSubview(anchorView)
       self.anchorView = anchorView
       shown.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
       popover = shown
@@ -217,8 +223,10 @@
   }
 
   /// `ReferenceHoverController.anchorView`: where a popover is shown from, and
-  /// nothing a click can land on.
+  /// nothing a click can land on. Flipped, as the text view is, so `.maxY` is the
+  /// anchor's lower edge and the popover opens below it, where it always did.
   private final class PopoverAnchor: NSView {
+    override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
   }
 #endif
