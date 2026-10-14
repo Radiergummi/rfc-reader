@@ -270,6 +270,43 @@ public struct LibraryList: Hashable, Sendable {
   }
 }
 
+extension LibraryList {
+  /// What this list asks the full-text search (#37).
+  public struct TextQuery: Hashable, Sendable {
+    /// The query's words, which the full-text search looks for in each section.
+    public var words: String
+    /// The only documents a section hit may be in, or nil for any: the RFCs this list
+    /// shows for the query's qualifiers alone.
+    public var documents: Set<DocumentID>?
+  }
+
+  /// The full-text search for this list, or nil when it has none: when the query has
+  /// no words, or names something unknown, and so lists no RFC rows either.
+  ///
+  /// A qualifier means the same to the section hits as to the RFC rows (answered on
+  /// #37, 2026-10-14): a hit's RFC has to be one this list shows for the query less
+  /// its words, as the filter, the qualifiers and the options narrow it. `sort:`
+  /// orders the RFC rows only, and narrows nothing.
+  public func textQuery(in index: RFCIndex, search: IndexSearch?) -> TextQuery? {
+    let parsed = IndexSearch.parseQuery(query)
+    guard !parsed.text.isUnsearchedQuery, unknownTerms(of: parsed, in: index).isEmpty else {
+      return nil
+    }
+    var filters = parsed.filters
+    filters.sort = nil
+    let qualifiers = SearchQuery.format(text: "", filters: filters)
+    guard filter != .all || !qualifiers.isEmpty else {
+      return TextQuery(words: parsed.text, documents: nil)
+    }
+    let narrowing = LibraryList(
+      filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
+      downloaded: downloaded, options: options, members: members, collections: collections)
+    let rows = narrowing.rows(in: index, search: search)
+    let documents = rows.flatMap { row in row.rfc.map { [$0.id] } ?? row.members.map(\.id) }
+    return TextQuery(words: parsed.text, documents: Set(documents))
+  }
+}
+
 extension SearchFilters {
   /// The filters the index's search answers, beside `text`: these less the reader's
   /// data, a sort, and `in:` once it names a collection, which a list narrows by
