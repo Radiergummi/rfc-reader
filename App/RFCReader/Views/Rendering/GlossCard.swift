@@ -5,6 +5,17 @@ import SwiftUI
 /// hover and force click on macOS, on long press on iOS, as a reference's card is,
 /// and as plain to read: no button, since on macOS the popover closes as the pointer
 /// moves toward it. Go to Definition is in the term's menu instead.
+extension Gloss {
+  /// The menu item that follows `anchor`: to a term's definition, or to the section
+  /// that expands an abbreviation (#67).
+  var followTitle: String {
+    switch self {
+    case .term: String(localized: "Go to Definition")
+    case .abbreviation: String(localized: "Go to Expansion")
+    }
+  }
+}
+
 struct GlossCard: View {
   let gloss: Gloss
 

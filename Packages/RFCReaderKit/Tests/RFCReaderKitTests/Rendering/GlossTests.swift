@@ -31,7 +31,8 @@ struct GlossTests {
 
   /// One the abstract expands has no section to go to.
   @Test func `an abbreviation expanded in the abstract has nowhere to go`() {
-    let gloss = Gloss.abbreviation(Abbreviation(short: "TLS", expansion: "Transport Layer Security"))
+    let gloss = Gloss.abbreviation(
+      Abbreviation(short: "TLS", expansion: "Transport Layer Security"))
     #expect(gloss.anchor == nil)
   }
 

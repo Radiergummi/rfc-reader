@@ -151,8 +151,9 @@ import RFCReaderKit
     /// as a reference's is.
     var isOnGloss: (NSEvent) -> Bool = { _ in false }
     /// Go to Definition for the defined term glossed under the event's pointer
-    /// (#396), or nil where there is none, or its definition has no anchor.
-    var goToDefinition: (NSEvent) -> (() -> Void)? = { _ in nil }
+    /// (#396), or Go to Expansion for the abbreviation (#67): the item's title and
+    /// what it does. Nil where there is none, or it has nowhere to go.
+    var goToDefinition: (NSEvent) -> (title: String, follow: () -> Void)? = { _ in nil }
 
     /// How far the text container reaches left into the gutter, for the headings'
     /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
@@ -467,10 +468,9 @@ import RFCReaderKit
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
       if let definition {
         let item = NSMenuItem(
-          title: String(localized: "Go to Definition"), action: #selector(goToDefinitionItem(_:)),
-          keyEquivalent: "")
+          title: definition.title, action: #selector(goToDefinitionItem(_:)), keyEquivalent: "")
         item.target = self
-        item.representedObject = definition
+        item.representedObject = definition.follow
         if !result.items.isEmpty {
           result.insertItem(.separator(), at: 0)
         }

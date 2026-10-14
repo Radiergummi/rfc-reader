@@ -1,44 +1,59 @@
 import Foundation
 import RFCKit
 
-/// The defined terms the reader marks in a document (#396), and where in a run of
-/// text they are used.
+/// The defined terms and abbreviations the reader marks in a document (#396, #67),
+/// and where in a run of text they are used.
 ///
-/// A use is the term as the document spells it, matched case-sensitively, as a whole
-/// word: not inside a longer word or a hyphenated compound. Where two terms start at
-/// the same word, the longer is the use, so `origin server` is one gloss, not `origin`.
-/// A term of one word that is a common English word, `client` or `message`, is not
-/// marked: every reader knows it, and it would be underlined in nearly every
-/// paragraph, nor is one capitalized, `Server`. The common words are the lower-case
-/// words used in at least a tenth of the corpus's documents, which `corpus-build
-/// common-words` measures; an acronym is never one.
+/// A use is the term or the short form as the document spells it, matched
+/// case-sensitively, as a whole word: not inside a longer word or a hyphenated
+/// compound. Where two start at the same word, the longer is the use, so `origin
+/// server` is one gloss, not `origin`. A term of one word that is a common English
+/// word, `client` or `message`, is not marked: every reader knows it, and it would be
+/// underlined in nearly every paragraph, nor is one capitalized, `Server`. The common
+/// words are the lower-case words used in at least a tenth of the corpus's documents,
+/// which `corpus-build common-words` measures; an acronym is never one.
+///
+/// An abbreviation is not marked right after its own expansion, `Transport Layer
+/// Security (TLS)`, where its card would say the words beside it, nor where its short
+/// form is one character, which `(A)` reads as a list's label far more often. A term
+/// spelled as an abbreviation is the gloss: its definition says more.
 struct GlossMatcher {
-  /// The terms that may be marked, grouped by their first word as `uses` reads words,
-  /// longest first: `X.509 certificate` under `X`.
-  private let byFirstWord: [String: [DefinedTerm]]
+  /// What may be marked, by its spelling, grouped by its first word as `uses` reads
+  /// words, longest first: `X.509 certificate` under `X`.
+  private let byFirstWord: [String: [(spelling: String, gloss: Gloss)]]
 
-  init(_ terms: [String: DefinedTerm], commonWords: Set<String> = Self.bundledCommonWords) {
-    var byFirstWord: [String: [DefinedTerm]] = [:]
-    for (spelling, term) in terms {
+  init(
+    _ terms: [String: DefinedTerm], abbreviations: [String: Abbreviation] = [:],
+    commonWords: Set<String> = Self.bundledCommonWords
+  ) {
+    var glosses: [(String, Gloss)] = terms.compactMap { spelling, term in
+      if !spelling.contains(where: \.isWhitespace), Self.isCommon(spelling, in: commonWords) {
+        return nil
+      }
+      return (spelling, .term(term))
+    }
+    for (short, abbreviation) in abbreviations where short.count > 1 && terms[short] == nil {
+      glosses.append((short, .abbreviation(abbreviation)))
+    }
+    var byFirstWord: [String: [(spelling: String, gloss: Gloss)]] = [:]
+    for (spelling, gloss) in glosses {
       let string = spelling as NSString
       let first = Self.word(in: string, at: 0)
       guard first.length > 0 else { continue }
-      if !spelling.contains(where: \.isWhitespace), Self.isCommon(spelling, in: commonWords) {
-        continue
-      }
-      byFirstWord[string.substring(with: first), default: []].append(term)
+      byFirstWord[string.substring(with: first), default: []].append((spelling, gloss))
     }
     self.byFirstWord = byFirstWord.mapValues {
-      $0.sorted { $0.term.utf16.count > $1.term.utf16.count }
+      $0.sorted { $0.spelling.utf16.count > $1.spelling.utf16.count }
     }
   }
 
   var isEmpty: Bool { byFirstWord.isEmpty }
 
-  /// A term, and the UTF-16 range of its use.
-  typealias Use = (range: NSRange, term: DefinedTerm)
+  /// A gloss, and the UTF-16 range of its use.
+  typealias Use = (range: NSRange, gloss: Gloss)
 
-  /// The first use in `text` of each term not in `marked`, in order, as UTF-16 ranges.
+  /// The first use in `text` of each term or abbreviation not in `marked`, by its
+  /// spelling, in order, as UTF-16 ranges.
   func uses(in text: String, skipping marked: Set<String>) -> [Use] {
     let string = text as NSString
     var marked = marked
@@ -51,20 +66,34 @@ struct GlossMatcher {
         continue
       }
       let first = string.substring(with: word)
-      // The longest term used here is the use, marked or not: once marked, it is
-      // passed over whole, and the shorter one inside it is not its use.
-      let used = byFirstWord[first]?.first { Self.isWholeWord($0.term, in: string, at: location) }
-      if let term = used {
-        let range = NSRange(location: location, length: term.term.utf16.count)
+      // The longest used here is the use, marked or not: once marked, it is passed
+      // over whole, and the shorter one inside it is not its use.
+      let used = byFirstWord[first]?.first {
+        Self.isWholeWord($0.spelling, in: string, at: location)
+      }
+      if let (spelling, gloss) = used {
+        let range = NSRange(location: location, length: spelling.utf16.count)
         location = NSMaxRange(range)
-        guard !marked.contains(term.term) else { continue }
-        found.append((range, term))
-        marked.insert(term.term)
+        guard !marked.contains(spelling), !Self.isExpanded(gloss, at: range, in: string)
+        else { continue }
+        found.append((range, gloss))
+        marked.insert(spelling)
       } else {
         location = NSMaxRange(word)
       }
     }
     return found
+  }
+
+  /// Whether `gloss` is an abbreviation written at `range` in parentheses right after
+  /// its own expansion: `Transport Layer Security (TLS)`.
+  private static func isExpanded(_ gloss: Gloss, at range: NSRange, in string: NSString) -> Bool {
+    guard case .abbreviation(let abbreviation) = gloss, range.location > 0,
+      string.character(at: range.location - 1) == 0x28
+    else { return false }
+    let before = string.substring(to: range.location - 1)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return before.lowercased().hasSuffix(abbreviation.expansion.lowercased())
   }
 
   /// Whether `word` is a common word, or one capitalized: `Server` as `server`. An

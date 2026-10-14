@@ -80,13 +80,16 @@ public final class DocumentTextBuilder {
   var definedRules: Set<String> = []
 
   /// The document's defined terms, marked at their first use in each paragraph
-  /// (#396). Empty in a build with no live links: on paper there is no card to show.
+  /// (#396), and its abbreviations, at their first use in each section (#67). Empty
+  /// in a build with no live links: on paper there is no card to show.
   var glossMatcher = GlossMatcher([:])
   /// The terms each paragraph of a definition defines, which it does not mark.
   var ownTerms: [Paragraph: Set<String>] = [:]
   /// The terms already marked in the paragraph being emitted, or nil outside one: a
   /// heading, a table cell, a definition list's term.
   var glossedInParagraph: Set<String>?
+  /// The abbreviations already marked in the section being emitted, by short form.
+  var glossedInSection: Set<String> = []
   /// Whether the inlines being emitted are a link's, which no gloss goes inside.
   var isInLink = false
   /// Serial number of the last gloss's long-press item, on iOS.
@@ -240,7 +243,7 @@ extension DocumentTextBuilder {
     grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
-      glossMatcher = GlossMatcher(document.definedTerms)
+      glossMatcher = GlossMatcher(document.definedTerms, abbreviations: document.abbreviations)
       for term in document.definedTerms.values {
         for case .paragraph(let paragraph) in term.definition.flattened {
           ownTerms[paragraph, default: []].insert(term.term)
@@ -266,6 +269,7 @@ extension DocumentTextBuilder {
 
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
+    glossedInSection = []
     mark(Self.abstractAnchor)
     keepsWithNext.insert(output.length)
     append("Abstract\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
@@ -344,6 +348,7 @@ extension DocumentTextBuilder {
     // References tab instead — `DocumentInspector` in the app — and is skipped
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
+    glossedInSection = []
     mark(section.anchor, heading: section.displayTitle, place: section.place, depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents

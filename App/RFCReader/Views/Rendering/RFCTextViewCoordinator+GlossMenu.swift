@@ -14,7 +14,7 @@
       if let follow = goToDefinition(of: box.gloss) {
         children.append(
           UIAction(
-            title: String(localized: "Go to Definition"),
+            title: box.gloss.followTitle,
             image: UIImage(systemName: "arrow.turn.down.right")
           ) { _ in follow() })
       }

@@ -116,7 +116,10 @@ struct GlossMatcherTests {
     let matcher = Self.matcher(abbreviations: [Self.tls])
     let text = "Transport Layer Security (TLS) protects it, and TLS"
     let uses = matcher.uses(in: text, skipping: [])
-    #expect(uses.map(\.range.location) == [(text as NSString).range(of: "TLS", options: .backwards).location])
+    #expect(
+      uses.map(\.range.location) == [
+        (text as NSString).range(of: "TLS", options: .backwards).location
+      ])
   }
 
   @Test func `an abbreviation after other words in parentheses is marked`() {

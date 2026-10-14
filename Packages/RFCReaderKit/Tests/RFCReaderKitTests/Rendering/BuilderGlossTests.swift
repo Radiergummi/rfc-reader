@@ -159,14 +159,18 @@ struct BuilderGlossTests {
     #expect(Self.glossed(text).isEmpty)
   }
 
+  /// Less its abbreviations, which are glossed too (#67).
   @Test func `a document without defined terms glosses nothing`() throws {
-    let text = build(try Fixtures.rfc8999())
-    #expect(Self.glossed(text).isEmpty)
+    var document = try Fixtures.rfc8999()
+    document.abbreviations = [:]
+    #expect(Self.glossed(build(document)).isEmpty)
   }
 
   /// RFC 9985's terminology section defines four terms; the prose after it uses them.
+  /// Its abbreviations, glossed too (#67), are left out.
   @Test func `a committed document's defined terms are glossed where they are used`() throws {
-    let document = try Fixtures.document(named: "rfc9985.xml")
+    var document = try Fixtures.document(named: "rfc9985.xml")
+    document.abbreviations = [:]
     let text = build(document)
     let glossed = Self.glossed(text)
     #expect(!glossed.isEmpty)

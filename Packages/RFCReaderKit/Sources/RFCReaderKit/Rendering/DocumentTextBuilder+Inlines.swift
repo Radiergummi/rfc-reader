@@ -118,21 +118,25 @@ extension DocumentTextBuilder {
   }
 
   /// `text` in `attributes`, with the first use in the paragraph of each defined term
-  /// glossed (#396): a box of its own, and a dotted underline in the secondary color,
-  /// quieter than a link's. Outside a paragraph, and inside a link, it is plain.
+  /// (#396), and in the section of each abbreviation (#67), glossed: a box of its own,
+  /// and a dotted underline in the secondary color, quieter than a link's. Outside a
+  /// paragraph, and inside a link, it is plain.
   private func glossed(_ text: String, attributes: [NSAttributedString.Key: Any])
     -> NSAttributedString
   {
     guard let marked = glossedInParagraph, !isInLink else {
       return NSAttributedString(string: text, attributes: attributes)
     }
-    let uses = glossMatcher.uses(in: text, skipping: marked)
+    let uses = glossMatcher.uses(in: text, skipping: marked.union(glossedInSection))
     guard !uses.isEmpty else { return NSAttributedString(string: text, attributes: attributes) }
     let result = NSMutableAttributedString(string: text, attributes: attributes)
     for use in uses {
-      glossedInParagraph?.insert(use.term.term)
+      switch use.gloss {
+      case .term: glossedInParagraph?.insert(use.gloss.title)
+      case .abbreviation: glossedInSection.insert(use.gloss.title)
+      }
       var gloss: [NSAttributedString.Key: Any] = [
-        .rfcGloss: GlossBox(.term(use.term)),
+        .rfcGloss: GlossBox(use.gloss),
         .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
         .underlineColor: RFCColors.secondaryLabel,
       ]
