@@ -124,7 +124,7 @@ struct ReadingStyleTests {
   @Test func `inline code in a heading takes the heading's semibold weight`() {
     let style = ReadingStyle(bodySize: 17)
     let code = style.codeFont(matching: style.headingFont(depth: 1))
-    #expect(stated(code) == stated(.monospacedSystemFont(ofSize: 17, weight: .semibold)))
+    #expect(stated(code) == stated(.monospacedFont(ofSize: 17, weight: .semibold)))
   }
 
   /// Each text size reads its own column of the tables, smallest to largest.

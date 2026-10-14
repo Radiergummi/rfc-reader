@@ -134,7 +134,7 @@ public struct ReadingStyle: Sendable, Hashable {
   /// code in emphasis stays italic (#154).
   public func codeFont(matching surrounding: PlatformFont) -> PlatformFont {
     let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
-    return PlatformFont.monospacedSystemFont(
+    return PlatformFont.monospacedFont(
       ofSize: surrounding.pointSize * 0.92, weight: surrounding.weight
     )
     .adding(traits: slant)
@@ -145,7 +145,7 @@ public struct ReadingStyle: Sendable, Hashable {
   /// seen on a device to leave this one regular, which suits a diagram — a heavier
   /// stroke would close up its box-drawing without making it easier to read.
   public func monospacedFont(scale: CGFloat) -> PlatformFont {
-    .monospacedSystemFont(ofSize: bodySize * 0.82 * scale, weight: .regular)
+    .monospacedFont(ofSize: bodySize * 0.82 * scale, weight: .regular)
   }
 
   /// `1.` is a title, `1.1.` a subtitle, deeper is a headline: the system's

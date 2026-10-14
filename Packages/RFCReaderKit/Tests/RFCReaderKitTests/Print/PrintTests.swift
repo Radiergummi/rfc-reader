@@ -87,7 +87,7 @@ struct PrintLayoutTests {
   /// The published text's artwork only reads at its own 72 columns, so they have to
   /// fit the narrower of the two papers without wrapping.
   @Test func `the original text's 72 columns fit the narrowest paper`() {
-    let font = PlatformFont.monospacedSystemFont(
+    let font = PlatformFont.monospacedFont(
       ofSize: PrintLayout.originalTextSize, weight: .regular)
     let line = CTLineCreateWithAttributedString(
       NSAttributedString(string: String(repeating: "0", count: 72), attributes: [.font: font]))
@@ -572,7 +572,7 @@ struct PublishedPagesTests {
   /// A published page is 58 lines of at most 72 columns, and it prints at the
   /// preferred size on either paper.
   @Test func `a published page of 58 lines fits both papers at 9 pt`() {
-    let font = PlatformFont.monospacedSystemFont(
+    let font = PlatformFont.monospacedFont(
       ofSize: PrintLayout.originalTextSize, weight: .regular)
     let page = Array(repeating: String(repeating: "0", count: 72), count: 58)
       .joined(separator: "\n")
@@ -584,8 +584,8 @@ struct PublishedPagesTests {
   }
 
   @Test func `a font's metrics are per point of its size`() {
-    let small = Metrics(PlatformFont.monospacedSystemFont(ofSize: 9, weight: .regular))
-    let large = Metrics(PlatformFont.monospacedSystemFont(ofSize: 18, weight: .regular))
+    let small = Metrics(PlatformFont.monospacedFont(ofSize: 9, weight: .regular))
+    let large = Metrics(PlatformFont.monospacedFont(ofSize: 18, weight: .regular))
     #expect(abs(small.lineHeight - large.lineHeight) < 0.01)
     #expect(abs(small.advance - large.advance) < 0.01)
     #expect(small.lineHeight > 1)
