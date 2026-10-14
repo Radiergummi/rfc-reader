@@ -428,6 +428,9 @@ struct ReaderInputs {
       textView.copyCode = { [weak coordinator = context.coordinator] event in
         coordinator?.copyCode(under: event) ?? false
       }
+      textView.isOnGloss = { [weak coordinator = context.coordinator] event in
+        coordinator?.isOnGloss(event) ?? false
+      }
       textView.goToDefinition = { [weak coordinator = context.coordinator] event in
         coordinator?.goToDefinition(under: event)
       }

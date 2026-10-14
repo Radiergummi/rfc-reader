@@ -3,6 +3,8 @@ import RFCKit
 
 #if canImport(UIKit)
   import UIKit
+#else
+  import AppKit
 #endif
 
 extension NSAttributedString.Key {
@@ -279,6 +281,19 @@ extension NSAttributedString {
       let range = extent(ofBox: .rfcReference, at: offset)
     else { return nil }
     return (box, range)
+  }
+
+  /// Whether a link or an attachment is on either side of the caret position
+  /// `index`: what a point between those characters may be over, and what a text
+  /// view has as accessibility children. What the reader's text view asks before it
+  /// lets AppKit hit-test its children (#396); anywhere else that hit test can only
+  /// find the text view itself.
+  public func hasAccessibilityChild(besideInsertionIndex index: Int) -> Bool {
+    [index - 1, index].contains { offset in
+      guard offset >= 0, offset < length else { return false }
+      return attribute(.link, at: offset, effectiveRange: nil) != nil
+        || attribute(.attachment, at: offset, effectiveRange: nil) != nil
+    }
   }
 
   /// The gloss at this character offset, and the whole of its extent: what its card

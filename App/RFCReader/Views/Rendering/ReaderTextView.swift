@@ -147,6 +147,9 @@ import RFCReaderKit
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
+    /// Whether a mouse-down is on a defined term's gloss (#396), whose click is tracked
+    /// as a reference's is.
+    var isOnGloss: (NSEvent) -> Bool = { _ in false }
     /// Go to Definition for the defined term glossed under the event's pointer
     /// (#396), or nil where there is none, or its definition has no anchor.
     var goToDefinition: (NSEvent) -> (() -> Void)? = { _ in nil }
@@ -305,13 +308,39 @@ import RFCReaderKit
       {
         return
       }
-      guard event.clickCount == 1, !event.modifierFlags.contains(.control),
-        let (link, index) = referenceLink(event)
-      else {
+      guard event.clickCount == 1, !event.modifierFlags.contains(.control) else {
         super.mouseDown(with: event)
         return
       }
-      trackReferenceClick(event, link: link, at: index)
+      if let (link, index) = referenceLink(event) {
+        trackReferenceClick(event, link: link, at: index)
+      } else if isOnGloss(event) {
+        // Tracked as a reference is, for its force click: left to `NSTextView`, a
+        // deep press on it began Look Up's own preview, whose popover, shown from
+        // the text view, hung the app as a card once did (#396).
+        trackReferenceClick(event, link: nil, at: nil)
+      } else {
+        super.mouseDown(with: event)
+      }
+    }
+
+    /// The text view itself where no link or attachment is near the point, without
+    /// asking AppKit (#396). AppKit's answer walks every link in the document as a
+    /// child, again for each child it registers, to find none and return the text
+    /// view: in RFC 9110 the main thread never came back. Every popover shown from
+    /// the text view asks it, Look Up's after a force click on a word among them.
+    /// Near a link or an attachment, AppKit answers, so VoiceOver finds them as it
+    /// always did. `point` is in screen coordinates. Nonisolated, as AppKit declares
+    /// it, and asked on the main thread, as all of AppKit's accessibility is.
+    nonisolated override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+      let answersItself = MainActor.assumeIsolated { () -> Bool in
+        guard let window else { return false }
+        let local = convert(window.convertPoint(fromScreen: point), from: nil)
+        return bounds.contains(local)
+          && !attributedString().hasAccessibilityChild(
+            besideInsertionIndex: characterIndexForInsertion(at: local))
+      }
+      return answersItself ? self : super.accessibilityHitTest(point)
     }
 
     /// A click that starts on a reference, tracked here rather than by `NSTextView`,
@@ -323,7 +352,11 @@ import RFCReaderKit
     /// plain release follows the link through `clicked(onLink:at:)`, as `NSTextView`
     /// would have; and a drag is handed back to `NSTextView` from the mouse-down, so
     /// a selection can still start on a reference.
-    private func trackReferenceClick(_ down: NSEvent, link: Any, at index: Int) {
+    ///
+    /// A click on a gloss (#396), which has no link, is tracked here too: its deep
+    /// press shows its card, and a plain release puts the caret where it was pressed,
+    /// as a click on any text does.
+    private func trackReferenceClick(_ down: NSEvent, link: Any?, at index: Int?) {
       guard let window else { return }
       // Decided once, at the first event of stage 2. Not on `stageTransition`, which
       // measures the way to the next stage rather than the step into this one: it
@@ -345,7 +378,13 @@ import RFCReaderKit
             return
           }
         case .leftMouseUp:
-          if !forceClicked { clicked(onLink: link, at: index) }
+          guard !forceClicked else { return }
+          if let link, let index {
+            clicked(onLink: link, at: index)
+          } else {
+            let caret = characterIndexForInsertion(at: convert(down.locationInWindow, from: nil))
+            setSelectedRange(NSRange(location: caret, length: 0))
+          }
           return
         default:
           break

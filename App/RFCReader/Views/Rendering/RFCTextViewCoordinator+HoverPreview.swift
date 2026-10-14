@@ -32,6 +32,15 @@
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
     }
 
+    /// Whether `event` is on a gloss, found as hover finds it. Not in a link
+    /// preview's reader, whose clicks commit the preview.
+    func isOnGloss(_ event: NSEvent) -> Bool {
+      guard commitsOnClick == nil, let textView, event.window === textView.window else {
+        return false
+      }
+      return reference(atWindowPoint: event.locationInWindow)?.gloss != nil
+    }
+
     /// Go to Definition for the gloss under `event`'s pointer, found as hover finds
     /// it, by the character under the pointer rather than the nearest caret position.
     func goToDefinition(under event: NSEvent) -> (() -> Void)? {
