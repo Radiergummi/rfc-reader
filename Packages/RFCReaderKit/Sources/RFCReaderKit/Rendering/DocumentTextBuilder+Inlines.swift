@@ -99,7 +99,8 @@ extension DocumentTextBuilder {
         // `UITextView` has no such accessor, so iOS is given a pronunciation on
         // the chip's icon instead (#862), only in a build for the reader, as a
         // diagram's is (`setDiagramSpeech`).
-        chipAttributes[.rfcSpoken] = display.text + ", informative"
+        // The kind first, as iOS says it, where the icon comes before the label.
+        chipAttributes[.rfcSpoken] = "informative " + display.text
         #if canImport(UIKit)
           if style.emitsLinks {
             iconAttributes[.accessibilitySpeechIPANotation] =

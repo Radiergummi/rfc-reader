@@ -185,8 +185,9 @@ struct BuilderChipTests {
   }
 
   /// The kind is said, not only drawn (#457): VoiceOver on macOS reads an
-  /// informative chip as its label and ", informative", which every character of
-  /// the chip carries; a normative one as it always has.
+  /// informative chip as "informative" and its label, the order iOS says it in
+  /// (#862), which every character of the chip carries; a normative one as it
+  /// always has.
   @Test func `an informative chip is said to be informative`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     // What each chip is said as, and what it reads as on screen.
@@ -206,7 +207,7 @@ struct BuilderChipTests {
       spoken[id] = (label ?? "", box.reference.display.text)
     }
     let informative = try #require(spoken[.rfc(5116)])
-    #expect(informative.label == informative.shown + ", informative")
+    #expect(informative.label == "informative " + informative.shown)
     #expect(spoken[.rfc(2119)]?.label == "", "a normative chip has no label of its own")
   }
 

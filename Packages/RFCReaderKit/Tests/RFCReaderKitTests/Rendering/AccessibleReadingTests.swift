@@ -154,7 +154,7 @@ struct AccessibleReadingTests {
     #expect(AccessibleReading.rotorLabel(at: offset, in: text) == "Diagram")
   }
 
-  /// An informative chip is said as its label and its kind (#457), over the chip's
+  /// An informative chip is said as its kind and its label (#457), over the chip's
   /// own range, so the text view can keep the link it is: said as a plain label, it
   /// lost the link trait a normative chip keeps.
   @Test func `an informative chip is said as a chip, with its range`() throws {
@@ -163,7 +163,7 @@ struct AccessibleReadingTests {
       if case .chipLabel(let label, let range) = piece { (label, range) } else { nil }
     }
     let chip = try #require(chips.first)
-    #expect(chip.0.hasSuffix(", informative"))
+    #expect(chip.0.hasPrefix("informative "))
     #expect(text.attribute(.link, at: NSMaxRange(chip.1) - 1, effectiveRange: nil) != nil)
     #expect(text.attribute(.rfcChip, at: chip.1.location, effectiveRange: nil) != nil)
     // Where an accessor takes no range, the label is said as any other.
