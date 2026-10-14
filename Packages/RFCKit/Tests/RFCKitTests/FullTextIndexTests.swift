@@ -191,6 +191,44 @@ final class FullTextIndexTests {
     #expect(narrowed == ranked)
   }
 
+  /// `section:` (#37, #177): only sections whose heading holds the value, as a phrase,
+  /// or whose anchor holds it.
+  @Test func `a section narrows the hits to the sections whose heading matches`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(
+      try index.search("intermediaries", section: "connection").map(\.anchor) == ["connection-id"])
+    #expect(try index.search("intermediaries", section: "notational").isEmpty)
+  }
+
+  @Test func `a section matches by its anchor too`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    #expect(try index.search("interoperation", section: "section-6").map(\.number) == ["6"])
+  }
+
+  /// `section:security in:9110` goes to a section without a word to search for. The
+  /// snippet is the section's opening words, with nothing marked.
+  @Test func `a section without words lists the sections that match`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    let hits = try index.search("", section: "connection id")
+    #expect(hits.map(\.anchor) == ["connection-id"])
+    let snippet = try #require(hits.first?.snippet)
+    #expect(!snippet.text.isEmpty)
+    #expect(snippet.matches.isEmpty)
+  }
+
+  @Test func `a section narrows a search by the predicate too`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(try index.search("", section: "connection") { $0 == .rfc(1) }.isEmpty)
+  }
+
   @Test func `adding a document again replaces it`() throws {
     let index = try index()
     let document = try Fixtures.document("rfc8999.xml")

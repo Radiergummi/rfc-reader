@@ -141,13 +141,13 @@ public actor TextIndexer {
   }
 
   /// The sections holding every word of `query`, best first; see
-  /// `FullTextIndex.search`. `allowed`, when given, are the only documents a hit may
-  /// be in.
+  /// `FullTextIndex.search`, `section` included. `allowed`, when given, are the only
+  /// documents a hit may be in.
   public func search(
-    _ query: String, limit: Int = 50, in allowed: Set<DocumentID>? = nil
+    _ query: String, section: String? = nil, limit: Int = 50, in allowed: Set<DocumentID>? = nil
   ) throws -> Found {
     let hits = try index.search(
-      query, limit: limit, where: allowed.map { allowed in allowed.contains })
+      query, section: section, limit: limit, where: allowed.map { allowed in allowed.contains })
     let indexed = indexedDocuments() ?? []
     let searched = allowed.map { indexed.intersection($0).count } ?? indexed.count
     return Found(hits: hits, searched: searched, narrowedTo: allowed?.count)

@@ -76,6 +76,30 @@ struct TextQueryTests {
     #expect(textQuery(LibraryList(filter: .all, query: "congestion sort:oldest"))?.documents == nil)
   }
 
+  @Test func `a section goes to the full-text search`() {
+    let query = textQuery(LibraryList(filter: .all, query: "congestion section:security"))
+    #expect(query?.words == "congestion")
+    #expect(query?.section == "security")
+    #expect(query?.documents == nil)
+  }
+
+  /// `section:security in:9110` goes to the section, with no word to search for
+  /// (answered on #37, 2026-10-14).
+  @Test func `a section alone searches the text`() {
+    let query = textQuery(LibraryList(filter: .all, query: "section:security in:2"))
+    #expect(query?.words == "")
+    #expect(query?.section == "security")
+    #expect(query?.documents == [.rfc(2)])
+  }
+
+  /// A query naming a section is about sections: it lists no RFC rows, only the
+  /// section hits under them.
+  @Test func `a query with a section lists no RFC rows`() {
+    let list = LibraryList(filter: .all, query: "host section:security")
+    #expect(list.rows(in: index, search: IndexSearch(index: index)).isEmpty)
+    #expect(list.hits(from: IndexSearch(index: index)).isEmpty)
+  }
+
   /// The RFC rows are empty while a term is unknown, and so are the section hits.
   @Test func `an unknown term has no section hits`() {
     #expect(textQuery(LibraryList(filter: .all, query: "congestion released:2024")) == nil)

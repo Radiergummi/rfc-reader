@@ -1146,7 +1146,8 @@ final class LibraryModel {
       let query = await Self.textQuery(list, in: index, search: search)
     else { return nil }
     do {
-      return try await textIndexer.search(query.words, in: query.documents)
+      return try await textIndexer.search(
+        query.words, section: query.section, in: query.documents)
     } catch {
       libraryLog.error(
         "the full-text search failed: \(String(describing: error), privacy: .public)")
