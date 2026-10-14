@@ -32,6 +32,8 @@ struct SearchQueryTests {
     #"wg:"NON WORKING GROUP" cache"#,
     #"author:"" cache"#,
     "author:\"Roy\tFielding\" cache",
+    "section:content-negotiation",
+    #"section:"Security Considerations" tls in:9110"#,
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
@@ -86,6 +88,7 @@ struct SearchQueryTests {
     case .has: "xml"
     case .readerData: "bookmarked"
     case .scope: "rfc9110"
+    case .section: "security"
     case .sort: "newest"
     }
   }
@@ -140,7 +143,7 @@ struct SearchQueryTests {
         == [
           "cache wg:", "cache status:", "cache author:", "cache stream:", "cache year:",
           "cache after:", "cache before:", "cache published:", "cache has:xml", "cache is:",
-          "cache in:", "cache sort:",
+          "cache in:", "cache section:", "cache sort:",
         ])
   }
 
@@ -281,6 +284,16 @@ struct SearchQueryTermTests {
 
   private func tokenized(_ query: String) -> SearchQuery.Tokenized {
     SearchQuery.tokenized(query, workingGroups: workingGroups)
+  }
+
+  /// `section:` names the sections a full-text search looks in (#37, #177): one value,
+  /// as written, a term of its own.
+  @Test func `a section is a term of its own`() {
+    let parsed = IndexSearch.parseQuery("section:Content-Negotiation cache")
+    #expect(parsed.filters.section == "content-negotiation")
+    #expect(parsed.text == "cache")
+    #expect(
+      SearchQuery.terms(of: parsed.filters).map(\.label) == ["Section: content-negotiation"])
   }
 
   /// One term per word of the canonical form, in its order, each named for a

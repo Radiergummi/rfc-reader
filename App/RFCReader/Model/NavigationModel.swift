@@ -71,6 +71,20 @@ final class NavigationModel: Identifiable {
   private(set) var listed: ListedRows?
   @ObservationIgnored private var listing: Task<Void, Never>?
 
+  /// What the full-text search found for a list (#37): the "In the text" rows under
+  /// it. Made after the list, and again whenever the full-text index changes; until
+  /// the next arrives this keeps what it has, for the list it was made for, which a
+  /// view compares with the list it shows.
+  private(set) var textFound: TextFound?
+  @ObservationIgnored private var textSearching: Task<Void, Never>?
+
+  struct TextFound {
+    let list: LibraryList
+    /// Nil when the search has nothing to say of the list: there is no index, or the
+    /// list asks the text nothing (`LibraryModel.textSearch`).
+    let found: TextIndexer.Found?
+  }
+
   /// The query the list, its count and the sidebar's results are for: the one whose
   /// rows are on show.
   var appliedQuery: String { listed?.list.query ?? "" }
@@ -97,11 +111,15 @@ final class NavigationModel: Identifiable {
   /// compared document (#187), which would otherwise list the library for nothing.
   init(library: LibraryModel, listsDocuments: Bool = true) {
     self.library = library
-    if listsDocuments { followListInputs() }
+    if listsDocuments {
+      followListInputs()
+      followTextSearch()
+    }
   }
 
   isolated deinit {
     listing?.cancel()
+    textSearching?.cancel()
     pendingSearch?.cancel()
   }
 
@@ -367,6 +385,44 @@ final class NavigationModel: Identifiable {
         else { continue }
         self.listed = made
       }
+    }
+  }
+
+  /// A full-text search asked for: the list on show, over the full-text index as it
+  /// is now.
+  private struct TextRequest: Equatable {
+    let list: LibraryList
+    let textIndexVersion: Int
+  }
+
+  private func textRequest() -> TextRequest? {
+    guard let list = listed?.list else { return nil }
+    return TextRequest(list: list, textIndexVersion: library.textIndexVersion)
+  }
+
+  /// Searches the text again whenever the list on show or the full-text index
+  /// changes, as `followListInputs` lists again.
+  private func followTextSearch() {
+    let requests = Observations { [weak self] in self?.textRequest() }
+    textSearching = Task(name: "Search the text") { [weak self] in
+      for await request in requests {
+        guard let request, let self else { continue }
+        let found = await self.library.textSearch(request.list)
+        // Kept while the index changed under it, as the first pass changes it every
+        // few documents: it is newer than what is on show, and the next search follows.
+        guard !Task.isCancelled, self.textRequest()?.list == request.list else { continue }
+        self.textFound = TextFound(list: request.list, found: found)
+      }
+    }
+  }
+
+  /// A section the full-text search found (#37): its document, at the section. Like
+  /// `select(_:)`, it leaves the filter and the search alone, which the hit is in.
+  func select(_ hit: SectionHit) {
+    if hit.document == selection {
+      jump(toSection: hit.anchor)
+    } else {
+      go(to: HistoryEntry(id: hit.document, section: hit.anchor))
     }
   }
 

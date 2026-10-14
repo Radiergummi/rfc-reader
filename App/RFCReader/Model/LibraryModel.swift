@@ -456,6 +456,15 @@ final class LibraryModel {
   private let store = DocumentStore()
   private var search: IndexSearch?
 
+  /// The full-text index (#37), kept to the bodies `store` holds. Nil until bootstrap
+  /// has opened it, off the main actor, and when it could not be opened, which leaves
+  /// the search to the index's metadata.
+  @ObservationIgnored private var textIndexer: TextIndexer?
+
+  /// Counts the full-text index's changes, for a tab to search the text again once
+  /// a document is added to it or removed.
+  private(set) var textIndexVersion = 0
+
   // MARK: - Bootstrap
 
   func bootstrap() async {
@@ -500,6 +509,22 @@ final class LibraryModel {
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    Task(name: "Index the text", priority: .utility) { [weak self, store] in
+      let indexer: TextIndexer
+      do {
+        indexer = try await TextIndexer.opening(store: store)
+      } catch {
+        libraryLog.error(
+          "the full-text index did not open: \(String(describing: error), privacy: .public)")
+        return
+      }
+      self?.textIndexer = indexer
+      // A list made before the index opened has no section hits, and an index that is
+      // already up to date never reports a change: its tabs search the text now.
+      self?.textIndexChanged()
+      await indexer.run(changed: changed)
+    }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -1134,6 +1159,34 @@ final class LibraryModel {
     guard let index else { return nil }
     return await Self.listed(
       list, in: index, indexVersion: indexVersion, search: search, hits: hits)
+  }
+
+  private func textIndexChanged() {
+    textIndexVersion += 1
+  }
+
+  /// What the full-text search finds for `list` (#37): its section hits, narrowed as
+  /// its RFC rows are. Nil while there is no index, or when the list asks the text
+  /// nothing (`LibraryList.textQuery`).
+  func textSearch(_ list: LibraryList) async -> TextIndexer.Found? {
+    guard let index, let textIndexer,
+      let query = await Self.textQuery(list, in: index, search: search)
+    else { return nil }
+    do {
+      return try await textIndexer.search(
+        query.words, section: query.section, in: query.documents)
+    } catch {
+      libraryLog.error(
+        "the full-text search failed: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  @concurrent
+  private static func textQuery(
+    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?
+  ) async -> LibraryList.TextQuery? {
+    list.textQuery(in: index, search: search)
   }
 
   /// `listed(_:hits:)` on the main actor, for a script, which reads the list

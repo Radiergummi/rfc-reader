@@ -48,6 +48,12 @@ public struct SearchFilters: Sendable, Hashable {
   public var requiresXML = false
   public var readerData: Set<ReaderData> = []
   public var scopes: Set<Scope> = []
+  /// The sections a full-text search looks in (`section:`), by their heading or
+  /// anchor: lowercased when set, and nil when set empty, as `author` is. The index's
+  /// metadata has no sections, so a query with one lists no RFCs (#37).
+  public var section: String? {
+    didSet { section = Self.normalized(section) }
+  }
   public var sort: Sort?
 
   public init() {}
@@ -56,7 +62,7 @@ public struct SearchFilters: Sendable, Hashable {
     statuses.isEmpty && streams.isEmpty && workingGroups.isEmpty && author == nil
       && yearRange == nil && publishedAfter == nil && publishedBefore == nil
       && publishedWithinDays == nil && !excludeObsolete && !requiresXML && readerData.isEmpty
-      && scopes.isEmpty && sort == nil
+      && scopes.isEmpty && section == nil && sort == nil
   }
 
   private static func normalized(_ value: String?) -> String? {
@@ -208,6 +214,8 @@ public struct IndexSearch: Sendable {
       case .scope:
         read.scopes.insert(
           DocumentID(parsing: value).map(SearchFilters.Scope.document) ?? .collection(value))
+      case .section:
+        read.section = value
       case .has:
         guard lowered == SearchQuery.xmlValue else { return false }
         read.requiresXML = true
@@ -223,9 +231,11 @@ public struct IndexSearch: Sendable {
   /// The hits for `query`. A query naming something unknown, or asking for the
   /// reader's data or a collection, which the index doesn't hold, finds nothing:
   /// a list that holds them narrows by them itself, through `search(text:filters:)`.
+  /// So does one naming a section, which only the full-text search answers.
   public func search(_ query: String, limit: Int = 100, now: Date = Date()) -> [SearchHit] {
     let parsed = Self.parseQuery(query)
-    guard parsed.unknown.isEmpty, !parsed.filters.asksReader else { return [] }
+    guard parsed.unknown.isEmpty, !parsed.filters.asksReader, parsed.filters.section == nil
+    else { return [] }
     return search(text: parsed.text, filters: parsed.filters, limit: limit, now: now)
   }
 
