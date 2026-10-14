@@ -90,8 +90,8 @@ public final class DocumentTextBuilder {
   var glossedInParagraph: Set<String>?
   /// The abbreviations already marked in the section being emitted, by short form.
   var glossedInSection: Set<String> = []
-  /// The document's abbreviations, for the paragraphs that expand them.
-  var abbreviations: [String: Abbreviation] = [:]
+  /// Whether the document expands any abbreviation, so a paragraph may.
+  var hasAbbreviations = false
   /// The abbreviations the paragraph being emitted expands, which are not marked in
   /// parentheses there.
   var expandedInParagraph: Set<String> = []
@@ -249,7 +249,7 @@ extension DocumentTextBuilder {
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
       glossMatcher = GlossMatcher(document.definedTerms, abbreviations: document.abbreviations)
-      abbreviations = document.abbreviations
+      hasAbbreviations = !document.abbreviations.isEmpty
       for term in document.definedTerms.values {
         for case .paragraph(let paragraph) in term.definition.flattened {
           ownTerms[paragraph, default: []].insert(term.term)
@@ -472,7 +472,9 @@ extension DocumentTextBuilder {
     mark(paragraph.anchor)
     // A term defined here is not marked here: its definition is what a card would show.
     glossedInParagraph = glossMatcher.isEmpty ? nil : ownTerms[paragraph] ?? []
-    expandedInParagraph = GlossMatcher.expanded(in: paragraph.plainText, among: abbreviations)
+    if glossedInParagraph != nil, hasAbbreviations {
+      expandedInParagraph = Abbreviation.shortForms(expandedIn: paragraph.plainText)
+    }
     output.append(inlineRuns(paragraph.inlines, base: attributes))
     glossedInParagraph = nil
     expandedInParagraph = []

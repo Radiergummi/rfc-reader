@@ -127,18 +127,6 @@ struct GlossMatcherTests {
     #expect(Self.marked(matcher, in: "a secure channel (TLS)") == ["TLS"])
   }
 
-  /// Whatever its case and white space, and across the runs a paragraph's emphasis
-  /// or link splits it into.
-  @Test func `a paragraph's own expansions are found`() {
-    let abbreviations = [
-      "TLS": Self.tls, "IP": Abbreviation(short: "IP", expansion: "Internet Protocol"),
-    ]
-    #expect(
-      GlossMatcher.expanded(
-        in: "Uses transport layer\n   security (TLS) over IP.", among: abbreviations)
-        == ["TLS"])
-  }
-
   @Test func `an abbreviation marked in the section is not marked again`() {
     let matcher = Self.matcher(abbreviations: [Self.tls])
     #expect(matcher.uses(in: "over TLS", skipping: [], markedInSection: ["TLS"]).isEmpty)

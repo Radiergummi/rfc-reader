@@ -44,10 +44,10 @@
     /// Go to Definition or Go to Expansion for the gloss under `event`'s pointer,
     /// found as hover finds it, by the character under the pointer rather than the
     /// nearest caret position.
-    func goToDefinition(under event: NSEvent) -> (title: String, follow: () -> Void)? {
+    func followGloss(under event: NSEvent) -> (title: String, follow: () -> Void)? {
       guard let textView, event.window === textView.window,
         let gloss = reference(atWindowPoint: event.locationInWindow)?.gloss,
-        let follow = goToDefinition(of: gloss.gloss)
+        let follow = followGloss(of: gloss.gloss)
       else { return nil }
       return (gloss.gloss.followTitle(), follow)
     }

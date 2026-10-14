@@ -382,10 +382,11 @@ final class RFCTextViewCoordinator: NSObject {
     textView?.textLayoutManager?.attributedText?.gloss(at: offset)
   }
 
-  /// Go to Definition for `gloss`, from its menu: the definition's anchor followed
-  /// here, as a link to it would be, so Back returns. Nil for a definition with no
-  /// anchor, which has nowhere to go.
-  func goToDefinition(of gloss: Gloss) -> (() -> Void)? {
+  /// Go to Definition or Go to Expansion for `gloss`, from its menu: the anchor of
+  /// the definition, or of the section that expands the abbreviation, followed here,
+  /// as a link to it would be, so Back returns. Nil for a definition with no anchor,
+  /// which has nowhere to go.
+  func followGloss(of gloss: Gloss) -> (() -> Void)? {
     guard let anchor = gloss.anchor,
       let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
     else { return nil }

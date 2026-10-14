@@ -11,7 +11,7 @@
     {
       guard let environment, let (box, _) = gloss(at: textItem.range.location) else { return nil }
       var children: [UIMenuElement] = []
-      if let follow = goToDefinition(of: box.gloss) {
+      if let follow = followGloss(of: box.gloss) {
         children.append(
           UIAction(
             title: box.gloss.followTitle(),

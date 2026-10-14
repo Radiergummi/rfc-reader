@@ -103,20 +103,6 @@ struct GlossMatcher {
     return string.character(at: range.location - 1) == 0x28
   }
 
-  /// The abbreviations of `abbreviations` that `text`, a paragraph's, expands: its
-  /// expansion followed by the short form in parentheses, whatever the case and the
-  /// white space, across the paragraph's runs of emphasis and links.
-  static func expanded(in text: String, among abbreviations: [String: Abbreviation])
-    -> Set<String>
-  {
-    guard text.contains("(") else { return [] }
-    let folded = text.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
-    return Set(
-      abbreviations.values.filter {
-        folded.contains("\($0.expansion.lowercased()) (\($0.short.lowercased())")
-      }.map(\.short))
-  }
-
   /// Whether `word` is a common word, or one capitalized: `Server` as `server`. An
   /// acronym is neither, `IP` not `iP`.
   private static func isCommon(_ word: String, in commonWords: Set<String>) -> Bool {

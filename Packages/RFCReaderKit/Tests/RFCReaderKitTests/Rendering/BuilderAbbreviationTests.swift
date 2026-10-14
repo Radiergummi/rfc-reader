@@ -75,6 +75,13 @@ struct BuilderAbbreviationTests {
     #expect(Self.glosses(in: document).count == 1)
   }
 
+  /// The words differ from the expansion the document is shown by, its first: the
+  /// paragraph expands the short form all the same.
+  @Test func `parentheses that expand it in other words are not glossed`() {
+    let found = Self.glosses(in: Self.document(["Run over transport-layer security (TLS) here."]))
+    #expect(found.isEmpty)
+  }
+
   /// A committed document that expands abbreviations: every gloss in it is one.
   @Test func `a committed document's abbreviations are glossed where they are used`() throws {
     var document = try Fixtures.document(named: "rfc9985.xml")

@@ -153,7 +153,7 @@ import RFCReaderKit
     /// Go to Definition for the defined term glossed under the event's pointer
     /// (#396), or Go to Expansion for the abbreviation (#67): the item's title and
     /// what it does. Nil where there is none, or it has nowhere to go.
-    var goToDefinition: (NSEvent) -> (title: String, follow: () -> Void)? = { _ in nil }
+    var followGloss: (NSEvent) -> (title: String, follow: () -> Void)? = { _ in nil }
 
     /// How far the text container reaches left into the gutter, for the headings'
     /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
@@ -462,15 +462,15 @@ import RFCReaderKit
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
       let quotes = selectedRange().length > 0
-      let definition = goToDefinition(event)
-      guard figure != nil || quotes || definition != nil else { return standard }
+      let gloss = followGloss(event)
+      guard figure != nil || quotes || gloss != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
-      if let definition {
+      if let gloss {
         let item = NSMenuItem(
-          title: definition.title, action: #selector(goToDefinitionItem(_:)), keyEquivalent: "")
+          title: gloss.title, action: #selector(followGlossItem(_:)), keyEquivalent: "")
         item.target = self
-        item.representedObject = definition.follow
+        item.representedObject = gloss.follow
         if !result.items.isEmpty {
           result.insertItem(.separator(), at: 0)
         }
@@ -507,7 +507,7 @@ import RFCReaderKit
       return result
     }
 
-    @objc private func goToDefinitionItem(_ sender: NSMenuItem) {
+    @objc private func followGlossItem(_ sender: NSMenuItem) {
       (sender.representedObject as? () -> Void)?()
     }
 
