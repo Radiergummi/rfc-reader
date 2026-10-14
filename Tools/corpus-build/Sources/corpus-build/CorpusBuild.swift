@@ -18,6 +18,7 @@ struct CorpusBuild: AsyncParsableCommand {
       FetchCommand.self, ConvertCommand.self, ManifestCommand.self, QueriesCommand.self,
       ScoreCommand.self,
       RevisionsCommand.self, GroupsCommand.self, IndexCommand.self, AbbreviationsCommand.self,
+      CommonWordsCommand.self,
     ]
   )
 }
