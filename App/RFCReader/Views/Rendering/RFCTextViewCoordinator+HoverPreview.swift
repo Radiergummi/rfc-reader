@@ -15,8 +15,15 @@
       hover.pointerExited = { [weak self] in self?.hoverSectionNumber(under: nil) }
       hover.card = { [weak self] target in
         guard let self, let environment = self.environment,
-          let preview = self.preview(for: target.box.reference),
           let rect = self.referenceRect(for: target.range)
+        else { return nil }
+        if let gloss = target.gloss {
+          return ReferenceHoverController.Popover(
+            content: NSHostingController(
+              rootView: GlossCard(gloss: gloss.gloss).readerEnvironment(environment)),
+            anchor: rect)
+        }
+        guard let reference = target.reference, let preview = self.preview(for: reference.reference)
         else { return nil }
         return ReferenceHoverController.Popover(
           content: NSHostingController(rootView: preview.readerEnvironment(environment)),
@@ -67,14 +74,17 @@
     }
 
     private func forceClick(on target: HoverTarget) -> ReferenceHover.Event? {
-      guard commitsOnClick == nil, let documentID,
+      guard commitsOnClick == nil else { return nil }
+      // A gloss has its card and nothing more: it names no document (#396).
+      if target.gloss != nil { return .forceClickCard(target) }
+      guard let reference = target.reference, let documentID,
         let url = link(at: target.range.location),
         let resolved = LinkPreview.resolve(
-          target.box.reference, linkedTo: url, from: documentID, in: environment?.library.index)
+          reference.reference, linkedTo: url, from: documentID, in: environment?.library.index)
       else { return nil }
       switch resolved {
       case .card:
-        guard preview(for: target.box.reference) != nil else { return nil }
+        guard preview(for: reference.reference) != nil else { return nil }
         return .forceClickCard(target)
       case .document:
         guard environment != nil, referenceRect(for: target.range) != nil else { return nil }
@@ -125,21 +135,22 @@
         content: host, size: preview.size, anchor: rect)
     }
 
-    /// The reference under a point in window coordinates. `textContainerOrigin` is
-    /// the inset: the view is flipped, so subtracting it is all it takes to reach
-    /// container space.
+    /// The reference under a point in window coordinates, or the gloss (#396) where
+    /// there is no reference. `textContainerOrigin` is the inset: the view is
+    /// flipped, so subtracting it is all it takes to reach container space.
     private func reference(atWindowPoint point: NSPoint) -> HoverTarget? {
       guard let textView else { return nil }
       let viewPoint = textView.convert(point, from: nil)
-      return reference(
-        at: CGPoint(
-          x: viewPoint.x - textView.textContainerOrigin.x,
-          y: viewPoint.y - textView.textContainerOrigin.y)
-      ).map { HoverTarget(box: $0.box, range: $0.range) }
-    }
-
-    private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
-      characterOffset(atContainerPoint: containerPoint).flatMap { reference(at: $0) }
+      guard
+        let offset = characterOffset(
+          atContainerPoint: CGPoint(
+            x: viewPoint.x - textView.textContainerOrigin.x,
+            y: viewPoint.y - textView.textContainerOrigin.y))
+      else { return nil }
+      if let reference = reference(at: offset) {
+        return HoverTarget(box: reference.box, range: reference.range)
+      }
+      return gloss(at: offset).map { HoverTarget(gloss: $0.box, range: $0.range) }
     }
 
     /// The rect of a reference's run, in text-container coordinates — the

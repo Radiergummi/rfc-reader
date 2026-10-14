@@ -147,6 +147,9 @@ import RFCReaderKit
     /// Copies a code block for a click on its copy button, answering whether there
     /// was one.
     var copyCode: (NSEvent) -> Bool = { _ in false }
+    /// Go to Definition for the defined term glossed at a character (#396), or nil
+    /// where there is none, or its definition has no anchor.
+    var goToDefinition: (Int) -> (() -> Void)? = { _ in nil }
 
     /// How far the text container reaches left into the gutter, for the headings'
     /// hung numbers (#433). AppKit's inset is symmetric, so the reach is taken off
@@ -408,7 +411,9 @@ import RFCReaderKit
     /// "Copy Figure" for the figure under the click, or else the one the selection
     /// holds (issue #15). First in the menu, because on a figure it is what the
     /// menu was opened for. Which figure and what it copies are `FigureCopy`'s.
-    /// "Copy as Quote" right after Copy where there is a selection (#186).
+    /// "Copy as Quote" right after Copy where there is a selection (#186). "Go to
+    /// Definition" first on a defined term's gloss (#396), which is what that menu
+    /// was opened for.
     override func menu(for event: NSEvent) -> NSMenu? {
       let standard = super.menu(for: event)
       let text = attributedString()
@@ -417,9 +422,21 @@ import RFCReaderKit
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
       let quotes = selectedRange().length > 0
-      guard figure != nil || quotes else { return standard }
+      let definition = goToDefinition(clicked) != nil
+      guard figure != nil || quotes || definition else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
+      if definition {
+        let item = NSMenuItem(
+          title: String(localized: "Go to Definition"), action: #selector(goToDefinitionItem(_:)),
+          keyEquivalent: "")
+        item.target = self
+        item.representedObject = clicked
+        if !result.items.isEmpty {
+          result.insertItem(.separator(), at: 0)
+        }
+        result.insertItem(item, at: 0)
+      }
       if quotes {
         let quote = NSMenuItem(
           title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
@@ -449,6 +466,11 @@ import RFCReaderKit
         }
       }
       return result
+    }
+
+    @objc private func goToDefinitionItem(_ sender: NSMenuItem) {
+      guard let clicked = sender.representedObject as? Int else { return }
+      goToDefinition(clicked)?()
     }
 
     @objc private func choosePresentationItem(_ sender: NSMenuItem) {

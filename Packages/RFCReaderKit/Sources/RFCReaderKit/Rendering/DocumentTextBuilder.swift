@@ -89,6 +89,8 @@ public final class DocumentTextBuilder {
   var glossedInParagraph: Set<String>?
   /// Whether the inlines being emitted are a link's, which no gloss goes inside.
   var isInLink = false
+  /// Serial number of the last gloss's long-press item, on iOS.
+  var nextGlossItem = 0
 
   /// How far the headings' numbers hang left of the column, and every paragraph is
   /// set in by (`BuiltDocument.sectionNumberHang`). Zero unless the style hangs them.

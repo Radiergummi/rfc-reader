@@ -247,18 +247,6 @@ public final class ReferenceBox: NSObject, Sendable {
   public init(_ reference: CrossReference) { self.reference = reference }
 }
 
-/// What a glossed run means (#396). Abbreviations are to share it (#67).
-public enum Gloss: Sendable, Hashable {
-  /// A term the document defines, with its definition.
-  case term(DefinedTerm)
-}
-
-/// Boxes a `Gloss` for the same reason, one per use, so two adjacent uses are two.
-public final class GlossBox: NSObject, Sendable {
-  public let gloss: Gloss
-  public init(_ gloss: Gloss) { self.gloss = gloss }
-}
-
 extension NSAttributedString {
   /// The whole extent of the boxed value — a `VerbatimBox`, `ReferenceBox` or `StrokeBox` — at
   /// `location`: every character around it carrying that same instance. Nil where

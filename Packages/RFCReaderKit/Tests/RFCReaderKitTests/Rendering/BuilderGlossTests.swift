@@ -70,6 +70,23 @@ struct BuilderGlossTests {
     #expect(color == RFCColors.secondaryLabel)
   }
 
+  #if canImport(UIKit)
+    /// A long press on a gloss reaches the text view's delegate as an item of its
+    /// own, as one on a figure does: two uses are two items.
+    @Test func `on iOS each gloss is a text item of its own`() throws {
+      let text = build(
+        Self.document(
+          .paragraph(Paragraph(text: "A relay.")), .paragraph(Paragraph(text: "A relay."))))
+      let string = text.string as NSString
+      let first = string.range(of: "relay").location
+      let second = string.range(of: "relay", options: .backwards).location
+      let firstTag = try #require(text.attribute(.textItemTag, at: first, effectiveRange: nil))
+      let secondTag = try #require(text.attribute(.textItemTag, at: second, effectiveRange: nil))
+      #expect((firstTag as? String)?.hasPrefix("gloss-") == true)
+      #expect((firstTag as? String) != (secondTag as? String))
+    }
+  #endif
+
   @Test func `two uses in two paragraphs are two glosses`() throws {
     let text = build(
       Self.document(

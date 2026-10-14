@@ -135,12 +135,18 @@ extension DocumentTextBuilder {
     let result = NSMutableAttributedString(string: text, attributes: attributes)
     for use in uses {
       glossedInParagraph?.insert(use.term.term)
-      result.addAttributes(
-        [
-          .rfcGloss: GlossBox(.term(use.term)),
-          .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
-          .underlineColor: RFCColors.secondaryLabel,
-        ], range: use.range)
+      var gloss: [NSAttributedString.Key: Any] = [
+        .rfcGloss: GlossBox(.term(use.term)),
+        .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
+        .underlineColor: RFCColors.secondaryLabel,
+      ]
+      #if canImport(UIKit)
+        // An item for its long press, as a figure is: what makes the press reach the
+        // text view's delegate, which shows the card. One tag per use.
+        nextGlossItem += 1
+        gloss[.textItemTag] = "gloss-\(nextGlossItem)"
+      #endif
+      result.addAttributes(gloss, range: use.range)
     }
     return result
   }
