@@ -130,6 +130,48 @@ struct TextIndexerTests {
     #expect(try await !indexer.search("intermediaries", in: [id]).hits.isEmpty)
   }
 
+  /// "Searched 1 of 3 RFCs" in a list of three: the documents it could look in that
+  /// are indexed, not every one indexed.
+  @Test func `a narrowed search counts what it could look in`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+
+    #expect(try await indexer.search("intermediaries", in: [.rfc(9000)]).searched == 0)
+    let narrowed = try await indexer.search("intermediaries", in: [id, .rfc(9000)])
+    #expect(narrowed.searched == 1)
+    #expect(narrowed.narrowedTo == 2)
+    #expect(try await indexer.search("intermediaries").narrowedTo == nil)
+  }
+
+  /// The fetcher serves RFC 8999's XML whatever is asked, as a body whose header names
+  /// another document: it is indexed under the id it is stored as, and once.
+  @Test func `a body is indexed under the id it is stored as`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    _ = try await store.document(.rfc(2119), formats: [.xml], client: fetcher)
+
+    let changes = Changes()
+    await indexer.reconcile(changed: changes.record)
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [.rfc(2119)])
+    await indexer.reconcile(changed: changes.record)
+    #expect(await changes.count == 1)
+  }
+
+  /// Counts the calls of a reconcile's `changed`.
+  actor Changes {
+    private(set) var count = 0
+    func increment() { count += 1 }
+    nonisolated func record() async { await increment() }
+  }
+
   /// What `run()` listens for: every write and removal of a body.
   @Test func `the store says when its bodies change`() async throws {
     let sandbox = Sandbox()

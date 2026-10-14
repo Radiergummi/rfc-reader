@@ -701,9 +701,9 @@ public actor DocumentStore {
   /// `id`'s body on disk, parsed, for the full-text index (#37); nil when there is
   /// none. Not an open: the body is not marked opened, which is what eviction goes by,
   /// and a parse made here is not kept with the ones an open keeps. A parse an open
-  /// kept is used as it is.
+  /// kept is used as it is, and keeps its place among them.
   public func storedDocument(_ id: DocumentID) async -> RFCDocument? {
-    if let parse = parsed.value(for: id) { return parse.document }
+    if let parse = parsed.peek(id) { return parse.document }
     let bodies = Bodies(
       xml: fileURLs(id, format: .xml), pack: legacyPack?.file(for: id),
       text: fileURLs(id, format: .text))

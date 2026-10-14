@@ -44,6 +44,16 @@ struct TextQueryTests {
     #expect(query?.documents == [.rfc(1), .rfc(3)])
   }
 
+  /// The option hides an obsolete RFC's row, and its sections with it, in the whole
+  /// library as in any other list.
+  @Test func `hiding the obsolete RFCs narrows the documents searched`() {
+    let index = RFCIndex(
+      rfcs: [Fixtures.metadata(1, obsoletedBy: [.rfc(2)]), Fixtures.metadata(2)], series: [])
+    let list = LibraryList(
+      filter: .all, query: "congestion", options: ListOptions(showsObsolete: false))
+    #expect(list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [.rfc(2)])
+  }
+
   @Test func `the list's filter narrows the documents searched`() {
     let query = textQuery(
       LibraryList(filter: .bookmarks, query: "congestion", bookmarked: [.rfc(2), .rfc(4)]))

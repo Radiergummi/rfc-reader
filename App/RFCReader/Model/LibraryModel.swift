@@ -449,17 +449,10 @@ final class LibraryModel {
   private let store = DocumentStore()
   private var search: IndexSearch?
 
-  /// The full-text index (#37), kept to the bodies `store` holds; nil when it could
-  /// not be opened, which leaves the search to the index's metadata.
-  @ObservationIgnored private lazy var textIndexer: TextIndexer? = {
-    do {
-      return try TextIndexer(contentsOf: TextIndexer.defaultURL, store: store)
-    } catch {
-      libraryLog.error(
-        "the full-text index did not open: \(String(describing: error), privacy: .public)")
-      return nil
-    }
-  }()
+  /// The full-text index (#37), kept to the bodies `store` holds. Nil until bootstrap
+  /// has opened it, off the main actor, and when it could not be opened, which leaves
+  /// the search to the index's metadata.
+  @ObservationIgnored private var textIndexer: TextIndexer?
 
   /// Counts the full-text index's changes, for a tab to search the text again once
   /// a document is added to it or removed.
@@ -509,9 +502,18 @@ final class LibraryModel {
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
-    if let textIndexer {
-      let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-      Task(name: "Index the text", priority: .utility) { await textIndexer.run(changed: changed) }
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    Task(name: "Index the text", priority: .utility) { [weak self, store] in
+      let indexer: TextIndexer
+      do {
+        indexer = try await TextIndexer.opening(store: store)
+      } catch {
+        libraryLog.error(
+          "the full-text index did not open: \(String(describing: error), privacy: .public)")
+        return
+      }
+      self?.textIndexer = indexer
+      await indexer.run(changed: changed)
     }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.

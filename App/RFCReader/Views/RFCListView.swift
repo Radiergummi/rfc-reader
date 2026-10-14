@@ -98,6 +98,12 @@ struct RFCListView: View {
     let rows = self.rows
     let textFound = self.textFound
     let hasTextHits = textFound.map { !$0.hits.isEmpty } ?? false
+    // How much the full-text index holds of what the search could look in, so a hit
+    // it does not have does not read as "no RFC says this".
+    let searched = textFound.map { found in
+      SectionResults.searched(
+        found.searched, of: found.narrowedTo ?? library.index?.rfcs.count ?? 0)
+    }
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
@@ -182,7 +188,8 @@ struct RFCListView: View {
       // The sections whose text holds the query's words (#37), under the RFC rows and
       // only once every row is in the window, as the status line below: after a
       // partial page they would sit in the middle of the list.
-      if limit >= rows.count, let textFound {
+      // With neither, the empty state says it instead.
+      if limit >= rows.count, let textFound, let searched, !rows.isEmpty || hasTextHits {
         Section {
           ForEach(textFound.hits, id: \.self) { hit in
             Button {
@@ -200,11 +207,7 @@ struct RFCListView: View {
             Text("In the Text")
           }
         } footer: {
-          // How much the full-text index holds, so a hit it does not have does not
-          // read as "no RFC says this".
-          Text(
-            verbatim: SectionResults.searched(
-              textFound.searched, of: library.index?.rfcs.count ?? 0))
+          Text(verbatim: searched)
         }
       }
       // Where Mail says when it last checked: after the last row, scrolled to
@@ -251,7 +254,15 @@ struct RFCListView: View {
             shown.filter.emptyTitle(in: library.collections),
             systemImage: shown.filter.systemImage)
         } else {
-          ContentUnavailableView.search(text: shown.query)
+          VStack {
+            ContentUnavailableView.search(text: shown.query)
+            if let searched {
+              Text(verbatim: searched)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom)
+            }
+          }
         }
       }
     }

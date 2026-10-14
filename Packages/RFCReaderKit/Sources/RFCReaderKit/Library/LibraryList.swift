@@ -295,7 +295,9 @@ extension LibraryList {
     var filters = parsed.filters
     filters.sort = nil
     let qualifiers = SearchQuery.format(text: "", filters: filters)
-    guard filter != .all || !qualifiers.isEmpty else {
+    // The whole library, narrowed by nothing, allows every document; hiding the
+    // obsolete RFCs narrows it as a qualifier does.
+    guard filter != .all || !qualifiers.isEmpty || !options.showsObsolete else {
       return TextQuery(words: parsed.text, documents: nil)
     }
     let narrowing = LibraryList(

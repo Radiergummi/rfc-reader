@@ -25,6 +25,15 @@ struct RecentValuesTests {
     #expect(recent.keys == ["b", "c"])
   }
 
+  /// The full-text index reads a kept parse without the reader having used it (#37).
+  @Test func `peeking at a value leaves its place`() {
+    var recent = RecentValues<String, Int>(capacity: 2)
+    recent.store(1, for: "a")
+    recent.store(2, for: "b")
+    #expect(recent.peek("a") == 1)
+    #expect(recent.keys == ["a", "b"])
+  }
+
   @Test func `reading a value makes it the most recent`() {
     var recent = RecentValues<String, Int>(capacity: 2)
     recent.store(1, for: "a")
