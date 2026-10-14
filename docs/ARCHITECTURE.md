@@ -191,6 +191,7 @@ is that way, and what was measured or tried first.
 - [The Safari extension asks the app which RFC a page is](decisions/2026-10-03-the-safari-extension-asks-the-app-which-rfc-a-page-is.md)
 - [The app's chrome is localized, the reader body is not](decisions/2026-10-04-the-apps-chrome-is-localized-the-reader-body-is-not.md)
 - [A document's index is a block of its own](decisions/2026-10-05-a-documents-index-is-a-block-of-its-own.md)
+- [A defined term is a gloss at its first use in a paragraph, not a link](decisions/2026-10-14-a-defined-term-is-a-gloss-at-its-first-use-in-a-paragraph.md)
 
 ## Planned engines
 
