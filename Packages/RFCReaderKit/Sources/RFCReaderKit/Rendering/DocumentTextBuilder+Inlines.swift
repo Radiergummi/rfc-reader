@@ -22,7 +22,7 @@ extension DocumentTextBuilder {
   private func run(_ inline: Inline, base: [NSAttributedString.Key: Any]) -> NSAttributedString {
     switch inline {
     case .text(let text):
-      return NSAttributedString(string: text, attributes: base)
+      return glossed(text, attributes: base)
 
     case .emphasis(let inner):
       return inlineRuns(inner, base: base.adding(trait: RFCTraits.italic, style: style))
@@ -55,7 +55,9 @@ extension DocumentTextBuilder {
       return NSAttributedString(string: text, attributes: attributes)
 
     case .link(let url, let inner):
+      isInLink = true
       let result = NSMutableAttributedString(attributedString: inlineRuns(inner, base: base))
+      isInLink = false
       result.addAttributes(linkAttributes(url), range: NSRange(location: 0, length: result.length))
       #if !canImport(UIKit)
         // Explicit, because the reader turns `displaysLinkToolTips` off: the
@@ -119,6 +121,30 @@ extension DocumentTextBuilder {
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
   /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
   /// the link color with the underline, since nothing else colors it there.
+  /// `text` in `attributes`, with the first use in the paragraph of each defined term
+  /// glossed (#396): a box of its own, and a dotted underline in the secondary color,
+  /// quieter than a link's. Outside a paragraph, and inside a link, it is plain.
+  private func glossed(_ text: String, attributes: [NSAttributedString.Key: Any])
+    -> NSAttributedString
+  {
+    guard let marked = glossedInParagraph, !isInLink else {
+      return NSAttributedString(string: text, attributes: attributes)
+    }
+    let uses = termMatcher.uses(in: text, skipping: marked)
+    guard !uses.isEmpty else { return NSAttributedString(string: text, attributes: attributes) }
+    let result = NSMutableAttributedString(string: text, attributes: attributes)
+    for use in uses {
+      glossedInParagraph?.insert(use.term.term)
+      result.addAttributes(
+        [
+          .rfcGloss: GlossBox(.term(use.term)),
+          .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
+          .underlineColor: RFCColors.secondaryLabel,
+        ], range: use.range)
+    }
+    return result
+  }
+
   func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }

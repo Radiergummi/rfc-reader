@@ -8,6 +8,10 @@ import RFCKit
 extension NSAttributedString.Key {
   /// The cross reference a run stands for: hit testing, preview, chip drawing.
   public static let rfcReference = NSAttributedString.Key("rfcReference")
+  /// What a run means where the document itself says so, for its card: a defined
+  /// term at its first use in a paragraph (#396). A `GlossBox`, one per use. Not a
+  /// link: a click on it selects, as on any text.
+  public static let rfcGloss = NSAttributedString.Key("rfcGloss")
   /// Set on heading runs, so the VoiceOver headings rotor can find them.
   public static let rfcAnchor = NSAttributedString.Key("rfcAnchor")
   /// What the layout fragment should draw behind or beside this run.
@@ -243,6 +247,18 @@ public final class ReferenceBox: NSObject, Sendable {
   public init(_ reference: CrossReference) { self.reference = reference }
 }
 
+/// What a glossed run means (#396). Abbreviations are to share it (#67).
+public enum Gloss: Sendable, Hashable {
+  /// A term the document defines, with its definition.
+  case term(DefinedTerm)
+}
+
+/// Boxes a `Gloss` for the same reason, one per use, so two adjacent uses are two.
+public final class GlossBox: NSObject, Sendable {
+  public let gloss: Gloss
+  public init(_ gloss: Gloss) { self.gloss = gloss }
+}
+
 extension NSAttributedString {
   /// The whole extent of the boxed value — a `VerbatimBox`, `ReferenceBox` or `StrokeBox` — at
   /// `location`: every character around it carrying that same instance. Nil where
@@ -273,6 +289,16 @@ extension NSAttributedString {
     guard offset >= 0, offset < length,
       let box = attribute(.rfcReference, at: offset, effectiveRange: nil) as? ReferenceBox,
       let range = extent(ofBox: .rfcReference, at: offset)
+    else { return nil }
+    return (box, range)
+  }
+
+  /// The gloss at this character offset, and the whole of its extent: what its card
+  /// is anchored to (#396). This runs on every pointer move, as `reference(at:)` does.
+  public func gloss(at offset: Int) -> (box: GlossBox, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      let box = attribute(.rfcGloss, at: offset, effectiveRange: nil) as? GlossBox,
+      let range = extent(ofBox: .rfcGloss, at: offset)
     else { return nil }
     return (box, range)
   }
