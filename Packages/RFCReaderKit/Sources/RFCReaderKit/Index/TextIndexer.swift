@@ -42,8 +42,8 @@ public actor TextIndexer {
   /// index, for a search on show to be made again.
   public func run(changed: @Sendable () async -> Void = {}) async {
     if await reconcile() { await changed() }
-    for await _ in store.bodiesChanged {
-      if await reconcile() { await changed() }
+    for await _ in store.bodiesChanged where await reconcile() {
+      await changed()
     }
   }
 
