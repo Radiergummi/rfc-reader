@@ -32,7 +32,8 @@ struct RFCReaderApp: App {
       // File ▸ New Window, which `WindowGroup` used to contribute — `WindowCommands`
       // puts it back.
       Settings {
-        SettingsView()
+        // The composition root: the Settings scene is a root of its own.
+        SettingsView(library: LibraryModel.shared)
       }
       .commands {
         AboutCommands()

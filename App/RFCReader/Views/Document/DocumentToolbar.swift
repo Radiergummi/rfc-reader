@@ -63,7 +63,7 @@ import SwiftUI
           }
           .keyboardShortcut("i", modifiers: .command)
 
-          TextSizeButton()
+          TextSizeButton(library: library)
         }
 
         ToolbarSpacer(.flexible, placement: .bottomBar)
@@ -163,6 +163,7 @@ import SwiftUI
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
   /// `DocumentCommands`'. #708 replaces it with a quick panel.
   private struct TextSizeButton: View {
+    let library: LibraryModel
     @ReaderSettingsValue private var settings
     @State private var showsSettings = false
 
@@ -213,7 +214,7 @@ import SwiftUI
         Label("Text Size", systemImage: "textformat.size")
       }
       .sheet(isPresented: $showsSettings) {
-        SettingsScreen()
+        SettingsScreen(library: library)
       }
     }
   }
