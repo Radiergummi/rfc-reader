@@ -698,6 +698,23 @@ public actor DocumentStore {
     return document
   }
 
+  /// Every document with a body in either tier, with when its body was written, for
+  /// the full-text index to index a body written again (#37): the latest creation
+  /// date of its files. Not their modification date, which says when the body was
+  /// last opened (`markOpened`); a write replaces the file, a move keeps it. Read from
+  /// the disk, never by parsing.
+  public func storedBodies() -> [DocumentID: Date] {
+    let state = offlineState()
+    var bodies: [DocumentID: Date] = [:]
+    for id in state.kept.union(state.cached) {
+      let dates = DocumentCacheIndex.bodyFormats.flatMap { fileURLs(id, format: $0) }.compactMap {
+        (try? $0.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+      }
+      bodies[id] = dates.max() ?? .distantPast
+    }
+    return bodies
+  }
+
   /// `id`'s body on disk, parsed, for the full-text index (#37); nil when there is
   /// none. Not an open: the body is not marked opened, which is what eviction goes by,
   /// and a parse made here is not kept with the ones an open keeps. A parse an open

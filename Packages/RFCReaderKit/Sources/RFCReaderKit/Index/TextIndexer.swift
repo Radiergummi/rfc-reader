@@ -6,8 +6,8 @@ private let indexerLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "text-index")
 
 /// Keeps the full-text index (#37) to what the store holds: every document with a body
-/// in either tier is indexed, and one whose body is removed, evicted or purged is
-/// dropped. The index follows the store rather than being told of each body, so a
+/// in either tier is indexed, again when its body is written again, and one whose body
+/// is removed, evicted or purged is dropped. The index follows the store rather than being told of each body, so a
 /// body is never indexed that is not on disk, whichever path wrote or removed it.
 ///
 /// The one place the index is written and searched, from this actor's executor:
@@ -16,14 +16,15 @@ public actor TextIndexer {
   private let store: DocumentStore
   private let index: FullTextIndex
 
-  /// Every document indexed, read from the index once and kept as it is changed here,
-  /// the one place it is written: each search counts them.
-  private var indexed: Set<DocumentID>?
+  /// Every document indexed, with when its body was written, read from the index once
+  /// and kept as it is changed here, the one place it is written: each search counts
+  /// them.
+  private var indexed: [DocumentID: Date]?
 
-  /// The stored bodies that could not be read or indexed, which a reconcile does not
-  /// try again while they stay stored: each change to the store would parse them
-  /// again. One whose body goes is forgotten, so a body stored again is tried again.
-  private var unindexable: Set<DocumentID> = []
+  /// The stored bodies that could not be read or indexed, with when they were written,
+  /// which a reconcile does not try again while they stay as they are: each change to
+  /// the store would parse them again. A body removed or written again is tried again.
+  private var unindexable: [DocumentID: Date] = [:]
 
   /// How many documents a long reconcile indexes between the calls of its `changed`,
   /// so a search on show fills in while the first pass works through every body.
@@ -68,22 +69,21 @@ public actor TextIndexer {
     }
   }
 
-  /// Indexes every body the store holds that the index lacks, and drops every
-  /// document the index holds that the store no longer has a body of. `changed` is
-  /// called as `run(changed:)` says.
+  /// Indexes every body the store holds that the index lacks, or holds as it was
+  /// before it was written again, and drops every document the index holds that the
+  /// store no longer has a body of. `changed` is called as `run(changed:)` says.
   ///
   /// A body removed while it was being parsed here is indexed all the same; the
   /// removal is a change of its own, and the reconcile after it drops it.
   public func reconcile(changed: @Sendable () async -> Void = {}) async {
-    let state = await store.offlineState()
-    let stored = state.kept.union(state.cached)
-    unindexable.formIntersection(stored)
+    let stored = await store.storedBodies()
+    unindexable = unindexable.filter { stored[$0.key] == $0.value }
     guard let before = indexedDocuments() else { return }
     var unannounced = 0
-    for id in before.subtracting(stored) {
+    for id in before.keys where stored[id] == nil {
       do {
         try index.remove(id)
-        indexed?.remove(id)
+        indexed?[id] = nil
         unannounced += 1
       } catch {
         indexerLog.error(
@@ -91,25 +91,28 @@ public actor TextIndexer {
         )
       }
     }
-    for id in stored.subtracting(before).subtracting(unindexable).sorted() {
+    let unindexed = stored.filter { id, written in
+      before[id] != written && unindexable[id] != written
+    }
+    for (id, written) in unindexed.sorted(by: { $0.key < $1.key }) {
       guard !Task.isCancelled else { break }
       if unannounced >= Self.progressInterval {
         unannounced = 0
         await changed()
       }
       guard var document = await store.storedDocument(id) else {
-        unindexable.insert(id)
+        unindexable[id] = written
         continue
       }
       // Under the id it is stored as, whatever its header says: a body whose header
       // names another document, or none, would otherwise never be found indexed.
       document.header.id = id
       do {
-        try index.add(document)
-        indexed?.insert(id)
+        try index.add(document, written: written)
+        indexed?[id] = written
         unannounced += 1
       } catch {
-        unindexable.insert(id)
+        unindexable[id] = written
         indexerLog.error(
           "\(id.displayName, privacy: .public): not indexed: \(String(describing: error), privacy: .public)"
         )
@@ -119,7 +122,7 @@ public actor TextIndexer {
   }
 
   /// `indexed`, read from the index the first time; nil when it cannot be read.
-  private func indexedDocuments() -> Set<DocumentID>? {
+  private func indexedDocuments() -> [DocumentID: Date]? {
     if let indexed { return indexed }
     do {
       indexed = try index.indexed()
@@ -148,8 +151,8 @@ public actor TextIndexer {
   ) throws -> Found {
     let hits = try index.search(
       query, section: section, limit: limit, where: allowed.map { allowed in allowed.contains })
-    let indexed = indexedDocuments() ?? []
-    let searched = allowed.map { indexed.intersection($0).count } ?? indexed.count
+    let indexed = indexedDocuments() ?? [:]
+    let searched = allowed.map { $0.count { indexed[$0] != nil } } ?? indexed.count
     return Found(hits: hits, searched: searched, narrowedTo: allowed?.count)
   }
 }

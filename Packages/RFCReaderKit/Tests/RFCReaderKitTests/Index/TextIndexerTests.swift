@@ -118,6 +118,45 @@ struct TextIndexerTests {
     #expect(modified as? Date == longAgo)
   }
 
+  /// A body written again under an id already indexed, as a newer download is, is
+  /// indexed again: the index keeps when each body it holds was written. The text
+  /// changed at run time stands for a newer body.
+  @Test func `a body rewritten under an indexed id is indexed again`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    try await storeBody(in: sandbox.store())
+    try await TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store()).reconcile()
+
+    let file = sandbox.file(id, format: .xml)
+    let rewritten = try String(contentsOf: file, encoding: .utf8)
+      .replacing("intermediaries", with: "zyzzyva")
+    try Data(rewritten.utf8).write(to: file, options: .atomic)
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    await indexer.reconcile()
+
+    #expect(try await indexer.search("zyzzyva").hits.map(\.anchor) == ["connection-id"])
+    #expect(try await indexer.search("intermediaries").hits.isEmpty)
+  }
+
+  /// Opening a body changes its modification date (`DocumentStore.markOpened`), not
+  /// the body: it is not parsed again, in this run or the next.
+  @Test func `a body that did not change is not indexed again`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+
+    await store.markOpened(id)
+    let changes = Changes()
+    await indexer.reconcile(changed: changes.record)
+    let relaunched = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    await relaunched.reconcile(changed: changes.record)
+
+    #expect(await changes.count == 0)
+  }
+
   @Test func `a search is narrowed to the documents allowed`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }

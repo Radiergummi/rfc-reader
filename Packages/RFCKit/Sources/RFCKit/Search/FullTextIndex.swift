@@ -45,7 +45,8 @@ public struct Snippet: Sendable, Hashable {
 /// The schema:
 ///
 ///     meta (key, value)             -- `version`
-///     documents (document)          -- every document indexed, `rfc8999`
+///     documents (document, written) -- every document indexed, `rfc8999`, and when
+///                                      its body was written
 ///     sections (document, anchor, number, heading, body)   -- FTS5
 ///     section_rows (row, document)  -- which document each row of `sections` is
 ///
@@ -56,7 +57,7 @@ public struct Snippet: Sendable, Hashable {
   /// under another version is emptied when it is opened. The app then indexes its
   /// stored bodies again; a document indexed by Index All RFCs, whose body was not
   /// kept, is only back once that run is made again.
-  public static let version = 1
+  public static let version = 2
 
   /// The anchor the reader gives the abstract, which a hit in it opens.
   public static let abstractAnchor = "abstract"
@@ -98,7 +99,7 @@ public struct Snippet: Sendable, Hashable {
         DROP TABLE IF EXISTS documents;
         DROP TABLE IF EXISTS sections;
         DROP TABLE IF EXISTS section_rows;
-        CREATE TABLE documents (document TEXT PRIMARY KEY);
+        CREATE TABLE documents (document TEXT PRIMARY KEY, written REAL NOT NULL);
         CREATE VIRTUAL TABLE sections USING fts5(
           document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
           tokenize = 'unicode61 remove_diacritics 2'
@@ -125,8 +126,10 @@ public struct Snippet: Sendable, Hashable {
   // MARK: - Writing
 
   /// Indexes `document`, replacing what was indexed of it before. One that does not
-  /// say which RFC it is is refused: its hits could open nothing.
-  public func add(_ document: RFCDocument) throws {
+  /// say which RFC it is is refused: its hits could open nothing. `written` is when
+  /// its body was written, which `indexed()` hands back, for a body written again to
+  /// be indexed again.
+  public func add(_ document: RFCDocument, written: Date = .distantPast) throws {
     guard let id = document.header.id else {
       throw Failure(description: "the document names no number")
     }
@@ -150,7 +153,13 @@ public struct Snippet: Sendable, Hashable {
         try check(unsafe sqlite3_reset(record))
         try unsafe step(record)
       }
-      try run("INSERT INTO documents (document) VALUES (?)", id.fileStem)
+      let recordDocument = try unsafe prepare(
+        "INSERT INTO documents (document, written) VALUES (?, ?)")
+      defer { unsafe sqlite3_finalize(recordDocument) }
+      try unsafe bind(id.fileStem, at: 1, in: recordDocument)
+      try check(
+        unsafe sqlite3_bind_double(recordDocument, 2, written.timeIntervalSinceReferenceDate))
+      try unsafe step(recordDocument)
     }
   }
 
@@ -158,9 +167,24 @@ public struct Snippet: Sendable, Hashable {
     try transaction { try deleteRows(of: id) }
   }
 
-  /// Every document indexed.
-  public func indexed() throws -> Set<DocumentID> {
-    Set(try strings("SELECT document FROM documents").compactMap(DocumentID.init(fileStem:)))
+  /// Every document indexed, with when its body was written, as `add` was told.
+  /// A failure throws rather than ending the rows early, which would index them again.
+  public func indexed() throws -> [DocumentID: Date] {
+    let statement = try unsafe prepare("SELECT document, written FROM documents")
+    defer { unsafe sqlite3_finalize(statement) }
+    var documents: [DocumentID: Date] = [:]
+    while true {
+      let result = unsafe sqlite3_step(statement)
+      guard result == SQLITE_ROW else {
+        guard result == SQLITE_DONE else { throw Failure(description: message) }
+        return documents
+      }
+      guard let id = unsafe column(0, of: statement).flatMap(DocumentID.init(fileStem:)) else {
+        continue
+      }
+      documents[id] = Date(
+        timeIntervalSinceReferenceDate: unsafe sqlite3_column_double(statement, 1))
+    }
   }
 
   /// A document never indexed has no rows, and costs one lookup.
@@ -488,7 +512,7 @@ public struct Snippet: Sendable, Hashable {
 
   /// The first column of every row `sql` returns, with `values` bound in order. A
   /// failure throws rather than ending the rows early: an empty answer to the
-  /// version check would empty the index, and to `indexed()` would index it all again.
+  /// version check would empty the index.
   private func strings(_ sql: String, _ values: String...) throws -> [String] {
     let statement = try unsafe prepare(sql)
     defer { unsafe sqlite3_finalize(statement) }

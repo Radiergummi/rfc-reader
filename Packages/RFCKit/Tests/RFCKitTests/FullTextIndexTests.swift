@@ -323,15 +323,24 @@ final class FullTextIndexTests {
     try index.remove(.rfc(8999))
 
     #expect(try index.search("intermediaries").isEmpty)
-    #expect(try index.indexed() == [.rfc(2119)])
+    #expect(try Set(index.indexed().keys) == [.rfc(2119)])
   }
 
   @Test func `the index survives being opened again`() throws {
     try index().add(Fixtures.document("rfc8999.xml"))
 
     let reopened = try index()
-    #expect(try reopened.indexed() == [.rfc(8999)])
+    #expect(try Set(reopened.indexed().keys) == [.rfc(8999)])
     #expect(try reopened.search("intermediaries").count == 1)
+  }
+
+  /// When a body was written is kept as it was given, for the app to tell a body
+  /// written again from the one indexed.
+  @Test func `the index keeps when each body was written`() throws {
+    let written = Date(timeIntervalSinceReferenceDate: 812_345_678.123_456)
+    try index().add(Fixtures.document("rfc8999.xml"), written: written)
+
+    #expect(try index().indexed() == [.rfc(8999): written])
   }
 
   /// A change to what a section's text is, or to the tables, raises the version: an
