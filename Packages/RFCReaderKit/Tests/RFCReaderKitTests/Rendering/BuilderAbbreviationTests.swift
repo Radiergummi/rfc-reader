@@ -63,9 +63,22 @@ struct BuilderAbbreviationTests {
     #expect(found.count == 1)
   }
 
-  /// RFC 8999 expands a handful of abbreviations; every gloss in it is one of them.
+  /// The expansion set in emphasis is a run of its own, before the parentheses'.
+  @Test func `the expansion's parentheses are not glossed across runs`() {
+    var document = Self.document([])
+    document.sections[0].blocks = [
+      .paragraph(
+        Paragraph([.emphasis([.text("Transport Layer Security")]), .text(" (TLS) protects it.")])
+      ),
+      .paragraph(Paragraph(text: "TLS keeps it.")),
+    ]
+    #expect(Self.glosses(in: document).count == 1)
+  }
+
+  /// A committed document that expands abbreviations: every gloss in it is one.
   @Test func `a committed document's abbreviations are glossed where they are used`() throws {
-    let document = try Fixtures.rfc8999()
+    var document = try Fixtures.document(named: "rfc9985.xml")
+    document.definedTerms = [:]
     let found = Self.glosses(in: document)
     #expect(!found.isEmpty)
     #expect(found.allSatisfy { document.abbreviations[$0.text] != nil })

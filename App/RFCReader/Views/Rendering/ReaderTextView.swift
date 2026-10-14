@@ -452,8 +452,8 @@ import RFCReaderKit
     /// holds (issue #15). First in the menu, because on a figure it is what the
     /// menu was opened for. Which figure and what it copies are `FigureCopy`'s.
     /// "Copy as Quote" right after Copy where there is a selection (#186). "Go to
-    /// Definition" first on a defined term's gloss (#396), which is what that menu
-    /// was opened for.
+    /// Definition" first on a defined term's gloss (#396), and "Go to Expansion" on an
+    /// abbreviation's (#67), which is what that menu was opened for.
     override func menu(for event: NSEvent) -> NSMenu? {
       let standard = super.menu(for: event)
       let text = attributedString()

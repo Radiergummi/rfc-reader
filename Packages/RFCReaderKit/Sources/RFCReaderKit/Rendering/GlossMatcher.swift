@@ -13,10 +13,11 @@ import RFCKit
 /// words are the lower-case words used in at least a tenth of the corpus's documents,
 /// which `corpus-build common-words` measures; an acronym is never one.
 ///
-/// An abbreviation is not marked right after its own expansion, `Transport Layer
-/// Security (TLS)`, where its card would say the words beside it, nor where its short
-/// form is one character, which `(A)` reads as a list's label far more often. A term
-/// spelled as an abbreviation is the gloss: its definition says more.
+/// An abbreviation is not marked in parentheses where its paragraph expands it,
+/// `Transport Layer Security (TLS)`: its card would say the words beside it. A short
+/// form of one character, which `(A)` reads as a list's label far more often, never
+/// comes here: `Abbreviations` collects none. A term spelled as an abbreviation is the
+/// gloss: its definition says more.
 struct GlossMatcher {
   /// What may be marked, by its spelling, grouped by its first word as `uses` reads
   /// words, longest first: `X.509 certificate` under `X`.
@@ -32,7 +33,7 @@ struct GlossMatcher {
       }
       return (spelling, .term(term))
     }
-    for (short, abbreviation) in abbreviations where short.count > 1 && terms[short] == nil {
+    for (short, abbreviation) in abbreviations where terms[short] == nil {
       glosses.append((short, .abbreviation(abbreviation)))
     }
     var byFirstWord: [String: [(spelling: String, gloss: Gloss)]] = [:]
@@ -52,9 +53,14 @@ struct GlossMatcher {
   /// A gloss, and the UTF-16 range of its use.
   typealias Use = (range: NSRange, gloss: Gloss)
 
-  /// The first use in `text` of each term or abbreviation not in `marked`, by its
-  /// spelling, in order, as UTF-16 ranges.
-  func uses(in text: String, skipping marked: Set<String>) -> [Use] {
+  /// The first use in `text` of each term or abbreviation not marked already, in
+  /// `marked` or `markedInSection` by its spelling, in order, as UTF-16 ranges.
+  /// `expanded` are the abbreviations the paragraph expands, which are not marked in
+  /// parentheses there.
+  func uses(
+    in text: String, skipping marked: Set<String>, markedInSection: Set<String> = [],
+    expanded: Set<String> = []
+  ) -> [Use] {
     let string = text as NSString
     var marked = marked
     var found: [Use] = []
@@ -74,7 +80,8 @@ struct GlossMatcher {
       if let (spelling, gloss) = used {
         let range = NSRange(location: location, length: spelling.utf16.count)
         location = NSMaxRange(range)
-        guard !marked.contains(spelling), !Self.isExpanded(gloss, at: range, in: string)
+        guard !marked.contains(spelling), !markedInSection.contains(spelling),
+          !Self.isExpanded(gloss, at: range, in: string, expanded: expanded)
         else { continue }
         found.append((range, gloss))
         marked.insert(spelling)
@@ -85,15 +92,29 @@ struct GlossMatcher {
     return found
   }
 
-  /// Whether `gloss` is an abbreviation written at `range` in parentheses right after
-  /// its own expansion: `Transport Layer Security (TLS)`.
-  private static func isExpanded(_ gloss: Gloss, at range: NSRange, in string: NSString) -> Bool {
-    guard case .abbreviation(let abbreviation) = gloss, range.location > 0,
-      string.character(at: range.location - 1) == 0x28
+  /// Whether `gloss` is an abbreviation in `expanded` written at `range` in
+  /// parentheses: where its paragraph expands it.
+  private static func isExpanded(
+    _ gloss: Gloss, at range: NSRange, in string: NSString, expanded: Set<String>
+  ) -> Bool {
+    guard case .abbreviation(let abbreviation) = gloss, expanded.contains(abbreviation.short),
+      range.location > 0
     else { return false }
-    let before = string.substring(to: range.location - 1)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return before.lowercased().hasSuffix(abbreviation.expansion.lowercased())
+    return string.character(at: range.location - 1) == 0x28
+  }
+
+  /// The abbreviations of `abbreviations` that `text`, a paragraph's, expands: its
+  /// expansion followed by the short form in parentheses, whatever the case and the
+  /// white space, across the paragraph's runs of emphasis and links.
+  static func expanded(in text: String, among abbreviations: [String: Abbreviation])
+    -> Set<String>
+  {
+    guard text.contains("(") else { return [] }
+    let folded = text.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+    return Set(
+      abbreviations.values.filter {
+        folded.contains("\($0.expansion.lowercased()) (\($0.short.lowercased())")
+      }.map(\.short))
   }
 
   /// Whether `word` is a common word, or one capitalized: `Server` as `server`. An

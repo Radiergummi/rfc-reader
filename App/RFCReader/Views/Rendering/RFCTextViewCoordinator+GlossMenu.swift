@@ -4,8 +4,8 @@
   import UIKit
 
   extension RFCTextViewCoordinator {
-    /// The long-press menu of a defined term's gloss (#396): its card lifted, as a
-    /// reference's is, over Go to Definition. Nil where the item is no gloss's.
+    /// The long-press menu of a gloss (#396, #67): its card lifted, as a reference's
+    /// is, over Go to Definition or Go to Expansion. Nil where the item is no gloss's.
     func glossMenu(for textItem: UITextItem, in textView: UITextView)
       -> UITextItem.MenuConfiguration?
     {
@@ -14,7 +14,7 @@
       if let follow = goToDefinition(of: box.gloss) {
         children.append(
           UIAction(
-            title: box.gloss.followTitle,
+            title: box.gloss.followTitle(),
             image: UIImage(systemName: "arrow.turn.down.right")
           ) { _ in follow() })
       }

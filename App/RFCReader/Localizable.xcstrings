@@ -1191,26 +1191,6 @@
         }
       }
     },
-    "Go to Definition" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zur Definition"
-          }
-        }
-      }
-    },
-    "Go to Expansion" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zur Langform"
-          }
-        }
-      }
-    },
     "Go to RFC" : {
       "localizations" : {
         "de" : {

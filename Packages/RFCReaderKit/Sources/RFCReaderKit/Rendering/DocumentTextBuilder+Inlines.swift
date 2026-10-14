@@ -127,7 +127,9 @@ extension DocumentTextBuilder {
     guard let marked = glossedInParagraph, !isInLink else {
       return NSAttributedString(string: text, attributes: attributes)
     }
-    let uses = glossMatcher.uses(in: text, skipping: marked.union(glossedInSection))
+    let uses = glossMatcher.uses(
+      in: text, skipping: marked, markedInSection: glossedInSection,
+      expanded: expandedInParagraph)
     guard !uses.isEmpty else { return NSAttributedString(string: text, attributes: attributes) }
     let result = NSMutableAttributedString(string: text, attributes: attributes)
     for use in uses {

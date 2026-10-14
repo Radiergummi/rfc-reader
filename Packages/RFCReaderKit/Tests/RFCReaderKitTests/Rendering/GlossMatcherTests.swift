@@ -112,10 +112,10 @@ struct GlossMatcherTests {
   }
 
   /// The card would say the words right beside it.
-  @Test func `an abbreviation right after its own expansion is not marked`() {
+  @Test func `an abbreviation in parentheses where it is expanded is not marked`() {
     let matcher = Self.matcher(abbreviations: [Self.tls])
     let text = "Transport Layer Security (TLS) protects it, and TLS"
-    let uses = matcher.uses(in: text, skipping: [])
+    let uses = matcher.uses(in: text, skipping: [], expanded: ["TLS"])
     #expect(
       uses.map(\.range.location) == [
         (text as NSString).range(of: "TLS", options: .backwards).location
@@ -127,10 +127,21 @@ struct GlossMatcherTests {
     #expect(Self.marked(matcher, in: "a secure channel (TLS)") == ["TLS"])
   }
 
-  /// `(A)` reads as a list's label far more often than as an abbreviation.
-  @Test func `a short form of one character is not marked`() {
-    let matcher = Self.matcher(abbreviations: [Abbreviation(short: "A", expansion: "Address")])
-    #expect(Self.marked(matcher, in: "A record").isEmpty)
+  /// Whatever its case and white space, and across the runs a paragraph's emphasis
+  /// or link splits it into.
+  @Test func `a paragraph's own expansions are found`() {
+    let abbreviations = [
+      "TLS": Self.tls, "IP": Abbreviation(short: "IP", expansion: "Internet Protocol"),
+    ]
+    #expect(
+      GlossMatcher.expanded(
+        in: "Uses transport layer\n   security (TLS) over IP.", among: abbreviations)
+        == ["TLS"])
+  }
+
+  @Test func `an abbreviation marked in the section is not marked again`() {
+    let matcher = Self.matcher(abbreviations: [Self.tls])
+    #expect(matcher.uses(in: "over TLS", skipping: [], markedInSection: ["TLS"]).isEmpty)
   }
 
   /// An acronym is never a common word, as a term's is not: `ID` is marked, whatever

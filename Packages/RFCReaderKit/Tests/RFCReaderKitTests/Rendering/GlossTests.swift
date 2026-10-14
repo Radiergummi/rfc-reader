@@ -4,7 +4,7 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// What a gloss's card says, and where Go to Definition takes the reader (#396).
+/// What a gloss's card says, and where its menu's item takes the reader (#396, #67).
 struct GlossTests {
   @Test func `a term's card is titled with the term and says its definition`() {
     let gloss = Gloss.term(
@@ -29,11 +29,18 @@ struct GlossTests {
     #expect(gloss.anchor == "intro")
   }
 
-  /// One the abstract expands has no section to go to.
-  @Test func `an abbreviation expanded in the abstract has nowhere to go`() {
+  /// One the abstract expands goes to the abstract, which the reader anchors.
+  @Test func `an abbreviation expanded in the abstract goes to the abstract`() {
     let gloss = Gloss.abbreviation(
       Abbreviation(short: "TLS", expansion: "Transport Layer Security"))
-    #expect(gloss.anchor == nil)
+    #expect(gloss.anchor == DocumentTextBuilder.abstractAnchor)
+  }
+
+  @Test func `the menu goes to a term's definition and an abbreviation's expansion`() {
+    let term = Gloss.term(DefinedTerm(term: "relay", anchor: "def-relay", definition: []))
+    let abbreviation = Gloss.abbreviation(Abbreviation(short: "TLS", expansion: "T"))
+    #expect(term.followTitle(locale: .english) == "Go to Definition")
+    #expect(abbreviation.followTitle(locale: .english) == "Go to Expansion")
   }
 
   @Test func `a term defined without an anchor has nowhere to go`() {

@@ -49,7 +49,7 @@
         let gloss = reference(atWindowPoint: event.locationInWindow)?.gloss,
         let follow = goToDefinition(of: gloss.gloss)
       else { return nil }
-      return (gloss.gloss.followTitle, follow)
+      return (gloss.gloss.followTitle(), follow)
     }
 
     /// Called from `dismantleNSView`.

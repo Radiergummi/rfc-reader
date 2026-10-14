@@ -29,12 +29,22 @@ public enum Gloss: Sendable, Hashable {
   }
 
   /// Where the menu's item goes: a term's definition, or the section that expands an
-  /// abbreviation. Nil for a definition with no anchor, and an abbreviation expanded
-  /// in the abstract.
+  /// abbreviation, the abstract where it expands one. Nil for a definition with no
+  /// anchor.
   public var anchor: String? {
     switch self {
     case .term(let term): term.anchor
-    case .abbreviation(let abbreviation): abbreviation.sectionAnchor
+    case .abbreviation(let abbreviation):
+      abbreviation.sectionAnchor ?? DocumentTextBuilder.abstractAnchor
+    }
+  }
+
+  /// The menu's item that follows `anchor`: Go to Definition for a term, Go to
+  /// Expansion for an abbreviation (#67).
+  public func followTitle(locale: Locale = .interface) -> String {
+    switch self {
+    case .term: String(kit: "Go to Definition", locale: locale)
+    case .abbreviation: String(kit: "Go to Expansion", locale: locale)
     }
   }
 }
