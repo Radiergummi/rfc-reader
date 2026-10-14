@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app build-app-tests-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -273,15 +273,14 @@ ios-sim: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
-## Build RFCReaderKit's tests for the iOS Simulator
-# `test-app` builds them for macOS only, so code behind `#if canImport(UIKit)`
-# could stop compiling unseen (#568). Builds without running: the suite has
-# failures on the Simulator that macOS doesn't (#821), and once they are fixed
-# this should run the tests too. xcodebuild finds the package's scheme only
-# from inside the package.
-build-app-tests-ios:
-	cd $(RFCREADERKIT) && xcodebuild build-for-testing -scheme RFCReaderKit \
-	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+## Run RFCReaderKit's tests on the iOS Simulator
+# `test-app` runs them for macOS only, so code behind `#if canImport(UIKit)` could
+# break unseen (#568). A test run needs a simulated device by name, which
+# `generic/platform=iOS Simulator` is not: `IOS_SIMULATOR`, as `run-sim` boots.
+# xcodebuild finds the package's scheme only from inside the package.
+test-app-ios:
+	cd $(RFCREADERKIT) && xcodebuild test -scheme RFCReaderKit \
+	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
 ## Build the app for an iOS device
 ios-app: xcodeproj
