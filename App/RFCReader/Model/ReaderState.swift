@@ -190,7 +190,7 @@ final class ReaderState {
 
   /// A request to show one bibliography entry in the panel.
   ///
-  /// Not a bare `String?`, for the reason `NavigationModel.ScrollRequest` is not:
+  /// Not a bare `String?`, for the reason `ScrollRequest` is not:
   /// the same citation clicked twice must reveal its entry twice.
   struct RevealedReference: Equatable {
     let anchor: String

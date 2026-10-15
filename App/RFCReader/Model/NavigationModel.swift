@@ -17,24 +17,6 @@ import SwiftUI
 /// the observable shell around it, plus the bookkeeping SwiftUI needs.
 @Observable
 final class NavigationModel: Identifiable {
-  /// A request to scroll somewhere, carrying its own identity.
-  ///
-  /// Not a bare `String?`: a reader can navigate to the same section twice in a row
-  /// — back, then forward again, or the same contents row clicked twice — and an
-  /// `onChange` watching the section alone would see no change and never scroll.
-  struct ScrollRequest: Equatable {
-    let section: String
-    /// A place in the document on screen, which has no entry in the history yet:
-    /// the reader gives it one if its document holds the place, and otherwise moves
-    /// nothing (#276). Only the reader can tell, having the build, and only it can
-    /// say that `4.2` and `section-4.2` are the same place (#482).
-    var isUnrecorded = false
-    /// A return to a reader the stack on iOS kept below its top, which is where it
-    /// was left (#263): only a reader made again, having been let go, goes there.
-    var isToKeptReader = false
-    private let issue = UUID()
-  }
-
   nonisolated let id = UUID()
 
   private var history = NavigationHistory() {
@@ -221,21 +203,21 @@ final class NavigationModel: Identifiable {
   /// what keeps the place -- Bookmark, Recently Read, the history -- on `selection`.
   var shown: DocumentID? { selection.flatMap(library.documentShown) }
 
-  private(set) var scrollRequest: ScrollRequest? {
-    didSet {
-      // A jump waited on is done once the reader has recorded it, which replaces
-      // it with the request to scroll there, or once anything else replaces it
-      // before the reader got to it.
-      if let waiting = jumpWaiter, waiting.request != scrollRequest {
-        jumpWaiter = nil
-        waiting.done()
-      }
-    }
-  }
+  /// What the reader on screen is asked to scroll to: `requests.current`, published
+  /// only when it changes.
+  private(set) var scrollRequest: ScrollRequest?
 
-  /// Whoever waits for the unrecorded jump requested last: a script, whose next
-  /// command must find the jump in the history (#482).
-  @ObservationIgnored private var jumpWaiter: (request: ScrollRequest, done: () -> Void)?
+  /// The scroll request, and whoever waits for the jump it asked for: a script,
+  /// whose next command must find the jump in the history (#482).
+  @ObservationIgnored private var requests = ScrollRequests<() -> Void>()
+
+  /// Makes `change` to the requests, publishes the request, and then ends the wait
+  /// the change ended, if it ended one.
+  private func updateRequests(_ change: (inout ScrollRequests<() -> Void>) -> (() -> Void)?) {
+    let ended = change(&requests)
+    if scrollRequest != requests.current { scrollRequest = requests.current }
+    ended?()
+  }
 
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
@@ -445,22 +427,14 @@ final class NavigationModel: Identifiable {
   /// `whenSettled` runs once it has, or once the reader has done what else it will
   /// with the place: after the document loads, if it is still loading.
   func jump(toSection section: String, whenSettled done: @escaping () -> Void = {}) {
-    guard selection != nil else {
-      done()
-      return
-    }
-    let request = ScrollRequest(section: section, isUnrecorded: true)
-    scrollRequest = request
-    jumpWaiter = (request, done)
+    updateRequests { $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done) }
   }
 
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load.
   func settle(_ request: ScrollRequest) {
-    guard let waiting = jumpWaiter, waiting.request == request else { return }
-    jumpWaiter = nil
-    waiting.done()
+    updateRequests { $0.settle(request) }
   }
 
   /// A place the document on screen holds: its own history entry, so Back undoes
@@ -500,21 +474,21 @@ final class NavigationModel: Identifiable {
       // scroll to. The last request is an earlier arrival's, and the reader made
       // again for the document took it over its reading position (#508). A reader
       // still on screen keeps its own, which may be a jump a script waits on.
-      if reopening { scrollRequest = nil }
+      if reopening { updateRequests { $0.arrive(at: nil) } }
       return
     }
     arrive(at: place)
   }
 
   private func arrive(at place: HistoryEntry) {
-    scrollRequest = place.section.map { ScrollRequest(section: $0) }
+    updateRequests { $0.arrive(at: place.section) }
     visiblePosition = place.section
   }
 
   /// At a place in a reader the stack kept, which is where it was left: nothing to
   /// scroll to, unless the reader was let go and is made again.
   private func arriveKept(at place: HistoryEntry) {
-    scrollRequest = place.section.map { ScrollRequest(section: $0, isToKeptReader: true) }
+    updateRequests { $0.arrive(at: place.section, inKeptReader: true) }
     visiblePosition = place.section
   }
 

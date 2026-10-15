@@ -726,7 +726,7 @@ struct DocumentView: View {
 
   /// A place handed over unrecorded, settled once followed. Without a build it
   /// waits for the text to appear, and is followed there.
-  private func follow(_ request: NavigationModel.ScrollRequest) {
+  private func follow(_ request: ScrollRequest) {
     if follow(request.section) {
       navigation.settle(request)
     }
