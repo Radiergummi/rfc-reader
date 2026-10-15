@@ -240,7 +240,7 @@ final class NavigationModel: Identifiable {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
     switch route {
     case .jump(let place, _): jump(toSection: place)
-    case .go(let entry): go(to: entry)
+    case .navigate(let entry): go(to: entry)
     }
     if route.reveals { sidebarSelection = .all }
   }
@@ -392,11 +392,10 @@ final class NavigationModel: Identifiable {
   /// A section the full-text search found (#37): its document, at the section. Like
   /// `select(_:)`, it leaves the filter and the search alone, which the hit is in.
   func select(_ hit: SectionHit) {
-    switch OpenRoute.route(
-      RFCLink(id: hit.document, anchor: hit.anchor), selected: selection, shown: shown)
-    {
+    let link = RFCLink(id: hit.document, anchor: hit.anchor)
+    switch OpenRoute.route(link, selected: selection, shown: shown) {
     case .jump(let place, _): jump(toSection: place)
-    case .go(let entry): go(to: entry)
+    case .navigate(let entry): go(to: entry)
     }
   }
 
