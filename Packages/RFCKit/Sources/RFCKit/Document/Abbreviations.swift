@@ -17,6 +17,15 @@ public struct Abbreviation: Sendable, Hashable, Codable {
   }
 }
 
+extension Abbreviation {
+  /// The short forms `text`, a paragraph's, expands, `TLS` in `Transport Layer
+  /// Security (TLS)`, by the same rule the document's abbreviations are collected
+  /// with, whatever words it expands them in.
+  public static func shortForms(expandedIn text: String) -> Set<String> {
+    Set(Abbreviations.expansions(in: text).map(\.short))
+  }
+}
+
 /// Collects the abbreviations a document expands, at parse time, the way cross
 /// references are resolved: from the document's own text, so the expansion is
 /// the author's and correct for this document.

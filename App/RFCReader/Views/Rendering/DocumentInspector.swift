@@ -221,7 +221,7 @@ struct PanelHost: View {
         hasBody: reader.hasDocument,
         isLoading: reader.isLoading,
         publishedOriginal: reader.publishedOriginal,
-        document: navigation.selection,
+        document: navigation.shown,
         library: library,
         pane: reader.pane,
         tab: $reader.tab,

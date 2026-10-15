@@ -163,7 +163,14 @@ final class LibraryModel {
   /// What is wanted offline: the marks, and the bookmarks when they are kept too.
   private var wantedOffline: Set<DocumentID> {
     OfflineReconciler.wanted(
-      marks: offlineMarks, bookmarks: bookmarkedDocuments, keepsBookmarks: keepsBookmarksOffline)
+      marks: withMembers(of: offlineMarks), bookmarks: withMembers(of: bookmarkedDocuments),
+      keepsBookmarks: keepsBookmarksOffline)
+  }
+
+  /// `documents`, a series with its members: a bookmarked or open BCP, STD or FYI
+  /// stands for its members' bodies (#656). As they are while there is no index.
+  private func withMembers(of documents: Set<DocumentID>) -> Set<DocumentID> {
+    index?.withMembers(of: documents) ?? documents
   }
 
   /// Whether `offlineMarks` has been read from the store at least once. Until it
@@ -449,6 +456,15 @@ final class LibraryModel {
   private let store = DocumentStore()
   private var search: IndexSearch?
 
+  /// The full-text index (#37), kept to the bodies `store` holds. Nil until bootstrap
+  /// has opened it, off the main actor, and when it could not be opened, which leaves
+  /// the search to the index's metadata.
+  @ObservationIgnored private var textIndexer: TextIndexer?
+
+  /// Counts the full-text index's changes, for a tab to search the text again once
+  /// a document is added to it or removed.
+  private(set) var textIndexVersion = 0
+
   // MARK: - Bootstrap
 
   func bootstrap() async {
@@ -493,6 +509,22 @@ final class LibraryModel {
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    Task(name: "Index the text", priority: .utility) { [weak self, store] in
+      let indexer: TextIndexer
+      do {
+        indexer = try await TextIndexer.opening(store: store)
+      } catch {
+        libraryLog.error(
+          "the full-text index did not open: \(String(describing: error), privacy: .public)")
+        return
+      }
+      self?.textIndexer = indexer
+      // A list made before the index opened has no section hits, and an index that is
+      // already up to date never reports a change: its tabs search the text now.
+      self?.textIndexChanged()
+      await indexer.run(changed: changed)
+    }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -1055,6 +1087,23 @@ final class LibraryModel {
     index?[id]
   }
 
+  /// "RFC 2119 and RFC 8174", the members of a series, for its reader's subtitle
+  /// (#656); nil for an RFC, or before the index names them.
+  func seriesMembers(_ id: DocumentID) -> String? {
+    index.flatMap { SeriesTitle.members(of: id, in: $0) }
+  }
+
+  /// The RFC whose text the reader shows for `id` (#656), a series' first member;
+  /// see `RFCIndex.documentShown(for:)`. Nil for a series while the index loads,
+  /// which names its members. A series the index doesn't list, or any once the index
+  /// has failed, is shown from its own file, as before.
+  func documentShown(for id: DocumentID) -> DocumentID? {
+    guard id.series != .rfc else { return id }
+    if let index { return index.documentShown(for: id) ?? id }
+    if case .failed = indexState { return id }
+    return nil
+  }
+
   /// Working groups with the most RFCs, for the sidebar.
   ///
   /// Derived once per index rather than per read: `SidebarView.body` reads this, so
@@ -1110,6 +1159,34 @@ final class LibraryModel {
     guard let index else { return nil }
     return await Self.listed(
       list, in: index, indexVersion: indexVersion, search: search, hits: hits)
+  }
+
+  private func textIndexChanged() {
+    textIndexVersion += 1
+  }
+
+  /// What the full-text search finds for `list` (#37): its section hits, narrowed as
+  /// its RFC rows are. Nil while there is no index, or when the list asks the text
+  /// nothing (`LibraryList.textQuery`).
+  func textSearch(_ list: LibraryList) async -> TextIndexer.Found? {
+    guard let index, let textIndexer,
+      let query = await Self.textQuery(list, in: index, search: search)
+    else { return nil }
+    do {
+      return try await textIndexer.search(
+        query.words, section: query.section, in: query.documents)
+    } catch {
+      libraryLog.error(
+        "the full-text search failed: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  @concurrent
+  private static func textQuery(
+    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?
+  ) async -> LibraryList.TextQuery? {
+    list.textQuery(in: index, search: search)
   }
 
   /// `listed(_:hits:)` on the main actor, for a script, which reads the list
@@ -1268,13 +1345,13 @@ final class LibraryModel {
     if delivery.bringsForward {
       deliver(delivery.link, to: delivery.scene)
     } else {
-      delivery.scene.open(delivery.link, in: index)
+      delivery.scene.open(delivery.link)
     }
   }
 
   /// Opens `link` in `scene` and makes that the tab in use.
   private func deliver(_ link: RFCLink, to scene: NavigationModel) {
-    scene.open(link, in: index)
+    scene.open(link)
     // The tab that took the link is the most recently used one now, and where the
     // next untargeted link belongs -- even when it already showed that document, so
     // its selection did not change and `activate` was not called for it.
@@ -1314,7 +1391,7 @@ final class LibraryModel {
   ) {
     switch activation {
     case .here:
-      scene.open(link, in: index, arrival: arrival)
+      scene.open(link, arrival: arrival)
     case .newTab(let inBackground):
       openInNewScene(link, inBackground: inBackground)
     }
@@ -1394,7 +1471,9 @@ final class LibraryModel {
 
   // MARK: - Documents
 
+  /// A series is read as its first member, the RFC its reader shows (#656).
   func document(for id: DocumentID) async throws -> RFCDocument {
+    let id = documentShown(for: id) ?? id
     let entry = index?[id]
     let document = try await store.document(
       id, formats: entry?.formats ?? [], entry: entry, client: client)
@@ -1453,8 +1532,8 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
-    let open = sceneRegistry.open.compactMap(\.selection)
-    return bookmarked.union(read).union(marked).union(open)
+    let open = Set(sceneRegistry.open.compactMap(\.shown))
+    return withMembers(of: bookmarked.union(read).union(marked)).union(open)
   }
 
   // MARK: - Storage (#358)
@@ -1487,7 +1566,7 @@ final class LibraryModel {
   private func sparedFromClearing() -> Set<DocumentID>? {
     do {
       return try OfflineMarkStore.markedDocuments(in: container.mainContext)
-        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.selection))
+        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.shown))
     } catch {
       libraryLog.error(
         "Clear Cache spares everything, reading the marks failed: \(String(describing: error), privacy: .public)"

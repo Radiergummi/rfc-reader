@@ -75,6 +75,8 @@ struct BuildInputs: Equatable {
 @Observable
 final class DocumentSession {
   let id: DocumentID
+  /// What the tab opened: `id`, or the series whose first member it is (#656).
+  let identity: DocumentID
   /// The reader's place in the tab's stack of readers on iOS (#263), nil on the Mac:
   /// what says whether the reader is the one on screen (`NavigationModel.shows`),
   /// and so whether what it loads and builds goes into the window's reader state.
@@ -129,8 +131,9 @@ final class DocumentSession {
   /// where it started does not build it again.
   @ObservationIgnored private var builtInputs: BuildInputs?
 
-  init(id: DocumentID, depth: Int?) {
+  init(id: DocumentID, identity: DocumentID, depth: Int?) {
     self.id = id
+    self.identity = identity
     self.depth = depth
   }
 

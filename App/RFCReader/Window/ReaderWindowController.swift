@@ -271,16 +271,20 @@
         title: navigation.selection?.displayName ?? library.title(for: navigation.filter),
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
+        // A series names its members (#656).
         subtitle: navigation.selection
           .flatMap {
-            DocumentActions.subtitle(
-              metadata: library.metadata($0), documentTitle: reader.documentTitle)
+            library.seriesMembers($0)
+              ?? DocumentActions.subtitle(
+                metadata: library.metadata($0), documentTitle: reader.documentTitle)
           }?
           .truncated(to: Self.subtitleLimit) ?? "",
         // The reader's own copy, shown once its header scrolls away. Whole, not
         // truncated like the tab's: the item ellipsizes to whatever room it has.
         documentTitle: navigation.selection?.displayName ?? "",
-        documentSubtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? "",
+        documentSubtitle: navigation.selection.flatMap {
+          library.seriesMembers($0) ?? library.metadata($0)?.title
+        } ?? "",
         isBookmarked: isBookmarked
       )
     }

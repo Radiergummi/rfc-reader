@@ -115,10 +115,24 @@ jobs:
         run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
         run: make ios-sim CODE_SIGNING_ALLOWED=NO
-      # `make test-app` builds RFCReaderKit's tests for macOS only (#568). Built,
-      # not run, until #821's Simulator failures are fixed; then this should test.
-      - name: Build RFCReaderKit's tests for the iOS Simulator
-        run: make build-app-tests-ios CODE_SIGNING_ALLOWED=NO
+      # `make test-app` runs RFCReaderKit's tests for macOS only (#568). A test run
+      # needs a simulated device by name, and the image's iPhones are not the
+      # Makefile's default: the first available iPhone, which xcodebuild runs on
+      # the newest iOS that has one by that name.
+      - name: Pick an iPhone Simulator
+        id: simulator
+        run: |
+          name=$(xcrun simctl list devices available --json | jq -r '
+            [.devices | to_entries[]
+              | select(.key | contains(".iOS-")) | .value[]
+              | select(.name | startswith("iPhone")) | .name] | first // empty')
+          test -n "$name"
+          echo "Simulator: $name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: Run RFCReaderKit's tests on the iOS Simulator
+        env:
+          IOS_SIMULATOR: ${{ steps.simulator.outputs.name }}
+        run: make test-app-ios CODE_SIGNING_ALLOWED=NO IOS_SIMULATOR="$IOS_SIMULATOR"
       # After both builds, whose records of the strings in the code it reads; the
       # builds it starts first have nothing left to do.
       - name: Check the string catalogs

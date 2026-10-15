@@ -45,7 +45,7 @@
     /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
     /// chosen; a different paper picked in the panel itself is scaled to fit.
     func printDocument() {
-      guard !isPrinting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      guard !isPrinting, let id = navigation.shown, reader.offersPrintAndExport, let window
       else {
         return
       }
@@ -104,7 +104,7 @@
     /// picks (#376), as a sheet on this window. A paged format is laid out for the
     /// paper Page Setup has chosen, as a print is.
     func exportDocument() {
-      guard !isExporting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      guard !isExporting, let id = navigation.shown, reader.offersPrintAndExport, let window
       else {
         return
       }

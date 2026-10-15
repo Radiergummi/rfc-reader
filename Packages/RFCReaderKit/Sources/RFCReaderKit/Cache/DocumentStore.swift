@@ -95,6 +95,14 @@ public actor DocumentStore {
   /// cache that has not grown is not enumerated again.
   private var hasGrown = true
 
+  /// Yields whenever a body is written, moved or removed, for the full-text index to
+  /// follow what the store holds (#37): `TextIndexer.run()` is its one reader. Only the
+  /// latest is kept, so a reader busy through several changes is told once, and asks
+  /// the store what it holds then. A body the system purges is not told of: it is
+  /// found gone at the next look.
+  public nonisolated let bodiesChanged: AsyncStream<Void>
+  private let bodiesChangedContinuation: AsyncStream<Void>.Continuation
+
   /// Where the index snapshot lives: in Caches, because it is made again from one
   /// parse, so it stays out of backups.
   private let snapshotURL: URL
@@ -159,6 +167,8 @@ public actor DocumentStore {
     parsing: (@Sendable () async -> Void)?
   ) {
     self.parsing = parsing
+    (bodiesChanged, bodiesChangedContinuation) = AsyncStream.makeStream(
+      bufferingPolicy: .bufferingNewest(1))
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
     let cacheDirectory = caches.appending(path: "Documents", directoryHint: .isDirectory)
     self.directory = directory
@@ -460,6 +470,7 @@ public actor DocumentStore {
   private func update(_ id: DocumentID, in tier: StorageTier, by change: () throws -> Void)
     rethrows
   {
+    defer { bodiesChangedContinuation.yield() }
     switch tier {
     case .kept: try keptDocuments.update(id, by: change)
     case .cache: try cachedDocuments.update(id, by: change)
@@ -685,6 +696,36 @@ public actor DocumentStore {
     var document = parse.document
     _ = IndexHeader.apply(entry, to: &document.header)
     return document
+  }
+
+  /// Every document with a body in either tier, with when its body was written, for
+  /// the full-text index to index a body written again (#37): the latest creation
+  /// date of its files. Not their modification date, which says when the body was
+  /// last opened (`markOpened`); a write replaces the file, a move keeps it. Read from
+  /// the disk, never by parsing.
+  public func storedBodies() -> [DocumentID: Date] {
+    let state = offlineState()
+    var bodies: [DocumentID: Date] = [:]
+    for id in state.kept.union(state.cached) {
+      let dates = DocumentCacheIndex.bodyFormats.flatMap { fileURLs(id, format: $0) }.compactMap {
+        (try? $0.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+      }
+      bodies[id] = dates.max() ?? .distantPast
+    }
+    return bodies
+  }
+
+  /// `id`'s body on disk, parsed, for the full-text index (#37); nil when there is
+  /// none. Not an open: the body is not marked opened, which is what eviction goes by,
+  /// and a parse made here is not kept with the ones an open keeps. A parse an open
+  /// kept is used as it is, and keeps its place among them.
+  public func storedDocument(_ id: DocumentID) async -> RFCDocument? {
+    if let parse = parsed.peek(id) { return parse.document }
+    let bodies = Bodies(
+      xml: fileURLs(id, format: .xml), pack: legacyPack?.file(for: id),
+      text: fileURLs(id, format: .text))
+    return await Self.parseCached(
+      id, from: bodies, entry: nil, signpostID: signposter.makeSignpostID())?.document
   }
 
   /// `document(_:formats:entry:client:)`'s parse, before the entry is applied. The

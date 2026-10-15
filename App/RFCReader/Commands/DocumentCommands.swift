@@ -95,7 +95,7 @@ struct DocumentCommands: Commands {
         #if os(macOS)
           // The key window's undo manager, so Edit > Undo puts back a document
           // removed from here, as it does for a removal in the list (#349).
-          if let controller = active.controller, let document = controller.navigation.selection {
+          if let controller = active.controller, let document = controller.navigation.shown {
             Menu("Add to Collection") {
               AddToCollectionItems(
                 document: document, library: controller.library,
@@ -166,7 +166,7 @@ struct DocumentCommands: Commands {
         }
         // View ▸ Compare Side by Side (#187), beside the other ways of reading it.
         if let controller = active.controller, let reader,
-          let document = controller.navigation.selection, showsDocument
+          let document = controller.navigation.shown, showsDocument
         {
           CompareItems(id: document, library: controller.library, reader: reader)
         }

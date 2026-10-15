@@ -31,6 +31,11 @@ public struct RecentValues<Key: Hashable, Value> {
     return entry.value
   }
 
+  /// The value for `key`, which keeps its place: a look that is not a use.
+  public func peek(_ key: Key) -> Value? {
+    entries.first { $0.key == key }?.value
+  }
+
   /// Keeps `value` as the most recently used, in place of any value `key` had, and
   /// lets the least recently used go if that takes the count past `capacity`.
   public mutating func store(_ value: Value, for key: Key) {
