@@ -81,4 +81,45 @@ struct CacheEvictionTests {
     // The more recent of a document's two bodies is when it was last opened.
     #expect(entries.first?.lastOpened == now - 2 * 86_400)
   }
+
+  /// A stand-in for the index's series members: BCP 14 is RFC 2119 and RFC 8174.
+  private func withMembers(_ documents: Set<DocumentID>) -> Set<DocumentID> {
+    documents.contains(DocumentID(series: .bcp, number: 14))
+      ? documents.union([.rfc(2119), .rfc(8174)]) : documents
+  }
+
+  @Test func `what was read in the last month is pinned, and nothing before`() {
+    #expect(CacheEviction.readCutoff(now: now) == now - 30 * 86_400)
+  }
+
+  @Test func `bookmarks, reading, marks and open documents are pinned`() {
+    let pinned = CacheEviction.pinned(
+      bookmarked: [.rfc(1)], read: [.rfc(2)], marked: [.rfc(3)], open: [.rfc(4)],
+      withMembers: withMembers)
+    #expect(pinned == [.rfc(1), .rfc(2), .rfc(3), .rfc(4)])
+  }
+
+  /// A bookmarked BCP stands for its members' bodies (#656).
+  @Test func `a series pinned pins its members`() {
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let pinned = CacheEviction.pinned(
+      bookmarked: [bcp14], read: [], marked: [], open: [], withMembers: withMembers)
+    #expect(pinned == [bcp14, .rfc(2119), .rfc(8174)])
+  }
+
+  /// What a window has open is the document it shows, already a series' member.
+  @Test func `an open series is pinned as itself`() {
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let pinned = CacheEviction.pinned(
+      bookmarked: [], read: [], marked: [], open: [bcp14], withMembers: withMembers)
+    #expect(pinned == [bcp14])
+  }
+
+  /// Clear Cache leaves what a window has open, and what is wanted offline, whose
+  /// body waits in the cache for the keeper to move it (#358).
+  @Test func `clearing spares marks, what is wanted offline and open documents`() {
+    let spared = CacheEviction.spared(
+      marked: [.rfc(1)], wantedOffline: [.rfc(2)], open: [.rfc(3)])
+    #expect(spared == [.rfc(1), .rfc(2), .rfc(3)])
+  }
 }
