@@ -63,7 +63,9 @@ final class ReaderState {
   /// ways of navigating the document, so they share one pane.
   var tab: InspectorTab = .contents
 
-  /// The anchor the reader is looking at: the contents' highlight.
+  /// The anchor the reader is looking at: the contents' highlight. The window's copy
+  /// of the reader on screen's `ReaderController.section`, which `DocumentView`
+  /// writes.
   var currentAnchor: String?
   /// The same place as a section's `place` — its number, or `appendix-1` for an
   /// appendix numbered like a section (#429) — for the citation and the section link.
@@ -89,7 +91,8 @@ final class ReaderState {
   }
 
   /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
-  /// without one, as Copy is (#186). Reported by the text view's coordinator.
+  /// without one, as Copy is (#186). Written by `DocumentView`, from
+  /// `ReaderController.hasSelection`.
   var hasSelection = false
 
   /// A document read beside this one, scrolling with it (#187); nil when it is
