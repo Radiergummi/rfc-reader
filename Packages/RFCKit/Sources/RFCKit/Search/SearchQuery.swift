@@ -19,6 +19,9 @@ public enum SearchQuery {
     case readerData
     /// `in:`: a document or a collection.
     case scope
+    /// `section:`: the sections whose heading or anchor matches, which only the
+    /// full-text search answers (#37).
+    case section
     case sort
 
     /// The long spelling, written back and offered.
@@ -35,6 +38,7 @@ public enum SearchQuery {
       case .has: "has"
       case .readerData: "is"
       case .scope: "in"
+      case .section: "section"
       case .sort: "sort"
       }
     }
@@ -53,7 +57,7 @@ public enum SearchQuery {
     var isUnion: Bool {
       switch self {
       case .workingGroup, .status, .stream, .readerData, .scope: true
-      case .author, .year, .after, .before, .published, .has, .sort: false
+      case .author, .year, .after, .before, .published, .has, .section, .sort: false
       }
     }
 
@@ -76,7 +80,8 @@ public enum SearchQuery {
     var isClosed: Bool {
       switch self {
       case .status, .stream, .has, .readerData, .sort: true
-      case .workingGroup, .author, .year, .after, .before, .published, .scope: false
+      case .workingGroup, .author, .year, .after, .before, .published, .scope, .section:
+        false
       }
     }
   }
@@ -298,6 +303,9 @@ public enum SearchQuery {
     }
     terms += filters.scopes.sorted(by: isOrdered).map { scope in
       term(.scope, spelling(of: scope), label: "In: \(label(of: scope))")
+    }
+    if let section = filters.section {
+      terms.append(term(.section, written(section), label: "Section: \(section)"))
     }
     if let sort = filters.sort {
       terms.append(term(.sort, sort.rawValue, label: "Sort: \(label(of: sort))"))
@@ -611,7 +619,7 @@ public enum SearchQuery {
         SearchFilters.ReaderData.allCases.map(\.rawValue).filter { $0.hasPrefix(typed) }
           + StatusValue.all.filter { $0.spellings.contains { $0.hasPrefix(typed) } }.map(\.name)
       case .sort: SearchFilters.Sort.allCases.map(\.rawValue).filter { $0.hasPrefix(typed) }
-      case .author, .year, .after, .before, .published, .scope: []
+      case .author, .year, .after, .before, .published, .scope, .section: []
       }
     if matching.isEmpty, !typed.isEmpty, qualifier.isClosed {
       return [Suggestion(completion: query, isUnknown: true)]

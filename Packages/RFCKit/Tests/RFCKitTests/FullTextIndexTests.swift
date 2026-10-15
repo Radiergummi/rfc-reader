@@ -166,6 +166,146 @@ final class FullTextIndexTests {
     #expect(try index.search("\"negotiation intermediaries\"").isEmpty)
   }
 
+  /// A query's qualifiers narrow the section hits to the RFCs they allow (#37,
+  /// 2026-10-14): the hits the predicate refuses are skipped, and up to `limit` of
+  /// the rest are returned, not `limit` less those it refused.
+  @Test func `a predicate narrows the hits and still fills the limit`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+    try index.add(Fixtures.document("rfc2119.txt"))
+    #expect(try Set(index.search("the", limit: 100).map(\.document)) == [.rfc(8999), .rfc(2119)])
+
+    let hits = try index.search("the", limit: 3) { $0 == .rfc(2119) }
+    #expect(hits.count == 3)
+    #expect(hits.allSatisfy { $0.document == .rfc(2119) })
+  }
+
+  /// The hits a predicate keeps are in the order the whole search ranks them.
+  @Test func `a predicate keeps the hits in rank order`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    let ranked = try index.search("the", limit: 1_000).filter { $0.document == .rfc(8999) }
+    let narrowed = try index.search("the", limit: 1_000) { $0 == .rfc(8999) }
+    #expect(narrowed == ranked)
+  }
+
+  /// `section:` (#37, #177): only sections whose heading holds the value, as a phrase,
+  /// or whose anchor holds it.
+  @Test func `a section narrows the hits to the sections whose heading matches`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(
+      try index.search("intermediaries", section: "connection").map(\.anchor) == ["connection-id"])
+    #expect(try index.search("intermediaries", section: "notational").isEmpty)
+  }
+
+  @Test func `a section matches by its anchor too`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    #expect(try index.search("interoperation", section: "section-6").map(\.number) == ["6"])
+  }
+
+  /// An anchor or a number names a section and the ones under it, never one that only
+  /// holds it: `section-1` and `1` are not section 10.
+  @Test func `a section's anchor or number matches it and its subsections only`() throws {
+    let index = try index()
+    let sections = [("section-1", "1"), ("section-1.2", "1.2"), ("section-10", "10")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: "Body", blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(
+      try index.search("words", section: "section-1").map(\.anchor) == ["section-1", "section-1.2"])
+    #expect(try index.search("words", section: "1").map(\.anchor) == ["section-1", "section-1.2"])
+    #expect(try index.search("", section: "1.2").map(\.anchor) == ["section-1.2"])
+  }
+
+  /// The value comes lowercased (`SearchFilters.section`): an appendix's number and
+  /// anchor match it whatever their case, the appendix itself as well as what is under it.
+  @Test func `a section's number or anchor matches whatever its case`() throws {
+    let index = try index()
+    let sections = [("appendix-A.1", "A.1"), ("appendix-A.1.2", "A.1.2")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: "Body", blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(
+      try index.search("", section: "a.1").map(\.anchor) == ["appendix-A.1", "appendix-A.1.2"])
+    #expect(
+      try index.search("", section: "appendix-a.1").map(\.anchor) == [
+        "appendix-A.1", "appendix-A.1.2",
+      ])
+  }
+
+  /// A number names a section by its number alone: a heading holding the same token,
+  /// as "Version 1" does, is not that section.
+  @Test func `a number is not looked for in the headings`() throws {
+    let index = try index()
+    let sections = [("section-1", "1", "Body"), ("section-2", "2", "Version 1")].map {
+      Section(
+        anchor: $0.0, number: $0.1, title: $0.2, blocks: [.paragraph(.init(text: "words"))])
+    }
+    try index.add(
+      RFCDocument(
+        header: DocumentHeader(id: .rfc(1), title: "A document"), sections: sections,
+        source: .xml))
+
+    #expect(try index.search("", section: "version").map(\.anchor) == ["section-2"])
+    #expect(try index.search("", section: "1").map(\.anchor) == ["section-1"])
+  }
+
+  /// SQLite cuts the opening by Unicode scalars, which may be fewer characters than the
+  /// opening's length: a text cut there still ends with an ellipsis.
+  @Test func `an opening cut inside combining marks says it was cut`() {
+    let scalars = String(repeating: "e\u{301}\u{302}", count: 134).unicodeScalars.prefix(401)
+    let text = String(String.UnicodeScalarView(scalars))
+    #expect(FullTextIndex.opening(of: text).text.hasSuffix("…"))
+  }
+
+  /// With no words to rank them, sections are listed newest RFC first, each RFC's in
+  /// its own order, whatever order the documents were indexed in.
+  @Test func `a section without words lists the newest RFC first`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    let hits = try index.search("", section: "security")
+    #expect(hits.map(\.document).first == .rfc(8999))
+    #expect(hits.map(\.document).last == .rfc(2119))
+  }
+
+  /// `section:security in:9110` goes to a section without a word to search for. The
+  /// snippet is the section's opening words, with nothing marked.
+  @Test func `a section without words lists the sections that match`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    let hits = try index.search("", section: "connection id")
+    #expect(hits.map(\.anchor) == ["connection-id"])
+    let snippet = try #require(hits.first?.snippet)
+    #expect(!snippet.text.isEmpty)
+    #expect(snippet.matches.isEmpty)
+  }
+
+  @Test func `a section narrows a search by the predicate too`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(try index.search("", section: "connection") { $0 == .rfc(1) }.isEmpty)
+  }
+
   @Test func `adding a document again replaces it`() throws {
     let index = try index()
     let document = try Fixtures.document("rfc8999.xml")
@@ -183,15 +323,24 @@ final class FullTextIndexTests {
     try index.remove(.rfc(8999))
 
     #expect(try index.search("intermediaries").isEmpty)
-    #expect(try index.indexed() == [.rfc(2119)])
+    #expect(try Set(index.indexed().keys) == [.rfc(2119)])
   }
 
   @Test func `the index survives being opened again`() throws {
     try index().add(Fixtures.document("rfc8999.xml"))
 
     let reopened = try index()
-    #expect(try reopened.indexed() == [.rfc(8999)])
+    #expect(try Set(reopened.indexed().keys) == [.rfc(8999)])
     #expect(try reopened.search("intermediaries").count == 1)
+  }
+
+  /// When a body was written is kept as it was given, for the app to tell a body
+  /// written again from the one indexed.
+  @Test func `the index keeps when each body was written`() throws {
+    let written = Date(timeIntervalSinceReferenceDate: 812_345_678.123_456)
+    try index().add(Fixtures.document("rfc8999.xml"), written: written)
+
+    #expect(try index().indexed() == [.rfc(8999): written])
   }
 
   /// A change to what a section's text is, or to the tables, raises the version: an

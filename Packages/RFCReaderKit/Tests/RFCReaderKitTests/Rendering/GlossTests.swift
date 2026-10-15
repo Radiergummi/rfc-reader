@@ -4,7 +4,7 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// What a gloss's card says, and where Go to Definition takes the reader (#396).
+/// What a gloss's card says, and where its menu's item takes the reader (#396, #67).
 struct GlossTests {
   @Test func `a term's card is titled with the term and says its definition`() {
     let gloss = Gloss.term(
@@ -17,6 +17,30 @@ struct GlossTests {
     #expect(gloss.title == "relay")
     #expect(gloss.text == "A relay forwards.\nIt keeps nothing.")
     #expect(gloss.anchor == "def-relay")
+  }
+
+  /// An abbreviation's card is its short form and the document's own words for it,
+  /// and Go to Expansion goes to the section that expands it (#67).
+  @Test func `an abbreviation's card is its short form and its expansion`() {
+    let gloss = Gloss.abbreviation(
+      Abbreviation(short: "TLS", expansion: "Transport Layer Security", sectionAnchor: "intro"))
+    #expect(gloss.title == "TLS")
+    #expect(gloss.text == "Transport Layer Security")
+    #expect(gloss.anchor == "intro")
+  }
+
+  /// One the abstract expands goes to the abstract, which the reader anchors.
+  @Test func `an abbreviation expanded in the abstract goes to the abstract`() {
+    let gloss = Gloss.abbreviation(
+      Abbreviation(short: "TLS", expansion: "Transport Layer Security"))
+    #expect(gloss.anchor == DocumentTextBuilder.abstractAnchor)
+  }
+
+  @Test func `the menu goes to a term's definition and an abbreviation's expansion`() {
+    let term = Gloss.term(DefinedTerm(term: "relay", anchor: "def-relay", definition: []))
+    let abbreviation = Gloss.abbreviation(Abbreviation(short: "TLS", expansion: "T"))
+    #expect(term.followTitle(locale: .english) == "Go to Definition")
+    #expect(abbreviation.followTitle(locale: .english) == "Go to Expansion")
   }
 
   @Test func `a term defined without an anchor has nowhere to go`() {

@@ -20,6 +20,11 @@ public struct Snippet: Sendable, Hashable {
   /// Where the matched words are, on Unicode scalar boundaries: a match may end inside
   /// a character, before a combining mark, so read them through `text.unicodeScalars`.
   public var matches: [Range<String.Index>]
+
+  public init(text: String, matches: [Range<String.Index>]) {
+    self.text = text
+    self.matches = matches
+  }
 }
 
 /// Full-text search over document bodies (#37): one row per section, in SQLite FTS5,
@@ -40,7 +45,8 @@ public struct Snippet: Sendable, Hashable {
 /// The schema:
 ///
 ///     meta (key, value)             -- `version`
-///     documents (document)          -- every document indexed, `rfc8999`
+///     documents (document, written) -- every document indexed, `rfc8999`, and when
+///                                      its body was written
 ///     sections (document, anchor, number, heading, body)   -- FTS5
 ///     section_rows (row, document)  -- which document each row of `sections` is
 ///
@@ -51,7 +57,7 @@ public struct Snippet: Sendable, Hashable {
   /// under another version is emptied when it is opened. The app then indexes its
   /// stored bodies again; a document indexed by Index All RFCs, whose body was not
   /// kept, is only back once that run is made again.
-  public static let version = 1
+  public static let version = 2
 
   /// The anchor the reader gives the abstract, which a hit in it opens.
   public static let abstractAnchor = "abstract"
@@ -93,7 +99,7 @@ public struct Snippet: Sendable, Hashable {
         DROP TABLE IF EXISTS documents;
         DROP TABLE IF EXISTS sections;
         DROP TABLE IF EXISTS section_rows;
-        CREATE TABLE documents (document TEXT PRIMARY KEY);
+        CREATE TABLE documents (document TEXT PRIMARY KEY, written REAL NOT NULL);
         CREATE VIRTUAL TABLE sections USING fts5(
           document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
           tokenize = 'unicode61 remove_diacritics 2'
@@ -120,8 +126,10 @@ public struct Snippet: Sendable, Hashable {
   // MARK: - Writing
 
   /// Indexes `document`, replacing what was indexed of it before. One that does not
-  /// say which RFC it is is refused: its hits could open nothing.
-  public func add(_ document: RFCDocument) throws {
+  /// say which RFC it is is refused: its hits could open nothing. `written` is when
+  /// its body was written, which `indexed()` hands back, for a body written again to
+  /// be indexed again.
+  public func add(_ document: RFCDocument, written: Date = .distantPast) throws {
     guard let id = document.header.id else {
       throw Failure(description: "the document names no number")
     }
@@ -145,7 +153,13 @@ public struct Snippet: Sendable, Hashable {
         try check(unsafe sqlite3_reset(record))
         try unsafe step(record)
       }
-      try run("INSERT INTO documents (document) VALUES (?)", id.fileStem)
+      let recordDocument = try unsafe prepare(
+        "INSERT INTO documents (document, written) VALUES (?, ?)")
+      defer { unsafe sqlite3_finalize(recordDocument) }
+      try unsafe bind(id.fileStem, at: 1, in: recordDocument)
+      try check(
+        unsafe sqlite3_bind_double(recordDocument, 2, written.timeIntervalSinceReferenceDate))
+      try unsafe step(recordDocument)
     }
   }
 
@@ -153,9 +167,24 @@ public struct Snippet: Sendable, Hashable {
     try transaction { try deleteRows(of: id) }
   }
 
-  /// Every document indexed.
-  public func indexed() throws -> Set<DocumentID> {
-    Set(try strings("SELECT document FROM documents").compactMap(DocumentID.init(fileStem:)))
+  /// Every document indexed, with when its body was written, as `add` was told.
+  /// A failure throws rather than ending the rows early, which would index them again.
+  public func indexed() throws -> [DocumentID: Date] {
+    let statement = try unsafe prepare("SELECT document, written FROM documents")
+    defer { unsafe sqlite3_finalize(statement) }
+    var documents: [DocumentID: Date] = [:]
+    while true {
+      let result = unsafe sqlite3_step(statement)
+      guard result == SQLITE_ROW else {
+        guard result == SQLITE_DONE else { throw Failure(description: message) }
+        return documents
+      }
+      guard let id = unsafe column(0, of: statement).flatMap(DocumentID.init(fileStem:)) else {
+        continue
+      }
+      documents[id] = Date(
+        timeIntervalSinceReferenceDate: unsafe sqlite3_column_double(statement, 1))
+    }
   }
 
   /// A document never indexed has no rows, and costs one lookup.
@@ -228,37 +257,161 @@ public struct Snippet: Sendable, Hashable {
 
   /// The sections that hold every word of `query`, best first. A quoted run is a
   /// phrase; everything else is words, whatever FTS5 would make of it.
-  public func search(_ query: String, limit: Int = 50) throws -> [SectionHit] {
-    guard let match = Self.matchExpression(for: query) else { return [] }
-    // `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
-    // `snippet()` runs for the rows returned only, not for every section that matched.
-    // The snippet is the body's (column 4): left to choose, FTS5 takes a heading that
-    // matches as often, which the result shows already.
+  ///
+  /// `section`, when given, keeps only the sections whose heading holds it, as a
+  /// phrase, or that it names by anchor or number, with the sections under them
+  /// (`section:`, #37). With no words, those sections are the hits, newest RFC first
+  /// and each RFC's in its own order, each with its opening words for a snippet.
+  ///
+  /// `includes`, when given, says which documents a hit may be in: a query's
+  /// qualifiers narrow its section hits as they narrow its RFC rows (#37). Up to
+  /// `limit` of the hits it allows are returned, in the order of the whole search.
+  public func search(
+    _ query: String, section: String? = nil, limit: Int = 50,
+    where includes: ((DocumentID) -> Bool)? = nil
+  ) throws -> [SectionHit] {
+    let match = Self.matchExpression(for: query)
+    let section = section.map { $0.replacing("\u{0}", with: " ") }.flatMap { $0.isEmpty ? nil : $0 }
+    guard match != nil || section != nil, limit > 0 else { return [] }
+    let rows = try rankedRows(matching: match, section: section, limit: limit, where: includes)
+    guard !rows.isEmpty else { return [] }
+    let placeholders = Array(repeating: "?", count: rows.count).joined(separator: ",")
+    // `snippet()` is made only for the rows kept, in a second statement: in the first
+    // it would be made for every row the predicate refuses too. It needs the match in
+    // its own statement. The snippet is the body's (column 4): left to choose, FTS5
+    // takes a heading that matches as often, which the result shows already.
     let statement = try unsafe prepare(
-      """
-      SELECT document, anchor, number, heading,
-        snippet(sections, 4, char(57344), char(57345), '…', 16)
-      FROM sections WHERE sections MATCH ? ORDER BY rank LIMIT ?
-      """)
+      match == nil
+        ? """
+        SELECT rowid, document, anchor, number, heading, substr(body, 1, \(Self.openingLength + 1))
+        FROM sections WHERE rowid IN (\(placeholders))
+        """
+        : """
+        SELECT rowid, document, anchor, number, heading,
+          snippet(sections, 4, char(57344), char(57345), '…', 16)
+        FROM sections WHERE sections MATCH ? AND rowid IN (\(placeholders))
+        """)
     defer { unsafe sqlite3_finalize(statement) }
-    try unsafe bind(match, at: 1, in: statement)
-    try check(unsafe sqlite3_bind_int64(statement, 2, Int64(limit)))
-    var hits: [SectionHit] = []
+    var position: Int32 = 1
+    if let match {
+      try unsafe bind(match, at: position, in: statement)
+      position += 1
+    }
+    for row in rows {
+      try check(unsafe sqlite3_bind_int64(statement, position, row))
+      position += 1
+    }
+    var hits: [Int64: SectionHit] = [:]
     while true {
       let result = unsafe sqlite3_step(statement)
       guard result == SQLITE_ROW else {
         guard result == SQLITE_DONE else { throw Failure(description: message) }
-        return hits
+        return rows.compactMap { hits[$0] }
       }
-      guard let id = unsafe column(0, of: statement).flatMap(DocumentID.init(fileStem:)),
-        let anchor = unsafe column(1, of: statement)
+      guard let id = unsafe column(1, of: statement).flatMap(DocumentID.init(fileStem:)),
+        let anchor = unsafe column(2, of: statement)
       else { continue }
-      hits.append(
-        SectionHit(
-          document: id, anchor: anchor, number: unsafe column(2, of: statement),
-          heading: unsafe column(3, of: statement) ?? "",
-          snippet: Self.snippet(marked: unsafe column(4, of: statement) ?? "")))
+      let text = unsafe column(5, of: statement) ?? ""
+      hits[unsafe sqlite3_column_int64(statement, 0)] = SectionHit(
+        document: id, anchor: anchor, number: unsafe column(3, of: statement),
+        heading: unsafe column(4, of: statement) ?? "",
+        snippet: match == nil ? Self.opening(of: text) : Self.snippet(marked: text))
     }
+  }
+
+  /// The rows of up to `limit` sections matching `match` and `section` that `includes`
+  /// allows, best first, or with no match newest RFC first and each RFC's in the order
+  /// its sections were indexed, which is the document's.
+  /// `rank` is `bm25()` with no weights, and lets FTS5 sort the matches itself, so
+  /// the rows are read only until `limit` are allowed.
+  private func rankedRows(
+    matching match: String?, section: String?, limit: Int,
+    where includes: ((DocumentID) -> Bool)?
+  ) throws -> [Int64] {
+    var conditions: [String] = []
+    var values: [String] = []
+    if let match {
+      conditions.append("sections MATCH ?")
+      values.append(match)
+    }
+    if let section {
+      let condition = Self.condition(forSection: section)
+      conditions.append(condition.sql)
+      values += condition.values
+    }
+    let statement = try unsafe prepare(
+      "SELECT rowid, document FROM sections WHERE \(conditions.joined(separator: " AND ")) "
+        + (match == nil
+          ? "ORDER BY CAST(ltrim(document, 'abcdefghijklmnopqrstuvwxyz') AS INTEGER) DESC, rowid"
+          : "ORDER BY rank"))
+    defer { unsafe sqlite3_finalize(statement) }
+    for (offset, value) in values.enumerated() {
+      try unsafe bind(value, at: Int32(offset + 1), in: statement)
+    }
+    var rows: [Int64] = []
+    // Each document asked about once, however many of its sections match.
+    var allowed: [String: Bool] = [:]
+    while rows.count < limit {
+      let result = unsafe sqlite3_step(statement)
+      guard result == SQLITE_ROW else {
+        guard result == SQLITE_DONE else { throw Failure(description: message) }
+        break
+      }
+      if let includes {
+        guard let stem = unsafe column(1, of: statement) else { continue }
+        if allowed[stem] == nil {
+          allowed[stem] = DocumentID(fileStem: stem).map(includes) ?? false
+        }
+        guard allowed[stem] == true else { continue }
+      }
+      rows.append(unsafe sqlite3_column_int64(statement, 0))
+    }
+    return rows
+  }
+
+  /// What `section:` asks of a row: that its heading holds `section` as a phrase, or
+  /// that `section` is its anchor or number, or the anchor or number of a section it is
+  /// under: `section-1` and `1` are section 1 and 1.2, never 10. The heading is matched
+  /// in a subquery, as FTS5 takes no match beside an `OR`; a value with no word in it,
+  /// or that is a section number, is matched against the anchor and the number alone.
+  /// The value comes lowercased, so the anchor and the number are compared in any case.
+  static func condition(forSection section: String) -> (sql: String, values: [String]) {
+    let escaped = section.replacing("\\", with: "\\\\").replacing("%", with: "\\%")
+      .replacing("_", with: "\\_")
+    let names = """
+      anchor = ? COLLATE NOCASE OR anchor LIKE ? ESCAPE '\\' OR anchor LIKE ? ESCAPE '\\'
+        OR number = ? COLLATE NOCASE OR number LIKE ? ESCAPE '\\'
+      """
+    let values = [section, "\(escaped).%", "\(escaped)-%", section, "\(escaped).%"]
+    let isNumber = section.allSatisfy { $0.isNumber || $0 == "." }
+    guard section.contains(where: { $0.isLetter || $0.isNumber }), !isNumber else {
+      return ("(\(names))", values)
+    }
+    let heading = "heading : \"" + section.replacing("\"", with: "\"\"") + "\""
+    return (
+      "(rowid IN (SELECT rowid FROM sections WHERE sections MATCH ?) OR \(names))",
+      [heading] + values
+    )
+  }
+
+  /// How much of a section's text is read for its opening words.
+  private static let openingLength = 400
+
+  /// The opening words of a section's text, for a hit with no words to show around:
+  /// its white space as a snippet's, cut at a word a little short of a row's three
+  /// lines.
+  /// `text` is the first `openingLength` Unicode scalars of the section and one more, so
+  /// a text cut there says so with an ellipsis too.
+  static func opening(of text: String) -> Snippet {
+    let isCut = text.unicodeScalars.count > openingLength
+    let whole = snippet(marked: String(text.prefix(openingLength))).text
+    let length = 160
+    guard whole.count > length else {
+      return Snippet(text: isCut ? whole + "…" : whole, matches: [])
+    }
+    let cut = whole.prefix(length)
+    let words = cut.lastIndex(of: " ").map { cut[..<$0] } ?? cut
+    return Snippet(text: words + "…", matches: [])
   }
 
   /// `query` as an FTS5 match expression: each word, or each quoted run, as an FTS5
@@ -359,7 +512,7 @@ public struct Snippet: Sendable, Hashable {
 
   /// The first column of every row `sql` returns, with `values` bound in order. A
   /// failure throws rather than ending the rows early: an empty answer to the
-  /// version check would empty the index, and to `indexed()` would index it all again.
+  /// version check would empty the index.
   private func strings(_ sql: String, _ values: String...) throws -> [String] {
     let statement = try unsafe prepare(sql)
     defer { unsafe sqlite3_finalize(statement) }

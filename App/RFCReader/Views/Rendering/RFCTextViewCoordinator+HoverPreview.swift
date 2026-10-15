@@ -41,13 +41,15 @@
       return reference(atWindowPoint: event.locationInWindow)?.gloss != nil
     }
 
-    /// Go to Definition for the gloss under `event`'s pointer, found as hover finds
-    /// it, by the character under the pointer rather than the nearest caret position.
-    func goToDefinition(under event: NSEvent) -> (() -> Void)? {
+    /// Go to Definition or Go to Expansion for the gloss under `event`'s pointer,
+    /// found as hover finds it, by the character under the pointer rather than the
+    /// nearest caret position.
+    func followGloss(under event: NSEvent) -> (title: String, follow: () -> Void)? {
       guard let textView, event.window === textView.window,
-        let gloss = reference(atWindowPoint: event.locationInWindow)?.gloss
+        let gloss = reference(atWindowPoint: event.locationInWindow)?.gloss,
+        let follow = followGloss(of: gloss.gloss)
       else { return nil }
-      return goToDefinition(of: gloss.gloss)
+      return (gloss.gloss.followTitle(), follow)
     }
 
     /// Called from `dismantleNSView`.

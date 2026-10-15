@@ -12,7 +12,6 @@ struct BesideReader: View {
   let reading: SideBySide
   let main: ReaderState
   let mainNavigation: NavigationModel
-  @Environment(LibraryModel.self) private var library
   /// The bibliography entry a citation clicked in this reader names, shown in a
   /// popover from its bar: the panel is the window's reader's, and shows that
   /// document's bibliography, not this one's.
@@ -29,7 +28,7 @@ struct BesideReader: View {
               open: { id in
                 citedEntry = nil
                 // As a link to it: the document opens in the window's reader.
-                reading.navigation.open(id, in: library.index)
+                reading.navigation.open(id)
               },
               openInNewWindow: nil
             )
@@ -50,7 +49,7 @@ struct BesideReader: View {
         guard let selection, selection != reading.pair.other else { return }
         main.endComparison()
         mainNavigation.open(
-          selection, section: reading.navigation.scrollRequest?.section, in: library.index)
+          selection, section: reading.navigation.scrollRequest?.section)
       }
       #if os(iOS)
         // Its header's glossary terms, which the window's `readerScene` presents only

@@ -11,8 +11,9 @@ extension NSAttributedString.Key {
   /// The cross reference a run stands for: hit testing, preview, chip drawing.
   public static let rfcReference = NSAttributedString.Key("rfcReference")
   /// What a run means where the document itself says so, for its card: a defined
-  /// term at its first use in a paragraph (#396). A `GlossBox`, one per use. Not a
-  /// link: a click on it selects, as on any text.
+  /// term at its first use in a paragraph (#396), an abbreviation at its first use in
+  /// a section (#67). A `GlossBox`, one per use. Not a link: a click on it selects, as
+  /// on any text.
   public static let rfcGloss = NSAttributedString.Key("rfcGloss")
   /// Set on heading runs, so the VoiceOver headings rotor can find them.
   public static let rfcAnchor = NSAttributedString.Key("rfcAnchor")

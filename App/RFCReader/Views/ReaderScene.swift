@@ -25,7 +25,7 @@ struct ReaderScene: ViewModifier {
         // must not go on describing the document that was.
         if navigation.selection == nil { reader.clear() }
         // Another document read leaves the comparison with this one (#187).
-        if let beside = reader.sideBySide, beside.pair.reading != navigation.selection {
+        if let beside = reader.sideBySide, beside.pair.reading != navigation.shown {
           reader.endComparison()
         }
       }
