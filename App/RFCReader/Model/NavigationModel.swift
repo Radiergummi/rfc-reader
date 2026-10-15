@@ -237,17 +237,13 @@ final class NavigationModel: Identifiable {
   /// A BCP, STD or FYI is opened as itself, so it is bookmarked and recorded as the
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
-    let id = link.id
-    // A place in the document on screen is a jump within it, which the reader
-    // resolves: an anchor may name nothing in its body, as the RFC Editor's
-    // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
-    // and only the reader can tell a section's number from its anchor (#482). An
-    // anchor leaves the list as it is.
-    if let place = link.place, id == selection || id == shown {
+    switch OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown) {
+    case .jump(let place):
       jump(toSection: place)
+      // An anchor leaves the list as it is.
       guard link.section != nil else { return }
-    } else {
-      go(to: HistoryEntry(id: id, section: link.place, arrival: arrival))
+    case .go(let entry):
+      go(to: entry)
     }
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
@@ -401,10 +397,11 @@ final class NavigationModel: Identifiable {
   /// A section the full-text search found (#37): its document, at the section. Like
   /// `select(_:)`, it leaves the filter and the search alone, which the hit is in.
   func select(_ hit: SectionHit) {
-    if hit.document == selection {
-      jump(toSection: hit.anchor)
-    } else {
-      go(to: HistoryEntry(id: hit.document, section: hit.anchor))
+    switch OpenRoute.route(
+      RFCLink(id: hit.document, anchor: hit.anchor), selected: selection, shown: shown)
+    {
+    case .jump(let place): jump(toSection: place)
+    case .go(let entry): go(to: entry)
     }
   }
 
