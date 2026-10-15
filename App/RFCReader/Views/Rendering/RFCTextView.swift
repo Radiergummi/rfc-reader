@@ -36,7 +36,6 @@ struct RFCTextView: View {
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
-    onFoldingChange: @escaping (Folding) -> Void = { _ in },
     isShown: Bool = true,
     coupling: ScrollCoupling? = nil,
     requirements: [Requirement]? = nil,
@@ -46,7 +45,6 @@ struct RFCTextView: View {
     inputs = ReaderInputs(
       built: built,
       folding: folding,
-      onFoldingChange: onFoldingChange,
       coupling: coupling,
       requirements: requirements,
       bibliography: bibliography,
@@ -88,7 +86,6 @@ struct ReaderInputs {
   /// The reading mode and the sections it has expanded (#698); nil to keep what the
   /// text view has, as a reader fading out does while the scene has moved on.
   let folding: Folding?
-  let onFoldingChange: (Folding) -> Void
   /// The side-by-side reading this reader scrolls together in (#187), nil when it
   /// is read alone.
   let coupling: ScrollCoupling?
@@ -139,7 +136,6 @@ struct ReaderInputs {
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onChoosePresentation = onChoosePresentation
-    coordinator.onFoldingChange = onFoldingChange
     #if canImport(UIKit)
       coordinator.onChromeHidden = onChromeHidden
       coordinator.setChromeEnabled(hidesChrome)

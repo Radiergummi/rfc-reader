@@ -32,7 +32,7 @@ extension RFCTextViewCoordinator {
     let foldingIndex = FoldingIndex(built)
     self.foldingIndex = foldingIndex
     self.folding = folding
-    reportedFolding = nil
+    foldingEcho.forget()
     forgetBands()
     foldingDelegate.fold(foldingIndex, by: folding, bands: RequirementBands())
     // Through `install`, never by assigning `storage.attributedString`, which
@@ -58,11 +58,7 @@ extension RFCTextViewCoordinator {
   /// itself and reported (`show`), whose report has not landed yet: that is ignored,
   /// or it would fold back what was just opened.
   func apply(_ folding: Folding, placeAt place: Int? = nil) {
-    if let reported = reportedFolding {
-      if folding == reported.before { return }
-      if folding == reported.after { reportedFolding = nil }
-    }
-    guard folding != self.folding, let foldingIndex else { return }
+    guard foldingEcho.admits(folding), folding != self.folding, let foldingIndex else { return }
     // Focus with no section yet: the one the reader's line is in; Implementer
     // becoming the outline: with the line's section open. Told to the scene as a
     // change of the coordinator's own. Unless there is none, which leaves nothing
@@ -71,8 +67,8 @@ extension RFCTextViewCoordinator {
     let resolved = folding.focusingOnLine(at: line, in: foldingIndex)
       .keepingLine(at: line, after: self.folding, in: foldingIndex)
     if resolved != folding {
-      reportedFolding = (folding, resolved)
-      Task { self.onFoldingChange(resolved) }
+      foldingEcho.asked(for: resolved, from: folding)
+      controller?.requestFolding(resolved)
     }
     let folding = resolved
     let place = place ?? folding.placeOfFocus(after: self.folding, in: foldingIndex)
@@ -138,13 +134,13 @@ extension RFCTextViewCoordinator {
   }
 
   /// A click or tap on a heading in the outline opens its section, or closes it;
-  /// answers whether there was a heading to toggle there. From an event, not an
-  /// update, so the scene is told at once.
+  /// answers whether there was a heading to toggle there.
   func toggleSection(atHeading offset: Int) -> Bool {
     guard let foldingIndex, let toggled = folding.toggling(heading: offset, in: foldingIndex)
     else { return false }
+    let before = folding
     apply(toggled)
-    onFoldingChange(toggled)
+    askScene(from: before)
     return true
   }
 
@@ -156,12 +152,17 @@ extension RFCTextViewCoordinator {
     let before = folding
     let expanded = folding.expanding(toShow: offset, in: foldingIndex)
     apply(expanded, placeAt: offset)
-    // After `apply`, which would take `expanded` for the scene catching up and forget
-    // the report before it was made.
-    reportedFolding = (before, expanded)
-    // Deferred: a jump can run inside SwiftUI's update, where mutating state is illegal.
-    Task { self.onFoldingChange(expanded) }
+    askScene(from: before)
     return true
+  }
+
+  /// Asks the scene for the folding this coordinator went to from `before` itself:
+  /// the one applied, which `apply` may have resolved further. After `apply`, which
+  /// would take it for the scene catching up and forget the request before it was
+  /// made.
+  private func askScene(from before: Folding) {
+    foldingEcho.asked(for: folding, from: before)
+    controller?.requestFolding(folding)
   }
 
   // MARK: - Geometry

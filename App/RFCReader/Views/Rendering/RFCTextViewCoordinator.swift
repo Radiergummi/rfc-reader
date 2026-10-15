@@ -216,12 +216,9 @@ final class RFCTextViewCoordinator: NSObject {
   var folding = Folding()
   /// What folding needs of the installed build, made once per build.
   var foldingIndex: FoldingIndex?
-  /// A folding this coordinator changed itself and reported to the scene, which has
-  /// not caught up yet: the one before, which the scene may still pass, and the one
-  /// after, which it will.
-  var reportedFolding: (before: Folding, after: Folding)?
-  /// Tells the scene that a jump into folded text expanded a section.
-  var onFoldingChange: (Folding) -> Void = { _ in }
+  /// A folding this coordinator changed itself and asked the scene for, which the
+  /// scene has not caught up with yet; see `FoldingEcho`.
+  var foldingEcho = FoldingEcho()
   /// The document's requirements, which Implementer bands (#700).
   var requirements: [Requirement] = []
   /// Where the requirements are in the installed build: found in Implementer only,

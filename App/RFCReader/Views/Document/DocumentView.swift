@@ -291,6 +291,11 @@ struct DocumentView: View {
       .onChange(of: controller.hasSelection) { _, hasSelection in
         writer.hasSelection = hasSelection
       }
+      // A section the text view opened or closed itself: a heading toggled, a jump
+      // into folded text.
+      .onChange(of: controller.foldingRequest) {
+        if let folding = controller.takeFolding() { writer.folding = folding }
+      }
   }
 
   /// The reader, and on macOS only the reader.
@@ -514,7 +519,6 @@ struct DocumentView: View {
         // Not while fading out, nor under the top of the stack until the reader
         // state is this reader's again: it is the reader on screen's.
         folding: showsReaderState ? reader.folding : nil,
-        onFoldingChange: { writer.folding = $0 },
         isShown: showsReaderState,
         coupling: showsReaderState ? reader.coupling : nil,
         // None until they are extracted, which a text view made with its document
