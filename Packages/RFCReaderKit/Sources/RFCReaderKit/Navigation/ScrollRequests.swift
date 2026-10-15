@@ -60,14 +60,24 @@ public struct ScrollRequests<Waiter> {
     return ended
   }
 
-  /// The history did not move, so there is nothing to scroll to. Where that was the
-  /// hidden document `reopening` from its row, the last request is an earlier
+  /// Goes `history` to `place`, as `NavigationHistory.go(to:leaving:in:)` does, and
+  /// asks the reader to scroll to where it arrived. Returns the place arrived at,
+  /// nil when the history did not move, and the waiter whose wait that ended.
+  ///
+  /// Where the history did not move, there is nothing to scroll to. If that was the
+  /// hidden document reopened from its row, the last request is an earlier
   /// arrival's, and the reader made again for the document would take it over its
   /// reading position, so it is cleared (#508). A reader still on screen keeps its
   /// own, which may be a jump a script waits on.
-  public mutating func stayed(reopening: Bool) -> Waiter? {
-    guard reopening else { return nil }
-    return replace(with: nil)
+  public mutating func go(
+    to place: HistoryEntry, in history: inout NavigationHistory, leaving position: String?,
+    places: DocumentPlaces? = nil
+  ) -> (arrived: HistoryEntry?, ended: Waiter?) {
+    let reopening = history.shown == nil
+    if let arrived = history.go(to: place, leaving: position, in: places) {
+      return (arrived, arrive(at: arrived.section))
+    }
+    return (nil, reopening ? replace(with: nil) : nil)
   }
 
   /// The reader has done what it will with `request`, where that recorded nothing:

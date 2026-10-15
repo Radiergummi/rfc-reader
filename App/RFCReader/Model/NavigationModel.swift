@@ -238,11 +238,15 @@ final class NavigationModel: Identifiable {
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    follow(route)
+    if route.reveals { sidebarSelection = .all }
+  }
+
+  private func follow(_ route: OpenRoute) {
     switch route {
     case .jump(let place, _): jump(toSection: place)
     case .navigate(let entry): go(to: entry)
     }
-    if route.reveals { sidebarSelection = .all }
   }
 
   func open(_ id: DocumentID, section: String? = nil) {
@@ -389,14 +393,12 @@ final class NavigationModel: Identifiable {
     }
   }
 
-  /// A section the full-text search found (#37): its document, at the section. Like
+  /// A section the full-text search found (#37): its document, at the section, or a
+  /// jump to the section where the document is on screen, as `open` routes it. Like
   /// `select(_:)`, it leaves the filter and the search alone, which the hit is in.
   func select(_ hit: SectionHit) {
     let link = RFCLink(id: hit.document, anchor: hit.anchor)
-    switch OpenRoute.route(link, selected: selection, shown: shown) {
-    case .jump(let place, _): jump(toSection: place)
-    case .navigate(let entry): go(to: entry)
-    }
+    follow(OpenRoute.route(link, selected: selection, shown: shown))
   }
 
   /// A row picked in the document list.
@@ -459,12 +461,13 @@ final class NavigationModel: Identifiable {
   }
 
   private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
-    let reopening = history.shown == nil
-    guard let place = history.go(to: place, leaving: visiblePosition, in: places) else {
-      updateRequests { $0.stayed(reopening: reopening) }
-      return
+    var arrived: HistoryEntry?
+    updateRequests {
+      let went = $0.go(to: place, in: &history, leaving: visiblePosition, places: places)
+      arrived = went.arrived
+      return went.ended
     }
-    arrive(at: place)
+    if let arrived { visiblePosition = arrived.section }
   }
 
   private func arrive(at place: HistoryEntry) {

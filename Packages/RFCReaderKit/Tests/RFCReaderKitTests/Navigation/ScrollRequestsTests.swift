@@ -91,6 +91,17 @@ struct ScrollRequestsTests {
     #expect(requests.current == before, "the request stays as it was")
   }
 
+  // MARK: - Going somewhere in the history
+
+  @Test func `a move in the history asks to scroll to where it arrived`() {
+    var history = NavigationHistory()
+    var requests = ScrollRequests<String>()
+    let went = requests.go(
+      to: HistoryEntry(id: .rfc(9110), section: "section-4.2"), in: &history, leaving: nil)
+    #expect(went.arrived == HistoryEntry(id: .rfc(9110), section: "section-4.2"))
+    #expect(requests.current?.section == "section-4.2")
+  }
+
   // MARK: - Reopening the hidden document (#508)
 
   /// The hidden document reopened from its row: the history does not move, and
@@ -99,12 +110,11 @@ struct ScrollRequestsTests {
   @Test func `reopening the hidden document clears the request`() {
     var history = NavigationHistory()
     var requests = ScrollRequests<String>()
-    history.go(to: HistoryEntry(id: .rfc(9110), section: "section-4.2"))
-    _ = requests.arrive(at: "section-4.2")
+    _ = requests.go(
+      to: HistoryEntry(id: .rfc(9110), section: "section-4.2"), in: &history, leaving: nil)
     history.hide()
-    let reopening = history.shown == nil
-    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
-    _ = requests.stayed(reopening: reopening)
+    let went = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
+    #expect(went.arrived == nil)
     #expect(requests.current == nil)
   }
 
@@ -113,12 +123,12 @@ struct ScrollRequestsTests {
   @Test func `a reader still on screen keeps its request`() {
     var history = NavigationHistory()
     var requests = ScrollRequests<String>()
-    history.go(to: HistoryEntry(id: .rfc(9110)))
+    _ = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
     _ = requests.jump(to: "4.2", inDocumentOnScreen: true, waiter: "script")
     let jump = requests.current
-    let reopening = history.shown == nil
-    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
-    #expect(requests.stayed(reopening: reopening) == nil)
+    let went = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
+    #expect(went.arrived == nil)
+    #expect(went.ended == nil)
     #expect(requests.current == jump)
   }
 
@@ -127,11 +137,10 @@ struct ScrollRequestsTests {
   @Test func `reopening ends the wait of a jump the hidden reader never settled`() {
     var history = NavigationHistory()
     var requests = ScrollRequests<String>()
-    history.go(to: HistoryEntry(id: .rfc(9110)))
+    _ = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
     _ = requests.jump(to: "4.2", inDocumentOnScreen: true, waiter: "script")
     history.hide()
-    let reopening = history.shown == nil
-    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
-    #expect(requests.stayed(reopening: reopening) == "script")
+    let went = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
+    #expect(went.ended == "script")
   }
 }
