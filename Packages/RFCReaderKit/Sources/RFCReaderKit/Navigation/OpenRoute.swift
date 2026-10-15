@@ -7,7 +7,7 @@ public enum OpenRoute: Equatable, Sendable {
   /// an anchor may name nothing in its body, as the RFC Editor's `#page-12`
   /// doesn't, or an entry the reader shows rather than scrolls to (#276), and only
   /// the reader can tell a section's number from its anchor (#482).
-  case jump(to: String)
+  case jump(to: String, reveals: Bool)
   /// Anywhere else: a new entry in the history.
   case go(to: HistoryEntry)
 
@@ -19,8 +19,18 @@ public enum OpenRoute: Equatable, Sendable {
     shown: DocumentID?
   ) -> Self {
     if let place = link.place, link.id == selected || link.id == shown {
-      return .jump(to: place)
+      return .jump(to: place, reveals: link.section != nil)
     }
     return .go(to: HistoryEntry(id: link.id, section: link.place, arrival: arrival))
+  }
+
+  /// Whether an open reveals the document in the list, setting the sidebar to All,
+  /// since a narrowed filter may be hiding it. Every open does, but a jump to an
+  /// anchor, which leaves the list as it is.
+  public var reveals: Bool {
+    switch self {
+    case .jump(_, let reveals): reveals
+    case .go: true
+    }
   }
 }

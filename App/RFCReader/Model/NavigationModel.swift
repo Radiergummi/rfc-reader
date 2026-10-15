@@ -237,17 +237,12 @@ final class NavigationModel: Identifiable {
   /// A BCP, STD or FYI is opened as itself, so it is bookmarked and recorded as the
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
-    switch OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown) {
-    case .jump(let place):
-      jump(toSection: place)
-      // An anchor leaves the list as it is.
-      guard link.section != nil else { return }
-    case .go(let entry):
-      go(to: entry)
+    let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    switch route {
+    case .jump(let place, _): jump(toSection: place)
+    case .go(let entry): go(to: entry)
     }
-    // As before the split: an explicit open reveals the document in the list,
-    // which a narrowed filter may be hiding.
-    sidebarSelection = .all
+    if route.reveals { sidebarSelection = .all }
   }
 
   func open(_ id: DocumentID, section: String? = nil) {
@@ -400,7 +395,7 @@ final class NavigationModel: Identifiable {
     switch OpenRoute.route(
       RFCLink(id: hit.document, anchor: hit.anchor), selected: selection, shown: shown)
     {
-    case .jump(let place): jump(toSection: place)
+    case .jump(let place, _): jump(toSection: place)
     case .go(let entry): go(to: entry)
     }
   }
