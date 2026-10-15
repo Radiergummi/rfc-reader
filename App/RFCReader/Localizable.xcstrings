@@ -1191,16 +1191,6 @@
         }
       }
     },
-    "Go to Definition" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zur Definition"
-          }
-        }
-      }
-    },
     "Go to RFC" : {
       "localizations" : {
         "de" : {
@@ -1257,6 +1247,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Reihe nach"
+          }
+        }
+      }
+    },
+    "In the Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Text"
           }
         }
       }

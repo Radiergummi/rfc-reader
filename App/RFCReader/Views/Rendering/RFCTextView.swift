@@ -431,8 +431,8 @@ struct ReaderInputs {
       textView.isOnGloss = { [weak coordinator = context.coordinator] event in
         coordinator?.isOnGloss(event) ?? false
       }
-      textView.goToDefinition = { [weak coordinator = context.coordinator] event in
-        coordinator?.goToDefinition(under: event)
+      textView.followGloss = { [weak coordinator = context.coordinator] event in
+        coordinator?.followGloss(under: event)
       }
       textView.toggleSection = { [weak coordinator = context.coordinator] event in
         coordinator?.toggleSection(under: event) ?? false

@@ -30,6 +30,12 @@ struct RFCListView: View {
       ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
   }
 
+  /// The full-text search for the rows on show (#37), once it has ended: the search
+  /// follows the list, and until it ends the last one is for another.
+  private var textSearched: NavigationModel.TextFound? {
+    navigation.textFound.flatMap { $0.list == shown ? $0 : nil }
+  }
+
   @Environment(\.undoManager) private var undoManager
   #if !os(macOS)
     @Environment(\.editMode) private var editMode
@@ -90,6 +96,19 @@ struct RFCListView: View {
     let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
     let rows = self.rows
+    let textSearched = self.textSearched
+    let textFound = textSearched?.found
+    let hasTextHits = textFound.map { !$0.hits.isEmpty } ?? false
+    // A query naming a section has no RFC rows, only section hits: until the search
+    // ends it has found nothing yet, not nothing.
+    let awaitsSections =
+      textSearched == nil && IndexSearch.parseQuery(shown.query).filters.section != nil
+    // How much the full-text index holds of what the search could look in, so a hit
+    // it does not have does not read as "no RFC says this".
+    let searched = textFound.map { found in
+      SectionResults.searched(
+        found.searched, of: found.narrowedTo ?? library.index?.rfcs.count ?? 0)
+    }
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
@@ -171,12 +190,37 @@ struct RFCListView: View {
           unsectioned
         }
       #endif
+      // The sections whose text holds the query's words (#37), under the RFC rows and
+      // only once every row is in the window, as the status line below: after a
+      // partial page they would sit in the middle of the list.
+      // With neither, the empty state says it instead.
+      if limit >= rows.count, let textFound, let searched, !rows.isEmpty || hasTextHits {
+        Section {
+          ForEach(textFound.hits, id: \.self) { hit in
+            Button {
+              navigation.select(hit)
+            } label: {
+              SectionHitRow(hit: hit, title: library.index?[hit.document]?.title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .selectionDisabled()
+          }
+        } header: {
+          if !textFound.hits.isEmpty {
+            Text("In the Text")
+          }
+        } footer: {
+          Text(verbatim: searched)
+        }
+      }
       // Where Mail says when it last checked: after the last row, scrolled to
       // rather than pinned. Only once every row is in the window — after a
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil) {
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
         IndexStatusView()
           .frame(maxWidth: .infinity)
           .padding(.vertical, 8)
@@ -197,7 +241,7 @@ struct RFCListView: View {
     .overlay {
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
-      if rows.isEmpty, navigation.listed != nil {
+      if rows.isEmpty, navigation.listed != nil, !hasTextHits, !awaitsSections {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery
@@ -215,7 +259,15 @@ struct RFCListView: View {
             shown.filter.emptyTitle(in: library.collections),
             systemImage: shown.filter.systemImage)
         } else {
-          ContentUnavailableView.search(text: shown.query)
+          VStack {
+            ContentUnavailableView.search(text: shown.query)
+            if let searched {
+              Text(verbatim: searched)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom)
+            }
+          }
         }
       }
     }

@@ -76,7 +76,9 @@
 
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
-    private var id: DocumentID? { navigation.selection }
+    /// The RFC shown, which Cite, Share and Add to Collection act on: a series' first
+    /// member (#656). Bookmark is the window controller's, and bookmarks the series.
+    private var id: DocumentID? { navigation.shown }
     private var library: LibraryModel { controller.library }
     private var metadata: RFCMetadata? { id.flatMap { library.metadata($0) } }
 

@@ -96,7 +96,7 @@ import SwiftUI
       .onContinueUserActivity(SceneRequest.activityType) { activity in
         guard let link = SceneRequest.link(from: activity.userInfo) else { return }
         if hasAppeared {
-          navigation.open(link, in: library.index)
+          navigation.open(link)
         } else {
           requestedLink = link
         }
@@ -140,7 +140,7 @@ import SwiftUI
         hasAppeared = true
         if let link = requestedLink {
           requestedLink = nil
-          navigation.open(link, in: library.index)
+          navigation.open(link)
         }
       }
       // Side by side, the sidebar shows which filter feeds the list.

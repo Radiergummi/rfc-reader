@@ -131,7 +131,9 @@ public struct LibraryList: Hashable, Sendable {
   private func hits(
     for parsed: SearchQuery.Parsed, from search: IndexSearch, now: Date = Date()
   ) -> [RFCMetadata] {
-    guard parsed.unknown.isEmpty, let indexed = parsed.filters.indexed(text: parsed.text) else {
+    guard parsed.unknown.isEmpty, parsed.filters.section == nil,
+      let indexed = parsed.filters.indexed(text: parsed.text)
+    else {
       return []
     }
     return search.search(text: parsed.text, filters: indexed, limit: .max, now: now).map(\.rfc)
@@ -145,7 +147,11 @@ public struct LibraryList: Hashable, Sendable {
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [LibraryRow] {
     let parsed = IndexSearch.parseQuery(query)
-    guard unknownTerms(of: parsed, in: index).isEmpty else { return [] }
+    // A query naming a section is about sections, which only the full-text search
+    // has: it lists none of the index's rows (answered on #37, 2026-10-14).
+    guard unknownTerms(of: parsed, in: index).isEmpty, parsed.filters.section == nil else {
+      return []
+    }
     // In the whole library the reader's data is the list (`narrowing`), so the
     // index's every row would be made only to be thrown away.
     let isReplaced = filter == .all && !parsed.filters.readerData.isEmpty
@@ -270,6 +276,54 @@ public struct LibraryList: Hashable, Sendable {
   }
 }
 
+extension LibraryList {
+  /// What this list asks the full-text search (#37).
+  public struct TextQuery: Hashable, Sendable {
+    /// The query's words, which the full-text search looks for in each section: none
+    /// when a section is named alone.
+    public var words: String
+    /// The sections the search looks in, by heading or anchor (`section:`).
+    public var section: String?
+    /// The only documents a section hit may be in, or nil for any: the RFCs this list
+    /// shows for the query's qualifiers alone.
+    public var documents: Set<DocumentID>?
+  }
+
+  /// The full-text search for this list, or nil when it has none: when the query has
+  /// neither words nor a section, or names something unknown, and so lists no RFC
+  /// rows either.
+  ///
+  /// A qualifier means the same to the section hits as to the RFC rows (answered on
+  /// #37, 2026-10-14): a hit's RFC has to be one this list shows for the query less
+  /// its words, as the filter, the qualifiers and the options narrow it. `sort:`
+  /// orders the RFC rows only, and narrows nothing.
+  public func textQuery(in index: RFCIndex, search: IndexSearch?) -> TextQuery? {
+    let parsed = IndexSearch.parseQuery(query)
+    let section = parsed.filters.section
+    guard !parsed.text.isUnsearchedQuery || section != nil,
+      unknownTerms(of: parsed, in: index).isEmpty
+    else {
+      return nil
+    }
+    // The section narrows the hits in the full-text search, not the RFCs they may be in.
+    var filters = parsed.filters
+    filters.sort = nil
+    filters.section = nil
+    let qualifiers = SearchQuery.format(text: "", filters: filters)
+    // The whole library, narrowed by nothing, allows every document; hiding the
+    // obsolete RFCs narrows it as a qualifier does.
+    guard filter != .all || !qualifiers.isEmpty || !options.showsObsolete else {
+      return TextQuery(words: parsed.text, section: section, documents: nil)
+    }
+    let narrowing = LibraryList(
+      filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
+      downloaded: downloaded, options: options, members: members, collections: collections)
+    let rows = narrowing.rows(in: index, search: search)
+    let documents = rows.flatMap { row in row.rfc.map { [$0.id] } ?? row.members.map(\.id) }
+    return TextQuery(words: parsed.text, section: section, documents: Set(documents))
+  }
+}
+
 extension SearchFilters {
   /// The filters the index's search answers, beside `text`: these less the reader's
   /// data, a sort, and `in:` once it names a collection, which a list narrows by
@@ -278,6 +332,7 @@ extension SearchFilters {
     var indexed = self
     indexed.readerData = []
     indexed.sort = nil
+    indexed.section = nil
     if !collectionNames.isEmpty { indexed.scopes = [] }
     guard !text.trimmingCharacters(in: .whitespaces).isEmpty || !indexed.isEmpty else {
       return nil

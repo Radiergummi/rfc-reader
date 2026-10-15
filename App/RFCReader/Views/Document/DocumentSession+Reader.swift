@@ -59,14 +59,14 @@ extension DocumentSession {
       return
     }
     startLoad(from: library) {
-      [reader, library, navigation, positions, id, depth, isShown] loaded in
+      [reader, library, navigation, positions, id, identity, depth, isShown] loaded in
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
       // document is here, so one that failed to open is not listed as read. An
       // opening still, if a reader was pushed over it meanwhile (#263); not a
       // reader made again below the top of the stack.
-      if isShown, navigation.holds(id, at: depth) { positions.markOpened() }
+      if isShown, navigation.holds(identity, at: depth) { positions.markOpened() }
       Self.present(loaded, id: id, into: reader, library: library)
     } failed: { [reader, navigation] in
       // No header is coming, so the toolbar names the RFC that failed; unless it is

@@ -33,7 +33,7 @@ final class SideBySide {
   init(_ pair: SideBySidePair, library: LibraryModel) {
     self.pair = pair
     navigation = NavigationModel(library: library, listsDocuments: false)
-    navigation.open(pair.other, in: library.index)
+    navigation.open(pair.other)
     coupling = ScrollCoupling(leader: pair.reading, follower: pair.other)
     reader.coupling = coupling
     coupling.onUnaligned = { [weak self] leader, section in
