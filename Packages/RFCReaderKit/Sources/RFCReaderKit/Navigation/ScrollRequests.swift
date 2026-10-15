@@ -60,6 +60,16 @@ public struct ScrollRequests<Waiter> {
     return ended
   }
 
+  /// The history did not move, so there is nothing to scroll to. Where that was the
+  /// hidden document `reopening` from its row, the last request is an earlier
+  /// arrival's, and the reader made again for the document would take it over its
+  /// reading position, so it is cleared (#508). A reader still on screen keeps its
+  /// own, which may be a jump a script waits on.
+  public mutating func stayed(reopening: Bool) -> Waiter? {
+    guard reopening else { return nil }
+    return replace(with: nil)
+  }
+
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load. A request already replaced settles nothing.

@@ -470,11 +470,7 @@ final class NavigationModel: Identifiable {
   private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
     let reopening = history.shown == nil
     guard let place = history.go(to: place, leaving: visiblePosition, in: places) else {
-      // The hidden document reopened from its row: nowhere to move, and nothing to
-      // scroll to. The last request is an earlier arrival's, and the reader made
-      // again for the document took it over its reading position (#508). A reader
-      // still on screen keeps its own, which may be a jump a script waits on.
-      if reopening { updateRequests { $0.arrive(at: nil) } }
+      updateRequests { $0.stayed(reopening: reopening) }
       return
     }
     arrive(at: place)

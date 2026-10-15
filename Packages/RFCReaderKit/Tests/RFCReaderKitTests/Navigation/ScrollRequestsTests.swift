@@ -1,3 +1,4 @@
+import RFCKit
 import Testing
 
 @testable import RFCReaderKit
@@ -88,5 +89,49 @@ struct ScrollRequestsTests {
     let before = requests.current
     #expect(requests.jump(to: "4.2", inDocumentOnScreen: false, waiter: "script") == "script")
     #expect(requests.current == before, "the request stays as it was")
+  }
+
+  // MARK: - Reopening the hidden document (#508)
+
+  /// The hidden document reopened from its row: the history does not move, and
+  /// the reader made again for it opens at its reading position, not at the place
+  /// an earlier arrival asked for.
+  @Test func `reopening the hidden document clears the request`() {
+    var history = NavigationHistory()
+    var requests = ScrollRequests<String>()
+    history.go(to: HistoryEntry(id: .rfc(9110), section: "section-4.2"))
+    _ = requests.arrive(at: "section-4.2")
+    history.hide()
+    let reopening = history.shown == nil
+    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
+    _ = requests.stayed(reopening: reopening)
+    #expect(requests.current == nil)
+  }
+
+  /// The row of the document on screen picked again: the reader is still there,
+  /// and a jump a script waits on in it goes on.
+  @Test func `a reader still on screen keeps its request`() {
+    var history = NavigationHistory()
+    var requests = ScrollRequests<String>()
+    history.go(to: HistoryEntry(id: .rfc(9110)))
+    _ = requests.jump(to: "4.2", inDocumentOnScreen: true, waiter: "script")
+    let jump = requests.current
+    let reopening = history.shown == nil
+    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
+    #expect(requests.stayed(reopening: reopening) == nil)
+    #expect(requests.current == jump)
+  }
+
+  /// A jump waited on whose document was then hidden: its reader went before it
+  /// could settle it, and the reopen ends the wait.
+  @Test func `reopening ends the wait of a jump the hidden reader never settled`() {
+    var history = NavigationHistory()
+    var requests = ScrollRequests<String>()
+    history.go(to: HistoryEntry(id: .rfc(9110)))
+    _ = requests.jump(to: "4.2", inDocumentOnScreen: true, waiter: "script")
+    history.hide()
+    let reopening = history.shown == nil
+    #expect(history.go(to: HistoryEntry(id: .rfc(9110))) == nil)
+    #expect(requests.stayed(reopening: reopening) == "script")
   }
 }
