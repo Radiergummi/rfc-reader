@@ -21,15 +21,15 @@ struct ReadingPositionKeeper {
     }
   }
 
-  /// Saves where `box` says the reader is. Nothing for a document that never showed
-  /// its text — one that failed to load, or was left before it did — since saving
-  /// no place would erase the one stored, and list a document that never opened as
-  /// read.
-  func save(_ box: VisibleAnchorBox) {
-    guard let anchor = box.anchor else { return }
+  /// Saves where `reader` says the reader is. Nothing for a document that never
+  /// showed its text — one that failed to load, or was left before it did — since
+  /// saving no place would erase the one stored, and list a document that never
+  /// opened as read.
+  func save(_ reader: ReaderController) {
+    guard let anchor = reader.anchor else { return }
     do {
       try ReadingPositionStore.save(
-        box.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id, in: context)
+        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id, in: context)
     } catch {
       readerLog.error(
         "saving the position failed: \(String(describing: error), privacy: .public)")

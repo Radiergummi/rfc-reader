@@ -84,7 +84,7 @@ final class DocumentSession {
 
   private(set) var state = LoadState()
   /// Anchor to the section's place (`Section.place`), made once with the document. See
-  /// `DocumentView`'s `onVisibleAnchorChange` for why it is not asked of the
+  /// `DocumentView.showSection(_:)` for why it is not asked of the
   /// document each time.
   private(set) var sectionPlaces: [String: String] = [:]
 

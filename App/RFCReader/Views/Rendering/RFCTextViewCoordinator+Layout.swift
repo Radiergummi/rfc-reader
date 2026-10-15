@@ -26,7 +26,6 @@ extension RFCTextViewCoordinator {
       forgetHoveredSectionNumber()
     #endif
     self.built = built
-    lastReportedAnchor = nil
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
     // Before the text, so the first layout skips what the reading mode folds.
@@ -170,7 +169,7 @@ extension RFCTextViewCoordinator {
   /// Centers the column and hangs the header in the top inset.
   ///
   /// This runs on every update pass — and an update pass happens on every section
-  /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
+  /// crossing, because `DocumentView` observes the section — so nothing is written unless
   /// the gutter, the column or the header's height moved. A relayout costs more
   /// still, and only the column can force one: under the recommended measure, a
   /// window wider than it moves the gutters, not the text. Full width has no such

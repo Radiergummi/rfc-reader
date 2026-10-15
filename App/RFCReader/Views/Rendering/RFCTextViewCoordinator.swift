@@ -15,32 +15,9 @@ import Synchronization
   typealias PlatformHostingController = NSHostingController
 #endif
 
-/// The last anchor section tracking computed, outside SwiftUI's observation.
-///
-/// Reporting to `DocumentView` goes through a `Task`, because it can fire from
-/// inside a view update where mutating state is illegal — and a `Task` has no
-/// ordering guarantee against `onDisappear`, so a scroll immediately followed by
-/// navigating away would persist the section before last. `ReadingPositionKeeper`
-/// reads this instead: it is written the moment the anchor is computed.
-final class VisibleAnchorBox {
-  var anchor: String?
-  /// The reader's line, as a place that survives a rebuild: what the reading
-  /// position saves (#322). Nil at the top of the document.
-  var place: ReadingPlace? {
-    didSet { if place != oldValue { placeDidChange() } }
-  }
-  /// Told when `place` moves, on every scroll tick that moves it: `DocumentView`
-  /// saves the place once the reader stops (#155).
-  var placeDidChange: () -> Void = {}
-  /// Whether the top of the viewport is ahead of section one, which `anchor`
-  /// reports as section one.
-  var isAheadOfSections = false
-}
-
 /// Where the header's heading ends, in the hosted header's own coordinates, as
-/// `DocumentHeaderView` measured it. A box for the same reason as
-/// `VisibleAnchorBox`: the header is hosted outside SwiftUI's diffing and built
-/// once, so it writes into something both sides already hold rather than calling
+/// `DocumentHeaderView` measured it. A box because the header is hosted outside
+/// SwiftUI's diffing and built once, so it writes into something both sides already hold rather than calling
 /// through to a coordinator it was built before.
 final class HeadingBox {
   var bottom: CGFloat? {
@@ -151,7 +128,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// environment chain; see `ReaderEnvironment`.
   var environment: ReaderEnvironment?
 
-  var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
@@ -182,7 +158,7 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// Tells the view whether anything is selected: whenever the selection changes, and
   /// after an install, which may clear it without saying so. Deferred for the reason
-  /// `onVisibleAnchorChange` is: installing reports from inside SwiftUI's update.
+  /// the section is: installing reports from inside SwiftUI's update.
   /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
   /// selection's own edit menu (#186).
   func reportSelection() {
@@ -205,7 +181,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
   /// synchronously, on every scroll tick that changes it: the title is coupled to
   /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
-  /// That is safe where `onVisibleAnchorChange` is not because it touches no
+  /// That is safe where the section's report is not because it touches no
   /// SwiftUI state.
   ///
   /// With the coordinator, which owns what it reports until it withdraws it through
@@ -223,7 +199,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// the text view's scrolls and taps, and reported through `onChromeHidden`.
     var chrome = ReaderChrome()
     /// Told when `chrome` hides or shows the bars. Deferred, as
-    /// `onVisibleAnchorChange` is: a jump reports from inside SwiftUI's update.
+    /// the section is: a jump reports from inside SwiftUI's update.
     var onChromeHidden: (Bool) -> Void = { _ in }
     private var reportedChromeHidden = false
     /// The tap that shows and hides the bars, told apart from the text view's own
@@ -243,10 +219,8 @@ final class RFCTextViewCoordinator: NSObject {
     private var drag: ReaderChrome.Drag?
   #endif
 
-  /// Where section tracking last put the reader, written the moment it is computed.
-  /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
-  /// main-actor hop, which `onDisappear` cannot afford to wait for.
-  var lastVisibleAnchor: VisibleAnchorBox?
+  /// What the reader reports to, and is asked through: the view's.
+  var controller: ReaderController?
   /// The reading this reader scrolls together with another one in, side by side
   /// (#187); see `RFCTextViewCoordinator+Coupling`.
   var coupling: ScrollCoupling?
@@ -271,7 +245,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// silently break all of them. The builder marks which entries are sections; this
   /// is just that subset.
   var sectionIndex = AnchorIndex([])
-  var lastReportedAnchor: String?
   /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
   let engine = ReaderLayoutEngine()
   /// Skips the paragraphs the reading mode folds; the content storage's delegate.

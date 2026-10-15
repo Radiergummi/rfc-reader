@@ -30,10 +30,9 @@ struct RFCTextView: View {
     measure: MeasurePreference,
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
-    lastVisibleAnchor: VisibleAnchorBox,
+    controller: ReaderController,
     scrollTarget: ReaderScrollTarget?,
     onScrollHandled: @escaping () -> Void,
-    onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
@@ -60,10 +59,9 @@ struct RFCTextView: View {
       measure: measure,
       documentID: documentID,
       commitsOnClick: commitsOnClick,
-      lastVisibleAnchor: lastVisibleAnchor,
+      controller: controller,
       scrollTarget: scrollTarget,
       onScrollHandled: onScrollHandled,
-      onVisibleAnchorChange: onVisibleAnchorChange,
       onLink: onLink,
       onToolbarTitle: onToolbarTitle,
       onToolbarTitleReleased: onToolbarTitleReleased,
@@ -130,11 +128,10 @@ struct ReaderInputs {
   /// Set only for the reader inside a link preview (#29): a click anywhere in it
   /// commits the preview rather than selecting, and it previews nothing itself.
   let commitsOnClick: (() -> Void)?
-  /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
-  let lastVisibleAnchor: VisibleAnchorBox
+  /// What the reader reports to, and is asked through; see `ReaderController`.
+  let controller: ReaderController
   let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
-  let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void
   let onToolbarTitleReleased: (_ reader: AnyObject) -> Void
@@ -168,8 +165,8 @@ struct ReaderInputs {
   func apply(
     to coordinator: RFCTextViewCoordinator, environment: ReaderEnvironment, width: CGFloat
   ) {
+    coordinator.drive(controller)
     coordinator.onScrollHandled = onScrollHandled
-    coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
     coordinator.documentID = documentID
@@ -346,7 +343,7 @@ struct ReaderInputs {
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
-      context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
+      context.coordinator.drive(inputs.controller)
       return textView
     }
 
@@ -361,6 +358,7 @@ struct ReaderInputs {
       // The background layout ends with the view, as `releaseDocument()` ends it on
       // the Mac.
       coordinator.engine.stop()
+      coordinator.releaseController()
       coordinator.setChromeEnabled(false)
       coordinator.couple(to: nil, installed: false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
@@ -499,7 +497,7 @@ struct ReaderInputs {
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
-      context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
+      context.coordinator.drive(inputs.controller)
       return scroll
     }
 
@@ -518,6 +516,7 @@ struct ReaderInputs {
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
       coordinator.tearDownHoverTracking()
       coordinator.releaseDocument()
+      coordinator.releaseController()
     }
   }
 #endif

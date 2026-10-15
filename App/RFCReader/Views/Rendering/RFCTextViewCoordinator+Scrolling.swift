@@ -6,7 +6,26 @@ import RFCReaderKit
   import AppKit
 #endif
 
-extension RFCTextViewCoordinator {
+extension RFCTextViewCoordinator: ReaderTextDriving {
+  /// Reports to `controller` from now on, and is asked through it.
+  func drive(_ controller: ReaderController) {
+    guard controller !== self.controller else { return }
+    self.controller = controller
+    controller.driver = self
+  }
+
+  /// Stops reporting to the controller, which no longer asks this text view: it is
+  /// going away.
+  func releaseController() {
+    if controller?.driver === self { controller?.driver = nil }
+  }
+
+  var isInstalled: Bool { built != nil && textView != nil }
+
+  func headingDidMove() {
+    updateToolbarTitle()
+  }
+
   /// Puts the anchor's line at the top of the viewport.
   ///
   /// A jump can arrive — as a deep link, or as the reading position restored on
@@ -15,7 +34,7 @@ extension RFCTextViewCoordinator {
   /// everything above it first, which is what makes its y the real one.
   /// `extra` characters past the anchor, as a saved reading position has it; a
   /// stale one stays inside the anchor's block (`ReadingPlace.documentOffset`).
-  func scroll(to anchor: String, offset extra: Int = 0) {
+  func scroll(to anchor: String, offset extra: Int) {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
     guard let built,
@@ -52,33 +71,18 @@ extension RFCTextViewCoordinator {
     #endif
     guard let built, textView?.textLayoutManager != nil else { return }
     let line = placed ? engine.placeOffset : engine.userScrolled()
-    let offset = line ?? 0
-    lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
     // The other reader of a side-by-side reading follows, if this one leads (#187).
     if let documentID { coupling?.moved(documentID, to: line) }
-    // The abstract is the first prose in the storage and sits ahead of section
-    // one, so while it is on screen the reader is, as far as every consumer of
-    // this is concerned, in section one — which is what the old view reported too.
-    // The box tells the two apart for the one that must not scroll there: the
-    // reader's text made again, which starts at the top (#449).
-    let section = sectionIndex.anchor(at: offset)
-    lastVisibleAnchor?.isAheadOfSections = section == nil
-    guard let anchor = section ?? sectionIndex.entries.first?.anchor,
-      anchor != lastReportedAnchor
-    else { return }
-    lastReportedAnchor = anchor
-    lastVisibleAnchor?.anchor = anchor
-    // Deferred for the same reason as `onScrollHandled`: installing a document
-    // reports from inside SwiftUI's update, where mutating state is illegal.
-    Task { self.onVisibleAnchorChange(anchor) }
+    controller?.reportPlace(
+      engine.keeper.readingPlace(in: built.anchors), line: line ?? 0, in: sectionIndex)
   }
 
-  /// Reports where the reader is and where the title is, as if neither had been
-  /// reported: for a reader back on top of the stack on iOS, whose reports the
-  /// readers pushed over it replaced (#263).
+  /// Reports where the reader is, and where the title is as if it had not been
+  /// reported: for a reader back on top of the stack on iOS, whose title the readers
+  /// pushed over it replaced (#263). Its section `DocumentView` writes again itself,
+  /// from `ReaderController.section`.
   func reportAgain() {
     lastToolbarTitle = nil
-    lastReportedAnchor = nil
     reportVisibleAnchor()
   }
 

@@ -31,7 +31,7 @@ struct DocumentPreview: View {
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?
-  @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var controller = ReaderController()
   @State private var heading = HeadingBox()
 
   /// Everything a preview shows, kept whole by `LibraryModel.previews` so the
@@ -82,10 +82,9 @@ struct DocumentPreview: View {
         measure: settings.measure,
         documentID: id,
         commitsOnClick: commit,
-        lastVisibleAnchor: lastVisibleAnchor,
+        controller: controller,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
-        onVisibleAnchorChange: { _ in },
         onLink: { _, _ in true },
         onToolbarTitle: { _, _ in },
         onToolbarTitleReleased: { _ in },
