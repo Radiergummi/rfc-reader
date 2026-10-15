@@ -4,8 +4,7 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// What a refresh of the index does with the RFC Editor's answer (#314), or with
-/// its failure.
+/// What a refresh of the index does with the RFC Editor's answer (#314).
 @Suite("Index refresh outcome")
 struct IndexRefreshOutcomeTests {
   private let validators = CacheValidators(entityTag: #""abc""#, lastModified: nil)
@@ -32,14 +31,5 @@ struct IndexRefreshOutcomeTests {
         == .install(data, validators: validators))
     #expect(
       IndexRefreshOutcome(.changed(data, nil), kept: nil) == .install(data, validators: nil))
-  }
-
-  @Test func `a failure with no index showing is shown`() {
-    #expect(IndexRefreshOutcome(failureShowingIndex: false) == .failed(isShown: true))
-  }
-
-  /// With an index already showing, the failure is logged, not shown.
-  @Test func `a failure with an index showing is not shown`() {
-    #expect(IndexRefreshOutcome(failureShowingIndex: true) == .failed(isShown: false))
   }
 }

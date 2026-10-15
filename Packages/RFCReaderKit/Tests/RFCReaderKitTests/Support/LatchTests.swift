@@ -23,8 +23,14 @@ struct LatchTests {
     let latch = Latch()
     let log = Log()
     // Immediate, so that each is waiting before the latch opens.
-    let first = Task.immediate { await latch.wait(); log.events.append("first") }
-    let second = Task.immediate { await latch.wait(); log.events.append("second") }
+    let first = Task.immediate {
+      await latch.wait()
+      log.events.append("first")
+    }
+    let second = Task.immediate {
+      await latch.wait()
+      log.events.append("second")
+    }
     #expect(log.events.isEmpty)
     latch.open()
     await first.value

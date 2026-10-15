@@ -51,23 +51,6 @@ final class LibraryModel {
   /// in a `ReaderEnvironment`.
   static let shared = LibraryModel(container: AppData.container)
 
-  enum IndexState: Equatable {
-    case idle
-    case loading
-    case ready(updatedAt: Date)
-    /// What kind of failure, for the sentence the status line says, and the error's
-    /// own description, which it shows second (#759).
-    case failed(LoadFailure.Kind, message: String)
-
-    var isReady: Bool {
-      if case .ready = self { true } else { false }
-    }
-
-    static func failed(_ error: any Error) -> IndexState {
-      .failed(LoadFailure(error: error).kind, message: error.localizedDescription)
-    }
-  }
-
   private(set) var index: RFCIndex? {
     didSet {
       groupRFCs = [:]
@@ -84,14 +67,12 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle {
     didSet {
       guard indexState != .loading, indexState != .idle else { return }
-      let waiting = indexWaiters
-      indexWaiters = []
-      for waiter in waiting { waiter.resume() }
+      indexLoaded.open()
     }
   }
-  /// What waits for the index to be ready or to have failed: a background refresh
-  /// that arrived while launch was still loading it (#191).
-  @ObservationIgnored private var indexWaiters: [CheckedContinuation<Void, Never>] = []
+  /// Open once the index is ready or has failed, for a background refresh that
+  /// arrived while launch was still loading it (#191).
+  @ObservationIgnored private let indexLoaded = Latch()
   private(set) var recent: [RecentRFC] = []
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
@@ -100,21 +81,24 @@ final class LibraryModel {
   /// When this launch last fetched it; nil until it has.
   @ObservationIgnored private var revisionsFetchedAt: Date?
   /// The refresh under way, which a second call joins rather than repeats.
-  @ObservationIgnored private var revisionsRefresh: Task<Void, Never>?
+  @ObservationIgnored private let revisionsRefresh = SharedRefresh(name: "Refresh revisions")
   /// `groups.json`: the groups the index names, for a working group's card (#363).
   /// Nil until the cached copy or a fetch has arrived.
   private(set) var workingGroups: WorkingGroups?
   /// Every RFC's errata (#387), from the RFC Editor's feed: the copy kept first, then
   /// a check once a day. Nil until either has been read.
   private(set) var errata: Errata?
-  @ObservationIgnored private var isRefreshingErrata = false
+  /// The refresh under way, which a second call leaves to finish alone.
+  @ObservationIgnored private let errataRefresh = SharedRefresh(name: "Refresh errata")
   /// When this run last had an answer from the RFC Editor for the feed, whatever came
   /// of it: a feed that fails to decode or to be kept records no check, and would
   /// otherwise be downloaded again at every activation. A request that fails is asked
   /// again at the next activation, as the other refreshes are.
   @ObservationIgnored private var errataAskedAt: Date?
   @ObservationIgnored private var workingGroupsFetchedAt: Date?
-  @ObservationIgnored private var isRefreshingWorkingGroups = false
+  /// The refresh under way, which a second call leaves to finish alone.
+  @ObservationIgnored private let workingGroupsRefresh = SharedRefresh(
+    name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// Every bookmarked document, fetched again on every save of a bookmark: one set
@@ -542,18 +526,15 @@ final class LibraryModel {
   /// the palette asks on each keystroke, and nothing on screen lists them.
   @ObservationIgnored private var registryEntries: [RegistryEntry] = []
 
-  /// Registries change more often than RFCs, but not by the day.
-  private static let registryMaximumAge: TimeInterval = 7 * 86_400
-
   /// When the registries were last checked, nil until launch first checks them.
   @ObservationIgnored private var registriesCheckedAt: Date?
 
   /// Checks the registries again if the last check is older than
-  /// `registryMaximumAge`: the palette asks as it opens, since the app may stay open
-  /// for weeks after the check at launch.
+  /// `RegistryRefresh.maximumAge`: the palette asks as it opens, since the app may
+  /// stay open for weeks after the check at launch.
   func refreshRegistriesIfDue() {
     guard let checked = registriesCheckedAt,
-      checked.timeIntervalSinceNow < -Self.registryMaximumAge
+      RegistryRefresh.isDue(checkedAt: checked, now: .now)
     else { return }
     Task(name: "Refresh registries") { await refreshRegistries() }
   }
@@ -566,12 +547,12 @@ final class LibraryModel {
     // Set before the first suspension, so a palette opened meanwhile does not start
     // a second check.
     registriesCheckedAt = .now
-    var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
+    var cached = await store.cachedRegistries(maximumAge: RegistryRefresh.maximumAge)
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
     let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
     for fetch in fetches {
       // The first fetches come first (`RegistryRefresh`): what is left are refreshes.
-      if !fetch.onExpensiveNetworks { registriesBecameReadable() }
+      if !fetch.onExpensiveNetworks { registriesReadable.open() }
       let registry = fetch.registry
       let fetched: (entries: [RegistryEntry], data: Data)
       do {
@@ -595,7 +576,7 @@ final class LibraryModel {
         )
       }
     }
-    registriesBecameReadable()
+    registriesReadable.open()
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,
@@ -604,20 +585,10 @@ final class LibraryModel {
     RegistryLookup.matches(query, in: registryEntries)
   }
 
-  /// What waits in `loadedRegistryEntries()` for the registries to be readable.
-  @ObservationIgnored private var registryWaiters: [CheckedContinuation<Void, Never>] = []
-  /// Whether the registries are readable: the cached ones read, and the ones never
-  /// fetched fetched, or failed to be. Not the refreshes after them, which may wait
-  /// for a cheap network.
-  @ObservationIgnored private var areRegistriesReadable = false
-
-  private func registriesBecameReadable() {
-    guard !areRegistriesReadable else { return }
-    areRegistriesReadable = true
-    let waiters = registryWaiters
-    registryWaiters = []
-    for waiter in waiters { waiter.resume() }
-  }
+  /// Open once the registries are readable, for `loadedRegistryEntries()`: the
+  /// cached ones read, and the ones never fetched fetched, or failed to be. Not the
+  /// refreshes after them, which may wait for a cheap network.
+  @ObservationIgnored private let registriesReadable = Latch()
 
   /// The registry entries an App Intent asks for (#192), once they are readable.
   /// Only the Mac reads them at launch, and an intent may be the first to ask on
@@ -629,9 +600,7 @@ final class LibraryModel {
     if registriesCheckedAt == nil {
       Task.immediate(name: "Load registries") { await refreshRegistries() }
     }
-    if !areRegistriesReadable {
-      await withCheckedContinuation { registryWaiters.append($0) }
-    }
+    await registriesReadable.wait()
     return registryEntries
   }
 
@@ -727,16 +696,12 @@ final class LibraryModel {
         fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
           .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
       }
-      switch fetched {
-      case .unchanged:
-        // A `304` answers only a request that sent validators, which came from `kept`.
-        // One that answers none leaves no index to wait for.
-        guard let kept else {
-          settleIndex()
-          break
-        }
+      switch IndexRefreshOutcome(fetched, kept: kept) {
+      case .recordUnchanged(let kept):
         indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
-      case .changed(let data, let validators):
+      case .settle:
+        settleIndex()
+      case .install(let data, let validators):
         // Off the main actor: the parse alone is about a second (#124).
         let prepared = try await Self.parse(data)
         try await store.storeIndex(data, parsed: prepared.index, validators: validators)
@@ -774,13 +739,10 @@ final class LibraryModel {
 
   // MARK: - App Intents
 
-  /// What waits in `settledSearch()` for the index to arrive or fail, resumed by
-  /// `settleIndex()`.
-  @ObservationIgnored private var settledIndexWaiters: [CheckedContinuation<Void, Never>] = []
-  /// Whether the index has arrived or failed to, once: from then on an intent takes
-  /// what there is rather than waiting. Not `indexState`, which a launch whose fetch
-  /// answers nothing leaves loading.
-  @ObservationIgnored private var isIndexSettled = false
+  /// Open once the index has arrived or failed to, opened by `settleIndex()`: from
+  /// then on an intent takes what there is rather than waiting in `settledSearch()`.
+  /// Not `indexState`, which a launch whose fetch answers nothing leaves loading.
+  @ObservationIgnored private let indexSettled = Latch()
 
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
@@ -791,9 +753,7 @@ final class LibraryModel {
     if indexState == .idle {
       Task(name: "Bootstrap library") { await bootstrap() }
     }
-    if !isIndexSettled {
-      await withCheckedContinuation { settledIndexWaiters.append($0) }
-    }
+    await indexSettled.wait()
     return search
   }
 
@@ -856,11 +816,7 @@ final class LibraryModel {
   /// A call while one is under way waits for that one, so that a background refresh
   /// that asks returns only once the file is in (#191).
   func refreshRevisions() async {
-    if let revisionsRefresh { return await revisionsRefresh.value }
-    let refresh = Task(name: "Refresh revisions") { await loadRevisions() }
-    revisionsRefresh = refresh
-    await refresh.value
-    revisionsRefresh = nil
+    await revisionsRefresh.join { await self.loadRevisions() }
   }
 
   private func loadRevisions() async {
@@ -868,9 +824,7 @@ final class LibraryModel {
       revisions = cached
       compareBookmarks()
     }
-    if let fetchedAt = revisionsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
-      return
-    }
+    guard DataFileCheck.isDue(fetchedAt: revisionsFetchedAt, now: .now) else { return }
     do {
       let fetched = try await client.fetchRevisions()
       try await store.storeRevisions(fetched.data)
@@ -894,7 +848,7 @@ final class LibraryModel {
 
   /// The refresh of the index under way, the automatic daily check's or a Retry's,
   /// which a second one joins.
-  @ObservationIgnored private var indexRefresh: Task<Void, Never>?
+  @ObservationIgnored private let indexRefresh = SharedRefresh(name: "Refresh index")
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
   @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
@@ -910,18 +864,10 @@ final class LibraryModel {
   /// cancels the check.
   func refreshForBookmarks() async {
     await bootstrap()
-    if indexState == .loading {
-      await withCheckedContinuation { indexWaiters.append($0) }
-    }
+    await indexLoaded.wait()
     await refreshRevisions()
     await bookmarkComparison?.value
-    let isIndexDue =
-      switch indexState {
-      case .ready(let checkedAt): IndexCheck.isDue(checkedAt: checkedAt, now: .now)
-      case .failed: true
-      case .idle, .loading: false
-      }
-    guard isIndexDue else { return }
+    guard indexState.isCheckDue(now: .now) else { return }
     let check = checkIndex()
     await withTaskCancellationHandler {
       await check.value
@@ -935,23 +881,13 @@ final class LibraryModel {
   /// under way, or a new one.
   @discardableResult
   private func checkIndex() -> Task<Void, Never> {
-    if let indexRefresh { return indexRefresh }
-    let check = Task(name: "Refresh index") {
-      await refreshIndex(onExpensiveNetworks: false)
-      indexRefresh = nil
-    }
-    indexRefresh = check
-    return check
+    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: false) }
   }
 
   /// Retry, after the index failed: on any network, as a person asked for it, and
   /// joining a refresh already under way rather than fetching the index beside it.
   func retryIndex() {
-    guard indexRefresh == nil else { return }
-    indexRefresh = Task(name: "Refresh index") {
-      await refreshIndex()
-      indexRefresh = nil
-    }
+    indexRefresh.start { await self.refreshIndex() }
   }
 
   /// Compares the bookmarked RFCs with the last baseline, after every change to the
@@ -1003,15 +939,14 @@ final class LibraryModel {
   /// first, so a card works offline, then a fetch once a day. A failure keeps the
   /// cached copy and is logged, not shown.
   func refreshWorkingGroups() async {
-    guard !isRefreshingWorkingGroups else { return }
-    isRefreshingWorkingGroups = true
-    defer { isRefreshingWorkingGroups = false }
+    await workingGroupsRefresh.runUnlessUnderWay { await self.loadWorkingGroups() }
+  }
+
+  private func loadWorkingGroups() async {
     if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
       workingGroups = cached
     }
-    if let fetchedAt = workingGroupsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
-      return
-    }
+    guard DataFileCheck.isDue(fetchedAt: workingGroupsFetchedAt, now: .now) else { return }
     do {
       let fetched = try await client.fetchWorkingGroups()
       try await store.storeWorkingGroups(fetched.data)
@@ -1031,16 +966,19 @@ final class LibraryModel {
   /// metered nor in Low Data Mode, since nobody is waiting for it. A failure keeps
   /// what there is and is logged, not shown.
   func refreshErrata() async {
-    guard !isRefreshingErrata else { return }
-    isRefreshingErrata = true
-    defer { isRefreshingErrata = false }
+    await errataRefresh.runUnlessUnderWay { await self.loadErrata() }
+  }
+
+  private func loadErrata() async {
     if errata == nil, let data = await store.cachedErrata() {
       errata = try? await Self.decodeErrata(data)
     }
     // Without a feed in memory, a `304` would leave nothing to show.
     let kept = errata == nil ? nil : store.errataCheck()
-    if let kept, !IndexCheck.isDue(checkedAt: kept.checkedAt, now: .now) { return }
-    if let errataAskedAt, !IndexCheck.isDue(checkedAt: errataAskedAt, now: .now) { return }
+    guard
+      DataFileCheck.isErrataDue(
+        keptCheckedAt: kept?.checkedAt, askedAt: errataAskedAt, now: .now)
+    else { return }
     do {
       let fetched = try await clientOnCheapNetworks.fetchErrataData(
         unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
@@ -1293,10 +1231,7 @@ final class LibraryModel {
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
   private func settleIndex() {
-    isIndexSettled = true
-    let waiters = settledIndexWaiters
-    settledIndexWaiters = []
-    for waiter in waiters { waiter.resume() }
+    indexSettled.open()
     let preferred = preferredScene
     sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
   }
@@ -1521,19 +1456,17 @@ final class LibraryModel {
     forgetPreviews(of: evicted)
   }
 
-  /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
-  /// keep the document offline; what was read in the last month; a document marked
-  /// Keep Offline, whose cached body waits for the keeper to move it (#358); and
-  /// whatever a window has open, which includes the document just fetched.
+  /// What eviction never removes (#39), `CacheEviction.pinned`.
   private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = container.mainContext
-    let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
-    let read = try ReadingPositionStore.read(since: monthAgo, in: context)
+    let read = try ReadingPositionStore.read(
+      since: CacheEviction.readCutoff(now: .now), in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
-    let open = Set(sceneRegistry.open.compactMap(\.shown))
-    return withMembers(of: bookmarked.union(read).union(marked)).union(open)
+    return CacheEviction.pinned(
+      bookmarked: bookmarked, read: read, marked: marked,
+      open: Set(sceneRegistry.open.compactMap(\.shown)), withMembers: withMembers(of:))
   }
 
   // MARK: - Storage (#358)
@@ -1559,14 +1492,14 @@ final class LibraryModel {
     forgetPreviews(of: await store.clearCache(sparing: spared))
   }
 
-  /// What Clear Cache leaves in the reading cache: what a window has open, and what
-  /// is wanted offline, whose body waits there for the keeper to move it. The marks
+  /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper
   /// runs; nil when they cannot be read.
   private func sparedFromClearing() -> Set<DocumentID>? {
     do {
-      return try OfflineMarkStore.markedDocuments(in: container.mainContext)
-        .union(wantedOffline).union(sceneRegistry.open.compactMap(\.shown))
+      return CacheEviction.spared(
+        marked: try OfflineMarkStore.markedDocuments(in: container.mainContext),
+        wantedOffline: wantedOffline, open: Set(sceneRegistry.open.compactMap(\.shown)))
     } catch {
       libraryLog.error(
         "Clear Cache spares everything, reading the marks failed: \(String(describing: error), privacy: .public)"

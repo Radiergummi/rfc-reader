@@ -14,11 +14,11 @@ struct DataFileCheckTests {
   }
 
   @Test func `a file fetched within the day is not due`() {
-    #expect(!DataFileCheck.isDue(fetchedAt: now - DataFileCheck.interval + 60, now: now))
+    #expect(!DataFileCheck.isDue(fetchedAt: now - IndexCheck.interval + 60, now: now))
   }
 
   @Test func `a file fetched a day ago is due`() {
-    #expect(DataFileCheck.isDue(fetchedAt: now - DataFileCheck.interval, now: now))
+    #expect(DataFileCheck.isDue(fetchedAt: now - IndexCheck.interval, now: now))
   }
 
   @Test func `errata never kept nor asked for are due`() {
