@@ -45,12 +45,12 @@ struct ReaderChromeTapTests {
   }
 
   @Test func `a tap on a heading that discloses toggles its section`() {
-    #expect(Self.action(for: Self.tap(character: 20)) == .toggleSection(at: 20))
+    #expect(Self.action(for: Self.tap(character: 20)) == .toggleSection(heading: 20))
   }
 
   @Test func `a tap beside a disclosure toggles its section`() {
     #expect(
-      Self.action(for: Self.tap(besideDisclosure: 20, character: 5)) == .toggleSection(at: 20))
+      Self.action(for: Self.tap(besideDisclosure: 20, character: 5)) == .toggleSection(heading: 20))
   }
 
   @Test func `beside a disclosure with nothing to toggle, the character decides`() {

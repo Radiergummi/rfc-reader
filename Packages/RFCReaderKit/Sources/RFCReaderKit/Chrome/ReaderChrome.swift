@@ -264,7 +264,7 @@ extension ReaderChrome {
     case nothing
     /// Opens or closes the section, or the aside, whose heading or caption starts at
     /// or holds this offset.
-    case toggleSection(at: Int)
+    case toggleSection(heading: Int)
     /// Brings the bars back, or puts them away.
     case toggleBars
   }
@@ -284,11 +284,11 @@ extension ReaderChrome {
   ) -> TapAction {
     guard !tap.clearsSelectionOrStopsFling, !tap.isOnHeader else { return .nothing }
     if discloses, let paragraph = tap.besideDisclosure, toggles(paragraph) {
-      return .toggleSection(at: paragraph)
+      return .toggleSection(heading: paragraph)
     }
     if let character = tap.character {
       if isLink(character) { return .nothing }
-      if discloses, toggles(character) { return .toggleSection(at: character) }
+      if discloses, toggles(character) { return .toggleSection(heading: character) }
     }
     return .toggleBars
   }
