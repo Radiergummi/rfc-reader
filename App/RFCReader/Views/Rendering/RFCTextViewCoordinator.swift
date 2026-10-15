@@ -128,7 +128,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// environment chain; see `ReaderEnvironment`.
   var environment: ReaderEnvironment?
 
-  var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
   var bibliography: [ReferenceGroup] = []

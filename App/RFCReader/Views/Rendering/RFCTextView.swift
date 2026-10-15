@@ -31,8 +31,6 @@ struct RFCTextView: View {
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
     controller: ReaderController,
-    scrollTarget: ReaderScrollTarget?,
-    onScrollHandled: @escaping () -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
@@ -60,8 +58,6 @@ struct RFCTextView: View {
       documentID: documentID,
       commitsOnClick: commitsOnClick,
       controller: controller,
-      scrollTarget: scrollTarget,
-      onScrollHandled: onScrollHandled,
       onLink: onLink,
       onToolbarTitle: onToolbarTitle,
       onToolbarTitleReleased: onToolbarTitleReleased,
@@ -88,16 +84,6 @@ struct RFCTextView: View {
         width: geometry.size.width)
     }
   }
-}
-
-/// Where the reader is asked to scroll.
-///
-/// A jump is never animated: the layout engine settles its line in several passes,
-/// each followed by a layout, so there is no single scroll to animate (#585).
-struct ReaderScrollTarget: Equatable {
-  let anchor: String
-  /// Characters past the anchor: a saved reading position's line (#322).
-  var offset: Int = 0
 }
 
 /// Everything the reader is given, and the one place it is handed to the shared
@@ -130,8 +116,6 @@ struct ReaderInputs {
   let commitsOnClick: (() -> Void)?
   /// What the reader reports to, and is asked through; see `ReaderController`.
   let controller: ReaderController
-  let scrollTarget: ReaderScrollTarget?
-  let onScrollHandled: () -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void
   let onToolbarTitleReleased: (_ reader: AnyObject) -> Void
@@ -166,7 +150,6 @@ struct ReaderInputs {
     to coordinator: RFCTextViewCoordinator, environment: ReaderEnvironment, width: CGFloat
   ) {
     coordinator.drive(controller)
-    coordinator.onScrollHandled = onScrollHandled
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
     coordinator.documentID = documentID
@@ -202,8 +185,10 @@ struct ReaderInputs {
       coordinator.apply(folding)
     }
     coordinator.couple(to: coupling, installed: installs)
-    if let scrollTarget {
-      coordinator.scroll(to: scrollTarget.anchor, offset: scrollTarget.offset)
+    // A scroll asked for before there was a build to carry it out on; one asked for
+    // since went to the build at once (`ReaderController.scroll(to:offset:)`).
+    if let target = controller.takePendingTarget() {
+      coordinator.scroll(to: target.anchor, offset: target.offset)
     }
     if isShown, !coordinator.isShown { coordinator.reportAgain() }
     coordinator.isShown = isShown

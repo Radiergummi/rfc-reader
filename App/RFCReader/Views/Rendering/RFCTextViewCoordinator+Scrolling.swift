@@ -35,8 +35,6 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
   /// `extra` characters past the anchor, as a saved reading position has it; a
   /// stale one stays inside the anchor's block (`ReadingPlace.documentOffset`).
   func scroll(to anchor: String, offset extra: Int) {
-    // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
-    defer { Task { self.onScrollHandled() } }
     guard let built,
       let offset = ReadingPlace(anchor: anchor, offset: extra).documentOffset(
         in: built.anchors, length: built.text.length)

@@ -105,6 +105,23 @@ struct ReaderControllerTests {
     #expect(controller.takePendingTarget() == nil)
   }
 
+  @Test func `the install that carried out a scroll says so once, to its own arrival`() {
+    controller.scroll(to: "section-2")
+    driver.isInstalled = true
+    _ = controller.takePendingTarget()
+
+    #expect(controller.takeInstallCarriedOutTarget())
+    #expect(!controller.takeInstallCarriedOutTarget())
+
+    // A text view made again arrives afresh, whatever the last one's install did.
+    controller.scroll(to: "section-3")
+    controller.driver = nil
+    _ = controller.takePendingTarget()
+    let next = FakeDriver()
+    controller.driver = next
+    #expect(!controller.takeInstallCarriedOutTarget())
+  }
+
   @Test func `a scroll asked for with a build installed goes to it at once`() {
     driver.isInstalled = true
 

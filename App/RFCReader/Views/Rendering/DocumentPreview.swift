@@ -30,7 +30,6 @@ struct DocumentPreview: View {
   @Environment(\.dynamicTypeSize) private var textSize
   @State private var loaded: Loaded?
   @State private var failure: String?
-  @State private var scrollTarget: ReaderScrollTarget?
   @State private var controller = ReaderController()
   @State private var heading = HeadingBox()
 
@@ -83,8 +82,6 @@ struct DocumentPreview: View {
         documentID: id,
         commitsOnClick: commit,
         controller: controller,
-        scrollTarget: scrollTarget,
-        onScrollHandled: { scrollTarget = nil },
         onLink: { _, _ in true },
         onToolbarTitle: { _, _ in },
         onToolbarTitleReleased: { _ in },
@@ -124,7 +121,7 @@ struct DocumentPreview: View {
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
-        scrollTarget = ReaderScrollTarget(anchor: shown.document.anchor(forPlace: place))
+        controller.scroll(to: shown.document.anchor(forPlace: place))
       }
       // After the text is shown: asking whether the document is still downloaded
       // waits for the store, which may be parsing another document.

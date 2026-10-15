@@ -65,7 +65,9 @@ public final class ReaderController {
   // MARK: - At once
 
   /// The text view this drives, while it has one.
-  @ObservationIgnored public weak var driver: (any ReaderTextDriving)?
+  @ObservationIgnored public weak var driver: (any ReaderTextDriving)? {
+    didSet { if driver !== oldValue { installCarriedOutTarget = false } }
+  }
 
   /// The reader's line, as a place that survives a rebuild: what the reading
   /// position saves (#322). Nil at the top of the document.
@@ -108,6 +110,9 @@ public final class ReaderController {
   /// A scroll asked for while no build was installed, carried out by the install;
   /// see `scroll(to:offset:)`.
   @ObservationIgnored public private(set) var pendingTarget: ScrollTarget?
+  /// Whether the text view's install carried out a pending scroll; see
+  /// `takeInstallCarriedOutTarget()`.
+  @ObservationIgnored private var installCarriedOutTarget = false
 
   // MARK: - After one hop
 
@@ -194,7 +199,17 @@ public final class ReaderController {
   /// it; asked once, so it is carried out once.
   public func takePendingTarget() -> ScrollTarget? {
     defer { pendingTarget = nil }
+    if pendingTarget != nil { installCarriedOutTarget = true }
     return pendingTarget
+  }
+
+  /// Whether the install of the text view on screen carried out a scroll asked for
+  /// while there was none, such as a jump from the contents over the original text:
+  /// that is where the text view arrives, and nothing else is to move it there.
+  /// Answered once.
+  public func takeInstallCarriedOutTarget() -> Bool {
+    defer { installCarriedOutTarget = false }
+    return installCarriedOutTarget
   }
 
   // MARK: - The hop

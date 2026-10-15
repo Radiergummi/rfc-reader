@@ -423,7 +423,6 @@ struct DocumentView: View {
     positions.save(controller)
   }
 
-  @State private var scrollTarget: ReaderScrollTarget?
   /// The tab an App Intent asked to show beside this document, taken and waiting for
   /// the panel to have something to describe; see `showRequestedTab()`.
   @State private var requestedTab: InspectorTab?
@@ -497,8 +496,6 @@ struct DocumentView: View {
         measure: settings.measure,
         documentID: id,
         controller: controller,
-        scrollTarget: scrollTarget,
-        onScrollHandled: { scrollTarget = nil },
         onLink: openInApp,
         // Not while fading out over the next document's reader, nor under the top
         // of the stack, as the load's and the build's writes are not: the title is
@@ -698,7 +695,7 @@ struct DocumentView: View {
     case .reference(let anchor) where revealingReferences:
       reader.reveal(reference: anchor)
     case .reference(let anchor), .jump(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor)
+      controller.scroll(to: anchor)
     case .document, .unhandled, nil:
       break
     }
@@ -738,10 +735,13 @@ struct DocumentView: View {
   /// Where the text view opens as it first appears.
   private func arrive() {
     guard let built = session.state.built else { return }
+    // It arrived where a scroll asked for while it was gone sent it, as it was
+    // installed.
+    if controller.takeInstallCarriedOutTarget() { return }
     // Deep link or restored reading position — or, when the text view is made
     // again, where the reader was (#449).
     let arrival = ReaderArrival.onAppear(
-      pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
+      pendingAnchor: controller.pendingTarget?.anchor, placeLeft: placeLeft,
       request: navigation.scrollRequest,
       // Any anchor, not only a section's: a place is saved at the nearest anchor
       // of any kind (`ReadingPlace`), a paragraph's as often as not. Beside
@@ -753,14 +753,14 @@ struct DocumentView: View {
         })
     switch arrival {
     case .place(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor)
+      controller.scroll(to: anchor)
     case .request(let request) where request.isUnrecorded:
       follow(request)
     case .request(let request):
       jump(toSection: request.section)
     case .stored(let saved):
       if let anchor = saved.anchor {
-        scrollTarget = ReaderScrollTarget(anchor: anchor, offset: saved.offset)
+        controller.scroll(to: anchor, offset: saved.offset)
       }
     case .stay:
       break
