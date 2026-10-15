@@ -40,8 +40,7 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
         in: built.anchors, length: built.text.length)
     else { return }
     #if canImport(UIKit)
-      chrome.jumped()
-      reportChrome()
+      bars.jumped()
     #endif
     // Into folded text, the section opens and the line lands there in one layout.
     if !show(offset) {

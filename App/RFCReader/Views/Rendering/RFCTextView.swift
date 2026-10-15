@@ -34,7 +34,6 @@ struct RFCTextView: View {
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
-    onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
     isShown: Bool = true,
     coupling: ScrollCoupling? = nil,
@@ -55,7 +54,6 @@ struct RFCTextView: View {
       onLink: onLink,
       onChoosePresentation: onChoosePresentation,
       hidesChrome: hidesChrome,
-      onChromeHidden: onChromeHidden,
       isShown: isShown,
       header: AnyView(header()),
       headerIdentity: headerIdentity
@@ -109,10 +107,8 @@ struct ReaderInputs {
   /// Shows a rendered verbatim block as its text, or back, from its menu. Nil where
   /// the reader cannot, as in a force-click preview: no block offers to switch.
   let onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
-  /// Whether reading on may hide the bars, and what to tell when it does or they
-  /// come back; iOS only, see `ReaderChrome`.
+  /// Whether reading on may hide the bars; iOS only, see `ReaderBars`.
   let hidesChrome: Bool
-  let onChromeHidden: (Bool) -> Void
   /// Whether the window's reader state is this reader's. False for a reader on iOS
   /// that the stack keeps below its top (#263): what it reported was replaced by
   /// the readers pushed over it, so it reports again when this comes back.
@@ -137,8 +133,7 @@ struct ReaderInputs {
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onChoosePresentation = onChoosePresentation
     #if canImport(UIKit)
-      coordinator.onChromeHidden = onChromeHidden
-      coordinator.setChromeEnabled(hidesChrome)
+      coordinator.bars.setEnabled(hidesChrome)
     #endif
     coordinator.environment = environment
     // Only when it actually changed: the hosting controller is outside SwiftUI's
@@ -293,11 +288,12 @@ struct ReaderInputs {
       textView.addSubview(host.view)
 
       // Shows and hides the bars; see `RFCTextViewCoordinator.tappedText(_:)`.
-      let tap = UITapGestureRecognizer(
-        target: context.coordinator, action: #selector(RFCTextViewCoordinator.tappedText(_:)))
-      tap.delegate = context.coordinator
-      textView.addGestureRecognizer(tap)
-      context.coordinator.chromeTap = tap
+      context.coordinator.bars.attach(
+        to: textView, target: context.coordinator,
+        action: #selector(RFCTextViewCoordinator.tappedText(_:)))
+      context.coordinator.bars.report = { [weak coordinator = context.coordinator] hidden in
+        coordinator?.controller?.reportBars(hidden: hidden)
+      }
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
@@ -317,7 +313,7 @@ struct ReaderInputs {
       // the Mac.
       coordinator.engine.stop()
       coordinator.releaseController()
-      coordinator.setChromeEnabled(false)
+      coordinator.bars.setEnabled(false)
       coordinator.couple(to: nil, installed: false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not

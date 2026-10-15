@@ -288,6 +288,9 @@ struct DocumentView: View {
       .onChange(of: controller.section) { _, anchor in
         if let anchor { showSection(anchor) }
       }
+      .onChange(of: controller.barsHidden) { _, hidden in
+        setBarsHidden(hidden)
+      }
       .onChange(of: controller.hasSelection) { _, hasSelection in
         writer.hasSelection = hasSelection
       }
@@ -515,7 +518,6 @@ struct DocumentView: View {
         onLink: openInApp,
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
-        onChromeHidden: setBarsHidden,
         // Not while fading out, nor under the top of the stack until the reader
         // state is this reader's again: it is the reader on screen's.
         folding: showsReaderState ? reader.folding : nil,
