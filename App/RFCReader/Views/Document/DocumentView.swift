@@ -155,7 +155,6 @@ struct DocumentView: View {
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
   @State private var placeLeft: ReaderPlaceLeft?
-  @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
   ///
@@ -289,6 +288,9 @@ struct DocumentView: View {
       .onChange(of: controller.section) { _, anchor in
         if let anchor { showSection(anchor) }
       }
+      .onChange(of: controller.hasSelection) { _, hasSelection in
+        writer.hasSelection = hasSelection
+      }
   }
 
   /// The reader, and on macOS only the reader.
@@ -341,6 +343,15 @@ struct DocumentView: View {
       // takes the reader with no `onDisappear` (#155). So the place is saved once
       // the reader stops, and when the app goes.
       .onAppear {
+        // Not while fading out over the next document's reader, nor under the top of
+        // the stack, as the load's and the build's writes are not: the title is the
+        // reader on screen's.
+        controller.titleSink = ReaderController.TitleSink(
+          report: { [reader, navigation, identity, depth] state, source in
+            let writer = reader.writer(showing: identity, at: depth, in: navigation)
+            writer { $0.report(title: state, from: source) }
+          },
+          release: { [reader] in reader.releaseTitle(from: $0) })
         // Beside another reader, its place is that reader's counterpart, not one of
         // its own: it saves none, so the document opened alone later is where it was
         // last read (#187).
@@ -497,12 +508,6 @@ struct DocumentView: View {
         documentID: id,
         controller: controller,
         onLink: openInApp,
-        // Not while fading out over the next document's reader, nor under the top
-        // of the stack, as the load's and the build's writes are not: the title is
-        // the reader on screen's.
-        onToolbarTitle: { state, source in writer { $0.report(title: state, from: source) } },
-        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
-        onSelectionChange: { writer.hasSelection = $0 },
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
@@ -516,11 +521,10 @@ struct DocumentView: View {
         // has; a reader back on top of the stack keeps its bands while they are
         // extracted again, rather than dropping them for the moment (#263).
         requirements: showsReaderState ? reader.requirements : nil,
-        heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
         header: {
-          DocumentHeaderView(identity: headerIdentity, heading: heading)
+          DocumentHeaderView(identity: headerIdentity, reader: controller)
             .padding(.top, 16)
             .padding(.bottom, 12)
             // Outside the padding, so the heading is measured from the top of the
@@ -601,7 +605,7 @@ struct DocumentView: View {
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,
             revisions: library.revisionsSummary(for: metadata.id)),
-          heading: heading
+          reader: controller
         )
         .padding(.top, 16)
         .padding(.bottom, 12)

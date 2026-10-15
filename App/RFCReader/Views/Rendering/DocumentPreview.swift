@@ -31,7 +31,6 @@ struct DocumentPreview: View {
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var controller = ReaderController()
-  @State private var heading = HeadingBox()
 
   /// Everything a preview shows, kept whole by `LibraryModel.previews` so the
   /// build is never paired with another parse of its document.
@@ -83,9 +82,6 @@ struct DocumentPreview: View {
         commitsOnClick: commit,
         controller: controller,
         onLink: { _, _ in true },
-        onToolbarTitle: { _, _ in },
-        onToolbarTitleReleased: { _ in },
-        heading: heading,
         headerIdentity: DocumentHeaderView.Identity(
           header: loaded.document.header, metadata: library.metadata(id)),
         header: { EmptyView() }

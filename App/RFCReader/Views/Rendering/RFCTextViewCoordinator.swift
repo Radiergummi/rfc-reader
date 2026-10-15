@@ -15,21 +15,6 @@ import Synchronization
   typealias PlatformHostingController = NSHostingController
 #endif
 
-/// Where the header's heading ends, in the hosted header's own coordinates, as
-/// `DocumentHeaderView` measured it. A box because the header is hosted outside
-/// SwiftUI's diffing and built once, so it writes into something both sides already hold rather than calling
-/// through to a coordinator it was built before.
-final class HeadingBox {
-  var bottom: CGFloat? {
-    didSet { if bottom != oldValue { didChange() } }
-  }
-
-  /// The reader can report its viewport before the header has measured its
-  /// heading — a text view made afresh on the way back from the original text
-  /// does — and nothing scrolls afterwards to report it again.
-  var didChange: () -> Void = {}
-}
-
 /// Everything the two representables share. Both platforms drive the same anchor
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
@@ -147,26 +132,16 @@ final class RFCTextViewCoordinator: NSObject {
     return LinkCopy.publicURL(
       for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
   }
-  /// See `RFCTextView.onSelectionChange`.
-  var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onChoosePresentation`.
   var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
-  /// What `onSelectionChange` was last told, so a selection dragged across the text
-  /// reports once rather than on every character.
-  private var reportedSelection: Bool?
-
-  /// Tells the view whether anything is selected: whenever the selection changes, and
-  /// after an install, which may clear it without saying so. Deferred for the reason
-  /// the section is: installing reports from inside SwiftUI's update.
-  /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
-  /// selection's own edit menu (#186).
+  /// Tells the controller whether anything is selected: whenever the selection
+  /// changes, and after an install, which may clear it without saying so. macOS only,
+  /// where Edit ▸ Copy as Quote observes it; on iOS the item is in the selection's own
+  /// edit menu (#186).
   func reportSelection() {
     #if !canImport(UIKit)
       guard let textView else { return }
-      let hasSelection = textView.selectedRange().length > 0
-      guard hasSelection != reportedSelection else { return }
-      reportedSelection = hasSelection
-      Task { self.onSelectionChange(hasSelection) }
+      controller?.reportSelection(textView.selectedRange().length > 0)
     #endif
   }
   /// See `RFCTextView.commitsOnClick`.
@@ -177,18 +152,7 @@ final class RFCTextViewCoordinator: NSObject {
       #endif
     }
   }
-  /// What the toolbar's title shows; see `ToolbarTitleState`. Called
-  /// synchronously, on every scroll tick that changes it: the title is coupled to
-  /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
-  /// That is safe where the section's report is not because it touches no
-  /// SwiftUI state.
-  ///
-  /// With the coordinator, which owns what it reports until it withdraws it through
-  /// `onToolbarTitleReleased` in `releaseDocument()` (#281): the reader is made per
-  /// document, and the last one's teardown can come after the next one's report.
-  var onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void = { _, _ in }
-  var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
-  var heading: HeadingBox?
+  /// What the toolbar's title was last told; see `updateToolbarTitle()`.
   var lastToolbarTitle: ToolbarTitleState?
   /// See `ReaderInputs.isShown`.
   var isShown = true
@@ -774,7 +738,7 @@ final class RFCTextViewCoordinator: NSObject {
       NotificationCenter.default.removeObserver(
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
-      onToolbarTitleReleased(self)
+      controller?.releaseTitle(from: self)
       couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil

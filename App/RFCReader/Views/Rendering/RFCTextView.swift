@@ -32,9 +32,6 @@ struct RFCTextView: View {
     commitsOnClick: (() -> Void)? = nil,
     controller: ReaderController,
     onLink: @escaping (URL, LinkActivation) -> Bool,
-    onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
-    onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
-    onSelectionChange: @escaping (Bool) -> Void = { _ in },
     onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
@@ -43,7 +40,6 @@ struct RFCTextView: View {
     isShown: Bool = true,
     coupling: ScrollCoupling? = nil,
     requirements: [Requirement]? = nil,
-    heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
   ) {
@@ -59,14 +55,10 @@ struct RFCTextView: View {
       commitsOnClick: commitsOnClick,
       controller: controller,
       onLink: onLink,
-      onToolbarTitle: onToolbarTitle,
-      onToolbarTitleReleased: onToolbarTitleReleased,
-      onSelectionChange: onSelectionChange,
       onChoosePresentation: onChoosePresentation,
       hidesChrome: hidesChrome,
       onChromeHidden: onChromeHidden,
       isShown: isShown,
-      heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
     )
@@ -117,12 +109,6 @@ struct ReaderInputs {
   /// What the reader reports to, and is asked through; see `ReaderController`.
   let controller: ReaderController
   let onLink: (URL, LinkActivation) -> Bool
-  let onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void
-  let onToolbarTitleReleased: (_ reader: AnyObject) -> Void
-  /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
-  /// one, as Copy is (#186). Reported on macOS only; see
-  /// `RFCTextViewCoordinator.reportSelection()`.
-  let onSelectionChange: (Bool) -> Void
   /// Shows a rendered verbatim block as its text, or back, from its menu. Nil where
   /// the reader cannot, as in a force-click preview: no block offers to switch.
   let onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
@@ -134,8 +120,6 @@ struct ReaderInputs {
   /// that the stack keeps below its top (#263): what it reported was replaced by
   /// the readers pushed over it, so it reports again when this comes back.
   let isShown: Bool
-  /// Written by the header as it lays out; see `HeadingBox`.
-  let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
   /// thing done with it is to hand it to a hosting controller, which is not
   /// generic either.
@@ -154,19 +138,12 @@ struct ReaderInputs {
     coordinator.bibliography = bibliography
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
-    coordinator.onToolbarTitle = onToolbarTitle
-    coordinator.onToolbarTitleReleased = onToolbarTitleReleased
-    coordinator.onSelectionChange = onSelectionChange
     coordinator.onChoosePresentation = onChoosePresentation
     coordinator.onFoldingChange = onFoldingChange
     #if canImport(UIKit)
       coordinator.onChromeHidden = onChromeHidden
       coordinator.setChromeEnabled(hidesChrome)
     #endif
-    if coordinator.heading !== heading {
-      coordinator.heading = heading
-      heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
-    }
     coordinator.environment = environment
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
@@ -349,7 +326,7 @@ struct ReaderInputs {
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not
       // reported yet.
-      coordinator.onToolbarTitleReleased(coordinator)
+      coordinator.controller?.releaseTitle(from: coordinator)
     }
   }
 #else

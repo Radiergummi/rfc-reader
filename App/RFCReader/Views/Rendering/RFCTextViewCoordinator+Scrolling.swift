@@ -84,10 +84,15 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
     reportVisibleAnchor()
   }
 
+  /// What the toolbar's title shows; see `ToolbarTitleState`. Told on every scroll
+  /// tick that changes it, at once: the title is coupled to the scroll, and a hop
+  /// would leave it a frame behind the text. Told with this coordinator, which owns
+  /// what it reports until `releaseDocument()` withdraws it (#281): the reader is
+  /// made per document, and the last one's teardown can come after the next one's
+  /// report.
   func updateToolbarTitle() {
-    guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
-      return
-    }
+    guard let textView, let header = headerHost?.view, let bottom = controller?.headingBottom
+    else { return }
     let edge = textView.unobscuredTop
     let state = ToolbarTitleState(
       reveal: ToolbarTitleReveal.progress(
@@ -101,7 +106,7 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
     // Steady for almost all of a document; only a change is news.
     guard state != lastToolbarTitle else { return }
     lastToolbarTitle = state
-    onToolbarTitle(state, self)
+    controller?.reportTitle(state, from: self)
   }
 
   /// The section the toolbar's subtitle names, from the paragraph under the
