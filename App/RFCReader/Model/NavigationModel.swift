@@ -170,7 +170,8 @@ final class NavigationModel: Identifiable {
       if let newValue {
         select(newValue)
       } else {
-        history.hide()
+        // A jump a script waits on is not coming: its reader goes.
+        updateRequests { $0.hide(in: &history) }
       }
     }
   }

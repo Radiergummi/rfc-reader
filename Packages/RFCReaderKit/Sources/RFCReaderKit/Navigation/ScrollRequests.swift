@@ -80,6 +80,18 @@ public struct ScrollRequests<Waiter> {
     return (nil, reopening ? replace(with: nil) : nil)
   }
 
+  /// Hides the document in `history`, as `NavigationHistory.hide()` does: a row
+  /// deselected on a Mac, or a collapsed split view gone back to its list. Its
+  /// reader goes without settling a jump it was handed, so that wait ends here,
+  /// rather than lasting until the document is reopened. The request stays, and a
+  /// reopen clears it (`go(to:in:leaving:places:)`).
+  public mutating func hide(in history: inout NavigationHistory) -> Waiter? {
+    history.hide()
+    guard let waiting else { return nil }
+    self.waiting = nil
+    return waiting.waiter
+  }
+
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load. A request already replaced settles nothing.

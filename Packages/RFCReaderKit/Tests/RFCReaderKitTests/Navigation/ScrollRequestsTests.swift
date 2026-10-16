@@ -132,15 +132,25 @@ struct ScrollRequestsTests {
     #expect(requests.current == jump)
   }
 
-  /// A jump waited on whose document was then hidden: its reader went before it
-  /// could settle it, and the reopen ends the wait.
-  @Test func `reopening ends the wait of a jump the hidden reader never settled`() {
+  /// A jump waited on whose document was then hidden, by deselecting its row or
+  /// going back to the list: its reader went before it could settle it, so hiding
+  /// ends the wait, rather than leaving the script suspended until a reopen.
+  @Test func `hiding the document ends the wait of a jump its reader never settled`() {
     var history = NavigationHistory()
     var requests = ScrollRequests<String>()
     _ = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
     _ = requests.jump(to: "4.2", inDocumentOnScreen: true, waiter: "script")
-    history.hide()
+    #expect(requests.hide(in: &history) == "script")
+    #expect(history.shown == nil)
     let went = requests.go(to: HistoryEntry(id: .rfc(9110)), in: &history, leaving: nil)
-    #expect(went.ended == "script")
+    #expect(went.ended == nil, "a wait ends once")
+  }
+
+  @Test func `hiding with no jump waited on ends nothing`() {
+    var history = NavigationHistory()
+    var requests = ScrollRequests<String>()
+    _ = requests.go(
+      to: HistoryEntry(id: .rfc(9110), section: "section-4.2"), in: &history, leaving: nil)
+    #expect(requests.hide(in: &history) == nil)
   }
 }
