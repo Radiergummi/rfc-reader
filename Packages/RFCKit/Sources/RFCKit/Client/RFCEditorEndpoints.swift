@@ -37,12 +37,12 @@ public enum RFCEditorEndpoints {
     datatrackerBase.appending(path: "doc/\(name)/")
   }
 
-  /// The repository's GitHub Pages site, where the revisions workflow publishes the
+  /// The rfc-reader R2 bucket's public domain, where the revisions workflow publishes the
   /// files it refreshes daily.
-  static let publishedDataBase = URL(string: "https://rfc-reader.mazetti.me/")!
+  static let publishedDataBase = URL(string: "https://data.rfc-reader.mazetti.me/")!
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC, which
-  /// the revisions workflow publishes daily on the repository's Pages site.
+  /// the revisions workflow publishes daily in the bucket.
   public static let revisions = publishedDataBase.appending(path: "revisions.json")
 
   /// `groups.json`: the groups the index names, as datatracker describes them (#363),

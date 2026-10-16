@@ -192,7 +192,7 @@ is that way, and what was measured or tried first.
 - [The app's chrome is localized, the reader body is not](decisions/2026-10-04-the-apps-chrome-is-localized-the-reader-body-is-not.md)
 - [A document's index is a block of its own](decisions/2026-10-05-a-documents-index-is-a-block-of-its-own.md)
 - [A defined term is a gloss at its first use in a paragraph, not a link](decisions/2026-10-14-a-defined-term-is-a-gloss-at-its-first-use-in-a-paragraph.md)
-- [Datatracker data is published on GitHub Pages](decisions/2026-10-16-datatracker-data-is-published-on-github-pages.md)
+- [Datatracker data is published to Cloudflare R2](decisions/2026-10-16-datatracker-data-is-published-to-cloudflare-r2.md)
 
 ## Planned engines
 

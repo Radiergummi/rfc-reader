@@ -1,13 +1,13 @@
 name: Revisions
 
 # Scans datatracker daily for adopted drafts that intend to obsolete or update an RFC,
-# and publishes revisions.json on the repository's GitHub Pages site, where the app
-# fetches it (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md). The scan
-# record beside it lets the next run read only what changed. groups.json, the groups
-# the RFC index names as datatracker describes them, is published beside it (#363).
+# and publishes revisions.json to the rfc-reader R2 bucket, where the app fetches it
+# from data.rfc-reader.mazetti.me (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md).
+# The scan record beside it lets the next run read only what changed. groups.json, the
+# groups the RFC index names as datatracker describes them, is published beside it (#363).
 #
-# Pages, not a release: the repository's releases are immutable, and a file replaced
-# daily cannot live on one (decision "Datatracker data is published on GitHub Pages").
+# A bucket, not a release: the repository's releases are immutable, and a file replaced
+# daily cannot live on one (decision "Datatracker data is published to Cloudflare R2").
 on:
   schedule:
     - cron: "17 5 * * *"
@@ -22,7 +22,7 @@ on:
         type: boolean
         default: false
 
-# One run at a time: a deployment replaces the whole site, so two would race.
+# One run at a time: each reads the files the last one wrote, so two would race.
 concurrency:
   group: revisions
   cancel-in-progress: false
@@ -30,7 +30,8 @@ concurrency:
 permissions: {}
 
 env:
-  SITE: https://rfc-reader.mazetti.me
+  SITE: https://data.rfc-reader.mazetti.me
+  BUCKET: rfc-reader
 
 jobs:
   scan:
@@ -39,8 +40,6 @@ jobs:
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     permissions:
       contents: read
-    outputs:
-      site: ${{ steps.site.outputs.site }}
     env:
       ALLOW_SHRINK: ${{ inputs.allow-shrink && '--allow-shrink' || '' }}
       ALLOW_GROUPS_SHRINK: ${{ inputs.allow-groups-shrink && '--allow-shrink' || '' }}
@@ -86,8 +85,8 @@ jobs:
           Tools/corpus-build/.build/release/corpus-build revisions --out out $SCAN $ALLOW_SHRINK
 
       # The groups the index names, for the app's working-group card (#363). A failure
-      # here costs only this file a day: the previous copy is published again, and the
-      # run fails after the deployment, so it is still seen.
+      # here costs only this file a day: the bucket keeps the previous copy, and the run
+      # fails after publishing the rest, so it is still seen.
       - name: Describe groups
         id: groups
         continue-on-error: true
@@ -97,35 +96,28 @@ jobs:
 
       - name: Keep the previous groups
         if: steps.groups.outcome == 'failure'
+        run: rm -f out/groups.json
+
+      # Through R2's S3 API, signed by curl itself. revisions.json goes before the scan
+      # record that describes it: if the second upload fails, the next run rescans what
+      # was published rather than trusting a record of what was not.
+      - name: Publish
+        env:
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          rm -f out/groups.json
-          if [ -f previous/groups.json ]; then cp previous/groups.json out/groups.json; fi
-
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: out
-
-      - name: Mark the site ready
-        id: site
-        run: echo "site=ready" >> "$GITHUB_OUTPUT"
+          for file in revisions.json revisions-scan.json groups.json; do
+            [ -f "out/$file" ] || continue
+            curl -sS --fail-with-body --retry 3 \
+              --aws-sigv4 "aws:amz:auto:s3" --user "$ACCESS_KEY_ID:$SECRET_ACCESS_KEY" \
+              -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" \
+              -H "Content-Type: application/json" \
+              -T "out/$file" "https://$ACCOUNT_ID.r2.cloudflarestorage.com/$BUCKET/$file"
+          done
 
       - name: Fail for the groups
         if: steps.groups.outcome == 'failure'
         run: |
-          echo "Describing the groups failed; the previous groups.json was published again." >&2
+          echo "Describing the groups failed; the previous groups.json stays published." >&2
           exit 1
-
-  deploy:
-    needs: scan
-    if: ${{ !cancelled() && needs.scan.outputs.site == 'ready' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

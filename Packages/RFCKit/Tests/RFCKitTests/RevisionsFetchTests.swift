@@ -50,9 +50,9 @@ struct RevisionsFetchTests {
     }
   }
 
-  @Test func `the file is fetched from the repository's Pages site`() {
+  @Test func `the file is fetched from the data bucket`() {
     #expect(
       RFCEditorEndpoints.revisions.absoluteString
-        == "https://rfc-reader.mazetti.me/revisions.json")
+        == "https://data.rfc-reader.mazetti.me/revisions.json")
   }
 }
