@@ -144,22 +144,28 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 #
 #   make benchmark BENCHMARK_ARGS='baseline update before'
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
-#   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
+#   make benchmark-core BENCHMARK_ARGS='--filter "Index.*"'
 #
-# `benchmark` runs both packages with the same arguments. Arguments only one of them
-# can take, such as `--target`, a baseline saved in only one, or a `baseline check`
-# that fails the first and so skips the second, go to that package alone:
-# `make benchmark-core` or `make benchmark-layout`.
+# `benchmark` runs both packages with the same arguments, one after the other, so
+# that under `make -j` neither is measured while the other runs. Arguments only one
+# of them can take, such as a `--filter` or `--target`, a baseline saved in only one,
+# or a `baseline check` that fails the first and so skips the second, go to that
+# package alone: `make benchmark-core` or `make benchmark-layout`. A filtered
+# `baseline update` through `benchmark` saves an empty baseline in the package the
+# filter matches nothing in, which a later `baseline compare` then fails on.
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xml rfc5661.txt rfc793.txt
+LAYOUT_BENCHMARK_INPUTS := rfc9000.xml rfc5661.txt
 BENCHMARK_ARGS ?=
-benchmark: benchmark-core benchmark-layout
+benchmark:
+	$(MAKE) benchmark-core
+	$(MAKE) benchmark-layout
 
 benchmark-core: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
-benchmark-layout: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+benchmark-layout: $(LAYOUT_BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(LAYOUT_BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 

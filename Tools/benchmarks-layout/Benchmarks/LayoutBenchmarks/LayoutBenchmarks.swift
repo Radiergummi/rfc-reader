@@ -18,8 +18,9 @@ import RFCReaderKit
 // the step needs first (a fresh layout, a pinned line, the slices before it) is made
 // before `startMeasurement`, so neither installing the text nor the layout's setup
 // is in the number. The runner calls a benchmark off the main thread, and the layout
-// is the main actor's, as it is in the reader, so the step is one `MainActor.run`
-// hop, whose few microseconds are in every sample.
+// is the main actor's, as it is in the reader, so each sample is one `MainActor.run`
+// that starts and stops the measurement itself: the hops to the main actor and back
+// are outside it.
 //
 // Inputs are real RFCs, read from the directory in `RFC_CORPUS`, which
 // `make benchmark` fills: no RFC text is committed (CLAUDE.md). RFC 9000 is the
@@ -34,23 +35,40 @@ let benchmarks: @Sendable () -> Void = {
 
   let corpus = Corpus()
 
+  // A jump into RFC 5661 takes long enough that the default budget, which pays for
+  // each sample's fresh layout too, leaves too few samples for the upper percentiles.
+  var jump = Benchmark.defaultConfiguration
+  jump.maxDuration = .seconds(30)
+
   for (number, file) in [(9000, "rfc9000.xml"), (5661, "rfc5661.txt")] {
     // From a document nothing has laid out, as a jump from the contents panel
     // right after opening it.
-    Benchmark("Layout: jump to the last section, RFC \(number)") { benchmark, input async in
-      await MainActor.run { input.layOutAfresh() }
-      benchmark.startMeasurement()
-      blackHole(await MainActor.run { autoreleasepool { input.jumpToLastSection() } })
+    // The layout is released after the measurement stops, so that the next sample's
+    // peak memory is its own layout's rather than under the one before it.
+    Benchmark("Layout: jump to the last section, RFC \(number)", configuration: jump) {
+      benchmark, input async in
+      nonisolated(unsafe) let benchmark = benchmark
+      await MainActor.run {
+        input.layOutAfresh()
+        benchmark.startMeasurement()
+        blackHole(autoreleasepool { input.jumpToLastSection() })
+        benchmark.stopMeasurement()
+        input.release()
+      }
     } setup: {
       try LayoutInput(document: corpus.document(file))
     }
 
-    // One step of a live resize: the column 8 pt narrower, down to 320 and back up
-    // to the reader's, with the line in the middle of the document kept on top.
+    // One step of a live resize: the column 8 pt narrower or wider, between the
+    // reader's and 320, with the line in the middle of the document kept on top.
     Benchmark("Layout: resize step, RFC \(number)") { benchmark, input async in
-      await MainActor.run { input.prepareResizing() }
-      benchmark.startMeasurement()
-      blackHole(await MainActor.run { autoreleasepool { input.resizeStep() } })
+      nonisolated(unsafe) let benchmark = benchmark
+      await MainActor.run {
+        input.prepareResizing()
+        benchmark.startMeasurement()
+        blackHole(autoreleasepool { input.resizeStep() })
+        benchmark.stopMeasurement()
+      }
     } setup: {
       try LayoutInput(document: corpus.document(file))
     }
@@ -58,9 +76,13 @@ let benchmarks: @Sendable () -> Void = {
     // The next 6,000 characters of background completion, after the ones before
     // them, as the reader lays them out one frame at a time.
     Benchmark("Layout: one background slice, RFC \(number)") { benchmark, input async in
-      await MainActor.run { input.prepareSlicing() }
-      benchmark.startMeasurement()
-      await MainActor.run { autoreleasepool { input.layOutNextSlice() } }
+      nonisolated(unsafe) let benchmark = benchmark
+      await MainActor.run {
+        input.prepareSlicing()
+        benchmark.startMeasurement()
+        autoreleasepool { input.layOutNextSlice() }
+        benchmark.stopMeasurement()
+      }
     } setup: {
       try LayoutInput(document: corpus.document(file))
     }
@@ -82,19 +104,28 @@ final class LayoutInput: @unchecked Sendable {
   private let lastSection: Int
   private var current: Layout?
   private var width = widest
+  private var narrowing = true
   private var slices: SlicePlanner?
 
   init(document: RFCDocument) {
     built = DocumentTextBuilder.build(document, style: ReadingStyle(measure: Self.widest))
-    lastSection = built.anchors.sections.entries.last?.offset ?? 0
+    guard let last = built.anchors.sections.entries.last else {
+      preconditionFailure("the document has no sections to jump to")
+    }
+    lastSection = last.offset
   }
 
   /// A new layout of the built text, nothing of it laid out yet. The one it replaces
   /// is released here, before the measurement, not in a sample.
   @MainActor
   func layOutAfresh() {
-    current = nil
+    release()
     current = Layout(built.text, width: Self.widest)
+  }
+
+  @MainActor
+  func release() {
+    current = nil
   }
 
   @MainActor
@@ -110,17 +141,28 @@ final class LayoutInput: @unchecked Sendable {
   func prepareResizing() {
     guard current == nil else { return }
     layOutAfresh()
-    resizeStep()
+    pinMiddle()
   }
 
+  /// Narrows the column by a step down to the narrowest, then widens it back to the
+  /// widest, so that every step is the same 8 pt.
   @MainActor
   @discardableResult
   func resizeStep() -> Int {
     guard let current else { preconditionFailure("prepareResizing first") }
-    width = width - Self.resizeStep < Self.narrowest ? Self.widest : width - Self.resizeStep
+    if narrowing, width - Self.resizeStep < Self.narrowest { narrowing = false }
+    if !narrowing, width + Self.resizeStep > Self.widest { narrowing = true }
+    width += narrowing ? -Self.resizeStep : Self.resizeStep
     current.layout.textContainer?.size = CGSize(width: width, height: 10_000_000)
+    return pinMiddle()
+  }
+
+  @MainActor
+  @discardableResult
+  private func pinMiddle() -> Int {
+    guard let current else { preconditionFailure("prepareResizing first") }
     return PinRecipe.pin(
-      ReaderAnchor(characterOffset: lastSection / 2), in: current.layout, on: current.surface)
+      ReaderAnchor(characterOffset: built.text.length / 2), in: current.layout, on: current.surface)
   }
 
   /// A fresh layout and planner the first time, and again once every slice is laid
