@@ -15,6 +15,36 @@ public enum CacheEviction {
   /// The bound the app applies: about 1,350 documents at the ~370 KB measured.
   public static let defaultBound = 500 * 1024 * 1024
 
+  /// How long a document read stays pinned.
+  public static let readWindow: TimeInterval = 30 * 86_400
+
+  /// What was read since this is pinned at `now`.
+  public static func readCutoff(now: Date) -> Date {
+    now.addingTimeInterval(-readWindow)
+  }
+
+  /// What eviction never removes: bookmarks, a bookmark being a promise to keep the
+  /// document offline; what was read since `readCutoff`; a document marked Keep
+  /// Offline, whose cached body waits for the keeper to move it (#358); and
+  /// whatever a window has open, which includes the document just fetched. A
+  /// bookmarked, read or marked series stands for its members (`withMembers`,
+  /// #656); what is open is the document a window shows, already a member.
+  public static func pinned(
+    bookmarked: Set<DocumentID>, read: Set<DocumentID>, marked: Set<DocumentID>,
+    open: Set<DocumentID>, withMembers: (Set<DocumentID>) -> Set<DocumentID>
+  ) -> Set<DocumentID> {
+    withMembers(bookmarked.union(read).union(marked)).union(open)
+  }
+
+  /// What Clear Cache leaves in the reading cache: the marks, what is wanted
+  /// offline, whose body waits there for the keeper to move it, and what a window
+  /// has open.
+  public static func spared(
+    marked: Set<DocumentID>, wantedOffline: Set<DocumentID>, open: Set<DocumentID>
+  ) -> Set<DocumentID> {
+    marked.union(wantedOffline).union(open)
+  }
+
   public struct Entry: Sendable, Equatable {
     public let id: DocumentID
     /// All of the document's bodies together.

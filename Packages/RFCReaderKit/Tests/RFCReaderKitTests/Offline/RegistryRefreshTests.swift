@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 import Testing
 
@@ -33,5 +34,17 @@ struct RegistryRefreshTests {
 
   @Test func `nothing stale fetches nothing`() {
     #expect(plan(stale: [], cached: [.tlsAlerts]).isEmpty)
+  }
+
+  /// The palette asks as it opens, since the app may stay open for weeks after the
+  /// check at launch.
+  @Test func `registries checked within the week are not due`() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(!RegistryRefresh.isDue(checkedAt: now - RegistryRefresh.maximumAge + 60, now: now))
+  }
+
+  @Test func `registries checked over a week ago are due`() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(RegistryRefresh.isDue(checkedAt: now - RegistryRefresh.maximumAge - 60, now: now))
   }
 }
