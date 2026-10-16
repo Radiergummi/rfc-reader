@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -146,12 +146,20 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
 #   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
 #
+# `benchmark` runs both packages with the same arguments. Arguments only one of them
+# can take, such as `--target`, a baseline saved in only one, or a `baseline check`
+# that fails the first and so skips the second, go to that package alone:
+# `make benchmark-core` or `make benchmark-layout`.
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xml rfc5661.txt rfc793.txt
 BENCHMARK_ARGS ?=
-benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+benchmark: benchmark-core benchmark-layout
+
+benchmark-core: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+benchmark-layout: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(LAYOUT_BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
