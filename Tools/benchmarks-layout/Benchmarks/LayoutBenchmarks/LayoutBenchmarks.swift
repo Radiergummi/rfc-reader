@@ -142,6 +142,7 @@ final class LayoutInput: @unchecked Sendable {
     guard current == nil else { return }
     layOutAfresh()
     pinMiddle()
+    current?.surface.isInLiveResize = true
   }
 
   /// Narrows the column by a step down to the narrowest, then widens it back to the
@@ -154,7 +155,9 @@ final class LayoutInput: @unchecked Sendable {
     if !narrowing, width + Self.resizeStep > Self.widest { narrowing = true }
     width += narrowing ? -Self.resizeStep : Self.resizeStep
     current.layout.textContainer?.size = CGSize(width: width, height: 10_000_000)
-    return pinMiddle()
+    let passes = pinMiddle()
+    current.surface.displayPass()
+    return passes
   }
 
   @MainActor
@@ -219,7 +222,21 @@ final class BenchmarkSurface: PinSurface {
     containerTop = max(0, target)
   }
 
+  /// Set through a live resize. The reader's engine then lays out no viewport while
+  /// it pins the line, because forcing one on every step made `NSTextView` lay out a
+  /// large range of the document itself, and AppKit's display pass lays the viewport
+  /// out once the step is done (`ReaderLayoutEngine.layOutViewport`). A resize step
+  /// here does the same: `pin` lays out nothing of the viewport, and `displayPass()`
+  /// stands in for AppKit's pass after it.
+  var isInLiveResize = false
+
   func layOutViewport() {
+    guard !isInLiveResize else { return }
+    displayPass()
+  }
+
+  /// Lays out what the viewport covers.
+  func displayPass() {
     let top = containerTop
     guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
     layout.enumerateTextLayoutFragments(
