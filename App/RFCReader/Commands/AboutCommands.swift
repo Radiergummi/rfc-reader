@@ -2,7 +2,8 @@ import RFCReaderKit
 import SwiftUI
 
 #if os(macOS)
-  /// The About panel, crediting the code the app adapts, as its licenses ask.
+  /// The About panel, crediting the code the app includes or adapts, as its licenses
+  /// ask, and Check for Updates… beside it, where a Mac app keeps it (#911).
   struct AboutCommands: Commands {
     var body: some Commands {
       CommandGroup(replacing: .appInfo) {
@@ -15,6 +16,10 @@ import SwiftUI
             ])
           NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
         }
+        Button("Check for Updates…") {
+          Updater.shared.checkForUpdates()
+        }
+        .disabled(!Updater.shared.canCheckForUpdates)
       }
     }
   }

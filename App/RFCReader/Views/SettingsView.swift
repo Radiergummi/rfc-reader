@@ -144,6 +144,10 @@ private struct GeneralSettings: View {
   var body: some View {
     Toggle(
       "Show the original text rendering by default", isOn: $settings.preferOriginalText)
+    #if os(macOS)
+      @Bindable var updater = Updater.shared
+      Toggle("Check for updates automatically", isOn: $updater.automaticallyChecksForUpdates)
+    #endif
   }
 }
 

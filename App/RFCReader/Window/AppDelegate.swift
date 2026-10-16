@@ -49,6 +49,8 @@
         signposter.emitEvent("First window made")
       }
       warnIfTheStoreDidNotOpen()
+      // Started here, so a scheduled check runs whether or not a menu asks first.
+      _ = Updater.shared
     }
 
     /// Once, at launch, when the bookmarks store fell back to memory (#152):
