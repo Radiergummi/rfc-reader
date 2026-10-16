@@ -15,6 +15,9 @@ corpus/*
 # Traces `make trace` records
 traces/
 
+# The release script's archive, signed app and disk image (.github/scripts/release.sh)
+/build/
+
 # Python bytecode, from running Tools/trace/trace.py
 __pycache__/
 

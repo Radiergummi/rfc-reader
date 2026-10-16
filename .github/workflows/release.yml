@@ -38,9 +38,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # The Xcode the app build in ci-macos.yml uses, for the same reason.
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+      # The Xcode ci-macos.yml tests the packages with, for the same reason: the
+      # gate is the one every pull request passed.
+      - name: Select Xcode for the tests
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app && xcodebuild -version
 
       - name: Install XcodeGen
         run: make xcodegen-install
@@ -61,6 +62,10 @@ jobs:
       # Gates before anything is signed: a signed artifact is one somebody might install.
       - name: Test
         run: make test test-app
+
+      # The Xcode the app build in ci-macos.yml uses, for the same reason.
+      - name: Select Xcode for the build
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
 
       - name: Install the signing material
         env:

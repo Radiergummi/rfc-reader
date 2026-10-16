@@ -16,10 +16,11 @@
   final class Updater {
     static let shared = Updater()
 
+    /// Whether this build runs the updater at all; a Debug build does not.
     #if DEBUG
-      private static let starts = false
+      static let starts = false
     #else
-      private static let starts = true
+      static let starts = true
     #endif
 
     @ObservationIgnored private let controller = SPUStandardUpdaterController(

@@ -16,6 +16,33 @@ appcast="site/public/appcast.xml"
 
 step() { printf '\n==> %s\n' "$1"; }
 
+# A deploy replaces every file the site serves, so a checkout without the newest feed
+# would take updates away from every installed copy: refused when the live feed has
+# a build the local one lacks, or there is a live feed and no local one.
+highest_build() { sed -n 's/.*<sparkle:version>\([0-9]*\)<.*/\1/p' "$1" | sort -n | tail -1; }
+step "Comparing with the live feed"
+live="$(mktemp)"
+status=$(curl -sS -o "$live" -w '%{http_code}' --max-time 20 "$feed_url")
+case "$status" in
+  200)
+    if [[ ! -f "$appcast" ]]; then
+      echo "$feed_url is live and $appcast is missing: deploying would remove the feed." >&2
+      exit 1
+    fi
+    live_build=$(highest_build "$live")
+    local_build=$(highest_build "$appcast")
+    if [[ "${local_build:-0}" -lt "${live_build:-0}" ]]; then
+      echo "The live feed offers build $live_build and $appcast only ${local_build:-none}: deploying would take it back." >&2
+      exit 1
+    fi
+    ;;
+  404) ;;
+  *)
+    echo "Fetching $feed_url answered $status." >&2
+    exit 1
+    ;;
+esac
+
 if [[ -f "$appcast" ]]; then
   step "Checking the feed"
   # Every entry signed, not only some: the older ones carry their signatures

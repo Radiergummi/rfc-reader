@@ -11,14 +11,15 @@
 # The site must be deployed once before the first release (`make publish-feed`
 # deploys it without a feed), so that the feed's address answers.
 #
-# Usage: Tools/release/appcast.sh <version>, or make appcast VERSION=<version>
+# Usage: make appcast VERSION=<version>, which passes the build directory of
+# this checkout's DerivedData, where the Sparkle the app is built with is.
 #
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-version="${1:?usage: Tools/release/appcast.sh <version>}"
+version="${1:?usage: make appcast VERSION=<version>}"
+build_dir="${2:?usage: make appcast VERSION=<version>}"
 repository="Radiergummi/rfc-reader"
-feed_url="https://rfc-reader.mazetti.me/appcast.xml"
 tag="v$version"
 disk_image="RFC-Reader-$version.dmg"
 updates=".build/updates"
@@ -27,12 +28,7 @@ mount_point="$updates/mount"
 step() { printf '\n==> %s\n' "$1"; }
 
 step "Finding Sparkle's generate_appcast"
-make xcodeproj >/dev/null
 xcodebuild -resolvePackageDependencies -project RFCReader.xcodeproj -scheme RFCReader >/dev/null
-# This checkout's own DerivedData, which holds the Sparkle the app is built with.
-# awk reads to the end, so xcodebuild is never cut off mid-write.
-build_dir=$(xcodebuild -project RFCReader.xcodeproj -scheme RFCReader -destination 'generic/platform=macOS' -showBuildSettings 2>/dev/null \
-  | awk -F' = ' '/ BUILD_DIR / && !found {print $2; found=1}')
 generate_appcast="${build_dir%/Build/Products}/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
 [[ -x "$generate_appcast" ]] || {
   echo "No generate_appcast at $generate_appcast." >&2
@@ -59,13 +55,15 @@ gh attestation verify "$updates/$disk_image" --repo "$repository" \
   --signer-workflow "$repository/.github/workflows/release.yml" \
   --source-ref "refs/tags/$tag"
 
-step "Reading the build number"
+# The feed is the one the released app reads, so it is the one its entry joins.
+step "Reading the build number and the feed's address"
 hdiutil attach "$updates/$disk_image" -nobrowse -readonly -mountpoint "$mount_point" >/dev/null
 trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
 build_number=$(plutil -extract CFBundleVersion raw "$mount_point/RFCReader.app/Contents/Info.plist")
+feed_url=$(plutil -extract SUFeedURL raw "$mount_point/RFCReader.app/Contents/Info.plist")
 hdiutil detach "$mount_point" >/dev/null
 trap - EXIT
-echo "$tag is build $build_number"
+echo "$tag is build $build_number, with its feed at $feed_url"
 
 # Seeded from the published feed, so the releases before keep their entries:
 # generate_appcast keeps what the feed in its directory holds. A 404 is the first

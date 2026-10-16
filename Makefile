@@ -366,9 +366,9 @@ install: build-app
 
 ## Sign the update feed for a published release, into site/public (VERSION=x.y.z)
 # On the maintainer's machine, whose keychain holds the feed's key (#911).
-appcast:
+appcast: xcodeproj
 	@test -n "$(VERSION)" || { echo "usage: make appcast VERSION=x.y.z" >&2; exit 1; }
-	Tools/release/appcast.sh $(VERSION)
+	Tools/release/appcast.sh $(VERSION) '$(call build_setting,generic/platform=macOS,BUILD_DIR)'
 
 ## Deploy the site and its update feed to rfc-reader.mazetti.me
 publish-feed:

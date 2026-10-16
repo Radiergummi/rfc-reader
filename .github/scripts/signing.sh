@@ -25,7 +25,9 @@ security default-keychain -s "$keychain"
 security list-keychains -s "$keychain"
 # Locked, codesign would prompt, and a runner would wait for the timeout.
 security unlock-keychain -p "$keychain_password" "$keychain"
-security set-keychain-settings -lut 3600 "$keychain"
+# Unlocked for as long as the job may run (release.yml's timeout-minutes): the disk
+# image is signed only after the app's notarization, which may wait for Apple long.
+security set-keychain-settings -lut 7200 "$keychain"
 security import ./Signing.p12 -k "$keychain" -P "$SIGNING_PASSWORD" -A -T /usr/bin/codesign
 # Lets codesign use the key without a prompt that cannot appear.
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null

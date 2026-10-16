@@ -29,9 +29,11 @@ step() { printf '\n==> %s\n' "$1"; }
 
 # notarytool's exit status does not say whether Apple accepted the submission, so
 # the status is read from its result, and Apple's log is printed when it is not.
+# Its exit status is ignored for the same reason: under set -e a non-zero one would
+# end the script before the log is printed.
 notarize() {
   local result id status
-  result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --output-format json)
+  result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --output-format json) || true
   id=$(plutil -extract id raw - <<<"$result")
   status=$(plutil -extract status raw - <<<"$result")
   if [[ "$status" != "Accepted" ]]; then
