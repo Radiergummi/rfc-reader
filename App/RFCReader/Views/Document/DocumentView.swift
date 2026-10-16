@@ -217,10 +217,11 @@ struct DocumentView: View {
       foldedText = nil
       return
     }
-    // Held, and compared by reference: a new build can be allocated where the old
-    // one was, and an identifier alone would take it for the old one.
+    // The build's own index (#723), written only when the build changes, since every
+    // write notifies. The text is held and compared by reference: a new build can be
+    // allocated where the old one was, and an identifier alone would take it for it.
     if reader.foldingIndex == nil || foldedText !== built.text {
-      reader.foldingIndex = FoldingIndex(built)
+      reader.foldingIndex = built.foldingIndex
       foldedText = built.text
     }
     guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)

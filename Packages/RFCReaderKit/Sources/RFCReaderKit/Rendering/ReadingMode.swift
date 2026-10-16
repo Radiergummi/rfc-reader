@@ -38,7 +38,7 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
 /// every toggle: where each paragraph starts, the outline's entries, which are the
 /// sections and the abstract, each with where its heading's paragraph starts, and the
 /// asides Implementer folds.
-public struct FoldingIndex: Sendable {
+public struct FoldingIndex: Sendable, Equatable {
   public struct Entry: Sendable, Equatable {
     public let anchor: String
     /// Where the anchor is: the heading.
@@ -66,8 +66,10 @@ public struct FoldingIndex: Sendable {
   let asides: [Aside]
   let length: Int
 
-  public init(_ built: BuiltDocument) {
-    let string = built.text.string as NSString
+  /// The index of `text`, whose anchors are `anchors`. Made once per build, by
+  /// `BuiltDocument` (#723): read it as `built.foldingIndex`.
+  init(text: NSAttributedString, anchors: AnchorIndex) {
+    let string = text.string as NSString
     var paragraphs: [NSRange] = []
     string.enumerateSubstrings(
       in: NSRange(location: 0, length: string.length),
@@ -77,8 +79,8 @@ public struct FoldingIndex: Sendable {
     length = string.length
     // The abstract has a heading of its own but no section, so it is an entry of the
     // outline beside the sections: otherwise nothing could open it.
-    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
-    entries = (abstract + built.anchors.sections.entries)
+    let abstract = anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
+    entries = (abstract + anchors.sections.entries)
       .sorted { $0.offset < $1.offset }
       .map { entry in
         Entry(
@@ -88,7 +90,7 @@ public struct FoldingIndex: Sendable {
           depth: entry.depth ?? 1
         )
       }
-    asides = Self.asides(in: built.text)
+    asides = Self.asides(in: text)
   }
 
   /// The asides of `text`, each from the first to the last character carrying its

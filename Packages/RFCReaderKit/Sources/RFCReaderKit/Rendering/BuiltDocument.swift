@@ -13,7 +13,7 @@ import RFCKit
 ///   to be immutable rather than merely unshared, because Foundation uniques equal
 ///   attribute dictionaries across every string in the process and two builds do
 ///   end up holding the same ones.
-/// - `AnchorIndex` is a `Sendable` value.
+/// - `AnchorIndex` and `FoldingIndex` are `Sendable` values.
 ///
 /// Once handed over, a build may be installed more than once: a force-click
 /// preview keeps its builds, and a repeated preview installs the same one into a
@@ -44,6 +44,10 @@ public struct BuiltDocument: @unchecked Sendable {
   /// paragraph is set in by: the text container is this much wider than the column,
   /// on its leading side. Zero in a build that hangs nothing.
   public let sectionNumberHang: CGFloat
+  /// Where the text's paragraphs, headings and asides are, which the reading modes
+  /// fold by (#698). Made here, with the build and off the main actor, once: the
+  /// text view folds by it and the reader state steps Focus by it (#723).
+  public let foldingIndex: FoldingIndex
 
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
@@ -56,6 +60,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
+    foldingIndex = FoldingIndex(text: text, anchors: anchors)
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the

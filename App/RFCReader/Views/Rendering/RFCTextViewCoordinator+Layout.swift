@@ -29,7 +29,7 @@ extension RFCTextViewCoordinator {
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
     // Before the text, so the first layout skips what the reading mode folds.
-    let foldingIndex = FoldingIndex(built)
+    let foldingIndex = built.foldingIndex
     self.foldingIndex = foldingIndex
     self.folding = folding
     foldingEcho.forget()
