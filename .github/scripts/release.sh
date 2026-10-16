@@ -17,7 +17,6 @@ cd "$(dirname "$0")/../.."
 : "${NOTARY_ISSUER:?}"
 : "${BUILD_NUMBER:?}"
 
-team_id="TH593VRB6W"
 notary=(--key "$HOME/.private_keys/AuthKey_${NOTARY_KEY_ID}.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
 
 build_dir="build"
@@ -27,6 +26,20 @@ app="$export_dir/RFCReader.app"
 stage="$build_dir/dmg"
 
 step() { printf '\n==> %s\n' "$1"; }
+
+# notarytool's exit status does not say whether Apple accepted the submission, so
+# the status is read from its result, and Apple's log is printed when it is not.
+notarize() {
+  local result id status
+  result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --output-format json)
+  id=$(plutil -extract id raw - <<<"$result")
+  status=$(plutil -extract status raw - <<<"$result")
+  if [[ "$status" != "Accepted" ]]; then
+    echo "Notarization of $1 ended as $status." >&2
+    xcrun notarytool log "$id" "${notary[@]}" >&2 || true
+    exit 1
+  fi
+}
 
 step "Generating the Xcode project"
 make xcodeproj
@@ -41,7 +54,6 @@ xcodebuild archive -project RFCReader.xcodeproj -scheme RFCReader \
   -archivePath "$archive" \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="Developer ID Application" \
-  DEVELOPMENT_TEAM="$team_id" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   -quiet
@@ -80,7 +92,7 @@ grep -q 'Timestamp=' <<<"$signature" || {
 step "Notarizing the app"
 zip="$build_dir/RFCReader-notarize.zip"
 ditto -c -k --keepParent "$app" "$zip"
-xcrun notarytool submit "$zip" "${notary[@]}" --wait
+notarize "$zip"
 # Stapled, so the app stays trusted once copied out of the disk image.
 xcrun stapler staple "$app"
 rm -f "$zip"
@@ -93,18 +105,11 @@ rm -f "$dmg"
 hdiutil create -volname "RFC Reader $version" -srcfolder "$stage" -ov -format UDZO "$dmg" >/dev/null
 
 # The disk image needs its own signature and ticket, or Gatekeeper finds no usable
-# signature on the download itself.
-identity=$(security find-identity -v -p codesigning \
-  | grep "Developer ID Application" | grep "$team_id" | head -1 \
-  | sed -E 's/.*"(.*)".*/\1/')
-[[ -n "$identity" ]] || {
-  echo "No Developer ID Application identity for team $team_id." >&2
-  exit 1
-}
-codesign --force --sign "$identity" --timestamp "$dmg"
+# signature on the download itself. The runner's keychain holds the one identity.
+codesign --force --sign "Developer ID Application" --timestamp "$dmg"
 
 step "Notarizing the disk image"
-xcrun notarytool submit "$dmg" "${notary[@]}" --wait
+notarize "$dmg"
 xcrun stapler staple "$dmg"
 
 echo "$dmg"

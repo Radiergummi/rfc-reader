@@ -15,9 +15,9 @@ To check a download against them:
 
 ```sh
 shasum -a 256 RFC-Reader-VERSION_PLACEHOLDER.dmg
-gh attestation verify RFC-Reader-VERSION_PLACEHOLDER.dmg --repo Radiergummi/rfc-reader
+gh attestation verify RFC-Reader-VERSION_PLACEHOLDER.dmg --repo REPOSITORY_PLACEHOLDER
 ```
 
 This proves which source and which run produced the file, not that a rebuild gives the same bytes: Xcode's output is not reproducible.
 
-Updates are signed with a key the maintainer holds, apart from the key that signed this build, so neither the build system nor the maintainer's machine alone can ship an update.
+Updates are signed with a key the maintainer holds, which the build system never sees, so the build system alone cannot ship an update.
