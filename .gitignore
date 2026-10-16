@@ -31,3 +31,6 @@ App/SafariExtension/RFCReaderSafari.entitlements
 # Claude Code: worktrees and personal settings stay local; skills and settings.json are shared
 .claude/worktrees/
 .claude/settings.local.json
+
+# Wrangler's local state, from deploying site/
+site/.wrangler/
