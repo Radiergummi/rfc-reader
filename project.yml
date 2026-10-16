@@ -110,8 +110,8 @@ targets:
         # again.
         SUFeedURL: https://rfc-reader.mazetti.me/appcast.xml
         SUPublicEDKey: qif0+j8cimHQhgje/uAIcGSO/O7lfnSGey8PlVS0jU0=
-        # Checks on its own without asking first; Settings turns it off. A Debug build
-        # never starts the updater (Window/Updater.swift).
+        # Checks on its own without asking first; Settings turns it off. Only a release
+        # build starts the updater (Window/Updater.swift).
         SUEnableAutomaticChecks: true
         # The app is sandboxed, so Sparkle installs through its launcher service,
         # which the mach-lookup exceptions in the entitlements let it reach.

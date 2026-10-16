@@ -147,7 +147,7 @@ private struct GeneralSettings: View {
     #if os(macOS)
       @Bindable var updater = Updater.shared
       Toggle("Check for updates automatically", isOn: $updater.automaticallyChecksForUpdates)
-        // Debug shares Release's defaults, so a Debug build may not change them.
+        // Every build shares the release's defaults, so only a release changes them.
         .disabled(!Updater.starts)
     #endif
   }
