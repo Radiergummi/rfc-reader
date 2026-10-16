@@ -49,7 +49,8 @@
         signposter.emitEvent("First window made")
       }
       warnIfTheStoreDidNotOpen()
-      // Started here, so a scheduled check runs whether or not a menu asks first.
+      // Made by the menu's commands as a rule, which come first; made here if not, so
+      // the scheduled checks never wait on the menu.
       _ = Updater.shared
     }
 

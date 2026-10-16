@@ -101,7 +101,9 @@ targets:
         # again.
         SUFeedURL: https://rfc-reader.mazetti.me/appcast.xml
         SUPublicEDKey: qif0+j8cimHQhgje/uAIcGSO/O7lfnSGey8PlVS0jU0=
-        SUEnableAutomaticChecks: $(RFC_AUTOMATIC_UPDATE_CHECKS)
+        # Checks on its own without asking first; Settings turns it off. A Debug build
+        # never starts the updater (Window/Updater.swift).
+        SUEnableAutomaticChecks: true
         # The app is sandboxed, so Sparkle installs through its launcher service,
         # which the mach-lookup exceptions in the entitlements let it reach.
         SUEnableInstallerLauncherService: true
@@ -146,10 +148,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader
-        # Whether Sparkle checks on its own, substituted into SUEnableAutomaticChecks.
-        # Off in Debug: Sparkle installs over the running bundle, so an update accepted
-        # in a development build would replace it with the release.
-        RFC_AUTOMATIC_UPDATE_CHECKS: "YES"
+        # Where a Mac app's embedded frameworks are, Sparkle's among them (#911). The
+        # target's default is iOS's flat bundle, @executable_path/Frameworks, which
+        # nothing needed until a framework was embedded, and dyld then stops at launch.
+        LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]: $(inherited) @executable_path/../Frameworks
         # The app is UI throughout, so its code is main-actor unless it says
         # otherwise. On this target, not the project: the packages keep nonisolated
         # defaults, as `DocumentTextBuilder` requires, and so would any other target.
@@ -167,9 +169,6 @@ targets:
         APP_ICON_2700: AppIcon-27
         EXCLUDED_SOURCE_FILE_NAMES: AppIcon-*.icon
         INCLUDED_SOURCE_FILE_NAMES: $(ASSETCATALOG_COMPILER_APPICON_NAME).icon
-      configs:
-        Debug:
-          RFC_AUTOMATIC_UPDATE_CHECKS: "NO"
 
   # The Safari extension that opens an RFC's web page in the app (#194): a web
   # extension in Resources and a native handler that reads a page's URL with
