@@ -51,9 +51,9 @@ struct DocumentHeaderView: View {
   /// describe different headers.
   let identity: Identity
 
-  /// Where the heading ends, for the toolbar's copy of the title to take over from
-  /// as it scrolls away; see `ToolbarTitleReveal`.
-  let heading: HeadingBox
+  /// Told where the heading ends, for the toolbar's copy of the title to take over
+  /// from as it scrolls away; see `ToolbarTitleReveal`.
+  let reader: ReaderController
 
   nonisolated static let coordinateSpace = "documentHeader"
 
@@ -65,7 +65,7 @@ struct DocumentHeaderView: View {
         .onGeometryChange(for: CGFloat.self) {
           $0.frame(in: .named(Self.coordinateSpace)).maxY
         } action: { bottom in
-          heading.bottom = bottom
+          reader.headingBottom = bottom
         }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {

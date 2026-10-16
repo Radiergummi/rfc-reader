@@ -389,6 +389,38 @@ public struct Folding: Sendable, Equatable {
   }
 }
 
+/// A folding the reader changed itself and asked the scene for, which the scene has
+/// not taken yet: the request reaches it a hop later (`ReaderController`), and until
+/// then the scene still passes the folding from before, which would fold back what
+/// was just opened.
+public struct FoldingEcho: Sendable, Equatable {
+  private var before: Folding?
+  private var after: Folding?
+
+  public init() {}
+
+  /// The reader went from `before` to `after`, and asked the scene for `after`.
+  public mutating func asked(for after: Folding, from before: Folding) {
+    self.before = before
+    self.after = after
+  }
+
+  /// Whether `folding`, from the scene, is to be applied: not the one from before the
+  /// reader's change, and the change forgotten once the scene has caught up with it.
+  public mutating func admits(_ folding: Folding) -> Bool {
+    guard let before, let after else { return true }
+    if folding == before { return false }
+    if folding == after { forget() }
+    return true
+  }
+
+  /// A new build: what was asked of the scene is no longer pending against it.
+  public mutating func forget() {
+    before = nil
+    after = nil
+  }
+}
+
 extension FoldingIndex {
   /// The anchors of the sections `entry` is nested in: each shallower heading
   /// before it, back to the top level.

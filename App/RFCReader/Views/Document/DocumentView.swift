@@ -144,18 +144,17 @@ struct DocumentView: View {
       isCompact && UIDevice.current.userInterfaceIdiom == .phone && !voiceOverEnabled
     #endif
   }
-  /// Where the reader is, written the moment tracking computes it. This is the
-  /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
-  /// a main-actor hop. Anything that cannot afford that lag — persisting the
-  /// reading position on the way out — reads the box. The place across a rebuild
-  /// is finer than a section, and the coordinator keeps that itself.
-  @State private var lastVisibleAnchor = VisibleAnchorBox()
+  /// The reader's interface to its text view: where it is, and what it is asked.
+  /// `ReaderState.currentAnchor` is the window's copy of its section, written from
+  /// `controller.section` while this is the reader on screen. Anything that cannot
+  /// wait for the hop that section lags by — persisting the reading position on the
+  /// way out — reads the controller's place and anchor, which are written at once.
+  @State private var controller = ReaderController()
   @State private var placeSaver = ReadingPlaceSaver()
   /// Where the reader was when the text view last went — turning Original Text on
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
   @State private var placeLeft: ReaderPlaceLeft?
-  @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
   ///
@@ -273,7 +272,10 @@ struct DocumentView: View {
           takeReaderState()
           if arrivesOnTop {
             arrivesOnTop = false
-            arrive()
+            // After the update that hands the text view the folding just taken back:
+            // a scroll goes to an installed build at once, and would land in the
+            // folding it had before, which the reinstated one may fold away.
+            Task { arrive() }
           }
         } else {
           ownsReader = false
@@ -285,6 +287,20 @@ struct DocumentView: View {
       // (`DocumentSession.reinstate`).
       .onChange(of: session.state.isLoading) { _, isLoading in
         writer.isLoading = isLoading
+      }
+      .onChange(of: controller.section) { _, anchor in
+        if let anchor { showSection(anchor) }
+      }
+      .onChange(of: controller.barsHidden) { _, hidden in
+        setBarsHidden(hidden)
+      }
+      .onChange(of: controller.hasSelection) { _, hasSelection in
+        writer.hasSelection = hasSelection
+      }
+      // A section the text view opened or closed itself: a heading toggled, a jump
+      // into folded text.
+      .onChange(of: controller.foldingRequest) {
+        if let folding = controller.takeFolding() { writer.folding = folding }
       }
   }
 
@@ -338,15 +354,24 @@ struct DocumentView: View {
       // takes the reader with no `onDisappear` (#155). So the place is saved once
       // the reader stops, and when the app goes.
       .onAppear {
+        // Not while fading out over the next document's reader, nor under the top of
+        // the stack, as the load's and the build's writes are not: the title is the
+        // reader on screen's.
+        controller.titleSink = ReaderController.TitleSink(
+          report: { [reader, navigation, identity, depth] state, source in
+            let writer = reader.writer(showing: identity, at: depth, in: navigation)
+            writer { $0.report(title: state, from: source) }
+          },
+          release: { [reader] in reader.releaseTitle(from: $0) })
         // Beside another reader, its place is that reader's counterpart, not one of
         // its own: it saves none, so the document opened alone later is where it was
         // last read (#187).
         guard !isBeside else { return }
-        // Not the view, and the box weakly: the box holds this.
-        let box = lastVisibleAnchor
-        box.placeDidChange = { [positions, placeSaver, weak box] in
+        // Not the view, and the controller weakly: the controller holds this.
+        let controller = controller
+        controller.placeDidChange = { [positions, placeSaver, weak controller] in
           placeSaver.schedule {
-            if let box { positions.save(box) }
+            if let controller { positions.save(controller) }
           }
         }
       }
@@ -365,7 +390,7 @@ struct DocumentView: View {
       .onDisappear {
         // A report after this, during the fade-out, would save the document left
         // over the one now read.
-        lastVisibleAnchor.placeDidChange = {}
+        controller.placeDidChange = {}
         saveNow()
       }
   }
@@ -417,10 +442,9 @@ struct DocumentView: View {
   private func saveNow() {
     placeSaver.cancel()
     guard !isBeside else { return }
-    positions.save(lastVisibleAnchor)
+    positions.save(controller)
   }
 
-  @State private var scrollTarget: ReaderScrollTarget?
   /// The tab an App Intent asked to show beside this document, taken and waiting for
   /// the panel to have something to describe; see `showRequestedTab()`.
   @State private var requestedTab: InspectorTab?
@@ -493,51 +517,23 @@ struct DocumentView: View {
         bibliography: reader.groups,
         measure: settings.measure,
         documentID: id,
-        lastVisibleAnchor: lastVisibleAnchor,
-        scrollTarget: scrollTarget,
-        onScrollHandled: { scrollTarget = nil },
-        onVisibleAnchorChange: { anchor in
-          // Not while fading out, nor under the top of the stack: the reader state
-          // is the reader on screen's, and so is the history entry's place.
-          writer { reader in
-            reader.currentAnchor = anchor
-            // Resolved here, where the document is: the toolbar's citation and
-            // section link need the place, and on macOS the toolbar is in the
-            // window rather than in this view. Through the map rather than
-            // `document.section(anchor:)`, which searches the section tree
-            // depth first — 305 sections on RFC 9110 — and this runs on every
-            // section crossing while scrolling.
-            reader.currentSection = session.sectionPlaces[anchor]
-            // Recorded on the history entry when navigating away, so coming
-            // back returns here rather than to the top of the document.
-            navigation.visiblePosition = anchor
-          }
-        },
+        controller: controller,
         onLink: openInApp,
-        // Not while fading out over the next document's reader, nor under the top
-        // of the stack, as the load's and the build's writes are not: the title is
-        // the reader on screen's.
-        onToolbarTitle: { state, source in writer { $0.report(title: state, from: source) } },
-        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
-        onSelectionChange: { writer.hasSelection = $0 },
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
-        onChromeHidden: setBarsHidden,
         // Not while fading out, nor under the top of the stack until the reader
         // state is this reader's again: it is the reader on screen's.
         folding: showsReaderState ? reader.folding : nil,
-        onFoldingChange: { writer.folding = $0 },
         isShown: showsReaderState,
         coupling: showsReaderState ? reader.coupling : nil,
         // None until they are extracted, which a text view made with its document
         // has; a reader back on top of the stack keeps its bands while they are
         // extracted again, rather than dropping them for the moment (#263).
         requirements: showsReaderState ? reader.requirements : nil,
-        heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
         header: {
-          DocumentHeaderView(identity: headerIdentity, heading: heading)
+          DocumentHeaderView(identity: headerIdentity, reader: controller)
             .padding(.top, 16)
             .padding(.bottom, 12)
             // Outside the padding, so the heading is measured from the top of the
@@ -575,8 +571,7 @@ struct DocumentView: View {
           isCovered = true
           return
         }
-        placeLeft =
-          lastVisibleAnchor.isAheadOfSections ? .top : lastVisibleAnchor.anchor.map { .section($0) }
+        placeLeft = controller.isAheadOfSections ? .top : controller.anchor.map { .section($0) }
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
@@ -619,7 +614,7 @@ struct DocumentView: View {
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,
             revisions: library.revisionsSummary(for: metadata.id)),
-          heading: heading
+          reader: controller
         )
         .padding(.top, 16)
         .padding(.bottom, 12)
@@ -650,6 +645,24 @@ struct DocumentView: View {
       .contentMargins(.top, toolbarInset, for: .scrollContent)
       .background(ToolbarInsetReader { toolbarInset = $0 })
     #endif
+  }
+
+  /// Into the window's reader state, the section the reader is in. Not while fading
+  /// out, nor under the top of the stack: the reader state is the reader on screen's,
+  /// and so is the history entry's place.
+  private func showSection(_ anchor: String) {
+    writer { reader in
+      reader.currentAnchor = anchor
+      // Resolved here, where the document is: the toolbar's citation and section
+      // link need the place, and on macOS the toolbar is in the window rather than
+      // in this view. Through the map rather than `document.section(anchor:)`, which
+      // searches the section tree depth first — 305 sections on RFC 9110 — and this
+      // runs on every section crossing while scrolling.
+      reader.currentSection = session.sectionPlaces[anchor]
+      // Recorded on the history entry when navigating away, so coming back returns
+      // here rather than to the top of the document.
+      navigation.visiblePosition = anchor
+    }
   }
 
   /// On iOS only; the Mac's toolbar is the window's, and stays.
@@ -695,7 +708,7 @@ struct DocumentView: View {
     case .reference(let anchor) where revealingReferences:
       reader.reveal(reference: anchor)
     case .reference(let anchor), .jump(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor)
+      controller.scroll(to: anchor)
     case .document, .unhandled, nil:
       break
     }
@@ -735,10 +748,13 @@ struct DocumentView: View {
   /// Where the text view opens as it first appears.
   private func arrive() {
     guard let built = session.state.built else { return }
+    // It arrived where a scroll asked for while it was gone sent it, as it was
+    // installed.
+    if controller.takeInstallCarriedOutTarget() { return }
     // Deep link or restored reading position — or, when the text view is made
     // again, where the reader was (#449).
     let arrival = ReaderArrival.onAppear(
-      pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
+      pendingAnchor: controller.pendingTarget?.anchor, placeLeft: placeLeft,
       request: navigation.scrollRequest,
       // Any anchor, not only a section's: a place is saved at the nearest anchor
       // of any kind (`ReadingPlace`), a paragraph's as often as not. Beside
@@ -750,14 +766,14 @@ struct DocumentView: View {
         })
     switch arrival {
     case .place(let anchor):
-      scrollTarget = ReaderScrollTarget(anchor: anchor)
+      controller.scroll(to: anchor)
     case .request(let request) where request.isUnrecorded:
       follow(request)
     case .request(let request):
       jump(toSection: request.section)
     case .stored(let saved):
       if let anchor = saved.anchor {
-        scrollTarget = ReaderScrollTarget(anchor: anchor, offset: saved.offset)
+        controller.scroll(to: anchor, offset: saved.offset)
       }
     case .stay:
       break
@@ -771,6 +787,9 @@ struct DocumentView: View {
     session.reinstate(
       into: writer, library: library, showsOriginal: keptOriginal, folding: keptFolding)
     ownsReader = true
+    // The section it is in, which reinstating cleared, and which the controller
+    // publishes only as it changes.
+    if let anchor = controller.section { showSection(anchor) }
     updateFolding()
   }
 

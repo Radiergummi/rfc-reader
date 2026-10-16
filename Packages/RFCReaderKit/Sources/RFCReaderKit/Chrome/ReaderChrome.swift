@@ -231,3 +231,65 @@ public struct ReaderChrome: Equatable, Sendable {
     runsDown = nil
   }
 }
+
+extension ReaderChrome {
+  /// One tap on the reader's text, as its tap recognizer saw it, after a double tap
+  /// has failed.
+  public struct Tap: Equatable, Sendable {
+    /// Whether the text had a selection as the tap began, or was still moving after
+    /// a flick: that tap clears the selection or stops the scroll.
+    public var clearsSelectionOrStopsFling: Bool
+    /// Whether it landed on the header, which takes its own taps.
+    public var isOnHeader: Bool
+    /// Where the paragraph starts beside whose disclosure, in the gutter, it landed;
+    /// nil elsewhere, or where nothing discloses.
+    public var besideDisclosure: Int?
+    /// The character it landed on; nil beside the text.
+    public var character: Int?
+
+    public init(
+      clearsSelectionOrStopsFling: Bool, isOnHeader: Bool, besideDisclosure: Int? = nil,
+      character: Int? = nil
+    ) {
+      self.clearsSelectionOrStopsFling = clearsSelectionOrStopsFling
+      self.isOnHeader = isOnHeader
+      self.besideDisclosure = besideDisclosure
+      self.character = character
+    }
+  }
+
+  /// What a tap does.
+  public enum TapAction: Equatable, Sendable {
+    /// Nothing of the reader's: UIKit's, the header's or a link's own.
+    case nothing
+    /// Opens or closes the section, or the aside, whose heading or caption starts at
+    /// or holds this offset.
+    case toggleSection(heading: Int)
+    /// Brings the bars back, or puts them away.
+    case toggleBars
+  }
+
+  /// What `tap` does. A tap on the text toggles the bars. Not one that clears a
+  /// selection or stops a flick; not one on the header, which takes its own; not one
+  /// on a link or a chip, which follows it. In a mode that discloses (`discloses`),
+  /// a tap on a heading's chevron in the gutter or on the heading opens or closes its
+  /// section (#698), and in Implementer one on an aside's caption the aside (#700),
+  /// a link in a heading being followed first.
+  ///
+  /// - Parameters:
+  ///   - isLink: whether the character at an offset is part of a link.
+  ///   - toggles: whether there is a heading or caption at an offset to toggle.
+  public static func action(
+    for tap: Tap, discloses: Bool, isLink: (Int) -> Bool, toggles: (Int) -> Bool
+  ) -> TapAction {
+    guard !tap.clearsSelectionOrStopsFling, !tap.isOnHeader else { return .nothing }
+    if discloses, let paragraph = tap.besideDisclosure, toggles(paragraph) {
+      return .toggleSection(heading: paragraph)
+    }
+    if let character = tap.character {
+      if isLink(character) { return .nothing }
+      if discloses, toggles(character) { return .toggleSection(heading: character) }
+    }
+    return .toggleBars
+  }
+}

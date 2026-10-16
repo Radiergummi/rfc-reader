@@ -30,9 +30,7 @@ struct DocumentPreview: View {
   @Environment(\.dynamicTypeSize) private var textSize
   @State private var loaded: Loaded?
   @State private var failure: String?
-  @State private var scrollTarget: ReaderScrollTarget?
-  @State private var lastVisibleAnchor = VisibleAnchorBox()
-  @State private var heading = HeadingBox()
+  @State private var controller = ReaderController()
 
   /// Everything a preview shows, kept whole by `LibraryModel.previews` so the
   /// build is never paired with another parse of its document.
@@ -82,14 +80,8 @@ struct DocumentPreview: View {
         measure: settings.measure,
         documentID: id,
         commitsOnClick: commit,
-        lastVisibleAnchor: lastVisibleAnchor,
-        scrollTarget: scrollTarget,
-        onScrollHandled: { scrollTarget = nil },
-        onVisibleAnchorChange: { _ in },
+        controller: controller,
         onLink: { _, _ in true },
-        onToolbarTitle: { _, _ in },
-        onToolbarTitleReleased: { _ in },
-        heading: heading,
         headerIdentity: DocumentHeaderView.Identity(
           header: loaded.document.header, metadata: library.metadata(id)),
         header: { EmptyView() }
@@ -125,7 +117,7 @@ struct DocumentPreview: View {
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
-        scrollTarget = ReaderScrollTarget(anchor: shown.document.anchor(forPlace: place))
+        controller.scroll(to: shown.document.anchor(forPlace: place))
       }
       // After the text is shown: asking whether the document is still downloaded
       // waits for the store, which may be parsing another document.

@@ -15,44 +15,6 @@ import Synchronization
   typealias PlatformHostingController = NSHostingController
 #endif
 
-/// The last anchor section tracking computed, outside SwiftUI's observation.
-///
-/// Reporting to `DocumentView` goes through a `Task`, because it can fire from
-/// inside a view update where mutating state is illegal — and a `Task` has no
-/// ordering guarantee against `onDisappear`, so a scroll immediately followed by
-/// navigating away would persist the section before last. `ReadingPositionKeeper`
-/// reads this instead: it is written the moment the anchor is computed.
-final class VisibleAnchorBox {
-  var anchor: String?
-  /// The reader's line, as a place that survives a rebuild: what the reading
-  /// position saves (#322). Nil at the top of the document.
-  var place: ReadingPlace? {
-    didSet { if place != oldValue { placeDidChange() } }
-  }
-  /// Told when `place` moves, on every scroll tick that moves it: `DocumentView`
-  /// saves the place once the reader stops (#155).
-  var placeDidChange: () -> Void = {}
-  /// Whether the top of the viewport is ahead of section one, which `anchor`
-  /// reports as section one.
-  var isAheadOfSections = false
-}
-
-/// Where the header's heading ends, in the hosted header's own coordinates, as
-/// `DocumentHeaderView` measured it. A box for the same reason as
-/// `VisibleAnchorBox`: the header is hosted outside SwiftUI's diffing and built
-/// once, so it writes into something both sides already hold rather than calling
-/// through to a coordinator it was built before.
-final class HeadingBox {
-  var bottom: CGFloat? {
-    didSet { if bottom != oldValue { didChange() } }
-  }
-
-  /// The reader can report its viewport before the header has measured its
-  /// heading — a text view made afresh on the way back from the original text
-  /// does — and nothing scrolls afterwards to report it again.
-  var didChange: () -> Void = {}
-}
-
 /// Everything the two representables share. Both platforms drive the same anchor
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
@@ -151,8 +113,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// environment chain; see `ReaderEnvironment`.
   var environment: ReaderEnvironment?
 
-  var onVisibleAnchorChange: (String) -> Void = { _ in }
-  var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
   var bibliography: [ReferenceGroup] = []
@@ -172,26 +132,16 @@ final class RFCTextViewCoordinator: NSObject {
     return LinkCopy.publicURL(
       for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
   }
-  /// See `RFCTextView.onSelectionChange`.
-  var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onChoosePresentation`.
   var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
-  /// What `onSelectionChange` was last told, so a selection dragged across the text
-  /// reports once rather than on every character.
-  private var reportedSelection: Bool?
-
-  /// Tells the view whether anything is selected: whenever the selection changes, and
-  /// after an install, which may clear it without saying so. Deferred for the reason
-  /// `onVisibleAnchorChange` is: installing reports from inside SwiftUI's update.
-  /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
-  /// selection's own edit menu (#186).
+  /// Tells the controller whether anything is selected: whenever the selection
+  /// changes, and after an install, which may clear it without saying so. macOS only,
+  /// where Edit ▸ Copy as Quote observes it; on iOS the item is in the selection's own
+  /// edit menu (#186).
   func reportSelection() {
     #if !canImport(UIKit)
       guard let textView else { return }
-      let hasSelection = textView.selectedRange().length > 0
-      guard hasSelection != reportedSelection else { return }
-      reportedSelection = hasSelection
-      Task { self.onSelectionChange(hasSelection) }
+      controller?.reportSelection(textView.selectedRange().length > 0)
     #endif
   }
   /// See `RFCTextView.commitsOnClick`.
@@ -202,51 +152,18 @@ final class RFCTextViewCoordinator: NSObject {
       #endif
     }
   }
-  /// What the toolbar's title shows; see `ToolbarTitleState`. Called
-  /// synchronously, on every scroll tick that changes it: the title is coupled to
-  /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
-  /// That is safe where `onVisibleAnchorChange` is not because it touches no
-  /// SwiftUI state.
-  ///
-  /// With the coordinator, which owns what it reports until it withdraws it through
-  /// `onToolbarTitleReleased` in `releaseDocument()` (#281): the reader is made per
-  /// document, and the last one's teardown can come after the next one's report.
-  var onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void = { _, _ in }
-  var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
-  var heading: HeadingBox?
+  /// What the toolbar's title was last told; see `updateToolbarTitle()`.
   var lastToolbarTitle: ToolbarTitleState?
   /// See `ReaderInputs.isShown`.
   var isShown = true
 
   #if canImport(UIKit)
-    /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by
-    /// the text view's scrolls and taps, and reported through `onChromeHidden`.
-    var chrome = ReaderChrome()
-    /// Told when `chrome` hides or shows the bars. Deferred, as
-    /// `onVisibleAnchorChange` is: a jump reports from inside SwiftUI's update.
-    var onChromeHidden: (Bool) -> Void = { _ in }
-    private var reportedChromeHidden = false
-    /// The tap that shows and hides the bars, told apart from the text view's own
-    /// recognizers in the gesture delegate.
-    weak var chromeTap: UITapGestureRecognizer?
-    /// Whether the text had a selection when the tap began, or was still moving
-    /// after a flick: that tap clears the selection or stops the scroll, and is not
-    /// one for the bars.
-    private var tapIsNotForTheBars = false
-    /// Where that tap touched, in the text view's content. Taken when it begins,
-    /// because the tap is recognized only after a double tap has failed, and by
-    /// then a link it followed may have scrolled the text away from under it.
-    private var chromeTapPoint = CGPoint.zero
-    /// The finger's drag on the text, from the moment it begins until the scroll
-    /// it started stops: a pan moves the bars, a drag of the scroll indicator does
-    /// not (`ReaderChrome.Drag`).
-    private var drag: ReaderChrome.Drag?
+    /// The bars on iPhone, which reading on puts away; see `ReaderBars`.
+    let bars = ReaderBars()
   #endif
 
-  /// Where section tracking last put the reader, written the moment it is computed.
-  /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
-  /// main-actor hop, which `onDisappear` cannot afford to wait for.
-  var lastVisibleAnchor: VisibleAnchorBox?
+  /// What the reader reports to, and is asked through: the view's.
+  var controller: ReaderController?
   /// The reading this reader scrolls together with another one in, side by side
   /// (#187); see `RFCTextViewCoordinator+Coupling`.
   var coupling: ScrollCoupling?
@@ -271,7 +188,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// silently break all of them. The builder marks which entries are sections; this
   /// is just that subset.
   var sectionIndex = AnchorIndex([])
-  var lastReportedAnchor: String?
   /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
   let engine = ReaderLayoutEngine()
   /// Skips the paragraphs the reading mode folds; the content storage's delegate.
@@ -280,12 +196,9 @@ final class RFCTextViewCoordinator: NSObject {
   var folding = Folding()
   /// What folding needs of the installed build, made once per build.
   var foldingIndex: FoldingIndex?
-  /// A folding this coordinator changed itself and reported to the scene, which has
-  /// not caught up yet: the one before, which the scene may still pass, and the one
-  /// after, which it will.
-  var reportedFolding: (before: Folding, after: Folding)?
-  /// Tells the scene that a jump into folded text expanded a section.
-  var onFoldingChange: (Folding) -> Void = { _ in }
+  /// A folding this coordinator changed itself and asked the scene for, which the
+  /// scene has not caught up with yet; see `FoldingEcho`.
+  var foldingEcho = FoldingEcho()
   /// The document's requirements, which Implementer bands (#700).
   var requirements: [Requirement] = []
   /// Where the requirements are in the installed build: found in Implementer only,
@@ -311,7 +224,7 @@ final class RFCTextViewCoordinator: NSObject {
       AnyView(
         header
           .contentShape(.rect)
-          .onTapGesture { [weak self] in self?.tappedHeader() }
+          .onTapGesture { [weak self] in self?.bars.tappedHeader() }
           .readerEnvironment(environment))
     #else
       AnyView(header.readerEnvironment(environment))
@@ -446,7 +359,7 @@ final class RFCTextViewCoordinator: NSObject {
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
       // A figure is an item for its long press alone: a tap on it is a tap on text,
-      // which `chromeTap` takes for the bars. Not nil: for an item with no primary
+      // which `ReaderBars` takes for the bars. Not nil: for an item with no primary
       // action UIKit opens the menu on a tap, and that took the tap from the bars.
       if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
@@ -571,138 +484,56 @@ final class RFCTextViewCoordinator: NSObject {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       if !isFollowing { reportVisibleAnchor() }
-      followChrome(scrollView)
+      bars.scrolled(scrollView, engineMoving: engine.keeper.isEngineMoving)
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
       takeLead()
-      drag = ReaderChrome.Drag(
-        offset: scrollView.contentOffset.y,
-        finger: scrollView.panGestureRecognizer.translation(in: scrollView).y)
+      bars.willBeginDragging(scrollView)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-      if decelerate {
-        drag?.lifted()
-      } else {
-        drag = nil
-      }
+      bars.didEndDragging(willDecelerate: decelerate)
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-      drag = nil
+      bars.didEndDecelerating()
     }
   }
 
   // MARK: - The bars on iPhone
 
-  extension RFCTextViewCoordinator: UIGestureRecognizerDelegate {
-    /// Whether the bars may go at all; see `ReaderChrome.isEnabled`.
-    func setChromeEnabled(_ enabled: Bool) {
-      guard chrome.isEnabled != enabled else { return }
-      chrome.isEnabled = enabled
-      reportChrome()
-    }
-
-    private func followChrome(_ scrollView: UIScrollView) {
-      let offset = scrollView.contentOffset.y
-      let finger = scrollView.panGestureRecognizer.translation(in: scrollView).y
-      // Not `isDragging`, which can stay set while a flick decelerates: the finger
-      // is off the glass then, and the flick's drag is still the one scrolling.
-      let touching = scrollView.isTracking
-      drag = .following(drag, offset: offset, finger: finger, touching: touching)
-      let insets = scrollView.adjustedContentInset
-      chrome.scrolled(
-        ReaderChrome.Scroll(
-          offset: offset, topInset: insets.top, bottomInset: insets.bottom,
-          contentHeight: scrollView.contentSize.height,
-          viewportHeight: scrollView.bounds.height,
-          isUserDriven: drag?.isUserDriven(
-            touching: touching, decelerating: scrollView.isDecelerating,
-            engineMoving: engine.keeper.isEngineMoving) ?? false,
-          isFlinging: scrollView.isDecelerating && !scrollView.isTracking))
-      reportChrome()
-    }
-
-    func reportChrome() {
-      let hidden = chrome.isHidden
-      guard hidden != reportedChromeHidden else { return }
-      reportedChromeHidden = hidden
-      // Now, not with the report: the safe area follows the bars, which follow the
-      // report, and the top inset must already know to hold.
-      (textView as? ReaderTextView)?.barsHidden = hidden
-      Task { self.onChromeHidden(hidden) }
-    }
-
-    /// A tap on the text brings the bars back, or puts them away. Not a tap on a
-    /// link or a chip, which follows it; not one on the header, which takes its own
-    /// (`tappedHeader()`); and not one that clears a selection or stops a flick.
-    @objc func tappedText(_ tap: UITapGestureRecognizer) {
-      guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
-      let point = chromeTapPoint
-      if headerHost?.view.frame.contains(point) == true { return }
+  extension RFCTextViewCoordinator {
+    /// A tap on the text, which brings the bars back or puts them away, unless it is
+    /// for something else; see `ReaderChrome.action(for:discloses:isLink:toggles:)`.
+    @objc func tappedText(_ recognizer: UITapGestureRecognizer) {
+      guard recognizer.state == .ended, let textView else { return }
+      let point = bars.tapPoint
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-      // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
-      // opens or closes its section (#698), and in Implementer one on an aside's
-      // caption opens or closes the aside (#700); a link in a heading is followed
-      // first.
-      if folding.mode.discloses {
-        if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-          let offset = paragraphStart(atContainerPoint: gutter),
-          toggleSection(atHeading: offset)
-        {
-          return
-        }
+      let discloses = folding.mode.discloses
+      let tap = ReaderChrome.Tap(
+        clearsSelectionOrStopsFling: bars.tapClearsSelectionOrStopsFling,
+        isOnHeader: headerHost?.view.frame.contains(point) == true,
+        besideDisclosure: discloses
+          ? FragmentGeometry.disclosureHit(atContainerPoint: containerPoint)
+            .flatMap(paragraphStart(atContainerPoint:))
+          : nil,
+        character: characterOffset(atContainerPoint: containerPoint))
+      let action = ReaderChrome.action(
+        for: tap, discloses: discloses,
+        isLink: { link(at: $0) != nil },
+        toggles: { offset in
+          foldingIndex.map { folding.toggling(heading: offset, in: $0) != nil } ?? false
+        })
+      switch action {
+      case .nothing:
+        break
+      case .toggleSection(let offset):
+        _ = toggleSection(atHeading: offset)
+      case .toggleBars:
+        bars.tapped()
       }
-      if let offset = characterOffset(atContainerPoint: containerPoint) {
-        if link(at: offset) != nil { return }
-        if folding.mode.discloses, toggleSection(atHeading: offset) { return }
-      }
-      chrome.tapped()
-      reportChrome()
-    }
-
-    /// A tap on the header's blank space, as a tap on the text is. Told by a tap
-    /// gesture on the header's root (`hostedHeader(_:in:)`), which the header's author
-    /// chips and banner links take precedence over, being SwiftUI gestures below
-    /// it: a tap on one of them does only what it does.
-    func tappedHeader() {
-      guard !tapIsNotForTheBars else { return }
-      chrome.tapped()
-      reportChrome()
-    }
-
-    /// Beside the text view's own recognizers, so a tap on a link still follows it
-    /// and a long press still previews it.
-    func gestureRecognizer(
-      _ gestureRecognizer: UIGestureRecognizer,
-      shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
-      // The delegate of `chromeTap` alone, so always that one.
-      true
-    }
-
-    /// After a double tap has failed: the first tap of one that selects a word is
-    /// not a tap for the bars.
-    func gestureRecognizer(
-      _ gestureRecognizer: UIGestureRecognizer,
-      shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
-      guard gestureRecognizer === chromeTap,
-        let tap = otherGestureRecognizer as? UITapGestureRecognizer
-      else { return false }
-      return tap.numberOfTapsRequired > 1
-    }
-
-    func gestureRecognizer(
-      _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
-    ) -> Bool {
-      if gestureRecognizer === chromeTap, let textView {
-        tapIsNotForTheBars = textView.selectedRange.length > 0 || textView.isDecelerating
-        chromeTapPoint = touch.location(in: textView)
-      }
-      return true
     }
   }
 #else
@@ -802,7 +633,7 @@ final class RFCTextViewCoordinator: NSObject {
       NotificationCenter.default.removeObserver(
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
-      onToolbarTitleReleased(self)
+      controller?.releaseTitle(from: self)
       couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil

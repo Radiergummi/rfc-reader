@@ -30,49 +30,31 @@ struct RFCTextView: View {
     measure: MeasurePreference,
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
-    lastVisibleAnchor: VisibleAnchorBox,
-    scrollTarget: ReaderScrollTarget?,
-    onScrollHandled: @escaping () -> Void,
-    onVisibleAnchorChange: @escaping (String) -> Void,
+    controller: ReaderController,
     onLink: @escaping (URL, LinkActivation) -> Bool,
-    onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
-    onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
-    onSelectionChange: @escaping (Bool) -> Void = { _ in },
     onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
-    onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
-    onFoldingChange: @escaping (Folding) -> Void = { _ in },
     isShown: Bool = true,
     coupling: ScrollCoupling? = nil,
     requirements: [Requirement]? = nil,
-    heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
   ) {
     inputs = ReaderInputs(
       built: built,
       folding: folding,
-      onFoldingChange: onFoldingChange,
       coupling: coupling,
       requirements: requirements,
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
       commitsOnClick: commitsOnClick,
-      lastVisibleAnchor: lastVisibleAnchor,
-      scrollTarget: scrollTarget,
-      onScrollHandled: onScrollHandled,
-      onVisibleAnchorChange: onVisibleAnchorChange,
+      controller: controller,
       onLink: onLink,
-      onToolbarTitle: onToolbarTitle,
-      onToolbarTitleReleased: onToolbarTitleReleased,
-      onSelectionChange: onSelectionChange,
       onChoosePresentation: onChoosePresentation,
       hidesChrome: hidesChrome,
-      onChromeHidden: onChromeHidden,
       isShown: isShown,
-      heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
     )
@@ -92,16 +74,6 @@ struct RFCTextView: View {
   }
 }
 
-/// Where the reader is asked to scroll.
-///
-/// A jump is never animated: the layout engine settles its line in several passes,
-/// each followed by a layout, so there is no single scroll to animate (#585).
-struct ReaderScrollTarget: Equatable {
-  let anchor: String
-  /// Characters past the anchor: a saved reading position's line (#322).
-  var offset: Int = 0
-}
-
 /// Everything the reader is given, and the one place it is handed to the shared
 /// coordinator. `RFCTextView` holds one of these rather than a copy of each field,
 /// and the two representables pass it on, so an input is declared here and named
@@ -112,7 +84,6 @@ struct ReaderInputs {
   /// The reading mode and the sections it has expanded (#698); nil to keep what the
   /// text view has, as a reader fading out does while the scene has moved on.
   let folding: Folding?
-  let onFoldingChange: (Folding) -> Void
   /// The side-by-side reading this reader scrolls together in (#187), nil when it
   /// is read alone.
   let coupling: ScrollCoupling?
@@ -130,31 +101,18 @@ struct ReaderInputs {
   /// Set only for the reader inside a link preview (#29): a click anywhere in it
   /// commits the preview rather than selecting, and it previews nothing itself.
   let commitsOnClick: (() -> Void)?
-  /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
-  let lastVisibleAnchor: VisibleAnchorBox
-  let scrollTarget: ReaderScrollTarget?
-  let onScrollHandled: () -> Void
-  let onVisibleAnchorChange: (String) -> Void
+  /// What the reader reports to, and is asked through; see `ReaderController`.
+  let controller: ReaderController
   let onLink: (URL, LinkActivation) -> Bool
-  let onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void
-  let onToolbarTitleReleased: (_ reader: AnyObject) -> Void
-  /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
-  /// one, as Copy is (#186). Reported on macOS only; see
-  /// `RFCTextViewCoordinator.reportSelection()`.
-  let onSelectionChange: (Bool) -> Void
   /// Shows a rendered verbatim block as its text, or back, from its menu. Nil where
   /// the reader cannot, as in a force-click preview: no block offers to switch.
   let onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
-  /// Whether reading on may hide the bars, and what to tell when it does or they
-  /// come back; iOS only, see `ReaderChrome`.
+  /// Whether reading on may hide the bars; iOS only, see `ReaderBars`.
   let hidesChrome: Bool
-  let onChromeHidden: (Bool) -> Void
   /// Whether the window's reader state is this reader's. False for a reader on iOS
   /// that the stack keeps below its top (#263): what it reported was replaced by
   /// the readers pushed over it, so it reports again when this comes back.
   let isShown: Bool
-  /// Written by the header as it lays out; see `HeadingBox`.
-  let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
   /// thing done with it is to hand it to a hosting controller, which is not
   /// generic either.
@@ -168,25 +126,15 @@ struct ReaderInputs {
   func apply(
     to coordinator: RFCTextViewCoordinator, environment: ReaderEnvironment, width: CGFloat
   ) {
-    coordinator.onScrollHandled = onScrollHandled
-    coordinator.onVisibleAnchorChange = onVisibleAnchorChange
+    coordinator.drive(controller)
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
-    coordinator.onToolbarTitle = onToolbarTitle
-    coordinator.onToolbarTitleReleased = onToolbarTitleReleased
-    coordinator.onSelectionChange = onSelectionChange
     coordinator.onChoosePresentation = onChoosePresentation
-    coordinator.onFoldingChange = onFoldingChange
     #if canImport(UIKit)
-      coordinator.onChromeHidden = onChromeHidden
-      coordinator.setChromeEnabled(hidesChrome)
+      coordinator.bars.setEnabled(hidesChrome)
     #endif
-    if coordinator.heading !== heading {
-      coordinator.heading = heading
-      heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
-    }
     coordinator.environment = environment
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
@@ -205,8 +153,10 @@ struct ReaderInputs {
       coordinator.apply(folding)
     }
     coordinator.couple(to: coupling, installed: installs)
-    if let scrollTarget {
-      coordinator.scroll(to: scrollTarget.anchor, offset: scrollTarget.offset)
+    // A scroll asked for before there was a build to carry it out on; one asked for
+    // since went to the build at once (`ReaderController.scroll(to:offset:)`).
+    if let target = controller.takePendingTarget() {
+      coordinator.scroll(to: target.anchor, offset: target.offset)
     }
     if isShown, !coordinator.isShown { coordinator.reportAgain() }
     coordinator.isShown = isShown
@@ -327,6 +277,13 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      // After a jump TextKit estimates the rest of the document again, and the scroll
+      // view moves its offset to keep what it shows: the title read then is read from
+      // fragments that are only put where they are by the next viewport layout, which
+      // no scroll follows. Only a change is reported, so a layout costs a lookup.
+      textView.didLayOut = { [weak coordinator = context.coordinator] in
+        coordinator?.updateToolbarTitle()
+      }
 
       let host = UIHostingController(
         rootView: context.coordinator.hostedHeader(inputs.header, in: environment))
@@ -338,15 +295,16 @@ struct ReaderInputs {
       textView.addSubview(host.view)
 
       // Shows and hides the bars; see `RFCTextViewCoordinator.tappedText(_:)`.
-      let tap = UITapGestureRecognizer(
-        target: context.coordinator, action: #selector(RFCTextViewCoordinator.tappedText(_:)))
-      tap.delegate = context.coordinator
-      textView.addGestureRecognizer(tap)
-      context.coordinator.chromeTap = tap
+      context.coordinator.bars.attach(
+        to: textView, target: context.coordinator,
+        action: #selector(RFCTextViewCoordinator.tappedText(_:)))
+      context.coordinator.bars.report = { [weak coordinator = context.coordinator] hidden in
+        coordinator?.controller?.reportBars(hidden: hidden)
+      }
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
-      context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
+      context.coordinator.drive(inputs.controller)
       return textView
     }
 
@@ -361,12 +319,13 @@ struct ReaderInputs {
       // The background layout ends with the view, as `releaseDocument()` ends it on
       // the Mac.
       coordinator.engine.stop()
-      coordinator.setChromeEnabled(false)
+      coordinator.releaseController()
+      coordinator.bars.setEnabled(false)
       coordinator.couple(to: nil, installed: false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not
       // reported yet.
-      coordinator.onToolbarTitleReleased(coordinator)
+      coordinator.controller?.releaseTitle(from: coordinator)
     }
   }
 #else
@@ -499,7 +458,7 @@ struct ReaderInputs {
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
-      context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
+      context.coordinator.drive(inputs.controller)
       return scroll
     }
 
@@ -518,6 +477,7 @@ struct ReaderInputs {
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
       coordinator.tearDownHoverTracking()
       coordinator.releaseDocument()
+      coordinator.releaseController()
     }
   }
 #endif
