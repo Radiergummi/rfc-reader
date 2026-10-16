@@ -9,6 +9,7 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
+LAYOUT_BENCHMARKS := Tools/benchmarks-layout
 # RFCKit, built as the root package, fails on a warning; the other packages say so
 # in their manifests. See RFCKit's manifest for why it cannot (#440).
 RFCKIT_WARNINGS := -Xswiftc -warnings-as-errors
@@ -135,9 +136,11 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
-# RFCs (Tools/benchmarks). Not part of `check`: the numbers are this machine's,
-# and the first run needs the network. A change is measured against a baseline
-# saved before it:
+# RFCs (Tools/benchmarks), then of the reader's TextKit layout (Tools/benchmarks-layout,
+# without package-benchmark's malloc interposer, which crashes TextKit, #582). Not
+# part of `check`: the numbers are this machine's, and the first run needs the
+# network. A change is measured against a baseline saved before it, which each
+# package keeps of its own:
 #
 #   make benchmark BENCHMARK_ARGS='baseline update before'
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
@@ -149,6 +152,8 @@ BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(LAYOUT_BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 ## Build the benchmarks without running them
 # Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
@@ -156,6 +161,7 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 # next wants a baseline (#419). Debug: it checks that they compile, not how fast.
 build-benchmarks:
 	swift build --package-path $(BENCHMARKS)
+	swift build --package-path $(LAYOUT_BENCHMARKS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
