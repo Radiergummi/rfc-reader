@@ -139,6 +139,9 @@ extension RFCTextViewCoordinator {
     guard let foldingIndex, let toggled = folding.toggling(heading: offset, in: foldingIndex)
     else { return false }
     let before = folding
+    // The reader's own change, over one the scene has not caught up with yet: what
+    // that one was from is no longer to be ignored, nor this toggle refused for it.
+    foldingEcho.forget()
     apply(toggled)
     askScene(from: before)
     return true
@@ -151,6 +154,7 @@ extension RFCTextViewCoordinator {
     guard let foldingIndex, foldingDelegate.hidden.contains(offset) else { return false }
     let before = folding
     let expanded = folding.expanding(toShow: offset, in: foldingIndex)
+    foldingEcho.forget()
     apply(expanded, placeAt: offset)
     askScene(from: before)
     return true
@@ -161,6 +165,7 @@ extension RFCTextViewCoordinator {
   /// would take it for the scene catching up and forget the request before it was
   /// made.
   private func askScene(from before: Folding) {
+    guard folding != before else { return }
     foldingEcho.asked(for: folding, from: before)
     controller?.requestFolding(folding)
   }

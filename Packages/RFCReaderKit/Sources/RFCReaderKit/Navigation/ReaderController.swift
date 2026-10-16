@@ -83,10 +83,6 @@ public final class ReaderController {
   /// Whether the top of the viewport is ahead of section one, which `anchor` reports
   /// as section one: a text view made again starts at the top, not there (#449).
   @ObservationIgnored public private(set) var isAheadOfSections = false
-  /// The section last published, so that a scroll publishes a section once, not
-  /// once per tick.
-  @ObservationIgnored private var publishedAnchor: String?
-
   /// Where the header's heading ends, in the hosted header's own coordinates, as
   /// the header measured it. The header is hosted outside SwiftUI's diffing and
   /// built once, so it writes here, and the text view works out the title again: it
@@ -99,9 +95,17 @@ public final class ReaderController {
   /// Where the title goes. Told the last title at once when set: the text view can
   /// report before the view has set it.
   @ObservationIgnored public var titleSink: TitleSink? {
-    didSet { if let title { titleSink?.report(title.state, title.reader) } }
+    didSet {
+      if let title, let reader = title.reader.reader { titleSink?.report(title.state, reader) }
+    }
   }
-  @ObservationIgnored private var title: (state: ToolbarTitleState, reader: AnyObject)?
+  /// The last title and the coordinator it came from, weakly: the coordinator holds
+  /// this controller, and with it the whole document.
+  @ObservationIgnored private var title: (state: ToolbarTitleState, reader: WeakReader)?
+
+  private struct WeakReader {
+    weak var reader: AnyObject?
+  }
 
   /// What the selection was last reported as, so a selection dragged across the text
   /// publishes once rather than on every character.
@@ -139,9 +143,9 @@ public final class ReaderController {
     self.place = place
     let section = sections.anchor(at: line)
     isAheadOfSections = section == nil
-    guard let anchor = section ?? sections.entries.first?.anchor, anchor != publishedAnchor
+    // Once per section, not once per scroll tick.
+    guard let anchor = section ?? sections.entries.first?.anchor, anchor != self.anchor
     else { return }
-    publishedAnchor = anchor
     self.anchor = anchor
     publish(.section(anchor))
   }
@@ -170,13 +174,13 @@ public final class ReaderController {
   /// Where the title is, from `reader`, passed on at once: it is coupled to the
   /// scroll, and a hop would leave it a frame behind the text.
   public func reportTitle(_ state: ToolbarTitleState, from reader: AnyObject) {
-    title = (state, reader)
+    title = (state, WeakReader(reader: reader))
     titleSink?.report(state, reader)
   }
 
   /// `reader` has gone, and what it said of the title goes with it.
   public func releaseTitle(from reader: AnyObject) {
-    if title?.reader === reader { title = nil }
+    if title?.reader.reader === reader { title = nil }
     titleSink?.release(reader)
   }
 

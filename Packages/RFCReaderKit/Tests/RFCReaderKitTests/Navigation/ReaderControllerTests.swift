@@ -114,9 +114,9 @@ struct ReaderControllerTests {
     #expect(!controller.takeInstallCarriedOutTarget())
 
     // A text view made again arrives afresh, whatever the last one's install did.
+    driver.isInstalled = false
     controller.scroll(to: "section-3")
-    controller.driver = nil
-    _ = controller.takePendingTarget()
+    #expect(controller.takePendingTarget() != nil)
     let next = FakeDriver()
     controller.driver = next
     #expect(!controller.takeInstallCarriedOutTarget())
@@ -166,6 +166,17 @@ struct ReaderControllerTests {
     controller.titleSink = .init(report: { state, _ in reports.append(state) }, release: { _ in })
 
     #expect(reports == [.hidden])
+  }
+
+  @Test func `a title is not kept for a reader that has gone`() {
+    var reader: FakeDriver? = FakeDriver()
+    controller.reportTitle(.hidden, from: reader!)
+    reader = nil
+    var reports: [ToolbarTitleState] = []
+
+    controller.titleSink = .init(report: { state, _ in reports.append(state) }, release: { _ in })
+
+    #expect(reports.isEmpty)
   }
 
   @Test func `a released title is not told to a sink set after`() {

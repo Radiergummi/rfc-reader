@@ -272,7 +272,10 @@ struct DocumentView: View {
           takeReaderState()
           if arrivesOnTop {
             arrivesOnTop = false
-            arrive()
+            // After the update that hands the text view the folding just taken back:
+            // a scroll goes to an installed build at once, and would land in the
+            // folding it had before, which the reinstated one may fold away.
+            Task { arrive() }
           }
         } else {
           ownsReader = false
