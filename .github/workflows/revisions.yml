@@ -1,10 +1,13 @@
 name: Revisions
 
 # Scans datatracker daily for adopted drafts that intend to obsolete or update an RFC,
-# and publishes revisions.json on the `revisions` release, where the app fetches it
-# (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md). The scan record beside
-# it lets the next run read only what changed. groups.json, the groups the RFC index
-# names as datatracker describes them, is published beside it (#363).
+# and publishes revisions.json on the repository's GitHub Pages site, where the app
+# fetches it (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md). The scan
+# record beside it lets the next run read only what changed. groups.json, the groups
+# the RFC index names as datatracker describes them, is published beside it (#363).
+#
+# Pages, not a release: the repository's releases are immutable, and a file replaced
+# daily cannot live on one (decision "Datatracker data is published on GitHub Pages").
 on:
   schedule:
     - cron: "17 5 * * *"
@@ -19,22 +22,26 @@ on:
         type: boolean
         default: false
 
-# One run at a time: two would upload over each other's assets.
+# One run at a time: a deployment replaces the whole site, so two would race.
 concurrency:
   group: revisions
   cancel-in-progress: false
+
+permissions: {}
+
+env:
+  SITE: https://radiergummi.github.io/rfc-reader
 
 jobs:
   scan:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
-    # write only for uploading to the `revisions` release.
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      site: ${{ steps.site.outputs.site }}
     env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
       ALLOW_SHRINK: ${{ inputs.allow-shrink && '--allow-shrink' || '' }}
       ALLOW_GROUPS_SHRINK: ${{ inputs.allow-groups-shrink && '--allow-shrink' || '' }}
     steps:
@@ -42,29 +49,34 @@ jobs:
         with:
           persist-credentials: false
 
-      # make for the Makefile, gh for the release, SQLite's headers for corpus-build
-      # (#174). The image carries none of them.
+      # make for the Makefile, curl for the published files, SQLite's headers for
+      # corpus-build (#174). The image carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make gh libsqlite3-dev >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
 
       - name: Build corpus-build
         run: make corpus-tool
 
-      # Nothing to download on the first run. The test is for the scan itself, not the
-      # release: a release whose first upload failed has none, and is a first run too,
-      # rather than a download that fails every day until someone repairs it. Only a
-      # missing release means that: any other failure to ask fails the run, which would
-      # otherwise rescan with no previous scan and so no shrink guard.
-      - name: Download the previous scan
+      # The last published copies are the next run's baseline: the scan lets it read only
+      # what changed, and both are the shrink guards' baselines. A 404 means nothing has
+      # been published yet, and is a first run. Any other failure fails the run, which
+      # would otherwise rescan with no baseline and so no shrink guard.
+      - name: Download the previous files
         run: |
-          mkdir -p out
-          if ! assets=$(gh release view revisions --json assets --jq '.assets[].name' 2>view.err); then
-            grep -q "release not found" view.err || { cat view.err >&2; exit 1; }
-            assets=""
-          fi
-          if printf '%s\n' "$assets" | grep -qx revisions-scan.json; then
-            gh release download revisions --pattern revisions-scan.json --dir previous
+          mkdir -p out previous
+          for file in revisions-scan.json groups.json; do
+            status=$(curl -sS --retry 3 -o "previous/$file" -w '%{http_code}' "$SITE/$file")
+            case "$status" in
+              200) ;;
+              404) rm -f "previous/$file" ;;
+              *) echo "Fetching $file answered $status" >&2; exit 1 ;;
+            esac
+          done
+          if [ -f previous/revisions-scan.json ]; then
             echo "SCAN=--scan previous/revisions-scan.json" >> "$GITHUB_ENV"
+          fi
+          if [ -f previous/groups.json ]; then
+            echo "PREVIOUS_GROUPS=--previous previous/groups.json" >> "$GITHUB_ENV"
           fi
 
       # Unquoted on purpose: a flag that is empty must vanish, not become "".
@@ -73,34 +85,47 @@ jobs:
           # shellcheck disable=SC2086
           Tools/corpus-build/.build/release/corpus-build revisions --out out $SCAN $ALLOW_SHRINK
 
-      # A prerelease, so it never becomes the repository's "Latest release".
-      # --clobber deletes before it uploads: the app treats the moment between as a
-      # failed fetch and keeps its copy.
-      - name: Publish
-        run: |
-          if ! gh release view revisions >/dev/null 2>&1; then
-            gh release create revisions --prerelease --title "Revisions" \
-              --notes "Adopted drafts revising an RFC, refreshed daily by the revisions workflow."
-          fi
-          gh release upload revisions out/revisions.json out/revisions-scan.json --clobber
-
-      # The groups the index names, for the app's working-group card (#363). After the
-      # revisions are published, so a failure here costs only this file a day. The last
-      # published copy is the shrink guard's baseline, as the scan is the revisions'; the
-      # release exists by now, so a failure to ask fails the run.
-      - name: Download the previous groups
-        run: |
-          assets=$(gh release view revisions --json assets --jq '.assets[].name')
-          if printf '%s\n' "$assets" | grep -qx groups.json; then
-            gh release download revisions --pattern groups.json --dir previous-groups
-            echo "PREVIOUS_GROUPS=--previous previous-groups/groups.json" >> "$GITHUB_ENV"
-          fi
-
-      # Unquoted on purpose, as in Scan.
+      # The groups the index names, for the app's working-group card (#363). A failure
+      # here costs only this file a day: the previous copy is published again, and the
+      # run fails after the deployment, so it is still seen.
       - name: Describe groups
+        id: groups
+        continue-on-error: true
         run: |
           # shellcheck disable=SC2086
           Tools/corpus-build/.build/release/corpus-build groups --out out $PREVIOUS_GROUPS $ALLOW_GROUPS_SHRINK
 
-      - name: Publish groups
-        run: gh release upload revisions out/groups.json --clobber
+      - name: Keep the previous groups
+        if: steps.groups.outcome == 'failure'
+        run: |
+          rm -f out/groups.json
+          if [ -f previous/groups.json ]; then cp previous/groups.json out/groups.json; fi
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: out
+
+      - name: Mark the site ready
+        id: site
+        run: echo "site=ready" >> "$GITHUB_OUTPUT"
+
+      - name: Fail for the groups
+        if: steps.groups.outcome == 'failure'
+        run: |
+          echo "Describing the groups failed; the previous groups.json was published again." >&2
+          exit 1
+
+  deploy:
+    needs: scan
+    if: ${{ !cancelled() && needs.scan.outputs.site == 'ready' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
