@@ -1,3 +1,4 @@
+import AppKit
 import Benchmark
 import Foundation
 import RFCKit
@@ -129,6 +130,28 @@ let benchmarks: @Sendable () -> Void = {
     }
   } setup: {
     LegacyTextParser.parse(corpus.data("rfc5661.txt"))
+  }
+
+  // TextKit 2 laying out a whole built document at the reader's column, as a jump to
+  // its end makes the reader do.
+  for number in [9000] {
+    Benchmark("Layout: RFC \(number)") { benchmark, built in
+      iterate(benchmark) {
+        let storage = NSTextContentStorage()
+        let layout = NSTextLayoutManager()
+        let container = NSTextContainer(
+          size: CGSize(width: ReaderLayout.idealMeasure, height: 10_000_000))
+        container.lineFragmentPadding = 0
+        layout.textContainer = container
+        storage.addTextLayoutManager(layout)
+        storage.install(built.text)
+        layout.ensureLayout(for: layout.documentRange)
+        blackHole(layout.usageBoundsForTextContainer)
+      }
+    } setup: {
+      DocumentTextBuilder.build(
+        try RFCXMLParser.parse(corpus.data("rfc\(number).xml")), style: style)
+    }
   }
 }
 
