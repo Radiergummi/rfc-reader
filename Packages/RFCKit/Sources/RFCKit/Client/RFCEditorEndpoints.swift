@@ -39,7 +39,7 @@ public enum RFCEditorEndpoints {
 
   /// The repository's GitHub Pages site, where the revisions workflow publishes the
   /// files it refreshes daily.
-  static let publishedDataBase = URL(string: "https://radiergummi.github.io/rfc-reader/")!
+  static let publishedDataBase = URL(string: "https://rfc-reader.mazetti.me/")!
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC, which
   /// the revisions workflow publishes daily on the repository's Pages site.

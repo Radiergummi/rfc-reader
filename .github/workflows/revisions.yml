@@ -30,7 +30,7 @@ concurrency:
 permissions: {}
 
 env:
-  SITE: https://radiergummi.github.io/rfc-reader
+  SITE: https://rfc-reader.mazetti.me
 
 jobs:
   scan:

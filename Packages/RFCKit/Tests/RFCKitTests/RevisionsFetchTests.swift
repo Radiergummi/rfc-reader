@@ -53,6 +53,6 @@ struct RevisionsFetchTests {
   @Test func `the file is fetched from the repository's Pages site`() {
     #expect(
       RFCEditorEndpoints.revisions.absoluteString
-        == "https://radiergummi.github.io/rfc-reader/revisions.json")
+        == "https://rfc-reader.mazetti.me/revisions.json")
   }
 }
