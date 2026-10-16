@@ -8,6 +8,9 @@
 # in this machine's keychain (account rfc-reader), which never reaches CI. The disk
 # image signed is the one the workflow attested, checked before it is signed.
 #
+# The site must be deployed once before the first release (`make publish-feed`
+# deploys it without a feed), so that the feed's address answers.
+#
 # Usage: Tools/release/appcast.sh <version>, or make appcast VERSION=<version>
 #
 set -euo pipefail
@@ -19,6 +22,7 @@ feed_url="https://rfc-reader.mazetti.me/appcast.xml"
 tag="v$version"
 disk_image="RFC-Reader-$version.dmg"
 updates=".build/updates"
+mount_point="$updates/mount"
 
 step() { printf '\n==> %s\n' "$1"; }
 
@@ -26,8 +30,9 @@ step "Finding Sparkle's generate_appcast"
 make xcodeproj >/dev/null
 xcodebuild -resolvePackageDependencies -project RFCReader.xcodeproj -scheme RFCReader >/dev/null
 # This checkout's own DerivedData, which holds the Sparkle the app is built with.
+# awk reads to the end, so xcodebuild is never cut off mid-write.
 build_dir=$(xcodebuild -project RFCReader.xcodeproj -scheme RFCReader -destination 'generic/platform=macOS' -showBuildSettings 2>/dev/null \
-  | awk -F' = ' '/ BUILD_DIR /{print $2; exit}')
+  | awk -F' = ' '/ BUILD_DIR / && !found {print $2; found=1}')
 generate_appcast="${build_dir%/Build/Products}/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
 [[ -x "$generate_appcast" ]] || {
   echo "No generate_appcast at $generate_appcast." >&2
@@ -43,23 +48,28 @@ is_draft=$(gh release view "$tag" --repo "$repository" --json isDraft --jq .isDr
   exit 1
 }
 
+hdiutil detach "$mount_point" >/dev/null 2>&1 || true
 rm -rf "$updates"
 mkdir -p "$updates"
 gh release download "$tag" --repo "$repository" --pattern "$disk_image" --dir "$updates"
 
+# Made by release.yml, run for this tag, not only by some workflow of the repository.
 step "Verifying that the release workflow built it"
-gh attestation verify "$updates/$disk_image" --repo "$repository"
+gh attestation verify "$updates/$disk_image" --repo "$repository" \
+  --signer-workflow "$repository/.github/workflows/release.yml" \
+  --source-ref "refs/tags/$tag"
 
 step "Reading the build number"
-mount_point="$updates/mount"
 hdiutil attach "$updates/$disk_image" -nobrowse -readonly -mountpoint "$mount_point" >/dev/null
+trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
 build_number=$(plutil -extract CFBundleVersion raw "$mount_point/RFCReader.app/Contents/Info.plist")
 hdiutil detach "$mount_point" >/dev/null
+trap - EXIT
 echo "$tag is build $build_number"
 
 # Seeded from the published feed, so the releases before keep their entries:
 # generate_appcast keeps what the feed in its directory holds. A 404 is the first
-# release; any other failure stops here rather than publish a feed that forgot them.
+# release; anything else stops here rather than publish a feed that forgot them.
 step "Reading the published feed"
 status=$(curl -sS -o "$updates/appcast.xml" -w '%{http_code}' "$feed_url")
 case "$status" in
@@ -84,18 +94,19 @@ case "$status" in
 esac
 
 # Pinned to the release's own tag, not releases/latest, which would point every
-# entry at the newest download.
+# entry at the newest download. Every version is kept: an entry dropped is a
+# version whose users are no longer told about anything newer than theirs.
 step "Generating and signing the feed"
-"$generate_appcast" --account rfc-reader \
+"$generate_appcast" --account rfc-reader --maximum-versions 0 \
   --download-url-prefix "https://github.com/$repository/releases/download/$tag/" \
   "$updates"
 
-grep -q 'sparkle:edSignature' "$updates/appcast.xml" || {
-  echo "The feed carries no EdDSA signature; Sparkle would refuse every update." >&2
-  exit 1
-}
-grep -q "<sparkle:version>$build_number</sparkle:version>" "$updates/appcast.xml" || {
-  echo "The feed has no entry for build $build_number." >&2
+# The new entry's own signature: the older entries copied from the published feed
+# carry theirs whether or not this one was signed.
+awk -v RS='</item>' -v entry="<sparkle:version>$build_number</sparkle:version>" \
+  'index($0, entry) && /sparkle:edSignature=/ {found = 1} END {exit !found}' \
+  "$updates/appcast.xml" || {
+  echo "The feed has no signed entry for build $build_number; is the rfc-reader key in this keychain?" >&2
   exit 1
 }
 
