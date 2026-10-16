@@ -194,8 +194,8 @@ final class RFCTextViewCoordinator: NSObject {
   let foldingDelegate = FoldingDelegate()
   /// The reading mode and expanded sections last applied (#698).
   var folding = Folding()
-  /// What folding needs of the installed build, made once per build.
-  var foldingIndex: FoldingIndex?
+  /// What folding needs of the installed build: the build's own (#723).
+  var foldingIndex: FoldingIndex? { built?.foldingIndex }
   /// A folding this coordinator changed itself and asked the scene for, which the
   /// scene has not caught up with yet; see `FoldingEcho`.
   var foldingEcho = FoldingEcho()

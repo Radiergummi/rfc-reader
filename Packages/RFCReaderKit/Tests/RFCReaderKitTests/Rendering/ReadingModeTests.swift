@@ -83,12 +83,17 @@ struct ReadingModeTests {
     return (entries[parent], entries[parent + 1])
   }
 
-  /// The build makes the index once, off the main actor, for the text view and the
-  /// reader state to share (#723): it is the index of the build's own text.
+  /// The build makes the index (#723), so the text view and the reader state share
+  /// one: it is the index of the build's own text, its paragraphs and its outline.
   @Test func `a build carries the folding index of its text`() throws {
     let built = try Self.rfc8999()
-    #expect(built.foldingIndex == FoldingIndex(text: built.text, anchors: built.anchors))
-    #expect(!built.foldingIndex.entries.isEmpty)
+    let index = built.foldingIndex
+    #expect(index.paragraphs == Self.paragraphs(of: built))
+    let outline = Self.outlineEntries(of: built)
+    #expect(!outline.isEmpty)
+    #expect(index.entries.map(\.anchor) == outline.map(\.anchor))
+    #expect(index.entries.map(\.offset) == outline.map(\.offset))
+    #expect(index.length == built.text.length)
   }
 
   @Test func `normal reading hides nothing`() throws {
@@ -381,12 +386,11 @@ struct ReadingModeTests {
   @Test func `the focused section's citations are what it cites`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: ReadingStyle())
-    let index = built.foldingIndex
     var checked = 0
     for section in built.anchors.sections.entries {
       let expected = Self.modelCitations(of: section.anchor, in: document)
       #expect(
-        FocusCitations.entries(citedIn: section.anchor, in: built, index: index) == expected,
+        FocusCitations.entries(citedIn: section.anchor, in: built) == expected,
         "\(section.anchor)")
       if !expected.isEmpty { checked += 1 }
     }

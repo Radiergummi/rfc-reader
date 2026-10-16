@@ -45,7 +45,7 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
-  /// The text of the build the reader's folding index was made of (#699).
+  /// The text of the build whose folding index the reader state holds (#699, #723).
   @State private var foldedText: NSAttributedString?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
@@ -226,7 +226,7 @@ struct DocumentView: View {
     }
     guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
     else { return }
-    let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+    let cited = FocusCitations.entries(citedIn: anchor, in: built)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying
     // the document has none.

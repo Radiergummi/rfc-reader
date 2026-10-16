@@ -38,7 +38,7 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
 /// every toggle: where each paragraph starts, the outline's entries, which are the
 /// sections and the abstract, each with where its heading's paragraph starts, and the
 /// asides Implementer folds.
-public struct FoldingIndex: Sendable, Equatable {
+public struct FoldingIndex: Sendable {
   public struct Entry: Sendable, Equatable {
     public let anchor: String
     /// Where the anchor is: the heading.
