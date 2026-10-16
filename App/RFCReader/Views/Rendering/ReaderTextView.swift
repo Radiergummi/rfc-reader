@@ -52,6 +52,14 @@ import RFCReaderKit
     /// estimate under viewport layout; the engine puts it there exactly instead.
     var revealRange: ((NSRange) -> Bool)?
 
+    /// Told after every layout, the viewport's included.
+    var didLayOut: () -> Void = {}
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      didLayOut()
+    }
+
     override func scrollRangeToVisible(_ range: NSRange) {
       if revealRange?(range) == true { return }
       super.scrollRangeToVisible(range)

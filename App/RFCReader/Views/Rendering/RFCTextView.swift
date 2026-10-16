@@ -277,6 +277,13 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      // After a jump TextKit estimates the rest of the document again, and the scroll
+      // view moves its offset to keep what it shows: the title read then is read from
+      // fragments that are only put where they are by the next viewport layout, which
+      // no scroll follows. Only a change is reported, so a layout costs a lookup.
+      textView.didLayOut = { [weak coordinator = context.coordinator] in
+        coordinator?.updateToolbarTitle()
+      }
 
       let host = UIHostingController(
         rootView: context.coordinator.hostedHeader(inputs.header, in: environment))
