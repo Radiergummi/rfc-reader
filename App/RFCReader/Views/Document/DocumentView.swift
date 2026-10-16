@@ -224,8 +224,7 @@ struct DocumentView: View {
       reader.foldingIndex = built.foldingIndex
       foldedText = built.text
     }
-    guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
-    else { return }
+    guard let anchor = reader.folding.focusedAnchor(in: built.foldingIndex) else { return }
     let cited = FocusCitations.entries(citedIn: anchor, in: built)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying

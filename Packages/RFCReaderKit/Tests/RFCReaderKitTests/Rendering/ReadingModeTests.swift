@@ -94,6 +94,17 @@ struct ReadingModeTests {
     #expect(index.entries.map(\.anchor) == outline.map(\.anchor))
     #expect(index.entries.map(\.offset) == outline.map(\.offset))
     #expect(index.length == built.text.length)
+    // And all of it is what an index made of the finished build afterwards holds,
+    // so nothing the build does after making it changes what it describes.
+    let afterwards = FoldingIndex(text: built.text, anchors: built.anchors)
+    #expect(index.paragraphs == afterwards.paragraphs)
+    #expect(index.entries == afterwards.entries)
+    #expect(index.asides == afterwards.asides)
+    let withAsides = try Self.rfc9271()
+    #expect(!withAsides.foldingIndex.asides.isEmpty)
+    #expect(
+      withAsides.foldingIndex.asides
+        == FoldingIndex(text: withAsides.text, anchors: withAsides.anchors).asides)
   }
 
   @Test func `normal reading hides nothing`() throws {

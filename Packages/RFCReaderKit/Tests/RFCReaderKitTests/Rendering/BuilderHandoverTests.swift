@@ -27,6 +27,9 @@ struct BuilderHandoverTests {
 
     #expect(detached.text.string == onMain.text.string)
     #expect(detached.anchors == onMain.anchors)
+    #expect(detached.foldingIndex.paragraphs == onMain.foldingIndex.paragraphs)
+    #expect(detached.foldingIndex.entries == onMain.foldingIndex.entries)
+    #expect(detached.foldingIndex.asides == onMain.foldingIndex.asides)
     #expect(
       Self.runs(of: detached.text) == Self.runs(of: onMain.text),
       "\(Self.fontsWhereRunsDiffer(offMain: detached.text, onMain: onMain.text))")
