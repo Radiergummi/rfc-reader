@@ -1,0 +1,113 @@
+name: Release
+
+# On a version tag, builds the Mac app with Developer ID, notarizes it, attests its
+# provenance and makes a draft release with the disk image (#911). Adapted from
+# meetingFocus's release workflow.
+#
+# Two signatures, kept apart: GitHub attests the build, so a download can be traced
+# to the commit and the run that made it; the maintainer signs the update feed on
+# their own machine, so neither this workflow nor that machine alone can ship an
+# update. The release is a draft for that reason: the maintainer publishes it, which
+# makes it immutable, and only then signs the feed.
+on:
+  push:
+    tags: ["v*"]
+
+# One release at a time; a tag pushed twice must not race itself.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release:
+    name: Build, notarize and attest
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write # the draft release
+      id-token: write # the token the attestation is bound to
+      attestations: write # the attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The Xcode the app build in ci-macos.yml uses, for the same reason.
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+
+      - name: Install XcodeGen
+        run: make xcodegen-install
+
+      # The tag says which version ships, and project.yml says which version the app
+      # calls itself; a release where they differ is refused before anything is signed.
+      - name: Check the version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          declared=$(sed -n 's/.*CFBundleShortVersionString: &version "\(.*\)".*/\1/p' project.yml)
+          if [ "$version" != "$declared" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match version $declared in project.yml." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Gates before anything is signed: a signed artifact is one somebody might install.
+      - name: Test
+        run: make test test-app
+
+      - name: Install the signing material
+        env:
+          SIGNING_DATA: ${{ secrets.SIGNING_DATA }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          APPLE_API_KEY_DATA: ${{ secrets.APPLE_API_KEY_DATA }}
+          APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+        run: .github/scripts/signing.sh
+
+      # The run number is the build number: it only grows, and Sparkle orders
+      # updates by CFBundleVersion, so two releases never share one.
+      - name: Build, notarize and package
+        id: build
+        env:
+          NOTARY_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        # Named, so the step runs with pipefail: by default a failing script would
+        # pass as tee's success.
+        shell: bash
+        run: |
+          .github/scripts/release.sh | tee "$RUNNER_TEMP/release.log"
+          dmg=$(tail -1 "$RUNNER_TEMP/release.log")
+          test -f "$dmg"
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 "$dmg" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # Binds this disk image to this commit, workflow and run, which anyone can
+      # check with `gh attestation verify`.
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.build.outputs.dmg }}
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DMG: ${{ steps.build.outputs.dmg }}
+          SHA256: ${{ steps.build.outputs.sha256 }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          sed -e "s|VERSION_PLACEHOLDER|$VERSION|g" \
+            -e "s|SHA256_PLACEHOLDER|$SHA256|g" \
+            -e "s|RUN_URL_PLACEHOLDER|$RUN_URL|g" \
+            -e "s|ATTESTATION_URL_PLACEHOLDER|$ATTESTATION_URL|g" \
+            -e "s|COMMIT_PLACEHOLDER|$COMMIT|g" \
+            .github/templates/release.md > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" "$DMG" --repo "$GITHUB_REPOSITORY" \
+            --draft --verify-tag --title "RFC Reader $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
