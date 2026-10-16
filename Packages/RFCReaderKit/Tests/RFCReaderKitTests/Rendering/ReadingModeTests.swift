@@ -83,6 +83,14 @@ struct ReadingModeTests {
     return (entries[parent], entries[parent + 1])
   }
 
+  /// The build makes the index once, off the main actor, for the text view and the
+  /// reader state to share (#723): it is the index of the build's own text.
+  @Test func `a build carries the folding index of its text`() throws {
+    let built = try Self.rfc8999()
+    #expect(built.foldingIndex == FoldingIndex(text: built.text, anchors: built.anchors))
+    #expect(!built.foldingIndex.entries.isEmpty)
+  }
+
   @Test func `normal reading hides nothing`() throws {
     let built = try Self.rfc8999()
     #expect(Folding(mode: .normal).hidden(in: FoldingIndex(built)).isEmpty)
