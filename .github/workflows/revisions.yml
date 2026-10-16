@@ -103,8 +103,8 @@ jobs:
       # was published rather than trusting a record of what was not.
       - name: Publish
         env:
-          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
           SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           for file in revisions.json revisions-scan.json groups.json; do

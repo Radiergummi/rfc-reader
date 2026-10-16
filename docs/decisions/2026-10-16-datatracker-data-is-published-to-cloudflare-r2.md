@@ -10,7 +10,7 @@ GitHub Pages was tried first and dropped. A Pages deployment replaces the whole 
 A bucket is written one object at a time: each run replaces its own files and nothing else, so the website on `rfc-reader.mazetti.me` is deployed on its own.
 A branch served from raw.githubusercontent.com would have meant a workflow force-pushing a branch every day.
 
-The workflow writes through R2's S3 API, signed by `curl --aws-sigv4`, with an R2 API token scoped to the bucket: the repository secrets `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`.
+The workflow writes through R2's S3 API, signed by `curl --aws-sigv4`, with an R2 API token scoped to the bucket: the repository variables `CLOUDFLARE_ACCOUNT_ID` and `R2_ACCESS_KEY_ID` and the secret `R2_SECRET_ACCESS_KEY`.
 `revisions.json` is written before the scan record that describes it, so a run that fails between the two makes the next one rescan rather than trust a record of what was not published.
 The next run reads its baselines, the scan record and the last `groups.json`, back from the public domain, where a 404 means a first run.
 A failure to describe the groups leaves the previous `groups.json` in the bucket and fails the run after the rest is published, so the revisions still go out and the failure is still seen.
