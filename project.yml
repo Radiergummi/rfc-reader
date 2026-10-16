@@ -27,6 +27,11 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: "YES"
     LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
     DEVELOPMENT_TEAM: TH593VRB6W
+    # The build number, 1 for every local build; the release workflow passes its
+    # run number (#911).
+    CURRENT_PROJECT_VERSION: "1"
+    # Notarization requires the hardened runtime; it applies to macOS only.
+    ENABLE_HARDENED_RUNTIME: "YES"
 
 packages:
   RFCKit:
@@ -58,9 +63,11 @@ targets:
       properties:
         CFBundleDisplayName: RFC Reader
         # The version, set here only: XcodeGen writes these into Info.plist as they
-        # are, so a MARKETING_VERSION build setting beside them was never read.
+        # are, so a MARKETING_VERSION build setting beside them was never read. The
+        # build number is the one build setting, CURRENT_PROJECT_VERSION, so that the
+        # release workflow can set it per release: Sparkle orders updates by it (#911).
         CFBundleShortVersionString: &version "0.1.0"
-        CFBundleVersion: &build "1"
+        CFBundleVersion: &build $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.reference
         # The contact card an author chip opens can add the author to Contacts (#19).
         NSContactsUsageDescription: RFC Reader adds an RFC author to your contacts when you ask it to.
