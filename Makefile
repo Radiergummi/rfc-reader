@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install appcast publish-feed trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -363,6 +363,16 @@ install: build-app
 	  rm -rf '/Applications/$(SCHEME).app'; \
 	  cp -R "$$app" /Applications/; \
 	  echo "installed /Applications/$(SCHEME).app"
+
+## Sign the update feed for a published release, into site/public (VERSION=x.y.z)
+# On the maintainer's machine, whose keychain holds the feed's key (#911).
+appcast:
+	@test -n "$(VERSION)" || { echo "usage: make appcast VERSION=x.y.z" >&2; exit 1; }
+	Tools/release/appcast.sh $(VERSION)
+
+## Deploy the site and its update feed to rfc-reader.mazetti.me
+publish-feed:
+	Tools/release/publish-feed.sh
 
 ## Record a Time Profiler trace of a scripted session and print the signposts
 # Release, because that is what ships and what the numbers should describe; a
