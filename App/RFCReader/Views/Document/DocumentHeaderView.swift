@@ -89,12 +89,23 @@ struct DocumentHeaderView: View {
         if let group = identity.workingGroup {
           Text(group)
         }
-        if !identity.documentErrata.isEmpty {
-          DocumentErrataChip(items: identity.documentErrata)
-        }
+        #if os(macOS)
+          if !identity.documentErrata.isEmpty {
+            DocumentErrataChip(items: identity.documentErrata)
+          }
+        #endif
       }
       .font(.subheadline)
       .foregroundStyle(.secondary)
+      #if !os(macOS)
+        // A line of its own: beside the rest it wraps on an iPhone in portrait.
+        if !identity.documentErrata.isEmpty {
+          DocumentErrataChip(items: identity.documentErrata)
+            .fixedSize()
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+      #endif
       if !identity.authors.isEmpty {
         AuthorChips(authors: identity.authors)
           .font(.subheadline)
@@ -117,9 +128,9 @@ struct DocumentHeaderView: View {
 }
 
 /// The whole document's errata (#387), those naming no section it has: a chip by the
-/// date, worded as a heading's is, which lists them in a popover on macOS, and in a
-/// sheet the scene presents on iOS, where the header cannot present
-/// (`GlossaryPresentation`).
+/// date on macOS, and on a line of its own under it on iOS, worded as a heading's is,
+/// which lists them in a popover on macOS, and in a sheet the scene presents on iOS,
+/// where the header cannot present (`GlossaryPresentation`).
 private struct DocumentErrataChip: View {
   let items: [ErrataSummary.Item]
   @Environment(NavigationModel.self) private var navigation
