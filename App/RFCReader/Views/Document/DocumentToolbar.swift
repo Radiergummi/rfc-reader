@@ -113,7 +113,9 @@ import SwiftUI
         Divider()
         MenuSections(
           sections: DocumentMenus.more(
-            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            showsOriginal: reader.showOriginal,
+            showsTranslation: reader.showTranslation,
+            errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           perform: perform)
         Divider()

@@ -24,7 +24,8 @@ extension DocumentTextBuilder {
     let labeled = Self.labeledAside(blocks)
     // A paragraph the label was all of goes, and its anchor lands on the caption.
     mark(labeled.anchor)
-    appendAsideCaption(labeled.caption, indent: indent + style.indentStep)
+    appendAsideCaption(
+      labeled.caption == "Notes" ? labels.notes : labels.note, indent: indent + style.indentStep)
     appendBlocks(labeled.blocks, indent: indent + style.indentStep)
     decorate(from: start, with: .aside)
     // As `decorate` does: a nested aside has claimed its own span already.

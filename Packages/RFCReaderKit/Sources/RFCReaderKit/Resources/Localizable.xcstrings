@@ -2553,6 +2553,16 @@
         }
       }
     },
+    "Translate" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzen"
+          }
+        }
+      }
+    },
     "Try again in a moment." : {
       "localizations" : {
         "de" : {

@@ -77,7 +77,7 @@ Reference
 
 - **Internet-Drafts** from the Datatracker, with the same renderer, and "what changed" diffs between draft versions or between a draft and the RFC it became.
 - **On-device intelligence** via the Foundation Models framework: summarize a section, explain a term in context, "which sections of RFC 9110 replaced Section 5.1 of RFC 7231". Everything stays on device, and every answer links to the text it came from. Worth doing only if it can be honest about its sources.
-- **Translation** of a selection via the Translation framework, for non-native readers.
+- **Translation** via the Translation framework, for non-native readers: of a selection, and of the whole document on demand, which is built (#749, [the decision](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)).
 - **visionOS**: a reading room with a spec pinned next to your code is a genuinely good use of the platform.
 - **Pencil annotation** on iPad, kept as an overlay per section so it survives re-rendering.
 

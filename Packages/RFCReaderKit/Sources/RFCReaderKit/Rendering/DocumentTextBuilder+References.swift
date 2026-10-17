@@ -6,7 +6,7 @@ extension DocumentTextBuilder {
     mark(figure.anchor)
     let start = output.length
     appendBlocks(figure.blocks, indent: indent)
-    let caption = Self.caption("Figure", number: figure.number, title: figure.title)
+    let caption = Self.caption(labels.figure, number: figure.number, title: figure.title)
     // Tag any artwork the figure just contributed with the caption, so the
     // Diagrams rotor can name it.
     if let caption {

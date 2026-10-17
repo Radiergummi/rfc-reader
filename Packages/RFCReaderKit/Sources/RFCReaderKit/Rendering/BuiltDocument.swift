@@ -44,11 +44,17 @@ public struct BuiltDocument: @unchecked Sendable {
   /// paragraph is set in by: the text container is this much wider than the column,
   /// on its leading side. Zero in a build that hangs nothing.
   public let sectionNumberHang: CGFloat
+  /// The labels a translated document's build was given (#749), nil for the
+  /// original's.
+  public let translation: DocumentLabels?
+  /// Whether this is a translated document's build, whose sentences are not the
+  /// original's (`RequirementBands`).
+  public var isTranslation: Bool { translation != nil }
 
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
-    sectionNumberHang: CGFloat = 0
+    sectionNumberHang: CGFloat = 0, translation: DocumentLabels? = nil
   ) {
     self.text = text
     self.anchors = anchors
@@ -56,6 +62,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
+    self.translation = translation
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the
@@ -64,7 +71,8 @@ public struct BuiltDocument: @unchecked Sendable {
     (backlinks[anchor] ?? []).compactMap { backlink in
       guard let section = backlink.section else {
         return BacklinkEntry(
-          anchor: DocumentTextBuilder.abstractAnchor, heading: "Abstract", count: backlink.count)
+          anchor: DocumentTextBuilder.abstractAnchor, heading: (translation ?? .english).abstract,
+          count: backlink.count)
       }
       guard let heading = anchors.heading(of: section) else { return nil }
       return BacklinkEntry(anchor: section, heading: heading, count: backlink.count)

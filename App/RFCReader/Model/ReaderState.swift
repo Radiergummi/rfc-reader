@@ -135,6 +135,13 @@ final class ReaderState {
     didSet { titleOwnership.showsOriginal = showOriginal }
   }
 
+  /// The document translated into the reader's language (#749) instead of the
+  /// English. Toolbar state, read by the reader, which translates it the first time.
+  var showTranslation = false
+  /// Whether the build on screen is the translation, which has no quote to copy:
+  /// not until it is made, though `showTranslation` is on.
+  var readsTranslation = false
+
   /// Why the RFC is read as its PDF or PostScript original, if it is (#207). Set by
   /// the reader as the load starts and ends, and again when the index arrives. A
   /// scan's page shows the header the index gives, so its title stays out of the
@@ -229,6 +236,7 @@ final class ReaderState {
   func clear() {
     titleOwnership.close()
     sections = []
+    readsTranslation = false
     groups = []
     requirements = nil
     exportFormats = [.pdf]

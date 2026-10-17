@@ -71,6 +71,9 @@ public final class DocumentTextBuilder {
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
+  /// The backlinks to use instead of the document's own: a translation's, which are
+  /// its original's (#749).
+  var givenBacklinks: [String: [Backlink]]?
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -118,13 +121,18 @@ public final class DocumentTextBuilder {
   /// The color of a character a decorated block draws over instead of showing.
   public static let hiddenColor = PlatformColor.clear
 
+  /// The words the builder writes into the body itself: English, or a
+  /// translation's (#749).
+  let labels: DocumentLabels
+
   init(
     style: ReadingStyle, choices: PresentationChoices = .defaults,
-    hints: ArtworkHints = .bundled
+    hints: ArtworkHints = .bundled, labels: DocumentLabels = .english
   ) {
     self.style = style
     self.choices = choices
     self.hints = hints
+    self.labels = labels
   }
 
   /// - Parameter title: a title block to open the text with. The reader has none —
@@ -132,13 +140,38 @@ public final class DocumentTextBuilder {
   ///   above the text, so a print passes one (#375).
   /// - Parameter choices: the blocks the reader asked to see as their source.
   /// - Parameter hints: reviewed artwork types; tests pass their own.
+  /// - Parameter translation: for a translated document (#749), the labels its
+  ///   translation gave; nil for the original, which is English throughout.
   public static func build(
     _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    translation: DocumentLabels? = nil
+  ) -> BuiltDocument {
+    let builder = DocumentTextBuilder(
+      style: style, choices: choices, hints: hints, labels: translation ?? .english)
+    return build(document, title: title, translation: translation, with: builder)
+  }
+
+  /// A translated document's build (#749), in its labels, with the original's
+  /// backlinks: a reference the translation lost the words of is still one the
+  /// section makes.
+  public static func build(
+    _ translated: TranslatedDocument, style: ReadingStyle,
     choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
   ) -> BuiltDocument {
-    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
-    if style.emitsLinks {
-      builder.hang = style.sectionNumberHang
+    let builder = DocumentTextBuilder(
+      style: style, choices: choices, hints: hints, labels: translated.labels)
+    builder.givenBacklinks = translated.backlinks
+    return build(
+      translated.document, title: nil, translation: translated.labels, with: builder)
+  }
+
+  private static func build(
+    _ document: RFCDocument, title: TitleBlock?, translation: DocumentLabels?,
+    with builder: DocumentTextBuilder
+  ) -> BuiltDocument {
+    if builder.style.emitsLinks {
+      builder.hang = builder.style.sectionNumberHang
     }
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
@@ -151,7 +184,7 @@ public final class DocumentTextBuilder {
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
       keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
-      sectionNumberHang: builder.hang)
+      sectionNumberHang: builder.hang, translation: translation)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -247,7 +280,7 @@ extension DocumentTextBuilder {
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
     grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
-      backlinks = Backlinks.within(document)
+      backlinks = givenBacklinks ?? Backlinks.within(document)
       glossMatcher = GlossMatcher(document.definedTerms, abbreviations: document.abbreviations)
       hasAbbreviations = !document.abbreviations.isEmpty
       for term in document.definedTerms.values {
@@ -278,7 +311,7 @@ extension DocumentTextBuilder {
     glossedInSection = []
     mark(Self.abstractAnchor)
     keepsWithNext.insert(output.length)
-    append("Abstract\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
+    append(labels.abstract + "\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
     // Emitted quiet, rather than emitted and then quietened. A post-pass has to
     // guess which runs "count" — matching against a dynamic color to find the
     // ones to step back — and anything the builder *measures* against the style
@@ -347,6 +380,15 @@ extension DocumentTextBuilder {
     body()
   }
 
+  /// `Section.numberPrefix`, with an appendix's word in the labels' language.
+  private func numberPrefix(of section: Section) -> String {
+    let prefix = section.numberPrefix
+    let english = section.appendixWord.label
+    guard section.isAppendix, prefix.hasPrefix(english) else { return prefix }
+    let word = section.appendixWord == .annex ? labels.annex : labels.appendix
+    return word + prefix.dropFirst(english.count)
+  }
+
   private func appendSection(_ section: Section, depth: Int) {
     // The bibliography is not part of the reading flow: every citation in the
     // prose already links straight to the document it names, so the section is
@@ -355,7 +397,10 @@ extension DocumentTextBuilder {
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
     glossedInSection = []
-    mark(section.anchor, heading: section.displayTitle, place: section.place, depth: depth)
+    let numberPrefix = numberPrefix(of: section)
+    mark(
+      section.anchor, heading: numberPrefix + section.headingWords.plainText, place: section.place,
+      depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
@@ -371,10 +416,14 @@ extension DocumentTextBuilder {
       hangsNumber: hangingNumber != nil)
     if let hangingNumber {
       appendHangingNumber(
-        hangingNumber, of: section.anchor, copiedAs: section.numberPrefix, attributes: attributes)
+        hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
       output.append(inlineRuns(section.headingWords, base: attributes))
     } else {
-      output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+      let words = section.headingWords
+      let title: [Inline] =
+        numberPrefix.isEmpty
+        ? words : words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
+      output.append(inlineRuns(title, base: attributes))
     }
     append("\n", attributes)
     if let citing {
