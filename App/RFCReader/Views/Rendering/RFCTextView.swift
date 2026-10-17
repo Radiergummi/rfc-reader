@@ -311,6 +311,10 @@ struct ReaderInputs {
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
+      // the reader on screen's.
+      let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
+      (textView as? ReaderTextView)?.findReader = findReader
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
