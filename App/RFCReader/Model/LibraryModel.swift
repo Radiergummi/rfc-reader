@@ -272,6 +272,12 @@ final class LibraryModel {
     wantedOfflineChanged()
   }
 
+  /// Whether Available Offline lists `id`: what a library row marks as offline
+  /// (#769). Only an RFC: the list holds the RFCs a series names, not the series.
+  func isAvailableOffline(_ id: DocumentID) -> Bool {
+    id.series == .rfc && availableOfflineNumbers.contains(id.number)
+  }
+
   /// Lists what is wanted offline, and brings the disk in line with it.
   private func wantedOfflineChanged() {
     availableOfflineNumbers = Set(wantedOffline.filter { $0.series == .rfc }.map(\.number))

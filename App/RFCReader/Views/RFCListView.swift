@@ -118,8 +118,10 @@ struct RFCListView: View {
     let row = { (row: LibraryRow, showsYear: Bool) in
       OfflineStated(document: row.id, isShown: showsOfflineState) { offline in
         RFCRow(
-          row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
-          filter: shown.filter, offline: offline
+          row: row, isBookmarked: bookmarked.contains(row.id),
+          // Available Offline's own rows say where their bodies stand instead.
+          isAvailableOffline: !showsOfflineState && library.isAvailableOffline(row.id),
+          showsYear: showsYear, filter: shown.filter, offline: offline
         ) { library.downloadNow(row.id) }
       }
       .tag(row.id)
@@ -504,6 +506,9 @@ private struct OfflineStated<Content: View>: View {
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool
+  /// Whether Available Offline lists it, marked beside the bookmark (#769): what
+  /// can be opened without a network.
+  var isAvailableOffline = false
   /// False under a year's header, which already says it (#347).
   var showsYear = true
   /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
@@ -581,6 +586,9 @@ struct RFCRow: View {
           if isBookmarked {
             Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
           }
+          if isAvailableOffline {
+            offlineMark.font(.caption)
+          }
         }
       #endif
       if let offline {
@@ -591,7 +599,9 @@ struct RFCRow: View {
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(row.accessibilityLabel(isBookmarked: isBookmarked))
+    .accessibilityLabel(
+      row.accessibilityLabel(isBookmarked: isBookmarked, isAvailableOffline: isAvailableOffline)
+    )
     .accessibilityValue(offline.map { Text(verbatim: $0.description()) } ?? Text(verbatim: ""))
     .accessibilityActions {
       // The row is one element, so its button is reached as an action of it.
@@ -630,12 +640,21 @@ struct RFCRow: View {
         if isBookmarked {
           Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
         }
+        if isAvailableOffline {
+          offlineMark.font(.caption2)
+        }
         if showsYear {
           Text(String(row.date.year)).font(.caption).foregroundStyle(.tertiary)
         }
       }
     }
   #endif
+
+  /// Quieter than the bookmark, which the reader set on this row: this says only
+  /// what the device holds.
+  private var offlineMark: some View {
+    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.secondary)
+  }
 
   private var title: some View {
     Text(row.title)

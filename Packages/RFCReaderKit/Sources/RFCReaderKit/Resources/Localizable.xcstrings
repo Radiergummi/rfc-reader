@@ -595,6 +595,16 @@
         }
       }
     },
+    "Available offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
+    },
     "BCP Series" : {
       "localizations" : {
         "de" : {
