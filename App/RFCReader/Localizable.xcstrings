@@ -130,6 +130,46 @@
         }
       }
     },
+    "%lld RFCs could not be indexed. Index All RFCs tries them again." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC konnte nicht indiziert werden. „Alle RFCs indizieren“ versucht es erneut."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs konnten nicht indiziert werden. „Alle RFCs indizieren“ versucht es erneut."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC could not be indexed. Index All RFCs tries it again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs could not be indexed. Index All RFCs tries them again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld documents" : {
       "localizations" : {
         "de" : {
@@ -476,6 +516,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle Schlüsselwörter"
+          }
+        }
+      }
+    },
+    "All RFCs are indexed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs sind indiziert."
           }
         }
       }
@@ -1171,6 +1221,16 @@
         }
       }
     },
+    "Full-Text Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex"
+          }
+        }
+      }
+    },
     "General" : {
       "localizations" : {
         "de" : {
@@ -1257,6 +1317,96 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Im Text"
+          }
+        }
+      }
+    },
+    "Index All RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren"
+          }
+        }
+      }
+    },
+    "Index All RFCs…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren …"
+          }
+        }
+      }
+    },
+    "Index all RFCs?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren?"
+          }
+        }
+      }
+    },
+    "Indexing %lld of %lld RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld von %#@total@ indiziert"
+          },
+          "substitutions" : {
+            "total" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg RFC"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg RFCs"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indexing %1$lld of %#@total@"
+          },
+          "substitutions" : {
+            "total" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg RFC"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg RFCs"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2221,6 +2371,16 @@
         }
       }
     },
+    "Remove" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entfernen"
+          }
+        }
+      }
+    },
     "Remove All" : {
       "localizations" : {
         "de" : {
@@ -2237,6 +2397,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle Offline-Dokumente entfernen …"
+          }
+        }
+      }
+    },
+    "Remove Full-Text Index…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex entfernen …"
           }
         }
       }
@@ -2267,6 +2437,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aus Sammlung entfernen"
+          }
+        }
+      }
+    },
+    "Remove the full-text index?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex entfernen?"
           }
         }
       }
@@ -2561,6 +2741,16 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhalten"
+          }
+        }
+      }
+    },
     "Stop Comparing with %@" : {
       "localizations" : {
         "de" : {
@@ -2597,6 +2787,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße"
+          }
+        }
+      }
+    },
+    "The %lld RFCs not yet indexed are downloaded when the network is not metered, or read from the legacy pack, and only their text is kept. You can stop at any time and go on later." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Der %lld noch nicht indizierte RFC wird geladen, sobald das Netzwerk nicht getaktet ist, oder aus dem Legacy-Paket gelesen, und nur sein Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Die %lld noch nicht indizierten RFCs werden geladen, sobald das Netzwerk nicht getaktet ist, oder aus dem Legacy-Paket gelesen, und nur ihr Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %lld RFC not yet indexed is downloaded when the network is not metered, or read from the legacy pack, and only its text is kept. You can stop at any time and go on later."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %lld RFCs not yet indexed are downloaded when the network is not metered, or read from the legacy pack, and only their text is kept. You can stop at any time and go on later."
+                }
+              }
+            }
           }
         }
       }
@@ -2647,6 +2877,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Dokumente, die dieses normativ zitiert, in der Reihenfolge, in der sie zu lesen sind."
+          }
+        }
+      }
+    },
+    "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Index behält nur die RFCs auf diesem Gerät, und die Suche findet Text in diesen. „Alle RFCs indizieren“ lädt den Rest erneut."
           }
         }
       }

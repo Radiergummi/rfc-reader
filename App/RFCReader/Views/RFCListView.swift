@@ -107,8 +107,14 @@ struct RFCListView: View {
     // it does not have does not read as "no RFC says this".
     let searched = textFound.map { found in
       SectionResults.searched(
-        found.searched, of: found.narrowedTo ?? library.index?.rfcs.count ?? 0)
+        found.searched, of: found.narrowedTo ?? library.indexableRFCs.count)
     }
+    // While the index holds fewer than the search could look in, the one way to have
+    // it look in the rest.
+    let offersIndexAll =
+      textFound.map { found in
+        found.searched < (found.narrowedTo ?? library.indexableRFCs.count)
+      } ?? false
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
@@ -212,7 +218,12 @@ struct RFCListView: View {
             Text("In the Text")
           }
         } footer: {
-          Text(verbatim: searched)
+          VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: searched)
+            if offersIndexAll {
+              IndexAllRFCsControl(library: library)
+            }
+          }
         }
       }
       // Where Mail says when it last checked: after the last row, scrolled to
@@ -265,6 +276,10 @@ struct RFCListView: View {
               Text(verbatim: searched)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.bottom, offersIndexAll ? 0 : nil)
+            }
+            if offersIndexAll {
+              IndexAllRFCsControl(library: library)
                 .padding(.bottom)
             }
           }
