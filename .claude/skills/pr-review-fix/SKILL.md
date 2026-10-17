@@ -1,6 +1,6 @@
 ---
 name: pr-review-fix
-description: Review every open pull request of this repository (or the numbers given) with a subagent each - code-review at level high, then simplify, fix what is clearly right, verify as CI does, commit signed and push back to the PR's branch, have a second agent re-review those fixes - and bring the maintainer a verdict per PR (merge, re-review, hand check, blocked) and one list of the decisions that have no obvious answer. A `gh stack` stack gets one subagent that works it bottom-up and rebases each fix up the stack. Use when asked to "review the open PRs", "review and fix PR N", or "/pr-review-fix [N...]".
+description: Review every open pull request of this repository (or the numbers given) with a subagent each - code-review at level high, then simplify, fix what is clearly right, verify as CI does, commit signed and push back to the PR's branch, have a second agent re-review those fixes - and bring the maintainer a verdict per PR (merge, hand check, re-review, blocked, question) and one list of the decisions that have no obvious answer. A `gh stack` stack gets one subagent that works it bottom-up and rebases each fix up the stack. Use when asked to "review the open PRs", "review and fix PR N", or "/pr-review-fix [N...]".
 ---
 
 # Review and fix pull requests
@@ -45,8 +45,8 @@ Steps
 6. Commit in the repo's style, ending with the Co-Authored-By line. Sign it; if Secretive is locked, `git -c gpg.format=openpgp -c user.signingkey=8F4ED9558B0722C0 commit ...`. Never unsigned, never a config change.
 7. `git status -sb` shows BRANCH, then `git push origin BRANCH`. No force-push.
 8. If the PR description now says something untrue, fix it with `gh pr edit N --body-file`.
-9. Wait for CI on the head you pushed (or on the current head, if you pushed nothing): one `gh pr checks N --watch`. A failing check is fixed like any finding, or reported; it is never dismissed as unrelated without the log line that shows it.
-10. Leave the PR a draft. The orchestrator sets ready or draft from the verdict.
+9. Unless you leave a question for the maintainer, mark the PR ready (`gh pr ready N`): `ci-macos.yml` skips its jobs, the app builds and the iOS Simulator tests among them, on a draft, so a draft has no CI to wait for. Then wait for CI on the head you pushed (or on the current head, if you pushed nothing), polling `gh pr checks N` until nothing is pending; a single `--watch` can outlast a tool's timeout. A failing check is fixed like any finding, or reported; it is never dismissed as unrelated without the log line that shows it.
+10. A PR you leave a question on stays a draft, and says so in the report: its CI has not run.
 
 Do not decide on assumptions: product or UX behaviour, design tradeoffs, scope changes, anything contradicting the PR's or issue's intent, and anything touching a decision in docs/ARCHITECTURE.md or docs/decisions/ are left alone and reported as questions with the options and your recommendation.
 
@@ -74,21 +74,22 @@ Scope: `git diff BEFORE..origin/BRANCH`. Look hardest at FOCUS (the fixes the re
 
 Work only in WORKTREE, clean and at or fast-forwardable to `origin/BRANCH`; otherwise stop and report. Review for correctness bugs, regressions the fixes introduced, broken repository rules (CLAUDE.md), and tests that pass without testing what they claim; `Skill(skill: "code-review")` may help, posting nothing to GitHub. Verify every finding yourself.
 
-Fix only a clear, local bug, test first where the rules allow, verified as CI does (the main prompt's step 5), committed signed and pushed after checking the PR is still open. Anything larger, and any design or product question, is reported. Then one `gh pr checks N --watch` on the final head. Leave the draft state alone.
+Fix only a clear, local bug, test first where the rules allow, verified as CI does (the main prompt's step 5), committed signed and pushed after checking the PR is still open. Anything larger, and any design or product question, is reported. Then poll `gh pr checks N` on the final head until nothing is pending. Leave the PR ready: it is ready while it is re-reviewed, since the macOS CI jobs skip a draft.
 
 End with exactly one verdict, as defined in the skill's Verdicts section, with one sentence of reasoning, and for **hand check** the exact steps. Report each finding (fixed / not fixed and why), commits pushed and the CI result.
 </re-review-prompt>
 
 ## Verdicts
 
-Every PR ends the run with exactly one, from the last report on it:
+Every PR ends the run with exactly one, from the last report on it. Ready or draft only says whether CI can run (`ci-macos.yml` skips a draft) and whether the maintainer owes an answer; the verdict is what says merge:
 
 | Verdict | When | PR state |
 |---|---|---|
 | **merge** | CI green on the final head; the fixes were none or trivial, or a re-review passed them; nothing unverified that could hide a user-visible regression | ready |
 | **hand check** | the code holds up, but only the running app or a device can confirm a behavior that would be a user-visible regression if wrong; the steps are named | ready, with the steps in the hand-over |
-| **re-review** | logic fixes nobody else has read, or logic the reviewer could not convince itself of | draft |
-| **blocked** | CI fails, an unfixed bug, a conflict, or a maintainer's question | draft |
+| **re-review** | logic fixes nobody else has read, or logic the reviewer could not convince itself of | ready, so CI runs; the hand-over says not to merge it yet |
+| **blocked** | CI fails, an unfixed bug, or a conflict | ready while an agent fixes it and CI must run; draft if it waits on the maintainer |
+| **question** | a decision only the maintainer can make | draft, with the question in the hand-over |
 
 A small PR in tooling, docs or benchmarks, with CI green, is **merge** even with unverified behavior, since nothing ships. Size alone never makes a verdict: a 50-line change to the build lifecycle can need a re-review where 800 lines of view copy do not.
 
@@ -117,6 +118,6 @@ Report per PR, bottom first, and say which rebases and pushes carried which fix 
 
 ## 4. Hand over
 
-When every PR has a verdict, lead with them, grouped: **merge** first (the PRs the maintainer can merge without reading), then **hand check** with each one's steps, then **re-review** and **blocked** with the reason in one line. Then the whole question list at once, grouped by PR, each with the options and the agent's recommendation.
+When every PR has a verdict, lead with them, grouped: **merge** first (the PRs the maintainer can merge without reading), then **hand check** with each one's steps, then **re-review**, **blocked** and **question** with the reason in one line. A ready PR is not a merge verdict; only this list is. Then the whole question list at once, grouped by PR, each with the options and the agent's recommendation.
 
 When the maintainer answers, resume that PR's agent with `SendMessage` to apply the answer, verify as in step 5, push and wait for CI. An answer applied as code is a logic fix: it goes to a re-review before the PR can be **merge**.
