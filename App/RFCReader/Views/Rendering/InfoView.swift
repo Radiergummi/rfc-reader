@@ -664,6 +664,8 @@ private struct OfflineSection: View {
   @State private var downloadFailed = false
   /// Whether that was for want of room on the disk rather than a failed fetch.
   @State private var hadNoRoom = false
+  /// Whether iOS asks before it stops keeping the copy (#763).
+  @State private var confirmsStopping = false
 
   private var isKept: Bool {
     document.series == .rfc && library.offlineMarks.contains(document)
@@ -672,7 +674,7 @@ private struct OfflineSection: View {
   var body: some View {
     InfoSection(title: String(localized: "Offline")) {
       HStack(spacing: 10) {
-        Button(action: toggle) {
+        Button(action: press) {
           Image(systemName: symbol)
             .font(.title3)
             .foregroundStyle(isKept && isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
@@ -709,6 +711,24 @@ private struct OfflineSection: View {
       if !Task.isCancelled { self.size = size }
     }
     .resets($downloadFailed, to: false, after: .seconds(1.5))
+    .confirmationDialog(
+      "Stop keeping this RFC offline?", isPresented: $confirmsStopping, titleVisibility: .visible
+    ) {
+      Button("Stop Keeping Offline", role: .destructive, action: toggle)
+    } message: {
+      Text(help)
+    }
+  }
+
+  /// Stops keeping the copy at once on the Mac, whose icon turns to a cross under the
+  /// pointer first; on iOS, which has no pointer to show it, a tap asks first (#763).
+  /// Keeping a copy never asks.
+  private func press() {
+    #if os(macOS)
+      toggle()
+    #else
+      if isKept { confirmsStopping = true } else { toggle() }
+    #endif
   }
 
   private var symbol: String {
