@@ -131,6 +131,23 @@ public enum DocumentMenus {
     case removeFromCollection
   }
 
+  /// What a References panel row that names an RFC offers on a right click or a
+  /// long press, by kind, in order (#761): one list for the Mac and iOS.
+  public enum ReferenceAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case copyLink
+    case cite
+  }
+
+  /// A reference's menu, where the device opens tabs or windows as given.
+  public static func referenceActions(opensTabs: Bool, opensWindows: Bool) -> [[ReferenceAction]] {
+    var opening: [ReferenceAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    return [opening, [.copyLink, .cite]].filter { !$0.isEmpty }
+  }
+
   /// The row menu of a row that `isRFC`, or is a BCP, STD or FYI read as itself,
   /// which is bookmarked and opened but neither added to a collection nor shared:
   /// a collection holds RFCs (#321). `opensTabs` and `opensWindows` are what the

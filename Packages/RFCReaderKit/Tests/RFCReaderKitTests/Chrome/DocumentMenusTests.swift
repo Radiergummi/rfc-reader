@@ -188,6 +188,15 @@ struct DocumentMenuEffectsTests {
         == [[.openInNewTab, .openInNewWindow], [.bookmark]])
   }
 
+  /// A reference opens where the device can, then copies its link or cites it.
+  @Test func `a reference opens first, then copies its link or cites it`() {
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: true, opensWindows: true)
+        == [[.openInNewTab, .openInNewWindow], [.copyLink, .cite]])
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false) == [[.copyLink, .cite]])
+  }
+
   @Test func `a collection's row can be removed from it, last`() {
     let actions = DocumentMenus.rowActions(
       isRFC: true, opensTabs: true, opensWindows: true, inCollection: true)
