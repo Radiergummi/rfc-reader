@@ -56,8 +56,41 @@ struct DecorationFactsTests {
     let secondFacts = try #require(
       built.text.attribute(.rfcDecorationFacts, at: second, effectiveRange: nil) as? DecorationFacts
     )
-    #expect(NSIntersectionRange(firstFacts.range, secondFacts.range).length == 0)
-    #expect(NSLocationInRange(first, firstFacts.range))
-    #expect(NSLocationInRange(second, secondFacts.range))
+    #expect(firstFacts.range.location == first)
+    #expect(NSMaxRange(firstFacts.range) <= second)
+    #expect(secondFacts.range.location == second)
+    #expect(NSMaxRange(secondFacts.range) > second + "BBBB\nBBBB".utf16.count - 1)
+  }
+
+  /// The facts' range is an offset into the build's text, so a copy cut out of it
+  /// carries ranges that point elsewhere: there the block is walked, as text
+  /// without facts is.
+  @Test func `a substring's spans are those of its text walked`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.document(named: "rfc8999.xml"), style: style)
+    let text = built.text
+    let string = text.string as NSString
+    var start = 0
+    while start < text.length, text.decoration(at: start) == nil { start += 1 }
+    let paragraphStart = string.paragraphRange(for: NSRange(location: max(start - 1, 0), length: 0))
+    let cut = text.attributedSubstring(
+      from: NSRange(
+        location: paragraphStart.location, length: text.length - paragraphStart.location))
+    let walked = NSMutableAttributedString(attributedString: cut)
+    walked.removeAttribute(.rfcDecorationFacts, range: NSRange(location: 0, length: walked.length))
+
+    var checked = 0
+    var location = 0
+    let cutString = cut.string as NSString
+    while location < cut.length {
+      let paragraph = cutString.paragraphRange(for: NSRange(location: location, length: 0))
+      defer { location = NSMaxRange(paragraph) }
+      guard cut.decoration(at: paragraph.location) != nil else { continue }
+      #expect(
+        FragmentGeometry.decorationSpan(in: cut, fragment: paragraph)
+          == FragmentGeometry.decorationSpan(in: walked, fragment: paragraph),
+        "at \(paragraph.location)")
+      checked += 1
+    }
+    #expect(checked > 0)
   }
 }

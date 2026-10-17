@@ -144,6 +144,8 @@ public final class DocumentTextBuilder {
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
     reserveChipPadding(in: builder.output)
+    // Last: it carries the decorations, indents, insets and widths set so far, and
+    // nothing rewrites them after it.
     builder.setDecorationFacts()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be

@@ -45,7 +45,8 @@ public enum FragmentGeometry {
     public let runRange: NSRange
     /// The shallowest paragraph indent anywhere in that run: where the band
     /// starts. Carried with the span because the drawing path asks for it on
-    /// every draw; the build worked it out once (`DecorationFacts`).
+    /// every draw; the build worked it out once (`DecorationFacts`), except for a
+    /// folded block, whose indent is that of what is shown of it.
     public let indent: CGFloat
     /// Whether the run starts directly below another card, and ends directly
     /// above one: the ends `Placement.cardRect` cuts rather than caps.
@@ -71,11 +72,12 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// The block's `DecorationFacts` name that whole run; comparing the fragment's own start and
-  /// end against it says whether this fragment is the run's first, its last, both
-  /// (the common single-fragment case), or neither (a middle fragment, which draws
-  /// no cap and must not repeat the run's outer padding or its rounding, or the
-  /// band would show a seam at every fragment boundary).
+  /// The block's `DecorationFacts` name that whole run, or the verbatim block cut out
+  /// of it; comparing the fragment's own start and end against it says whether this
+  /// fragment is the run's first, its last, both (the common single-fragment case),
+  /// or neither (a middle fragment, which draws no cap and must not repeat the run's
+  /// outer padding or its rounding, or the band would show a seam at every fragment
+  /// boundary).
   ///
   /// A run whose rest a reading mode folds away, an aside closed under its caption
   /// (#700), ends where what is shown of it ends, and the run after it meets no card
@@ -83,13 +85,21 @@ public enum FragmentGeometry {
   ///
   /// What the whole block says is read from its `DecorationFacts`, which the build
   /// set; only what differs per fragment, or per reading mode, is looked up here.
-  /// Text that did not come from a build has no facts, and is walked instead.
+  /// Text that did not come from a build has no facts, and is walked instead; so is a
+  /// copy whose offsets moved, such as a substring, since the facts' range is an
+  /// offset into the build's text.
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
-    guard let decoration = text.decoration(at: fragment.location),
-      let facts = text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
-        as? DecorationFacts ?? decorationFacts(in: text, at: fragment.location)
+    guard let decoration = text.decoration(at: fragment.location) else { return nil }
+    let carried =
+      text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
+      as? DecorationFacts
+    let isCarriedHere =
+      carried.map {
+        NSLocationInRange(fragment.location, $0.range) && NSMaxRange($0.range) <= text.length
+      } ?? false
+    guard let facts = isCarriedHere ? carried : decorationFacts(in: text, at: fragment.location)
     else { return nil }
     var effective = facts.range
     let shownEnd = hidden.shownEnd(of: effective)

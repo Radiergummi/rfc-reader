@@ -91,7 +91,7 @@ extension NSAttributedString.Key {
   /// What every fragment of a decorated block measures its band against, worked
   /// out once as the build ends (`DecorationFacts`), on every character of the
   /// block.
-  public static let rfcDecorationFacts = NSAttributedString.Key("rfcDecorationFacts")
+  static let rfcDecorationFacts = NSAttributedString.Key("rfcDecorationFacts")
   /// Makes a block with a rendering one item for a long press, which shows the
   /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
   /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
@@ -251,22 +251,23 @@ public final class StrokeBox: NSObject, Sendable {
 /// What a decorated block's fragments share, walked out of the text once
 /// (`FragmentGeometry.decorationFacts`) rather than by each fragment as it lays out:
 /// a verbatim block is one fragment per line, and walking the block from every line
-/// made a long highlighted block quadratic (#766).
+/// made a long highlighted block quadratic (#766), which the benchmark
+/// `Decoration spans: RFC 8727` measures.
 ///
-/// Its extent is still made by `longestEffectiveRange`, only once, so the staircase
-/// it prevents cannot come back. An `NSObject` left with identity equality, like the
-/// other boxes, so two blocks' boxes never merge into one run.
-public final class DecorationFacts: NSObject, Sendable {
+/// Its extent is still a longest effective range, merged across storage runs, made
+/// once, so the staircase cannot come back. An `NSObject` left with identity
+/// equality, like the other boxes, so two blocks' boxes never merge into one run.
+final class DecorationFacts: NSObject, Sendable {
   /// The block's whole extent: its decoration's run, cut to its verbatim block.
-  public let range: NSRange
+  let range: NSRange
   /// The shallowest paragraph indent in the block.
-  public let indent: CGFloat
+  let indent: CGFloat
   /// How far the block's text is set in from its card (`.rfcCardInset`).
-  public let cardInset: CGFloat
+  let cardInset: CGFloat
   /// How wide its content is set, where its card hugs it (`.rfcContentWidth`).
-  public let contentWidth: CGFloat?
+  let contentWidth: CGFloat?
 
-  public init(range: NSRange, indent: CGFloat, cardInset: CGFloat, contentWidth: CGFloat?) {
+  init(range: NSRange, indent: CGFloat, cardInset: CGFloat, contentWidth: CGFloat?) {
     self.range = range
     self.indent = indent
     self.cardInset = cardInset

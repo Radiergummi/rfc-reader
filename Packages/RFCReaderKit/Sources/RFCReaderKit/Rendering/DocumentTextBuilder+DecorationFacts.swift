@@ -13,6 +13,9 @@ extension DocumentTextBuilder {
   /// own facts, and what lies between them the run's, as `decorationSpan` read them
   /// when it walked. Each extent is walked once: the run is the one this
   /// enumeration names, and a verbatim block is the piece of it its box covers.
+  /// Both enumerations hand back longest effective ranges, merged across storage
+  /// runs, as `decorationRun(at:)` does; `.longestEffectiveRangeNotRequired` would
+  /// box each storage run apart and bring the staircase back.
   func setDecorationFacts() {
     var boxed: [(range: NSRange, facts: DecorationFacts)] = []
     let whole = NSRange(location: 0, length: output.length)
