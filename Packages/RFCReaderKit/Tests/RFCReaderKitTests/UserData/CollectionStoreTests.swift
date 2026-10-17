@@ -54,6 +54,86 @@ struct CollectionStoreTests {
     #expect(try CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
+  // MARK: - Dynamic collections (#355)
+
+  @Test func `a collection made from a query keeps it, as the field would write it`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let made = try CollectionStore.create(
+      named: "QUIC standards", color: .blue, query: "  wg:quic status:std \n", in: context)
+
+    let entry = try #require(try CollectionSnapshot.fetch(in: context)[made.identifier])
+    #expect(entry.query == "wg:quic status:std")
+    #expect(entry.isDynamic)
+    #expect(entry.members.isEmpty)
+  }
+
+  @Test func `a manual collection has no query`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let made = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context)
+
+    let entry = try #require(try CollectionSnapshot.fetch(in: context)[made.identifier])
+    #expect(entry.query == nil)
+    #expect(!entry.isDynamic)
+  }
+
+  /// An empty query would list the whole library, which is All RFCs.
+  @Test func `a query of only spaces is refused, on create and on edit`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    #expect(throws: CollectionStore.Failure.emptyQuery) {
+      try CollectionStore.create(named: "QUIC", color: .blue, query: "  ", in: context)
+    }
+    let made = try CollectionStore.create(
+      named: "QUIC", color: .blue, query: "wg:quic", in: context)
+    #expect(throws: CollectionStore.Failure.emptyQuery) {
+      try CollectionStore.update(
+        made.identifier, name: "QUIC", color: .blue, query: "", in: context)
+    }
+    #expect(try CollectionSnapshot.fetch(in: context)[made.identifier]?.query == "wg:quic")
+  }
+
+  @Test func `the editor changes a dynamic collection's query`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let made = try CollectionStore.create(
+      named: "QUIC", color: .blue, query: "wg:quic", in: context)
+
+    try CollectionStore.update(
+      made.identifier, name: "QUIC and TLS", color: .green, query: "wg:quic,tls", in: context)
+
+    let entry = try #require(try CollectionSnapshot.fetch(in: context)[made.identifier])
+    #expect(entry.name == "QUIC and TLS")
+    #expect(entry.query == "wg:quic,tls")
+  }
+
+  /// Its members are chosen, not matched: a query would hide them.
+  @Test func `a manual collection is not given a query`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let made = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context)
+
+    #expect(throws: CollectionStore.Failure.notDynamic) {
+      try CollectionStore.update(
+        made.identifier, name: "HTTP/3", color: .blue, query: "wg:quic", in: context)
+    }
+    #expect(try CollectionSnapshot.fetch(in: context)[made.identifier]?.query == nil)
+  }
+
+  /// Its members are whatever matches, so none can be added; a script hears why.
+  @Test func `nothing is added to a dynamic collection`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let made = try CollectionStore.create(
+      named: "QUIC", color: .blue, query: "wg:quic", in: context)
+
+    #expect(throws: CollectionStore.Failure.dynamic) {
+      try CollectionStore.add(.rfc(9000), to: made.identifier, in: context)
+    }
+    #expect(try members(of: made.identifier, in: context).isEmpty)
+  }
+
   /// What the editor enables its button by, so the button and the store agree.
   @Test func `a name is valid once it has more than spaces`() {
     #expect(!CollectionStore.isValidName(""))
