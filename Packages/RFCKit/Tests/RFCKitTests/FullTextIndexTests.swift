@@ -374,34 +374,26 @@ final class FullTextIndexTests {
     #expect(try Set(index.indexed().keys) == [.rfc(2119)])
   }
 
-  @Test func `releasing the retained keeps them indexed`() throws {
+  /// Remove Full-Text Index removes nearly the whole index: the file has to shrink
+  /// with it, or Settings goes on showing its old size. Documents that differ, since
+  /// what FTS5 leaves of a removed row is its own postings.
+  @Test func `removing every document gives back the disk`() throws {
     let index = try index()
-    try index.add(Fixtures.document("rfc8999.xml"), retained: true)
-
-    try index.releaseRetained()
-
-    #expect(try index.retained().isEmpty)
-    #expect(try Set(index.indexed().keys) == [.rfc(8999)])
-  }
-
-  /// Remove Full-Text Index removes most of the index: the file has to shrink with
-  /// it, or Settings goes on showing its old size.
-  @Test func `compacting gives back the disk a removal left`() throws {
-    let index = try index()
-    let document = try Fixtures.document("rfc8999.xml")
-    let ids = (1...40).map { DocumentID.rfc($0) }
-    for id in ids {
-      var copy = document
-      copy.header.id = id
-      try index.add(copy)
+    let names = [
+      "rfc1.txt", "rfc1005.txt", "rfc1540.txt", "rfc2049.txt", "rfc2078.txt", "rfc2371.txt",
+      "rfc2511.txt", "rfc5234.txt", "rfc8999.xml",
+    ]
+    for name in names {
+      try index.add(Fixtures.document(name), retained: true)
     }
-    try index.remove(ids)
     let before = try bytes()
 
-    try index.compact()
+    try index.removeAll()
 
-    #expect(try bytes() < before / 2)
+    #expect(try bytes() < before / 10)
     #expect(try index.indexed().isEmpty)
+    #expect(try index.retained().isEmpty)
+    #expect(try index.search("protocol").isEmpty)
   }
 
   /// The database and its journal.

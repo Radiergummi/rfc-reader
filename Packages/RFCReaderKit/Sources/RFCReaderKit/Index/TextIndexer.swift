@@ -93,18 +93,16 @@ public actor TextIndexer {
     unindexable = unindexable.filter { stored[$0.key] == $0.value }
     guard let before = indexedDocuments() else { return }
     var unannounced = 0
-    // In one transaction: after Remove Full-Text Index, nearly every document goes.
-    let gone = before.keys.filter { stored[$0] == nil && !retained.contains($0) }
-    do {
-      try index.remove(gone)
-      for id in gone {
+    for id in before.keys where stored[id] == nil && !retained.contains(id) {
+      do {
+        try index.remove(id)
         indexed?[id] = nil
+        unannounced += 1
+      } catch {
+        indexerLog.error(
+          "\(id.displayName, privacy: .public): not removed from the index: \(String(describing: error), privacy: .public)"
+        )
       }
-      unannounced += gone.count
-    } catch {
-      indexerLog.error(
-        "\(gone.count, privacy: .public) documents not removed from the index: \(String(describing: error), privacy: .public)"
-      )
     }
     let unindexed = stored.filter { id, written in
       before[id] != written && unindexable[id] != written
@@ -258,26 +256,21 @@ public actor TextIndexer {
     return counted
   }
 
-  /// Remove Full-Text Index: no document is retained any more, and those the store
-  /// holds no body of leave the index, which goes back to the bodies the store holds,
-  /// and gives back the disk they took.
+  /// Remove Full-Text Index: the index goes back to the bodies the store holds, and
+  /// gives back the disk the rest took. It is emptied and the stored bodies indexed
+  /// again (`FullTextIndex.removeAll`), which is far fewer documents than it drops.
   public func releaseRetained(changed: @Sendable () async -> Void = {}) async {
     do {
-      try index.releaseRetained()
-      retained = []
+      try index.removeAll()
     } catch {
       indexerLog.error(
-        "releasing what Index All RFCs indexed failed: \(String(describing: error), privacy: .public)"
-      )
+        "emptying the index failed: \(String(describing: error), privacy: .public)")
       return
     }
+    indexed = [:]
+    retained = []
+    await changed()
     await reconcile(changed: changed)
-    do {
-      try index.compact()
-    } catch {
-      indexerLog.error(
-        "compacting the index failed: \(String(describing: error), privacy: .public)")
-    }
   }
 
   /// What the index holds, for Settings.

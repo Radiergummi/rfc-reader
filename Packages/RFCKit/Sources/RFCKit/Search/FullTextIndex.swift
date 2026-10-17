@@ -96,21 +96,7 @@ public struct Snippet: Sendable, Hashable {
     try transaction {
       try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
       guard try storedVersion() != String(version) else { return }
-      try execute(
-        """
-        DROP TABLE IF EXISTS documents;
-        DROP TABLE IF EXISTS sections;
-        DROP TABLE IF EXISTS section_rows;
-        CREATE TABLE documents (
-          document TEXT PRIMARY KEY, written REAL NOT NULL, retained INTEGER NOT NULL
-        );
-        CREATE VIRTUAL TABLE sections USING fts5(
-          document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
-          tokenize = 'unicode61 remove_diacritics 2'
-        );
-        CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
-        CREATE INDEX section_rows_by_document ON section_rows (document);
-        """)
+      try execute(Self.emptyTables)
       try run("INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(version))
     }
   }
@@ -118,6 +104,22 @@ public struct Snippet: Sendable, Hashable {
   deinit {
     unsafe sqlite3_close(connection)
   }
+
+  /// The tables, made empty: those of an earlier version, or of the index, dropped.
+  private static let emptyTables = """
+    DROP TABLE IF EXISTS documents;
+    DROP TABLE IF EXISTS sections;
+    DROP TABLE IF EXISTS section_rows;
+    CREATE TABLE documents (
+      document TEXT PRIMARY KEY, written REAL NOT NULL, retained INTEGER NOT NULL
+    );
+    CREATE VIRTUAL TABLE sections USING fts5(
+      document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
+      tokenize = 'unicode61 remove_diacritics 2'
+    );
+    CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
+    CREATE INDEX section_rows_by_document ON section_rows (document);
+    """
 
   /// The version the index was made under, nil for a new file.
   private func storedVersion() throws -> String? {
@@ -175,22 +177,17 @@ public struct Snippet: Sendable, Hashable {
   }
 
   public func remove(_ id: DocumentID) throws {
-    try remove([id])
+    try transaction { try deleteRows(of: id) }
   }
 
-  /// Removes every one of `ids`, in one transaction rather than one each.
-  public func remove(_ ids: some Sequence<DocumentID>) throws {
-    try transaction {
-      for id in ids {
-        try deleteRows(of: id)
-      }
-    }
-  }
-
-  /// Gives the disk back what removed documents left: SQLite keeps their pages for
-  /// rows to come, and the journal at its largest. After a removal of most of the
-  /// index, as Remove Full-Text Index makes; it rewrites the whole file.
-  public func compact() throws {
+  /// Removes every document, as Remove Full-Text Index does before the app indexes
+  /// its stored bodies again, and gives the disk back. The tables are made again
+  /// rather than emptied row by row: FTS5 removes a row by writing a deletion over
+  /// its postings, which leaves them in the file until segments merge, so removing
+  /// nearly every document would take as long as indexing it and free little.
+  public func removeAll() throws {
+    try transaction { try execute(Self.emptyTables) }
+    // SQLite keeps freed pages for rows to come, and the journal at its largest.
     try execute("PRAGMA wal_checkpoint(TRUNCATE)")
     try execute("VACUUM")
     try execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -204,12 +201,6 @@ public struct Snippet: Sendable, Hashable {
         try run("UPDATE documents SET retained = 1 WHERE document = ?", id.fileStem)
       }
     }
-  }
-
-  /// No document is retained any more; each stays indexed, for the app to drop those
-  /// it holds no body of.
-  public func releaseRetained() throws {
-    try execute("UPDATE documents SET retained = 0")
   }
 
   /// The documents indexed by Index All RFCs, or by `retain`: those indexed whether or

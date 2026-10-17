@@ -9,7 +9,8 @@ import RFCKit
 /// reported, which stays once the run ends, for its failures to be told.
 @MainActor @Observable
 public final class IndexAllRun {
-  /// What the run in progress, or the last one, reported last; nil before the first.
+  /// What the run in progress, or the last one, reported last; nil before a run's
+  /// first report.
   public private(set) var progress: TextIndexer.CorpusProgress?
 
   public private(set) var isRunning = false
@@ -30,6 +31,7 @@ public final class IndexAllRun {
   ) {
     guard !isRunning, !isRemoving else { return }
     isRunning = true
+    progress = nil
     task = Task {
       let ended = await indexer.indexAll(
         ids, fetch: fetch,

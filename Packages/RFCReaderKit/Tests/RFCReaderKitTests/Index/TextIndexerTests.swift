@@ -496,6 +496,25 @@ struct TextIndexerTests {
     #expect(run.progress == TextIndexer.CorpusProgress(indexed: 2, total: 2, failed: 0))
   }
 
+  /// Until the new run reports, the control shows it starting, not where the last
+  /// one ended.
+  @MainActor @Test func `a run started again does not show the last run's progress`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let run = IndexAllRun()
+    let fetch = CountingFetch()
+    run.start([id], indexer: indexer) { try fetch($0) }
+    await run.untilEnded()
+
+    run.start([id, .rfc(1)], indexer: indexer) { try fetch($0) }
+
+    #expect(run.progress == nil)
+    await run.untilEnded()
+  }
+
   @MainActor @Test func `a stopped run ends with what it indexed`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
