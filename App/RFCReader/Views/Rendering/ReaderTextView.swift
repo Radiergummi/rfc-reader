@@ -225,9 +225,10 @@ import RFCReaderKit
       Clipboard.write(.quote(quote), announcing: .quote)
     }
 
-    /// Look Up from the menu or the keyboard: a reference under the selection is
-    /// still previewed rather than looked up. A force click never arrives here; see
-    /// `trackReferenceClick(_:link:at:)`.
+    /// Look Up. A gesture on a reference previews it, as a force click does (the
+    /// coordinator's `quickLookReference(with:)`); anywhere else, and from the menu or
+    /// the keyboard, which have no location to test, it is AppKit's own Look Up. A force
+    /// click never arrives here; see `trackReferenceClick(_:link:at:)`.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }
       super.quickLook(with: event)
