@@ -2521,6 +2521,16 @@
         }
       }
     },
+    "Shows the author’s contact details." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt die Kontaktdaten des Autors."
+          }
+        }
+      }
+    },
     "Sidebar" : {
       "localizations" : {
         "de" : {
