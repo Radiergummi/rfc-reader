@@ -449,6 +449,12 @@ final class LibraryModel {
   /// a document is added to it or removed.
   private(set) var textIndexVersion = 0
 
+  /// Index All RFCs (#37), which Settings and the search's footer start and stop.
+  let indexAllRun = IndexAllRun()
+
+  /// Whether the full-text index has opened, for Index All RFCs to be offered.
+  var hasTextIndex: Bool { textIndexer != nil }
+
   // MARK: - Bootstrap
 
   func bootstrap() async {
@@ -1101,6 +1107,44 @@ final class LibraryModel {
 
   private func textIndexChanged() {
     textIndexVersion += 1
+  }
+
+  /// Index All RFCs: downloads every RFC the index lists a text or XML of and is not
+  /// indexed yet, on a network that is neither metered nor in Low Data Mode, and
+  /// indexes it without keeping its body. An RFC listed with neither, only a PDF or
+  /// PostScript, has no text to index.
+  func indexAllRFCs() {
+    guard let index, let textIndexer else { return }
+    let entries = Dictionary(
+      index.rfcs.compactMap { entry in
+        entry.formats.contains(.text) || entry.formats.contains(.xml) ? (entry.id, entry) : nil
+      },
+      uniquingKeysWith: { first, _ in first })
+    let client = clientOnCheapNetworks
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    indexAllRun.start(entries.keys.sorted(), indexer: textIndexer) { id in
+      let entry = entries[id]
+      return try await client.fetchPreferredDocument(
+        id, availableFormats: entry?.formats, entry: entry
+      ).document
+    } changed: {
+      await changed()
+    }
+  }
+
+  /// What the full-text index holds, and how much of the disk it takes; nil while it
+  /// has not opened.
+  func textIndexUsage() async -> TextIndexer.Usage? {
+    await textIndexer?.usage()
+  }
+
+  /// Remove Full-Text Index: stops Index All RFCs, and keeps in the index only the
+  /// RFCs whose bodies are stored.
+  func removeIndexOfAllRFCs() async {
+    indexAllRun.stop()
+    await indexAllRun.untilEnded()
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await textIndexer?.releaseRetained(changed: changed)
   }
 
   /// What the full-text search finds for `list` (#37): its section hits, narrowed as

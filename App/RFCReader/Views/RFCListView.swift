@@ -212,7 +212,14 @@ struct RFCListView: View {
             Text("In the Text")
           }
         } footer: {
-          Text(verbatim: searched)
+          VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: searched)
+            // While the index holds fewer than the search could look in, the one way
+            // to have it look in the rest.
+            if textFound.searched < (textFound.narrowedTo ?? library.index?.rfcs.count ?? 0) {
+              IndexAllRFCsControl(library: library)
+            }
+          }
         }
       }
       // Where Mail says when it last checked: after the last row, scrolled to

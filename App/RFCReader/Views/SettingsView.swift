@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 import SwiftUI
 
@@ -211,7 +212,8 @@ struct NotificationSettings: View {
 
 /// Where documents are kept (#358): what the kept tier and the reading cache each
 /// hold, keeping the bookmarks offline as well as the marked documents, and emptying
-/// either. On the Mac a tab of its own, on iOS a section of `SettingsScreen`.
+/// either; and the full-text index (#37), Index All RFCs and its removal. On the Mac
+/// a tab of its own, on iOS a section of `SettingsScreen`.
 struct StorageSettings: View {
   let library: LibraryModel
 
@@ -220,6 +222,9 @@ struct StorageSettings: View {
   /// window counts from the next time the tab shows.
   @State private var usage: StorageReport?
   @State private var confirmsRemoval = false
+  /// Read as `usage` is, and again whenever the index changes.
+  @State private var textIndex: TextIndexer.Usage?
+  @State private var confirmsIndexRemoval = false
 
   private var keepsBookmarks: Binding<Bool> {
     Binding(
@@ -271,12 +276,44 @@ struct StorageSettings: View {
         .font(.caption)
         .foregroundStyle(.secondary)
       }
+      LabeledContent("Full-Text Index") { UsageValue(usage: textIndex?.usage) }
+      if let textIndex, let total = library.index?.rfcs.count, textIndex.usage.documents >= total {
+        Text("All RFCs are indexed.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        IndexAllRFCsControl(library: library)
+      }
+      Button("Remove Full-Text Index…", role: .destructive) {
+        confirmsIndexRemoval = true
+      }
+      .disabled((textIndex?.retained ?? 0) == 0 && !library.indexAllRun.isRunning)
+      .confirmationDialog(
+        "Remove the full-text index?", isPresented: $confirmsIndexRemoval,
+        titleVisibility: .visible
+      ) {
+        Button("Remove", role: .destructive) {
+          Task {
+            await library.removeIndexOfAllRFCs()
+            await refreshTextIndex()
+          }
+        }
+      } message: {
+        Text(
+          "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again."
+        )
+      }
     }
     .task { await refresh() }
+    .task(id: library.textIndexVersion) { await refreshTextIndex() }
   }
 
   private func refresh() async {
     usage = await library.storageUsage()
+  }
+
+  private func refreshTextIndex() async {
+    textIndex = await library.textIndexUsage()
   }
 }
 
