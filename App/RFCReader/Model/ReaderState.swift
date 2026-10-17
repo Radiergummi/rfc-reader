@@ -208,6 +208,15 @@ final class ReaderState {
   /// installs `updateToolbarTitle`.
   @ObservationIgnored var openPanel: () -> Void = {}
 
+  #if canImport(UIKit)
+    /// Opens Find over the text on screen (#763): the More menu's Find in Document
+    /// and ⌘F. Whichever text view shows, the reader's or the original's, installs it
+    /// as it is made and updated (`UITextView.installsFind(in:)`). Without it an
+    /// iPhone had no way into Find at all: ⌘F reached it only with a keyboard, and
+    /// only once the text view was first responder.
+    @ObservationIgnored var presentFind: () -> Void = {}
+  #endif
+
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
   /// (`ReaderLinkScheme.referenceScheme`). The reader beside a compared document
   /// has no panel, and `BesideReader` shows the entry in a popover instead (#187).

@@ -2,6 +2,9 @@ import RFCReaderKit
 import SwiftUI
 
 struct OriginalTextView: View {
+  #if canImport(UIKit)
+    @Environment(ReaderState.self) private var reader
+  #endif
   let text: String?
   let failure: LoadFailure?
   let fontSize: Double
@@ -9,7 +12,11 @@ struct OriginalTextView: View {
 
   var body: some View {
     if let text {
-      OriginalTextBody(text: text, fontSize: fontSize)
+      #if canImport(UIKit)
+        OriginalTextBody(text: text, fontSize: fontSize, reader: reader)
+      #else
+        OriginalTextBody(text: text, fontSize: fontSize)
+      #endif
     } else if let failure {
       ContentUnavailableView {
         Label("Couldn't load the original text", systemImage: failure.kind.symbol)

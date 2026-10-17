@@ -107,6 +107,10 @@ import SwiftUI
     /// the print sheet.
     private var moreMenu: some View {
       Menu {
+        // The way into Find from the screen (#763); ⌘F is `DocumentCommands`'.
+        Button("Find in Document", systemImage: "magnifyingglass") { reader.presentFind() }
+          .disabled(!reader.hasDocument)
+        Divider()
         Menu("Cite", systemImage: "quote.opening") {
           MenuSections(sections: DocumentMenus.cite(), perform: perform)
         }

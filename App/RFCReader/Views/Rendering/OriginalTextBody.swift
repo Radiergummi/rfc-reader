@@ -17,6 +17,10 @@ import SwiftUI
 struct OriginalTextBody {
   let text: String
   let fontSize: Double
+  #if canImport(UIKit)
+    /// The window's reader state, which Find is installed in (#763).
+    let reader: ReaderState
+  #endif
 
   /// The monospaced face the text is set in, a little smaller than the reader's
   /// body so a 72-column page fits beside it.
@@ -114,6 +118,7 @@ struct OriginalTextBody {
     }
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
+      textView.installsFind(in: reader)
       let previous = context.coordinator.shown
       if let previous, previous == (text, fontSize) { return }
       let offset = textView.contentOffset.x
