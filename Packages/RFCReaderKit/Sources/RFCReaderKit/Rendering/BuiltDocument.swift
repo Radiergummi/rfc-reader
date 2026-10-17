@@ -71,7 +71,8 @@ public struct BuiltDocument: @unchecked Sendable {
     (backlinks[anchor] ?? []).compactMap { backlink in
       guard let section = backlink.section else {
         return BacklinkEntry(
-          anchor: DocumentTextBuilder.abstractAnchor, heading: (translation ?? .english).abstract, count: backlink.count)
+          anchor: DocumentTextBuilder.abstractAnchor, heading: (translation ?? .english).abstract,
+          count: backlink.count)
       }
       guard let heading = anchors.heading(of: section) else { return nil }
       return BacklinkEntry(anchor: section, heading: heading, count: backlink.count)

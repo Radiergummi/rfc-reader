@@ -37,6 +37,10 @@ struct BuildInputs: Equatable {
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
+  /// Whether the document is built as its translation (#749): asked for, and made.
+  /// A flag rather than the translation, which once made does not change, and which
+  /// would be compared whole on every update pass.
+  let translated: Bool
 
   /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
   ///   or zero where they don't (#433). Asked of the style rather than given, since
@@ -45,7 +49,7 @@ struct BuildInputs: Equatable {
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
-    hang: (ReadingStyle) -> CGFloat = { _ in 0 }
+    translated: Bool = false, hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
@@ -56,6 +60,7 @@ struct BuildInputs: Equatable {
       return style
     }
     self.choices = choices
+    self.translated = translated
   }
 }
 
@@ -118,6 +123,19 @@ final class DocumentSession {
   /// and why it could not be.
   private(set) var originalText: String?
   private(set) var originalTextFailure: LoadFailure?
+
+  /// Where a translation of the document stands (#749); see `translate(with:cache:)`.
+  var translationPhase = TranslationPhase.idle
+  /// Whether the reader shows the translation: the window's choice while the reader
+  /// state is this reader's, kept here for when it is not, as on iOS under a reader
+  /// pushed over it (#263).
+  var showsTranslation = false
+
+  /// The translation, once it is made.
+  var translatedDocument: TranslatedDocument? {
+    if case .translated(let translated) = translationPhase { return translated }
+    return nil
+  }
 
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the
@@ -295,13 +313,16 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await Self.built(document, style: style, choices: inputs.choices)
+      let translation = inputs.translated ? self?.translatedDocument : nil
+      let shown = translation?.document ?? document
+      let rebuilt = await Self.built(
+        shown, style: style, choices: inputs.choices, translation: translation?.labels)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs
       buildingFor = nil
       trace("built")
-      reader { $0.sections = rebuilt.reachableSections(of: document) }
+      reader { $0.sections = rebuilt.reachableSections(of: shown) }
     }
   }
 

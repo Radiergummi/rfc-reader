@@ -25,10 +25,11 @@ struct LocalizationTests {
   @Test func `RFCReaderKit finds its German catalog`() {
     #expect(String(kit: "Remove from Collection", locale: .german) == "Aus Sammlung entfernen")
     let more = DocumentMenus.more(
-      showsOriginal: false, errata: nil, precedingDraft: nil, locale: .german)
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      locale: .german)
     #expect(
       more.map { $0.map(\.title) } == [
-        ["Originaltext"], ["Auf rfc-editor.org öffnen", "Datatracker"],
+        ["Originaltext", "Übersetzen"], ["Auf rfc-editor.org öffnen", "Datatracker"],
       ])
   }
 

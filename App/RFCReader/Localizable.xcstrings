@@ -840,6 +840,16 @@
         }
       }
     },
+    "Couldn't translate this document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Dokument konnte nicht übersetzt werden"
+          }
+        }
+      }
+    },
     "Couldn’t Install the Data Pack" : {
       "localizations" : {
         "de" : {
@@ -1437,6 +1447,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schlägt eine Protokollkennung nach, etwa HTTP-Status 425, TLS-Alert 70 oder das Feld Retry-After, und findet den RFC-Abschnitt, der sie definiert."
+          }
+        }
+      }
+    },
+    "Machine-translated from English" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maschinell aus dem Englischen übersetzt"
           }
         }
       }
@@ -2471,6 +2491,16 @@
         }
       }
     },
+    "Show Original" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original anzeigen"
+          }
+        }
+      }
+    },
     "Show Requirements" : {
       "localizations" : {
         "de" : {
@@ -2688,6 +2718,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Titel"
+          }
+        }
+      }
+    },
+    "Translating…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird übersetzt …"
           }
         }
       }

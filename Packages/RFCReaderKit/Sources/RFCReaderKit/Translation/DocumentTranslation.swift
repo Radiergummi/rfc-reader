@@ -42,9 +42,32 @@ public enum DocumentTranslation {
     Rewriter { translations[$0] ?? $0 }.document(document)
   }
 
+  /// What a translation of `document` still has to ask for, with `known` already
+  /// translated: its sources and the builder's labels, once each, in that order.
+  public static func missing(in document: RFCDocument, known: [String: String]) -> [String] {
+    var seen: Set<String> = []
+    return (sources(in: document) + DocumentLabels.sources).filter {
+      known[$0] == nil && seen.insert($0).inserted
+    }
+  }
+
   /// The same, over blocks.
   static func translated(blocks: [Block], _ translations: [String: String]) -> [Block] {
     Rewriter { translations[$0] ?? $0 }.blocks(blocks)
+  }
+}
+
+/// A document as a translation gave it (#749): its model, and the labels the
+/// builder writes into it.
+public struct TranslatedDocument: Sendable, Equatable {
+  public let document: RFCDocument
+  public let labels: DocumentLabels
+
+  /// `original` translated by `translations`, which carry the labels' translations
+  /// beside the prose's.
+  public init(_ original: RFCDocument, _ translations: [String: String]) {
+    document = DocumentTranslation.translated(original, translations)
+    labels = DocumentLabels(translating: translations)
   }
 }
 
@@ -243,7 +266,8 @@ enum Relinking {
     for spelling in spaced == words ? [words] : [words, spaced] {
       var from = start
       while let found = text.range(of: spelling, range: from..<text.endIndex) {
-        let before = found.lowerBound > text.startIndex ? text[text.index(before: found.lowerBound)] : nil
+        let before =
+          found.lowerBound > text.startIndex ? text[text.index(before: found.lowerBound)] : nil
         let after = found.upperBound < text.endIndex ? text[found.upperBound] : nil
         let startsWord = spelling.first.map(isWordCharacter) ?? false
         let endsWord = spelling.last.map(isWordCharacter) ?? false
@@ -266,7 +290,8 @@ enum Relinking {
   private static func text(_ text: Substring) -> [Inline] {
     guard !text.isEmpty else { return [] }
     var result: [Inline] = []
-    for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    for (index, line) in lines.enumerated() {
       if index > 0 { result.append(.lineBreak) }
       if !line.isEmpty { result.append(.text(String(line))) }
     }

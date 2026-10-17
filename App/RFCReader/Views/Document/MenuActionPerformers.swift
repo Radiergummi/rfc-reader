@@ -16,6 +16,7 @@ struct DocumentActionPerformer {
     case .copy(let text, let feedback): Clipboard.copy(text, announcing: feedback)
     case .open(let url): open(url)
     case .toggleOriginalText: reader.showOriginal.toggle()
+    case .toggleTranslation: reader.showTranslation.toggle()
     case nil: break
     }
   }

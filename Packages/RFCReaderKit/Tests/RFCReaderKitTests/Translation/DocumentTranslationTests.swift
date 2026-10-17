@@ -130,6 +130,27 @@ struct DocumentTranslationTests {
     }
   }
 
+  /// What a reader asks the framework for: the document's sources and the labels'
+  /// both, less what an earlier translation already gave.
+  @Test func `only what is not known yet is asked for`() throws {
+    let document = try Fixtures.rfc2119()
+    let all = DocumentTranslation.missing(in: document, known: [:])
+    #expect(Set(all) == Set(DocumentTranslation.sources(in: document) + DocumentLabels.sources))
+    let known = Dictionary(uniqueKeysWithValues: all.prefix(3).map { ($0, "x") })
+    #expect(DocumentTranslation.missing(in: document, known: known) == Array(all.dropFirst(3)))
+  }
+
+  @Test func `a translated document carries its prose and its labels`() throws {
+    let document = try Fixtures.rfc8999()
+    let all = DocumentTranslation.missing(in: document, known: [:])
+    var translations = Dictionary(uniqueKeysWithValues: all.map { ($0, "«\($0)»") })
+    translations["Figure 1"] = "Abbildung 1"
+    let translated = TranslatedDocument(document, translations)
+    #expect(translated.labels.figure == "Abbildung")
+    #expect(translated.labels.abstract == "«Abstract»")
+    #expect(translated.document == DocumentTranslation.translated(document, translations))
+  }
+
   /// An aside's "Note:" stays, so the builder still takes it for the caption the
   /// translated labels name, and translates the rest.
   @Test func `an aside keeps the label its caption is made from`() throws {
