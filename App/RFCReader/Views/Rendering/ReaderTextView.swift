@@ -76,6 +76,9 @@ import RFCReaderKit
 
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// Whether the text is a translation (#749), which offers no quote: asked
+    /// rather than `quoteSelection`, which makes the whole quote.
+    var isTranslation: () -> Bool = { false }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
@@ -208,6 +211,9 @@ import RFCReaderKit
 
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// Whether the text is a translation (#749), which offers no quote: asked
+    /// rather than `quoteSelection`, which makes the whole quote.
+    var isTranslation: () -> Bool = { false }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
@@ -469,7 +475,7 @@ import RFCReaderKit
       let clickedBox = FigureCopy.box(at: clicked, in: text)
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
-      let quotes = quoteSelection(selectedRange()) != nil
+      let quotes = selectedRange().length > 0 && !isTranslation()
       let gloss = followGloss(event)
       guard figure != nil || quotes || gloss != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.

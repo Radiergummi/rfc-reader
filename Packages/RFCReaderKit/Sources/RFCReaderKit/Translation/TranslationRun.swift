@@ -14,15 +14,6 @@ public enum TranslationPhase: Equatable, Sendable {
     if case .translated(let translated) = self { return translated }
     return nil
   }
-
-  /// Whether a translation is made or under way, so none is started: one that is
-  /// idle or failed may be.
-  public var isUnderWayOrMade: Bool {
-    switch self {
-    case .translating, .translated: true
-    case .idle, .failed: false
-    }
-  }
 }
 
 /// What the document's header says of a translation the reader asked for: how far it
@@ -59,6 +50,15 @@ public struct TranslationRun: Sendable {
   /// Whether every request has come back: a batch that ended early, canceled, is a
   /// translation with English left in it.
   public var isComplete: Bool { received.count == requests.count }
+
+  /// Where a batch that has ended leaves the translation: nil where every request
+  /// came back without a failure, so it is made. `interrupted`, its task canceled or
+  /// the original shown again, it is idle, to be asked for again; otherwise, failed
+  /// or ended early by the framework, it failed.
+  public func phase(after failure: (any Error)?, interrupted: Bool) -> TranslationPhase? {
+    if isComplete, failure == nil { return nil }
+    return interrupted ? .idle : .failed
+  }
 
   public var progress: Double {
     requests.isEmpty ? 1 : Double(received.count) / Double(requests.count)

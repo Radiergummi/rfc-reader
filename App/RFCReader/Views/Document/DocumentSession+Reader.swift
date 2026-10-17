@@ -112,6 +112,7 @@ extension DocumentSession {
       if let built {
         let shown = built.isTranslation ? translatedDocument?.document : nil
         reader.sections = built.reachableSections(of: shown ?? document)
+        reader.readsTranslation = built.isTranslation
       }
     case .failed:
       reader { $0.documentFailedToLoad() }
@@ -196,17 +197,21 @@ extension DocumentSession {
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
   /// what discards a canceled one. `DocumentPreview` builds through it too.
+  /// - Parameter translation: `document`'s translation (#749), built in its place.
   @concurrent
   static func built(
     _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults,
-    translation: DocumentLabels? = nil
+    translation: TranslatedDocument? = nil
   ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      DocumentTextBuilder.build(
-        document, style: style, choices: choices, translation: translation)
+      if let translation {
+        DocumentTextBuilder.build(translation, style: style, choices: choices)
+      } else {
+        DocumentTextBuilder.build(document, style: style, choices: choices)
+      }
     }
   }
 }

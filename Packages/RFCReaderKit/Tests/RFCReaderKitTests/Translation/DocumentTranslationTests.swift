@@ -118,6 +118,36 @@ struct DocumentTranslationTests {
     #expect(kept.count < Self.crossReferences(in: document).count)
   }
 
+  /// A reference the translation lost the words of is still one its section makes:
+  /// the headings it points to keep their backlinks.
+  @Test func `a translated build keeps the original's backlinks`() throws {
+    let document = try Fixtures.rfc8999()
+    let style = ReadingStyle()
+    let original = DocumentTextBuilder.build(document, style: style).backlinks
+    try #require(!original.isEmpty)
+    let sources = DocumentTranslation.sources(in: document) + DocumentLabels.sources
+    let translated = TranslatedDocument(
+      document,
+      Dictionary(
+        sources.map { ($0, String($0.filter { !$0.isNumber }) + " (übersetzt)") },
+        uniquingKeysWith: { first, _ in first }))
+    #expect(DocumentTextBuilder.build(translated, style: style).backlinks == original)
+  }
+
+  /// A label is found whole, not as the start of a longer number or word.
+  @Test func `a label is not found inside a longer one`() {
+    let text = "Siehe RFC 12 und Sections."
+    #expect(Relinking.range(of: "RFC 1", in: text, from: text.startIndex) == nil)
+    #expect(Relinking.range(of: "Section", in: text, from: text.startIndex) == nil)
+  }
+
+  /// Japanese, Chinese and Thai write no space between words, so a label stands
+  /// against the kana, ideographs or letters around it and is still found.
+  @Test(arguments: ["それはRFC 9110で定義される", "参见RFC 9110的定义", "ดูRFC 9110ที่นี่"])
+  func `a label is found against a script without spaces`(text: String) {
+    #expect(Relinking.range(of: "RFC 9110", in: text, from: text.startIndex) != nil)
+  }
+
   /// A section's qualifier, "(Normative)", is part of its title in a translation,
   /// which translates the two together.
   @Test func `a heading is translated with its qualifier`() throws {

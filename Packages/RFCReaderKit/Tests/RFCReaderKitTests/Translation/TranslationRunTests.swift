@@ -35,6 +35,23 @@ struct TranslationRunTests {
     #expect(TranslationRun([]).isComplete)
   }
 
+  /// A batch cut short, its view gone or the original shown again, leaves the
+  /// translation to be asked for again, and the next asks only for the rest. One the
+  /// framework ended or failed on its own is a failure, not a translation still
+  /// under way that nothing is running.
+  @Test func `a batch that ends short is idle when interrupted and failed otherwise`() {
+    var run = TranslationRun(["one", "two"])
+    _ = run.receive("eins", for: "0")
+    #expect(run.phase(after: nil, interrupted: true) == .idle)
+    #expect(run.phase(after: CancellationError(), interrupted: true) == .idle)
+    #expect(run.phase(after: nil, interrupted: false) == .failed)
+    #expect(run.phase(after: CancellationError(), interrupted: false) == .failed)
+    _ = run.receive("zwei", for: "1")
+    #expect(run.phase(after: nil, interrupted: true) == nil)
+    #expect(run.phase(after: nil, interrupted: false) == nil)
+    #expect(run.phase(after: CancellationError(), interrupted: false) == .failed)
+  }
+
   @Test func `the target is the reader's first language that is not English`() {
     #expect(DocumentTranslation.target(preferring: ["de-DE", "en-DE"])?.languageCode == .german)
     #expect(DocumentTranslation.target(preferring: ["en-GB", "fr-FR"])?.languageCode == .french)

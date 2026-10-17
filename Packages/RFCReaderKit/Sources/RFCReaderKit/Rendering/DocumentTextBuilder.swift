@@ -71,6 +71,9 @@ public final class DocumentTextBuilder {
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
+  /// The backlinks to use instead of the document's own: a translation's, which are
+  /// its original's (#749).
+  var givenBacklinks: [String: [Backlink]]?
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -146,8 +149,29 @@ public final class DocumentTextBuilder {
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(
       style: style, choices: choices, hints: hints, labels: translation ?? .english)
-    if style.emitsLinks {
-      builder.hang = style.sectionNumberHang
+    return build(document, title: title, translation: translation, with: builder)
+  }
+
+  /// A translated document's build (#749), in its labels, with the original's
+  /// backlinks: a reference the translation lost the words of is still one the
+  /// section makes.
+  public static func build(
+    _ translated: TranslatedDocument, style: ReadingStyle,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+  ) -> BuiltDocument {
+    let builder = DocumentTextBuilder(
+      style: style, choices: choices, hints: hints, labels: translated.labels)
+    builder.givenBacklinks = translated.backlinks
+    return build(
+      translated.document, title: nil, translation: translated.labels, with: builder)
+  }
+
+  private static func build(
+    _ document: RFCDocument, title: TitleBlock?, translation: DocumentLabels?,
+    with builder: DocumentTextBuilder
+  ) -> BuiltDocument {
+    if builder.style.emitsLinks {
+      builder.hang = builder.style.sectionNumberHang
     }
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
@@ -256,7 +280,7 @@ extension DocumentTextBuilder {
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
     grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
-      backlinks = Backlinks.within(document)
+      backlinks = givenBacklinks ?? Backlinks.within(document)
       glossMatcher = GlossMatcher(document.definedTerms, abbreviations: document.abbreviations)
       hasAbbreviations = !document.abbreviations.isEmpty
       for term in document.definedTerms.values {

@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 import Translation
+import os
 
 /// Translating the document on demand (#749): asked for from the More menu, carried
 /// out by the Translation framework on the device, and kept, so the same document is
@@ -18,15 +19,20 @@ extension DocumentSession {
   }
 
   /// Translates the document with `translator`, if the reader still shows the
-  /// translation and none is made or under way: `.translationTask` runs this again
-  /// whenever the view appears. What an earlier translation kept is not asked for
-  /// again, and the rest is asked for in one batch. What comes back is kept even if
-  /// the batch fails or is canceled, so the next attempt asks only for the rest; a
-  /// batch that ended early is no translation, and leaves the phase idle.
+  /// translation and none is made. `.translationTask` runs this again whenever the
+  /// view appears, having canceled the run before, and whenever the reader asks
+  /// again; the latest run is the one that counts, and an earlier one stops at its
+  /// next response. So does a run whose translation the reader no longer shows.
+  /// What an earlier translation kept is not asked for again, and the rest is asked
+  /// for in one batch. What comes back is kept even if the batch fails or stops, so
+  /// the next attempt asks only for the rest; where it leaves the translation is
+  /// `TranslationRun.phase(after:interrupted:)`.
   func translate(with translator: TranslationSession, cache: TranslationCache) async {
-    guard showsTranslation, !translationPhase.isUnderWayOrMade,
+    guard showsTranslation, translationPhase.translated == nil,
       let document = state.document, let target = translator.targetLanguage
     else { return }
+    translationAttempt += 1
+    let attempt = translationAttempt
     let language = target.minimalIdentifier
     translationPhase = .translating(progress: 0)
     var translations = await Self.kept(by: cache, of: id, into: language)
@@ -38,6 +44,7 @@ extension DocumentSession {
       }
       do {
         for try await response in translator.translate(batch: requests) {
+          guard attempt == translationAttempt, showsTranslation else { break }
           let moved = run.receive(response.targetText, for: response.clientIdentifier)
           if moved { translationPhase = .translating(progress: run.progress) }
         }
@@ -48,13 +55,17 @@ extension DocumentSession {
     if !run.received.isEmpty {
       await Self.keep(run.received, in: cache, of: id, into: language)
     }
-    if let failure {
-      readerLog.failure(of: id, "translating failed", failure)
-      translationPhase = .failed
-      return
-    }
-    guard run.isComplete else {
-      translationPhase = .idle
+    guard attempt == translationAttempt else { return }
+    let interrupted = Task.isCancelled || !showsTranslation
+    if let phase = run.phase(after: failure, interrupted: interrupted) {
+      if phase == .failed, let failure {
+        readerLog.failure(of: id, "translating failed", failure)
+      } else if phase == .failed {
+        readerLog.error(
+          "\(self.id.displayName, privacy: .public): translating ended with \(run.received.count) of \(run.requests.count)"
+        )
+      }
+      translationPhase = phase
       return
     }
     translations.merge(run.received) { _, new in new }

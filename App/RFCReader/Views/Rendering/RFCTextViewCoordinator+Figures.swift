@@ -12,7 +12,7 @@
       _ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]
     ) -> UIMenu? {
       var extra: [UIMenuElement] = []
-      if let reader = textView as? ReaderTextView, reader.quoteSelection(range) != nil {
+      if range.length > 0, let reader = textView as? ReaderTextView, !reader.isTranslation() {
         extra.append(
           UIAction(
             title: String(localized: "Copy as Quote"), image: UIImage(systemName: "text.quote")

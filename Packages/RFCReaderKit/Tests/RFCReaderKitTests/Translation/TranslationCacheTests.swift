@@ -7,13 +7,17 @@ import Testing
 /// What a translation keeps (#749), so a document opened again is not translated
 /// again, and a changed one only where it changed.
 @Suite("Translation cache")
-struct TranslationCacheTests {
+final class TranslationCacheTests {
+  private let directory = FileManager.default.temporaryDirectory
+    .appending(path: "TranslationCacheTests-\(UUID().uuidString)", directoryHint: .isDirectory)
   private let cache: TranslationCache
 
-  init() throws {
-    let directory = FileManager.default.temporaryDirectory
-      .appending(path: "TranslationCacheTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+  init() {
     cache = TranslationCache(directory: directory)
+  }
+
+  deinit {
+    try? FileManager.default.removeItem(at: directory)
   }
 
   @Test func `nothing is kept for a document never translated`() {

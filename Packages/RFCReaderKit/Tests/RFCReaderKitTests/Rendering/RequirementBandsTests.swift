@@ -95,6 +95,28 @@ struct RequirementBandsTests {
     }
   }
 
+  /// A legacy document's artwork has no anchor of its own, so the next anchor is
+  /// past it: the band stops where its paragraph does, not at the end of the
+  /// artwork after it.
+  @Test func `in a translation a band stops at its paragraph's end`() throws {
+    let document = try Fixtures.document(named: "rfc2511.txt")
+    let requirements = Requirements.extract(from: document)
+    let sources = DocumentTranslation.sources(in: document)
+    let translated = DocumentTranslation.translated(
+      document,
+      Dictionary(
+        sources.map { ($0, "«\($0.uppercased())»") }, uniquingKeysWith: { first, _ in first }))
+    let built = DocumentTextBuilder.build(translated, style: ReadingStyle(), translation: .english)
+    let bands = RequirementBands(requirements, in: built)
+    let text = built.text.string as NSString
+    try #require(!bands.ranges.isEmpty)
+    for band in bands.ranges {
+      let banded = text.substring(with: band)
+      #expect(banded.hasSuffix("»"), "\(banded)")
+      #expect(!banded.contains("»\n"), "\(banded)")
+    }
+  }
+
   /// The bands a fragment draws: every one that meets its range, whole, since
   /// where a band starts and ends decides which of its corners round.
   @Test func `the bands meeting a range are found whole`() throws {

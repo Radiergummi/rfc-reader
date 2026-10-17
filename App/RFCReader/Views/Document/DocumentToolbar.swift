@@ -114,7 +114,7 @@ import SwiftUI
         MenuSections(
           sections: DocumentMenus.more(
             showsOriginal: reader.showOriginal,
-            showsTranslation: DocumentTranslation.target == nil ? nil : reader.showTranslation,
+            showsTranslation: reader.showTranslation,
             errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           perform: perform)

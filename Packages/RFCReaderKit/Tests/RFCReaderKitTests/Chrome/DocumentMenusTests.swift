@@ -24,6 +24,7 @@ struct DocumentMenusTests {
   @Test func `more has the original text apart from the pages elsewhere`() {
     let more = DocumentMenus.more(
       showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
       locale: .english)
     #expect(
       titles(more) == [["Original Text", "Translate"], ["Open on rfc-editor.org", "Datatracker"]])
@@ -32,6 +33,7 @@ struct DocumentMenusTests {
   @Test func `errata and the preceding draft appear only where the document has them`() {
     let more = DocumentMenus.more(
       showsOriginal: false, showsTranslation: false, errata: errata, precedingDraft: draft,
+      offersTranslation: true,
       locale: .english)
     #expect(
       titles(more)[1] == ["Open on rfc-editor.org", "Errata", "Datatracker", "Preceding Draft"])
@@ -43,11 +45,13 @@ struct DocumentMenusTests {
     #expect(
       DocumentMenus.more(
         showsOriginal: true, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
         locale: .english)[
           0][0].isOn == true)
     #expect(
       DocumentMenus.more(
         showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
         locale: .english)[
           0][0].isOn == false
     )
@@ -58,11 +62,13 @@ struct DocumentMenusTests {
   @Test func `translate is a toggle beside the original text`() {
     let shown = DocumentMenus.more(
       showsOriginal: false, showsTranslation: true, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
       locale: .english)
     #expect(shown[0][1].action == .toggleTranslation)
     #expect(shown[0][1].isOn == true)
     let hidden = DocumentMenus.more(
       showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
       locale: .english)
     #expect(hidden[0][1].isOn == false)
     #expect(
@@ -72,7 +78,8 @@ struct DocumentMenusTests {
 
   @Test func `a reader of English alone is not offered a translation`() {
     let more = DocumentMenus.more(
-      showsOriginal: false, showsTranslation: nil, errata: nil, precedingDraft: nil,
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: false,
       locale: .english)
     #expect(titles(more)[0] == ["Original Text"])
   }

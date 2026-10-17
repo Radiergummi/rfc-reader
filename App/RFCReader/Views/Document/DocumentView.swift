@@ -460,11 +460,11 @@ struct DocumentView: View {
     }
   #endif
 
-  /// Starts the translation the reader asked for, unless it is made or under way;
-  /// again after one that failed.
+  /// Starts the translation the reader asked for, unless it is made: again after
+  /// one that failed or stopped, and in place of one still under way, which stops.
   private func requestTranslation() {
     guard showsTranslation, session.state.document != nil,
-      !session.translationPhase.isUnderWayOrMade
+      session.translationPhase.translated == nil
     else { return }
     if translationConfiguration == nil {
       translationConfiguration = DocumentSession.translationConfiguration()

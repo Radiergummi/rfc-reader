@@ -62,12 +62,16 @@ public enum DocumentTranslation {
 public struct TranslatedDocument: Sendable, Equatable {
   public let document: RFCDocument
   public let labels: DocumentLabels
+  /// The original's backlinks, which a reference left out of the translation, its
+  /// words not found, would otherwise take from its target's heading.
+  public let backlinks: [String: [Backlink]]
 
   /// `original` translated by `translations`, which carry the labels' translations
   /// beside the prose's.
   public init(_ original: RFCDocument, _ translations: [String: String]) {
     document = DocumentTranslation.translated(original, translations)
     labels = DocumentLabels(translating: translations)
+    backlinks = Backlinks.within(original)
   }
 }
 
@@ -293,9 +297,22 @@ enum Relinking {
     return nil
   }
 
+  /// A digit, or a letter of a script that spaces its words. Not kana, ideographs,
+  /// Hangul or a Southeast Asian script, whose words run on into a label without a
+  /// space, "RFC 9110で", or take their particles that way.
   private static func isWordCharacter(_ character: Character) -> Bool {
-    character.isLetter || character.isNumber
+    if character.isNumber { return true }
+    guard character.isLetter, let scalar = character.unicodeScalars.first else { return false }
+    if scalar.properties.isIdeographic { return false }
+    return !unspacedScripts.contains { $0.contains(scalar.value) }
   }
+
+  /// Hangul Jamo, Thai, Lao, Myanmar, Khmer, kana, Hangul syllables and halfwidth
+  /// kana, by their blocks.
+  private static let unspacedScripts: [ClosedRange<UInt32>] = [
+    0x0E00...0x0EFF, 0x1000...0x109F, 0x1100...0x11FF, 0x1780...0x17FF, 0x3040...0x30FF,
+    0x3130...0x318F, 0x31F0...0x31FF, 0xAC00...0xD7AF, 0xFF66...0xFFDC,
+  ]
 
   /// Plain text, with each line break the translation kept a line break again.
   private static func text(_ text: Substring) -> [Inline] {

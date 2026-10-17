@@ -133,6 +133,8 @@ final class DocumentSession {
 
   /// The translation, once it is made.
   var translatedDocument: TranslatedDocument? { translationPhase.translated }
+  /// Which run of `translate(with:cache:)` is the latest, so an earlier one stops.
+  @ObservationIgnored var translationAttempt = 0
 
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the
@@ -313,13 +315,16 @@ final class DocumentSession {
       let translation = inputs.translated ? self?.translatedDocument : nil
       let shown = translation?.document ?? document
       let rebuilt = await Self.built(
-        shown, style: style, choices: inputs.choices, translation: translation?.labels)
+        document, style: style, choices: inputs.choices, translation: translation)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs
       buildingFor = nil
       trace("built")
-      reader { $0.sections = rebuilt.reachableSections(of: shown) }
+      reader {
+        $0.sections = rebuilt.reachableSections(of: shown)
+        $0.readsTranslation = rebuilt.isTranslation
+      }
     }
   }
 

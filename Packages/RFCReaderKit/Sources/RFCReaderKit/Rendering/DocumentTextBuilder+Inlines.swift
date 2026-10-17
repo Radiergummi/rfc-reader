@@ -315,13 +315,6 @@ extension DocumentTextBuilder {
       attributes: attributes)
   }
 
-  /// What a backlink caption says, and VoiceOver says for it: the number of
-  /// sections that refer to the section — not of references, of which one section
-  /// may make several — in words up to three.
-  public static func backlinksCaption(count: Int) -> String {
-    DocumentLabels.english.backlinksCaption(count: count)
-  }
-
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by

@@ -1,6 +1,12 @@
 import Foundation
 import RFCKit
 
+#if canImport(UIKit)
+  import UIKit
+#elseif canImport(AppKit)
+  import AppKit
+#endif
+
 /// Where Implementer draws its requirement bands (#700): each BCP 14 sentence the
 /// requirements index found (`Requirements`), as a range of the built text. The
 /// band is drawn by the fragments that lay the sentence out, so a switch into or
@@ -65,7 +71,8 @@ public struct RequirementBands: Sendable, Equatable {
 
   /// In a translation (#749) none of the original's sentences is there to be found,
   /// so each requirement bands the paragraph its anchor names: from the anchor to the
-  /// next one, less the line breaks before it. Not to its first line break, which a
+  /// next one or to the end of its paragraph style, whichever is first, less the line
+  /// breaks before it. Not to its first line break, which a
   /// paragraph's own line break, or one its translation kept, is as well. Once,
   /// however many requirements the paragraph states. One anchored on its section, as
   /// a legacy paragraph nested in a list is, has no paragraph to band.
@@ -80,7 +87,14 @@ public struct RequirementBands: Sendable, Equatable {
         start >= NSMaxRange(ranges.last ?? NSRange())
       else { continue }
       let next = entries.partitioningIndex { $0.offset > start }
-      var end = next < entries.count ? entries[next].offset : text.length
+      let limit = next < entries.count ? entries[next].offset : text.length
+      // A block with no anchor of its own, as a legacy document's artwork, is past
+      // the paragraph style's end but before the next anchor.
+      var paragraph = NSRange()
+      _ = built.text.attribute(
+        .paragraphStyle, at: start, longestEffectiveRange: &paragraph,
+        in: NSRange(location: start, length: limit - start))
+      var end = NSMaxRange(paragraph)
       while end > start, let scalar = Unicode.Scalar(text.character(at: end - 1)),
         CharacterSet.whitespacesAndNewlines.contains(scalar)
       {
