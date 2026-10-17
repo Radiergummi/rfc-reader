@@ -239,13 +239,26 @@ final class NavigationModel: Identifiable {
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
-    let reveals = route.reveals(selected: selection, among: listed?.rows.map(\.id))
+    let reveals = route.reveals(selected: selection, among: rowsOnShow)
     follow(route)
     if reveals {
       sidebarSelection = .all
       searchText = ""
-      listOptions.showsObsolete = true
+      // Only where it is what hides the row: it is the reader's choice for the tab.
+      if library.metadata(link.id)?.isObsolete == true {
+        listOptions.showsObsolete = true
+      }
     }
+  }
+
+  /// The rows on show, if they are those of the list the inputs ask for now: nil
+  /// while a new filter's list is still being made, or typing has not paused for
+  /// the search, when the rows on show are about to be replaced.
+  private var rowsOnShow: [DocumentID]? {
+    guard AppliedSearch.query(for: searchText) == requestedQuery, let request = request(),
+      shows(request)
+    else { return nil }
+    return listed?.rows.map(\.id)
   }
 
   private func follow(_ route: OpenRoute) {

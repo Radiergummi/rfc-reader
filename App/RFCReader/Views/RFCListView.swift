@@ -506,8 +506,8 @@ private struct OfflineStated<Content: View>: View {
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool
-  /// Whether Available Offline lists it, marked beside the bookmark (#769): what
-  /// can be opened without a network.
+  /// Whether Available Offline lists it, marked beside the bookmark (#769): what the
+  /// reader asked to keep offline, whose body may still be on its way.
   var isAvailableOffline = false
   /// False under a year's header, which already says it (#347).
   var showsYear = true

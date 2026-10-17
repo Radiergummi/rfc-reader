@@ -141,6 +141,30 @@ struct UserDataStoreTests {
     #expect(try context.fetch(FetchDescriptor<Bookmark>()).count == 1)
   }
 
+  /// Removed, then bookmarked again: Undo takes the new bookmark away, rather than
+  /// offering to restore one that is already there and doing nothing.
+  @Test func `undoing a new bookmark removes it`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    try BookmarkStore.toggle(.rfc(9110), title: "HTTP Semantics", in: context)
+
+    for _ in 0..<2 {
+      undoManager.beginUndoGrouping()
+      try BookmarkStore.toggle(
+        .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+        onUndoFailure: Self.undoFailed, in: context)
+      undoManager.endUndoGrouping()
+    }
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context) == [.rfc(9110)])
+
+    undoManager.undo()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context).isEmpty)
+    undoManager.undo()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context) == [.rfc(9110)])
+  }
+
   /// What an undo or redo reports failing, which none here should.
   private static func undoFailed(_ error: any Error) {
     Issue.record(error, "an undo or redo failed")

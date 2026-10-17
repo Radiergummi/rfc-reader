@@ -15,14 +15,12 @@
   /// hosting view in a panel of its own, outside every environment chain.
   struct QuickOpenPalette: View {
     let library: LibraryModel
-    let dismiss: () -> Void
     @State private var controller: QuickOpenController
 
     static let width: CGFloat = 620
 
     init(library: LibraryModel, navigation: NavigationModel, dismiss: @escaping () -> Void) {
       self.library = library
-      self.dismiss = dismiss
       _controller = State(
         initialValue: QuickOpenController(
           library: library, navigation: navigation, dismiss: dismiss))

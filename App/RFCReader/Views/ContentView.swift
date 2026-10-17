@@ -346,7 +346,10 @@ struct EmptyDetailView: View {
               .foregroundStyle(.secondary)
           }
           if let section = row.link.section {
-            Spacer(minLength: 0)
+            // A registry row already ends at the far edge.
+            if row.entry == nil {
+              Spacer(minLength: 0)
+            }
             Text(PlaceName.abbreviated(section))
               .foregroundStyle(.secondary)
               .monospacedDigit()

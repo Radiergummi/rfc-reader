@@ -50,9 +50,31 @@ public enum BookmarkStore {
       try remove(
         existing, of: id, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
     } else {
-      context.insert(Bookmark(document: id, title: title))
-      try context.save()
+      try add(id, title: title, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
     }
+  }
+
+  /// Adds the bookmark, and registers removing it as the undo, so an undo after a
+  /// removal and a new bookmark takes the new one away rather than doing nothing.
+  private static func add(
+    _ id: DocumentID, title: String, undoManager: UndoManager?,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
+  ) throws {
+    context.insert(Bookmark(document: id, title: title))
+    undoManager?.registerUndo(withTarget: context) { context in
+      // On the main thread, for the reason `CollectionStore.remove` gives.
+      MainActor.assumeIsolated {
+        do {
+          try remove(
+            bookmarks(for: id, in: context), of: id, undoManager: undoManager,
+            onUndoFailure: onUndoFailure, in: context)
+        } catch {
+          onUndoFailure(error)
+        }
+      }
+    }
+    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: false))
+    try context.save()
   }
 
   /// Removes `existing`, every row naming the document, since nothing stops there
@@ -64,11 +86,8 @@ public enum BookmarkStore {
     guard let first = existing.first else { return }
     let removal = Removal(document: id, title: first.title, createdAt: first.createdAt)
     existing.forEach(context.delete)
-    // Explicitly, rather than leaving it to autosave on one platform and not the
-    // other: on macOS the sidebar's list and the reader's toolbar are separate
-    // hosting roots reading the same store, and the glyph should not be able to
-    // disagree with the list behind it while a save is still pending.
-    try context.save()
+    // Registered before the save: a failed save leaves the removal pending in the
+    // context, saved with the next save that succeeds, and still undoable.
     undoManager?.registerUndo(withTarget: context) { context in
       // On the main thread, for the reason `CollectionStore.remove` gives.
       MainActor.assumeIsolated {
@@ -81,6 +100,11 @@ public enum BookmarkStore {
       }
     }
     undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
+    // Explicitly, rather than leaving it to autosave on one platform and not the
+    // other: on macOS the sidebar's list and the reader's toolbar are separate
+    // hosting roots reading the same store, and the glyph should not be able to
+    // disagree with the list behind it while a save is still pending.
+    try context.save()
   }
 
   /// What a removal took out, for its undo to put back.
@@ -100,7 +124,6 @@ public enum BookmarkStore {
     let bookmark = Bookmark(
       document: removal.document, title: removal.title, createdAt: removal.createdAt)
     context.insert(bookmark)
-    try context.save()
     undoManager?.registerUndo(withTarget: context) { context in
       MainActor.assumeIsolated {
         do {
@@ -113,6 +136,7 @@ public enum BookmarkStore {
       }
     }
     undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
+    try context.save()
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do
