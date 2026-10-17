@@ -45,8 +45,10 @@ public struct Snippet: Sendable, Hashable {
 /// The schema:
 ///
 ///     meta (key, value)             -- `version`
-///     documents (document, written) -- every document indexed, `rfc8999`, and when
-///                                      its body was written
+///     documents (document, written, retained)
+///                                   -- every document indexed, `rfc8999`, when its
+///                                      body was written, and whether Index All RFCs
+///                                      indexed it
 ///     sections (document, anchor, number, heading, body)   -- FTS5
 ///     section_rows (row, document)  -- which document each row of `sections` is
 ///
@@ -57,7 +59,7 @@ public struct Snippet: Sendable, Hashable {
   /// under another version is emptied when it is opened. The app then indexes its
   /// stored bodies again; a document indexed by Index All RFCs, whose body was not
   /// kept, is only back once that run is made again.
-  public static let version = 2
+  public static let version = 3
 
   /// The anchor the reader gives the abstract, which a hit in it opens.
   public static let abstractAnchor = "abstract"
@@ -99,7 +101,9 @@ public struct Snippet: Sendable, Hashable {
         DROP TABLE IF EXISTS documents;
         DROP TABLE IF EXISTS sections;
         DROP TABLE IF EXISTS section_rows;
-        CREATE TABLE documents (document TEXT PRIMARY KEY, written REAL NOT NULL);
+        CREATE TABLE documents (
+          document TEXT PRIMARY KEY, written REAL NOT NULL, retained INTEGER NOT NULL
+        );
         CREATE VIRTUAL TABLE sections USING fts5(
           document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
           tokenize = 'unicode61 remove_diacritics 2'
@@ -128,12 +132,18 @@ public struct Snippet: Sendable, Hashable {
   /// Indexes `document`, replacing what was indexed of it before. One that does not
   /// say which RFC it is is refused: its hits could open nothing. `written` is when
   /// its body was written, which `indexed()` hands back, for a body written again to
-  /// be indexed again.
-  public func add(_ document: RFCDocument, written: Date = .distantPast) throws {
+  /// be indexed again. `retained` marks it as Index All RFCs indexes a document, whose
+  /// body is not kept (`retained()`); a document retained before stays retained.
+  public func add(_ document: RFCDocument, written: Date = .distantPast, retained: Bool = false)
+    throws
+  {
     guard let id = document.header.id else {
       throw Failure(description: "the document names no number")
     }
     try transaction {
+      let wasRetained = try !strings(
+        "SELECT document FROM documents WHERE document = ? AND retained = 1", id.fileStem
+      ).isEmpty
       try deleteRows(of: id)
       let insert = try unsafe prepare(
         "INSERT INTO sections (document, anchor, number, heading, body) VALUES (?, ?, ?, ?, ?)")
@@ -154,17 +164,42 @@ public struct Snippet: Sendable, Hashable {
         try unsafe step(record)
       }
       let recordDocument = try unsafe prepare(
-        "INSERT INTO documents (document, written) VALUES (?, ?)")
+        "INSERT INTO documents (document, written, retained) VALUES (?, ?, ?)")
       defer { unsafe sqlite3_finalize(recordDocument) }
       try unsafe bind(id.fileStem, at: 1, in: recordDocument)
       try check(
         unsafe sqlite3_bind_double(recordDocument, 2, written.timeIntervalSinceReferenceDate))
+      try check(unsafe sqlite3_bind_int(recordDocument, 3, retained || wasRetained ? 1 : 0))
       try unsafe step(recordDocument)
     }
   }
 
   public func remove(_ id: DocumentID) throws {
     try transaction { try deleteRows(of: id) }
+  }
+
+  /// Marks those of `ids` that are indexed as retained, as Index All RFCs does with
+  /// what is indexed already rather than indexing it again.
+  public func retain(_ ids: some Sequence<DocumentID>) throws {
+    try transaction {
+      for id in ids {
+        try run("UPDATE documents SET retained = 1 WHERE document = ?", id.fileStem)
+      }
+    }
+  }
+
+  /// No document is retained any more; each stays indexed, for the app to drop those
+  /// it holds no body of.
+  public func releaseRetained() throws {
+    try execute("UPDATE documents SET retained = 0")
+  }
+
+  /// The documents indexed by Index All RFCs, or by `retain`: those indexed whether or
+  /// not the app keeps their bodies.
+  public func retained() throws -> Set<DocumentID> {
+    Set(
+      try strings("SELECT document FROM documents WHERE retained = 1")
+        .compactMap(DocumentID.init(fileStem:)))
   }
 
   /// Every document indexed, with when its body was written, as `add` was told.
