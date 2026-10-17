@@ -32,10 +32,15 @@ public final class IndexAllRun {
     guard !isRunning, !isRemoving else { return }
     isRunning = true
     progress = nil
-    task = Task {
+    // Below what the person does meanwhile, as the indexing of stored bodies is; and,
+    // on the Mac, not napped while its windows are hidden.
+    let activity = ProcessInfo.processInfo.beginActivity(
+      options: .userInitiatedAllowingIdleSystemSleep, reason: "Index All RFCs")
+    task = Task(priority: .utility) {
       let ended = await indexer.indexAll(
         ids, fetch: fetch,
         progress: { [weak self] progress in await self?.report(progress) }, changed: changed)
+      ProcessInfo.processInfo.endActivity(activity)
       progress = ended
       isRunning = false
       task = nil
@@ -66,10 +71,11 @@ public final class IndexAllRun {
     await indexer.releaseRetained(changed: changed)
   }
 
-  /// The RFCs of `rfcs` a run can index: those listed with a text or an XML. One
-  /// listed with only a PDF or a PostScript has no text to index.
+  /// The RFCs of `rfcs` a run can index, as a narrowed search counts them
+  /// (`hasOnlyPrintFormats`): one listed with only a PDF or a PostScript has no text
+  /// to index.
   public nonisolated static func indexable(_ rfcs: [RFCMetadata]) -> [RFCMetadata] {
-    rfcs.filter { $0.formats.contains(.text) || $0.formats.contains(.xml) }
+    rfcs.filter { !$0.hasOnlyPrintFormats }
   }
 
   private func report(_ progress: TextIndexer.CorpusProgress) {

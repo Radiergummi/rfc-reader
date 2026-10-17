@@ -183,8 +183,7 @@ public struct Snippet: Sendable, Hashable {
   /// Removes every document, as Remove Full-Text Index does before the app indexes
   /// its stored bodies again, and gives the disk back. The tables are made again
   /// rather than emptied row by row: FTS5 removes a row by writing a deletion over
-  /// its postings, which leaves them in the file until segments merge, so removing
-  /// nearly every document would take as long as indexing it and free little.
+  /// its postings, which leaves them in the file until segments merge.
   public func removeAll() throws {
     try transaction { try execute(Self.emptyTables) }
     // SQLite keeps freed pages for rows to come, and the journal at its largest.

@@ -444,15 +444,40 @@ struct TextIndexerTests {
     #expect(await indexer.unindexed([id, .rfc(1), .rfc(2)]) == 2)
   }
 
-  @Test func `only an RFC with a text or an XML can be indexed`() {
+  /// The same RFCs a narrowed search counts (`TextQuery.documents`), so a complete
+  /// run searches everything a search could: one with no formats listed may have a
+  /// text, and the download tries it.
+  @Test func `only an RFC listed only as a PDF or a PostScript cannot be indexed`() {
     let date = PublicationDate(year: 1990)
     let rfcs = [
       RFCMetadata(id: .rfc(1), title: "Text", date: date, formats: [.text, .html]),
       RFCMetadata(id: .rfc(2), title: "XML", date: date, formats: [.xml]),
       RFCMetadata(id: .rfc(3), title: "Scanned", date: date, formats: [.pdf, .postScript]),
+      RFCMetadata(id: .rfc(4), title: "Unlisted", date: date, formats: []),
     ]
 
-    #expect(IndexAllRun.indexable(rfcs).map(\.id) == [.rfc(1), .rfc(2)])
+    #expect(IndexAllRun.indexable(rfcs).map(\.id) == [.rfc(1), .rfc(2), .rfc(4)])
+  }
+
+  /// A body the reader stored during the run is indexed by the reconcile as it was
+  /// written; the run does not index it again over that, as if it had no body.
+  @Test func `the whole-corpus run leaves what a reconcile indexed meanwhile`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let url = indexURL(in: sandbox)
+    let indexer = try TextIndexer(contentsOf: url, store: store)
+    let fetch = CountingFetch()
+
+    _ = await indexer.indexAll([id]) { asked in
+      try await storeBody(in: store)
+      await indexer.reconcile()
+      return try fetch(asked)
+    }
+
+    let written = try FullTextIndex(contentsOf: url).indexed()[id]
+    #expect(written == (await store.storedBodies())[id])
+    #expect(await indexer.usage().retained == 1)
   }
 
   /// Remove Full-Text Index: the index goes back to the bodies the store holds.

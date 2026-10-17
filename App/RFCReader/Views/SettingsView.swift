@@ -224,6 +224,8 @@ struct StorageSettings: View {
   @State private var confirmsRemoval = false
   /// Read as `usage` is, and again whenever the index changes.
   @State private var textIndex: TextIndexer.Usage?
+  /// How many RFCs Index All RFCs would index, read with `textIndex`.
+  @State private var unindexed: Int?
   @State private var confirmsIndexRemoval = false
 
   private var keepsBookmarks: Binding<Bool> {
@@ -277,9 +279,7 @@ struct StorageSettings: View {
         .foregroundStyle(.secondary)
       }
       LabeledContent("Full-Text Index") { UsageValue(usage: textIndex?.usage) }
-      if let textIndex, library.index != nil,
-        textIndex.usage.documents >= library.indexableRFCs.count
-      {
+      if unindexed == 0, library.index != nil, !library.indexAllRun.isRunning {
         Text("All RFCs are indexed.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -310,7 +310,7 @@ struct StorageSettings: View {
       }
     }
     .task { await refresh() }
-    .task(id: library.textIndexVersion) { await refreshTextIndex() }
+    .task(id: [library.textIndexVersion, library.indexVersion]) { await refreshTextIndex() }
   }
 
   private func refresh() async {
@@ -319,6 +319,7 @@ struct StorageSettings: View {
 
   private func refreshTextIndex() async {
     textIndex = await library.textIndexUsage()
+    unindexed = await library.unindexedRFCCount()
   }
 }
 

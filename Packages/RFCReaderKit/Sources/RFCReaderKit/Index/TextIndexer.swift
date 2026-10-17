@@ -225,8 +225,14 @@ public actor TextIndexer {
         case .success(var document):
           document.header.id = id
           do {
-            try index.add(document, retained: true)
-            indexed?[id] = .distantPast
+            // A reconcile may have indexed it from a body stored meanwhile, as it was
+            // written; indexed again here, the next reconcile would parse it again.
+            if indexed?[id] != nil {
+              try index.retain([id])
+            } else {
+              try index.add(document, retained: true)
+              indexed?[id] = .distantPast
+            }
             retained.insert(id)
             counted.indexed += 1
             unannounced += 1
@@ -265,9 +271,10 @@ public actor TextIndexer {
     } catch {
       indexerLog.error(
         "emptying the index failed: \(String(describing: error), privacy: .public)")
-      return
     }
-    indexed = [:]
+    // Read again from the index, whether or not giving back the disk failed after the
+    // tables were made again.
+    indexed = nil
     retained = []
     await changed()
     await reconcile(changed: changed)
