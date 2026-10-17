@@ -115,6 +115,9 @@ final class ReaderLayoutEngine: PinSurface {
   /// folded, or put at `place`, a jump's target the folding has just shown.
   func refold(_ hidden: HiddenText, placeAt place: Int? = nil) {
     guard let layout = textView?.textLayoutManager else { return }
+    let interval = signposter.beginInterval(
+      "Refold", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
+    defer { signposter.endInterval("Refold", interval) }
     if let place {
       keeper.jumped(to: ReaderAnchor(characterOffset: place))
     } else if case .line(let anchor) = keeper.place, hidden.contains(anchor.characterOffset) {

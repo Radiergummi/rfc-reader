@@ -104,15 +104,24 @@ extension RFCTextViewCoordinator {
       let built, !requirements.isEmpty
     else { return }
     let requirements = requirements
+    // From the install, or the requirements' arrival, until the bands are drawn (#747).
+    let interval = signposter.beginInterval("Find bands", id: signposter.makeSignpostID())
     bandsTask = Task {
       let bands = await Self.bands(of: requirements, in: built)
       // A later build or requirements have forgotten this task and started their own.
-      guard self.built?.text === built.text, self.requirements == requirements else { return }
+      guard self.built?.text === built.text, self.requirements == requirements else {
+        signposter.endInterval("Find bands", interval, "superseded")
+        return
+      }
       bandsTask = nil
       requirementBands = bands
-      guard folding.mode.bandsRequirements, let foldingIndex else { return }
+      guard folding.mode.bandsRequirements, let foldingIndex else {
+        signposter.endInterval("Find bands", interval, "not drawn")
+        return
+      }
       foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
       engine.refold(foldingDelegate.hidden)
+      signposter.endInterval("Find bands", interval)
     }
   }
 
