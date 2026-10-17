@@ -7,8 +7,8 @@ extension CitationStyle {
   public func title(in locale: Locale = .interface) -> String {
     switch self {
     case .short: String(kit: "Short", locale: locale)
-    case .full: String(kit: "Full citation", locale: locale)
-    case .markdown: String(kit: "Markdown link", locale: locale)
+    case .full: String(kit: "Full Citation", locale: locale)
+    case .markdown: String(kit: "Markdown Link", locale: locale)
     case .bibtex: "BibTeX"
     case .url: "URL"
     }

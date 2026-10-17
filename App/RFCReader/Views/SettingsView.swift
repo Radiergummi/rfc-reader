@@ -97,7 +97,7 @@ private struct ReadingSettings: View {
       value: $settings.fontSize, in: ReaderPreferences.fontSizes,
       step: ReaderPreferences.fontSizeStep
     ) {
-      Text("Reading font size: \(Int(settings.fontSize))")
+      Text("Text Size: \(Int(settings.fontSize))")
     } minimumValueLabel: {
       Image(systemName: "textformat.size.smaller")
     } maximumValueLabel: {
@@ -110,7 +110,7 @@ private struct ReadingSettings: View {
     }
     Toggle("Underline links", isOn: $settings.underlineLinks)
     Toggle(isOn: $settings.drawDiagrams) {
-      Text("Draw diagrams")
+      Text("Show Diagrams as Figures")
       Text(
         "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it."
       )

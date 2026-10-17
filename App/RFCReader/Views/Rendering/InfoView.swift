@@ -689,7 +689,7 @@ private struct OfflineSection: View {
         Text(
           downloadFailed
             ? (hadNoRoom ? "Not enough space" : "Couldn't download")
-            : isKept ? "Kept offline" : "Not kept offline"
+            : isKept ? "Available offline" : "Not available offline"
         )
         .foregroundStyle(isKept ? .primary : .secondary)
         Spacer()
