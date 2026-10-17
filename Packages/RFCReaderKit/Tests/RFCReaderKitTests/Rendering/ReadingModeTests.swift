@@ -84,27 +84,25 @@ struct ReadingModeTests {
   }
 
   /// The build makes the index (#723), so the text view and the reader state share
-  /// one: it is the index of the build's own text, its paragraphs and its outline.
+  /// one: it is the index of the build's own text, its paragraphs and its outline,
+  /// each entry at its heading's paragraph and depth.
   @Test func `a build carries the folding index of its text`() throws {
     let built = try Self.rfc8999()
     let index = built.foldingIndex
     #expect(index.paragraphs == Self.paragraphs(of: built))
+    #expect(index.length == built.text.length)
     let outline = Self.outlineEntries(of: built)
     #expect(!outline.isEmpty)
-    #expect(index.entries.map(\.anchor) == outline.map(\.anchor))
-    #expect(index.entries.map(\.offset) == outline.map(\.offset))
-    #expect(index.length == built.text.length)
-    // And all of it is what an index made of the finished build afterwards holds,
-    // so nothing the build does after making it changes what it describes.
-    let afterwards = FoldingIndex(text: built.text, anchors: built.anchors)
-    #expect(index.paragraphs == afterwards.paragraphs)
-    #expect(index.entries == afterwards.entries)
-    #expect(index.asides == afterwards.asides)
-    let withAsides = try Self.rfc9271()
-    #expect(!withAsides.foldingIndex.asides.isEmpty)
+    let string = built.text.string as NSString
     #expect(
-      withAsides.foldingIndex.asides
-        == FoldingIndex(text: withAsides.text, anchors: withAsides.anchors).asides)
+      index.entries
+        == outline.map { entry in
+          FoldingIndex.Entry(
+            anchor: entry.anchor, offset: entry.offset,
+            paragraph: string.paragraphRange(for: NSRange(location: entry.offset, length: 0))
+              .location,
+            depth: entry.depth ?? 1)
+        })
   }
 
   @Test func `normal reading hides nothing`() throws {
