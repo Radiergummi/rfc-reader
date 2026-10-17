@@ -16,6 +16,10 @@ public enum ReaderLinkScheme {
   /// lists the sections that refer to it rather than going anywhere.
   public static let backlinksScheme = "rfc-backlinks"
 
+  /// The scheme of a heading's errata chip (#387), naming the section: a click lists
+  /// the section's errata rather than going anywhere.
+  public static let errataScheme = "rfc-errata"
+
   /// The anchor a link of `anchorScheme` names: the other half of `url(_:scheme:)`,
   /// and nil when the URL is not one of ours. Kept beside the encoder, because a
   /// scheme whose two halves live apart is one percent-encoding rule away from
@@ -32,6 +36,11 @@ public enum ReaderLinkScheme {
   /// The same for `backlinksScheme`: the section whose backlinks a caption lists.
   public static func backlinks(from url: URL) -> String? {
     decoded(url, scheme: backlinksScheme)
+  }
+
+  /// The same for `errataScheme`: the section whose errata a chip lists.
+  public static func errata(from url: URL) -> String? {
+    decoded(url, scheme: errataScheme)
   }
 
   private static func decoded(_ url: URL, scheme: String) -> String? {

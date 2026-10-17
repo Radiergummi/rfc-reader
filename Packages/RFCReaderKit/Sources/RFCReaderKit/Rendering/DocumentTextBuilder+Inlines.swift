@@ -185,7 +185,7 @@ extension DocumentTextBuilder {
   ///
   /// `iconAttributes` are the icon's alone, on top of the chip's.
   private func chipRun(
-    _ text: String, attributes: [NSAttributedString.Key: Any],
+    _ text: String, symbol: String = "doc.text", attributes: [NSAttributedString.Key: Any],
     iconAttributes: [NSAttributedString.Key: Any] = [:]
   ) -> NSAttributedString {
     var chip = attributes
@@ -193,7 +193,7 @@ extension DocumentTextBuilder {
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
     if let symbol = chipSymbolRun(
-      "doc.text", attributes: chip.merging(iconAttributes) { _, icon in icon })
+      symbol, attributes: chip.merging(iconAttributes) { _, icon in icon })
     {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
@@ -251,6 +251,26 @@ extension DocumentTextBuilder {
   ) {
     let existing = output.attribute(.kern, at: index, effectiveRange: nil) as? CGFloat ?? 0
     output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
+  }
+
+  /// A heading's errata chip (#387), after its title and a space: drawn as a
+  /// reference's chip is, saying how many errata the section has and whether they are
+  /// held, and going nowhere itself: its link names the section, and the reader lists
+  /// the section's errata. The space and the chip are `.rfcReaderOnly`, so a copied
+  /// heading is its words alone.
+  func errataChip(
+    _ anchor: String, items: [ErrataSummary.Item], base: [NSAttributedString.Key: Any]
+  ) -> NSAttributedString {
+    var attributes = base
+    attributes[.rfcReaderOnly] = ""
+    let result = NSMutableAttributedString(string: " ", attributes: attributes)
+    let words = ErrataMarks.bodyLabel(for: items)
+    attributes[.rfcSpoken] = words
+    if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.errataScheme) {
+      attributes.merge(linkAttributes(url)) { _, link in link }
+    }
+    result.append(chipRun(words, symbol: "exclamationmark.bubble", attributes: attributes))
+    return result
   }
 
   /// A heading's backlink caption (#183, #584): a paragraph of its own under the
