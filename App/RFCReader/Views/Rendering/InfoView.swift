@@ -313,14 +313,17 @@ private struct ErrataSection: View {
   }
 }
 
-private struct ErratumView: View {
+/// One erratum, as the Info pane and an errata chip's list show it (#387).
+struct ErratumView: View {
   let item: ErrataSummary.Item
-  let selectSection: (String) -> Void
+  /// Goes to the section the erratum names; nil where the list is already there, as a
+  /// chip's is.
+  var selectSection: ((String) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(alignment: .firstTextBaseline) {
-        if let anchor = item.anchor {
+        if let anchor = item.anchor, let selectSection {
           Button {
             selectSection(anchor)
           } label: {

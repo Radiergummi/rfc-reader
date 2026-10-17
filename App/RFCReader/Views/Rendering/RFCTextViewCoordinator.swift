@@ -369,6 +369,12 @@ final class RFCTextViewCoordinator: NSObject {
           self?.showBacklinks(at: offset)
         }
       }
+      // Nor does an errata chip: it lists its section's errata (#387).
+      if errataChip(at: offset) != nil {
+        return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+          self?.showErrata(at: offset)
+        }
+      }
       guard let url = link(at: offset), let documentID,
         LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
       else { return defaultAction }
@@ -549,6 +555,11 @@ final class RFCTextViewCoordinator: NSObject {
       // A backlink caption goes nowhere: it lists what refers to its section.
       if backlinkCaption(at: charIndex) != nil {
         showBacklinks(at: charIndex)
+        return true
+      }
+      // Nor does an errata chip: it lists its section's errata (#387).
+      if errataChip(at: charIndex) != nil {
+        showErrata(at: charIndex)
         return true
       }
       guard let url = Self.url(fromLink: link) else { return false }

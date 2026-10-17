@@ -33,9 +33,15 @@ struct DocumentHeaderView: View {
     /// it was made and so would never compare equal.
     let revisionLines: [RevisionsSummary.Line]
     let moreRevisions: String?
+    /// The errata naming no section the document has (#387), which the chip by the
+    /// date lists.
+    let documentErrata: [ErrataSummary.Item]
 
     /// Merged by `HeaderSummary`, which a printed page's title block reads too.
-    init(header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil) {
+    init(
+      header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil,
+      documentErrata: [ErrataSummary.Item] = []
+    ) {
       let summary = HeaderSummary(header: header, metadata: metadata)
       title = summary.title
       date = summary.date
@@ -44,6 +50,7 @@ struct DocumentHeaderView: View {
       self.metadata = metadata
       revisionLines = revisions?.bannerLines ?? []
       moreRevisions = revisions?.moreText
+      self.documentErrata = documentErrata
     }
   }
 
@@ -82,6 +89,9 @@ struct DocumentHeaderView: View {
         if let group = identity.workingGroup {
           Text(group)
         }
+        if !identity.documentErrata.isEmpty {
+          DocumentErrataChip(items: identity.documentErrata)
+        }
       }
       .font(.subheadline)
       .foregroundStyle(.secondary)
@@ -103,5 +113,31 @@ struct DocumentHeaderView: View {
     // the column's leading edge, and by a distance that changes with the title's
     // length. Filling the column is the same instruction the body text gets.
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// The whole document's errata (#387), those naming no section it has: a chip by the
+/// date, worded as a heading's is, which lists them in a popover.
+private struct DocumentErrataChip: View {
+  let items: [ErrataSummary.Item]
+  @State private var isShown = false
+
+  var body: some View {
+    Button {
+      isShown = true
+    } label: {
+      Label {
+        Text(verbatim: ErrataMarks.label(for: items))
+      } icon: {
+        Image(systemName: "exclamationmark.bubble")
+      }
+    }
+    .buttonStyle(.borderless)
+    .help("The errata that name no section")
+    .popover(isPresented: $isShown) {
+      ErrataList(items: items)
+        .frame(width: ErrataList.width)
+        .frame(maxHeight: ErrataList.maximumHeight)
+    }
   }
 }

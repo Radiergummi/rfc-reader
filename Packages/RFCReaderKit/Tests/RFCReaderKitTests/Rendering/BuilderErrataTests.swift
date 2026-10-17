@@ -131,7 +131,8 @@ struct BuilderErrataTests {
       errata: Self.marks([Self.erratum(1, .heldForDocumentUpdate, section: "1")]))
 
     let chip = try #require(chips(in: built.text).first)
-    let spoken = built.text.attribute(.rfcSpoken, at: NSMaxRange(chip.range) - 1, effectiveRange: nil)
+    let spoken = built.text.attribute(
+      .rfcSpoken, at: NSMaxRange(chip.range) - 1, effectiveRange: nil)
     #expect(spoken as? String == "Held erratum")
   }
 

@@ -37,6 +37,10 @@ struct BuildInputs: Equatable {
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
+  /// The errata marked after the headings (#387): none until the feed and the
+  /// document are both here, so a build made before is made again once, and a
+  /// refresh that changes nothing builds nothing.
+  let errata: ErrataMarks
 
   /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
   ///   or zero where they don't (#433). Asked of the style rather than given, since
@@ -45,7 +49,7 @@ struct BuildInputs: Equatable {
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
-    hang: (ReadingStyle) -> CGFloat = { _ in 0 }
+    errata: ErrataMarks = .none, hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
@@ -56,6 +60,7 @@ struct BuildInputs: Equatable {
       return style
     }
     self.choices = choices
+    self.errata = errata
   }
 }
 
@@ -295,7 +300,8 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await Self.built(document, style: style, choices: inputs.choices)
+      let rebuilt = await Self.built(
+        document, style: style, choices: inputs.choices, errata: inputs.errata)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs

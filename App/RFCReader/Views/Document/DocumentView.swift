@@ -190,11 +190,20 @@ struct DocumentView: View {
     ReadingPositionKeeper(id: identity, context: modelContext)
   }
 
+  /// The document's verified and held errata, where the reader marks them (#387).
+  private var errataMarks: ErrataMarks {
+    guard let document = session.state.document, let errata = library.errata?[id],
+      !errata.isEmpty
+    else { return .none }
+    return ErrataMarks(ErrataSummary(errata: errata, sections: document.sections))
+  }
+
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
+      errata: errataMarks,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -511,7 +520,8 @@ struct DocumentView: View {
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
-        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) },
+        documentErrata: built.errata.document)
       RFCTextView(
         built: built,
         bibliography: reader.groups,
