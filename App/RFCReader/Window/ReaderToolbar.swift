@@ -350,7 +350,8 @@
       case moreMenu:
         add(
           DocumentMenus.more(
-            showsOriginal: reader.showOriginal, showsTranslation: reader.showTranslation,
+            showsOriginal: reader.showOriginal,
+            showsTranslation: DocumentTranslation.target == nil ? nil : reader.showTranslation,
             errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           to: menu)

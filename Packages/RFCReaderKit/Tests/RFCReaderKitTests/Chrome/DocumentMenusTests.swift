@@ -70,6 +70,13 @@ struct DocumentMenusTests {
         == .toggleTranslation)
   }
 
+  @Test func `a reader of English alone is not offered a translation`() {
+    let more = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: nil, errata: nil, precedingDraft: nil,
+      locale: .english)
+    #expect(titles(more)[0] == ["Original Text"])
+  }
+
   @Test func `with no collections, add to collection offers only a new one`() {
     let menu = DocumentMenus.addToCollection(
       .rfc(9110), in: CollectionSnapshot(collections: []), locale: .english)

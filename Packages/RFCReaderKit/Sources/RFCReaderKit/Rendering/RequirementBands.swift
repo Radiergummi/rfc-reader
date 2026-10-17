@@ -64,24 +64,29 @@ public struct RequirementBands: Sendable, Equatable {
   }
 
   /// In a translation (#749) none of the original's sentences is there to be found,
-  /// so each requirement bands the paragraph its anchor names, from the anchor to
-  /// the paragraph's end: once, however many requirements the paragraph states. One
-  /// anchored on its section, as a legacy paragraph nested in a list is, has no
-  /// paragraph to band.
+  /// so each requirement bands the paragraph its anchor names: from the anchor to the
+  /// next one, less the line breaks before it. Not to its first line break, which a
+  /// paragraph's own line break, or one its translation kept, is as well. Once,
+  /// however many requirements the paragraph states. One anchored on its section, as
+  /// a legacy paragraph nested in a list is, has no paragraph to band.
   private static func paragraphs(of requirements: [Requirement], in built: BuiltDocument)
     -> [NSRange]
   {
     let text = built.text.string as NSString
+    let entries = built.anchors.entries
     var ranges: [NSRange] = []
     for requirement in requirements where requirement.anchor != requirement.sectionAnchor {
       guard let start = built.anchors.offset(of: requirement.anchor),
         start >= NSMaxRange(ranges.last ?? NSRange())
       else { continue }
-      let end = text.range(
-        of: "\n", range: NSRange(location: start, length: text.length - start)
-      ).location
-      let band = NSRange(location: start, length: (end == NSNotFound ? text.length : end) - start)
-      if band.length > 0 { ranges.append(band) }
+      let next = entries.partitioningIndex { $0.offset > start }
+      var end = next < entries.count ? entries[next].offset : text.length
+      while end > start, let scalar = Unicode.Scalar(text.character(at: end - 1)),
+        CharacterSet.whitespacesAndNewlines.contains(scalar)
+      {
+        end -= 1
+      }
+      if end > start { ranges.append(NSRange(location: start, length: end - start)) }
     }
     return ranges
   }

@@ -132,10 +132,7 @@ final class DocumentSession {
   var showsTranslation = false
 
   /// The translation, once it is made.
-  var translatedDocument: TranslatedDocument? {
-    if case .translated(let translated) = translationPhase { return translated }
-    return nil
-  }
+  var translatedDocument: TranslatedDocument? { translationPhase.translated }
 
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the

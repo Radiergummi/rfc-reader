@@ -45,6 +45,12 @@ struct DocumentLabelsTests {
     #expect(DocumentLabels(translating: [:]) == .english)
   }
 
+  @Test func `a label written without a space, or after its number, is found or kept`() {
+    let labels = DocumentLabels(translating: ["Figure 1": "図1", "Table 1": "1. táblázat"])
+    #expect(labels.figure == "図")
+    #expect(labels.table == "Table")
+  }
+
   @Test func `a translated build says the translated labels`() throws {
     let document = try Fixtures.rfc8999()
     let labels = DocumentLabels(translating: Self.german)

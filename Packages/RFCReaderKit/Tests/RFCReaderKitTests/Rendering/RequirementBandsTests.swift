@@ -89,7 +89,6 @@ struct RequirementBandsTests {
       let banded = text.substring(with: band)
       #expect(banded.hasPrefix("«"), "\(banded)")
       #expect(banded.hasSuffix("»"), "\(banded)")
-      #expect(!banded.contains("\n"))
     }
     for (earlier, later) in zip(bands.ranges, bands.ranges.dropFirst()) {
       #expect(NSMaxRange(earlier) <= later.location)

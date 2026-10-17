@@ -42,12 +42,22 @@ public struct DocumentLabels: Sendable, Hashable {
     func word(_ source: String) -> String? {
       translations[source].flatMap { $0.isEmpty ? nil : $0 }
     }
-    func label(_ source: String, beside number: Substring) -> String? {
-      guard let translated = translations[source] else { return nil }
-      let words = translated.split(separator: " ")
-      let label = words.filter { $0 != number }
-      guard label.count == words.count - 1, !label.isEmpty else { return nil }
-      return label.joined(separator: " ")
+    // The label is what is left of the phrase without its number, where the number
+    // is on the side the builder sets it: after "Abbildung" and "図", before
+    // "Rückverweise". A language that puts it on the other side, "1. ábra", keeps the
+    // English.
+    func label(_ source: String, beside number: String, numberFirst: Bool = false) -> String? {
+      guard let translated = translations[source],
+        numberFirst ? translated.hasPrefix(number) : translated.hasSuffix(number)
+      else { return nil }
+      let rest =
+        numberFirst ? translated.dropFirst(number.count) : translated.dropLast(number.count)
+      let label = rest.trimmingCharacters(in: .whitespaces)
+      // A letter, an appendix's, is only the number where it stands apart from the
+      // word: the "A" of "Anhang A", not of "MANA".
+      let isApart = label.count < rest.count || number.allSatisfy(\.isNumber)
+      guard !label.isEmpty, isApart else { return nil }
+      return label
     }
     abstract = word("Abstract") ?? abstract
     note = word("Note") ?? note
@@ -59,7 +69,7 @@ public struct DocumentLabels: Sendable, Hashable {
     table = label("Table 1", beside: "1") ?? table
     appendix = label("Appendix A", beside: "A") ?? appendix
     annex = label("Annex A", beside: "A") ?? annex
-    backlinks = label("4 Backlinks", beside: "4") ?? backlinks
+    backlinks = label("4 Backlinks", beside: "4", numberFirst: true) ?? backlinks
   }
 
   /// What a backlink caption says, and VoiceOver says for it: the number of

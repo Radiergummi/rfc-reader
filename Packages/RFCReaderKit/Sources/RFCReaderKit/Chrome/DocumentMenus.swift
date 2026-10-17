@@ -84,9 +84,10 @@ public enum DocumentMenus {
 
   /// What is used least: the original text and a translation, and the document's
   /// pages elsewhere — errata and the preceding draft only where the document has
-  /// them.
+  /// them. `showsTranslation` is nil where none is offered: to a reader who reads
+  /// only English (`DocumentTranslation.target`).
   public static func more(
-    showsOriginal: Bool, showsTranslation: Bool, errata: URL?, precedingDraft: URL?,
+    showsOriginal: Bool, showsTranslation: Bool?, errata: URL?, precedingDraft: URL?,
     locale: Locale = .interface
   ) -> Sections<Action> {
     var pages: [Item<Action>] = [
@@ -100,6 +101,7 @@ public enum DocumentMenus {
     }
     let original = Item(
       String(kit: "Original Text", locale: locale), Action.toggleOriginalText, isOn: showsOriginal)
+    guard let showsTranslation else { return [[original], pages] }
     let translation = Item(
       String(kit: "Translate", locale: locale), Action.toggleTranslation, isOn: showsTranslation)
     return [[original, translation], pages]

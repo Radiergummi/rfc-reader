@@ -6,81 +6,66 @@ import Translation
 /// Translating the document on demand (#749): asked for from the More menu, carried
 /// out by the Translation framework on the device, and kept, so the same document is
 /// not translated again. What a translated document is, and what is not translated,
-/// are `DocumentTranslation`'s.
+/// are `DocumentTranslation`'s; where a translation stands is `TranslationRun`'s.
 extension DocumentSession {
-  /// Where a translation of the document stands.
-  enum TranslationPhase: Equatable {
-    case idle
-    /// The share of what had to be asked for that has come back.
-    case translating(progress: Double)
-    case translated(TranslatedDocument)
-    case failed
-  }
-
-  /// The language to translate into: the first of the reader's languages that is
-  /// not English, which the document already is. Nil for a reader who reads only
-  /// English, which leaves the choice to the framework.
-  static var translationTarget: Locale.Language? {
-    Locale.preferredLanguages.lazy
-      .map { Locale.Language(identifier: $0) }
-      .first { $0.languageCode != .english }
-  }
-
   /// The framework's configuration for the document, which `.translationTask` runs
-  /// `translate(with:)` under.
-  static func translationConfiguration() -> TranslationSession.Configuration {
-    TranslationSession.Configuration(
-      source: Locale.Language(identifier: "en"), target: translationTarget)
+  /// `translate(with:cache:)` under. Nil for a reader who reads only English, who
+  /// is not offered a translation.
+  static func translationConfiguration() -> TranslationSession.Configuration? {
+    DocumentTranslation.target.map {
+      TranslationSession.Configuration(source: Locale.Language(identifier: "en"), target: $0)
+    }
   }
 
-  /// Translates the document with `translator`: what an earlier translation kept is
-  /// not asked for again, the rest is asked for in one batch, and the whole is kept
-  /// once it is back. Once per document unless it failed: a translation already
-  /// made, or under way, is left as it is.
+  /// Translates the document with `translator`, if the reader still shows the
+  /// translation and none is made or under way: `.translationTask` runs this again
+  /// whenever the view appears. What an earlier translation kept is not asked for
+  /// again, and the rest is asked for in one batch. What comes back is kept even if
+  /// the batch fails or is canceled, so the next attempt asks only for the rest; a
+  /// batch that ended early is no translation, and leaves the phase idle.
   func translate(with translator: TranslationSession, cache: TranslationCache) async {
-    guard let document = state.document else { return }
-    switch translationPhase {
-    case .translating, .translated: return
-    case .idle, .failed: break
-    }
+    guard showsTranslation, !translationPhase.isUnderWayOrMade,
+      let document = state.document, let target = translator.targetLanguage
+    else { return }
+    let language = target.minimalIdentifier
     translationPhase = .translating(progress: 0)
-    let language = translator.targetLanguage?.minimalIdentifier
     var translations = await Self.kept(by: cache, of: id, into: language)
-    let missing = await Self.missing(in: document, known: translations)
-    var fresh: [String: String] = [:]
-    var responseLanguage: String?
-    do {
-      // Identified by index, so a response is matched to its source whatever the
-      // framework makes of the text's white space.
-      let requests = missing.enumerated().map { index, source in
+    var run = TranslationRun(await Self.missing(in: document, known: translations))
+    var failure: (any Error)?
+    if !run.requests.isEmpty {
+      let requests = run.requests.enumerated().map { index, source in
         TranslationSession.Request(sourceText: source, clientIdentifier: String(index))
       }
-      for try await response in translator.translate(batch: requests) {
-        guard let index = response.clientIdentifier.flatMap(Int.init) else { continue }
-        fresh[missing[index]] = response.targetText
-        responseLanguage = responseLanguage ?? response.targetLanguage.minimalIdentifier
-        // A step at a time, so the header is not hosted again for every paragraph.
-        if fresh.count.isMultiple(of: 50) {
-          translationPhase = .translating(progress: Double(fresh.count) / Double(missing.count))
+      do {
+        for try await response in translator.translate(batch: requests) {
+          let moved = run.receive(response.targetText, for: response.clientIdentifier)
+          if moved { translationPhase = .translating(progress: run.progress) }
         }
+      } catch {
+        failure = error
       }
-    } catch {
-      readerLog.failure(of: id, "translating failed", error)
+    }
+    if !run.received.isEmpty {
+      await Self.keep(run.received, in: cache, of: id, into: language)
+    }
+    if let failure {
+      readerLog.failure(of: id, "translating failed", failure)
       translationPhase = .failed
       return
     }
-    translations.merge(fresh) { _, new in new }
-    if let language = language ?? responseLanguage, !fresh.isEmpty {
-      await Self.keep(fresh, in: cache, of: id, into: language)
+    guard run.isComplete else {
+      translationPhase = .idle
+      return
     }
+    translations.merge(run.received) { _, new in new }
     translationPhase = .translated(await Self.translated(document, translations))
   }
 
   @concurrent
   private static func kept(
-    by cache: TranslationCache, of id: DocumentID, into language: String?
+    by cache: TranslationCache, of id: DocumentID, into language: String
   ) async -> [String: String] {
-    language.map { cache.translations(of: id, into: $0) } ?? [:]
+    cache.translations(of: id, into: language)
   }
 
   @concurrent

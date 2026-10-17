@@ -53,13 +53,6 @@ struct DocumentHeaderView: View {
     }
   }
 
-  /// Where a translation of the document stands, as the header says it (#749).
-  enum TranslationMark: Equatable {
-    case translating(progress: Double)
-    case translated
-    case failed
-  }
-
   /// The view renders from the identity rather than beside it, so the two cannot
   /// describe different headers.
   let identity: Identity
@@ -129,7 +122,7 @@ private struct TranslationNotice: View {
   /// Hosted outside the SwiftUI hierarchy, by a host that `ReaderEnvironment`
   /// guarantees gave it the environment.
   @Environment(ReaderState.self) private var reader
-  let mark: DocumentHeaderView.TranslationMark
+  let mark: TranslationMark
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {

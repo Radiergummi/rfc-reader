@@ -151,6 +151,14 @@ struct DocumentTranslationTests {
     #expect(translated.document == DocumentTranslation.translated(document, translations))
   }
 
+  @Test func `a run with a superscript is left as it was`() {
+    let power = Block.paragraph(
+      Paragraph([.text("The counter wraps at 2"), .superscript("32"), .text(" values.")]))
+    let translated = DocumentTranslation.translated(
+      blocks: [power], ["The counter wraps at 232 values.": "Der Zähler läuft bei 232 über."])
+    #expect(translated == [power])
+  }
+
   /// An aside's "Note:" stays, so the builder still takes it for the caption the
   /// translated labels name, and translates the rest.
   @Test func `an aside keeps the label its caption is made from`() throws {

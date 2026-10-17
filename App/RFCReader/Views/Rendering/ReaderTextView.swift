@@ -469,7 +469,7 @@ import RFCReaderKit
       let clickedBox = FigureCopy.box(at: clicked, in: text)
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
-      let quotes = selectedRange().length > 0
+      let quotes = quoteSelection(selectedRange()) != nil
       let gloss = followGloss(event)
       guard figure != nil || quotes || gloss != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.

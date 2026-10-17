@@ -463,11 +463,9 @@ struct DocumentView: View {
   /// Starts the translation the reader asked for, unless it is made or under way;
   /// again after one that failed.
   private func requestTranslation() {
-    guard showsTranslation, session.state.document != nil else { return }
-    switch session.translationPhase {
-    case .translating, .translated: return
-    case .idle, .failed: break
-    }
+    guard showsTranslation, session.state.document != nil,
+      !session.translationPhase.isUnderWayOrMade
+    else { return }
     if translationConfiguration == nil {
       translationConfiguration = DocumentSession.translationConfiguration()
     } else {
@@ -475,18 +473,11 @@ struct DocumentView: View {
     }
   }
 
-  /// What the header says of a translation asked for: how far it is, that the text
-  /// is a machine's, or that it failed. Nil showing the English.
-  private var translationMark: DocumentHeaderView.TranslationMark? {
-    guard showsTranslation else { return nil }
-    switch session.translationPhase {
-    case .idle: return .translating(progress: 0)
-    case .translating(let progress): return .translating(progress: progress)
-    // Until the translated build is the one on screen.
-    case .translated:
-      return session.state.built?.isTranslation == true ? .translated : .translating(progress: 1)
-    case .failed: return .failed
-    }
+  /// What the header says of a translation asked for, nil showing the English.
+  private var translationMark: TranslationMark? {
+    TranslationMark(
+      session.translationPhase, showsTranslation: showsTranslation,
+      buildIsTranslation: session.state.built?.isTranslation == true)
   }
 
   private func saveNow() {

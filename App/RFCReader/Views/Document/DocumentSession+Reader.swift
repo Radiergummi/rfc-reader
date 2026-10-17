@@ -110,7 +110,8 @@ extension DocumentSession {
       reader { $0.documentStartsLoading() }
       Self.present(document, id: id, into: reader, library: library)
       if let built {
-        reader.sections = built.reachableSections(of: translatedDocument?.document ?? document)
+        let shown = built.isTranslation ? translatedDocument?.document : nil
+        reader.sections = built.reachableSections(of: shown ?? document)
       }
     case .failed:
       reader { $0.documentFailedToLoad() }

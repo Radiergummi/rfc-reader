@@ -172,10 +172,12 @@ private struct Rewriter {
     Self.isProse(text) ? translate(text) : text
   }
 
-  /// A run of prose, translated whole and linked again (`Relinking`).
+  /// A run of prose, translated whole and linked again (`Relinking`). Not one with a
+  /// superscript or subscript, which plain text would run into the digits beside
+  /// it, 2 and 32 into 232: it stays English rather than say another number.
   func inlines(_ inlines: [Inline]) -> [Inline] {
     let source = inlines.plainText
-    guard Self.isProse(source) else { return inlines }
+    guard Self.isProse(source), !Self.hasScripts(inlines) else { return inlines }
     // Before the run itself, so the labels are asked for even where the run is not
     // translated.
     let keepers = keepers(in: inlines)
@@ -211,6 +213,15 @@ private struct Rewriter {
         return keepers(in: inner)
       case .text, .superscript, .subscript, .lineBreak:
         return []
+      }
+    }
+  }
+
+  static func hasScripts(_ inlines: [Inline]) -> Bool {
+    inlines.flattened.contains { inline in
+      switch inline {
+      case .superscript, .subscript: true
+      default: false
       }
     }
   }
