@@ -19,20 +19,28 @@ step() { printf '\n==> %s\n' "$1"; }
 # A deploy replaces every file the site serves, so a checkout without the newest feed
 # would take updates away from every installed copy: refused when the live feed has
 # a build the local one lacks, or there is a live feed and no local one.
-highest_build() { sed -n 's/.*<sparkle:version>\([0-9]*\)<.*/\1/p' "$1" | sort -n | tail -1; }
+builds() { sed -n 's/.*<sparkle:version>\([0-9]*\)<.*/\1/p' "$1" | sort -u; }
 step "Comparing with the live feed"
 live="$(mktemp)"
-status=$(curl -sS -o "$live" -w '%{http_code}' --max-time 20 "$feed_url")
+served="$(mktemp)"
+trap 'rm -f "$live" "$served"' EXIT
+# Before the first deploy the hostname has no DNS record at all, which curl reports
+# as exit status 6 rather than a status code. That is no feed, as a 404 is, but only
+# while there is no local feed either: once there is one, the site has been deployed.
+status=$(curl -sS -o "$live" -w '%{http_code}' --max-time 20 "$feed_url") || {
+  code=$?
+  [[ "$code" -eq 6 && ! -f "$appcast" ]] || exit "$code"
+  status=404
+}
 case "$status" in
   200)
     if [[ ! -f "$appcast" ]]; then
       echo "$feed_url is live and $appcast is missing: deploying would remove the feed." >&2
       exit 1
     fi
-    live_build=$(highest_build "$live")
-    local_build=$(highest_build "$appcast")
-    if [[ "${local_build:-0}" -lt "${live_build:-0}" ]]; then
-      echo "The live feed offers build $live_build and $appcast only ${local_build:-none}: deploying would take it back." >&2
+    missing=$(comm -23 <(builds "$live") <(builds "$appcast") | paste -sd ' ' -)
+    if [[ -n "$missing" ]]; then
+      echo "The live feed offers builds $appcast lacks ($missing): deploying would take them back." >&2
       exit 1
     fi
     ;;
@@ -82,7 +90,6 @@ fi
 # The edge may serve the feed before for a little while; what counts is that the
 # one just deployed is served, as XML.
 step "Checking the published feed"
-served="$(mktemp)"
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
   type=$(curl -sS -o "$served" -w '%{content_type}' --max-time 20 "$feed_url") || type=""
   if cmp -s "$served" "$appcast"; then

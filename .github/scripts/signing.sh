@@ -18,6 +18,8 @@ set -euo pipefail
 keychain="release.keychain"
 keychain_password="release"
 
+# Removed however the script ends: it is the Developer ID private key.
+trap 'rm -f Signing.p12' EXIT
 echo "$SIGNING_DATA" | base64 -d -o Signing.p12
 
 security create-keychain -p "$keychain_password" "$keychain"
@@ -31,7 +33,6 @@ security set-keychain-settings -lut 7200 "$keychain"
 security import ./Signing.p12 -k "$keychain" -P "$SIGNING_PASSWORD" -A -T /usr/bin/codesign
 # Lets codesign use the key without a prompt that cannot appear.
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
-rm -f Signing.p12
 
 # notarytool reads the App Store Connect key from disk, by its ID.
 mkdir -p ~/.private_keys

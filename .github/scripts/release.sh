@@ -34,8 +34,14 @@ step() { printf '\n==> %s\n' "$1"; }
 notarize() {
   local result id status
   result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --output-format json) || true
-  id=$(plutil -extract id raw - <<<"$result")
-  status=$(plutil -extract status raw - <<<"$result")
+  # A submission refused before it has an ID (a wrong key or issuer) has neither.
+  id=$(plutil -extract id raw - <<<"$result" 2>/dev/null) || id=""
+  status=$(plutil -extract status raw - <<<"$result" 2>/dev/null) || status=""
+  if [[ -z "$id" ]]; then
+    echo "notarytool did not submit $1:" >&2
+    echo "$result" >&2
+    exit 1
+  fi
   if [[ "$status" != "Accepted" ]]; then
     echo "Notarization of $1 ended as $status." >&2
     xcrun notarytool log "$id" "${notary[@]}" >&2 || true
@@ -48,8 +54,8 @@ make xcodeproj
 
 step "Archiving"
 rm -rf "$archive" "$export_dir" "$stage"
-# SELF_UPDATING starts the updater, which no other build does (Window/Updater.swift);
-# a Release build sets no other condition for it to replace.
+# SELF_UPDATING starts the updater, which no other build does (Window/Updater.swift).
+# Added to the conditions each target has, not in place of them.
 # Signed with Developer ID from the start: automatic signing would resolve the
 # archive to a development certificate, which export then discards but which must
 # still exist, and the runner holds only the Developer ID one.
@@ -60,7 +66,7 @@ xcodebuild archive -project RFCReader.xcodeproj -scheme RFCReader \
   CODE_SIGN_IDENTITY="Developer ID Application" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS=SELF_UPDATING \
+  SWIFT_ACTIVE_COMPILATION_CONDITIONS="\$(inherited) SELF_UPDATING" \
   -quiet
 
 step "Exporting with Developer ID"

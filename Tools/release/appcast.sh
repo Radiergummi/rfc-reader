@@ -46,7 +46,8 @@ is_draft=$(gh release view "$tag" --repo "$repository" --json isDraft --jq .isDr
 
 hdiutil detach "$mount_point" >/dev/null 2>&1 || true
 rm -rf "$updates"
-mkdir -p "$updates"
+# hdiutil refuses a mount point outside /Volumes that does not exist yet.
+mkdir -p "$mount_point"
 gh release download "$tag" --repo "$repository" --pattern "$disk_image" --dir "$updates"
 
 # Made by release.yml, run for this tag, not only by some workflow of the repository.
@@ -69,7 +70,7 @@ echo "$tag is build $build_number, with its feed at $feed_url"
 # generate_appcast keeps what the feed in its directory holds. A 404 is the first
 # release; anything else stops here rather than publish a feed that forgot them.
 step "Reading the published feed"
-status=$(curl -sS -o "$updates/appcast.xml" -w '%{http_code}' "$feed_url")
+status=$(curl -sS -o "$updates/appcast.xml" -w '%{http_code}' --max-time 20 "$feed_url")
 case "$status" in
   200)
     published=$(sed -n 's/.*<sparkle:version>\([0-9]*\)<.*/\1/p' "$updates/appcast.xml" | sort -n | tail -1)
