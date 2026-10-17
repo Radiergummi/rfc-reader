@@ -28,6 +28,8 @@ struct DocumentPreview: View {
   @ReaderSettingsValue private var settings
   /// The reader follows Dynamic Type (#331), so the preview of it does too.
   @Environment(\.dynamicTypeSize) private var textSize
+  /// Bold Text, part of what a kept preview was built for (#765).
+  @Environment(\.legibilityWeight) private var legibilityWeight
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var controller = ReaderController()
@@ -101,7 +103,7 @@ struct DocumentPreview: View {
   private func load() async {
     let column = ReaderLayout.column(forWidth: size.width, measure: settings.measure)
     let style = settings.style(column: column, textSize: textSize)
-    let key = BuildKey(document: id, style: style)
+    let key = BuildKey(document: id, style: style, boldText: legibilityWeight == .bold)
     do {
       let kept = library.keptPreview(for: key)
       let shown: Loaded
