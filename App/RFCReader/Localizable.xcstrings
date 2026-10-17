@@ -2621,6 +2621,16 @@
         }
       }
     },
+    "Tab" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab"
+          }
+        }
+      }
+    },
     "Text Size" : {
       "localizations" : {
         "de" : {
