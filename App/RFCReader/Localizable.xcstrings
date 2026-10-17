@@ -750,6 +750,16 @@
         }
       }
     },
+    "Copy Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code kopieren"
+          }
+        }
+      }
+    },
     "Copy Figure" : {
       "localizations" : {
         "de" : {

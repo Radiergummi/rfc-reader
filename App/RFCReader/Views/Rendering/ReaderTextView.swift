@@ -533,6 +533,16 @@ import RFCReaderKit
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
+        // A code block's button as an item too, beside Copy Figure, so Voice Control
+        // can name it (#760).
+        if let code = copyCode(of: box, in: text) {
+          let copy = NSMenuItem(
+            title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
+            keyEquivalent: "")
+          copy.target = self
+          copy.representedObject = code
+          result.insertItem(copy, at: 1)
+        }
         if let shown = box.presentation, choosePresentation() != nil {
           let toggle = NSMenuItem(
             title: FigureMenu.title(offeredFrom: shown),
@@ -543,6 +553,19 @@ import RFCReaderKit
         }
       }
       return result
+    }
+
+    /// What `box`'s copy button copies, if it has one: only a code block does.
+    private func copyCode(of box: VerbatimBox, in text: NSAttributedString) -> String? {
+      let button = text.copyButtons(in: NSRange(location: 0, length: text.length)).first {
+        text.attribute(.rfcVerbatim, at: $0.location, effectiveRange: nil) as? VerbatimBox === box
+      }
+      return button.flatMap { text.code(ofCopyButtonAt: $0.location) }
+    }
+
+    @objc private func copyCodeItem(_ sender: NSMenuItem) {
+      guard let code = sender.representedObject as? String else { return }
+      Clipboard.copy(code, announcing: .code)
     }
 
     @objc private func followGlossItem(_ sender: NSMenuItem) {

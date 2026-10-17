@@ -71,6 +71,16 @@ struct CodeCopyTests {
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
 
+    /// VoiceOver names the button rather than passing over an unnamed attachment
+    /// (#760).
+    @Test func `the copy button is said as Copy Code`() throws {
+      let text = Self.built(measure: 4000)
+      let button = try #require(
+        text.copyButtons(in: NSRange(location: 0, length: text.length)).first)
+      let pieces = AccessibleReading.pieces(of: button, in: text)
+      #expect(pieces == [.label("Copy Code")])
+    }
+
     /// Where the pointer is the arrow (#724): each button in the range, whole, and
     /// none outside it.
     @Test func `the copy buttons in a range are found whole`() throws {

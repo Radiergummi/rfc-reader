@@ -108,8 +108,8 @@ public enum AccessibleReading {
     }
 
     // An attachment the reader adds to the document's words with nothing to say for
-    // it, a code block's copy button, is a pointer's control and not read at all:
-    // VoiceOver would otherwise name the object-replacement character.
+    // it is not read at all: VoiceOver would otherwise name the object-replacement
+    // character. A code block's copy button has its name to say (#760).
     func readUnlabelled(_ range: NSRange) {
       text.enumerateAttribute(.attachment, in: range) { value, piece, _ in
         guard value != nil,
