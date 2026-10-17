@@ -744,6 +744,10 @@ final class LibraryModel {
   /// Not `indexState`, which a launch whose fetch answers nothing leaves loading.
   @ObservationIgnored private let indexSettled = Latch()
 
+  /// Whether the index has loaded or failed to, for a caller that cannot wait for
+  /// `settledSearch()`: a script's accessor (#762).
+  var hasIndexSettled: Bool { indexSettled.isOpen }
+
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
   /// intent alone, before anything started the load, so this starts it then: in a
