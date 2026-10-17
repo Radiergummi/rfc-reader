@@ -147,6 +147,50 @@ extension RFCTextViewCoordinator {
     return true
   }
 
+  /// The outline's section the text's cursor is in, or in Implementer its aside, and
+  /// what opens or closes it: the text view's Expand Section or Collapse Section, or
+  /// Expand Aside or Collapse Aside, to an assistive technology (#760). The cursor,
+  /// not the reader's line: VoiceOver moves it heading by heading, and the action
+  /// belongs to the heading it has just said. The reader's line where the cursor is
+  /// in folded text.
+  func disclosureAction() -> (name: String, toggle: () -> Void)? {
+    guard let foldingIndex, let textView else { return nil }
+    #if canImport(UIKit)
+      let cursor = textView.selectedRange.location
+    #else
+      let cursor = textView.selectedRange().location
+    #endif
+    let line =
+      foldingDelegate.hidden.contains(cursor) ? (engine.placeOffset ?? 0) : cursor
+    let name: String
+    let heading: Int
+    if let section = folding.outlineSection(atLine: line, in: foldingIndex) {
+      name =
+        section.isExpanded
+        ? String(localized: "Collapse Section") : String(localized: "Expand Section")
+      heading = section.heading
+    } else if let aside = folding.aside(atLine: line, in: foldingIndex) {
+      name =
+        aside.isExpanded ? String(localized: "Collapse Aside") : String(localized: "Expand Aside")
+      heading = aside.heading
+    } else {
+      return nil
+    }
+    return (name, { [weak self] in _ = self?.toggleSection(atHeading: heading) })
+  }
+
+  /// What VoiceOver says after each heading the reading mode discloses (#760), worked
+  /// out once per folding: VoiceOver asks on every line it reads.
+  func spokenStates() -> [Int: String] {
+    guard let foldingIndex, let built else { return [:] }
+    if let kept = spokenStatesKept, kept.folding == folding, kept.text === built.text {
+      return kept.said
+    }
+    let said = folding.spokenStates(in: foldingIndex)
+    spokenStatesKept = KeptSpokenStates(folding: folding, text: built.text, said: said)
+    return said
+  }
+
   /// A jump to `offset`, which the reading mode may have folded away: its section is
   /// expanded and the line put there, in one layout. Answers whether it did, which
   /// leaves the jump nothing to do.

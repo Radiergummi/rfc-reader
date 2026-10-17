@@ -640,6 +640,26 @@
         }
       }
     },
+    "Collapse Aside" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einschub zuklappen"
+          }
+        }
+      }
+    },
+    "Collapse Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt zuklappen"
+          }
+        }
+      }
+    },
     "Collapsed" : {
       "localizations" : {
         "de" : {
@@ -736,6 +756,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste als Markdown kopieren"
+          }
+        }
+      }
+    },
+    "Copy Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code kopieren"
           }
         }
       }
@@ -1037,6 +1067,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Errata"
+          }
+        }
+      }
+    },
+    "Expand Aside" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einschub aufklappen"
+          }
+        }
+      }
+    },
+    "Expand Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt aufklappen"
           }
         }
       }
@@ -2587,6 +2637,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speicher"
+          }
+        }
+      }
+    },
+    "Tab" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab"
           }
         }
       }

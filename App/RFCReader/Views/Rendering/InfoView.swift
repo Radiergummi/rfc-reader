@@ -69,6 +69,9 @@ struct InfoView: View {
         #endif
         .frame(maxWidth: .infinity, alignment: .leading)
       }
+      // The pane takes focus as it shows: no ring round its first chip until a key
+      // moves focus there.
+      .clearsFocusOnAppear()
     } else {
       Color.clear
     }
@@ -246,6 +249,8 @@ private struct GroupCard: Identifiable {
 private struct FactStrip: View {
   let facts: [DocumentInfo.Fact]
 
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   var body: some View {
     HStack(spacing: 0) {
       ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
@@ -261,15 +266,14 @@ private struct FactStrip: View {
 
   private func factView(_ fact: DocumentInfo.Fact) -> some View {
     VStack(spacing: 2) {
+      // Wrapped rather than shrunk at an accessibility size (#760).
       Text(fact.value)
         .font(.infoFact)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .lineLimit(dynamicTypeSize.lines(1))
       Text(fact.label)
         .font(.infoFactCaption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .lineLimit(dynamicTypeSize.lines(1))
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)
@@ -487,8 +491,6 @@ private struct DocumentChip: View {
           Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
-    // The system's focus ring drew round the first chip as soon as the pane showed.
-    .focusEffectDisabled()
     .accessibilityHint("Opens the document")
   }
 }
@@ -509,7 +511,6 @@ private struct KeywordTag: View {
         .background(.fill.secondary, in: .capsule)
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
     .help("Search the library for “\(keyword)”")
     .accessibilityHint("Searches the library for it")
   }
@@ -541,7 +542,6 @@ private struct LinkRow: View {
         content(detail: nil, trailing: "arrow.up.right")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       .help(url.absoluteString)
     case .file(let document, let format):
       let url = RFCEditorEndpoints.document(document, format: format)
@@ -552,7 +552,6 @@ private struct LinkRow: View {
           detail: nil, trailing: outcomeSymbol ?? (isOptionHeld ? "arrow.down" : "arrow.up.right"))
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       #if os(macOS)
         .onModifierKeysChanged(mask: .option, initial: true) { _, keys in
           isOptionHeld = keys.contains(.option)
@@ -571,7 +570,6 @@ private struct LinkRow: View {
         content(detail: text, trailing: outcomeSymbol ?? "doc.on.doc")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       .help("Copy \(row.label)")
       .resets($outcome, to: nil, after: .seconds(1.5))
     default:
@@ -679,7 +677,6 @@ private struct OfflineSection: View {
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)

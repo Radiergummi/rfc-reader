@@ -196,6 +196,17 @@ final class RFCTextViewCoordinator: NSObject {
   var folding = Folding()
   /// What folding needs of the installed build, made once per build.
   var foldingIndex: FoldingIndex?
+  /// What VoiceOver says after each disclosed heading, for the folding and index it
+  /// was worked out for: asked on every line VoiceOver reads (`spokenStates()`).
+  var spokenStatesKept: KeptSpokenStates?
+
+  struct KeptSpokenStates {
+    let folding: Folding
+    /// The build's text, held and compared by reference: a new build can be
+    /// allocated where a freed one was, and an identifier would take it for that one.
+    let text: NSAttributedString
+    let said: [Int: String]
+  }
   /// A folding this coordinator changed itself and asked the scene for, which the
   /// scene has not caught up with yet; see `FoldingEcho`.
   var foldingEcho = FoldingEcho()

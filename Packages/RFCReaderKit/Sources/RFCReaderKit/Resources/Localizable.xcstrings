@@ -2793,6 +2793,26 @@
         }
       }
     },
+    "collapsed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zugeklappt"
+          }
+        }
+      }
+    },
+    "expanded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aufgeklappt"
+          }
+        }
+      }
+    },
     "in IETF Last Call" : {
       "localizations" : {
         "de" : {

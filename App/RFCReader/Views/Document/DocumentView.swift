@@ -14,6 +14,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
@@ -204,11 +205,13 @@ struct DocumentView: View {
 
   /// The folding index of the build on screen, and in Focus the References tab's
   /// groups, filtered to what its section cites (#699). Only for the reader on
-  /// screen, whose the reader state is, and only in Focus, which alone needs them;
+  /// screen, whose the reader state is, and only in Focus, which steps through it,
+  /// and the outline, whose Expand Section and Collapse Section look it up (#760);
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
-    guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
+    guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
       // would redraw on every disclosure the outline turns.
@@ -223,8 +226,12 @@ struct DocumentView: View {
       reader.foldingIndex = FoldingIndex(built)
       foldedText = built.text
     }
-    guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
-    else { return }
+    guard reader.folding.mode == .focus, let index = reader.foldingIndex,
+      let anchor = reader.folding.focusedAnchor(in: index)
+    else {
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      return
+    }
     let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying
@@ -668,7 +675,8 @@ struct DocumentView: View {
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
-      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
+      // The bars slide: with Reduce Motion they go and come without it (#760).
+      withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { barsHidden = hidden }
     #endif
   }
 
