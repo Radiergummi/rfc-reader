@@ -39,9 +39,7 @@ struct BacklinksList: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            // The popover takes focus as it opens, which put a focus ring around the
-            // first row before anyone had pressed a key.
-            .focusEffectDisabled()
+            .focusRingWhenShown()
           }
         }
       }
@@ -53,5 +51,8 @@ struct BacklinksList: View {
     .padding(.vertical, 8)
     .padding(.horizontal, 4)
     .frame(width: Self.width, alignment: .leading)
+    // The popover takes focus as it opens: no ring round its first row until a key
+    // is pressed.
+    .focusRingAfterKey()
   }
 }

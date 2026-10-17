@@ -69,6 +69,9 @@ struct InfoView: View {
         #endif
         .frame(maxWidth: .infinity, alignment: .leading)
       }
+      // The pane takes focus as it shows: no ring round its first chip until a key
+      // is pressed.
+      .focusRingAfterKey()
     } else {
       Color.clear
     }
@@ -487,8 +490,7 @@ private struct DocumentChip: View {
           Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
-    // The system's focus ring drew round the first chip as soon as the pane showed.
-    .focusEffectDisabled()
+    .focusRingWhenShown()
     .accessibilityHint("Opens the document")
   }
 }
@@ -509,7 +511,7 @@ private struct KeywordTag: View {
         .background(.fill.secondary, in: .capsule)
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
+    .focusRingWhenShown()
     .help("Search the library for “\(keyword)”")
     .accessibilityHint("Searches the library for it")
   }
@@ -541,7 +543,7 @@ private struct LinkRow: View {
         content(detail: nil, trailing: "arrow.up.right")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
+      .focusRingWhenShown()
       .help(url.absoluteString)
     case .file(let document, let format):
       let url = RFCEditorEndpoints.document(document, format: format)
@@ -552,7 +554,7 @@ private struct LinkRow: View {
           detail: nil, trailing: outcomeSymbol ?? (isOptionHeld ? "arrow.down" : "arrow.up.right"))
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
+      .focusRingWhenShown()
       #if os(macOS)
         .onModifierKeysChanged(mask: .option, initial: true) { _, keys in
           isOptionHeld = keys.contains(.option)
@@ -571,7 +573,7 @@ private struct LinkRow: View {
         content(detail: text, trailing: outcomeSymbol ?? "doc.on.doc")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
+      .focusRingWhenShown()
       .help("Copy \(row.label)")
       .resets($outcome, to: nil, after: .seconds(1.5))
     default:
@@ -679,7 +681,7 @@ private struct OfflineSection: View {
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .focusRingWhenShown()
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
