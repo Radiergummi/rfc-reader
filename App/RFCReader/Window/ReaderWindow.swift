@@ -50,6 +50,19 @@
         ReaderPreferences.stepFontSizeUp()
         return true
       }
+      // ⌘← and ⌘→ go back and forward where no text has the keys (#761); see
+      // `HistoryArrowShortcut`.
+      if let step = HistoryArrowShortcut.step(
+        characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags,
+        inText: firstResponder is NSText),
+        let controller = windowController as? ReaderWindowController
+      {
+        switch step {
+        case .back: controller.navigation.goBack()
+        case .forward: controller.navigation.goForward()
+        }
+        return true
+      }
       return super.performKeyEquivalent(with: event)
     }
 

@@ -207,12 +207,15 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("i", modifiers: .command)
             .disabled(reader?.canDescribe != true)
         #endif
-        // Cmd+arrow, as Safari and Finder bind it.
+        // ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not the
+        // arrows: a menu item takes its key before a text field does, and ⌘← and ⌘→
+        // are a field's line start and end. The Mac's reader window answers them
+        // where no text has the keys (`HistoryArrowShortcut`).
         Button("Back") { navigation?.goBack() }
-          .keyboardShortcut(.leftArrow, modifiers: .command)
+          .keyboardShortcut("[", modifiers: .command)
           .disabled(navigation?.canGoBack != true)
         Button("Forward") { navigation?.goForward() }
-          .keyboardShortcut(.rightArrow, modifiers: .command)
+          .keyboardShortcut("]", modifiers: .command)
           .disabled(navigation?.canGoForward != true)
       }
     }
