@@ -410,16 +410,20 @@ final class RFCTextViewCoordinator: NSObject {
       }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
-      guard let environment, let documentID,
-        let (box, range) = reference(at: textItem.range.location),
-        let url = link(at: range.location),
+      let reference = reference(at: textItem.range.location)
+      let range = reference?.range ?? textItem.range
+      guard let url = link(at: range.location) else { return .init(menu: defaultMenu) }
+      // Whatever the preview comes to, the menu is the reader's own: UIKit's would
+      // hand out the `rfc://` URL (#763).
+      let menu = referenceMenu(defaultMenu, for: url, from: textView, at: range)
+      guard let environment, let documentID, let box = reference?.box,
         let target = LinkPreview.resolve(
           box.reference, linkedTo: url, from: documentID, in: environment.library.index)
-      else { return .init(menu: defaultMenu) }
+      else { return .init(menu: menu) }
       let host: UIHostingController<AnyView>
       switch target {
       case .card:
-        guard let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
+        guard let preview = preview(for: box.reference) else { return .init(menu: menu) }
         host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         // Sized here, the way the header host is in `layOut`: the preview is shown
         // at its view's own size, and a hosting controller's view is not sized to
@@ -429,7 +433,7 @@ final class RFCTextViewCoordinator: NSObject {
       case .document(let id, let place):
         // Measured against the window, not the text view: the preview is shown
         // over the whole window, whatever the reader's own width.
-        guard let window = textView.window else { return .init(menu: defaultMenu) }
+        guard let window = textView.window else { return .init(menu: menu) }
         let size = LinkPreview.documentSize(fitting: window.bounds.size)
         // The commit is the tap, performed as the primary action; nothing in a
         // context menu's preview is clicked.
@@ -440,7 +444,6 @@ final class RFCTextViewCoordinator: NSObject {
         host.view.frame.size = size
       }
       let container = previewView(hosting: host)
-      let menu = referenceMenu(defaultMenu, for: url, from: textView, at: range)
       return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
     }
 

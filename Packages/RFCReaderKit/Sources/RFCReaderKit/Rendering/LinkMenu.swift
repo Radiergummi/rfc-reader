@@ -9,7 +9,7 @@ import RFCKit
 /// with its Copy Link handing out the URL `LinkCopy` gives instead of the link's,
 /// which is the reader's (`rfc://9110`, an anchor in this document, a bibliography
 /// entry) and opens nowhere else. On iOS (#763) a reader's link gets a menu of the
-/// reader's own actions (`actions(for:opensNewWindows:)`), rather than UIKit's with
+/// reader's own actions (`actions(for:opensNewWindows:opens:)`), rather than UIKit's with
 /// its items found by private identifiers and replaced.
 @MainActor
 public enum LinkMenu {

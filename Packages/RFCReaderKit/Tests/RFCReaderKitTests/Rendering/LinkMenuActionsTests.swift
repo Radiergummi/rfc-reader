@@ -52,6 +52,8 @@ struct LinkMenuActionsTests {
     let actions = try #require(actions("rfc-anchor:section-4.2"))
     #expect(actions.first == .open)
     #expect(!actions.contains { if case .openInNewWindow = $0 { true } else { false } })
+    #expect(actions.contains { if case .copyLink = $0 { true } else { false } })
+    #expect(actions.contains { if case .share = $0 { true } else { false } })
   }
 
   /// A heading's own number links to where the reader already is.

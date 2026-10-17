@@ -118,6 +118,7 @@ struct OriginalTextBody {
     }
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
+      textView.findReader = reader
       textView.installsFind(in: reader)
       let previous = context.coordinator.shown
       if let previous, previous == (text, fontSize) { return }
@@ -142,6 +143,14 @@ struct OriginalTextBody {
   /// on its way in, and asks again after each layout pass, since incremental layout
   /// widens what has been laid out as the text scrolls.
   final class SidewaysTextView: UITextView {
+    /// The reader state Find is installed in as this comes into a window (#763).
+    weak var findReader: ReaderState?
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      installsFind(in: findReader)
+    }
+
     override var contentSize: CGSize {
       get { super.contentSize }
       set { super.contentSize = CGSize(width: laidOutWidth, height: newValue.height) }

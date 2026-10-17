@@ -19,10 +19,13 @@
       guard let documentID else { return defaultMenu }
       let items = LinkMenu.items(
         for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+      // UIKit's own for a link to the web; none at all where the reader has nothing to
+      // offer, a heading's number with no public URL, rather than an empty menu.
       guard
         let actions = LinkMenu.actions(
           for: items, opensNewWindows: environment?.library.opensNewWindows == true, opens: opens)
       else { return defaultMenu }
+      guard !actions.isEmpty else { return UIMenu(title: "", children: []) }
       return UIMenu(
         title: "",
         children: actions.map { action($0, for: url, from: textView, at: range) })

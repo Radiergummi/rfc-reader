@@ -664,8 +664,10 @@ private struct OfflineSection: View {
   @State private var downloadFailed = false
   /// Whether that was for want of room on the disk rather than a failed fetch.
   @State private var hadNoRoom = false
-  /// Whether iOS asks before it stops keeping the copy (#763).
-  @State private var confirmsStopping = false
+  #if !os(macOS)
+    /// Whether iOS asks before it stops keeping the copy (#763).
+    @State private var confirmsStopping = false
+  #endif
 
   private var isKept: Bool {
     document.series == .rfc && library.offlineMarks.contains(document)
@@ -711,13 +713,17 @@ private struct OfflineSection: View {
       if !Task.isCancelled { self.size = size }
     }
     .resets($downloadFailed, to: false, after: .seconds(1.5))
-    .confirmationDialog(
-      "Stop keeping this RFC offline?", isPresented: $confirmsStopping, titleVisibility: .visible
-    ) {
-      Button("Stop Keeping Offline", role: .destructive, action: toggle)
-    } message: {
-      Text(help)
-    }
+    #if !os(macOS)
+      .confirmationDialog(
+        "Stop keeping this RFC offline?", isPresented: $confirmsStopping,
+        titleVisibility: .visible
+      ) {
+        // What the button says, whatever the mark became while the dialog was up.
+        Button("Stop Keeping Offline", role: .destructive) { setKept(false) }
+      } message: {
+        Text(help)
+      }
+    #endif
   }
 
   /// Stops keeping the copy at once on the Mac, whose icon turns to a cross under the
@@ -725,9 +731,9 @@ private struct OfflineSection: View {
   /// Keeping a copy never asks.
   private func press() {
     #if os(macOS)
-      toggle()
+      setKept(!isKept)
     #else
-      if isKept { confirmsStopping = true } else { toggle() }
+      if isKept { confirmsStopping = true } else { setKept(true) }
     #endif
   }
 
@@ -746,9 +752,8 @@ private struct OfflineSection: View {
       : String(localized: "Keep a copy to read offline.")
   }
 
-  private func toggle() {
+  private func setKept(_ keeps: Bool) {
     isWorking = true
-    let keeps = !isKept
     Task {
       do {
         try await library.setKeptOffline(document, keeps)
