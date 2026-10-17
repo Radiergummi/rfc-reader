@@ -44,6 +44,12 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
     }
   }
 
+  /// The requirement bands found after the folding: what is hidden and disclosed
+  /// stays as it is, as it does not depend on them.
+  func band(_ bands: RequirementBands) {
+    state.withLock { $0.bands = bands }
+  }
+
   /// Whether the heading whose paragraph starts at `offset` has a disclosure, and if
   /// so whether it is open.
   func disclosure(at offset: Int) -> Bool? {
