@@ -115,6 +115,39 @@ public enum DocumentMenus {
     }
     return collections.isEmpty ? [create] : [collections, create]
   }
+
+  /// What a library row's context menu offers, by kind, in order: one table for the
+  /// Mac's menu and iOS's (#761), which had drifted apart, each rendering an action
+  /// with its own control. The title of each is the renderer's: several are
+  /// controls with a state of their own, such as Keep Offline and Add to Collection.
+  public enum RowAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case bookmark
+    case addToCollection
+    case readingPath
+    case keepOffline
+    case share
+    case removeFromCollection
+  }
+
+  /// The row menu of a row that `isRFC`, or is a BCP, STD or FYI read as itself,
+  /// which is bookmarked and opened but neither added to a collection nor shared:
+  /// a collection holds RFCs (#321). `opensTabs` and `opensWindows` are what the
+  /// device can open it in; `inCollection` is whether the list is a collection's.
+  public static func rowActions(
+    isRFC: Bool, opensTabs: Bool, opensWindows: Bool, inCollection: Bool
+  ) -> [[RowAction]] {
+    var opening: [RowAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    var library: [RowAction] = [.bookmark]
+    if isRFC { library += [.addToCollection, .readingPath, .keepOffline] }
+    let sections = [
+      opening, library, isRFC ? [.share] : [], inCollection ? [.removeFromCollection] : [],
+    ]
+    return sections.filter { !$0.isEmpty }
+  }
 }
 
 extension DocumentMenus.Action {

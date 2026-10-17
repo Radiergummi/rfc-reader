@@ -47,37 +47,58 @@ import SwiftUI
           AddToCollectionSheet(document: row.id) { wantsNewCollection = true }
         }
         .contextMenu {
-          Button(action: toggleBookmark) {
-            Label(
-              DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
-              systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
-          }
-          if let rfc {
-            Menu("Add to Collection") {
-              AddToCollectionItems(
-                document: rfc.id, library: library, navigation: navigation,
-                undoManager: undoManager)
-            }
-            Button {
-              navigation.readingPath = ReadingPathRequest(root: rfc.id)
-            } label: {
-              Label("Reading Path", systemImage: "list.number")
-            }
-            KeepOfflineButton(document: rfc.id, library: library)
-            ShareLink(
-              item: RFCEditorEndpoints.infoPage(rfc.id),
-              subject: Text(verbatim: "\(rfc.id.displayName): \(rfc.title)"))
-          }
-          if library.opensNewWindows {
-            Button {
-              library.openWindow(for: row.id)
-            } label: {
-              Label("Open in New Window", systemImage: "macwindow.badge.plus")
+          // `DocumentMenus.rowActions`, the table the Mac's menu renders too (#761).
+          let sections = DocumentMenus.rowActions(
+            isRFC: rfc != nil, opensTabs: false, opensWindows: library.opensNewWindows,
+            inCollection: false)
+          ForEach(Array(sections.enumerated()), id: \.offset) { index, actions in
+            if index > 0 { Divider() }
+            ForEach(actions, id: \.self) { action in
+              item(action)
             }
           }
         } preview: {
           preview
         }
+    }
+
+    @ViewBuilder
+    private func item(_ action: DocumentMenus.RowAction) -> some View {
+      switch action {
+      case .openInNewWindow:
+        Button {
+          library.openWindow(for: row.id)
+        } label: {
+          Label("Open in New Window", systemImage: "macwindow.badge.plus")
+        }
+      case .bookmark:
+        Button(action: toggleBookmark) {
+          Label(
+            DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
+            systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+        }
+      case .addToCollection:
+        Menu("Add to Collection") {
+          AddToCollectionItems(
+            document: row.id, library: library, navigation: navigation,
+            undoManager: undoManager)
+        }
+      case .readingPath:
+        Button {
+          navigation.readingPath = ReadingPathRequest(root: row.id)
+        } label: {
+          Label("Reading Path", systemImage: "list.number")
+        }
+      case .keepOffline:
+        KeepOfflineButton(document: row.id, library: library)
+      case .share:
+        ShareLink(
+          item: RFCEditorEndpoints.infoPage(row.id),
+          subject: Text(verbatim: "\(row.id.displayName): \(row.title)"))
+      // iOS opens no tabs, and its lists are not a collection's to remove from here.
+      case .openInNewTab, .removeFromCollection:
+        EmptyView()
+      }
     }
 
     private var preview: some View {

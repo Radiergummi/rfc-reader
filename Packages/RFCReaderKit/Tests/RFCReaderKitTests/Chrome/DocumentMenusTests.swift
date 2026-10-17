@@ -153,4 +153,44 @@ struct DocumentMenuEffectsTests {
   @Test func `original text toggles`() {
     #expect(effect(.toggleOriginalText) == .toggleOriginalText)
   }
+
+  // MARK: - A library row's menu (#761)
+
+  /// The Mac opens a row in a tab or a window, then everything the library does
+  /// with it, then Share.
+  @Test func `a Mac row opens first, then the library's actions, then share`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: true, opensWindows: true, inCollection: false)
+        == [
+          [.openInNewTab, .openInNewWindow],
+          [.bookmark, .addToCollection, .readingPath, .keepOffline],
+          [.share],
+        ])
+  }
+
+  /// An iPhone opens no window, an iPad one, and neither a tab.
+  @Test func `a device offers only the windows and tabs it can open`() {
+    let iPhone = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: false, inCollection: false)
+    #expect(iPhone.first == [.bookmark, .addToCollection, .readingPath, .keepOffline])
+    let iPad = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: true, inCollection: false)
+    #expect(iPad.first == [.openInNewWindow])
+  }
+
+  /// A series is bookmarked and opened as itself, but a collection holds RFCs, and
+  /// a series is not shared (#321).
+  @Test func `a series is bookmarked and opened, not collected or shared`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: false, opensTabs: true, opensWindows: true, inCollection: false)
+        == [[.openInNewTab, .openInNewWindow], [.bookmark]])
+  }
+
+  @Test func `a collection's row can be removed from it, last`() {
+    let actions = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: true, opensWindows: true, inCollection: true)
+    #expect(actions.last == [.removeFromCollection])
+  }
 }
