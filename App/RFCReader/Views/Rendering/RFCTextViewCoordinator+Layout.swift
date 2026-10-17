@@ -147,6 +147,21 @@ extension RFCTextViewCoordinator {
     return true
   }
 
+  /// The outline's section the reader's line is in, and what opens or closes it: the
+  /// text view's Expand Section or Collapse Section to an assistive technology (#760).
+  func outlineSectionAction() -> (section: Folding.OutlineSection, toggle: () -> Void)? {
+    guard let foldingIndex,
+      let section = folding.outlineSection(atLine: engine.placeOffset ?? 0, in: foldingIndex)
+    else { return nil }
+    return (section, { [weak self] in _ = self?.toggleSection(atHeading: section.heading) })
+  }
+
+  /// What VoiceOver says after each heading the reading mode discloses (#760).
+  func spokenStates() -> [Int: String] {
+    guard let foldingIndex else { return [:] }
+    return folding.spokenStates(in: foldingIndex)
+  }
+
   /// A jump to `offset`, which the reading mode may have folded away: its section is
   /// expanded and the line put there, in one layout. Answers whether it did, which
   /// leaves the jump nothing to do.

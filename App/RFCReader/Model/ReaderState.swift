@@ -48,6 +48,22 @@ final class ReaderState {
     folding = stepped
   }
 
+  /// The outline's section the reader's line is in: what Expand Section and Collapse
+  /// Section act on (#760), so a section opens and closes without a pointer.
+  var outlineSection: Folding.OutlineSection? {
+    guard let foldingIndex else { return nil }
+    return folding.outlineSection(currentAnchor, in: foldingIndex)
+  }
+
+  /// Expand Section or Collapse Section: opens the outline's section at the reader's
+  /// line, or closes it.
+  func toggleOutlineSection() {
+    guard let foldingIndex, let section = outlineSection,
+      let toggled = folding.toggling(heading: section.heading, in: foldingIndex)
+    else { return }
+    folding = toggled
+  }
+
   /// Whether Next or Previous Section has somewhere to go.
   func canStepFocus(_ step: Folding.FocusStep) -> Bool {
     guard let foldingIndex else { return false }

@@ -224,6 +224,59 @@ struct ReadingModeTests {
       Folding(mode: .normal).toggling(heading: section.offset, in: FoldingIndex(built)) == nil)
   }
 
+  /// Expand Section and Collapse Section act on the section the reader's line is in,
+  /// by its heading, and say whether it is open (#760).
+  @Test func `the reader's line names the outline section to open or close`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let section = built.anchors.sections.entries[2]
+    let heading = try #require(index.entries.first { $0.anchor == section.anchor }).paragraph
+
+    let closed = Folding(mode: .outline)
+    let found = try #require(closed.outlineSection(atLine: section.offset + 2, in: index))
+    #expect(found == Folding.OutlineSection(heading: heading, isExpanded: false))
+    #expect(found.spokenState(locale: .english) == "collapsed")
+
+    let opened = try #require(closed.toggling(heading: found.heading, in: index))
+    #expect(opened.outlineSection(section.anchor, in: index)?.isExpanded == true)
+    #expect(
+      opened.outlineSection(section.anchor, in: index)?.spokenState(locale: .english)
+        == "expanded")
+  }
+
+  /// The chevron is drawn, not text: VoiceOver hears whether a heading's section is
+  /// open after the heading, before its line break, and nowhere in Normal (#760).
+  @Test func `a disclosed heading says whether it is open, before its line break`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let section = built.anchors.sections.entries[2]
+    let string = built.text.string as NSString
+    let heading = string.paragraphRange(for: NSRange(location: section.offset, length: 0))
+    let lineBreak = NSMaxRange(heading) - 1
+
+    let opened = Folding(mode: .outline, expanded: [section.anchor])
+    let said = opened.spokenStates(in: index, locale: .english)
+    #expect(said[lineBreak] == "expanded")
+    #expect(
+      Folding(mode: .outline).spokenStates(in: index, locale: .english)[lineBreak] == "collapsed")
+    #expect(Folding(mode: .normal).spokenStates(in: index).isEmpty)
+
+    let reading = AccessibleReading.reading(
+      heading, in: built.text, saying: said, text: { string.substring(with: $0) },
+      label: { "[\($0)]" }, join: { $0.joined() })
+    #expect(reading?.hasSuffix("[expanded]\n") == true)
+  }
+
+  /// Nothing to open in another mode, nor where no section's heading is shown.
+  @Test func `there is no outline section out of the outline`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let section = built.anchors.sections.entries[2]
+    #expect(Folding(mode: .normal).outlineSection(section.anchor, in: index) == nil)
+    #expect(Folding(mode: .outline).outlineSection("no-such-anchor", in: index) == nil)
+    #expect(Folding(mode: .outline).outlineSection(nil, in: index) == nil)
+  }
+
   /// The abstract has a heading but no section: it is an entry of the outline of its
   /// own, so it can be opened, and a jump into it opens it.
   @Test func `the abstract can be opened`() throws {

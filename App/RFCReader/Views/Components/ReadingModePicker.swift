@@ -31,6 +31,23 @@ struct ReadingModePicker: View {
   }
 }
 
+/// Expand Section and Collapse Section, which open and close the outline's section
+/// at the reader's line, for whoever does not point at its heading (#760). No
+/// shortcut: the reader's keys are #711's to give.
+struct OutlineSectionItems: View {
+  let reader: ReaderState
+
+  var body: some View {
+    if reader.folding.mode == .outline {
+      let section = reader.outlineSection
+      Button("Expand Section", systemImage: "chevron.forward") { reader.toggleOutlineSection() }
+        .disabled(section == nil || section?.isExpanded == true)
+      Button("Collapse Section", systemImage: "chevron.down") { reader.toggleOutlineSection() }
+        .disabled(section?.isExpanded != true)
+    }
+  }
+}
+
 /// Next Section and Previous Section, which move the focus in Focus (#699).
 struct FocusSteps: View {
   let reader: ReaderState

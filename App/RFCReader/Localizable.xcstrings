@@ -640,6 +640,16 @@
         }
       }
     },
+    "Collapse Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt zuklappen"
+          }
+        }
+      }
+    },
     "Collapsed" : {
       "localizations" : {
         "de" : {
@@ -1037,6 +1047,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Errata"
+          }
+        }
+      }
+    },
+    "Expand Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitt aufklappen"
           }
         }
       }
