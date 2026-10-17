@@ -86,7 +86,7 @@ public final class UserDataMirror {
   }
 
   /// Reads `changed` again, and every mirror whose last read failed.
-  public func refresh(_ changed: UserDataMirrors) {
+  func refresh(_ changed: UserDataMirrors) {
     let mirrors = changed.union(failedMirrors)
     failedMirrors = []
     if mirrors.contains(.bookmarks) { refreshBookmarks() }

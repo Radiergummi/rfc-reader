@@ -10,7 +10,8 @@ import Testing
 @Suite("User data mirror")
 @MainActor
 struct UserDataMirrorTests {
-  /// What each `on…Changed` was called with, in order.
+  /// How often each `on…Changed` was called, and the snapshots `onCollectionsChanged`
+  /// was called with, in order.
   @MainActor
   final class Reports {
     var bookmarks = 0
@@ -59,16 +60,22 @@ struct UserDataMirrorTests {
     #expect(reports.bookmarks == 1)
   }
 
-  /// A reading position is most saves, and reads none of the other sets.
-  @Test func `a reading saved changes the count and reports nothing else`() throws {
+  /// A reading position is most saves, and reads none of the other sets: a bookmark and
+  /// a mark waiting unsaved in the main context, which a read of theirs would find, are
+  /// not found. The reading is saved in a context of its own, so its save is only that.
+  @Test func `a reading saved changes the count and reads nothing else`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
     mirror.start()
+    mirror.container.mainContext.insert(Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+    mirror.container.mainContext.insert(OfflineMark(document: .rfc(9110)))
 
     try ReadingPositionStore.save(
       ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(9110),
-      in: mirror.container.mainContext)
+      in: ModelContext(mirror.container))
 
+    #expect(mirror.bookmarkedDocuments.isEmpty)
+    #expect(mirror.offlineMarks.isEmpty)
     #expect(mirror.recentlyReadCount == 1)
     #expect(reports.recentlyReadCount == 1)
     #expect(reports.bookmarks == 0)
@@ -117,16 +124,17 @@ struct UserDataMirrorTests {
   }
 
   /// The app's mirror is made once, but a second start would read every save twice.
-  @Test func `starting again changes nothing`() throws {
+  /// A bookmark waiting unsaved in the main context is what a second read would find.
+  @Test func `starting again reads nothing`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
     mirror.start()
+    mirror.container.mainContext.insert(Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+
     mirror.start()
 
-    mirror.toggleBookmark(.rfc(9110), title: "HTTP Semantics")
-
-    #expect(reports.offlineMarks == 1)
-    #expect(reports.bookmarks == 1)
+    #expect(mirror.bookmarkedDocuments.isEmpty)
+    #expect(reports.bookmarks == 0)
   }
 
   @Test func `a failed change to a collection says so`() throws {
