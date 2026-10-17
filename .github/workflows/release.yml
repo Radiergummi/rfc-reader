@@ -59,6 +59,17 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # A release is built from reviewed source only: a tag on a commit main does not
+      # contain would be signed and attested exactly as a real release is.
+      - name: Check the commit is on main
+        run: |
+          # The checkout is one commit deep; the whole history of both is what is compared.
+          git fetch --no-tags --unshallow origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "$GITHUB_REF_NAME is not on main; tag a commit main contains." >&2
+            exit 1
+          fi
+
       # Sparkle offers only a higher build number, and once the draft is published it
       # cannot be rebuilt, so a run number the feed has already passed (this file
       # renamed restarts it at 1) is refused here, not by `make appcast` after. No feed
