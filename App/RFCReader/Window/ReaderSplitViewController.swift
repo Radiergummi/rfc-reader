@@ -237,11 +237,14 @@
     // MARK: - What the window keeps
 
     /// The columns' widths, for the window's `SceneSnapshot` (#762): the sidebar's and
-    /// the list's, each where it is not collapsed.
+    /// the list's, each where it is not collapsed. Measured in the split view, as the
+    /// dividers are placed, rather than by the item's view, which sits in a container
+    /// of its own.
     var columnWidths: (sidebar: Double?, list: Double?) {
-      (
-        sidebarItem.isCollapsed ? nil : Double(sidebarView.frame.width),
-        listItem.isCollapsed ? nil : Double(listView.frame.width)
+      let columns = splitView.arrangedSubviews
+      return (
+        sidebarItem.isCollapsed ? nil : Double(columns[0].frame.width),
+        listItem.isCollapsed ? nil : Double(columns[1].frame.width)
       )
     }
 
@@ -249,16 +252,14 @@
     /// sidebar and the list. A column collapsed now, or one with no width kept, is
     /// left as it is; AppKit holds each to its own minimum and maximum.
     func restoreColumnWidths(sidebar: Double?, list: Double?) {
-      let divider = splitView.dividerThickness
       if let sidebar, !sidebarItem.isCollapsed {
         splitView.setPosition(sidebar, ofDividerAt: 0)
       }
       if let list, !listItem.isCollapsed {
-        // From where the sidebar ended up, which AppKit may have held to its own
-        // bounds, not from the width asked for.
+        // From where the list starts once the sidebar is back, which AppKit may have
+        // held to its own bounds, not from the width asked for.
         splitView.layoutSubtreeIfNeeded()
-        let start = sidebarItem.isCollapsed ? 0 : sidebarView.frame.maxX + divider
-        splitView.setPosition(start + list, ofDividerAt: 1)
+        splitView.setPosition(splitView.arrangedSubviews[1].frame.minX + list, ofDividerAt: 1)
       }
     }
 

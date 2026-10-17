@@ -95,46 +95,48 @@
     /// indexed accessors below instead, which build one object or none rather than
     /// all 9,842.
     @objc var rfcs: [ScriptableRFC] {
-      settledIndex?.rfcs.map { ScriptableRFC($0.id) } ?? []
+      Self.settledIndex?.rfcs.map { ScriptableRFC($0.id) } ?? []
     }
 
     @objc func countOfRfcs() -> Int {
-      settledIndex?.rfcs.count ?? 0
+      Self.settledIndex?.rfcs.count ?? 0
     }
 
     @objc(objectInRfcsAtIndex:)
     func objectInRfcs(at index: Int) -> ScriptableRFC? {
-      settledIndex.map { ScriptableRFC($0.rfcs[index].id) }
+      Self.settledIndex.map { ScriptableRFC($0.rfcs[index].id) }
     }
 
     /// The index once it has loaded or failed to, for a script (#762). A script that
     /// launched the app asks before the index has loaded, and found no RFCs at all;
     /// the intents wait for it with `settledSearch()`. An object accessor cannot
     /// suspend its Apple event, so it turns the run loop until the index settles,
-    /// which lets the main actor's load run, up to `scriptIndexWait`.
+    /// which lets the main actor's load run, until `indexDeadline`.
     ///
     /// Turning the run loop inside an accessor lets other main-actor work run in the
     /// middle of it, a link routed or a window made, so nothing here holds on to model
     /// state across the wait: each accessor reads the index once it is back.
-    private var settledIndex: RFCIndex? {
+    static var settledIndex: RFCIndex? {
       let library = LibraryModel.shared
-      let deadline = Date.now.addingTimeInterval(Self.scriptIndexWait)
+      let deadline = indexDeadline
       while !library.hasIndexSettled, Date.now < deadline {
         RunLoop.current.run(mode: .default, before: min(deadline, .now.addingTimeInterval(0.05)))
       }
       return library.index
     }
 
-    /// As long as a script waits for the index before it finds none: longer than a
-    /// launch takes to read the cached index, short of an Apple event's default
-    /// timeout of two minutes.
-    private static let scriptIndexWait: TimeInterval = 30
+    /// Until when scripts wait for the index before they find none: 30 s from the
+    /// first that asked, longer than a launch takes to read the cached index, short of
+    /// an Apple event's default timeout of two minutes. One deadline for the process,
+    /// so a script's every command does not wait 30 s again for an index that is not
+    /// coming. Lazy, as a static `let` is.
+    private static let indexDeadline = Date.now.addingTimeInterval(30)
 
     /// `rfc id 9110`, looked up by number rather than found by walking `rfcs`.
     @objc(valueInRfcsWithUniqueID:)
     func valueInRfcs(withUniqueID uniqueID: Any) -> ScriptableRFC? {
       guard let number = (uniqueID as? NSNumber)?.intValue,
-        settledIndex?[number] != nil
+        Self.settledIndex?[number] != nil
       else { return nil }
       return ScriptableRFC(.rfc(number))
     }
@@ -169,7 +171,8 @@
       }
       set {
         let library = LibraryModel.shared
-        let groups = Set(library.index?.rfcs.compactMap(\.workingGroup) ?? [])
+        // Once the index has settled, or a working group's name is not yet one.
+        let groups = Set(AppDelegate.settledIndex?.rfcs.compactMap(\.workingGroup) ?? [])
         guard
           let filter = LibraryFilter(
             scriptName: newValue, workingGroups: groups,

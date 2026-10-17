@@ -52,6 +52,8 @@ extension DocumentSession {
       skipLoad()
       guard isShown else { return }
       reader.isLoading = false
+      // A jump waiting for the text is not coming, as for a load that failed.
+      if let request = navigation.scrollRequest { navigation.settle(request, as: .notShown) }
       // Recorded as a loaded text would be: Recently Read lists a scan, and a
       // pointer with a pack or without. Here, so once per opening, like a load's.
       positions.markOpened()

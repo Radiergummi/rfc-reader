@@ -208,30 +208,29 @@ final class NavigationModel: Identifiable {
   /// only when it changes.
   private(set) var scrollRequest: ScrollRequest?
 
-  /// The scroll request, and whoever waits for the jump it asked for: a script,
-  /// whose next command must find the jump in the history (#482).
   /// How a jump within the document ended, for whoever waits on it: a script's
   /// `jump to section`, which reports all but the first as an error (#762).
   enum JumpOutcome {
-    /// The reader went there, or the tab went somewhere since.
+    /// The reader went there.
     case landed
     /// The document holds no such place.
     case noSuchPlace
     /// There was no document to jump in: none on screen, or it failed to load.
     case notShown
-    /// The document was hidden, or another jump asked for, before the reader made it.
+    /// The document was hidden, the tab went somewhere else, or another jump was
+    /// asked for, before the reader made it.
     case interrupted
   }
 
+  /// The scroll request, and whoever waits for the jump it asked for: a script,
+  /// whose next command must find the jump in the history (#482).
   @ObservationIgnored private var requests = ScrollRequests<(JumpOutcome) -> Void>()
 
-  /// Makes `change` to the requests, publishes the request, and then ends the wait
-  /// the change ended, if it ended one.
-  /// Changes the requests and tells the waiter whose wait that ended how its jump
-  /// ended: one replaced by the jump the reader recorded, or by a place arrived at
-  /// since, `landed`; the rest say their own `outcome`.
+  /// Makes `change` to the requests, publishes the request, and then tells the
+  /// waiter whose wait the change ended, if it ended one, that its jump ended as
+  /// `outcome`.
   private func updateRequests(
-    outcome: JumpOutcome = .landed,
+    outcome: JumpOutcome,
     _ change: (inout ScrollRequests<(JumpOutcome) -> Void>) -> ((JumpOutcome) -> Void)?
   ) {
     let ended = change(&requests)
@@ -461,7 +460,7 @@ final class NavigationModel: Identifiable {
   /// section's number and its anchor are one place (#482).
   func recordJump(to section: String, in places: DocumentPlaces) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places)
+    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places, ending: .landed)
   }
 
   func goBack() {
@@ -486,9 +485,14 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
+  /// `outcome` is how a jump this ends the wait for ended: only the reader recording
+  /// it is the jump made; anywhere else the tab goes, it was not (#762).
+  private func go(
+    to place: HistoryEntry, in places: DocumentPlaces? = nil,
+    ending outcome: JumpOutcome = .interrupted
+  ) {
     var arrived: HistoryEntry?
-    updateRequests {
+    updateRequests(outcome: outcome) {
       let went = $0.go(to: place, in: &history, leaving: visiblePosition, places: places)
       arrived = went.arrived
       return went.ended
@@ -497,14 +501,14 @@ final class NavigationModel: Identifiable {
   }
 
   private func arrive(at place: HistoryEntry) {
-    updateRequests { $0.arrive(at: place.section) }
+    updateRequests(outcome: .interrupted) { $0.arrive(at: place.section) }
     visiblePosition = place.section
   }
 
   /// At a place in a reader the stack kept, which is where it was left: nothing to
   /// scroll to, unless the reader was let go and is made again.
   private func arriveKept(at place: HistoryEntry) {
-    updateRequests { $0.arrive(at: place.section, inKeptReader: true) }
+    updateRequests(outcome: .interrupted) { $0.arrive(at: place.section, inKeptReader: true) }
     visiblePosition = place.section
   }
 

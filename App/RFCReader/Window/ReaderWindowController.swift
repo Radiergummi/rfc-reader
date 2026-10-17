@@ -47,9 +47,10 @@
     var correctsPanelOnFirstKey = false
     /// The layout a restored window came back with, until it has been put back
     /// (#762): its columns on the window's first turn as key, when it is laid out,
-    /// and its panel once its document can be described. Until then it is what the
-    /// window keeps, since what the window shows is not it yet: a tab left in the
-    /// background is never key, and its saved layout would be lost to the defaults.
+    /// and its panel once its document can be described. Until each part is back, it
+    /// is what the window keeps of that part, since what the window shows is not it
+    /// yet: a tab left in the background is never key, and its saved columns would be
+    /// lost to the defaults.
     var restoredLayout: WindowLayout?
     var restoresColumns = false
     var restoresPanel = false
@@ -127,7 +128,8 @@
         self.toolbar?.capTitleToList()
         ActiveReaderWindow.shared.sidebarChanged(self)
         // The columns' widths are part of what the window keeps (#762), and nothing
-        // observable says they changed. Not on every frame of a drag: once it ends.
+        // observable says they changed. Not on every frame of a resize of the window,
+        // only once it ends; a divider's drag is no live resize, and is kept as it goes.
         if self.window?.inLiveResize != true { self.keepColumnWidths() }
       }
       window.toolbar = toolbar.makeToolbar()
@@ -370,6 +372,9 @@
       } else {
         splitController.closePanel()
       }
+      // Whether the panel is open is part of what the window keeps (#762), and is no
+      // observable state; this is where it changes other than by the toggle.
+      window?.invalidateRestorableState()
     }
 
     // MARK: - The sidebar
@@ -409,6 +414,7 @@
 
     func togglePanel() {
       splitController.togglePanel()
+      window?.invalidateRestorableState()
     }
 
     /// A pane's toolbar button: opens the panel on that pane, swaps an open panel to

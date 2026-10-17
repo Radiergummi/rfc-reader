@@ -745,10 +745,14 @@ struct DocumentView: View {
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there.
+  /// waits for the text to appear, and is followed there; where no text is coming,
+  /// a scan's or a pointer's page or a load that failed, it is settled unmade
+  /// (#762), or a script's `jump to section` would wait on it forever.
   private func follow(_ request: ScrollRequest) {
     if let outcome = follow(request.section) {
       navigation.settle(request, as: outcome)
+    } else if isShown, !session.awaitsDocument, session.state.document == nil {
+      navigation.settle(request, as: .notShown)
     }
   }
 
