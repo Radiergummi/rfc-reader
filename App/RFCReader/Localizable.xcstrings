@@ -130,6 +130,46 @@
         }
       }
     },
+    "%lld RFCs could not be indexed. Index All RFCs tries them again." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC konnte nicht indiziert werden. „Alle RFCs indizieren“ versucht es erneut."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs konnten nicht indiziert werden. „Alle RFCs indizieren“ versucht es erneut."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFC could not be indexed. Index All RFCs tries it again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld RFCs could not be indexed. Index All RFCs tries them again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld documents" : {
       "localizations" : {
         "de" : {
@@ -476,6 +516,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle Schlüsselwörter"
+          }
+        }
+      }
+    },
+    "All RFCs are indexed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs sind indiziert."
           }
         }
       }
@@ -1041,6 +1091,16 @@
         }
       }
     },
+    "Every RFC not yet indexed is downloaded, about 650 MB, when the network is not metered. Only its text is kept, in an index of about 700 MB. You can stop at any time and go on later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder noch nicht indizierte RFC wird geladen, etwa 650 MB, sobald das Netzwerk nicht getaktet ist. Nur sein Text wird behalten, in einem Index von etwa 700 MB. Du kannst jederzeit anhalten und später weitermachen."
+          }
+        }
+      }
+    },
     "Expanded" : {
       "localizations" : {
         "de" : {
@@ -1171,6 +1231,16 @@
         }
       }
     },
+    "Full-Text Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex"
+          }
+        }
+      }
+    },
     "General" : {
       "localizations" : {
         "de" : {
@@ -1257,6 +1327,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Im Text"
+          }
+        }
+      }
+    },
+    "Index All RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren"
+          }
+        }
+      }
+    },
+    "Index All RFCs…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren …"
+          }
+        }
+      }
+    },
+    "Index all RFCs?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs indizieren?"
+          }
+        }
+      }
+    },
+    "Indexing %lld of %lld RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld von %2$lld RFCs indiziert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indexing %1$lld of %2$lld RFCs"
           }
         }
       }
@@ -2221,6 +2337,16 @@
         }
       }
     },
+    "Remove" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entfernen"
+          }
+        }
+      }
+    },
     "Remove All" : {
       "localizations" : {
         "de" : {
@@ -2237,6 +2363,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle Offline-Dokumente entfernen …"
+          }
+        }
+      }
+    },
+    "Remove Full-Text Index…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex entfernen …"
           }
         }
       }
@@ -2267,6 +2403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aus Sammlung entfernen"
+          }
+        }
+      }
+    },
+    "Remove the full-text index?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volltextindex entfernen?"
           }
         }
       }
@@ -2561,6 +2707,16 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhalten"
+          }
+        }
+      }
+    },
     "Stop Comparing with %@" : {
       "localizations" : {
         "de" : {
@@ -2647,6 +2803,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Dokumente, die dieses normativ zitiert, in der Reihenfolge, in der sie zu lesen sind."
+          }
+        }
+      }
+    },
+    "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Index behält nur die RFCs auf diesem Gerät, und die Suche findet Text in diesen. „Alle RFCs indizieren“ lädt den Rest erneut."
           }
         }
       }
