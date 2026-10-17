@@ -280,6 +280,29 @@ public actor TextIndexer {
     await reconcile(changed: changed)
   }
 
+  /// The legacy pack was installed: the retained RFCs it holds are dropped, since
+  /// their anchors are those of what the run read before, not of the pack the reader
+  /// now shows them from. The next run reads them from the pack; one with a stored
+  /// body is indexed again now, by the reconcile.
+  public func legacyPackInstalled(changed: @Sendable () async -> Void = {}) async {
+    guard indexedDocuments() != nil else { return }
+    var dropped = 0
+    for id in await store.inLegacyPack(retained) {
+      do {
+        try index.remove(id)
+        indexed?[id] = nil
+        retained.remove(id)
+        dropped += 1
+      } catch {
+        indexerLog.error(
+          "\(id.displayName, privacy: .public): not removed from the index: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    if dropped > 0 { await changed() }
+    await reconcile(changed: changed)
+  }
+
   /// How many of `ids` are not indexed yet: what Index All RFCs would download.
   public func unindexed(_ ids: [DocumentID]) -> Int {
     let indexed = indexedDocuments() ?? [:]

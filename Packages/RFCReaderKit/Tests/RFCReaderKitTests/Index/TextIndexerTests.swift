@@ -395,6 +395,27 @@ struct TextIndexerTests {
     #expect(try await indexer.search("interoperation").hits.map(\.document) == [.rfc(2119)])
   }
 
+  /// Indexed before the pack was installed, a legacy RFC has the anchors of another
+  /// parse than the one the reader now shows, so installing the pack drops it, and
+  /// the next run reads it from the pack. A retained RFC the pack does not hold stays.
+  @Test func `installing the legacy pack drops the retained RFCs it holds`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([.rfc(2119), id]) { try fetch($0) }
+    _ = try await store.installLegacyPack(from: DocumentStoreTests.legacyPack(in: sandbox.root))
+
+    await indexer.legacyPackInstalled()
+
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+    #expect(await indexer.unindexed([.rfc(2119), id]) == 1)
+    #expect(await indexer.usage().retained == 1)
+    _ = await indexer.indexAll([.rfc(2119), id]) { try fetch($0) }
+    #expect(try await indexer.search("interoperation").hits.map(\.document) == [.rfc(2119)])
+  }
+
   @Test func `releasing what the whole-corpus run indexed gives back its disk`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }

@@ -2791,7 +2791,7 @@
         }
       }
     },
-    "The %lld RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later." : {
+    "The %lld RFCs not yet indexed are downloaded when the network is not metered, or read from the legacy pack, and only their text is kept. You can stop at any time and go on later." : {
       "localizations" : {
         "de" : {
           "variations" : {
@@ -2799,13 +2799,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Der %lld noch nicht indizierte RFC wird geladen, sobald das Netzwerk nicht getaktet ist, und nur sein Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                  "value" : "Der %lld noch nicht indizierte RFC wird geladen, sobald das Netzwerk nicht getaktet ist, oder aus dem Legacy-Paket gelesen, und nur sein Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Die %lld noch nicht indizierten RFCs werden geladen, sobald das Netzwerk nicht getaktet ist, und nur ihr Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                  "value" : "Die %lld noch nicht indizierten RFCs werden geladen, sobald das Netzwerk nicht getaktet ist, oder aus dem Legacy-Paket gelesen, und nur ihr Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
                 }
               }
             }
@@ -2817,13 +2817,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "The %lld RFC not yet indexed is downloaded when the network is not metered, and only its text is kept. You can stop at any time and go on later."
+                  "value" : "The %lld RFC not yet indexed is downloaded when the network is not metered, or read from the legacy pack, and only its text is kept. You can stop at any time and go on later."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "The %lld RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later."
+                  "value" : "The %lld RFCs not yet indexed are downloaded when the network is not metered, or read from the legacy pack, and only their text is kept. You can stop at any time and go on later."
                 }
               }
             }

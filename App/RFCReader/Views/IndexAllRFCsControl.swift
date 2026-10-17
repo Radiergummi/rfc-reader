@@ -42,7 +42,7 @@ struct IndexAllRFCsControl: View {
         } message: {
           if let remaining {
             Text(
-              "The \(remaining) RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later."
+              "The \(remaining) RFCs not yet indexed are downloaded when the network is not metered, or read from the legacy pack, and only their text is kept. You can stop at any time and go on later."
             )
           }
         }

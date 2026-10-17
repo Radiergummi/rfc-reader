@@ -1478,6 +1478,8 @@ final class LibraryModel {
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
     let pack = try await store.installLegacyPack(from: source)
     await refreshPointersInPack()
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await textIndexer?.legacyPackInstalled(changed: changed)
     return pack
   }
 
