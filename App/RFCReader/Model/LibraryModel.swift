@@ -184,8 +184,7 @@ final class LibraryModel {
   /// `UserDataMirror.recentlyReadCount`.
   var recentlyReadCount: Int { userData.recentlyReadCount }
 
-  /// The user's data: what the sets above are read from, and where a bookmark or a
-  /// collection is changed.
+  /// The user's data, which `userData` reads its sets from.
   var container: ModelContainer { userData.container }
 
   private init(container: ModelContainer) {
@@ -1430,16 +1429,7 @@ final class LibraryModel {
     return await store.downloadedSize(id)
   }
 
-  /// The documents the reader has opened, most recent first, a BCP, STD or FYI
-  /// among them as itself (#321).
-  ///
-  /// Fetched on demand rather than observed, and that is the point: the Recently
-  /// read list is history as of the moment the filter is entered, and a live query
-  /// re-sorted it under the click that was reading it. `NavigationModel` takes one
-  /// of these when its filter changes, exactly as it takes `availableOfflineNumbers`.
-  ///
-  /// Empty when the fetch fails, which is logged: the list is only shown, and
-  /// nothing is decided by its being empty.
+  /// `UserDataMirror.recentlyRead`.
   func recentlyRead() -> [DocumentID] {
     userData.recentlyRead()
   }

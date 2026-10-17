@@ -4,8 +4,8 @@ import SwiftData
 /// The sets the app keeps read from the store, and which of them a save can have
 /// changed (#603).
 ///
-/// `LibraryModel` keeps four: the bookmarked documents, the collections, the
-/// Recently Read count and the Keep Offline marks. It used to read all of them
+/// `UserDataMirror` keeps four: the bookmarked documents, the collections, the
+/// Recently Read count and the Keep Offline marks. The app used to read all of them
 /// again on every save, and most saves only record a reading position, so the
 /// bookmark and collection fetches ran for nothing — `CollectionSnapshot.fetch`
 /// reads every collection and every item. A save's notification names the rows it

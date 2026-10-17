@@ -60,9 +60,17 @@ public final class UserDataMirror {
     self.container = container
   }
 
+  isolated deinit {
+    if let storeSaves {
+      NotificationCenter.default.removeObserver(storeSaves)
+    }
+  }
+
   /// Reads every mirror, then each again on every save that can have changed it.
   /// Separate from `init`, so the `on…Changed` closures are set before the first read.
+  /// Once: a second call does nothing.
   public func start() {
+    guard storeSaves == nil else { return }
     refresh(.all)
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
@@ -87,6 +95,8 @@ public final class UserDataMirror {
     if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
   }
 
+  /// Reads the marks again now, as after a mark saved here rather than through a
+  /// save's notification.
   public func refreshOfflineMarks() {
     let marks: Set<DocumentID>
     do {
@@ -98,6 +108,8 @@ public final class UserDataMirror {
         "reading Keep Offline marks failed: \(String(describing: error), privacy: .public)")
       return
     }
+    // Read now, so the next save need not read them again.
+    failedMirrors.remove(.offlineMarks)
     // The first read reports even when it finds what a failed one left: no set.
     let isFirstRead = !hasReadOfflineMarks
     hasReadOfflineMarks = true
@@ -192,7 +204,8 @@ public final class UserDataMirror {
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
-  /// re-sorted it under the click that was reading it.
+  /// re-sorted it under the click that was reading it. `NavigationModel` takes one
+  /// of these when its filter changes, exactly as it takes the RFCs wanted offline.
   ///
   /// Empty when the fetch fails, which is logged: the list is only shown, and
   /// nothing is decided by its being empty.

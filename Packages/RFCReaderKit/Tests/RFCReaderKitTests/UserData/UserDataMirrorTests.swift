@@ -72,6 +72,7 @@ struct UserDataMirrorTests {
     #expect(mirror.recentlyReadCount == 1)
     #expect(reports.recentlyReadCount == 1)
     #expect(reports.bookmarks == 0)
+    #expect(reports.collections.isEmpty)
     #expect(reports.offlineMarks == 1)
     #expect(mirror.recentlyRead() == [.rfc(9110)])
   }
@@ -113,6 +114,19 @@ struct UserDataMirrorTests {
     #expect(reports.bookmarks == 1)
     #expect(reports.offlineMarks == 1)
     #expect(reports.collections.isEmpty)
+  }
+
+  /// The app's mirror is made once, but a second start would read every save twice.
+  @Test func `starting again changes nothing`() throws {
+    let reports = Reports()
+    let mirror = try makeMirror(reporting: reports)
+    mirror.start()
+    mirror.start()
+
+    mirror.toggleBookmark(.rfc(9110), title: "HTTP Semantics")
+
+    #expect(reports.offlineMarks == 1)
+    #expect(reports.bookmarks == 1)
   }
 
   @Test func `a failed change to a collection says so`() throws {
