@@ -46,96 +46,85 @@ public enum BookmarkStore {
     onUndoFailure: @escaping @MainActor (any Error) -> Void = { _ in }, in context: ModelContext
   ) throws {
     let existing = try bookmarks(for: id, in: context)
-    if !existing.isEmpty {
+    let undo = Undo(
+      manager: undoManager,
+      name: DocumentActions.bookmarkCommand(isBookmarked: !existing.isEmpty),
+      onFailure: onUndoFailure)
+    if let first = existing.first {
       try remove(
-        existing, of: id, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
+        existing, putBack: Entry(document: id, title: first.title, createdAt: first.createdAt),
+        undo: undo, in: context)
     } else {
-      try add(id, title: title, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
+      try put(Entry(document: id, title: title, createdAt: .now), undo: undo, in: context)
     }
   }
 
-  /// Adds the bookmark, and registers removing it as the undo, so an undo after a
-  /// removal and a new bookmark takes the new one away rather than doing nothing.
-  private static func add(
-    _ id: DocumentID, title: String, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
-  ) throws {
-    context.insert(Bookmark(document: id, title: title))
-    undoManager?.registerUndo(withTarget: context) { context in
-      // On the main thread, for the reason `CollectionStore.remove` gives.
-      MainActor.assumeIsolated {
-        do {
-          try remove(
-            bookmarks(for: id, in: context), of: id, undoManager: undoManager,
-            onUndoFailure: onUndoFailure, in: context)
-        } catch {
-          onUndoFailure(error)
-        }
-      }
-    }
-    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: false))
-    try context.save()
-  }
-
-  /// Removes `existing`, every row naming the document, since nothing stops there
-  /// being two, and registers putting the first back as the undo.
-  private static func remove(
-    _ existing: [Bookmark], of id: DocumentID, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
-  ) throws {
-    guard let first = existing.first else { return }
-    let removal = Removal(document: id, title: first.title, createdAt: first.createdAt)
-    existing.forEach(context.delete)
-    // Registered before the save: a failed save leaves the removal pending in the
-    // context, saved with the next save that succeeds, and still undoable.
-    undoManager?.registerUndo(withTarget: context) { context in
-      // On the main thread, for the reason `CollectionStore.remove` gives.
-      MainActor.assumeIsolated {
-        do {
-          try restore(
-            removal, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
-        } catch {
-          onUndoFailure(error)
-        }
-      }
-    }
-    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
-    // Explicitly, rather than leaving it to autosave on one platform and not the
-    // other: on macOS the sidebar's list and the reader's toolbar are separate
-    // hosting roots reading the same store, and the glyph should not be able to
-    // disagree with the list behind it while a save is still pending.
-    try context.save()
-  }
-
-  /// What a removal took out, for its undo to put back.
-  private struct Removal {
+  /// A bookmark as a removal took it out, or an add puts it in.
+  private struct Entry {
     let document: DocumentID
     let title: String
     let createdAt: Date
   }
 
-  /// Undoing a removal: the bookmark back as it was, and the removal again as the
-  /// redo. Nothing is put back beside a bookmark made since.
-  private static func restore(
-    _ removal: Removal, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
-  ) throws {
-    guard try bookmarks(for: removal.document, in: context).isEmpty else { return }
-    let bookmark = Bookmark(
-      document: removal.document, title: removal.title, createdAt: removal.createdAt)
-    context.insert(bookmark)
-    undoManager?.registerUndo(withTarget: context) { context in
-      MainActor.assumeIsolated {
-        do {
-          try remove(
-            bookmarks(for: removal.document, in: context), of: removal.document,
-            undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
-        } catch {
-          onUndoFailure(error)
+  /// Where a toggle registers its undo, and under the name of what the reader did,
+  /// which its undo and redo keep whichever way they go.
+  @MainActor private struct Undo {
+    let manager: UndoManager?
+    let name: String
+    let onFailure: @MainActor (any Error) -> Void
+
+    /// Registers `action` as the undo. Its undo and redo run long after the toggle
+    /// returns, so they hand what they throw to `onFailure`, as
+    /// `CollectionStore.remove`'s do. The manager is held weakly: it holds this.
+    func register(
+      in context: ModelContext, _ action: @escaping @MainActor (ModelContext, Undo) throws -> Void
+    ) {
+      guard let manager else { return }
+      let name = name
+      let onFailure = onFailure
+      manager.registerUndo(withTarget: context) { [weak manager] context in
+        // On the main thread, for the reason `CollectionStore.remove` gives.
+        MainActor.assumeIsolated {
+          do {
+            try action(context, Undo(manager: manager, name: name, onFailure: onFailure))
+          } catch {
+            onFailure(error)
+          }
         }
       }
+      manager.setActionName(name)
     }
-    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
+  }
+
+  /// Puts `entry` in, and registers taking it out as the undo. Nothing is put in
+  /// beside a bookmark made since: an undone removal adds no second.
+  private static func put(_ entry: Entry, undo: Undo, in context: ModelContext) throws {
+    guard try bookmarks(for: entry.document, in: context).isEmpty else { return }
+    context.insert(
+      Bookmark(document: entry.document, title: entry.title, createdAt: entry.createdAt))
+    undo.register(in: context) { context, undo in
+      try remove(
+        bookmarks(for: entry.document, in: context), putBack: entry, undo: undo, in: context)
+    }
+    try context.save()
+  }
+
+  /// Removes `existing`, every row naming the document, since nothing stops there
+  /// being two, and registers putting `entry` back as the undo.
+  private static func remove(
+    _ existing: [Bookmark], putBack entry: Entry, undo: Undo, in context: ModelContext
+  ) throws {
+    guard !existing.isEmpty else { return }
+    existing.forEach(context.delete)
+    // Registered before the save: a failed save leaves the removal pending in the
+    // context, saved with the next save that succeeds, and still undoable.
+    undo.register(in: context) { context, undo in
+      try put(entry, undo: undo, in: context)
+    }
+    // Explicitly, rather than leaving it to autosave on one platform and not the
+    // other: on macOS the sidebar's list and the reader's toolbar are separate
+    // hosting roots reading the same store, and the glyph should not be able to
+    // disagree with the list behind it while a save is still pending.
     try context.save()
   }
 

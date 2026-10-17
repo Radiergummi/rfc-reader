@@ -650,8 +650,8 @@ struct RFCRow: View {
     }
   #endif
 
-  /// Quieter than the bookmark, which the reader set on this row: this says only
-  /// what the device holds.
+  /// Quieter than the bookmark: this says only what is kept on the device, which the
+  /// Available Offline list says more of.
   private var offlineMark: some View {
     Image(systemName: "arrow.down.circle.fill").foregroundStyle(.secondary)
   }

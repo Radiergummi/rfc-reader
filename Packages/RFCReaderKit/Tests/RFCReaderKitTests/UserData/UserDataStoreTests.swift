@@ -165,6 +165,39 @@ struct UserDataStoreTests {
     #expect(try BookmarkStore.bookmarkedDocuments(in: context) == [.rfc(9110)])
   }
 
+  /// Undo and Redo name what the reader did, whichever way they go: a new bookmark
+  /// is "Bookmark" in both, not "Remove Bookmark" once undone.
+  @Test func `undo and redo keep the name of the action they undo`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let adding = DocumentActions.bookmarkCommand(isBookmarked: false)
+    let removing = DocumentActions.bookmarkCommand(isBookmarked: true)
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    #expect(undoManager.undoActionName == adding)
+    undoManager.undo()
+    #expect(undoManager.redoActionName == adding)
+    undoManager.redo()
+    #expect(undoManager.undoActionName == adding)
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    #expect(undoManager.undoActionName == removing)
+    undoManager.undo()
+    #expect(undoManager.redoActionName == removing)
+    undoManager.redo()
+    #expect(undoManager.undoActionName == removing)
+  }
+
   /// What an undo or redo reports failing, which none here should.
   private static func undoFailed(_ error: any Error) {
     Issue.record(error, "an undo or redo failed")

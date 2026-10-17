@@ -500,6 +500,16 @@
         }
       }
     },
+    "Available Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
+    },
     "Available offline" : {
       "localizations" : {
         "de" : {
@@ -1317,16 +1327,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dokumente mit Lesezeichen offline behalten"
-          }
-        }
-      }
-    },
-    "Kept Offline" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline behalten"
           }
         }
       }

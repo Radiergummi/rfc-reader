@@ -237,7 +237,7 @@ struct StorageSettings: View {
         Text("Keep bookmarked documents offline")
         Text("Downloaded when the network is not metered, and kept while bookmarked.")
       }
-      LabeledContent("Kept Offline") { UsageValue(usage: usage?.kept) }
+      LabeledContent("Available Offline") { UsageValue(usage: usage?.kept) }
       Button("Remove All Offline Documents…", role: .destructive) {
         confirmsRemoval = true
       }

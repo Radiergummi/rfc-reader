@@ -239,26 +239,43 @@ final class NavigationModel: Identifiable {
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
-    let reveals = route.reveals(selected: selection, among: rowsOnShow)
+    guard route.reveals else {
+      follow(route)
+      return
+    }
+    // The list's own selected row: on iOS the root of the stack of readers, which a
+    // jump in a reader a citation pushed leaves where it is (#263).
+    let row = route.row(selected: listSelection)
+    let list = listOnShow
+    let reveals = route.reveals(selected: listSelection, among: list.rows)
     follow(route)
     if reveals {
       sidebarSelection = .all
       searchText = ""
       // Only where it is what hides the row: it is the reader's choice for the tab.
-      if library.metadata(link.id)?.isObsolete == true {
+      if let row, library.metadata(row)?.isObsolete == true {
         listOptions.showsObsolete = true
       }
+    } else if sidebarSelection != list.filter {
+      // A collapsed sidebar pushes the list the row is on show in, and the reader.
+      sidebarSelection = list.filter
     }
   }
 
-  /// The rows on show, if they are those of the list the inputs ask for now: nil
-  /// while a new filter's list is still being made, or typing has not paused for
-  /// the search, when the rows on show are about to be replaced.
-  private var rowsOnShow: [DocumentID]? {
+  /// The list the reader sees, and its rows if they are those the inputs ask for
+  /// now: nil while a new filter's list is still being made, or typing has not
+  /// paused for the search, when the rows on show are about to be replaced.
+  ///
+  /// The filter's list, but where a collapsed sidebar is on screen in its place
+  /// (iOS) and searched: that shows the whole library's results, which All lists
+  /// with the query kept (#345).
+  private var listOnShow: (filter: LibraryFilter, rows: [DocumentID]?) {
+    let searchesLibrary = sidebarSelection == nil && !appliedQuery.isUnsearchedQuery
+    let shownFilter: LibraryFilter = searchesLibrary ? .all : filter
     guard AppliedSearch.query(for: searchText) == requestedQuery, let request = request(),
-      shows(request)
-    else { return nil }
-    return listed?.rows.map(\.id)
+      shows(request), let listed
+    else { return (shownFilter, nil) }
+    return (shownFilter, (searchesLibrary ? listed.librarySearch : listed.rows).map(\.id))
   }
 
   private func follow(_ route: OpenRoute) {

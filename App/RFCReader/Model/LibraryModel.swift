@@ -501,7 +501,6 @@ final class LibraryModel {
       }
     }
     await refreshPointersInPack()
-    await refreshCitationIndex()
     do {
       if let (prepared, updatedAt) = try await cached {
         apply(prepared, updatedAt: updatedAt)
@@ -517,6 +516,8 @@ final class LibraryModel {
       indexState = .failed(error)
       settleIndex()
     }
+    // Only the Reading Path items wait for it, so not the list.
+    Task(name: "Look for a citation index") { await refreshCitationIndex() }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
