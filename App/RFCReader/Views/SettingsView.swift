@@ -289,7 +289,10 @@ struct StorageSettings: View {
       Button("Remove Full-Text Index…", role: .destructive) {
         confirmsIndexRemoval = true
       }
-      .disabled((textIndex?.retained ?? 0) == 0 && !library.indexAllRun.isRunning)
+      .disabled(
+        library.indexAllRun.isRemoving
+          || (textIndex?.retained ?? 0) == 0 && !library.indexAllRun.isRunning
+      )
       .confirmationDialog(
         "Remove the full-text index?", isPresented: $confirmsIndexRemoval,
         titleVisibility: .visible

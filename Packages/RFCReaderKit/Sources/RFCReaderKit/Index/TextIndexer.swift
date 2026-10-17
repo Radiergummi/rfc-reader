@@ -93,16 +93,18 @@ public actor TextIndexer {
     unindexable = unindexable.filter { stored[$0.key] == $0.value }
     guard let before = indexedDocuments() else { return }
     var unannounced = 0
-    for id in before.keys where stored[id] == nil && !retained.contains(id) {
-      do {
-        try index.remove(id)
+    // In one transaction: after Remove Full-Text Index, nearly every document goes.
+    let gone = before.keys.filter { stored[$0] == nil && !retained.contains($0) }
+    do {
+      try index.remove(gone)
+      for id in gone {
         indexed?[id] = nil
-        unannounced += 1
-      } catch {
-        indexerLog.error(
-          "\(id.displayName, privacy: .public): not removed from the index: \(String(describing: error), privacy: .public)"
-        )
       }
+      unannounced += gone.count
+    } catch {
+      indexerLog.error(
+        "\(gone.count, privacy: .public) documents not removed from the index: \(String(describing: error), privacy: .public)"
+      )
     }
     let unindexed = stored.filter { id, written in
       before[id] != written && unindexable[id] != written
@@ -168,7 +170,9 @@ public actor TextIndexer {
   /// holds no body of it, downloading with `fetch` each that is not indexed yet and
   /// keeping no body. A document indexed already is retained as it is, so a run
   /// stopped or cancelled is resumed by the next, which downloads only the rest, and
-  /// tries again those that failed.
+  /// tries again those that failed. A document the installed legacy pack holds is
+  /// read from the pack instead, as the reader reads it, so a hit's anchor is one the
+  /// reader has.
   ///
   /// `progress` is called after each document, beginning with what was indexed
   /// already; `changed` as `run(changed:)` says. Cancelled, the run ends with what it
@@ -181,13 +185,18 @@ public actor TextIndexer {
   ) async -> CorpusProgress {
     let before = indexedDocuments() ?? [:]
     let present = ids.filter { before[$0] != nil }
-    do {
-      try index.retain(present)
-      retained.formUnion(present)
-    } catch {
-      indexerLog.error(
-        "retaining what is indexed failed: \(String(describing: error), privacy: .public)")
+    let unretained = present.filter { !retained.contains($0) }
+    if !unretained.isEmpty {
+      do {
+        try index.retain(unretained)
+        retained.formUnion(unretained)
+        await changed()
+      } catch {
+        indexerLog.error(
+          "retaining what is indexed failed: \(String(describing: error), privacy: .public)")
+      }
     }
+    let store = store
     var counted = CorpusProgress(indexed: present.count, total: ids.count, failed: 0)
     await progress(counted)
     var missing = ids.filter { before[$0] == nil }.makeIterator()
@@ -195,6 +204,9 @@ public actor TextIndexer {
     await withTaskGroup(of: (DocumentID, Result<RFCDocument, any Error>).self) { group in
       func download(_ id: DocumentID) {
         group.addTask {
+          if let document = await store.packDocument(id) {
+            return (id, .success(document))
+          }
           do {
             return (id, .success(try await fetch(id)))
           } catch {
@@ -227,7 +239,6 @@ public actor TextIndexer {
             )
           }
         case .failure(let error):
-          guard !(error is CancellationError) else { continue }
           counted.failed += 1
           indexerLog.error(
             "\(id.displayName, privacy: .public): not downloaded to index: \(String(describing: error), privacy: .public)"
@@ -248,7 +259,8 @@ public actor TextIndexer {
   }
 
   /// Remove Full-Text Index: no document is retained any more, and those the store
-  /// holds no body of leave the index, which goes back to the bodies the store holds.
+  /// holds no body of leave the index, which goes back to the bodies the store holds,
+  /// and gives back the disk they took.
   public func releaseRetained(changed: @Sendable () async -> Void = {}) async {
     do {
       try index.releaseRetained()
@@ -260,6 +272,12 @@ public actor TextIndexer {
       return
     }
     await reconcile(changed: changed)
+    do {
+      try index.compact()
+    } catch {
+      indexerLog.error(
+        "compacting the index failed: \(String(describing: error), privacy: .public)")
+    }
   }
 
   /// What the index holds, for Settings.

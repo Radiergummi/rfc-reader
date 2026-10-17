@@ -14,6 +14,9 @@ public final class IndexAllRun {
 
   public private(set) var isRunning = false
 
+  /// Remove Full-Text Index is under way, during which no run starts.
+  public private(set) var isRemoving = false
+
   @ObservationIgnored private var task: Task<Void, Never>?
 
   public init() {}
@@ -25,14 +28,12 @@ public final class IndexAllRun {
     fetch: @escaping @Sendable (DocumentID) async throws -> RFCDocument,
     changed: @escaping @Sendable () async -> Void = {}
   ) {
-    guard !isRunning else { return }
+    guard !isRunning, !isRemoving else { return }
     isRunning = true
     task = Task {
-      let ended = await indexer.indexAll(ids, fetch: fetch) { [weak self] progress in
-        await self?.report(progress)
-      } changed: {
-        await changed()
-      }
+      let ended = await indexer.indexAll(
+        ids, fetch: fetch,
+        progress: { [weak self] progress in await self?.report(progress) }, changed: changed)
       progress = ended
       isRunning = false
       task = nil
@@ -49,9 +50,27 @@ public final class IndexAllRun {
     await task?.value
   }
 
+  /// Remove Full-Text Index: stops the run, then takes the index back to the bodies
+  /// the store holds (`TextIndexer.releaseRetained`). Once at a time.
+  public func remove(from indexer: TextIndexer, changed: @escaping @Sendable () async -> Void = {})
+    async
+  {
+    guard !isRemoving else { return }
+    isRemoving = true
+    defer { isRemoving = false }
+    stop()
+    await untilEnded()
+    progress = nil
+    await indexer.releaseRetained(changed: changed)
+  }
+
+  /// The RFCs of `rfcs` a run can index: those listed with a text or an XML. One
+  /// listed with only a PDF or a PostScript has no text to index.
+  public nonisolated static func indexable(_ rfcs: [RFCMetadata]) -> [RFCMetadata] {
+    rfcs.filter { $0.formats.contains(.text) || $0.formats.contains(.xml) }
+  }
+
   private func report(_ progress: TextIndexer.CorpusProgress) {
-    // A report from a run already ended would overwrite what it ended with.
-    guard isRunning else { return }
     self.progress = progress
   }
 }

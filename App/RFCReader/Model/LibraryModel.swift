@@ -55,8 +55,13 @@ final class LibraryModel {
     didSet {
       groupRFCs = [:]
       indexVersion += 1
+      indexableRFCs = index.map { IndexAllRun.indexable($0.rfcs) } ?? []
     }
   }
+
+  /// The RFCs Index All RFCs can index (`IndexAllRun.indexable`), worked out once per
+  /// index: the footer and Settings count them as they draw.
+  @ObservationIgnored private(set) var indexableRFCs: [RFCMetadata] = []
   /// Which index is installed, counted: what a tab compares to tell whether the
   /// rows and hits it has were made over the index there is now (#597), where
   /// comparing two indexes would compare 9,842 entries.
@@ -453,7 +458,7 @@ final class LibraryModel {
   let indexAllRun = IndexAllRun()
 
   /// Whether the full-text index has opened, for Index All RFCs to be offered.
-  var hasTextIndex: Bool { textIndexer != nil }
+  private(set) var hasTextIndex = false
 
   // MARK: - Bootstrap
 
@@ -510,6 +515,7 @@ final class LibraryModel {
         return
       }
       self?.textIndexer = indexer
+      self?.hasTextIndex = true
       // A list made before the index opened has no section hits, and an index that is
       // already up to date never reports a change: its tabs search the text now.
       self?.textIndexChanged()
@@ -1109,12 +1115,6 @@ final class LibraryModel {
     textIndexVersion += 1
   }
 
-  /// The RFCs Index All RFCs can index: those the index lists a text or XML of. One
-  /// listed with neither, only a PDF or PostScript, has no text to index.
-  var indexableRFCs: [RFCMetadata] {
-    index?.rfcs.filter { $0.formats.contains(.text) || $0.formats.contains(.xml) } ?? []
-  }
-
   /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
   /// on a network that is neither metered nor in Low Data Mode, and indexes it without
   /// keeping its body.
@@ -1124,14 +1124,14 @@ final class LibraryModel {
       indexableRFCs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     let client = clientOnCheapNetworks
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    indexAllRun.start(entries.keys.sorted(), indexer: textIndexer) { id in
-      let entry = entries[id]
-      return try await client.fetchPreferredDocument(
-        id, availableFormats: entry?.formats, entry: entry
-      ).document
-    } changed: {
-      await changed()
-    }
+    indexAllRun.start(
+      entries.keys.sorted(), indexer: textIndexer,
+      fetch: { id in
+        let entry = entries[id]
+        return try await client.fetchPreferredDocument(
+          id, availableFormats: entry?.formats, entry: entry
+        ).document
+      }, changed: changed)
   }
 
   /// What the full-text index holds, and how much of the disk it takes; nil while it
@@ -1143,10 +1143,9 @@ final class LibraryModel {
   /// Remove Full-Text Index: stops Index All RFCs, and keeps in the index only the
   /// RFCs whose bodies are stored.
   func removeIndexOfAllRFCs() async {
-    indexAllRun.stop()
-    await indexAllRun.untilEnded()
+    guard let textIndexer else { return }
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    await textIndexer?.releaseRetained(changed: changed)
+    await indexAllRun.remove(from: textIndexer, changed: changed)
   }
 
   /// What the full-text search finds for `list` (#37): its section hits, narrowed as

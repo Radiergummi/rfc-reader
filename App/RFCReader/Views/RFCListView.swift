@@ -107,7 +107,7 @@ struct RFCListView: View {
     // it does not have does not read as "no RFC says this".
     let searched = textFound.map { found in
       SectionResults.searched(
-        found.searched, of: found.narrowedTo ?? library.index?.rfcs.count ?? 0)
+        found.searched, of: found.narrowedTo ?? library.indexableRFCs.count)
     }
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not

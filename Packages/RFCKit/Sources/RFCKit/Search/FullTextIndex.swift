@@ -175,7 +175,25 @@ public struct Snippet: Sendable, Hashable {
   }
 
   public func remove(_ id: DocumentID) throws {
-    try transaction { try deleteRows(of: id) }
+    try remove([id])
+  }
+
+  /// Removes every one of `ids`, in one transaction rather than one each.
+  public func remove(_ ids: some Sequence<DocumentID>) throws {
+    try transaction {
+      for id in ids {
+        try deleteRows(of: id)
+      }
+    }
+  }
+
+  /// Gives the disk back what removed documents left: SQLite keeps their pages for
+  /// rows to come, and the journal at its largest. After a removal of most of the
+  /// index, as Remove Full-Text Index makes; it rewrites the whole file.
+  public func compact() throws {
+    try execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    try execute("VACUUM")
+    try execute("PRAGMA wal_checkpoint(TRUNCATE)")
   }
 
   /// Marks those of `ids` that are indexed as retained, as Index All RFCs does with

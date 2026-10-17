@@ -27,7 +27,7 @@ struct IndexAllRFCsControl: View {
     } else {
       VStack(alignment: .leading, spacing: 4) {
         Button("Index All RFCs…") { confirms = true }
-          .disabled(!library.hasTextIndex || library.index == nil)
+          .disabled(!library.hasTextIndex || library.index == nil || run.isRemoving)
           .confirmationDialog(
             "Index all RFCs?", isPresented: $confirms, titleVisibility: .visible
           ) {

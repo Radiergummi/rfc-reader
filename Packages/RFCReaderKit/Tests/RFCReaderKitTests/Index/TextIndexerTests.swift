@@ -376,6 +376,74 @@ struct TextIndexerTests {
     #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
   }
 
+  /// The reader shows a legacy RFC from the pack's XML, whose anchors a hit has to
+  /// open, so the run reads the pack and does not download what it holds.
+  @Test func `the whole-corpus run reads what the legacy pack holds from the pack`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    _ = try await store.installLegacyPack(from: DocumentStoreTests.legacyPack(in: sandbox.root))
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+
+    let progress = await indexer.indexAll([.rfc(2119)]) { try fetch($0) }
+
+    #expect(fetch.fetched.isEmpty)
+    #expect(progress == TextIndexer.CorpusProgress(indexed: 1, total: 1, failed: 0))
+    #expect(try await indexer.search("interoperation").hits.map(\.document) == [.rfc(2119)])
+  }
+
+  @Test func `releasing what the whole-corpus run indexed gives back its disk`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll((1...40).map { DocumentID.rfc($0) }) { try fetch($0) }
+    let before = await indexer.usage().usage.bytes
+
+    await indexer.releaseRetained()
+
+    let after = await indexer.usage()
+    #expect(after.usage.documents == 0)
+    #expect(after.retained == 0)
+    #expect(after.usage.bytes < before / 2)
+  }
+
+  /// A run that only retains what is indexed already still changes what Settings
+  /// shows: Remove Full-Text Index has something to remove.
+  @Test func `retaining what is indexed already announces a change`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let changes = Mutex(0)
+    let fetch = CountingFetch()
+
+    _ = await indexer.indexAll([id]) {
+      try fetch($0)
+    } changed: {
+      changes.withLock { $0 += 1 }
+    }
+
+    #expect(changes.withLock { $0 } == 1)
+    #expect(await indexer.usage().retained == 1)
+  }
+
+  @Test func `only an RFC with a text or an XML can be indexed`() {
+    let date = PublicationDate(year: 1990)
+    let rfcs = [
+      RFCMetadata(id: .rfc(1), title: "Text", date: date, formats: [.text, .html]),
+      RFCMetadata(id: .rfc(2), title: "XML", date: date, formats: [.xml]),
+      RFCMetadata(id: .rfc(3), title: "Scanned", date: date, formats: [.pdf, .postScript]),
+    ]
+
+    #expect(IndexAllRun.indexable(rfcs).map(\.id) == [.rfc(1), .rfc(2)])
+  }
+
   /// Remove Full-Text Index: the index goes back to the bodies the store holds.
   @Test func `releasing what Index All RFCs indexed keeps only the stored`() async throws {
     let sandbox = Sandbox()

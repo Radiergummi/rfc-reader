@@ -384,6 +384,35 @@ final class FullTextIndexTests {
     #expect(try Set(index.indexed().keys) == [.rfc(8999)])
   }
 
+  /// Remove Full-Text Index removes most of the index: the file has to shrink with
+  /// it, or Settings goes on showing its old size.
+  @Test func `compacting gives back the disk a removal left`() throws {
+    let index = try index()
+    let document = try Fixtures.document("rfc8999.xml")
+    let ids = (1...40).map { DocumentID.rfc($0) }
+    for id in ids {
+      var copy = document
+      copy.header.id = id
+      try index.add(copy)
+    }
+    try index.remove(ids)
+    let before = try bytes()
+
+    try index.compact()
+
+    #expect(try bytes() < before / 2)
+    #expect(try index.indexed().isEmpty)
+  }
+
+  /// The database and its journal.
+  func bytes() throws -> Int {
+    try ["", "-wal"].reduce(0) { total, suffix in
+      let file = URL(filePath: url.path + suffix)
+      guard FileManager.default.fileExists(atPath: file.path) else { return total }
+      return total + (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+    }
+  }
+
   @Test func `a removed document is no longer retained`() throws {
     let index = try index()
     try index.add(Fixtures.document("rfc8999.xml"), retained: true)
