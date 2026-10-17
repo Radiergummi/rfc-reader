@@ -109,6 +109,10 @@
       // The text rises from under the bar's bottom edge, which is this view's own
       // in the bar's middle: what is below it is out of sight.
       clipsToBounds = true
+      // Fixed type, as the bar's own title is, so at an accessibility size a long
+      // press shows it large, as the bar's own title does (#760).
+      showsLargeContentViewer = true
+      addInteraction(UILargeContentViewerInteraction())
     }
 
     @available(*, unavailable)
@@ -120,6 +124,17 @@
       if self.title.text != title { self.title.text = title }
       documentTitle = subtitle
       applyText()
+    }
+
+    /// What the Large Content Viewer shows: the title, and the running heading under
+    /// it where there is one.
+    override var largeContentTitle: String? {
+      get {
+        let heading = state.runningHeading.incoming ?? documentTitle
+        return [title.text, heading].compactMap { $0 }.filter { !$0.isEmpty }
+          .joined(separator: "\n")
+      }
+      set { super.largeContentTitle = newValue }
     }
 
     /// Only what changed: while the title slides in the hand-over holds still,
