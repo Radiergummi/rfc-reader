@@ -152,7 +152,8 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      library.toggleBookmark(identity, documentTitle: reader.documentTitle)
+      library.toggleBookmark(
+        identity, documentTitle: reader.documentTitle, undoManager: undoManager)
     }
   }
 

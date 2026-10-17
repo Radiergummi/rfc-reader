@@ -36,19 +36,83 @@ public enum BookmarkStore {
   /// A failed lookup throws before anything changes: not knowing whether the
   /// document is bookmarked, inserting would add a second bookmark beside the one
   /// there.
-  public static func toggle(_ id: DocumentID, title: String, in context: ModelContext) throws {
+  ///
+  /// A removal can be undone, the bookmark back with its title and the date it was
+  /// added (#769): a stray swipe or ⌘D lost both. Its undo and redo run long after
+  /// this returns, so they hand what they throw to `onUndoFailure`, as
+  /// `CollectionStore.remove`'s do.
+  public static func toggle(
+    _ id: DocumentID, title: String, undoManager: UndoManager? = nil,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void = { _ in }, in context: ModelContext
+  ) throws {
     let existing = try bookmarks(for: id, in: context)
     if !existing.isEmpty {
-      // Every row naming the document, since nothing stops there being two.
-      existing.forEach(context.delete)
+      try remove(
+        existing, of: id, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
     } else {
       context.insert(Bookmark(document: id, title: title))
+      try context.save()
     }
+  }
+
+  /// Removes `existing`, every row naming the document, since nothing stops there
+  /// being two, and registers putting the first back as the undo.
+  private static func remove(
+    _ existing: [Bookmark], of id: DocumentID, undoManager: UndoManager?,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
+  ) throws {
+    guard let first = existing.first else { return }
+    let removal = Removal(document: id, title: first.title, createdAt: first.createdAt)
+    existing.forEach(context.delete)
     // Explicitly, rather than leaving it to autosave on one platform and not the
     // other: on macOS the sidebar's list and the reader's toolbar are separate
     // hosting roots reading the same store, and the glyph should not be able to
     // disagree with the list behind it while a save is still pending.
     try context.save()
+    undoManager?.registerUndo(withTarget: context) { context in
+      // On the main thread, for the reason `CollectionStore.remove` gives.
+      MainActor.assumeIsolated {
+        do {
+          try restore(
+            removal, undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
+        } catch {
+          onUndoFailure(error)
+        }
+      }
+    }
+    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
+  }
+
+  /// What a removal took out, for its undo to put back.
+  private struct Removal {
+    let document: DocumentID
+    let title: String
+    let createdAt: Date
+  }
+
+  /// Undoing a removal: the bookmark back as it was, and the removal again as the
+  /// redo. Nothing is put back beside a bookmark made since.
+  private static func restore(
+    _ removal: Removal, undoManager: UndoManager?,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, in context: ModelContext
+  ) throws {
+    guard try bookmarks(for: removal.document, in: context).isEmpty else { return }
+    let bookmark = Bookmark(
+      document: removal.document, title: removal.title, createdAt: removal.createdAt)
+    context.insert(bookmark)
+    try context.save()
+    undoManager?.registerUndo(withTarget: context) { context in
+      MainActor.assumeIsolated {
+        do {
+          try remove(
+            bookmarks(for: removal.document, in: context), of: removal.document,
+            undoManager: undoManager, onUndoFailure: onUndoFailure, in: context)
+        } catch {
+          onUndoFailure(error)
+        }
+      }
+    }
+    undoManager?.setActionName(DocumentActions.bookmarkCommand(isBookmarked: true))
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do

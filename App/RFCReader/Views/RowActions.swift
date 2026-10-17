@@ -104,7 +104,7 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      library.toggleBookmark(row.id)
+      library.toggleBookmark(row.id, undoManager: undoManager)
     }
   }
 #endif

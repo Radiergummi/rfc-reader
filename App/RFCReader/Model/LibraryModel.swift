@@ -406,12 +406,21 @@ final class LibraryModel {
   /// or else `documentTitle`, what an open reader has parsed. A failure is logged
   /// rather than shown, as a collection's is (#125). A failed lookup changes
   /// nothing; a failed save leaves the change pending in the context, saved with
-  /// the next save that succeeds.
-  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+  /// the next save that succeeds. A removal registers its undo with `undoManager`
+  /// (#769), whose own failures are logged too.
+  func toggleBookmark(
+    _ id: DocumentID, documentTitle: String? = nil, undoManager: UndoManager? = nil
+  ) {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
     do {
-      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
+      try BookmarkStore.toggle(
+        id, title: title, undoManager: undoManager,
+        onUndoFailure: { error in
+          libraryLog.error(
+            "undoing or redoing a bookmark's removal failed: \(String(describing: error), privacy: .public)"
+          )
+        }, in: container.mainContext)
     } catch {
       libraryLog.error(
         "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
