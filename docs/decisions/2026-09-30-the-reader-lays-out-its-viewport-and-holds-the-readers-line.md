@@ -37,3 +37,9 @@ The scrollers are the platforms' own.
 What it costs: a deep jump before completion has passed its target freezes for as long as the layout above it takes, as on the old path (#295 stays open), and the rebuild after a resize on the Mac settles in about 0.35–0.6 s on RFC 5661.
 Print and export keep their own full layout.
 Each of these was measured to fail on a device and is not to come back: pins after completion slices; a scroll height or knob of our own, or holding back iOS's content size; jumping without laying out what is above the target; forcing a viewport layout during a live resize; settling at the end of a live resize; restarting completion when TextKit drops its layout.
+
+## A live resize waits before it builds
+
+*Moved here from `LoadState.buildDelay`'s comment on 17 October 2026 (#756).*
+
+A rebuild costs the whole attributed string plus a full relayout, 650 ms on the largest documents in the library when it was measured. So a column still being dragged for a document already on screen waits that long, 650 ms, before it builds, and the next change cancels the wait (`LoadState.buildDelay`). A restyle does not wait: View ▸ Bigger and Smaller (#153) waited out the whole delay before starting a build of about 120 ms, measured on RFC 9110, so each step took most of a second to show.
