@@ -1109,17 +1109,19 @@ final class LibraryModel {
     textIndexVersion += 1
   }
 
-  /// Index All RFCs: downloads every RFC the index lists a text or XML of and is not
-  /// indexed yet, on a network that is neither metered nor in Low Data Mode, and
-  /// indexes it without keeping its body. An RFC listed with neither, only a PDF or
-  /// PostScript, has no text to index.
+  /// The RFCs Index All RFCs can index: those the index lists a text or XML of. One
+  /// listed with neither, only a PDF or PostScript, has no text to index.
+  var indexableRFCs: [RFCMetadata] {
+    index?.rfcs.filter { $0.formats.contains(.text) || $0.formats.contains(.xml) } ?? []
+  }
+
+  /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
+  /// on a network that is neither metered nor in Low Data Mode, and indexes it without
+  /// keeping its body.
   func indexAllRFCs() {
-    guard let index, let textIndexer else { return }
+    guard let textIndexer else { return }
     let entries = Dictionary(
-      index.rfcs.compactMap { entry in
-        entry.formats.contains(.text) || entry.formats.contains(.xml) ? (entry.id, entry) : nil
-      },
-      uniquingKeysWith: { first, _ in first })
+      indexableRFCs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     let client = clientOnCheapNetworks
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
     indexAllRun.start(entries.keys.sorted(), indexer: textIndexer) { id in

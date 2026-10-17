@@ -214,9 +214,9 @@ struct RFCListView: View {
         } footer: {
           VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: searched)
-            // While the index holds fewer than the search could look in, the one way
-            // to have it look in the rest.
-            if textFound.searched < (textFound.narrowedTo ?? library.index?.rfcs.count ?? 0) {
+            // While the index holds fewer than it could, the one way to have it look
+            // in the rest.
+            if textFound.searched < (textFound.narrowedTo ?? library.indexableRFCs.count) {
               IndexAllRFCsControl(library: library)
             }
           }

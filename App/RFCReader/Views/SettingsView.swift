@@ -277,7 +277,9 @@ struct StorageSettings: View {
         .foregroundStyle(.secondary)
       }
       LabeledContent("Full-Text Index") { UsageValue(usage: textIndex?.usage) }
-      if let textIndex, let total = library.index?.rfcs.count, textIndex.usage.documents >= total {
+      if let textIndex, library.index != nil,
+        textIndex.usage.documents >= library.indexableRFCs.count
+      {
         Text("All RFCs are indexed.")
           .font(.caption)
           .foregroundStyle(.secondary)
