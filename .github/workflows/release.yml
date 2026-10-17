@@ -59,6 +59,39 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # Sparkle offers only a higher build number, and once the draft is published it
+      # cannot be rebuilt, so a run number the feed has already passed (this file
+      # renamed restarts it at 1) is refused here, not by `make appcast` after. No feed
+      # yet, or none reachable, is left to `make appcast`.
+      - name: Check the build number
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          published=$(curl -sf --max-time 20 https://rfc-reader.mazetti.me/appcast.xml \
+            | sed -n 's/.*<sparkle:version>\([0-9]*\)<.*/\1/p' | sort -n | tail -1) || true
+          if [ -n "$published" ] && [ "$BUILD_NUMBER" -le "$published" ]; then
+            echo "Build $BUILD_NUMBER is not above the published build $published." >&2
+            exit 1
+          fi
+
+      # Every secret and variable the signing needs, checked before the long tests
+      # rather than after them.
+      - name: Check the signing inputs
+        env:
+          SIGNING_DATA: ${{ secrets.SIGNING_DATA }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          APPLE_API_KEY_DATA: ${{ secrets.APPLE_API_KEY_DATA }}
+          APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          for name in SIGNING_DATA SIGNING_PASSWORD APPLE_API_KEY_DATA APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [[ -z "${!name}" ]]; then
+              echo "The $name secret or variable is not set." >&2
+              exit 1
+            fi
+          done
+
       # Gates before anything is signed: a signed artifact is one somebody might install.
       - name: Test
         run: make test test-app
@@ -77,8 +110,7 @@ jobs:
 
       # The run number is the build number: Sparkle orders updates by CFBundleVersion,
       # and the run number only grows. It is counted per workflow, so renaming this
-      # file would start it at 1 again; the feed script refuses a build number that is
-      # not above the published one.
+      # file would start it at 1 again; "Check the build number" refuses that.
       - name: Build, notarize and package
         id: build
         env:

@@ -39,11 +39,12 @@ packages:
   RFCReaderKit:
     path: Packages/RFCReaderKit
   # Updates for the Mac app outside the App Store (#911); see Window/Updater.swift.
-  # An exact version: Package.resolved is inside the generated, ignored project, so
-  # a range would let each release build resolve a Sparkle nobody reviewed.
+  # The commit of 2.10.0, not the tag: Package.resolved is inside the generated,
+  # ignored project, so a range, or a tag moved upstream, would let a release build
+  # resolve a Sparkle nobody reviewed.
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    exactVersion: 2.10.0
+    revision: eef1a539a373c1f1a320624b1130fc5de7b2e100
 
 targets:
   RFCReader:

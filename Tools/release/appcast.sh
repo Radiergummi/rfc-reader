@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 version="${1:?usage: make appcast VERSION=<version>}"
-build_dir="${2:?usage: make appcast VERSION=<version>}"
+build_dir="${2:?could not read BUILD_DIR from xcodebuild -showBuildSettings}"
 repository="Radiergummi/rfc-reader"
 tag="v$version"
 disk_image="RFC-Reader-$version.dmg"
@@ -68,7 +68,8 @@ echo "$tag is build $build_number, with its feed at $feed_url"
 
 # Seeded from the published feed, so the releases before keep their entries:
 # generate_appcast keeps what the feed in its directory holds. A 404 is the first
-# release; anything else stops here rather than publish a feed that forgot them.
+# release only while no feed is committed either; anything else stops here rather
+# than publish a feed that forgot them.
 step "Reading the published feed"
 status=$(curl -sS -o "$updates/appcast.xml" -w '%{http_code}' --max-time 20 "$feed_url")
 case "$status" in
@@ -83,6 +84,10 @@ case "$status" in
     echo "Build $build_number follows the published build ${published:-none}."
     ;;
   404)
+    if [[ -f site/public/appcast.xml ]]; then
+      echo "$feed_url answers 404 but site/public/appcast.xml exists: run make publish-feed to restore it first." >&2
+      exit 1
+    fi
     rm -f "$updates/appcast.xml"
     echo "No feed is published yet: this is the first release."
     ;;
