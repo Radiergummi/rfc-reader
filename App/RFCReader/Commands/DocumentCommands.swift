@@ -54,11 +54,7 @@ struct DocumentCommands: Commands {
 
     /// What an item of the Document menu does, as the toolbar's Cite and More do it.
     private func perform(_ action: DocumentMenus.Action) {
-      guard let controller = active.controller, let id = controller.navigation.shown else { return }
-      DocumentActionPerformer(
-        id: id, metadata: controller.library.metadata(id), reader: controller.reader,
-        open: { NSWorkspace.shared.open($0) }
-      ).perform(action)
+      active.controller?.perform(action)
     }
   #else
     let library: LibraryModel
@@ -155,6 +151,8 @@ struct DocumentCommands: Commands {
               ],
               perform: perform)
           }
+          // A citation is made from the index's entry, as the References menu's is.
+          .disabled(navigation?.shown.flatMap { active.controller?.library.metadata($0) } == nil)
           Divider()
           // Disabled rather than gone with no reader window, as the other menus'
           // items are: an empty menu in the bar says nothing.
@@ -302,9 +300,9 @@ struct DocumentCommands: Commands {
           // As TextEdit's and Safari's Find menus have them (#761). Only over a
           // selection: they act on it.
           Group {
-            Button("Use Selection for Find") { FindCommand.setSearchString.send() }
+            Button("Use Selection for Find") { active.controller?.useSelectionForFind() }
               .keyboardShortcut("e", modifiers: .command)
-            Button("Jump to Selection") { FindCommand.jumpToSelection() }
+            Button("Jump to Selection") { active.controller?.jumpToSelection() }
               .keyboardShortcut("j", modifiers: .command)
           }
           .disabled(!hasFindableSelection)

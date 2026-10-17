@@ -239,7 +239,7 @@
     }
 
     /// The sidebar or the panel opened or closed: both resize the subviews.
-    func sidebarChanged(_ controller: ReaderWindowController) {
+    func layoutChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
       isSidebarCollapsed = controller.splitController.isSidebarCollapsed
       isPanelOpen = controller.isPanelOpen

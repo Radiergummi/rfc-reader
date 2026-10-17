@@ -55,6 +55,8 @@ struct DocumentInspector: View {
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
+  /// The window's tab, beside which a reference opens in a new one (#761).
+  @Environment(NavigationModel.self) private var scene
   let pane: InspectorPane
   @Binding var tab: InspectorTab
   let current: String?
@@ -170,7 +172,9 @@ struct DocumentInspector: View {
     #if os(macOS)
       ReferenceMenu(
         library: library,
-        openInNewTab: { [library] in library.open(RFCLink(id: $0), placement: .newTab) },
+        openInNewTab: { [library, scene] in
+          library.openTab(RFCLink(id: $0), beside: scene)
+        },
         openInNewWindow: { [library] in library.open(RFCLink(id: $0), placement: .newWindow) })
     #else
       ReferenceMenu(
@@ -521,12 +525,7 @@ struct ReferenceMenu {
     let sections = DocumentMenus.referenceActions(
       opensTabs: openInNewTab != nil, opensWindows: openInNewWindow != nil,
       describes: library.metadata(id) != nil)
-    ForEach(Array(sections.enumerated()), id: \.offset) { index, actions in
-      if index > 0 { Divider() }
-      ForEach(actions, id: \.self) { action in
-        item(action, for: id)
-      }
-    }
+    DividedSections(sections: sections) { item($0, for: id) }
   }
 
   @ViewBuilder

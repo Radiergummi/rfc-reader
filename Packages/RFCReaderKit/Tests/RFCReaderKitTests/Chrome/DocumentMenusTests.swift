@@ -153,8 +153,11 @@ struct DocumentMenuEffectsTests {
   @Test func `original text toggles`() {
     #expect(effect(.toggleOriginalText) == .toggleOriginalText)
   }
+}
 
-  // MARK: - A library row's menu (#761)
+/// A library row's and a reference's menus (#761): one table each for the Mac and iOS.
+@Suite("Row and reference menus")
+struct RowAndReferenceMenusTests {
 
   /// The Mac opens a row in a tab or a window, then everything the library does
   /// with it, then Share.

@@ -695,12 +695,12 @@
         }
       }
     },
-    "Bookmark this RFC. It is not bookmarked." : {
+    "Bookmark this document. It is not bookmarked." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lesezeichen für diesen RFC hinzufügen. Er hat noch keines."
+            "value" : "Lesezeichen für dieses Dokument hinzufügen. Es hat noch keines."
           }
         }
       }
@@ -1935,12 +1935,12 @@
         }
       }
     },
-    "Remove Bookmark. This RFC is bookmarked." : {
+    "Remove Bookmark. This document is bookmarked." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lesezeichen entfernen. Dieser RFC hat ein Lesezeichen."
+            "value" : "Lesezeichen entfernen. Dieses Dokument hat ein Lesezeichen."
           }
         }
       }

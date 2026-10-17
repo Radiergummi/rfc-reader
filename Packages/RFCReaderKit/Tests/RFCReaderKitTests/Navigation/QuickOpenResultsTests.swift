@@ -31,8 +31,9 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link.id) == [.rfc(9110), .rfc(9111)])
   }
 
-  /// What the placeholder says it takes, the example shows one of each, and each of
-  /// them resolves or searches as it says (#761).
+  /// What the placeholder says it takes, the example shows one of each (#761), and
+  /// the number, the series and the link resolve as typed. The title words are a
+  /// search, which needs the index, so only their place is pinned.
   @Test func `the example is one of each thing the field takes`() {
     let parts = QuickOpenResults.example.components(separatedBy: " · ")
     #expect(parts.count == 4)

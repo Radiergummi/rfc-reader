@@ -12,7 +12,8 @@
     static let showFindInterface = FindCommand(.showFindInterface)
     static let nextMatch = FindCommand(.nextMatch)
     static let previousMatch = FindCommand(.previousMatch)
-    /// Use Selection for Find (#761), which `NSTextView` already performs.
+    /// Use Selection for Find (#761), which `NSTextView` already performs; sent by
+    /// `ReaderWindowController.useSelectionForFind()`.
     static let setSearchString = FindCommand(.setSearchString)
 
     @objc let tag: Int
@@ -24,12 +25,6 @@
     func send() {
       ActiveReaderWindow.shared.controller?.focusSearchableText()
       NSApp.sendAction(#selector(NSTextView.performTextFinderAction(_:)), to: nil, from: self)
-    }
-
-    /// Jump to Selection (#761): not a find-bar action but the responder's own, as
-    /// AppKit's standard Edit ▸ Find menu sends it.
-    static func jumpToSelection() {
-      ActiveReaderWindow.shared.controller?.jumpToSelection()
     }
   }
 #endif

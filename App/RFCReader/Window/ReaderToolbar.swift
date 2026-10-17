@@ -440,9 +440,7 @@
       guard let id else { return }
       switch sender.representedObject {
       case let action as DocumentMenus.Action:
-        DocumentActionPerformer(
-          id: id, metadata: metadata, reader: reader, open: { NSWorkspace.shared.open($0) }
-        ).perform(action)
+        controller.perform(action)
       case let action as DocumentMenus.CollectionAction:
         CollectionActionPerformer(
           document: id, library: library, navigation: navigation,

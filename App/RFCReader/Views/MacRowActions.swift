@@ -19,12 +19,7 @@ import SwiftUI
         let sections = DocumentMenus.rowActions(
           isRFC: row.rfc != nil, opensTabs: true, opensWindows: true,
           inCollection: collection != nil)
-        ForEach(Array(sections.enumerated()), id: \.offset) { index, actions in
-          if index > 0 { Divider() }
-          ForEach(actions, id: \.self) { action in
-            item(action)
-          }
-        }
+        DividedSections(sections: sections, item: item)
       }
     }
 
@@ -33,7 +28,7 @@ import SwiftUI
       switch action {
       case .openInNewTab:
         Button {
-          library.open(RFCLink(id: row.id), placement: .newTab)
+          library.openTab(RFCLink(id: row.id), beside: navigation)
         } label: {
           Label("Open in New Tab", systemImage: "plus.square.on.square")
         }

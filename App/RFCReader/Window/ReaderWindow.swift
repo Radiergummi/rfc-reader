@@ -57,11 +57,18 @@
         inText: (firstResponder as? NSText)?.isEditable == true),
         let controller = windowController as? ReaderWindowController
       {
+        // With nowhere to go the key passes on, as it did to a disabled menu item.
+        let navigation = controller.navigation
         switch step {
-        case .back: controller.navigation.goBack()
-        case .forward: controller.navigation.goForward()
+        case .back where navigation.canGoBack:
+          navigation.goBack()
+          return true
+        case .forward where navigation.canGoForward:
+          navigation.goForward()
+          return true
+        default:
+          break
         }
-        return true
       }
       return super.performKeyEquivalent(with: event)
     }

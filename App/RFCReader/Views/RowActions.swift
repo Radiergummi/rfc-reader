@@ -51,12 +51,7 @@ import SwiftUI
           let sections = DocumentMenus.rowActions(
             isRFC: rfc != nil, opensTabs: false, opensWindows: library.opensNewWindows,
             inCollection: false)
-          ForEach(Array(sections.enumerated()), id: \.offset) { index, actions in
-            if index > 0 { Divider() }
-            ForEach(actions, id: \.self) { action in
-              item(action)
-            }
-          }
+          DividedSections(sections: sections, item: item)
         } preview: {
           preview
         }

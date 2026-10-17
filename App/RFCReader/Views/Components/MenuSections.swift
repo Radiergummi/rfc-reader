@@ -11,22 +11,19 @@ struct MenuSections<Performed: Hashable & Sendable>: View {
   let perform: (Performed) -> Void
 
   var body: some View {
-    ForEach(Array(sections.enumerated()), id: \.offset) { index, items in
-      if index > 0 { Divider() }
-      ForEach(items, id: \.self) { item in
-        if let isOn = item.isOn {
-          Toggle(isOn: Binding(get: { isOn }, set: { _ in perform(item.action) })) {
-            label(for: item)
-          }
-          .keyboardShortcut(shortcuts[item.action])
-        } else {
-          Button {
-            perform(item.action)
-          } label: {
-            label(for: item)
-          }
-          .keyboardShortcut(shortcuts[item.action])
+    DividedSections(sections: sections) { item in
+      if let isOn = item.isOn {
+        Toggle(isOn: Binding(get: { isOn }, set: { _ in perform(item.action) })) {
+          label(for: item)
         }
+        .keyboardShortcut(shortcuts[item.action])
+      } else {
+        Button {
+          perform(item.action)
+        } label: {
+          label(for: item)
+        }
+        .keyboardShortcut(shortcuts[item.action])
       }
     }
   }
@@ -42,6 +39,22 @@ struct MenuSections<Performed: Hashable & Sendable>: View {
       .labelStyle(.titleAndIcon)
     } else {
       Text(item.title)
+    }
+  }
+}
+
+/// Sections of menu items, a divider between each two: one rendering for every
+/// `DocumentMenus` table (#761), each item made by `item`.
+struct DividedSections<Element: Hashable, Item: View>: View {
+  let sections: [[Element]]
+  @ViewBuilder let item: (Element) -> Item
+
+  var body: some View {
+    ForEach(Array(sections.enumerated()), id: \.offset) { index, elements in
+      if index > 0 { Divider() }
+      ForEach(elements, id: \.self) { element in
+        item(element)
+      }
     }
   }
 }

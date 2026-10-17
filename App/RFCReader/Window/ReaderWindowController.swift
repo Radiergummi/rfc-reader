@@ -105,12 +105,12 @@
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
       // that column is dragged.
-      // Collapsing or expanding the sidebar resizes the subviews too, so this is also
-      // where View ▸ Show Sidebar learns which title to show.
+      // Collapsing or expanding the sidebar or the panel resizes the subviews too, so
+      // this is also where View ▸ Show Sidebar, Contents and Info learn their titles.
       splitController.didResizeSubviews = { [weak self] in
         guard let self else { return }
         self.toolbar?.capTitleToList()
-        ActiveReaderWindow.shared.sidebarChanged(self)
+        ActiveReaderWindow.shared.layoutChanged(self)
       }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
@@ -461,9 +461,30 @@
 
     /// Edit ▸ Jump to Selection (#761), handed to the text with the selection, as Copy
     /// as Quote is and for its reason: with the find bar's field focused, the
-    /// responder chain would center the field's own selection.
+    /// responder chain would center the field's own selection. Scrolled to first,
+    /// which `centerSelectionInVisibleArea` never does: that is what opens a folded
+    /// section, makes this side lead a side-by-side reading and places a far-off
+    /// range exactly (`ReaderTextView.revealRange`).
     func jumpToSelection() {
-      FirstResponderSearch.searchableText(in: quotedReaderView)?.centerSelectionInVisibleArea(nil)
+      guard let text = selectedText else { return }
+      text.scrollRangeToVisible(text.selectedRange())
+      text.centerSelectionInVisibleArea(nil)
+    }
+
+    /// Edit ▸ Use Selection for Find (#761), from the text with the selection, for
+    /// Jump to Selection's reason.
+    func useSelectionForFind() {
+      selectedText?.performTextFinderAction(FindCommand.setSearchString)
+    }
+
+    /// The text Use Selection for Find and Jump to Selection act on, when something
+    /// in it is selected: the original text's selection is not mirrored in
+    /// `ReaderState`, so the menu lets it through and this checks.
+    private var selectedText: NSTextView? {
+      guard let text = FirstResponderSearch.searchableText(in: quotedReaderView),
+        text.selectedRange().length > 0
+      else { return nil }
+      return text
     }
 
     /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
@@ -485,6 +506,15 @@
       let focused = window?.firstResponder as? NSView
       if !reader.hasSelection || focused?.isDescendant(of: beside) == true { return beside }
       return splitController.readerView
+    }
+
+    /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
+    func perform(_ action: DocumentMenus.Action) {
+      guard let id = navigation.shown else { return }
+      DocumentActionPerformer(
+        id: id, metadata: library.metadata(id), reader: reader,
+        open: { NSWorkspace.shared.open($0) }
+      ).perform(action)
     }
 
     /// File ▸ Share… (#761): the picker the toolbar's Share item opens, hanging below
