@@ -226,7 +226,7 @@ is that way, and what was measured or tried first.
 
 ## Known gaps and the next technical steps
 
-- Legacy text: a definition list set as xml2rfc sets one, `Term:  definition` with the rest hung under it, is read as one (#436), but a term on a line of its own with its definition under it (e.g. the cache directives in RFC 2616 §14.9.1) still renders as a preformatted block; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
+- Legacy text: a definition list set as xml2rfc sets one, `Term:  definition` with the rest hung under it, is read as one (#436), but a term on a line of its own with its definition under it (e.g. the cache directives in RFC 2616 §14.9.1) still renders as a preformatted block; nested lists are flattened; front matter reads its authors from the header's right column, a line set in the right half alone included (#767), so an author line set nearer the left margin is not read.
 - Search covers the index's metadata only, in memory, scanning every entry per query (the "Search" benchmarks of `make benchmark`). Full-text search over document bodies has its index in RFCKit (`FullTextIndex`) but nothing in the app uses it yet (#37); metadata search moves into its database when it lands.
 - SVG artwork (`<artwork type="svg">`) is not drawn: an `<artset>` shows its ASCII alternative, and an artwork that has none names the gap and the RFC Editor's page that draws it, whose address is the block's text, not a link.
 - No Spotlight indexing or iCloud sync yet. The Datatracker is a page the Info pane links to, not data the app fetches. Errata are fetched (`LibraryModel.refreshErrata`, #387) and listed in the Info pane (`ErrataSummary`), but not yet marked in the reader.
