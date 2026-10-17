@@ -191,9 +191,12 @@ struct DocumentView: View {
   }
 
   /// The document's verified and held errata, where the reader marks them (#387):
-  /// none until its body is here, so a build is not made for marks that move.
+  /// none until its body is here, so a build is not made for marks that move, and
+  /// none in a text the original-only page loaded but does not show, whose header
+  /// lists them all.
   private var errataMarks: ErrataMarks {
-    session.state.document == nil ? .none : session.errataMarks(for: library.errata?[id])
+    guard session.state.document != nil, originalOnlyPage == nil else { return .none }
+    return session.errataMarks(for: library.errata?[id])
   }
 
   private var buildInputs: BuildInputs {
@@ -495,13 +498,18 @@ struct DocumentView: View {
       #endif
   }
 
+  /// The page of an RFC that is its PDF or PostScript original (#207), shown in place
+  /// of a body; nil for any other.
+  private var originalOnlyPage: PublishedOriginalPage? {
+    guard let metadata else { return nil }
+    return PublishedOriginalPage(
+      id, formats: metadata.formats, showsOriginal: showsOriginal,
+      text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
+  }
+
   @ViewBuilder
   private var states: some View {
-    if let metadata,
-      let page = PublishedOriginalPage(
-        id, formats: metadata.formats, showsOriginal: showsOriginal,
-        text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
-    {
+    if let metadata, let page = originalOnlyPage {
       originalOnly(page, metadata: metadata)
     } else if showsOriginal {
       // At the size the reader sets its body, the system's text size included, so

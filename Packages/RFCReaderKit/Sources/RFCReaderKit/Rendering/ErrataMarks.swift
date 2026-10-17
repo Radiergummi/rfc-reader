@@ -16,19 +16,16 @@ public struct ErrataMarks: Equatable, Sendable {
 
   public static let none = ErrataMarks(items: [])
 
-  public init(_ summary: ErrataSummary) {
-    self.init(items: summary.items)
-  }
-
   /// `document`'s marks: on the sections the reader draws, so an erratum naming a
   /// bibliography, which the reader leaves to the inspector, is the whole document's,
   /// as the Info pane lists it from the same sections. With no document, an original
   /// shown without a body, every erratum is the whole document's.
   public init(errata: [Erratum], document: RFCDocument?, locale: Locale = .interface) {
     self.init(
-      ErrataSummary(
+      items: ErrataSummary(
         errata: errata, sections: document.map { Self.drawn($0.sections) } ?? [],
-        locale: locale))
+        locale: locale
+      ).items)
   }
 
   /// `sections` less those the reader does not draw (`Section.holdsOnlyReferences`),

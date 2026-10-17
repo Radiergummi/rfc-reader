@@ -159,7 +159,7 @@ struct BuilderErrataTests {
     let heading = try Fixtures.offset(of: "2. Two", in: built.text)
     #expect(chip.range.location > heading)
     // The symbol, the joiner, then the words, before the heading's line break.
-    #expect(string.substring(with: chip.range).hasSuffix("2 errata"))
+    #expect(string.substring(with: chip.range).hasSuffix("2\u{00A0}errata"))
     #expect(string.substring(from: NSMaxRange(chip.range)).hasPrefix("\n"))
     // A chip, drawn as a reference's is, which nothing copies.
     for offset in chip.range.location..<NSMaxRange(chip.range) {
@@ -188,6 +188,22 @@ struct BuilderErrataTests {
 
     #expect(chips(in: built.text).isEmpty)
     #expect(built.errata(of: "one").isEmpty)
+  }
+
+  /// Like a reference's label, the chip never wraps between its words: a line too
+  /// short for it takes it whole onto the next.
+  @Test func `a chip's words do not break`() throws {
+    let built = DocumentTextBuilder.build(
+      Self.document, style: ReadingStyle(),
+      errata: Self.marks([
+        Self.erratum(1, .verified, section: "1"),
+        Self.erratum(2, .heldForDocumentUpdate, section: "1"),
+      ]))
+
+    let chip = try #require(chips(in: built.text).first)
+    let words = (built.text.string as NSString).substring(with: chip.range)
+    #expect(words.hasSuffix("1\u{00A0}erratum,\u{00A0}1\u{00A0}held"))
+    #expect(!words.contains(" "))
   }
 
   @Test func `a chip is said as its words`() throws {

@@ -269,7 +269,9 @@ extension DocumentTextBuilder {
     if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.errataScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
-    result.append(chipRun(words, symbol: "exclamationmark.bubble", attributes: attributes))
+    // NO-BREAK SPACEs, as a reference's label has: the chip never wraps in the middle.
+    let label = words.replacingOccurrences(of: " ", with: "\u{00A0}")
+    result.append(chipRun(label, symbol: "exclamationmark.bubble", attributes: attributes))
     return result
   }
 
