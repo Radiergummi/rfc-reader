@@ -640,6 +640,16 @@
         }
       }
     },
+    "Collapse Aside" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einschub zuklappen"
+          }
+        }
+      }
+    },
     "Collapse Section" : {
       "localizations" : {
         "de" : {
@@ -1057,6 +1067,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Errata"
+          }
+        }
+      }
+    },
+    "Expand Aside" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einschub aufklappen"
           }
         }
       }

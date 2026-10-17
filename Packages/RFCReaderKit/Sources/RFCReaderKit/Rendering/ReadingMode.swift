@@ -398,6 +398,17 @@ public struct Folding: Sendable, Equatable {
     outlineSection(index.entry(covering: line)?.anchor, in: index)
   }
 
+  /// In Implementer, the innermost aside whose caption or body holds `line` and whose
+  /// caption is shown, as an `OutlineSection` whose heading is the caption: what the
+  /// text's Expand Aside or Collapse Aside acts on (#760). Nil in another mode.
+  public func aside(atLine line: Int, in index: FoldingIndex) -> OutlineSection? {
+    guard mode == .implementer else { return nil }
+    let disclosures = disclosures(in: index)
+    return index.asides.reversed()
+      .first { ($0.caption..<$0.body.upperBound).contains(line) && disclosures[$0.caption] != nil }
+      .map { OutlineSection(heading: $0.caption, isExpanded: openAsides.contains($0.ordinal)) }
+  }
+
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored
   /// place inside a folded section, or in the abstract, expands it and every section
   /// it is nested in; in Implementer, inside a closed aside, opens it and every aside

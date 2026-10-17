@@ -264,8 +264,8 @@ struct ReaderInputs {
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
-      textView.outlineSection = { [weak coordinator = context.coordinator] in
-        coordinator?.outlineSectionAction()
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -412,8 +412,8 @@ struct ReaderInputs {
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
-      textView.outlineSection = { [weak coordinator = context.coordinator] in
-        coordinator?.outlineSectionAction()
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
       }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation

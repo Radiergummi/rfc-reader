@@ -81,20 +81,17 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
-    /// The outline's section the cursor is in and what toggles it, from the
-    /// coordinator: Expand Section or Collapse Section as an action of the text (#760).
-    var outlineSection: () -> (section: Folding.OutlineSection, toggle: () -> Void)? = { nil }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
 
-    /// Expand Section or Collapse Section, for the outline's section the cursor is
-    /// in, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
     /// action of the text (#760).
     override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
       get {
         var actions = super.accessibilityCustomActions ?? []
-        if let (section, toggle) = outlineSection() {
-          let name =
-            section.isExpanded
-            ? String(localized: "Collapse Section") : String(localized: "Expand Section")
+        if let (name, toggle) = disclosureAction() {
           actions.append(
             UIAccessibilityCustomAction(name: name) { _ in
               toggle()
@@ -237,9 +234,9 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
-    /// The outline's section the cursor is in and what toggles it, from the
-    /// coordinator: Expand Section or Collapse Section as an action of the text (#760).
-    var outlineSection: () -> (section: Folding.OutlineSection, toggle: () -> Void)? = { nil }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
     /// What VoiceOver says after each disclosed heading, by offset, from the
     /// coordinator: whether the reading mode has it open (#760).
     var spokenStates: () -> [Int: String] = { [:] }
@@ -637,15 +634,12 @@ import RFCReaderKit
 
     // MARK: - What VoiceOver reads (#12)
 
-    /// Expand Section or Collapse Section, for the outline's section the cursor is
-    /// in, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
     /// action of the text (#760).
     override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
       var actions = super.accessibilityCustomActions() ?? []
-      if let (section, toggle) = outlineSection() {
-        let name =
-          section.isExpanded
-          ? String(localized: "Collapse Section") : String(localized: "Expand Section")
+      if let (name, toggle) = disclosureAction() {
         actions.append(
           NSAccessibilityCustomAction(name: name) {
             toggle()

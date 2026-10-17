@@ -635,6 +635,19 @@ struct ReadingModeTests {
     #expect(Folding(mode: .normal).toggling(heading: aside.caption, in: index) == nil)
   }
 
+  /// Without a pointer, the text's action acts on the aside the line is in, by its
+  /// caption, from the caption or its body, and nowhere out of Implementer (#760).
+  @Test func `the line names the aside to open or close`() throws {
+    let index = FoldingIndex(try Self.rfc9271())
+    let aside = try #require(index.asides.first)
+    let closed = Folding(mode: .implementer)
+    let found = try #require(closed.aside(atLine: aside.caption + 1, in: index))
+    #expect(found == Folding.OutlineSection(heading: aside.caption, isExpanded: false))
+    let opened = try #require(closed.toggling(heading: found.heading, in: index))
+    #expect(opened.aside(atLine: aside.body.lowerBound, in: index)?.isExpanded == true)
+    #expect(Folding(mode: .outline).aside(atLine: aside.caption, in: index) == nil)
+  }
+
   /// A jump into a closed aside opens it; entering Implementer with the reader's
   /// line in an aside starts with that aside open, so the line stays shown.
   @Test func `a jump or the line inside an aside opens it`() throws {

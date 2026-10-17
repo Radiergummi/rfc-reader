@@ -70,8 +70,8 @@ struct InfoView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       // The pane takes focus as it shows: no ring round its first chip until a key
-      // is pressed.
-      .focusRingAfterKey()
+      // moves focus there.
+      .clearsFocusOnAppear()
     } else {
       Color.clear
     }
@@ -491,7 +491,6 @@ private struct DocumentChip: View {
           Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
-    .focusRingWhenShown()
     .accessibilityHint("Opens the document")
   }
 }
@@ -512,7 +511,6 @@ private struct KeywordTag: View {
         .background(.fill.secondary, in: .capsule)
     }
     .buttonStyle(.plain)
-    .focusRingWhenShown()
     .help("Search the library for “\(keyword)”")
     .accessibilityHint("Searches the library for it")
   }
@@ -544,7 +542,6 @@ private struct LinkRow: View {
         content(detail: nil, trailing: "arrow.up.right")
       }
       .buttonStyle(.plain)
-      .focusRingWhenShown()
       .help(url.absoluteString)
     case .file(let document, let format):
       let url = RFCEditorEndpoints.document(document, format: format)
@@ -555,7 +552,6 @@ private struct LinkRow: View {
           detail: nil, trailing: outcomeSymbol ?? (isOptionHeld ? "arrow.down" : "arrow.up.right"))
       }
       .buttonStyle(.plain)
-      .focusRingWhenShown()
       #if os(macOS)
         .onModifierKeysChanged(mask: .option, initial: true) { _, keys in
           isOptionHeld = keys.contains(.option)
@@ -574,7 +570,6 @@ private struct LinkRow: View {
         content(detail: text, trailing: outcomeSymbol ?? "doc.on.doc")
       }
       .buttonStyle(.plain)
-      .focusRingWhenShown()
       .help("Copy \(row.label)")
       .resets($outcome, to: nil, after: .seconds(1.5))
     default:
@@ -682,7 +677,6 @@ private struct OfflineSection: View {
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .focusRingWhenShown()
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)

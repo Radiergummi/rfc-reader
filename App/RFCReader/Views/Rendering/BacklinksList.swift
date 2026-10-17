@@ -42,7 +42,6 @@ struct BacklinksList: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .focusRingWhenShown()
           }
         }
       }
@@ -55,7 +54,7 @@ struct BacklinksList: View {
     .padding(.horizontal, 4)
     .frame(width: Self.width, alignment: .leading)
     // The popover takes focus as it opens: no ring round its first row until a key
-    // is pressed.
-    .focusRingAfterKey()
+    // moves focus there.
+    .clearsFocusOnAppear()
   }
 }
