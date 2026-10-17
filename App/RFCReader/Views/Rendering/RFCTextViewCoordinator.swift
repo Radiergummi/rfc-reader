@@ -198,7 +198,14 @@ final class RFCTextViewCoordinator: NSObject {
   var foldingIndex: FoldingIndex?
   /// What VoiceOver says after each disclosed heading, for the folding and index it
   /// was worked out for: asked on every line VoiceOver reads (`spokenStates()`).
-  var spokenStatesKept: (folding: Folding, index: Int, said: [Int: String])?
+  var spokenStatesKept: KeptSpokenStates?
+
+  struct KeptSpokenStates {
+    let folding: Folding
+    /// The build's text, by identity.
+    let text: ObjectIdentifier
+    let said: [Int: String]
+  }
   /// A folding this coordinator changed itself and asked the scene for, which the
   /// scene has not caught up with yet; see `FoldingEcho`.
   var foldingEcho = FoldingEcho()
