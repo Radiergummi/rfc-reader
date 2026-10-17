@@ -210,32 +210,17 @@
       command.performDefaultImplementation()
     }
 
-    /// An enumeration's value crosses as its four-character code.
+    /// An enumeration's value crosses as its four-character code (`ScriptPane`).
     @objc var scriptInspectorPane: FourCharCode {
       get {
-        guard let reader = controller?.reader else { return ScriptCode.contents }
-        if reader.pane == .info { return ScriptCode.info }
-        switch reader.tab {
-        case .contents: return ScriptCode.contents
-        case .references: return ScriptCode.references
-        case .requirements: return ScriptCode.requirements
-        }
+        guard let reader = controller?.reader else { return ScriptPane.contents.code }
+        return ScriptPane(pane: reader.pane, tab: reader.tab.rawValue).code
       }
       set {
         guard let reader = controller?.reader else { return }
-        switch newValue {
-        case ScriptCode.info:
-          reader.pane = .info
-        case ScriptCode.references:
-          reader.pane = .navigation
-          reader.tab = .references
-        case ScriptCode.requirements:
-          reader.pane = .navigation
-          reader.tab = .requirements
-        default:
-          reader.pane = .navigation
-          reader.tab = .contents
-        }
+        let pane = ScriptPane(code: newValue) ?? .contents
+        reader.pane = pane.pane
+        if let tab = pane.tab.flatMap(InspectorTab.init(rawValue:)) { reader.tab = tab }
       }
     }
   }
@@ -281,10 +266,10 @@
       }
       let code = (evaluatedArguments?["placement"] as? NSNumber)?.uint32Value
       let placement: LibraryModel.Placement =
-        switch code {
-        case ScriptCode.newTab: .newTab
-        case ScriptCode.newWindow: .newWindow
-        default: .frontTab
+        switch code.flatMap(ScriptPlacement.init(code:)) {
+        case .newTab: .newTab
+        case .newWindow: .newWindow
+        case .frontTab, nil: .frontTab
         }
       LibraryModel.shared.open(link, placement: placement)
     }
@@ -330,20 +315,6 @@
         }
         command.resumeExecution(withResult: nil)
       }
-    }
-  }
-
-  /// The dictionary's enumerators, as the four-character codes Apple events carry.
-  enum ScriptCode {
-    static let contents = code("RIpC")
-    static let references = code("RIpR")
-    static let requirements = code("RIpQ")
-    static let info = code("RIpI")
-    static let newTab = code("RPnT")
-    static let newWindow = code("RPnW")
-
-    private static func code(_ string: String) -> FourCharCode {
-      string.utf8.reduce(0) { $0 << 8 | FourCharCode($1) }
     }
   }
 

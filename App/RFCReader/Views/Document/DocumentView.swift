@@ -482,7 +482,7 @@ struct DocumentView: View {
         // Which window's live resize a new column comes from.
         .background {
           WindowObserver(resize: resize)
-            .accessibilityHidden(true)
+          .accessibilityHidden(true)
         }
       #else
         // Which size changes are a rotation, so their new column builds at once.
