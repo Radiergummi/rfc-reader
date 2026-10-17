@@ -31,6 +31,8 @@ extension RFCTextViewCoordinator {
     // Before the text, so the first layout skips what the reading mode folds.
     let foldingIndex = FoldingIndex(built)
     self.foldingIndex = foldingIndex
+    // It holds the build it was worked out for, which is no longer on screen.
+    spokenStatesKept = nil
     self.folding = folding
     foldingEcho.forget()
     forgetBands()
