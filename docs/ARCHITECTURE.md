@@ -194,6 +194,7 @@ is that way, and what was measured or tried first.
 - [A document's index is a block of its own](decisions/2026-10-05-a-documents-index-is-a-block-of-its-own.md)
 - [A defined term is a gloss at its first use in a paragraph, not a link](decisions/2026-10-14-a-defined-term-is-a-gloss-at-its-first-use-in-a-paragraph.md)
 - [Datatracker data is published to Cloudflare R2](decisions/2026-10-16-datatracker-data-is-published-to-cloudflare-r2.md)
+- [The Mac app is released from CI and updated by Sparkle](decisions/2026-10-17-the-mac-app-is-released-from-ci-and-updated-by-sparkle.md)
 
 ## Planned engines
 
