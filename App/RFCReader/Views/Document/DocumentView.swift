@@ -722,31 +722,33 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is. False while there is no build to look in.
+  /// leaves the history as it is. Nil while there is no build to look in, and
+  /// otherwise whether the place was one the document holds (#762).
   @discardableResult
-  private func follow(_ place: String) -> Bool {
+  private func follow(_ place: String) -> Bool? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
       let built = session.state.built
-    else { return false }
+    else { return nil }
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
         to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+      return true
     case .reference(let anchor):
       reader.reveal(reference: anchor)
+      return true
     case .document, .unhandled, nil:
-      break
+      return false
     }
-    return true
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
   /// waits for the text to appear, and is followed there.
   private func follow(_ request: ScrollRequest) {
-    if follow(request.section) {
-      navigation.settle(request)
+    if let landed = follow(request.section) {
+      navigation.settle(request, landed: landed)
     }
   }
 

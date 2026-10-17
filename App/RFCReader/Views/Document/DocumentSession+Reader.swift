@@ -74,7 +74,7 @@ extension DocumentSession {
       guard reader.isCurrent else { return }
       reader { $0.documentFailedToLoad() }
       // A jump waiting for the text is not coming.
-      if let request = navigation.scrollRequest { navigation.settle(request) }
+      if let request = navigation.scrollRequest { navigation.settle(request, landed: false) }
     }
   }
 

@@ -210,14 +210,20 @@ final class NavigationModel: Identifiable {
 
   /// The scroll request, and whoever waits for the jump it asked for: a script,
   /// whose next command must find the jump in the history (#482).
-  @ObservationIgnored private var requests = ScrollRequests<() -> Void>()
+  /// A waiter is told whether its jump landed (#762).
+  @ObservationIgnored private var requests = ScrollRequests<(Bool) -> Void>()
 
   /// Makes `change` to the requests, publishes the request, and then ends the wait
   /// the change ended, if it ended one.
-  private func updateRequests(_ change: (inout ScrollRequests<() -> Void>) -> (() -> Void)?) {
+  /// Changes the requests and tells the waiter whose wait that ended whether its
+  /// jump `landed`: one replaced by the jump the reader recorded, or by a place
+  /// arrived at since, did; one settled says itself.
+  private func updateRequests(
+    landed: Bool = true, _ change: (inout ScrollRequests<(Bool) -> Void>) -> ((Bool) -> Void)?
+  ) {
     let ended = change(&requests)
     if scrollRequest != requests.current { scrollRequest = requests.current }
-    ended?()
+    ended?(landed)
   }
 
   var canGoBack: Bool { history.canGoBack }
@@ -420,15 +426,18 @@ final class NavigationModel: Identifiable {
   /// records it through `recordJump(to:in:)` where its document holds the place.
   /// `whenSettled` runs once it has, or once the reader has done what else it will
   /// with the place: after the document loads, if it is still loading.
-  func jump(toSection section: String, whenSettled done: @escaping () -> Void = {}) {
-    updateRequests { $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done) }
+  func jump(toSection section: String, whenSettled done: @escaping (Bool) -> Void = { _ in }) {
+    // With no document on screen the wait ends at once, and nothing landed.
+    updateRequests(landed: selection != nil) {
+      $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done)
+    }
   }
 
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load.
-  func settle(_ request: ScrollRequest) {
-    updateRequests { $0.settle(request) }
+  func settle(_ request: ScrollRequest, landed: Bool) {
+    updateRequests(landed: landed) { $0.settle(request) }
   }
 
   /// A place the document on screen holds: its own history entry, so Back undoes

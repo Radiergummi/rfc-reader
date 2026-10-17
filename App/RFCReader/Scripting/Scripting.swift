@@ -303,7 +303,12 @@
       }
       suspendExecution()
       nonisolated(unsafe) let command = self
-      window.navigation.jump(toSection: section) {
+      // A place the document does not hold is an error to the script, in words,
+      // as the scripting decision asks, not a jump that went nowhere (#762).
+      window.navigation.jump(toSection: section) { landed in
+        if !landed {
+          ScriptError.report("The RFC has no section “\(section)”.", in: command)
+        }
         command.resumeExecution(withResult: nil)
       }
     }
