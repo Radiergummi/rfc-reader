@@ -313,7 +313,7 @@ public struct IndexSearch: Sendable {
   /// The filters with their text made into needles once per query, matched against
   /// an entry's prepared fields (#151). Lowercasing every author and working group
   /// on every query was the whole cost of an `author:` search, twice a free-text
-  /// query's (the "Search" benchmarks of `make benchmark`).
+  /// query's, when #151 measured it.
   private struct PreparedFilters {
     let filters: SearchFilters
     let groups: Set<SearchText>

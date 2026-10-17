@@ -702,7 +702,8 @@ final class LibraryModel {
       case .settle:
         settleIndex()
       case .install(let data, let validators):
-        // Off the main actor: the parse alone is the "Parse index XML" signpost (#124).
+        // Off the main actor: the parse, with what is built from it, is the "Parse
+        // index" signpost (#124).
         let prepared = try await Self.parse(data)
         try await store.storeIndex(data, parsed: prepared.index, validators: validators)
         apply(prepared, updatedAt: .now)

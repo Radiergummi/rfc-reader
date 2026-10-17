@@ -36,4 +36,4 @@ A document in the cache normally builds within that, so a pushed reader slides i
 
 *Moved here from ARCHITECTURE.md on 17 October 2026 (#756).*
 
-Its other writes are its own guard's (`updateFolding`), are made only by the reader on screen (a reference a followed link reveals), let go of only what it wrote itself (`releaseTitle(from:)`), or are not guarded at all (the panel opener set in `onAppear`).
+A reader below the top writes to the window's `ReaderState` through a `ReaderState.Writer`, which writes only while that reader is on top. Its other writes are its own guard's (`updateFolding`), are made only by the reader on screen (a reference a followed link reveals), let go of only what it wrote itself (`releaseTitle(from:)`), or are not guarded at all (the panel opener set in `onAppear`).
