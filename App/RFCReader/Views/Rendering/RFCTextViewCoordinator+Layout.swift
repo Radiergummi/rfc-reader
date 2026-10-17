@@ -104,31 +104,30 @@ extension RFCTextViewCoordinator {
       let built, !requirements.isEmpty
     else { return }
     let requirements = requirements
-    // From the install, or the requirements' arrival, until the bands are drawn (#747).
-    let interval = signposter.beginInterval("Find bands", id: signposter.makeSignpostID())
+    // From the install, the requirements' arrival or a switch into a mode that bands
+    // them, until the bands are drawn (#747).
+    let interval = signposter.beginInterval(
+      "Find bands", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     bandsTask = Task {
       let bands = await Self.bands(of: requirements, in: built)
       // A later build or requirements have forgotten this task and started their own.
-      guard self.built?.text === built.text, self.requirements == requirements else {
+      guard !Task.isCancelled, self.built?.text === built.text, self.requirements == requirements
+      else {
         signposter.endInterval("Find bands", interval, "superseded")
         return
       }
       bandsTask = nil
       requirementBands = bands
-      guard folding.mode.bandsRequirements, let foldingIndex else {
+      guard folding.mode.bandsRequirements else {
         signposter.endInterval("Find bands", interval, "not drawn")
         return
       }
-      let hidden = foldingDelegate.hidden
-      foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
-      // Where the folding hides what it hid, only what the fragments draw changed:
+      // The bands change only what the fragments draw, not what the folding hides:
       // they are drawn again, not laid out again, which a refold does for the whole
-      // document on the main actor ("Refold" and "Redraw" in `make trace`, #747).
-      if foldingDelegate.hidden == hidden {
-        engine.redraw()
-      } else {
-        engine.refold(foldingDelegate.hidden)
-      }
+      // document on the main actor (the "Refold" and "Redraw" signposts, #747).
+      foldingDelegate.band(bands)
+      engine.redraw()
       signposter.endInterval("Find bands", interval)
     }
   }
