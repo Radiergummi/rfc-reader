@@ -132,7 +132,9 @@ extension DocumentTextBuilder {
     case .stacked: appendStackedTable(table, indent: indent)
     }
     decorate(from: start, with: .table)
-    appendCaption(Self.caption("Table", number: table.number, title: table.title), indent: indent)
+    appendCaption(
+      Self.caption("Table", number: table.number, title: table.title), indent: indent,
+      blockStart: start)
   }
 
   private func appendGridTable(_ table: RFCKit.Table, widths: [CGFloat], indent: CGFloat) {
@@ -217,12 +219,14 @@ extension DocumentTextBuilder {
     return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
   }
 
-  /// A figure's or a table's caption, under its block. The block's last paragraph
-  /// keeps with it (`BuiltDocument.keepsWithNext`), so a printed page never ends on
-  /// the block and opens the next on its caption alone (#765).
-  func appendCaption(_ caption: String?, indent: CGFloat) {
+  /// A figure's or a table's caption, under its block, which starts at `blockStart`.
+  /// The block's last paragraph keeps with it (`BuiltDocument.keepsWithNext`), so a
+  /// printed page never ends on the block and opens the next on its caption alone
+  /// (#765). A block that emitted nothing has no paragraph to keep, and the one
+  /// before it is not its.
+  func appendCaption(_ caption: String?, indent: CGFloat, blockStart: Int) {
     guard let caption, !caption.isEmpty else { return }
-    if output.length > 0 {
+    if output.length > blockStart {
       let last = output.mutableString.paragraphRange(
         for: NSRange(location: output.length - 1, length: 0))
       keepsWithNext.insert(last.location)

@@ -103,8 +103,6 @@ struct GrammarLinksTests {
       ])
   }
 
-  /// One grammar spread over several blocks is one grammar: a use links to a
-  /// definition in another block, and the first definition of a name is its anchor.
   /// The grammar keeps each block's rules from the pass that collected it, which the
   /// rendering takes rather than parsing the block again (#765).
   @Test func `the grammar keeps each block's parsed rules`() throws {
@@ -118,6 +116,8 @@ struct GrammarLinksTests {
     #expect(grammar.parsed("other = 1*ALPHA", dialect: .rfc5234) == nil)
   }
 
+  /// One grammar spread over several blocks is one grammar: a use links to a
+  /// definition in another block, and the first definition of a name is its anchor.
   @Test func `blocks share one grammar, and the first definition wins`() throws {
     let first = Self.text("record = field *( \",\" field )")
     let second = Self.text("field = 1*ALPHA")

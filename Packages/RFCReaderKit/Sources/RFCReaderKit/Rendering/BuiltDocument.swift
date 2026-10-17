@@ -97,7 +97,7 @@ public struct BuildKey: Hashable, Sendable {
   /// (#765), as `BuildInputs.legibilityWeight` is a reason to build again.
   public let boldText: Bool
 
-  public init(document: DocumentID, style: ReadingStyle, boldText: Bool = false) {
+  public init(document: DocumentID, style: ReadingStyle, boldText: Bool) {
     self.document = document
     self.style = style
     self.boldText = boldText

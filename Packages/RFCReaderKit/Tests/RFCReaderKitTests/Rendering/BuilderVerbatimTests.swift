@@ -137,7 +137,7 @@ struct BuilderVerbatimTests {
     #expect(builder.monospaceScale(for: ascii, indent: 0) == 1)
     let scale = builder.monospaceScale(for: wide, indent: 0)
     #expect(scale < 1)
-    #expect(builder.widestLine(of: wide, scale: scale) <= style.measure + 1)
+    #expect(builder.widestLine(of: wide, scale: scale) <= style.measure)
   }
 
   /// Quotes nested deep enough to eat the whole measure must still leave the

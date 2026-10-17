@@ -250,6 +250,24 @@ struct BuilderTableTests {
     }
   }
 
+  /// A figure that emitted nothing has no paragraph to keep with its caption, and the
+  /// paragraph before it is not its own.
+  @Test func `an empty figure keeps nothing before it with its caption`() throws {
+    let blocks: [Block] = [
+      .paragraph(Paragraph(text: "Prose before.")),
+      .figure(Figure(title: "Nothing", number: 1, blocks: [])),
+    ]
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: blocks)],
+      source: .xml)
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let text = built.text.string as NSString
+    let prose = text.range(of: "Prose before.")
+    try #require(prose.location != NSNotFound)
+    #expect(!built.keepsWithNext.contains(prose.location))
+  }
+
   @Test func `the caption is text`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("Table 1: Methods"))

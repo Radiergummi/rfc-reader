@@ -133,7 +133,8 @@ struct ReaderSettingsTests {
     let id = DocumentID.rfc(9110)
     let base = ReaderSettings()
     func key(_ settings: ReaderSettings) -> BuildKey {
-      BuildKey(document: id, style: settings.style(column: 500, textSize: .large))
+      BuildKey(
+        document: id, style: settings.style(column: 500, textSize: .large), boldText: false)
     }
     var bigger = base
     bigger.fontSize += 1

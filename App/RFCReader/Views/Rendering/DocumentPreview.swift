@@ -51,7 +51,8 @@ struct DocumentPreview: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(width: size.width, height: size.height)
-    .task { await load() }
+    // Again when Bold Text changes, which the kept build was made without (#765).
+    .task(id: legibilityWeight) { await load() }
   }
 
   /// What is being previewed, above the text: the reader's own header would name

@@ -246,7 +246,7 @@ public final class StrokeBox: NSObject, Sendable {
   /// newlines before it in the text, which copied the whole document (#765).
   public let lineStarts: [Int]
 
-  public init(_ strokes: [Stroke], lineStarts: [Int] = [0]) {
+  public init(_ strokes: [Stroke], lineStarts: [Int]) {
     self.strokes = strokes
     self.lineStarts = lineStarts
   }

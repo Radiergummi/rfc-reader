@@ -392,15 +392,20 @@ extension DocumentTextBuilder {
   /// its own width, so a line of them overflowed a scale its count gave (#765).
   ///
   /// A measured line does not scale exactly with its font's size, a fallback font's
-  /// least of all, so a scaled-down block is measured again at its scale and set a
-  /// little smaller where it still overflows.
+  /// least of all, so a scaled-down block with any line that is not ASCII is measured
+  /// again at its scale and set smaller while it still overflows, a few times at
+  /// most. An ASCII line's width is its columns times the advance, exactly in scale.
   func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
     let widest = widestLine(of: text, scale: 1)
     guard widest > 0 else { return 1 }
     let available = max(style.indentStep, style.measure - indent)
-    let scale = min(1, available / widest)
-    guard scale < 1 else { return 1 }
-    let scaled = widestLine(of: text, scale: scale)
-    return scaled > available ? scale * available / scaled : scale
+    var scale = min(1, available / widest)
+    guard scale < 1, !text.allSatisfy(\.isASCII) else { return scale }
+    for _ in 0..<3 {
+      let scaled = widestLine(of: text, scale: scale)
+      guard scaled > available else { break }
+      scale *= available / scaled
+    }
+    return scale
   }
 }

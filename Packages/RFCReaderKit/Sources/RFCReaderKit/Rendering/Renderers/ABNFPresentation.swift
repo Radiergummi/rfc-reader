@@ -97,7 +97,7 @@ public struct DocumentGrammar: Sendable, Equatable {
   private var parsedBlocks: [BlockKey: ParsedBlock] = [:]
 
   /// A block's place among the grammar's blocks, and its rules.
-  struct ParsedBlock: Sendable {
+  struct ParsedBlock: Sendable, Equatable {
     let block: Int
     let rules: [ABNF.Rule]
   }
@@ -108,10 +108,12 @@ public struct DocumentGrammar: Sendable, Equatable {
     parsedBlocks[BlockKey(text: text, dialect: dialect)]
   }
 
-  /// Two grammars are equal when they define the same rules: the parsed blocks are
-  /// made from the same text.
-  public static func == (lhs: DocumentGrammar, rhs: DocumentGrammar) -> Bool {
-    lhs.definitions == rhs.definitions
+  /// The grammar without its parsed blocks, which only a build needs: a kept build
+  /// asks it for definitions alone, and would otherwise hold every rule it parsed.
+  var withoutParsedBlocks: DocumentGrammar {
+    var grammar = self
+    grammar.parsedBlocks = [:]
+    return grammar
   }
 
   public init() {}
