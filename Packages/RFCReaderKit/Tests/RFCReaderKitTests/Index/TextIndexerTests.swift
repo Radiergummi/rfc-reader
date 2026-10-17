@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import Synchronization
 import Testing
 
 @testable import RFCReaderKit
@@ -240,5 +241,205 @@ struct TextIndexerTests {
     while try await !indexer.search("intermediaries").hits.isEmpty {
       await Task.yield()
     }
+  }
+
+  // MARK: - Index All RFCs
+
+  /// A stand-in for the run's download: RFC 8999's XML parsed, whichever document is
+  /// asked for, counting each fetch.
+  final class CountingFetch: Sendable {
+    private let asked = Mutex<[DocumentID]>([])
+    var fetched: [DocumentID] { asked.withLock { $0 } }
+
+    func callAsFunction(_ id: DocumentID) throws -> RFCDocument {
+      asked.withLock { $0.append(id) }
+      return try Fixtures.rfc8999()
+    }
+  }
+
+  @Test func `Index All RFCs indexes what it downloads and keeps no body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+
+    let progress = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) }
+
+    #expect(progress == TextIndexer.CorpusProgress(indexed: 2, total: 2, failed: 0))
+    #expect(await store.storedBodies().isEmpty)
+    let found = try await indexer.search("intermediaries")
+    #expect(Set(found.hits.map(\.document)) == [id, .rfc(1)])
+    #expect(found.searched == 2)
+  }
+
+  /// Its documents have no body in the store, which a reconcile would otherwise read
+  /// as a body removed.
+  @Test func `what Index All RFCs indexed stays at reconcile`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id]) { try fetch($0) }
+
+    await indexer.reconcile()
+
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+  }
+
+  /// A document indexed from its body is not downloaded again, and is not dropped
+  /// when the body is evicted after.
+  @Test func `Index All RFCs keeps what is indexed already, past its eviction`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let fetch = CountingFetch()
+
+    let progress = await indexer.indexAll([id]) { try fetch($0) }
+    #expect(await store.evict(pinned: [], bound: 0) == [id])
+    await indexer.reconcile()
+
+    #expect(fetch.fetched.isEmpty)
+    #expect(progress.indexed == 1)
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+  }
+
+  @Test func `Index All RFCs resumes where it stopped`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let first = CountingFetch()
+    _ = await indexer.indexAll([id]) { try first($0) }
+    let fetch = CountingFetch()
+    let reported = Mutex<[TextIndexer.CorpusProgress]>([])
+
+    _ = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) } progress: { progress in
+      reported.withLock { $0.append(progress) }
+    }
+
+    #expect(fetch.fetched == [.rfc(1)])
+    #expect(
+      reported.withLock { $0 } == [
+        TextIndexer.CorpusProgress(indexed: 1, total: 2, failed: 0),
+        TextIndexer.CorpusProgress(indexed: 2, total: 2, failed: 0),
+      ])
+  }
+
+  /// One that cannot be downloaded or parsed is counted, and the next run tries it
+  /// again.
+  @Test func `a document Index All RFCs cannot fetch is counted, and the run goes on`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let id = self.id
+
+    let progress = await indexer.indexAll([.rfc(1), id]) { asked in
+      guard asked == id else { throw URLError(.badServerResponse) }
+      return try Fixtures.rfc8999()
+    }
+
+    #expect(progress == TextIndexer.CorpusProgress(indexed: 1, total: 2, failed: 1))
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+  }
+
+  /// Cancelled, the run keeps what it indexed, and counts nothing it left as failed.
+  @Test func `a cancelled Index All RFCs keeps what it indexed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let (indexing, indexed) = AsyncStream.makeStream(of: Int.self)
+    let id = self.id
+
+    let run = Task {
+      await indexer.indexAll([id, .rfc(1), .rfc(2)]) { asked in
+        if asked != id {
+          try await Task.sleep(for: .seconds(120))
+        }
+        return try Fixtures.rfc8999()
+      } progress: { progress in
+        indexed.yield(progress.indexed)
+      }
+    }
+    for await count in indexing where count == 1 { break }
+    run.cancel()
+    let progress = await run.value
+
+    #expect(progress == TextIndexer.CorpusProgress(indexed: 1, total: 3, failed: 0))
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+  }
+
+  /// Remove Full-Text Index: the index goes back to the bodies the store holds.
+  @Test func `releasing what Index All RFCs indexed keeps only the stored`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) }
+
+    await indexer.releaseRetained()
+
+    let found = try await indexer.search("intermediaries")
+    #expect(found.hits.map(\.document) == [id])
+    #expect(found.searched == 1)
+  }
+
+  @Test func `the usage counts what is indexed and what Index All RFCs retained`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([.rfc(1)]) { try fetch($0) }
+
+    let usage = await indexer.usage()
+
+    #expect(usage.usage.documents == 2)
+    #expect(usage.retained == 1)
+    #expect(usage.usage.bytes > 0)
+  }
+
+  @MainActor @Test func `a run reports what it ended with`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let run = IndexAllRun()
+    let fetch = CountingFetch()
+
+    run.start([id, .rfc(1)], indexer: indexer) { try fetch($0) }
+    #expect(run.isRunning)
+    await run.untilEnded()
+
+    #expect(!run.isRunning)
+    #expect(run.progress == TextIndexer.CorpusProgress(indexed: 2, total: 2, failed: 0))
+  }
+
+  @MainActor @Test func `a stopped run ends with what it indexed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let run = IndexAllRun()
+
+    run.start([id], indexer: indexer) { _ in
+      try await Task.sleep(for: .seconds(120))
+      return try Fixtures.rfc8999()
+    }
+    run.stop()
+    await run.untilEnded()
+
+    #expect(!run.isRunning)
+    #expect(run.progress == TextIndexer.CorpusProgress(indexed: 0, total: 1, failed: 0))
   }
 }
