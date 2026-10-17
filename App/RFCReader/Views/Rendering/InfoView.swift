@@ -48,7 +48,8 @@ struct InfoView: View {
               ErrataSection(summary: summary, selectSection: selectSection)
             }
           }
-          if let document, document.series == .rfc {
+          // Without a citation index a reading path can only say there is none.
+          if let document, document.series == .rfc, library.hasCitationIndex {
             InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)

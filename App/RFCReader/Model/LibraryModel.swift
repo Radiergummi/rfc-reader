@@ -190,6 +190,11 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
+  /// Whether the installed indexes pack holds a citation index (#189), without which
+  /// a reading path can only say there is none: the Reading Path items are offered
+  /// only while it is true (#769), and come back once #738 delivers the pack.
+  private(set) var hasCitationIndex = false
+
   /// How many documents Recently Read lists, for the sidebar's count (#344): the
   /// length of `recentlyRead()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
@@ -438,6 +443,12 @@ final class LibraryModel {
     pointersInPack = pointers
   }
 
+  private func refreshCitationIndex() async {
+    let hasIndex = await store.citationIndexURL() != nil
+    guard hasIndex != hasCitationIndex else { return }
+    hasCitationIndex = hasIndex
+  }
+
   private let client = RFCEditorClient()
   /// For the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode instead of failing (#314).
@@ -481,6 +492,7 @@ final class LibraryModel {
       }
     }
     await refreshPointersInPack()
+    await refreshCitationIndex()
     do {
       if let (prepared, updatedAt) = try await cached {
         apply(prepared, updatedAt: updatedAt)
@@ -638,6 +650,7 @@ final class LibraryModel {
           do {
             let pack = try await store.installIndexesPack(
               from: PackInstaller.source(fromArgument: indexes))
+            await refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {
             libraryLog.error(

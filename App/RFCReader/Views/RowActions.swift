@@ -58,10 +58,12 @@ import SwiftUI
                 document: rfc.id, library: library, navigation: navigation,
                 undoManager: undoManager)
             }
-            Button {
-              navigation.readingPath = ReadingPathRequest(root: rfc.id)
-            } label: {
-              Label("Reading Path", systemImage: "list.number")
+            if library.hasCitationIndex {
+              Button {
+                navigation.readingPath = ReadingPathRequest(root: rfc.id)
+              } label: {
+                Label("Reading Path", systemImage: "list.number")
+              }
             }
             KeepOfflineButton(document: rfc.id, library: library)
             ShareLink(
