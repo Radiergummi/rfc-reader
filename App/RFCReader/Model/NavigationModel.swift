@@ -239,8 +239,13 @@ final class NavigationModel: Identifiable {
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    let reveals = route.reveals(selected: selection, among: listed?.rows.map(\.id))
     follow(route)
-    if route.reveals { sidebarSelection = .all }
+    if reveals {
+      sidebarSelection = .all
+      searchText = ""
+      listOptions.showsObsolete = true
+    }
   }
 
   private func follow(_ route: OpenRoute) {
