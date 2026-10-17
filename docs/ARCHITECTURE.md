@@ -235,8 +235,8 @@ is that way, and what was measured or tried first.
 
 - Legacy text: a definition list whose term stands on a line of its own still renders as a preformatted block, nested lists are flattened, and an author line set near the left margin of the header is not read.
 - Search covers the index's metadata in memory, and finds sections through the full-text index (`FullTextIndex`, kept by `TextIndexer`) beside it; moving the metadata search into the full-text database is #37.
-- SVG artwork is not drawn: an `<artset>` shows its ASCII alternative, and an artwork with none names the RFC Editor's page that draws it (#768).
+- SVG artwork is not drawn, by design until there is an SVG renderer: an `<artset>` shows its ASCII alternative, and an artwork with none names the RFC Editor's page that draws it (decided in #768).
 - Spotlight indexes RFCs, not their sections (#178). There is no iCloud sync. The Datatracker is a page the Info pane links to, and errata are listed in the Info pane but not marked in the reader (#387).
-- A deep jump made before the background layout has passed its target lays out everything above it first (#295, [the decision](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)).
-- How VoiceOver says a diagram, as one label on macOS and as a pronunciation in the text on iOS, is to be confirmed by ear on a device (#308, [the decision](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)).
-- A block folded per RFC 8792 whose unfolded lines do not fit the column is shown folded, as printed, rather than scaled down (#64, [the decision](decisions/2026-10-17-a-folded-block-is-shown-unfolded-where-it-fits.md)).
+- By design, a deep jump made before the background layout has passed its target lays out everything above it first (decided in #295, [the decision](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)).
+- How VoiceOver says a diagram, as one label on macOS and as a pronunciation in the text on iOS, is to be confirmed by ear on a device (#942; [the decision](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)).
+- By design, a block folded per RFC 8792 whose unfolded lines do not fit the column is shown folded, as printed, rather than scaled down (decided in #64, [the decision](decisions/2026-10-17-a-folded-block-is-shown-unfolded-where-it-fits.md)).
