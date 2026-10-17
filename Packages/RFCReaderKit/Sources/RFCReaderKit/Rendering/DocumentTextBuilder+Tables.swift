@@ -21,10 +21,14 @@ extension DocumentTextBuilder {
   /// or three short ones, and tab stops do not wrap. So measure first: grid when
   /// the natural widths fit, stacked when they do not. The stacked shape is also
   /// what a phone measure needs for tables that fit comfortably on a Mac.
-  func tableShape(widths: [CGFloat]) -> TableShape {
+  ///
+  /// Against the measure less `indent`: a grid starts at its indent and does not
+  /// wrap, so one inside a list, a quotation or an aside that fit the column but not
+  /// what its indent leaves of it lost the end of its last column (#765).
+  func tableShape(widths: [CGFloat], indent: CGFloat) -> TableShape {
     guard !widths.isEmpty else { return .grid }
     let total = widths.reduce(0, +) + Self.columnGutter * CGFloat(widths.count - 1)
-    return total <= style.measure ? .grid : .stacked
+    return total <= style.measure - indent ? .grid : .stacked
   }
 
   func naturalColumnWidths(_ table: RFCKit.Table) -> [CGFloat] {
@@ -123,7 +127,7 @@ extension DocumentTextBuilder {
     // numbers, and every cell costs a `CTLine` to measure.
     let widths = naturalColumnWidths(table)
     let start = output.length
-    switch tableShape(widths: widths) {
+    switch tableShape(widths: widths, indent: indent) {
     case .grid: appendGridTable(table, widths: widths, indent: indent)
     case .stacked: appendStackedTable(table, indent: indent)
     }

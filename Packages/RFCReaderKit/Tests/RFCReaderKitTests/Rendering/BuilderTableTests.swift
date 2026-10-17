@@ -48,7 +48,7 @@ struct BuilderTableTests {
     measure: CGFloat = ReadingStyle().measure
   ) -> TableShape {
     let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
-    return builder.tableShape(widths: builder.naturalColumnWidths(table))
+    return builder.tableShape(widths: builder.naturalColumnWidths(table), indent: 0)
   }
 
   @Test func `a narrow table uses the grid`() {
@@ -70,6 +70,35 @@ struct BuilderTableTests {
 
     #expect(shape(narrow, measure: total + 1) == .grid)
     #expect(shape(narrow, measure: total - 1) == .stacked)
+  }
+
+  /// A grid starts at its indent and does not wrap, so a table set inside a list, a
+  /// quotation or an aside has the column less its indent to fit in (#765).
+  @Test func `a table's indent is taken from the measure it has to fit`() {
+    let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
+    let widths = wide.naturalColumnWidths(narrow)
+    let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
+    let builder = DocumentTextBuilder(style: ReadingStyle(measure: total + 1))
+    #expect(builder.tableShape(widths: widths, indent: 0) == .grid)
+    #expect(builder.tableShape(widths: widths, indent: 24) == .stacked)
+  }
+
+  /// Through a build: a table in a list item that would fit the column stacks when
+  /// it does not fit the item's indent, rather than being clipped at the column.
+  @Test func `a table in a list stacks where its indent leaves too little room`() throws {
+    let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
+    let widths = wide.naturalColumnWidths(narrow)
+    let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
+    let list = Block.list(ListBlock(style: .bullet, items: [ListItem(blocks: [.table(narrow)])]))
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(list), style: ReadingStyle(measure: total + 1))
+    // A grid row is one paragraph with its cells tab-separated; stacked has none.
+    #expect(!built.text.string.contains("GET\tyes\tyes"))
+    #expect(built.text.string.contains("GET"))
+    // The same table at the column's edge still fits as a grid.
+    let unindented = DocumentTextBuilder.build(
+      Fixtures.document(.table(narrow)), style: ReadingStyle(measure: total + 1))
+    #expect(unindented.text.string.contains("GET\tyes\tyes"))
   }
 
   /// A cell is measured as it is set: strong text in a data cell renders bold, and
