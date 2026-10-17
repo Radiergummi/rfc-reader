@@ -257,7 +257,7 @@ struct TextIndexerTests {
     }
   }
 
-  @Test func `Index All RFCs indexes what it downloads and keeps no body`() async throws {
+  @Test func `the whole-corpus run indexes what it downloads and keeps no body`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
@@ -290,7 +290,7 @@ struct TextIndexerTests {
 
   /// A document indexed from its body is not downloaded again, and is not dropped
   /// when the body is evicted after.
-  @Test func `Index All RFCs keeps what is indexed already, past its eviction`() async throws {
+  @Test func `the whole-corpus run keeps what is indexed, past its eviction`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
@@ -308,7 +308,7 @@ struct TextIndexerTests {
     #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
   }
 
-  @Test func `Index All RFCs resumes where it stopped`() async throws {
+  @Test func `the whole-corpus run resumes where it stopped`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
@@ -317,7 +317,9 @@ struct TextIndexerTests {
     let fetch = CountingFetch()
     let reported = Mutex<[TextIndexer.CorpusProgress]>([])
 
-    _ = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) } progress: { progress in
+    _ = await indexer.indexAll([id, .rfc(1)]) {
+      try fetch($0)
+    } progress: { progress in
       reported.withLock { $0.append(progress) }
     }
 
