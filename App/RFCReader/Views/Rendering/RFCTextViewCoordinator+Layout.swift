@@ -119,8 +119,16 @@ extension RFCTextViewCoordinator {
         signposter.endInterval("Find bands", interval, "not drawn")
         return
       }
+      let hidden = foldingDelegate.hidden
       foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
-      engine.refold(foldingDelegate.hidden)
+      // Where the folding hides what it hid, only what the fragments draw changed:
+      // they are drawn again, not laid out again, which a refold does for the whole
+      // document on the main actor ("Refold" and "Redraw" in `make trace`, #747).
+      if foldingDelegate.hidden == hidden {
+        engine.redraw()
+      } else {
+        engine.refold(foldingDelegate.hidden)
+      }
       signposter.endInterval("Find bands", interval)
     }
   }

@@ -113,6 +113,20 @@ final class ReaderLayoutEngine: PinSurface {
   /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
   /// and the reader's line kept, at the shown paragraph nearest it where it was
   /// folded, or put at `place`, a jump's target the folding has just shown.
+  /// Draws the fragments again without laying them out (#747): what a change only
+  /// to what they draw needs, such as Implementer's bands.
+  func redraw() {
+    guard let textView, let layout = textView.textLayoutManager else { return }
+    let interval = signposter.beginInterval("Redraw", id: signposter.makeSignpostID())
+    defer { signposter.endInterval("Redraw", interval) }
+    layout.invalidateRenderingAttributes(for: layout.documentRange)
+    #if canImport(UIKit)
+      textView.setNeedsDisplay()
+    #else
+      textView.needsDisplay = true
+    #endif
+  }
+
   func refold(_ hidden: HiddenText, placeAt place: Int? = nil) {
     guard let layout = textView?.textLayoutManager else { return }
     let interval = signposter.beginInterval(
