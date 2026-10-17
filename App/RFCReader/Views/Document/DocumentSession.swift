@@ -136,20 +136,26 @@ final class DocumentSession {
   /// where it started does not build it again.
   @ObservationIgnored private var builtInputs: BuildInputs?
 
-  /// The last marks worked out, with the errata they were worked out from: the view
-  /// asks on every pass, and a summary localizes and formats every erratum.
-  @ObservationIgnored private var markedErrata: (errata: [Erratum], marks: ErrataMarks)?
+  /// The last marks worked out, with what they were worked out from: the view asks
+  /// on every pass, and a summary localizes and formats every erratum.
+  @ObservationIgnored private var markedErrata:
+    (from: (errata: [Erratum], onBody: Bool), marks: ErrataMarks)?
 
   /// The document's verified and held errata, where the reader marks them (#387): on
   /// its sections once its body is here, by the title before and without one.
-  func errataMarks(for errata: [Erratum]?) -> ErrataMarks {
+  /// - Parameter drawsBody: false for an original shown without a body, whose loaded
+  ///   text, if any, only says where the original is: every erratum is the whole
+  ///   document's.
+  func errataMarks(for errata: [Erratum]?, drawsBody: Bool = true) -> ErrataMarks {
     guard let errata, !errata.isEmpty else { return .none }
-    if let markedErrata, markedErrata.errata == errata, state.document != nil {
+    let document = drawsBody ? state.document : nil
+    if let markedErrata, markedErrata.from.errata == errata,
+      markedErrata.from.onBody == (document != nil)
+    {
       return markedErrata.marks
     }
-    let marks = ErrataMarks(errata: errata, document: state.document)
-    // Kept only once the body is here: without it every erratum is the document's.
-    if state.document != nil { markedErrata = (errata, marks) }
+    let marks = ErrataMarks(errata: errata, document: document)
+    markedErrata = ((errata, document != nil), marks)
     return marks
   }
 

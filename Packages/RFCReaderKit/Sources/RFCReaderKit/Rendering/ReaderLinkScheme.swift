@@ -43,6 +43,11 @@ public enum ReaderLinkScheme {
     decoded(url, scheme: errataScheme)
   }
 
+  /// A link attribute's value as a URL: AppKit may hand it over as its string.
+  public static func url(fromLink link: Any) -> URL? {
+    link as? URL ?? (link as? String).flatMap(URL.init(string:))
+  }
+
   private static func decoded(_ url: URL, scheme: String) -> String? {
     guard url.scheme == scheme else { return nil }
     let encoded = url.absoluteString.dropFirst(scheme.count + 1)

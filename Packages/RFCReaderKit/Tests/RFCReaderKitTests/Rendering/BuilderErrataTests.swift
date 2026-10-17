@@ -34,7 +34,7 @@ struct BuilderErrataTests {
     source: .xml)
 
   private static func marks(_ errata: [Erratum]) -> ErrataMarks {
-    ErrataMarks(ErrataSummary(errata: errata, sections: document.sections, locale: .english))
+    ErrataMarks(errata: errata, document: document, locale: .english)
   }
 
   // MARK: - Where they go
@@ -92,15 +92,43 @@ struct BuilderErrataTests {
       errata: [
         Self.erratum(1, .verified, section: "2.1"), Self.erratum(2, .verified, section: "1"),
       ],
-      document: document)
+      document: document, locale: .english)
 
     #expect(marks.bySection.keys.sorted() == ["one"])
     #expect(marks.document.map(\.id) == [1])
   }
 
+  /// The Info pane is given the sections the contents panel lists, a flat list whose
+  /// entries keep their subsections, drawn or not. Through `drawn` it finds the same
+  /// sections the chips do, and offers no link to a bibliography the reader left out.
+  @Test func `the Info pane's errata go to the sections the chips are on`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "refs", number: "1", title: "References",
+          blocks: [.paragraph(Paragraph(text: "x"))],
+          subsections: [
+            Section(
+              anchor: "normative", number: "1.1", title: "Normative References",
+              blocks: [.references(ReferenceList(title: "Normative References", entries: []))])
+          ])
+      ],
+      source: .xml)
+    let flat = document.allSections
+    #expect(flat.map(\.anchor) == ["refs", "normative"])
+
+    let summary = ErrataSummary(
+      errata: [Self.erratum(1, .verified, section: "1.1")], sections: ErrataMarks.drawn(flat),
+      locale: .english)
+
+    #expect(summary.items.map(\.anchor) == [nil])
+  }
+
   /// An original shown without a body has no sections to put an erratum on.
   @Test func `without a document every erratum is the whole document's`() {
-    let marks = ErrataMarks(errata: [Self.erratum(1, .verified, section: "1")], document: nil)
+    let marks = ErrataMarks(
+      errata: [Self.erratum(1, .verified, section: "1")], document: nil, locale: .english)
     #expect(marks.bySection.isEmpty)
     #expect(marks.document.map(\.id) == [1])
   }
@@ -183,5 +211,15 @@ struct BuilderErrataTests {
     #expect(found.anchor == "one")
     #expect(found.range == chip.range)
     #expect(built.text.errataChip(at: 0) == nil)
+  }
+
+  /// A right-click below the last line asks at the end of the text.
+  @Test func `there is no errata chip past the end`() {
+    let built = DocumentTextBuilder.build(
+      Self.document, style: ReadingStyle(),
+      errata: Self.marks([Self.erratum(1, .verified, section: "1")]))
+
+    #expect(built.text.errataChip(at: built.text.length) == nil)
+    #expect(built.text.errataChip(at: -1) == nil)
   }
 }

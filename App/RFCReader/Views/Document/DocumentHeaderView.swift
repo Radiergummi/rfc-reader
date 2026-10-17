@@ -140,7 +140,7 @@ private struct DocumentErrataChip: View {
       }
     }
     .buttonStyle(.borderless)
-    .help("The errata that name no section")
+    .help("The errata not marked on any section")
     .popover(isPresented: $isShown) {
       ErrataList(items: items)
     }

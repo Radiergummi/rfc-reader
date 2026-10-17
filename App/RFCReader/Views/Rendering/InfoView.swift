@@ -42,7 +42,8 @@ struct InfoView: View {
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
-            let summary = ErrataSummary(errata: errata, sections: sections)
+            // The sections the reader draws, as the chips find them.
+            let summary = ErrataSummary(errata: errata, sections: ErrataMarks.drawn(sections))
             // Errata of only a status a later feed adds are neither listed nor counted.
             if !summary.items.isEmpty || summary.notListed != nil {
               ErrataSection(summary: summary, selectSection: selectSection)

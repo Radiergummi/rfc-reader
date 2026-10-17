@@ -623,7 +623,8 @@ struct DocumentView: View {
             metadata: metadata,
             revisions: library.revisionsSummary(for: metadata.id),
             // No body to mark: every erratum is the whole document's.
-            documentErrata: session.errataMarks(for: library.errata?[id]).document),
+            documentErrata: session.errataMarks(for: library.errata?[id], drawsBody: false)
+              .document),
           reader: controller
         )
         .padding(.top, 16)

@@ -314,12 +314,8 @@ final class RFCTextViewCoordinator: NSObject {
     guard let text = textView?.textLayoutManager?.attributedText,
       offset >= 0, offset < text.length
     else { return nil }
-    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(Self.url(fromLink:))
-  }
-
-  /// A link attribute's value as a URL: AppKit may hand it over as its string.
-  private static func url(fromLink link: Any) -> URL? {
-    link as? URL ?? (link as? String).flatMap(URL.init(string:))
+    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(
+      ReaderLinkScheme.url(fromLink:))
   }
 
   /// The card for a reference, on either platform, or nil when it would say no
@@ -562,7 +558,7 @@ final class RFCTextViewCoordinator: NSObject {
         showErrata(at: charIndex)
         return true
       }
-      guard let url = Self.url(fromLink: link) else { return false }
+      guard let url = ReaderLinkScheme.url(fromLink: link) else { return false }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)

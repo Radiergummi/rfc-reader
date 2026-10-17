@@ -2651,12 +2651,12 @@
         }
       }
     },
-    "The errata that name no section" : {
+    "The errata not marked on any section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Errata, die keinen Abschnitt nennen"
+            "value" : "Die Errata, die bei keinem Abschnitt markiert sind"
           }
         }
       }

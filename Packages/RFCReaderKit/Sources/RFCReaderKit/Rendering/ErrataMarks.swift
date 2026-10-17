@@ -24,14 +24,18 @@ public struct ErrataMarks: Equatable, Sendable {
   /// bibliography, which the reader leaves to the inspector, is the whole document's,
   /// as the Info pane lists it from the same sections. With no document, an original
   /// shown without a body, every erratum is the whole document's.
-  public init(errata: [Erratum], document: RFCDocument?) {
+  public init(errata: [Erratum], document: RFCDocument?, locale: Locale = .interface) {
     self.init(
-      ErrataSummary(errata: errata, sections: document.map { Self.drawn($0.sections) } ?? []))
+      ErrataSummary(
+        errata: errata, sections: document.map { Self.drawn($0.sections) } ?? [],
+        locale: locale))
   }
 
   /// `sections` less those the reader does not draw (`Section.holdsOnlyReferences`),
-  /// with their subsections, as `DocumentTextBuilder` leaves them out.
-  private static func drawn(_ sections: [Section]) -> [Section] {
+  /// with their subsections, as `DocumentTextBuilder` leaves them out: what the Info
+  /// pane finds an erratum's section in too, so it links to no section the reader
+  /// left out.
+  public static func drawn(_ sections: [Section]) -> [Section] {
     sections.filter { !$0.holdsOnlyReferences }.map { section in
       var section = section
       section.subsections = drawn(section.subsections)

@@ -24,12 +24,12 @@ extension RFCTextViewCoordinator {
     backlinkCaption(at: offset) != nil || errataChip(at: offset) != nil
   }
 
-  /// The list for the chip at `offset`; nil when there is none there.
-  func errataList(at offset: Int) -> (list: ErrataList, range: NSRange)? {
+  /// What the chip at `offset` lists, and its extent; nil when there is none there.
+  func errata(at offset: Int) -> (items: [ErrataSummary.Item], range: NSRange)? {
     guard let (anchor, range) = errataChip(at: offset), let items = built?.errata(of: anchor),
       !items.isEmpty
     else { return nil }
-    return (ErrataList(items: items), range)
+    return (items, range)
   }
 }
 
@@ -38,10 +38,12 @@ extension RFCTextViewCoordinator {
     /// A sheet, the texts being long, with a title and a Done button.
     func showErrata(at offset: Int) {
       guard let textView, var presenter = textView.window?.rootViewController,
-        let (list, _) = errataList(at: offset)
+        let (items, _) = errata(at: offset)
       else { return }
       while let presented = presenter.presentedViewController { presenter = presented }
-      let host = UIHostingController(rootView: ErrataSheet(items: list.items))
+      let host = UIHostingController(rootView: ErrataSheet(items: items))
+      // Presented by UIKit, which does not read the sheet's `presentationDetents`.
+      host.sheetPresentationController?.detents = [.medium(), .large()]
       presenter.present(host, animated: true)
     }
   }
@@ -50,9 +52,9 @@ extension RFCTextViewCoordinator {
   extension RFCTextViewCoordinator {
     /// In the popover the backlinks use, opened by the click.
     func showErrata(at offset: Int) {
-      guard let (list, range) = errataList(at: offset), let rect = referenceRect(for: range)
+      guard let (items, range) = errata(at: offset), let rect = referenceRect(for: range)
       else { return }
-      let host = NSHostingController(rootView: list)
+      let host = NSHostingController(rootView: ErrataList(items: items))
       host.sizingOptions = []
       let size = host.sizeThatFits(
         in: CGSize(width: ErrataList.width, height: .greatestFiniteMagnitude))
