@@ -67,9 +67,13 @@ public struct TranslatedDocument: Sendable, Equatable {
   public let backlinks: [String: [Backlink]]
 
   /// `original` translated by `translations`, which carry the labels' translations
-  /// beside the prose's.
+  /// beside the prose's. Without its defined terms and abbreviations, whose glosses
+  /// would set English definitions in translated prose.
   public init(_ original: RFCDocument, _ translations: [String: String]) {
-    document = DocumentTranslation.translated(original, translations)
+    var document = DocumentTranslation.translated(original, translations)
+    document.definedTerms = [:]
+    document.abbreviations = [:]
+    self.document = document
     labels = DocumentLabels(translating: translations)
     backlinks = Backlinks.within(original)
   }

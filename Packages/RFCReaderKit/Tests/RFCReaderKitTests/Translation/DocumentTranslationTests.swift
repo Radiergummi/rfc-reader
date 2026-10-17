@@ -134,6 +134,16 @@ struct DocumentTranslationTests {
     #expect(DocumentTextBuilder.build(translated, style: style).backlinks == original)
   }
 
+  /// A gloss would set an English definition in translated prose, or find its
+  /// English term nowhere: a translated document has none.
+  @Test func `a translated document has no glosses`() throws {
+    let document = try Fixtures.document(named: "rfc9985.xml")
+    try #require(!document.definedTerms.isEmpty && !document.abbreviations.isEmpty)
+    let translated = TranslatedDocument(document, [:]).document
+    #expect(translated.definedTerms.isEmpty)
+    #expect(translated.abbreviations.isEmpty)
+  }
+
   /// A label is found whole, not as the start of a longer number or word.
   @Test func `a label is not found inside a longer one`() {
     let text = "Siehe RFC 12 und Sections."
@@ -178,7 +188,10 @@ struct DocumentTranslationTests {
     let translated = TranslatedDocument(document, translations)
     #expect(translated.labels.figure == "Abbildung")
     #expect(translated.labels.abstract == "«Abstract»")
-    #expect(translated.document == DocumentTranslation.translated(document, translations))
+    var prose = DocumentTranslation.translated(document, translations)
+    prose.definedTerms = [:]
+    prose.abbreviations = [:]
+    #expect(translated.document == prose)
   }
 
   @Test func `a run with a superscript is left as it was`() {
