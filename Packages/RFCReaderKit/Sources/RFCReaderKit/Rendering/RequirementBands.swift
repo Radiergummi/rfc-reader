@@ -29,6 +29,10 @@ public struct RequirementBands: Sendable, Equatable {
   }
 
   public init(_ requirements: [Requirement], in built: BuiltDocument) {
+    guard !built.isTranslation else {
+      ranges = Self.paragraphs(of: requirements, in: built)
+      return
+    }
     let units = Array(built.text.string.utf16)
     let words = Self.words(in: units)
     let sections = built.anchors.sections.entries.map(\.offset)
@@ -57,6 +61,29 @@ public struct RequirementBands: Sendable, Equatable {
       cursor = NSMaxRange(band)
     }
     self.ranges = ranges
+  }
+
+  /// In a translation (#749) none of the original's sentences is there to be found,
+  /// so each requirement bands the paragraph its anchor names, from the anchor to
+  /// the paragraph's end: once, however many requirements the paragraph states. One
+  /// anchored on its section, as a legacy paragraph nested in a list is, has no
+  /// paragraph to band.
+  private static func paragraphs(of requirements: [Requirement], in built: BuiltDocument)
+    -> [NSRange]
+  {
+    let text = built.text.string as NSString
+    var ranges: [NSRange] = []
+    for requirement in requirements where requirement.anchor != requirement.sectionAnchor {
+      guard let start = built.anchors.offset(of: requirement.anchor),
+        start >= NSMaxRange(ranges.last ?? NSRange())
+      else { continue }
+      let end = text.range(
+        of: "\n", range: NSRange(location: start, length: text.length - start)
+      ).location
+      let band = NSRange(location: start, length: (end == NSNotFound ? text.length : end) - start)
+      if band.length > 0 { ranges.append(band) }
+    }
+    return ranges
   }
 
   /// The bands that meet `range`, whole: where a band starts and ends decides

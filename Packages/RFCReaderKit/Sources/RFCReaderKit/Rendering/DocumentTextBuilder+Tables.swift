@@ -128,7 +128,7 @@ extension DocumentTextBuilder {
     case .stacked: appendStackedTable(table, indent: indent)
     }
     decorate(from: start, with: .table)
-    appendCaption(Self.caption("Table", number: table.number, title: table.title), indent: indent)
+    appendCaption(Self.caption(labels.table, number: table.number, title: table.title), indent: indent)
   }
 
   private func appendGridTable(_ table: RFCKit.Table, widths: [CGFloat], indent: CGFloat) {
