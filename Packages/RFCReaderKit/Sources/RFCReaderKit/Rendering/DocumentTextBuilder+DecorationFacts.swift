@@ -11,19 +11,26 @@ extension DocumentTextBuilder {
   ///
   /// A run is boxed piece by piece along its verbatim blocks: each block gets its
   /// own facts, and what lies between them the run's, as `decorationSpan` read them
-  /// when it walked.
+  /// when it walked. Each extent is walked once: the run is the one this
+  /// enumeration names, and a verbatim block is the piece of it its box covers.
   func setDecorationFacts() {
-    var pieces: [NSRange] = []
+    var boxed: [(range: NSRange, facts: DecorationFacts)] = []
     let whole = NSRange(location: 0, length: output.length)
     output.enumerateAttribute(.rfcDecoration, in: whole) { value, run, _ in
       guard value != nil else { return }
-      output.enumerateAttribute(.rfcVerbatim, in: run) { _, piece, _ in pieces.append(piece) }
-    }
-    for piece in pieces {
-      guard let facts = FragmentGeometry.decorationFacts(in: output, at: piece.location) else {
-        continue
+      var runFacts: DecorationFacts?
+      output.enumerateAttribute(.rfcVerbatim, in: run) { box, piece, _ in
+        if box is VerbatimBox {
+          boxed.append((piece, FragmentGeometry.decorationFacts(in: output, block: piece)))
+        } else {
+          let facts = runFacts ?? FragmentGeometry.decorationFacts(in: output, block: run)
+          runFacts = facts
+          boxed.append((piece, facts))
+        }
       }
-      output.addAttribute(.rfcDecorationFacts, value: facts, range: piece)
+    }
+    for (range, facts) in boxed {
+      output.addAttribute(.rfcDecorationFacts, value: facts, range: range)
     }
   }
 }

@@ -125,7 +125,7 @@ let benchmarks: @Sendable () -> Void = {
   }
   // What laying RFC 8727 out asks of its decorations: the span of every decorated
   // paragraph, once each, as each fragment's layout does. A verbatim block lays out
-  // one fragment per line, so its JSON block alone asks some three thousand times
+  // one fragment per line, so its long JSON block asks once for each of its lines
   // (#766).
   Benchmark("Decoration spans: RFC 8727") { (benchmark, input: DecoratedParagraphs) in
     iterate(benchmark) {

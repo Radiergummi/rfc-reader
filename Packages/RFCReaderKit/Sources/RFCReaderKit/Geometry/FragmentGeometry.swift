@@ -44,8 +44,8 @@ public enum FragmentGeometry {
     /// measured against.
     public let runRange: NSRange
     /// The shallowest paragraph indent anywhere in that run: where the band
-    /// starts. Computed with the span because it is a scan over the run, and
-    /// the drawing path asks for it on every draw.
+    /// starts. Carried with the span because the drawing path asks for it on
+    /// every draw; the build worked it out once (`DecorationFacts`).
     public let indent: CGFloat
     /// Whether the run starts directly below another card, and ends directly
     /// above one: the ends `Placement.cardRect` cuts rather than caps.
@@ -71,7 +71,7 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// `decorationRun(at:)` names that whole run; comparing the fragment's own start and
+  /// The block's `DecorationFacts` name that whole run; comparing the fragment's own start and
   /// end against it says whether this fragment is the run's first, its last, both
   /// (the common single-fragment case), or neither (a middle fragment, which draws
   /// no cap and must not repeat the run's outer padding or its rounding, or the
@@ -83,12 +83,13 @@ public enum FragmentGeometry {
   ///
   /// What the whole block says is read from its `DecorationFacts`, which the build
   /// set; only what differs per fragment, or per reading mode, is looked up here.
+  /// Text that did not come from a build has no facts, and is walked instead.
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
     guard let decoration = text.decoration(at: fragment.location),
       let facts = text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
-        as? DecorationFacts
+        as? DecorationFacts ?? decorationFacts(in: text, at: fragment.location)
     else { return nil }
     var effective = facts.range
     let shownEnd = hidden.shownEnd(of: effective)
@@ -125,8 +126,13 @@ public enum FragmentGeometry {
     // depends on that as much as a table does: its last line carries the block's
     // spacing alone (#31), which is a storage run of its own.
     guard let run = text.decorationRun(at: location) else { return nil }
-    let block = verbatimBlock(in: text, at: location, within: run.range)
-    return DecorationFacts(
+    return decorationFacts(
+      in: text, block: verbatimBlock(in: text, at: location, within: run.range))
+  }
+
+  /// The facts of the decorated block whose whole extent is `block`.
+  static func decorationFacts(in text: NSAttributedString, block: NSRange) -> DecorationFacts {
+    DecorationFacts(
       range: block,
       indent: indent(in: text, over: block),
       cardInset: text.attribute(.rfcCardInset, at: block.location, effectiveRange: nil) as? CGFloat
