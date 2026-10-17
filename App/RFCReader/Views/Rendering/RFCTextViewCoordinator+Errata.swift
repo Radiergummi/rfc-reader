@@ -17,6 +17,13 @@ extension RFCTextViewCoordinator {
     textView?.textLayoutManager?.attributedText?.errataChip(at: offset)
   }
 
+  /// Whether the link at `offset` lists something beside it rather than going
+  /// anywhere: a backlink caption or an errata chip, whose links are ours alone, so
+  /// no menu offers to copy or share them.
+  func listsRatherThanGoes(at offset: Int) -> Bool {
+    backlinkCaption(at: offset) != nil || errataChip(at: offset) != nil
+  }
+
   /// The list for the chip at `offset`; nil when there is none there.
   func errataList(at offset: Int) -> (list: ErrataList, range: NSRange)? {
     guard let (anchor, range) = errataChip(at: offset), let items = built?.errata(of: anchor),
@@ -34,29 +41,8 @@ extension RFCTextViewCoordinator {
         let (list, _) = errataList(at: offset)
       else { return }
       while let presented = presenter.presentedViewController { presenter = presented }
-      let host = UIHostingController(rootView: ErrataSheet(list: list))
-      host.sheetPresentationController?.detents = [.medium(), .large()]
-      host.sheetPresentationController?.prefersGrabberVisible = true
+      let host = UIHostingController(rootView: ErrataSheet(items: list.items))
       presenter.present(host, animated: true)
-    }
-  }
-
-  /// `ErrataList` in a sheet of its own.
-  private struct ErrataSheet: View {
-    let list: ErrataList
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-      NavigationStack {
-        list
-          .navigationTitle("Errata")
-          .navigationBarTitleDisplayMode(.inline)
-          .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-              Button("Done") { dismiss() }
-            }
-          }
-      }
     }
   }
 
@@ -68,9 +54,8 @@ extension RFCTextViewCoordinator {
       else { return }
       let host = NSHostingController(rootView: list)
       host.sizingOptions = []
-      let fitting = host.sizeThatFits(
+      let size = host.sizeThatFits(
         in: CGSize(width: ErrataList.width, height: .greatestFiniteMagnitude))
-      let size = CGSize(width: fitting.width, height: min(fitting.height, ErrataList.maximumHeight))
       hover.showBacklinks(ReferenceHoverController.Popover(content: host, size: size, anchor: rect))
     }
   }

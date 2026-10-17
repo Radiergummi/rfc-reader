@@ -117,9 +117,9 @@
     /// Preview do what a Command-click and a force click do, for whoever doesn't
     /// know those gestures. Which items a link gets is `LinkMenu`'s.
     func linkMenu(_ menu: NSMenu, at characterIndex: Int) -> NSMenu {
-      // A backlink caption's link is ours alone, and Copy Link would copy a URL
-      // nothing else can open; the rest of the menu stays.
-      if backlinkCaption(at: characterIndex) != nil {
+      // A backlink caption's link is ours alone, and so is an errata chip's: Copy Link
+      // would copy a URL nothing else can open. The rest of the menu stays.
+      if listsRatherThanGoes(at: characterIndex) {
         return LinkMenu.adapting(menu, copyLink: .removed, adding: [])
       }
       guard let documentID, let url = link(at: characterIndex) else { return menu }

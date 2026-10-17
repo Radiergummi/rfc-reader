@@ -60,9 +60,7 @@ public struct ErrataSummary: Equatable, Sendable {
         place: erratum.sections.isEmpty
           ? Self.place(written: erratum.section, locale: locale)
           : Self.place(of: erratum.sections, locale: locale),
-        anchors: erratum.sections.compactMap { anchors[$0] }.reduce(into: []) { found, anchor in
-          if !found.contains(anchor) { found.append(anchor) }
-        },
+        anchors: erratum.sections.compactMap { anchors[$0] },
         isHeld: erratum.status == .heldForDocumentUpdate,
         original: erratum.original,
         corrected: erratum.corrected,

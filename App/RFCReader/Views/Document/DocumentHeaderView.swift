@@ -117,14 +117,21 @@ struct DocumentHeaderView: View {
 }
 
 /// The whole document's errata (#387), those naming no section it has: a chip by the
-/// date, worded as a heading's is, which lists them in a popover.
+/// date, worded as a heading's is, which lists them in a popover on macOS, and in a
+/// sheet the scene presents on iOS, where the header cannot present
+/// (`GlossaryPresentation`).
 private struct DocumentErrataChip: View {
   let items: [ErrataSummary.Item]
+  @Environment(NavigationModel.self) private var navigation
   @State private var isShown = false
 
   var body: some View {
     Button {
-      isShown = true
+      #if os(iOS)
+        navigation.errataShown = ErrataRequest(items: items)
+      #else
+        isShown = true
+      #endif
     } label: {
       Label {
         Text(verbatim: ErrataMarks.label(for: items))
@@ -136,8 +143,6 @@ private struct DocumentErrataChip: View {
     .help("The errata that name no section")
     .popover(isPresented: $isShown) {
       ErrataList(items: items)
-        .frame(width: ErrataList.width)
-        .frame(maxHeight: ErrataList.maximumHeight)
     }
   }
 }

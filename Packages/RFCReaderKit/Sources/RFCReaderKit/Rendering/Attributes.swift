@@ -333,8 +333,10 @@ extension NSAttributedString {
   public func errataChip(at offset: Int) -> (anchor: String, range: NSRange)? {
     // The link first, as a backlink caption is found: a longest range of nothing
     // would reach out to the next chip.
+    // AppKit may hand a link back as its string, as `RFCTextViewCoordinator` reads it.
+    let link = attribute(.link, at: offset, effectiveRange: nil)
     guard offset >= 0, offset < length,
-      let url = attribute(.link, at: offset, effectiveRange: nil) as? URL,
+      let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)),
       let anchor = ReaderLinkScheme.errata(from: url),
       attribute(.rfcChip, at: offset, effectiveRange: nil) != nil
     else { return nil }

@@ -20,6 +20,25 @@ public struct ErrataMarks: Equatable, Sendable {
     self.init(items: summary.items)
   }
 
+  /// `document`'s marks: on the sections the reader draws, so an erratum naming a
+  /// bibliography, which the reader leaves to the inspector, is the whole document's,
+  /// as the Info pane lists it from the same sections. With no document, an original
+  /// shown without a body, every erratum is the whole document's.
+  public init(errata: [Erratum], document: RFCDocument?) {
+    self.init(
+      ErrataSummary(errata: errata, sections: document.map { Self.drawn($0.sections) } ?? []))
+  }
+
+  /// `sections` less those the reader does not draw (`Section.holdsOnlyReferences`),
+  /// with their subsections, as `DocumentTextBuilder` leaves them out.
+  private static func drawn(_ sections: [Section]) -> [Section] {
+    sections.filter { !$0.holdsOnlyReferences }.map { section in
+      var section = section
+      section.subsections = drawn(section.subsections)
+      return section
+    }
+  }
+
   private init(items: [ErrataSummary.Item]) {
     var bySection: [String: [ErrataSummary.Item]] = [:]
     var document: [ErrataSummary.Item] = []
@@ -32,18 +51,10 @@ public struct ErrataMarks: Equatable, Sendable {
   }
 
   /// What a chip in the reader body says: "Erratum", "2 errata", "Held erratum", "2
-  /// held errata", "2 errata, 1 held". English, as the body is (decision "The app's
-  /// chrome is localized, the reader body is not").
+  /// held errata", "1 erratum, 1 held". `label`'s words in English, as the body is
+  /// (decision "The app's chrome is localized, the reader body is not").
   public static func bodyLabel(for items: [ErrataSummary.Item]) -> String {
-    let held = items.count(where: \.isHeld)
-    let verified = items.count - held
-    switch (verified, held) {
-    case (1, 0): return "Erratum"
-    case (_, 0): return "\(verified) errata"
-    case (0, 1): return "Held erratum"
-    case (0, _): return "\(held) held errata"
-    default: return "\(verified) errata, \(held) held"
-    }
+    label(for: items, locale: .english)
   }
 
   /// The same words for the chrome, by the title, in the interface's language.

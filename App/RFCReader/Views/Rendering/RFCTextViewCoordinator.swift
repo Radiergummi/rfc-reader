@@ -400,9 +400,9 @@ final class RFCTextViewCoordinator: NSObject {
       if case .tag = textItem.content {
         return glossMenu(for: textItem, in: textView) ?? figureMenu(for: textItem, in: textView)
       }
-      // A backlink caption's link is ours alone, and nothing in the default menu —
-      // Copy Link, Share — means anything for it.
-      if backlinkCaption(at: textItem.range.location) != nil { return nil }
+      // A backlink caption's link is ours alone, and so is an errata chip's: nothing
+      // in the default menu — Copy Link, Share — means anything for it.
+      if listsRatherThanGoes(at: textItem.range.location) { return nil }
       // A heading's hung number (#433) links to its own heading, which there is no
       // point previewing: only the menu, its Copy and Share handing out the RFC
       // Editor's URL for the section.

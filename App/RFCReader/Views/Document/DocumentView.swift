@@ -190,12 +190,10 @@ struct DocumentView: View {
     ReadingPositionKeeper(id: identity, context: modelContext)
   }
 
-  /// The document's verified and held errata, where the reader marks them (#387).
+  /// The document's verified and held errata, where the reader marks them (#387):
+  /// none until its body is here, so a build is not made for marks that move.
   private var errataMarks: ErrataMarks {
-    guard let document = session.state.document, let errata = library.errata?[id],
-      !errata.isEmpty
-    else { return .none }
-    return ErrataMarks(ErrataSummary(errata: errata, sections: document.sections))
+    session.state.document == nil ? .none : session.errataMarks(for: library.errata?[id])
   }
 
   private var buildInputs: BuildInputs {
@@ -623,7 +621,9 @@ struct DocumentView: View {
           identity: DocumentHeaderView.Identity(
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,
-            revisions: library.revisionsSummary(for: metadata.id)),
+            revisions: library.revisionsSummary(for: metadata.id),
+            // No body to mark: every erratum is the whole document's.
+            documentErrata: session.errataMarks(for: library.errata?[id]).document),
           reader: controller
         )
         .padding(.top, 16)

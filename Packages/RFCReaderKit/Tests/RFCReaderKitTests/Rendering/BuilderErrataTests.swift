@@ -60,12 +60,49 @@ struct BuilderErrataTests {
     ([.heldForDocumentUpdate], "Held erratum"),
     ([.heldForDocumentUpdate, .heldForDocumentUpdate], "2 held errata"),
     ([.verified, .verified, .heldForDocumentUpdate], "2 errata, 1 held"),
+    ([.verified, .heldForDocumentUpdate, .heldForDocumentUpdate], "1 erratum, 2 held"),
   ])
   func `a chip says how many, and which are held`(statuses: [Erratum.Status], label: String) {
     let errata = statuses.enumerated().map { Self.erratum($0.offset, $0.element, section: "1") }
     let items = Self.marks(errata).bySection["one"] ?? []
     #expect(ErrataMarks.bodyLabel(for: items) == label)
     #expect(ErrataMarks.label(for: items, locale: .english) == label)
+  }
+
+  /// The reader leaves a bibliography to the inspector, heading and all, so an
+  /// erratum naming one goes by the title, as the Info pane lists it.
+  @Test func `an erratum naming a bibliography is the whole document's`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "one", number: "1", title: "One", blocks: [.paragraph(Paragraph(text: "x"))]),
+        Section(
+          anchor: "refs", number: "2", title: "References",
+          subsections: [
+            Section(
+              anchor: "normative", number: "2.1", title: "Normative References",
+              blocks: [.references(ReferenceList(title: "Normative References", entries: []))])
+          ]),
+      ],
+      source: .xml)
+    #expect(document.sections[1].subsections[0].holdsOnlyReferences)
+
+    let marks = ErrataMarks(
+      errata: [
+        Self.erratum(1, .verified, section: "2.1"), Self.erratum(2, .verified, section: "1"),
+      ],
+      document: document)
+
+    #expect(marks.bySection.keys.sorted() == ["one"])
+    #expect(marks.document.map(\.id) == [1])
+  }
+
+  /// An original shown without a body has no sections to put an erratum on.
+  @Test func `without a document every erratum is the whole document's`() {
+    let marks = ErrataMarks(errata: [Self.erratum(1, .verified, section: "1")], document: nil)
+    #expect(marks.bySection.isEmpty)
+    #expect(marks.document.map(\.id) == [1])
   }
 
   // MARK: - The chip
