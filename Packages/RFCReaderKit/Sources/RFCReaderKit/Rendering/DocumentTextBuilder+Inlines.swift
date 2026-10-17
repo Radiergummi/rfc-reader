@@ -254,7 +254,7 @@ extension DocumentTextBuilder {
   }
 
   /// A heading's errata chip (#387), after its title and a space: drawn as a
-  /// reference's chip is, saying how many errata the section has and whether they are
+  /// reference's chip is, in the backlink caption's font, saying how many errata the section has and whether they are
   /// held, and going nowhere itself: its link names the section, and the reader lists
   /// the section's errata. The space and the chip are `.rfcReaderOnly`, so a copied
   /// heading is its words alone.
@@ -266,6 +266,8 @@ extension DocumentTextBuilder {
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
     let words = ErrataMarks.bodyLabel(for: items)
     attributes[.rfcSpoken] = words
+    // Chrome beside the heading, not part of it: the backlink caption's size and weight.
+    attributes[.font] = style.backlinksFont
     if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.errataScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }

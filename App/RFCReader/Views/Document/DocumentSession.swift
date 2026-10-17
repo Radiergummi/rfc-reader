@@ -325,11 +325,19 @@ final class DocumentSession {
       // blocking the main thread for it is what made the font-size slider stutter.
       let rebuilt = await Self.built(
         document, style: style, choices: inputs.choices, errata: inputs.errata)
-      guard let self, !Task.isCancelled else { return }
+      guard let self else { return }
+      if Task.isCancelled {
+        // Shown anyway while nothing is: the build that replaced it is under way,
+        // and the reader would otherwise stay blank until that one finished too, as
+        // it did when the errata feed arrived during a document's first build (#387).
+        guard state.built == nil else { return }
+        trace("canceled, installed: nothing was on screen")
+      } else {
+        buildingFor = nil
+        trace("built")
+      }
       state.install(rebuilt)
       builtInputs = inputs
-      buildingFor = nil
-      trace("built")
       reader { $0.sections = rebuilt.reachableSections(of: document) }
     }
   }

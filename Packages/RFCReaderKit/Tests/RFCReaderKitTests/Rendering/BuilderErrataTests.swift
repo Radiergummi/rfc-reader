@@ -206,6 +206,21 @@ struct BuilderErrataTests {
     #expect(!words.contains(" "))
   }
 
+  /// Chrome beside the heading rather than part of it: set as the backlink caption
+  /// under the heading is, not in the heading's own size and weight.
+  @Test func `a chip is set in the caption's font`() throws {
+    let style = ReadingStyle()
+    let built = DocumentTextBuilder.build(
+      Self.document, style: style,
+      errata: Self.marks([Self.erratum(1, .verified, section: "1")]))
+
+    let chip = try #require(chips(in: built.text).first)
+    let font = try #require(
+      built.text.attribute(.font, at: NSMaxRange(chip.range) - 1, effectiveRange: nil)
+        as? PlatformFont)
+    #expect(font == style.backlinksFont)
+  }
+
   @Test func `a chip is said as its words`() throws {
     let built = DocumentTextBuilder.build(
       Self.document, style: ReadingStyle(),

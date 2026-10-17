@@ -101,7 +101,6 @@ struct DocumentHeaderView: View {
         // A line of its own: beside the rest it wraps on an iPhone in portrait.
         if !identity.documentErrata.isEmpty {
           DocumentErrataChip(items: identity.documentErrata)
-            .fixedSize()
             .font(.subheadline)
             .foregroundStyle(.secondary)
         }
