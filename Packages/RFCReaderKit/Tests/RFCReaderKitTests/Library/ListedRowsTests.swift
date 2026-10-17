@@ -113,6 +113,12 @@ struct LibraryListInputsTests {
       reads.append("collection \(name)")
       return name == "Mine" ? UUID() : nil
     }
+    /// The one dynamic collection, whose query asks for the bookmarks.
+    let dynamic = UUID()
+    func query(of collection: UUID) -> String? {
+      reads.append("query")
+      return collection == dynamic ? "is:bookmarked" : nil
+    }
   }
 
   private func reading(_ filter: LibraryFilter, from sources: Sources) -> LibraryList {
@@ -128,7 +134,18 @@ struct LibraryListInputsTests {
   func `a filter reads its own input and no other`(filter: LibraryFilter, input: String) {
     let sources = Sources()
     _ = reading(filter, from: sources)
-    #expect(sources.reads == [input])
+    // A collection is asked first whether it is made from a query.
+    #expect(sources.reads == (input == "members" ? ["query", input] : [input]))
+  }
+
+  /// A dynamic collection has no members to read, and reads what its query asks
+  /// for instead (#355).
+  @Test func `a dynamic collection reads what its query asks for`() {
+    let sources = Sources()
+    let list = reading(.collection(sources.dynamic), from: sources)
+    #expect(sources.reads == ["query", "bookmarked"])
+    #expect(list.definition == "is:bookmarked")
+    #expect(list.members.isEmpty)
   }
 
   @Test(arguments: [LibraryFilter.all, .standards, .workingGroup("httpbis")])
