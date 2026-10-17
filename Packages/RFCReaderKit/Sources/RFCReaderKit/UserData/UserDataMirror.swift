@@ -11,7 +11,9 @@ private let mirrorLog = Logger(
 /// the collections, the Recently Read count and the Keep Offline marks, each read
 /// again on a save of what feeds it (`UserDataMirrors`, #603), and after a failed read
 /// on the next save of any kind (#613). Each is published only when it changed, and
-/// its `on…Changed` is then called, for what the app does about it.
+/// its `on…Changed` is then called, for what the app does about it; the bookmarks'
+/// and the marks' first read is reported whatever it found, as until it their
+/// emptiness meant nothing (`knowsWantedOffline(keepsBookmarks:)`).
 ///
 /// Also where a bookmark or a collection is changed, on the container's main context,
 /// whose save the mirror then reads.
@@ -37,7 +39,7 @@ public final class UserDataMirror {
   /// Whether `offlineMarks` has been read from the store at least once. Until it
   /// has, its emptiness means nothing, and reconciling against it would move every
   /// kept body back into the cache.
-  @ObservationIgnored public private(set) var hasReadOfflineMarks = false
+  @ObservationIgnored private(set) var hasReadOfflineMarks = false
 
   /// Whether `bookmarkedDocuments` has been read from the store at least once, which
   /// is to the bookmarks what `hasReadOfflineMarks` is to the marks.
@@ -106,8 +108,8 @@ public final class UserDataMirror {
     if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
   }
 
-  /// Reads the marks again now, as after a mark saved here rather than through a
-  /// save's notification.
+  /// Reads the marks again now. A save of a mark reads them already, synchronously
+  /// from a save on the main actor.
   public func refreshOfflineMarks() {
     let marks: Set<DocumentID>
     do {
@@ -182,12 +184,12 @@ public final class UserDataMirror {
     onBookmarksChanged()
   }
 
-  /// Whether the bookmarks wanted offline are known: none are, as bookmarks are not
-  /// kept offline, or they have been read. Until then the set is empty because a read
-  /// failed, and reconciling or clearing against it would treat every kept bookmark's
-  /// body as wanted by nobody.
-  public func knowsBookmarksWantedOffline(keepsBookmarks: Bool) -> Bool {
-    !keepsBookmarks || hasReadBookmarks
+  /// Whether what is wanted offline is known: the marks have been read, and the
+  /// bookmarks too when they are kept offline. Until then a set is empty because a
+  /// read failed, and reconciling or clearing against it would treat every body it
+  /// keeps as wanted by nobody.
+  public func knowsWantedOffline(keepsBookmarks: Bool) -> Bool {
+    hasReadOfflineMarks && (!keepsBookmarks || hasReadBookmarks)
   }
 
   // MARK: - Changes

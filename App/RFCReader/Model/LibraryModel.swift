@@ -258,8 +258,7 @@ final class LibraryModel {
   /// owes start now: every one of them is a mark nobody on this device is waiting
   /// for, since a tapped one is fetched at once.
   private func reconcileOffline(forgettingFailures: Bool = false) {
-    guard index != nil, userData.hasReadOfflineMarks,
-      userData.knowsBookmarksWantedOffline(keepsBookmarks: keepsBookmarksOffline),
+    guard index != nil, userData.knowsWantedOffline(keepsBookmarks: keepsBookmarksOffline),
       !AppData.isStoredInMemory, let policy = network.decision(for: .syncedMark)
     else { return }
     offlineKeeper.reconcile(
@@ -1362,8 +1361,8 @@ final class LibraryModel {
 
   /// What each tier holds, and what of the cache Clear Cache would remove, for
   /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
-  /// fetch still running is counted when it lands. Nothing is clearable when the
-  /// marks cannot be read, as Clear Cache then removes nothing.
+  /// fetch still running is counted when it lands. Nothing is clearable when what
+  /// `sparedFromClearing` spares cannot be told, as Clear Cache then removes nothing.
   func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
     guard let spared = sparedFromClearing() else {
@@ -1383,11 +1382,12 @@ final class LibraryModel {
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper
-  /// runs; nil when they cannot be read, or when the bookmarks kept offline have not
-  /// been, which would spare none of them.
+  /// runs; nil when they cannot be read, or when what is wanted offline is not known
+  /// yet, which would spare none of the bookmarks kept offline, nor a marked BCP's
+  /// members.
   private func sparedFromClearing() -> Set<DocumentID>? {
-    guard userData.knowsBookmarksWantedOffline(keepsBookmarks: keepsBookmarksOffline) else {
-      libraryLog.error("Clear Cache spares everything, the bookmarks have not been read")
+    guard userData.knowsWantedOffline(keepsBookmarks: keepsBookmarksOffline) else {
+      libraryLog.error("Clear Cache spares everything, what is wanted offline has not been read")
       return nil
     }
     do {
@@ -1488,8 +1488,8 @@ final class LibraryModel {
     Task(name: "Keep offline") { try? await offlineKeeper.fetchNow(id) }
   }
 
-  /// Saves the mark and reads the marks again at once, rather than when the save's
-  /// notification arrives, which is after the next turn of the run loop. Answers
+  /// Saves the mark, whose save reads the marks again before this returns (the
+  /// mirror's `ModelContext.didSave`, posted synchronously on the main actor). Answers
   /// whether it was saved.
   private func mark(_ id: DocumentID, keptOffline isKept: Bool) -> Bool {
     do {
@@ -1498,7 +1498,6 @@ final class LibraryModel {
       libraryLog.failure(of: id, "marking Keep Offline failed", error)
       return false
     }
-    userData.refreshOfflineMarks()
     return true
   }
 

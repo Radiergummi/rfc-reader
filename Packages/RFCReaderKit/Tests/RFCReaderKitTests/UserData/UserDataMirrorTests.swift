@@ -38,6 +38,7 @@ struct UserDataMirrorTests {
   @Test func `starting reads every set and reports the bookmarks and the marks`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
+    #expect(!mirror.knowsWantedOffline(keepsBookmarks: false))
     #expect(!mirror.hasReadOfflineMarks)
     #expect(!mirror.hasReadBookmarks)
 
@@ -123,6 +124,7 @@ struct UserDataMirrorTests {
     #expect(reports.bookmarks == 2)
     #expect(reports.offlineMarks == 1)
     #expect(reports.collections.isEmpty)
+    #expect(reports.recentlyReadCount == 0)
   }
 
   /// The app's mirror is made once, but a second start would read every save twice.
@@ -142,22 +144,22 @@ struct UserDataMirrorTests {
   /// A failed first read of the bookmarks leaves them unknown, not empty: with
   /// bookmarks kept offline, reconciling against none would un-keep every kept body.
   /// The next save reads them again, and that read is reported whatever it found.
-  @Test func `a failed first bookmark read leaves the bookmarks wanted offline unknown`() throws {
+  @Test func `a failed first bookmark read leaves what is wanted offline unknown`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
     struct Unreadable: Error {}
     mirror.readBookmarks = { _ in throw Unreadable() }
     mirror.start()
 
-    #expect(!mirror.knowsBookmarksWantedOffline(keepsBookmarks: true))
-    #expect(mirror.knowsBookmarksWantedOffline(keepsBookmarks: false))
+    #expect(!mirror.knowsWantedOffline(keepsBookmarks: true))
+    #expect(mirror.knowsWantedOffline(keepsBookmarks: false))
 
     mirror.readBookmarks = { try BookmarkStore.bookmarkedDocuments(in: $0) }
     try ReadingPositionStore.save(
       ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(9110),
       in: mirror.container.mainContext)
 
-    #expect(mirror.knowsBookmarksWantedOffline(keepsBookmarks: true))
+    #expect(mirror.knowsWantedOffline(keepsBookmarks: true))
     #expect(reports.bookmarks == 1)
   }
 

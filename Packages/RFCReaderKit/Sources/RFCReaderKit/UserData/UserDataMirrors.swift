@@ -10,31 +10,27 @@ import SwiftData
 /// bookmark and collection fetches ran for nothing — `CollectionSnapshot.fetch`
 /// reads every collection and every item. A save's notification names the rows it
 /// inserted, updated and deleted, and each row's entity says which mirror it feeds.
-public struct UserDataMirrors: OptionSet, Sendable {
-  public let rawValue: Int
-
-  public init(rawValue: Int) {
-    self.rawValue = rawValue
-  }
+struct UserDataMirrors: OptionSet, Sendable {
+  let rawValue: Int
 
   /// `BookmarkStore.bookmarkedDocuments`, read from `Bookmark` rows alone.
-  public static let bookmarks = UserDataMirrors(rawValue: 1 << 0)
+  static let bookmarks = UserDataMirrors(rawValue: 1 << 0)
   /// `CollectionSnapshot.fetch`, read from collections and their items.
-  public static let collections = UserDataMirrors(rawValue: 1 << 1)
+  static let collections = UserDataMirrors(rawValue: 1 << 1)
   /// `ReadingPositionStore.recentlyReadCount`, read from `ReadingPosition` rows
   /// alone: a bookmark is not a reading.
-  public static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
+  static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
   /// `OfflineMarkStore.markedDocuments`, read from `OfflineMark` rows alone (#358).
-  public static let offlineMarks = UserDataMirrors(rawValue: 1 << 3)
+  static let offlineMarks = UserDataMirrors(rawValue: 1 << 3)
 
-  public static let all: UserDataMirrors = [
+  static let all: UserDataMirrors = [
     .bookmarks, .collections, .recentlyReadCount, .offlineMarks,
   ]
 
   /// The mirrors a save of rows of these entities can have changed. Nil — the
   /// notification did not say what it saved — is every mirror, as before #603. An
   /// entity no mirror reads changes none.
-  public static func changed(byEntities entityNames: Set<String>?) -> UserDataMirrors {
+  static func changed(byEntities entityNames: Set<String>?) -> UserDataMirrors {
     guard let entityNames else { return .all }
     return entityNames.reduce(into: []) { mirrors, name in
       mirrors.formUnion(fed[name] ?? [])
@@ -60,7 +56,7 @@ public struct UserDataMirrors: OptionSet, Sendable {
   ///
   /// Takes the `userInfo` rather than the `Notification`, which is not `Sendable`:
   /// the observer reads this first and hands only the set to the main actor.
-  public static func changedEntityNames(in userInfo: [AnyHashable: Any]?) -> Set<String>? {
+  static func changedEntityNames(in userInfo: [AnyHashable: Any]?) -> Set<String>? {
     let keys: [ModelContext.NotificationKey] = [
       .insertedIdentifiers, .updatedIdentifiers, .deletedIdentifiers,
     ]
