@@ -2441,6 +2441,16 @@
         }
       }
     },
+    "Share…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilen …"
+          }
+        }
+      }
+    },
     "Show All %@ Results" : {
       "localizations" : {
         "de" : {

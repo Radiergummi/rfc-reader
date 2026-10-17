@@ -37,6 +37,15 @@ struct DocumentCommands: Commands {
     }
     private var isBookmarked: Bool { active.controller?.isBookmarked == true }
     private func toggleBookmark() { active.controller?.toggleBookmark() }
+
+    /// What an item of the Document menu does, as the toolbar's Cite and More do it.
+    private func perform(_ action: DocumentMenus.Action) {
+      guard let controller = active.controller, let id = controller.navigation.shown else { return }
+      DocumentActionPerformer(
+        id: id, metadata: controller.library.metadata(id), reader: controller.reader,
+        open: { NSWorkspace.shared.open($0) }
+      ).perform(action)
+    }
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
@@ -112,6 +121,38 @@ struct DocumentCommands: Commands {
         Button("Export…") { active.controller?.output.exportDocument() }
           .keyboardShortcut("e", modifiers: [.command, .shift])
           .disabled(!offersPrintAndExport)
+        // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
+        Button("Share…") { active.controller?.share() }
+          .disabled(!showsDocument)
+      }
+      // The document's own actions, the toolbar's Cite and More menus rendered from
+      // the same sections, so the two cannot drift (#761): with the toolbar hidden or
+      // in full screen they were nowhere else. One menu, as the toolbar keeps them
+      // together, rather than spread over Edit, View and a Go menu.
+      CommandMenu("Document") {
+        if let reader {
+          Menu("Cite") {
+            // ⌘⇧C, the citation people copy most, in the menu's first style.
+            MenuSections(
+              sections: DocumentMenus.cite(),
+              shortcuts: [
+                .copyCitation(CitationStyle.allCases[0]): KeyboardShortcut(
+                  "c", modifiers: [.command, .shift])
+              ],
+              perform: perform)
+          }
+          .disabled(!showsDocument)
+          Divider()
+          MenuSections(
+            sections: DocumentMenus.more(
+              showsOriginal: reader.showOriginal,
+              errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
+                .errataURL,
+              precedingDraft: reader.precedingDraft),
+            perform: perform
+          )
+          .disabled(!showsDocument)
+        }
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.

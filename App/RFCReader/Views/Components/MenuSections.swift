@@ -6,6 +6,8 @@ import SwiftUI
 /// menu and a rule in a list, where Add to Collection is shown as a sheet.
 struct MenuSections<Performed: Hashable & Sendable>: View {
   let sections: DocumentMenus.Sections<Performed>
+  /// The menu bar's key equivalents, by what an item does (#761).
+  var shortcuts: [Performed: KeyboardShortcut] = [:]
   let perform: (Performed) -> Void
 
   var body: some View {
@@ -16,12 +18,14 @@ struct MenuSections<Performed: Hashable & Sendable>: View {
           Toggle(isOn: Binding(get: { isOn }, set: { _ in perform(item.action) })) {
             label(for: item)
           }
+          .keyboardShortcut(shortcuts[item.action])
         } else {
           Button {
             perform(item.action)
           } label: {
             label(for: item)
           }
+          .keyboardShortcut(shortcuts[item.action])
         }
       }
     }

@@ -480,6 +480,16 @@
       return splitController.readerView
     }
 
+    /// File ▸ Share… (#761): the picker the toolbar's Share item opens, hanging below
+    /// the toolbar's middle, for a window whose toolbar is hidden.
+    func share() {
+      guard let id = navigation.shown, let window, let content = window.contentView else { return }
+      let picker = NSSharingServicePicker(items: [RFCEditorEndpoints.infoPage(id)])
+      let below = NSRect(
+        x: content.bounds.midX, y: window.contentLayoutRect.maxY, width: 1, height: 1)
+      picker.show(relativeTo: below, of: content, preferredEdge: .minY)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
