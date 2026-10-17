@@ -38,8 +38,8 @@ nonisolated private let libraryLog = Logger(
 ///
 /// Navigation is each tab's own (`NavigationModel`), and what the reader shows is
 /// each window's (`ReaderState`). The user's own data — bookmarks, reading
-/// positions, collections — is SwiftData's; this holds the sets read from it that
-/// every tab shows.
+/// positions, collections — is SwiftData's; `userData` holds the sets read from it
+/// that every tab shows, and this answers for them.
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
@@ -101,10 +101,12 @@ final class LibraryModel {
     name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
-  /// Every bookmarked document, fetched again on every save of a bookmark: one set
-  /// for the toolbars, scripts and lists alike, so BCP 14 is not answered for by
-  /// RFC 14 (#152), and is listed as itself (#321).
-  private(set) var bookmarkedDocuments: Set<DocumentID> = []
+  /// The sets read from the user's data, and where a bookmark or a collection is
+  /// changed (#595).
+  @ObservationIgnored private let userData: UserDataMirror
+
+  /// `UserDataMirror.bookmarkedDocuments`.
+  var bookmarkedDocuments: Set<DocumentID> { userData.bookmarkedDocuments }
 
   /// The presentation the reader chose from a block's menu, per document, for the
   /// app's session. Here rather than in `DocumentSession`, which goes when the
@@ -124,19 +126,13 @@ final class LibraryModel {
     chosenPresentations[id, default: [:]][key] = presentation
   }
 
-  /// Every collection and its members, fetched again on every save of a collection or
-  /// an item (#603), and after a failed fetch on the next save of any kind
-  /// (`failedMirrors`, #613), and published only when it changed (#349). The sidebar, a
-  /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts
-  /// all read it.
-  private(set) var collections = CollectionSnapshot.empty
-  @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
+  /// `UserDataMirror.collections`.
+  var collections: CollectionSnapshot { userData.collections }
 
-  /// Every document marked Keep Offline, fetched again on every save of a mark
-  /// (#358), and synced, so a mark made on another device arrives here too. With the
-  /// bookmarks when `keepsBookmarksOffline` is on, what is wanted offline, and what
-  /// Available Offline lists, whether or not a body has arrived yet.
-  private(set) var offlineMarks: Set<DocumentID> = []
+  /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
+  /// is on, what is wanted offline, and what Available Offline lists, whether or not
+  /// a body has arrived yet.
+  var offlineMarks: Set<DocumentID> { userData.offlineMarks }
 
   /// "Keep bookmarked documents offline", from Settings' Storage tab (#358). Per
   /// device, as storage is, so a default rather than synced user data.
@@ -156,11 +152,6 @@ final class LibraryModel {
   private func withMembers(of documents: Set<DocumentID>) -> Set<DocumentID> {
     index?.withMembers(of: documents) ?? documents
   }
-
-  /// Whether `offlineMarks` has been read from the store at least once. Until it
-  /// has, its emptiness means nothing, and reconciling against it would move every
-  /// kept body back into the cache.
-  @ObservationIgnored private var hasReadOfflineMarks = false
 
   /// The RFCs wanted offline, which is what the library lists, kept beside the marks
   /// rather than worked out on every read: the sidebar counts it as it draws.
@@ -190,34 +181,27 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// How many documents Recently Read lists, for the sidebar's count (#344): the
-  /// length of `recentlyRead()`, kept current on every save of a reading position
-  /// rather than by a live query of every reading position in the view.
-  private(set) var recentlyReadCount = 0
-
-  /// The mirrors whose last fetch failed. The next save reads them again, whatever
-  /// it changed, so a failure is mended on the next save, as it was when every save
-  /// read every mirror, rather than on the next save of the same entity (#603).
-  @ObservationIgnored private var failedMirrors: UserDataMirrors = []
+  /// `UserDataMirror.recentlyReadCount`.
+  var recentlyReadCount: Int { userData.recentlyReadCount }
 
   /// The user's data: what the sets above are read from, and where a bookmark or a
   /// collection is changed.
-  @ObservationIgnored let container: ModelContainer
+  var container: ModelContainer { userData.container }
 
   private init(container: ModelContainer) {
-    self.container = container
-    refresh(.all)
-    storeSaves = NotificationCenter.default.addObserver(
-      forName: ModelContext.didSave, object: nil, queue: .main
-    ) { [weak self] notification in
-      // Only the mirrors fed by what the save changed: most saves record a reading
-      // position, and the collections are every row of two entities (#603). Read
-      // before the hop, as the notification is not `Sendable` and the names are.
-      let changed = UserDataMirrors.changedEntityNames(in: notification.userInfo)
-      MainActor.assumeIsolated {
-        self?.refresh(UserDataMirrors.changed(byEntities: changed))
+    userData = UserDataMirror(container: container)
+    userData.onBookmarksChanged = { [weak self] in self?.bookmarksChanged() }
+    userData.onCollectionsChanged = { [weak self] snapshot in
+      // A collection deleted in another tab, or on another device, is not left on
+      // screen with no name and nothing in it.
+      for scene in self?.sceneRegistry.open ?? [] {
+        scene.keepFilter(in: snapshot)
       }
     }
+    // A document read for the first time: what a phrase can name (#192).
+    userData.onRecentlyReadCountChanged = { RFCReaderShortcuts.refreshParameters() }
+    userData.onOfflineMarksChanged = { [weak self] in self?.wantedOfflineChanged() }
+    userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
     #if os(macOS)
@@ -242,34 +226,6 @@ final class LibraryModel {
       pathChanged: { [weak self] in self?.reconcileOffline(forgettingFailures: true) },
       // Low Power Mode decides whether a fetch waits, not whether it fails.
       powerChanged: { [weak self] in self?.reconcileOffline() })
-  }
-
-  private func refresh(_ changed: UserDataMirrors) {
-    let mirrors = changed.union(failedMirrors)
-    failedMirrors = []
-    if mirrors.contains(.bookmarks) { refreshBookmarks() }
-    if mirrors.contains(.collections) { refreshCollections() }
-    if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
-    if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
-  }
-
-  private func refreshOfflineMarks() {
-    let marks: Set<DocumentID>
-    do {
-      marks = try OfflineMarkStore.markedDocuments(in: container.mainContext)
-    } catch {
-      // The last set read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.offlineMarks)
-      libraryLog.error(
-        "reading Keep Offline marks failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // The first read reconciles even when it finds what a failed one left: no set.
-    let isFirstRead = !hasReadOfflineMarks
-    hasReadOfflineMarks = true
-    guard isFirstRead || marks != offlineMarks else { return }
-    offlineMarks = marks
-    wantedOfflineChanged()
   }
 
   /// Lists what is wanted offline, and brings the disk in line with it.
@@ -302,7 +258,7 @@ final class LibraryModel {
   /// owes start now: every one of them is a mark nobody on this device is waiting
   /// for, since a tapped one is fetched at once.
   private func reconcileOffline(forgettingFailures: Bool = false) {
-    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
+    guard index != nil, userData.hasReadOfflineMarks, !AppData.isStoredInMemory,
       let policy = network.decision(for: .syncedMark)
     else { return }
     offlineKeeper.reconcile(
@@ -313,45 +269,6 @@ final class LibraryModel {
   /// its row's Download Now or Retry. The keeper logs a failure, and its row says it.
   func downloadNow(_ id: DocumentID) {
     Task(name: "Download now") { try? await offlineKeeper.fetchNow(id) }
-  }
-
-  private func refreshRecentlyReadCount() {
-    let count: Int
-    do {
-      count = try ReadingPositionStore.recentlyReadCount(in: container.mainContext)
-    } catch {
-      // The last count read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.recentlyReadCount)
-      libraryLog.error(
-        "counting the recently read failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    guard count != recentlyReadCount else { return }
-    recentlyReadCount = count
-    // A document read for the first time: what a phrase can name (#192).
-    RFCReaderShortcuts.refreshParameters()
-  }
-
-  private func refreshCollections() {
-    let snapshot: CollectionSnapshot
-    do {
-      snapshot = try CollectionSnapshot.fetch(in: container.mainContext)
-    } catch {
-      // The last snapshot stands until a fetch succeeds, which the next save tries:
-      // an empty one would close every filter on a collection (#613).
-      failedMirrors.insert(.collections)
-      libraryLog.error(
-        "reading collections failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
-    guard snapshot != collections else { return }
-    collections = snapshot
-    // A collection deleted in another tab, or on another device, is not left on
-    // screen with no name and nothing in it.
-    for scene in sceneRegistry.open {
-      scene.keepFilter(in: snapshot)
-    }
   }
 
   /// What a filter is called, wherever it is shown, against the collections as they
@@ -367,20 +284,10 @@ final class LibraryModel {
     return entry.rfcNumbers.count(where: { index[$0] != nil })
   }
 
-  /// Runs a change to collections on the app's context. A failure is logged rather
-  /// than shown (#125): every change the interface offers is one the store accepts,
-  /// and an empty name is refused before it gets here. Answers whether it was made,
-  /// for a view that says it was.
+  /// `UserDataMirror.editCollections`.
   @discardableResult
   func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
-    do {
-      try change(container.mainContext)
-      return true
-    } catch {
-      libraryLog.error(
-        "changing a collection failed: \(String(describing: error), privacy: .public)")
-      return false
-    }
+    userData.editCollections(change)
   }
 
   /// What an undone or redone removal from a collection does with its failure:
@@ -391,35 +298,16 @@ final class LibraryModel {
     )
   }
 
-  /// Adds the bookmark or removes it, on the app's context, titled from the index
-  /// or else `documentTitle`, what an open reader has parsed. A failure is logged
-  /// rather than shown, as a collection's is (#125). A failed lookup changes
-  /// nothing; a failed save leaves the change pending in the context, saved with
-  /// the next save that succeeds.
+  /// Adds the bookmark or removes it (`UserDataMirror.toggleBookmark`), titled from
+  /// the index or else `documentTitle`, what an open reader has parsed.
   func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
-    do {
-      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
-    }
+    userData.toggleBookmark(id, title: title)
   }
 
-  private func refreshBookmarks() {
-    let documents: Set<DocumentID>
-    do {
-      documents = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
-    } catch {
-      // The last set read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.bookmarks)
-      libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
-    guard documents != bookmarkedDocuments else { return }
-    bookmarkedDocuments = documents
+  /// What a change to the bookmarks means beyond the set itself.
+  private func bookmarksChanged() {
     if keepsBookmarksOffline { wantedOfflineChanged() }
     // So that the baseline holds a new bookmark from now on, and reports a change to
     // it from the next refresh rather than taking it for one from before (#191).
@@ -1526,7 +1414,7 @@ final class LibraryModel {
     storeKeepsBookmarksOffline(false)
     // One reconciliation for both: the marks' refresh runs it when they changed.
     let marks = offlineMarks
-    refreshOfflineMarks()
+    userData.refreshOfflineMarks()
     if offlineMarks == marks { wantedOfflineChanged() }
   }
 
@@ -1553,13 +1441,7 @@ final class LibraryModel {
   /// Empty when the fetch fails, which is logged: the list is only shown, and
   /// nothing is decided by its being empty.
   func recentlyRead() -> [DocumentID] {
-    do {
-      return try ReadingPositionStore.recentlyRead(in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "reading the recently read list failed: \(String(describing: error), privacy: .public)")
-      return []
-    }
+    userData.recentlyRead()
   }
 
   // MARK: - Reading paths (#189)
@@ -1619,7 +1501,7 @@ final class LibraryModel {
       libraryLog.failure(of: id, "marking Keep Offline failed", error)
       return false
     }
-    refreshOfflineMarks()
+    userData.refreshOfflineMarks()
     return true
   }
 
