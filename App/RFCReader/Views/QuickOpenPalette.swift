@@ -52,6 +52,14 @@
         if !results.rows.isEmpty {
           Divider()
           rows
+        } else if query.isEmpty {
+          // What the field takes, as iOS's sheet says it (#761).
+          Divider()
+          Text(verbatim: QuickOpenResults.example)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
         } else if let message {
           Divider()
           HStack {
@@ -96,7 +104,7 @@
           .font(.title2)
           .foregroundStyle(.secondary)
           .accessibilityHidden(true)
-        TextField("RFC number, BCP 14, or a link", text: text)
+        TextField(QuickOpenResults.placeholder(), text: text)
           .textFieldStyle(.plain)
           .font(.title2)
           .accessibilityLabel("Go to RFC")

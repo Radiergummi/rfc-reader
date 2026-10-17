@@ -265,7 +265,7 @@ struct EmptyDetailView: View {
     var body: some View {
       NavigationStack {
         Form {
-          TextField("RFC number, title words, or link", text: text)
+          TextField(QuickOpenResults.placeholder(), text: text)
             .focused($focused)
             .onSubmit(openSelection)
             .textInputAutocapitalization(.never)
@@ -309,7 +309,8 @@ struct EmptyDetailView: View {
     @ViewBuilder
     private var status: some View {
       if query.isEmpty {
-        Text("A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link.")
+        // The same as the Mac's palette (#761).
+        Text(verbatim: QuickOpenResults.example)
       } else if !results.isSearching {
         // Not `library.index == nil`, for the reason the Mac's palette gives.
         switch library.indexState {

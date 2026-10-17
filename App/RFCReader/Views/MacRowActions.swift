@@ -3,8 +3,9 @@ import RFCReaderKit
 import SwiftUI
 
 #if os(macOS)
-  /// What a Mac list row offers on a right click (#349). A series row is bookmarked
-  /// as itself, but not added to a collection, which holds RFCs (#321).
+  /// What a Mac list row offers on a right click (#349): `DocumentMenus.rowActions`,
+  /// the table iOS's menu renders too (#761). A series row is bookmarked as itself,
+  /// but not added to a collection, which holds RFCs (#321).
   struct MacRowActions: ViewModifier {
     let row: LibraryRow
     let collection: UUID?
@@ -15,31 +16,63 @@ import SwiftUI
 
     func body(content: Content) -> some View {
       content.contextMenu {
+        let sections = DocumentMenus.rowActions(
+          isRFC: row.rfc != nil, opensTabs: true, opensWindows: true,
+          inCollection: collection != nil)
+        DividedSections(sections: sections, item: item)
+      }
+    }
+
+    @ViewBuilder
+    private func item(_ action: DocumentMenus.RowAction) -> some View {
+      switch action {
+      case .openInNewTab:
+        Button {
+          library.openTab(RFCLink(id: row.id), beside: navigation)
+        } label: {
+          Label("Open in New Tab", systemImage: "plus.square.on.square")
+        }
+        // macOS 27 hides a menu item's icon unless the label asks to keep it.
+        .labelStyle(.titleAndIcon)
+      case .openInNewWindow:
+        Button {
+          library.open(RFCLink(id: row.id), placement: .newWindow)
+        } label: {
+          Label("Open in New Window", systemImage: "macwindow.badge.plus")
+        }
+        .labelStyle(.titleAndIcon)
+      case .bookmark:
         Button(action: toggleBookmark) {
           Label(
             DocumentActions.bookmarkCommand(isBookmarked: isBookmarked),
             systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
         }
-        // macOS 27 hides a menu item's icon unless the label asks to keep it.
         .labelStyle(.titleAndIcon)
-        if row.rfc != nil {
-          Menu("Add to Collection") {
-            AddToCollectionItems(
-              document: row.id, library: library, navigation: navigation,
-              undoManager: undoManager)
-          }
-          Button {
-            navigation.readingPath = ReadingPathRequest(root: row.id)
-          } label: {
-            Label("Reading Path", systemImage: "list.number")
-          }
+      case .addToCollection:
+        Menu("Add to Collection", systemImage: "folder.badge.plus") {
+          AddToCollectionItems(
+            document: row.id, library: library, navigation: navigation,
+            undoManager: undoManager)
+        }
+        .labelStyle(.titleAndIcon)
+      case .readingPath:
+        Button {
+          navigation.readingPath = ReadingPathRequest(root: row.id)
+        } label: {
+          Label("Reading Path", systemImage: "list.number")
+        }
+        .labelStyle(.titleAndIcon)
+      case .keepOffline:
+        KeepOfflineButton(document: row.id, library: library)
           .labelStyle(.titleAndIcon)
-          KeepOfflineButton(document: row.id, library: library)
-            .labelStyle(.titleAndIcon)
-        }
-        if collection != nil {
-          Button("Remove from Collection") { remove(row.id) }
-        }
+      case .share:
+        ShareLink(
+          item: RFCEditorEndpoints.infoPage(row.id),
+          subject: Text(verbatim: "\(row.id.displayName): \(row.title)")
+        )
+        .labelStyle(.titleAndIcon)
+      case .removeFromCollection:
+        Button("Remove from Collection") { remove(row.id) }
       }
     }
 

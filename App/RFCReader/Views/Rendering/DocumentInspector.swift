@@ -55,6 +55,8 @@ struct DocumentInspector: View {
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
+  /// The window's tab, beside which a reference opens in a new one (#761).
+  @Environment(NavigationModel.self) private var scene
   let pane: InspectorPane
   @Binding var tab: InspectorTab
   let current: String?
@@ -158,19 +160,27 @@ struct DocumentInspector: View {
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
       ReferencesView(
-        groups: groups, revealed: revealed, open: openDocument,
-        openInNewWindow: openInNewWindow)
+        groups: groups, revealed: revealed, open: openDocument, menu: referenceMenu)
     case .requirements:
       RequirementsView(requirements: requirements, document: document, select: selectSection)
     }
   }
 
-  /// Offered on iPad, where a reference can open in a window of its own (#158).
-  private var openInNewWindow: ((DocumentID) -> Void)? {
+  /// What a reference's row offers beyond a click (#761): a tab and a window of its
+  /// own on the Mac, a window on an iPad (#158), and its link and citation.
+  private var referenceMenu: ReferenceMenu {
     #if os(macOS)
-      nil
+      ReferenceMenu(
+        library: library,
+        openInNewTab: { [library, scene] in
+          library.openTab(RFCLink(id: $0), beside: scene)
+        },
+        openInNewWindow: { [library] in library.open(RFCLink(id: $0), placement: .newWindow) })
     #else
-      library.opensNewWindows ? { library.openWindow(for: $0) } : nil
+      ReferenceMenu(
+        library: library, openInNewTab: nil,
+        openInNewWindow: library.opensNewWindows
+          ? { [library] in library.openWindow(for: $0) } : nil)
     #endif
   }
 }
@@ -362,7 +372,7 @@ struct ReferencesView: View {
   let groups: [ReferenceGroup]
   let revealed: ReaderState.RevealedReference?
   let open: (DocumentID) -> Void
-  let openInNewWindow: ((DocumentID) -> Void)?
+  let menu: ReferenceMenu
 
   /// The revealed entry, marked for a moment so the eye finds it in the list. The
   /// reveal rather than its anchor, so revealing the same entry again marks it anew.
@@ -379,7 +389,7 @@ struct ReferencesView: View {
               ForEach(group.entries) { entry in
                 // Identified by its anchor already (`Reference.id`), which is
                 // what the reveal scrolls to.
-                ReferenceRow(entry: entry, open: open, openInNewWindow: openInNewWindow)
+                ReferenceRow(entry: entry, open: open, menu: menu)
                   .listRowBackground(
                     highlighted?.anchor == entry.anchor
                       ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
@@ -411,8 +421,8 @@ struct ReferencesView: View {
 struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
-  /// Nil where a reference cannot open in a window of its own.
-  let openInNewWindow: ((DocumentID) -> Void)?
+  /// What the row offers on a right click or a long press; nil for none.
+  let menu: ReferenceMenu?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -426,17 +436,11 @@ struct ReferenceRow: View {
           entryDescription.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        #if !os(macOS)
-          .contextMenu {
-            if let openInNewWindow {
-              Button {
-                openInNewWindow(id)
-              } label: {
-                Label("Open in New Window", systemImage: "macwindow.badge.plus")
-              }
-            }
+        .contextMenu {
+          if let menu {
+            menu.items(for: id)
           }
-        #endif
+        }
       } else {
         // Not a button, so the combined element needs a role of its own, or macOS
         // exposes it as AXUnknown (#300).
@@ -505,5 +509,63 @@ struct ReferenceRow: View {
     // were three for an entry that is no button (#300).
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(entry.accessibilityLabel)
+  }
+}
+
+/// A References panel row's menu (#761): `DocumentMenus.referenceActions`, one list
+/// for the Mac and iOS. Opening in a tab or a window is the platform's, and nil
+/// where it cannot.
+struct ReferenceMenu {
+  let library: LibraryModel
+  let openInNewTab: ((DocumentID) -> Void)?
+  let openInNewWindow: ((DocumentID) -> Void)?
+
+  @ViewBuilder
+  func items(for id: DocumentID) -> some View {
+    let sections = DocumentMenus.referenceActions(
+      opensTabs: openInNewTab != nil, opensWindows: openInNewWindow != nil,
+      describes: library.metadata(id) != nil)
+    DividedSections(sections: sections) { item($0, for: id) }
+  }
+
+  @ViewBuilder
+  private func item(_ action: DocumentMenus.ReferenceAction, for id: DocumentID) -> some View {
+    switch action {
+    case .openInNewTab:
+      Button {
+        openInNewTab?(id)
+      } label: {
+        Label("Open in New Tab", systemImage: "plus.square.on.square")
+      }
+      .labelStyle(.titleAndIcon)
+    case .openInNewWindow:
+      Button {
+        openInNewWindow?(id)
+      } label: {
+        Label("Open in New Window", systemImage: "macwindow.badge.plus")
+      }
+      .labelStyle(.titleAndIcon)
+    case .copyLink:
+      Button {
+        perform(.copySectionLink, for: id)
+      } label: {
+        Label("Copy Link", systemImage: "link")
+      }
+      .labelStyle(.titleAndIcon)
+    case .cite:
+      // The styles alone: the link to the reader's section is the reader's own.
+      Menu("Cite") {
+        MenuSections(sections: Array(DocumentMenus.cite().prefix(1))) { perform($0, for: id) }
+      }
+    }
+  }
+
+  /// A copy, of the referenced document as a whole: no section of it is being read.
+  private func perform(_ action: DocumentMenus.Action, for id: DocumentID) {
+    guard
+      case .copy(let text, let feedback) = action.effect(
+        for: id, metadata: library.metadata(id), section: nil)
+    else { return }
+    Clipboard.copy(text, announcing: feedback)
   }
 }

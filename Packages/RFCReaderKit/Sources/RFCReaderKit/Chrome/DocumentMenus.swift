@@ -115,6 +115,60 @@ public enum DocumentMenus {
     }
     return collections.isEmpty ? [create] : [collections, create]
   }
+
+  /// What a library row's context menu offers, by kind, in order: one table for the
+  /// Mac's menu and iOS's (#761), which had drifted apart, each rendering an action
+  /// with its own control. The title of each is the renderer's: several are
+  /// controls with a state of their own, such as Keep Offline and Add to Collection.
+  public enum RowAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case bookmark
+    case addToCollection
+    case readingPath
+    case keepOffline
+    case share
+    case removeFromCollection
+  }
+
+  /// What a References panel row that names an RFC offers on a right click or a
+  /// long press, by kind, in order (#761): one list for the Mac and iOS.
+  public enum ReferenceAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case copyLink
+    case cite
+  }
+
+  /// A reference's menu, where the device opens tabs or windows as given. Cite only
+  /// where the index `describes` the document, which a citation is made from: not a
+  /// BCP, STD or FYI, nor anything before the index has loaded.
+  public static func referenceActions(
+    opensTabs: Bool, opensWindows: Bool, describes: Bool = true
+  ) -> [[ReferenceAction]] {
+    var opening: [ReferenceAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    return [opening, describes ? [.copyLink, .cite] : [.copyLink]].filter { !$0.isEmpty }
+  }
+
+  /// The row menu of a row that `isRFC`, or is a BCP, STD or FYI read as itself,
+  /// which is bookmarked and opened but neither added to a collection nor shared:
+  /// a collection holds RFCs (#321). `opensTabs` and `opensWindows` are what the
+  /// device can open it in; `inCollection` is whether the list is a collection's.
+  public static func rowActions(
+    isRFC: Bool, opensTabs: Bool, opensWindows: Bool, inCollection: Bool
+  ) -> [[RowAction]] {
+    var opening: [RowAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    var library: [RowAction] = [.bookmark]
+    if isRFC { library += [.addToCollection, .readingPath, .keepOffline] }
+    let sections = [
+      opening, library, isRFC ? [.share] : [], inCollection ? [.removeFromCollection] : [],
+    ]
+    return sections.filter { !$0.isEmpty }
+  }
 }
 
 extension DocumentMenus.Action {

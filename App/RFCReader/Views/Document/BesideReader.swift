@@ -30,7 +30,7 @@ struct BesideReader: View {
                 // As a link to it: the document opens in the window's reader.
                 reading.navigation.open(id)
               },
-              openInNewWindow: nil
+              menu: nil
             )
             .padding(12)
             .frame(width: ReferencePreview.width, alignment: .leading)

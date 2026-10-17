@@ -1402,6 +1402,14 @@ final class LibraryModel {
         openInNewWindow(link)
       }
     }
+
+    /// Opens `link` in a new tab of the window showing `scene`, from a menu in it
+    /// (#761): a right click does not make a background window key, and a new tab
+    /// joins the key window's group.
+    func openTab(_ link: RFCLink, beside scene: NavigationModel) {
+      windows?.bringForward(scene)
+      openInNewScene(link, inBackground: false)
+    }
   #endif
 
   // MARK: - Documents
