@@ -222,14 +222,18 @@ extension DocumentTextBuilder {
   /// A figure's or a table's caption, under its block, which starts at `blockStart`.
   /// The block's last paragraph keeps with it (`BuiltDocument.keepsWithNext`), so a
   /// printed page never ends on the block and opens the next on its caption alone
-  /// (#765). A block that emitted nothing has no paragraph to keep, and the one
-  /// before it is not its.
+  /// (#765). A stacked table ends on the blank line after its last row, which keeps
+  /// too, back to the last paragraph with text. A block that emitted nothing has no
+  /// paragraph to keep, and the one before it is not its.
   func appendCaption(_ caption: String?, indent: CGFloat, blockStart: Int) {
     guard let caption, !caption.isEmpty else { return }
-    if output.length > blockStart {
-      let last = output.mutableString.paragraphRange(
-        for: NSRange(location: output.length - 1, length: 0))
-      keepsWithNext.insert(last.location)
+    var end = output.length
+    while end > blockStart {
+      let paragraph = output.mutableString.paragraphRange(
+        for: NSRange(location: end - 1, length: 0))
+      keepsWithNext.insert(paragraph.location)
+      guard paragraph.length == 1 else { break }
+      end = paragraph.location
     }
     append(
       caption + "\n",

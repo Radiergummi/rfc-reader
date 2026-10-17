@@ -400,7 +400,7 @@ extension DocumentTextBuilder {
     guard widest > 0 else { return 1 }
     let available = max(style.indentStep, style.measure - indent)
     var scale = min(1, available / widest)
-    guard scale < 1, !text.allSatisfy(\.isASCII) else { return scale }
+    guard scale < 1, !text.utf8.allSatisfy({ $0 < 0x80 }) else { return scale }
     for _ in 0..<3 {
       let scaled = widestLine(of: text, scale: scale)
       guard scaled > available else { break }

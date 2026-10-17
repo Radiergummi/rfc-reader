@@ -237,16 +237,33 @@ struct BuilderTableTests {
   @Test func `a captioned block's last paragraph keeps with its caption`() throws {
     let art = Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+")
     let figure = Block.figure(Figure(title: "Boxes", number: 1, blocks: [.preformatted(art)]))
-    let cases: [(Block, String)] = [
-      (figure, "Figure 1: Boxes"), (.table(narrow), "Table 1: Methods"),
+    // A table too wide for the measure stacks, and a stacked table ends on a blank
+    // line between rows, which has to keep with the caption as its last cell does.
+    let cases: [(BuiltDocument, String)] = [
+      (
+        DocumentTextBuilder.build(Fixtures.document(figure), style: ReadingStyle()),
+        "Figure 1: Boxes"
+      ),
+      (
+        DocumentTextBuilder.build(Fixtures.document(.table(narrow)), style: ReadingStyle()),
+        "Table 1: Methods"
+      ),
+      (
+        DocumentTextBuilder.build(
+          Fixtures.document(.table(narrow)), style: ReadingStyle(measure: 120)),
+        "Table 1: Methods"
+      ),
     ]
-    for (block, captionText) in cases {
-      let built = DocumentTextBuilder.build(Fixtures.document(block), style: ReadingStyle())
+    for (index, (built, captionText)) in cases.enumerated() {
       let text = built.text.string as NSString
       let caption = text.range(of: captionText)
       try #require(caption.location != NSNotFound)
-      let last = text.paragraphRange(for: NSRange(location: caption.location - 1, length: 0))
-      #expect(built.keepsWithNext.contains(last.location), "\(captionText)")
+      var paragraph = text.paragraphRange(for: NSRange(location: caption.location - 1, length: 0))
+      while true {
+        #expect(built.keepsWithNext.contains(paragraph.location), "case \(index)")
+        guard paragraph.length == 1, paragraph.location > 0 else { break }
+        paragraph = text.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+      }
     }
   }
 

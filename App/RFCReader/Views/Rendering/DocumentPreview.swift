@@ -116,6 +116,9 @@ struct DocumentPreview: View {
           document: document, built: await DocumentSession.built(document, style: style),
           bibliography: ReferenceGroup.groups(in: document))
       }
+      // Bold Text changed while this was built: the load for the new weight shows
+      // and keeps its own, and this one, made in either weight, is neither.
+      guard !Task.isCancelled else { return }
       loaded = shown
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
@@ -128,6 +131,7 @@ struct DocumentPreview: View {
         await library.keep(shown, for: key)
       }
     } catch {
+      guard !Task.isCancelled else { return }
       failure = error.localizedDescription
     }
   }
