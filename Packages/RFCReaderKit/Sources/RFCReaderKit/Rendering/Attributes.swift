@@ -328,6 +328,23 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
+  /// The errata chip at this character offset (#387): the section whose errata it
+  /// lists, and the chip's whole extent, which its list is anchored to.
+  public func errataChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+    // The link first, as a backlink caption is found: a longest range of nothing
+    // would reach out to the next chip.
+    guard offset >= 0, offset < length,
+      let url = attribute(.link, at: offset, effectiveRange: nil).flatMap(
+        ReaderLinkScheme.url(fromLink:)),
+      let anchor = ReaderLinkScheme.errata(from: url),
+      attribute(.rfcChip, at: offset, effectiveRange: nil) != nil
+    else { return nil }
+    var chip = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcChip, at: offset, longestEffectiveRange: &chip, in: NSRange(location: 0, length: length))
+    return (anchor, chip)
+  }
+
   /// The hung heading number at this character offset (#433): the anchor of the
   /// heading it links to, and the number's own extent, which the pointer lights up
   /// and a copy's feedback is shown over.

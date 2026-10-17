@@ -2651,6 +2651,16 @@
         }
       }
     },
+    "The errata not marked on any section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Errata, die bei keinem Abschnitt markiert sind"
+          }
+        }
+      }
+    },
     "The installed index pack couldn't be read." : {
       "localizations" : {
         "de" : {

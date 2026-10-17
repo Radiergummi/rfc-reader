@@ -37,6 +37,10 @@ struct BuildInputs: Equatable {
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
+  /// The errata marked after the headings (#387): none until the feed and the
+  /// document are both here, so a build made before is made again once, and a
+  /// refresh that changes nothing builds nothing.
+  let errata: ErrataMarks
 
   /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
   ///   or zero where they don't (#433). Asked of the style rather than given, since
@@ -45,7 +49,7 @@ struct BuildInputs: Equatable {
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
-    hang: (ReadingStyle) -> CGFloat = { _ in 0 }
+    errata: ErrataMarks = .none, hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
     self.legibilityWeight = legibilityWeight
@@ -56,6 +60,7 @@ struct BuildInputs: Equatable {
       return style
     }
     self.choices = choices
+    self.errata = errata
   }
 }
 
@@ -130,6 +135,29 @@ final class DocumentSession {
   /// What the document on screen was built from, so a change that comes back to
   /// where it started does not build it again.
   @ObservationIgnored private var builtInputs: BuildInputs?
+
+  /// The last marks worked out, with what they were worked out from: the view asks
+  /// on every pass, and a summary localizes and formats every erratum.
+  @ObservationIgnored private var markedErrata:
+    (from: (errata: [Erratum], onBody: Bool), marks: ErrataMarks)?
+
+  /// The document's verified and held errata, where the reader marks them (#387): on
+  /// its sections once its body is here, by the title before and without one.
+  /// - Parameter drawsBody: false for an original shown without a body, whose loaded
+  ///   text, if any, only says where the original is: every erratum is the whole
+  ///   document's.
+  func errataMarks(for errata: [Erratum]?, drawsBody: Bool = true) -> ErrataMarks {
+    guard let errata, !errata.isEmpty else { return .none }
+    let document = drawsBody ? state.document : nil
+    if let markedErrata, markedErrata.from.errata == errata,
+      markedErrata.from.onBody == (document != nil)
+    {
+      return markedErrata.marks
+    }
+    let marks = ErrataMarks(errata: errata, document: document)
+    markedErrata = ((errata, document != nil), marks)
+    return marks
+  }
 
   init(id: DocumentID, identity: DocumentID, depth: Int?) {
     self.id = id
@@ -295,12 +323,21 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await Self.built(document, style: style, choices: inputs.choices)
-      guard let self, !Task.isCancelled else { return }
+      let rebuilt = await Self.built(
+        document, style: style, choices: inputs.choices, errata: inputs.errata)
+      guard let self else { return }
+      if Task.isCancelled {
+        // Shown anyway while nothing is: the build that replaced it is under way,
+        // and the reader would otherwise stay blank until that one finished too, as
+        // it did when the errata feed arrived during a document's first build (#387).
+        guard state.built == nil else { return }
+        trace("canceled, installed: nothing was on screen")
+      } else {
+        buildingFor = nil
+        trace("built")
+      }
       state.install(rebuilt)
       builtInputs = inputs
-      buildingFor = nil
-      trace("built")
       reader { $0.sections = rebuilt.reachableSections(of: document) }
     }
   }
