@@ -479,6 +479,11 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+        // Which window's live resize a new column comes from.
+        .background {
+          WindowObserver(resize: resize)
+          .accessibilityHidden(true)
+        }
       #else
         // Which size changes are a rotation, so their new column builds at once.
         .background {
@@ -717,31 +722,37 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is. False while there is no build to look in.
+  /// leaves the history as it is. Nil while there is no build to look in, and
+  /// otherwise whether the place was one the document holds (#762).
   @discardableResult
-  private func follow(_ place: String) -> Bool {
+  private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
       let built = session.state.built
-    else { return false }
+    else { return nil }
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
         to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+      return .landed
     case .reference(let anchor):
       reader.reveal(reference: anchor)
+      return .landed
     case .document, .unhandled, nil:
-      break
+      return .noSuchPlace
     }
-    return true
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there.
+  /// waits for the text to appear, and is followed there; where no text is coming,
+  /// a scan's or a pointer's page or a load that failed, it is settled unmade
+  /// (#762), or a script's `jump to section` would wait on it forever.
   private func follow(_ request: ScrollRequest) {
-    if follow(request.section) {
-      navigation.settle(request)
+    if let outcome = follow(request.section) {
+      navigation.settle(request, as: outcome)
+    } else if isShown, !session.awaitsDocument, session.state.document == nil {
+      navigation.settle(request, as: .notShown)
     }
   }
 
