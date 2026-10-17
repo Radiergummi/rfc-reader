@@ -157,6 +157,13 @@
       applyMinimumWidth()
     }
 
+    /// Opens the panel at once, unanimated: a restored window putting back the panel
+    /// it had (#762).
+    func openPanel() {
+      panelItem.isCollapsed = false
+      applyMinimumWidth()
+    }
+
     /// Shuts the panel at once, unanimated, and puts the window's floor back where it
     /// is with the panel shut — also when the panel was already shut, since a tab group
     /// may have shut it without the floor following.
@@ -224,6 +231,31 @@
       if let item = besideItem {
         removeSplitViewItem(item)
         besideItem = nil
+      }
+    }
+
+    // MARK: - What the window keeps
+
+    /// The columns' widths, for the window's `SceneSnapshot` (#762): the sidebar's and
+    /// the list's, each where it is not collapsed.
+    var columnWidths: (sidebar: Double?, list: Double?) {
+      (
+        sidebarItem.isCollapsed ? nil : Double(sidebarView.frame.width),
+        listItem.isCollapsed ? nil : Double(listView.frame.width)
+      )
+    }
+
+    /// Puts back the widths `columnWidths` gave, by moving the dividers after the
+    /// sidebar and the list. A column collapsed now, or one with no width kept, is
+    /// left as it is; AppKit holds each to its own minimum and maximum.
+    func restoreColumnWidths(sidebar: Double?, list: Double?) {
+      let divider = splitView.dividerThickness
+      if let sidebar, !sidebarItem.isCollapsed {
+        splitView.setPosition(sidebar, ofDividerAt: 0)
+      }
+      if let list, !listItem.isCollapsed {
+        let start = sidebarItem.isCollapsed ? 0 : sidebarView.frame.width + divider
+        splitView.setPosition(start + list, ofDividerAt: 1)
       }
     }
 

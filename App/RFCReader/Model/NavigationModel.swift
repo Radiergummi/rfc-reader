@@ -519,8 +519,10 @@ final class NavigationModel: Identifiable {
   // MARK: - Across launches
 
   /// What this tab keeps across launches (#155), with its reader's inspector tab.
-  func snapshot(inspectorTab: InspectorTab) -> SceneSnapshot {
-    SceneSnapshot(history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue)
+  func snapshot(inspectorTab: InspectorTab, layout: WindowLayout? = nil) -> SceneSnapshot {
+    SceneSnapshot(
+      history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue,
+      layout: layout)
   }
 
   /// Puts the tab back as `snapshot` left it, and its inspector tab into `reader`.

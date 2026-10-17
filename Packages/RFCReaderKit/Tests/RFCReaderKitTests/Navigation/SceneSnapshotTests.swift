@@ -29,6 +29,24 @@ struct SceneSnapshotTests {
     #expect(SceneSnapshot.decoded(from: data) == snapshot)
   }
 
+  /// A Mac window comes back with its panel, its pane and its columns (#762).
+  @Test func `a window's layout reads back as it was written`() throws {
+    let layout = WindowLayout(
+      panelIsOpen: true, pane: .info, sidebarWidth: 220, listWidth: nil)
+    let snapshot = SceneSnapshot(
+      history: history(through: [9110]).snapshot(), filter: .all, layout: layout)
+    let data = try #require(snapshot.encoded())
+    #expect(SceneSnapshot.decoded(from: data)?.layout == layout)
+  }
+
+  /// The panel's rule holds on the way back: never open over nothing.
+  @Test func `a restored panel opens only over something to describe`() {
+    let open = WindowLayout(panelIsOpen: true, pane: .navigation)
+    #expect(open.opensPanel(canDescribe: true))
+    #expect(!open.opensPanel(canDescribe: false))
+    #expect(!WindowLayout(panelIsOpen: false, pane: .navigation).opensPanel(canDescribe: true))
+  }
+
   @Test func `a restored history walks back and forward through the same places`() {
     var restored = NavigationHistory(history(through: [9110, 9111, 9112], back: 1).snapshot())
     #expect(restored.shown == place(9111))

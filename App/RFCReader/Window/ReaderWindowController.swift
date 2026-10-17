@@ -45,6 +45,12 @@
     /// Set on a window AppKit restores (#155), whose panel is put right once, the
     /// first time it is made key. See `windowDidBecomeKey(_:)`.
     var correctsPanelOnFirstKey = false
+    /// The layout a restored window came back with, until its panel has been put
+    /// back: once its document can be described, the first time it can (#762).
+    var restoredLayout: WindowLayout?
+    /// The restored layout's column widths, until they are put back, which waits for
+    /// the window's first turn as key, when it is laid out.
+    var restoredColumnWidths: (sidebar: Double?, list: Double?)?
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
@@ -115,6 +121,9 @@
         guard let self else { return }
         self.toolbar?.capTitleToList()
         ActiveReaderWindow.shared.sidebarChanged(self)
+        // The columns' widths are part of what the window keeps (#762), and nothing
+        // observable says they changed.
+        self.window?.invalidateRestorableState()
       }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
@@ -345,6 +354,10 @@
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
       if reader.canDescribe {
+        if let layout = restoredLayout {
+          restoredLayout = nil
+          if layout.opensPanel(canDescribe: true), !isPanelOpen { splitController.openPanel() }
+        }
         // The panel may have been opened or shut by the tab group rather than by a
         // toggle, so the floor follows whatever state it is in now.
         splitController.applyMinimumWidth()
@@ -541,6 +554,14 @@
       if correctsPanelOnFirstKey {
         correctsPanelOnFirstKey = false
         Task { [weak self] in self?.closePanelWithoutDocument() }
+      }
+      // On the same turn, once the window is in its group and laid out at its frame,
+      // which it was not when its state was decoded (#762).
+      if let widths = restoredColumnWidths {
+        restoredColumnWidths = nil
+        Task { [weak self] in
+          self?.splitController.restoreColumnWidths(sidebar: widths.sidebar, list: widths.list)
+        }
       }
     }
 

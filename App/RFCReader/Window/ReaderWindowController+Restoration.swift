@@ -13,9 +13,14 @@
     static let restorationIdentifier = NSUserInterfaceItemIdentifier("reader")
     private static let sceneKey = "scene"
 
-    /// What this tab keeps; see `SceneSnapshot`.
+    /// What this tab keeps; see `SceneSnapshot`: its navigation, and the window's
+    /// panel and columns (#762).
     var sceneSnapshot: SceneSnapshot {
-      navigation.snapshot(inspectorTab: reader.tab)
+      let widths = splitController.columnWidths
+      let layout = WindowLayout(
+        panelIsOpen: isPanelOpen, pane: reader.pane, sidebarWidth: widths.sidebar,
+        listWidth: widths.list)
+      return navigation.snapshot(inspectorTab: reader.tab, layout: layout)
     }
 
     func makeRestorable(_ window: NSWindow) {
@@ -33,6 +38,13 @@
         let snapshot = SceneSnapshot.decoded(from: data as Data)
       else { return }
       navigation.restore(snapshot, into: reader)
+      guard let layout = snapshot.layout else { return }
+      reader.pane = layout.pane
+      // Neither yet: the columns are put back once the window is laid out, when it
+      // first becomes key, and the panel only over a document, which has not loaded;
+      // `closePanelWithoutDocument()` opens it once there is one.
+      restoredLayout = layout
+      restoredColumnWidths = (layout.sidebarWidth, layout.listWidth)
     }
   }
 
