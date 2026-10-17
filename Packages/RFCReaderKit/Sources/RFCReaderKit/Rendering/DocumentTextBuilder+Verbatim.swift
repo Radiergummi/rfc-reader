@@ -217,7 +217,13 @@ extension DocumentTextBuilder {
   /// color and its border characters in `hiddenColor`. The text is unchanged.
   func decorate(_ decorated: DecoratedText, from bodyStart: Int) {
     let body = NSRange(location: bodyStart, length: output.length - bodyStart)
-    output.addAttribute(.rfcStrokes, value: StrokeBox(decorated.strokes), range: body)
+    let text = output.mutableString
+    var lineStarts = [0]
+    for offset in 0..<max(0, body.length - 1) where text.character(at: bodyStart + offset) == 10 {
+      lineStarts.append(offset + 1)
+    }
+    output.addAttribute(
+      .rfcStrokes, value: StrokeBox(decorated.strokes, lineStarts: lineStarts), range: body)
     for (ranges, color) in [
       (decorated.secondary, RFCColors.secondaryLabel), (decorated.hidden, Self.hiddenColor),
     ] {
