@@ -226,17 +226,23 @@
     /// Sidebar. A SwiftUI menu item cannot ask the split view when the menu opens,
     /// so the window reports it here.
     private(set) var isSidebarCollapsed = false
+    /// Whether the key window's panel is open, for the titles of View ▸ Show
+    /// Contents and Show Info (#761), reported for the same reason.
+    private(set) var isPanelOpen = false
 
     private init() {}
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
       isSidebarCollapsed = controller.splitController.isSidebarCollapsed
+      isPanelOpen = controller.isPanelOpen
     }
 
+    /// The sidebar or the panel opened or closed: both resize the subviews.
     func sidebarChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
       isSidebarCollapsed = controller.splitController.isSidebarCollapsed
+      isPanelOpen = controller.isPanelOpen
     }
 
     func willClose(_ controller: ReaderWindowController) {

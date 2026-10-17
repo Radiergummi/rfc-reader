@@ -1105,6 +1105,26 @@
         }
       }
     },
+    "Hide Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt ausblenden"
+          }
+        }
+      }
+    },
+    "Hide Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info ausblenden"
+          }
+        }
+      }
+    },
     "How an RFC Is Made" : {
       "localizations" : {
         "de" : {
@@ -2121,6 +2141,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kurz"
+          }
+        }
+      }
+    },
+    "Show Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt einblenden"
+          }
+        }
+      }
+    },
+    "Show Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info einblenden"
           }
         }
       }

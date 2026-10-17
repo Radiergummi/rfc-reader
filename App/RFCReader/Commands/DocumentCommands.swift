@@ -38,6 +38,12 @@ struct DocumentCommands: Commands {
     private var isBookmarked: Bool { active.controller?.isBookmarked == true }
     private func toggleBookmark() { active.controller?.toggleBookmark() }
 
+    /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
+    private func paneTitle(_ pane: InspectorPane) -> String {
+      InspectorPane.menuTitle(
+        pane, isOpen: active.isPanelOpen, showing: active.controller?.reader.pane ?? .navigation)
+    }
+
     /// What an item of the Document menu does, as the toolbar's Cite and More do it.
     private func perform(_ action: DocumentMenus.Action) {
       guard let controller = active.controller, let id = controller.navigation.shown else { return }
@@ -235,7 +241,7 @@ struct DocumentCommands: Commands {
           // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
           // which every tabbed Mac app gives to reopening the last closed tab
           // (#157).
-          Button("Contents") { active.controller?.press(.navigation) }
+          Button(paneTitle(.navigation)) { active.controller?.press(.navigation) }
             .keyboardShortcut("i", modifiers: [.command, .option])
             // As the toolbar's button is: on whatever the index describes, a
             // document still loading or one that failed to included (#325), and
@@ -244,7 +250,7 @@ struct DocumentCommands: Commands {
             // panel that is still open.
             .disabled(reader?.canDescribe != true)
           // ⌘I, Get Info in Finder and Preview.
-          Button("Info") { active.controller?.press(.info) }
+          Button(paneTitle(.info)) { active.controller?.press(.info) }
             .keyboardShortcut("i", modifiers: .command)
             .disabled(reader?.canDescribe != true)
         #endif
