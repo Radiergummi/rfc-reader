@@ -26,7 +26,7 @@ struct LocalizationTests {
     #expect(String(kit: "Remove from Collection", locale: .german) == "Aus Sammlung entfernen")
     let more = DocumentMenus.more(
       showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
-      locale: .german)
+      offersTranslation: true, locale: .german)
     #expect(
       more.map { $0.map(\.title) } == [
         ["Originaltext", "Übersetzen"], ["Auf rfc-editor.org öffnen", "Datatracker"],
