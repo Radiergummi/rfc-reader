@@ -66,10 +66,14 @@
         backing: .buffered,
         defer: false
       )
-      // Everything in this app is the same kind of window, so a new one joins the
-      // front window's tab group rather than opening beside it.
+      // Everything in this app is the same kind of window, so one tabs with another.
+      // Whether a window shown on its own joins the front group is the user's "Prefer
+      // tabs" setting (`.automatic`): `.preferred` tabbed every one, so File ▸ New
+      // Window did what New Tab does (#762). A tab is ordered into its group
+      // explicitly, and a window that has to stand alone says so as it is shown
+      // (`AppDelegate.openWindow(tabbedWith:inBackground:standsAlone:)`).
       window.tabbingIdentifier = "org.rfc-editor.reader"
-      window.tabbingMode = .preferred
+      window.tabbingMode = .automatic
       output = DocumentOutputController(
         window: window, navigation: navigation, reader: reader, library: library)
       // No frame autosave name here. It is one name per window, and giving every

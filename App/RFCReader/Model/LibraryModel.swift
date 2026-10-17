@@ -20,7 +20,7 @@ nonisolated private let libraryLog = Logger(
   /// `LibraryModel.windows`. The library says what it needs, and never reaches for
   /// the delegate itself.
   protocol WindowOpening: AnyObject {
-    /// A window of its own, in front.
+    /// A window of its own, in front, whatever the user's "Prefer tabs" setting.
     func openWindow()
     /// A tab of the window the user is looking at.
     func openTab(inBackground: Bool)
