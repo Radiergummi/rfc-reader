@@ -1635,6 +1635,9 @@ final class LibraryModel {
       let data = try await client.fetchDocumentData(id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
+      // Not private API, but not documented either: the notification Safari posts,
+      // which the Dock answers today. If a macOS stops answering it, the stack stops
+      // bouncing and nothing says so; the file is saved all the same (#762).
       DistributedNotificationCenter.default().post(
         name: Notification.Name("com.apple.DownloadFileFinished"), object: file.path)
     }
