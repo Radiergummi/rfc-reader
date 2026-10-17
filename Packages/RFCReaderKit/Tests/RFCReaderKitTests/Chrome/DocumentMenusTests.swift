@@ -90,7 +90,7 @@ struct DocumentMenusTests {
   @Test func `cite names each style`() {
     #expect(
       titles(DocumentMenus.cite(locale: .english))[0]
-        == ["Short", "Full citation", "Markdown link", "BibTeX", "URL"])
+        == ["Short", "Full Citation", "Markdown Link", "BibTeX", "URL"])
   }
 
   @Test func `a collection's item is its folder in its color`() {

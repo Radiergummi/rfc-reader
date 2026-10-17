@@ -12,7 +12,7 @@ struct OriginalTextView: View {
       OriginalTextBody(text: text, fontSize: fontSize)
     } else if let failure {
       ContentUnavailableView {
-        Label("Couldn't load the original text", systemImage: failure.kind.symbol)
+        Label("Couldn’t Load the Original Text", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
         Text(failure.kind.recoverySuggestion(for: .originalText))

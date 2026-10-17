@@ -500,6 +500,26 @@
         }
       }
     },
+    "Available Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
+    },
+    "Available offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
+    },
     "A–Z" : {
       "localizations" : {
         "de" : {
@@ -810,26 +830,6 @@
         }
       }
     },
-    "Couldn't load %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ konnte nicht geladen werden"
-          }
-        }
-      }
-    },
-    "Couldn't load the original text" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Originaltext konnte nicht geladen werden"
-          }
-        }
-      }
-    },
     "Couldn't print %@" : {
       "localizations" : {
         "de" : {
@@ -856,6 +856,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht geladen werden"
+          }
+        }
+      }
+    },
+    "Couldn’t Load the Original Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Originaltext konnte nicht geladen werden"
           }
         }
       }
@@ -987,26 +997,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geladen, wenn das Netzwerk keine Datenbegrenzung hat, und behalten, solange ein Lesezeichen besteht."
-          }
-        }
-      }
-    },
-    "Draw Diagrams" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diagramme zeichnen"
-          }
-        }
-      }
-    },
-    "Draw diagrams" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diagramme zeichnen"
           }
         }
       }
@@ -1341,26 +1331,6 @@
         }
       }
     },
-    "Kept Offline" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline behalten"
-          }
-        }
-      }
-    },
-    "Kept offline" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Offline verfügbar"
-          }
-        }
-      }
-    },
     "Key Word" : {
       "localizations" : {
         "de" : {
@@ -1611,22 +1581,22 @@
         }
       }
     },
+    "Not available offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht offline verfügbar"
+          }
+        }
+      }
+    },
     "Not enough space" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht genug Speicherplatz"
-          }
-        }
-      }
-    },
-    "Not kept offline" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht offline verfügbar"
           }
         }
       }
@@ -1657,16 +1627,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Anmerkungen"
-          }
-        }
-      }
-    },
-    "Nothing in the index matches “%@”." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nichts im Index passt zu „%@“."
           }
         }
       }
@@ -2171,16 +2131,6 @@
         }
       }
     },
-    "Reading font size: %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schriftgröße beim Lesen: %lld"
-          }
-        }
-      }
-    },
     "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched." : {
       "localizations" : {
         "de" : {
@@ -2461,6 +2411,16 @@
         }
       }
     },
+    "Show Diagrams as Figures" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagramme als Abbildungen zeigen"
+          }
+        }
+      }
+    },
     "Show Obsolete" : {
       "localizations" : {
         "de" : {
@@ -2517,6 +2477,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Standardmäßig die Darstellung des Originaltexts zeigen"
+          }
+        }
+      }
+    },
+    "Shows the author’s contact details." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt die Kontaktdaten des Autors."
           }
         }
       }
@@ -2601,22 +2571,12 @@
         }
       }
     },
-    "The RFC index couldn't be loaded. A number still opens." : {
+    "Text Size: %lld" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der RFC-Index konnte nicht geladen werden. Eine Nummer lässt sich trotzdem öffnen."
-          }
-        }
-      }
-    },
-    "The RFC index is still loading." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der RFC-Index wird noch geladen."
+            "value" : "Textgröße: %lld"
           }
         }
       }

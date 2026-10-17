@@ -48,7 +48,8 @@ struct InfoView: View {
               ErrataSection(summary: summary, selectSection: selectSection)
             }
           }
-          if let document, document.series == .rfc {
+          // Without a citation index a reading path can only say there is none.
+          if let document, document.series == .rfc, library.hasCitationIndex {
             InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)
@@ -669,6 +670,13 @@ private struct OfflineSection: View {
     document.series == .rfc && library.offlineMarks.contains(document)
   }
 
+  /// Whether Available Offline lists it, which the status says as a row's mark does
+  /// (#769): kept by its mark, or as a bookmark while bookmarks are kept. The control
+  /// stays the mark's.
+  private var isAvailable: Bool {
+    library.isAvailableOffline(document)
+  }
+
   var body: some View {
     InfoSection(title: String(localized: "Offline")) {
       HStack(spacing: 10) {
@@ -688,9 +696,9 @@ private struct OfflineSection: View {
         Text(
           downloadFailed
             ? (hadNoRoom ? "Not enough space" : "Couldn't download")
-            : isKept ? "Kept offline" : "Not kept offline"
+            : isAvailable ? "Available offline" : "Not available offline"
         )
-        .foregroundStyle(isKept ? .primary : .secondary)
+        .foregroundStyle(isAvailable ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))

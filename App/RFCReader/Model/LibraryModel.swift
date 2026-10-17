@@ -190,6 +190,11 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
+  /// Whether the installed indexes pack holds a citation index (#189), without which
+  /// a reading path can only say there is none: the Reading Path items are offered
+  /// only while it is true (#769), and come back once #738 delivers the pack.
+  private(set) var hasCitationIndex = false
+
   /// How many documents Recently Read lists, for the sidebar's count (#344): the
   /// length of `recentlyRead()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
@@ -270,6 +275,12 @@ final class LibraryModel {
     guard isFirstRead || marks != offlineMarks else { return }
     offlineMarks = marks
     wantedOfflineChanged()
+  }
+
+  /// Whether Available Offline lists `id`: what a library row marks as offline
+  /// (#769). Only an RFC: the list holds the RFCs a series names, not the series.
+  func isAvailableOffline(_ id: DocumentID) -> Bool {
+    id.series == .rfc && availableOfflineNumbers.contains(id.number)
   }
 
   /// Lists what is wanted offline, and brings the disk in line with it.
@@ -395,12 +406,21 @@ final class LibraryModel {
   /// or else `documentTitle`, what an open reader has parsed. A failure is logged
   /// rather than shown, as a collection's is (#125). A failed lookup changes
   /// nothing; a failed save leaves the change pending in the context, saved with
-  /// the next save that succeeds.
-  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+  /// the next save that succeeds. A removal registers its undo with `undoManager`
+  /// (#769), whose own failures are logged too.
+  func toggleBookmark(
+    _ id: DocumentID, documentTitle: String? = nil, undoManager: UndoManager? = nil
+  ) {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
     do {
-      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
+      try BookmarkStore.toggle(
+        id, title: title, undoManager: undoManager,
+        onUndoFailure: { error in
+          libraryLog.error(
+            "undoing or redoing a bookmark's removal failed: \(String(describing: error), privacy: .public)"
+          )
+        }, in: container.mainContext)
     } catch {
       libraryLog.error(
         "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
@@ -430,6 +450,12 @@ final class LibraryModel {
     let pointers = await store.pointersInPack()
     guard pointers != pointersInPack else { return }
     pointersInPack = pointers
+  }
+
+  private func refreshCitationIndex() async {
+    let hasIndex = await store.citationIndexURL() != nil
+    guard hasIndex != hasCitationIndex else { return }
+    hasCitationIndex = hasIndex
   }
 
   private let client = RFCEditorClient()
@@ -490,6 +516,8 @@ final class LibraryModel {
       indexState = .failed(error)
       settleIndex()
     }
+    // Only the Reading Path items wait for it, so not the list.
+    Task(name: "Look for a citation index") { await refreshCitationIndex() }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
@@ -632,6 +660,7 @@ final class LibraryModel {
           do {
             let pack = try await store.installIndexesPack(
               from: PackInstaller.source(fromArgument: indexes))
+            await refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {
             libraryLog.error(
