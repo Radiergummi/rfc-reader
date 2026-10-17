@@ -249,22 +249,15 @@ private struct GroupCard: Identifiable {
 private struct FactStrip: View {
   let facts: [DocumentInfo.Fact]
 
-  /// Side by side where the values fit on one line each, and one above the other
-  /// where they don't, as at an accessibility size, rather than shrunk (#760).
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(spacing: 0) {
-        ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
-          if index > 0 {
-            Divider().frame(height: 28)
-          }
-          factView(fact)
+    HStack(spacing: 0) {
+      ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
+        if index > 0 {
+          Divider().frame(height: 28)
         }
-      }
-      VStack(spacing: 10) {
-        ForEach(Array(facts.enumerated()), id: \.offset) { _, fact in
-          factView(fact)
-        }
+        factView(fact)
       }
     }
     .padding(.vertical, 10)
@@ -273,13 +266,14 @@ private struct FactStrip: View {
 
   private func factView(_ fact: DocumentInfo.Fact) -> some View {
     VStack(spacing: 2) {
+      // Wrapped rather than shrunk at an accessibility size (#760).
       Text(fact.value)
         .font(.infoFact)
-        .lineLimit(1)
+        .lineLimit(dynamicTypeSize.lines(1))
       Text(fact.label)
         .font(.infoFactCaption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
+        .lineLimit(dynamicTypeSize.lines(1))
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)

@@ -29,11 +29,12 @@ struct ReferencePreview: View {
 
   /// The card's width, which the iOS preview, the backlinks and the gloss cards are
   /// also sized at: 280 points, grown with the text on iOS so an accessibility size
-  /// does not cut every line short (#760), and at most twice that, which an iPhone's
-  /// screen still holds.
+  /// does not cut every line short (#760), up to 340, which the narrowest iPhone's
+  /// 375-point screen holds with a margin either side. Past that, the lines it no
+  /// longer limits make the card taller instead.
   static var width: CGFloat {
     #if canImport(UIKit)
-      min(UIFontMetrics(forTextStyle: .body).scaledValue(for: 280), 560)
+      min(UIFontMetrics(forTextStyle: .body).scaledValue(for: 280), 340)
     #else
       280
     #endif

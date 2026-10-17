@@ -109,10 +109,14 @@
       // The text rises from under the bar's bottom edge, which is this view's own
       // in the bar's middle: what is below it is out of sight.
       clipsToBounds = true
-      // Fixed type, as the bar's own title is, so at an accessibility size a long
-      // press shows it large, as the bar's own title does (#760).
-      showsLargeContentViewer = true
-      addInteraction(UILargeContentViewerInteraction())
+    }
+
+    /// Fixed type, as the bar's own title is, so at an accessibility size a long
+    /// press shows it large, as the bar's own title does (#760): the bar's own
+    /// interaction asks its items. Not while it has not slid in.
+    override var showsLargeContentViewer: Bool {
+      get { state.reveal > 0 }
+      set { super.showsLargeContentViewer = newValue }
     }
 
     @available(*, unavailable)

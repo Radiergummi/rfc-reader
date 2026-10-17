@@ -535,7 +535,7 @@ import RFCReaderKit
         result.insertItem(item, at: 0)
         // A code block's button as an item too, beside Copy Figure, so Voice Control
         // can name it (#760).
-        if let code = copyCode(of: box, in: text) {
+        if let code = blockOffset(of: box, near: near, in: text).flatMap(text.code(ofBlockAt:)) {
           let copy = NSMenuItem(
             title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
             keyEquivalent: "")
@@ -555,12 +555,20 @@ import RFCReaderKit
       return result
     }
 
-    /// What `box`'s copy button copies, if it has one: only a code block does.
-    private func copyCode(of box: VerbatimBox, in text: NSAttributedString) -> String? {
-      let button = text.copyButtons(in: NSRange(location: 0, length: text.length)).first {
-        text.attribute(.rfcVerbatim, at: $0.location, effectiveRange: nil) as? VerbatimBox === box
+    /// Where `box` is, near the click or in the selection that found it.
+    private func blockOffset(of box: VerbatimBox, near: NSRange, in text: NSAttributedString)
+      -> Int?
+    {
+      var found: Int?
+      let searched = NSRange(location: near.location, length: max(near.length, 1))
+      text.enumerateAttribute(
+        .rfcVerbatim, in: NSIntersectionRange(searched, NSRange(location: 0, length: text.length))
+      ) { value, piece, stop in
+        guard value as? VerbatimBox === box else { return }
+        found = piece.location
+        stop.pointee = true
       }
-      return button.flatMap { text.code(ofCopyButtonAt: $0.location) }
+      return found
     }
 
     @objc private func copyCodeItem(_ sender: NSMenuItem) {

@@ -147,19 +147,35 @@ extension RFCTextViewCoordinator {
     return true
   }
 
-  /// The outline's section the reader's line is in, and what opens or closes it: the
+  /// The outline's section the text's cursor is in, and what opens or closes it: the
   /// text view's Expand Section or Collapse Section to an assistive technology (#760).
+  /// The cursor, not the reader's line: VoiceOver moves it heading by heading, and the
+  /// action belongs to the heading it has just said. The reader's line where the
+  /// cursor is in folded text.
   func outlineSectionAction() -> (section: Folding.OutlineSection, toggle: () -> Void)? {
-    guard let foldingIndex,
-      let section = folding.outlineSection(atLine: engine.placeOffset ?? 0, in: foldingIndex)
-    else { return nil }
+    guard let foldingIndex, let textView else { return nil }
+    #if canImport(UIKit)
+      let cursor = textView.selectedRange.location
+    #else
+      let cursor = textView.selectedRange().location
+    #endif
+    let line =
+      foldingDelegate.hidden.contains(cursor) ? (engine.placeOffset ?? 0) : cursor
+    guard let section = folding.outlineSection(atLine: line, in: foldingIndex) else { return nil }
     return (section, { [weak self] in _ = self?.toggleSection(atHeading: section.heading) })
   }
 
-  /// What VoiceOver says after each heading the reading mode discloses (#760).
+  /// What VoiceOver says after each heading the reading mode discloses (#760), worked
+  /// out once per folding: VoiceOver asks on every line it reads.
   func spokenStates() -> [Int: String] {
-    guard let foldingIndex else { return [:] }
-    return folding.spokenStates(in: foldingIndex)
+    guard let foldingIndex, let built else { return [:] }
+    let index = ObjectIdentifier(built.text).hashValue
+    if let kept = spokenStatesKept, kept.folding == folding, kept.index == index {
+      return kept.said
+    }
+    let said = folding.spokenStates(in: foldingIndex)
+    spokenStatesKept = (folding, index, said)
+    return said
   }
 
   /// A jump to `offset`, which the reading mode may have folded away: its section is

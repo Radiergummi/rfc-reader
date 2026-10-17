@@ -354,6 +354,16 @@ extension NSAttributedString {
     return buttons
   }
 
+  /// What the copy button of the code block at this character offset copies, its
+  /// menu's Copy Code (#760): nil for a block with no button. Only the block's own
+  /// extent is searched.
+  public func code(ofBlockAt offset: Int) -> String? {
+    guard let block = extent(ofBox: .rfcVerbatim, at: offset),
+      let button = copyButtons(in: block).first
+    else { return nil }
+    return code(ofCopyButtonAt: button.location)
+  }
+
   /// What the copy button at this character offset copies: its block as Copy
   /// Figure copies it (`FigureCopy.pasteboardText(for:)`). Nil anywhere but on the
   /// button. Asked on a click.

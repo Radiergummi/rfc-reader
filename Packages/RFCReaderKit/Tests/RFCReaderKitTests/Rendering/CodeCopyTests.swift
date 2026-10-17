@@ -71,6 +71,19 @@ struct CodeCopyTests {
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
 
+    /// The block's menu's Copy Code copies what its button does, found from anywhere
+    /// in the block; a block with no button offers none (#760).
+    @Test func `copy code in the menu copies what the button does`() throws {
+      let text = DocumentTextBuilder.build(
+        Fixtures.document(
+          .preformatted(Self.indented),
+          .preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+        style: ReadingStyle(measure: 4000)
+      ).text
+      #expect(text.code(ofBlockAt: try Fixtures.offset(of: "value", in: text)) == Self.copied)
+      #expect(text.code(ofBlockAt: try Fixtures.offset(of: "+--+", in: text)) == nil)
+    }
+
     /// VoiceOver names the button rather than passing over an unnamed attachment
     /// (#760).
     @Test func `the copy button is said as Copy Code`() throws {
