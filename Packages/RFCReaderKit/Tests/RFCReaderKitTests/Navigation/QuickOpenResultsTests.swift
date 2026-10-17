@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 import Testing
 
@@ -28,6 +29,16 @@ struct QuickOpenResultsTests {
     results.show(hits: [.rfc(9110), .rfc(9111)], for: "http")
     results.show(query: "http c", exact: nil)
     #expect(results.rows.map(\.link.id) == [.rfc(9110), .rfc(9111)])
+  }
+
+  /// What the placeholder says it takes, the example shows one of each, and each of
+  /// them resolves or searches as it says (#761).
+  @Test func `the example is one of each thing the field takes`() {
+    let parts = QuickOpenResults.example.components(separatedBy: " · ")
+    #expect(parts.count == 4)
+    #expect(DocumentReference.link(from: parts[0])?.id == .rfc(9110))
+    #expect(DocumentReference.link(from: parts[1])?.id == DocumentID(series: .bcp, number: 14))
+    #expect(DocumentReference.link(from: parts[3])?.id == .rfc(9110))
   }
 
   @Test func `nothing typed lists nothing and selects nothing`() {

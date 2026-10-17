@@ -1865,6 +1865,16 @@
         }
       }
     },
+    "RFC number, BCP 14, title words, or a link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Nummer, BCP 14, Wörter aus dem Titel oder ein Link"
+          }
+        }
+      }
+    },
     "Reading Path: %@" : {
       "localizations" : {
         "de" : {
