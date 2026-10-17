@@ -250,15 +250,17 @@ final class LibraryModel {
 
   /// Brings the disk in line with `wantedOffline`, after any reconciliation already
   /// running. Not before the index has loaded, since a fetch needs the formats it
-  /// lists, and applying the index runs this; nor before the marks have been read.
+  /// lists, and applying the index runs this; nor before the marks have been read,
+  /// nor the bookmarks when they are kept offline.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
   /// saved: reconciling against them would move every kept body into the cache.
   /// Nor before the network path is known, which decides whether the fetches it
   /// owes start now: every one of them is a mark nobody on this device is waiting
   /// for, since a tapped one is fetched at once.
   private func reconcileOffline(forgettingFailures: Bool = false) {
-    guard index != nil, userData.hasReadOfflineMarks, !AppData.isStoredInMemory,
-      let policy = network.decision(for: .syncedMark)
+    guard index != nil, userData.hasReadOfflineMarks,
+      userData.knowsBookmarksWantedOffline(keepsBookmarks: keepsBookmarksOffline),
+      !AppData.isStoredInMemory, let policy = network.decision(for: .syncedMark)
     else { return }
     offlineKeeper.reconcile(
       wanted: wantedOffline, policy: policy, forgettingFailures: forgettingFailures)
@@ -1381,8 +1383,13 @@ final class LibraryModel {
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper
-  /// runs; nil when they cannot be read.
+  /// runs; nil when they cannot be read, or when the bookmarks kept offline have not
+  /// been, which would spare none of them.
   private func sparedFromClearing() -> Set<DocumentID>? {
+    guard userData.knowsBookmarksWantedOffline(keepsBookmarks: keepsBookmarksOffline) else {
+      libraryLog.error("Clear Cache spares everything, the bookmarks have not been read")
+      return nil
+    }
     do {
       return CacheEviction.spared(
         marked: try OfflineMarkStore.markedDocuments(in: container.mainContext),

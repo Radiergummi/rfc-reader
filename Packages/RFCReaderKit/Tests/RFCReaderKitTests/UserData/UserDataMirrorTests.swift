@@ -33,18 +33,20 @@ struct UserDataMirrorTests {
     return mirror
   }
 
-  /// The first read of the marks reports them even when there are none: until it,
-  /// their emptiness meant nothing.
-  @Test func `starting reads every set and reports the marks`() throws {
+  /// The first read of the bookmarks and of the marks reports them even when there are
+  /// none: until it, their emptiness meant nothing.
+  @Test func `starting reads every set and reports the bookmarks and the marks`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
     #expect(!mirror.hasReadOfflineMarks)
+    #expect(!mirror.hasReadBookmarks)
 
     mirror.start()
 
     #expect(mirror.hasReadOfflineMarks)
+    #expect(mirror.hasReadBookmarks)
     #expect(reports.offlineMarks == 1)
-    #expect(reports.bookmarks == 0)
+    #expect(reports.bookmarks == 1)
     #expect(reports.collections.isEmpty)
     #expect(reports.recentlyReadCount == 0)
   }
@@ -57,7 +59,7 @@ struct UserDataMirrorTests {
     mirror.toggleBookmark(.rfc(9110), title: "HTTP Semantics")
 
     #expect(mirror.bookmarkedDocuments == [.rfc(9110)])
-    #expect(reports.bookmarks == 1)
+    #expect(reports.bookmarks == 2)
   }
 
   /// A reading position is most saves, and reads none of the other sets: a bookmark and
@@ -78,7 +80,7 @@ struct UserDataMirrorTests {
     #expect(mirror.offlineMarks.isEmpty)
     #expect(mirror.recentlyReadCount == 1)
     #expect(reports.recentlyReadCount == 1)
-    #expect(reports.bookmarks == 0)
+    #expect(reports.bookmarks == 1)
     #expect(reports.collections.isEmpty)
     #expect(reports.offlineMarks == 1)
     #expect(mirror.recentlyRead() == [.rfc(9110)])
@@ -118,7 +120,7 @@ struct UserDataMirrorTests {
 
     mirror.refresh(.all)
 
-    #expect(reports.bookmarks == 1)
+    #expect(reports.bookmarks == 2)
     #expect(reports.offlineMarks == 1)
     #expect(reports.collections.isEmpty)
   }
@@ -134,7 +136,29 @@ struct UserDataMirrorTests {
     mirror.start()
 
     #expect(mirror.bookmarkedDocuments.isEmpty)
-    #expect(reports.bookmarks == 0)
+    #expect(reports.bookmarks == 1)
+  }
+
+  /// A failed first read of the bookmarks leaves them unknown, not empty: with
+  /// bookmarks kept offline, reconciling against none would un-keep every kept body.
+  /// The next save reads them again, and that read is reported whatever it found.
+  @Test func `a failed first bookmark read leaves the bookmarks wanted offline unknown`() throws {
+    let reports = Reports()
+    let mirror = try makeMirror(reporting: reports)
+    struct Unreadable: Error {}
+    mirror.readBookmarks = { _ in throw Unreadable() }
+    mirror.start()
+
+    #expect(!mirror.knowsBookmarksWantedOffline(keepsBookmarks: true))
+    #expect(mirror.knowsBookmarksWantedOffline(keepsBookmarks: false))
+
+    mirror.readBookmarks = { try BookmarkStore.bookmarkedDocuments(in: $0) }
+    try ReadingPositionStore.save(
+      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(9110),
+      in: mirror.container.mainContext)
+
+    #expect(mirror.knowsBookmarksWantedOffline(keepsBookmarks: true))
+    #expect(reports.bookmarks == 1)
   }
 
   @Test func `a failed change to a collection says so`() throws {
