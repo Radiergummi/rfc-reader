@@ -35,7 +35,8 @@ final class ReaderState {
       if folding.focused != oldValue.focused { revealedReference = nil }
     }
   }
-  /// What folding needs of the document on screen, for Next and Previous Section.
+  /// What folding needs of the document on screen, for Next and Previous Section in
+  /// Focus and Expand and Collapse Section in the outline.
   var foldingIndex: FoldingIndex?
   /// In Focus, the References tab's groups with only what the focused section cites
   /// (#699); nil out of Focus, and for a section that cites nothing.
@@ -56,9 +57,9 @@ final class ReaderState {
   }
 
   /// Expand Section or Collapse Section: opens the outline's section at the reader's
-  /// line, or closes it.
-  func toggleOutlineSection() {
-    guard let foldingIndex, let section = outlineSection,
+  /// line, or closes it, and leaves one already so as it is.
+  func setOutlineSection(expanded: Bool) {
+    guard let foldingIndex, let section = outlineSection, section.isExpanded != expanded,
       let toggled = folding.toggling(heading: section.heading, in: foldingIndex)
     else { return }
     folding = toggled

@@ -74,7 +74,7 @@ public enum AccessibleReading {
 
   /// `pieces` with each of `said` spoken before the character at its offset, where
   /// that character is in a piece read as text: the piece is cut there.
-  public static func saying(_ said: [Int: String], in pieces: [Piece]) -> [Piece] {
+  static func saying(_ said: [Int: String], in pieces: [Piece]) -> [Piece] {
     guard !said.isEmpty else { return pieces }
     return pieces.flatMap { piece -> [Piece] in
       guard case .text(let range) = piece else { return [piece] }

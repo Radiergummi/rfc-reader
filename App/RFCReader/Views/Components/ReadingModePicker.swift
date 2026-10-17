@@ -17,7 +17,7 @@ struct ReadingModePicker: View {
           guard mode != reader.folding.mode else { return }
           // Focus starts on the section being read, which the text view knows, the
           // abstract included.
-          // The folding index is there in Focus, the one mode that keeps anything.
+          // Focus is the one mode that keeps anything, and its folding index is there.
           reader.folding =
             reader.foldingIndex.map { reader.folding.switching(to: mode, in: $0) }
             ?? Folding(mode: mode)
@@ -40,10 +40,14 @@ struct OutlineSectionItems: View {
   var body: some View {
     if reader.folding.mode == .outline {
       let section = reader.outlineSection
-      Button("Expand Section", systemImage: "chevron.forward") { reader.toggleOutlineSection() }
-        .disabled(section == nil || section?.isExpanded == true)
-      Button("Collapse Section", systemImage: "chevron.down") { reader.toggleOutlineSection() }
-        .disabled(section?.isExpanded != true)
+      Button("Expand Section", systemImage: "chevron.forward") {
+        reader.setOutlineSection(expanded: true)
+      }
+      .disabled(section == nil || section?.isExpanded == true)
+      Button("Collapse Section", systemImage: "chevron.down") {
+        reader.setOutlineSection(expanded: false)
+      }
+      .disabled(section?.isExpanded != true)
     }
   }
 }

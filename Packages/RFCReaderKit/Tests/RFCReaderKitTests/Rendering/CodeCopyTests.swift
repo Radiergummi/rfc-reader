@@ -72,7 +72,8 @@ struct CodeCopyTests {
     }
 
     /// The block's menu's Copy Code copies what its button does, found from anywhere
-    /// in the block; a block with no button offers none (#760).
+    /// in the block, or from a selection that begins before it; a block with no
+    /// button offers none (#760).
     @Test func `copy code in the menu copies what the button does`() throws {
       let text = DocumentTextBuilder.build(
         Fixtures.document(
@@ -80,8 +81,14 @@ struct CodeCopyTests {
           .preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
         style: ReadingStyle(measure: 4000)
       ).text
-      #expect(text.code(ofBlockAt: try Fixtures.offset(of: "value", in: text)) == Self.copied)
+      let value = try Fixtures.offset(of: "value", in: text)
+      #expect(text.code(ofBlockAt: value) == Self.copied)
       #expect(text.code(ofBlockAt: try Fixtures.offset(of: "+--+", in: text)) == nil)
+
+      let box = try #require(
+        text.attribute(.rfcVerbatim, at: value, effectiveRange: nil) as? VerbatimBox)
+      let selection = NSRange(location: 0, length: value + 1)
+      #expect(text.code(ofBlock: box, touching: selection) == Self.copied)
     }
 
     /// VoiceOver names the button rather than passing over an unnamed attachment

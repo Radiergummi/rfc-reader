@@ -169,12 +169,11 @@ extension RFCTextViewCoordinator {
   /// out once per folding: VoiceOver asks on every line it reads.
   func spokenStates() -> [Int: String] {
     guard let foldingIndex, let built else { return [:] }
-    let text = ObjectIdentifier(built.text)
-    if let kept = spokenStatesKept, kept.folding == folding, kept.text == text {
+    if let kept = spokenStatesKept, kept.folding == folding, kept.text === built.text {
       return kept.said
     }
     let said = folding.spokenStates(in: foldingIndex)
-    spokenStatesKept = KeptSpokenStates(folding: folding, text: text, said: said)
+    spokenStatesKept = KeptSpokenStates(folding: folding, text: built.text, said: said)
     return said
   }
 

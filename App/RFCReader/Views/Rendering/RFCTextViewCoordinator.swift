@@ -202,8 +202,9 @@ final class RFCTextViewCoordinator: NSObject {
 
   struct KeptSpokenStates {
     let folding: Folding
-    /// The build's text, by identity.
-    let text: ObjectIdentifier
+    /// The build's text, held and compared by reference: a new build can be
+    /// allocated where a freed one was, and an identifier would take it for that one.
+    let text: NSAttributedString
     let said: [Int: String]
   }
   /// A folding this coordinator changed itself and asked the scene for, which the

@@ -81,12 +81,12 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
-    /// The outline's section at the reader's line and what toggles it, from the
+    /// The outline's section the cursor is in and what toggles it, from the
     /// coordinator: Expand Section or Collapse Section as an action of the text (#760).
     var outlineSection: () -> (section: Folding.OutlineSection, toggle: () -> Void)? = { nil }
 
-    /// Expand Section or Collapse Section, for the outline's section at the reader's
-    /// line, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
+    /// Expand Section or Collapse Section, for the outline's section the cursor is
+    /// in, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
     /// action of the text (#760).
     override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
       get {
@@ -237,7 +237,7 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
-    /// The outline's section at the reader's line and what toggles it, from the
+    /// The outline's section the cursor is in and what toggles it, from the
     /// coordinator: Expand Section or Collapse Section as an action of the text (#760).
     var outlineSection: () -> (section: Folding.OutlineSection, toggle: () -> Void)? = { nil }
     /// What VoiceOver says after each disclosed heading, by offset, from the
@@ -533,16 +533,6 @@ import RFCReaderKit
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
-        // A code block's button as an item too, beside Copy Figure, so Voice Control
-        // can name it (#760).
-        if let code = blockOffset(of: box, near: near, in: text).flatMap(text.code(ofBlockAt:)) {
-          let copy = NSMenuItem(
-            title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
-            keyEquivalent: "")
-          copy.target = self
-          copy.representedObject = code
-          result.insertItem(copy, at: 1)
-        }
         if let shown = box.presentation, choosePresentation() != nil {
           let toggle = NSMenuItem(
             title: FigureMenu.title(offeredFrom: shown),
@@ -551,24 +541,18 @@ import RFCReaderKit
           toggle.representedObject = (box.presentationKey, FigureMenu.offered(from: shown))
           result.insertItem(toggle, at: 1)
         }
+        // A code block's button as an item too, beside Copy Figure, so Voice Control
+        // can name it (#760).
+        if let code = text.code(ofBlock: box, touching: near) {
+          let copy = NSMenuItem(
+            title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
+            keyEquivalent: "")
+          copy.target = self
+          copy.representedObject = code
+          result.insertItem(copy, at: 1)
+        }
       }
       return result
-    }
-
-    /// Where `box` is, near the click or in the selection that found it.
-    private func blockOffset(of box: VerbatimBox, near: NSRange, in text: NSAttributedString)
-      -> Int?
-    {
-      var found: Int?
-      let searched = NSRange(location: near.location, length: max(near.length, 1))
-      text.enumerateAttribute(
-        .rfcVerbatim, in: NSIntersectionRange(searched, NSRange(location: 0, length: text.length))
-      ) { value, piece, stop in
-        guard value as? VerbatimBox === box else { return }
-        found = piece.location
-        stop.pointee = true
-      }
-      return found
     }
 
     @objc private func copyCodeItem(_ sender: NSMenuItem) {
@@ -653,8 +637,8 @@ import RFCReaderKit
 
     // MARK: - What VoiceOver reads (#12)
 
-    /// Expand Section or Collapse Section, for the outline's section at the reader's
-    /// line, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
+    /// Expand Section or Collapse Section, for the outline's section the cursor is
+    /// in, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
     /// action of the text (#760).
     override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
       var actions = super.accessibilityCustomActions() ?? []
