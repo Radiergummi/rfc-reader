@@ -14,6 +14,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
@@ -668,7 +669,8 @@ struct DocumentView: View {
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
-      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
+      // The bars slide: with Reduce Motion they go and come without it (#760).
+      withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { barsHidden = hidden }
     #endif
   }
 
