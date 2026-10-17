@@ -43,8 +43,8 @@ public actor DocumentStore {
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
   /// parse, which the "Parse XML" and "Parse text" benchmarks of `make benchmark`
-  /// measure, the text far the slower. Bounded: it used to keep every document opened
-  /// for as long as the app ran.
+  /// measure. Bounded: it used to keep every document opened for as long as the app
+  /// ran.
   private var parsed = RecentValues<DocumentID, Parse>(capacity: 8)
 
   /// A document as parsed, with the index entry its parse was given: nil for one

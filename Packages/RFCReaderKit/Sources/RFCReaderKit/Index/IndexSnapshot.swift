@@ -5,9 +5,9 @@ import RFCKit
 /// instead of parsing 14 MB of XML.
 ///
 /// JSON, because it was measured fastest of what Foundation offers, ahead of a binary
-/// property list and well ahead of the XML parse it replaces (the "Index: decode
-/// snapshot" and "Index: parse" benchmarks of `make benchmark`). The XML stays the
-/// source of truth:
+/// property list (#405 has the comparison). The "Index: decode snapshot" and "Index:
+/// parse" benchmarks of `make benchmark` measure it against the XML parse it
+/// replaces. The XML stays the source of truth:
 /// a snapshot is only ever made from a parse of it, and one that cannot be trusted
 /// is parsed around rather than repaired.
 public enum IndexSnapshot {

@@ -3,8 +3,8 @@ import Foundation
 /// When the list follows what is typed into search (#124).
 ///
 /// Every change of result set costs SwiftUI's `List` a diff on the main thread,
-/// however many rows it is handed, long enough to drop frames in a Release trace of
-/// typing (`make trace`), so a list that followed every
+/// however many rows it is handed, long enough to drop frames, as Instruments' SwiftUI
+/// template showed in Release (#446), so a list that followed every
 /// keystroke froze the window once a letter. The list follows the query applied
 /// instead, which catches up with the field after a pause in typing: a word typed at
 /// speed changes the list once. Clearing the search applies at once, because there

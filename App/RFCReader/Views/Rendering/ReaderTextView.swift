@@ -227,7 +227,8 @@ import RFCReaderKit
 
     /// Look Up. A gesture on a reference previews it, as a force click does; from the
     /// menu or the keyboard, and anywhere but on a reference, it is AppKit's Look Up
-    /// of the selection, which `quickLookReference(with:)` hands on. A force click
+    /// of the selection, which `quickLookReference` hands on (the coordinator's
+    /// `quickLookReference(with:)` answers it). A force click
     /// never arrives here; see `trackReferenceClick(_:link:at:)`.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }

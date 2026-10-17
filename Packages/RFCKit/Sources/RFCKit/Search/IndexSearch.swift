@@ -426,9 +426,10 @@ public struct IndexSearch: Sendable {
 /// `String.range(of:)` was the whole cost of search. It is a Foundation call with
 /// per-call setup and Unicode-correct matching, and the scoring loop makes roughly
 /// five of them per entry — the title, each keyword, each author, and the abstract —
-/// across every entry of the index. Measured against the real index in release (the
-/// "Search" benchmarks of `make benchmark`), a query matching *nothing* cost nearly
-/// what a one-word query did: the work was the scanning, not the hits.
+/// across every entry of the index. Measured against the real index in release, when
+/// the byte scan replaced it (51358534), a query matching *nothing* cost nearly what a
+/// one-word query did: the work was the scanning, not the hits. The "Search"
+/// benchmarks of `make benchmark` measure the scan now.
 ///
 /// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
 /// as U+00E9. Both sides are folded on the way in (`SearchText.folded`), which

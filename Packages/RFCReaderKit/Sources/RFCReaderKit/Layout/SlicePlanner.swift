@@ -2,8 +2,8 @@ import Foundation
 
 /// Which slice of the document background completion lays out next. Slices run
 /// from the document's start, because TextKit's positions are exact only once
-/// everything above them is laid out, and are small enough to fit in a frame, as a
-/// trace of the "Lay out document" signpost shows between its frames.
+/// everything above them is laid out, and are small enough to fit in a frame, as the
+/// probe of #583 measured; no signpost times a slice of its own.
 public struct SlicePlanner: Sendable, Equatable {
   public static let sliceLength = 6_000
 

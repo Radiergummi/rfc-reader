@@ -81,20 +81,21 @@ public struct LoadState {
   /// How long a build waits before it starts.
   ///
   /// A rebuild costs the whole attributed string plus a full relayout, the "Build
-  /// document" and "Settle" signposts, so a column still being dragged for a document
-  /// already on screen waits to settle, and the next change cancels it: the window's
-  /// edge being dragged is a new column on every frame. Why the wait is as long as it
-  /// is: the reader layout decision, "A live resize waits before it builds".
+  /// document" and "Lay out document" signposts, so a column still being dragged for
+  /// a document already on screen waits to settle, and the next change cancels it:
+  /// the window's edge being dragged is a new column on every frame. Why the wait is
+  /// as long as it is: the reader layout decision, "A live resize waits before it
+  /// builds".
   ///
   /// Nothing else waits. The first build has nothing on screen to disturb, and the
   /// column is already known, so it is built once and built right. A column that
   /// changed in one step — a rotation — has nothing to settle either: waiting for
   /// it left artwork at the old column's width for a second after the text had
-  /// reflowed. A restyle — the text size, links underlined — comes a step at a
-  /// time: View ▸ Bigger and Smaller (#153) waited out the whole delay before
-  /// starting its build, so each step took most of a second to show. The Settings slider builds on each tick now too, off the
-  /// main actor, and a tick that comes before the build under way is done replaces
-  /// it.
+  /// reflowed. A restyle — the text size, links underlined — comes a step at a time:
+  /// View ▸ Bigger and Smaller (#153) waited out the whole delay before starting its
+  /// build, so each step took most of a second to show. The Settings slider builds on
+  /// each tick now too, off the main actor, and a tick that comes before the build
+  /// under way is done replaces it.
   public func buildDelay(for change: ColumnChange) -> Duration {
     built != nil && change == .live ? .milliseconds(650) : .zero
   }
