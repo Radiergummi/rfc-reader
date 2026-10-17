@@ -195,6 +195,10 @@ struct DocumentMenuEffectsTests {
         == [[.openInNewTab, .openInNewWindow], [.copyLink, .cite]])
     #expect(
       DocumentMenus.referenceActions(opensTabs: false, opensWindows: false) == [[.copyLink, .cite]])
+    // Nothing to cite from without the index's entry.
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false, describes: false)
+        == [[.copyLink]])
   }
 
   @Test func `a collection's row can be removed from it, last`() {

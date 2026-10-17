@@ -459,6 +459,13 @@
       window.makeFirstResponder(text)
     }
 
+    /// Edit ▸ Jump to Selection (#761), handed to the text with the selection, as Copy
+    /// as Quote is and for its reason: with the find bar's field focused, the
+    /// responder chain would center the field's own selection.
+    func jumpToSelection() {
+      FirstResponderSearch.searchableText(in: quotedReaderView)?.centerSelectionInVisibleArea(nil)
+    }
+
     /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
     /// responder chain, which reaches no text view with the sidebar, the contents
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of

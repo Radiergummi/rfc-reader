@@ -50,11 +50,11 @@
         ReaderPreferences.stepFontSizeUp()
         return true
       }
-      // ⌘← and ⌘→ go back and forward where no text has the keys (#761); see
+      // ⌘← and ⌘→ go back and forward where no field is being edited (#761); see
       // `HistoryArrowShortcut`.
       if let step = HistoryArrowShortcut.step(
         characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags,
-        inText: firstResponder is NSText),
+        inText: (firstResponder as? NSText)?.isEditable == true),
         let controller = windowController as? ReaderWindowController
       {
         switch step {

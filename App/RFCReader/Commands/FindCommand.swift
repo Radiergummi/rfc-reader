@@ -29,8 +29,7 @@
     /// Jump to Selection (#761): not a find-bar action but the responder's own, as
     /// AppKit's standard Edit ▸ Find menu sends it.
     static func jumpToSelection() {
-      ActiveReaderWindow.shared.controller?.focusSearchableText()
-      NSApp.sendAction(#selector(NSResponder.centerSelectionInVisibleArea(_:)), to: nil, from: nil)
+      ActiveReaderWindow.shared.controller?.jumpToSelection()
     }
   }
 #endif

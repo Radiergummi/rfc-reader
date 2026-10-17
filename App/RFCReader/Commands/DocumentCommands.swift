@@ -38,6 +38,14 @@ struct DocumentCommands: Commands {
     private var isBookmarked: Bool { active.controller?.isBookmarked == true }
     private func toggleBookmark() { active.controller?.toggleBookmark() }
 
+    /// Whether Use Selection for Find and Jump to Selection have a selection to act
+    /// on: the reader's, the one beside a compared document's, or the original
+    /// text's, which reports none and is let through.
+    private var hasFindableSelection: Bool {
+      reader?.showOriginal == true || reader?.hasSelection == true
+        || reader?.sideBySide?.reader.hasSelection == true
+    }
+
     /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
     private func paneTitle(_ pane: InspectorPane) -> String {
       InspectorPane.menuTitle(
@@ -136,7 +144,7 @@ struct DocumentCommands: Commands {
       // in full screen they were nowhere else. One menu, as the toolbar keeps them
       // together, rather than spread over Edit, View and a Go menu.
       CommandMenu("Document") {
-        if let reader {
+        Group {
           Menu("Cite") {
             // ⌘⇧C, the citation people copy most, in the menu's first style.
             MenuSections(
@@ -147,18 +155,18 @@ struct DocumentCommands: Commands {
               ],
               perform: perform)
           }
-          .disabled(!showsDocument)
           Divider()
+          // Disabled rather than gone with no reader window, as the other menus'
+          // items are: an empty menu in the bar says nothing.
           MenuSections(
             sections: DocumentMenus.more(
-              showsOriginal: reader.showOriginal,
+              showsOriginal: reader?.showOriginal == true,
               errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
                 .errataURL,
-              precedingDraft: reader.precedingDraft),
-            perform: perform
-          )
-          .disabled(!showsDocument)
+              precedingDraft: reader?.precedingDraft),
+            perform: perform)
         }
+        .disabled(!showsDocument)
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.
@@ -254,15 +262,23 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("i", modifiers: .command)
             .disabled(reader?.canDescribe != true)
         #endif
-        // ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not the
-        // arrows: a menu item takes its key before a text field does, and ⌘← and ⌘→
-        // are a field's line start and end. The Mac's reader window answers them
-        // where no text has the keys (`HistoryArrowShortcut`).
+        // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
+        // the arrows: AppKit gives a menu item its key before a text field, and ⌘←
+        // and ⌘→ are a field's line start and end. The reader window answers them
+        // where no field is being edited (`HistoryArrowShortcut`). The iPad keeps
+        // the arrows, which nothing else there answers.
+        #if os(macOS)
+          let back = KeyboardShortcut("[", modifiers: .command)
+          let forward = KeyboardShortcut("]", modifiers: .command)
+        #else
+          let back = KeyboardShortcut(.leftArrow, modifiers: .command)
+          let forward = KeyboardShortcut(.rightArrow, modifiers: .command)
+        #endif
         Button("Back") { navigation?.goBack() }
-          .keyboardShortcut("[", modifiers: .command)
+          .keyboardShortcut(back)
           .disabled(navigation?.canGoBack != true)
         Button("Forward") { navigation?.goForward() }
-          .keyboardShortcut("]", modifiers: .command)
+          .keyboardShortcut(forward)
           .disabled(navigation?.canGoForward != true)
       }
     }
@@ -291,7 +307,7 @@ struct DocumentCommands: Commands {
             Button("Jump to Selection") { FindCommand.jumpToSelection() }
               .keyboardShortcut("j", modifiers: .command)
           }
-          .disabled(reader?.hasSelection != true)
+          .disabled(!hasFindableSelection)
         }
         .disabled(!showsDocument)
         // ⌥⌘F, the chord Mail and Notes give their search field. Enabled with any

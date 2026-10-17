@@ -519,7 +519,8 @@ struct ReferenceMenu {
   @ViewBuilder
   func items(for id: DocumentID) -> some View {
     let sections = DocumentMenus.referenceActions(
-      opensTabs: openInNewTab != nil, opensWindows: openInNewWindow != nil)
+      opensTabs: openInNewTab != nil, opensWindows: openInNewWindow != nil,
+      describes: library.metadata(id) != nil)
     ForEach(Array(sections.enumerated()), id: \.offset) { index, actions in
       if index > 0 { Divider() }
       ForEach(actions, id: \.self) { action in

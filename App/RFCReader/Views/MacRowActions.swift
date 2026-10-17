@@ -54,11 +54,12 @@ import SwiftUI
         }
         .labelStyle(.titleAndIcon)
       case .addToCollection:
-        Menu("Add to Collection") {
+        Menu("Add to Collection", systemImage: "folder.badge.plus") {
           AddToCollectionItems(
             document: row.id, library: library, navigation: navigation,
             undoManager: undoManager)
         }
+        .labelStyle(.titleAndIcon)
       case .readingPath:
         Button {
           navigation.readingPath = ReadingPathRequest(root: row.id)
@@ -72,7 +73,9 @@ import SwiftUI
       case .share:
         ShareLink(
           item: RFCEditorEndpoints.infoPage(row.id),
-          subject: Text(verbatim: "\(row.id.displayName): \(row.title)"))
+          subject: Text(verbatim: "\(row.id.displayName): \(row.title)")
+        )
+        .labelStyle(.titleAndIcon)
       case .removeFromCollection:
         Button("Remove from Collection") { remove(row.id) }
       }

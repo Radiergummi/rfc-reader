@@ -140,12 +140,16 @@ public enum DocumentMenus {
     case cite
   }
 
-  /// A reference's menu, where the device opens tabs or windows as given.
-  public static func referenceActions(opensTabs: Bool, opensWindows: Bool) -> [[ReferenceAction]] {
+  /// A reference's menu, where the device opens tabs or windows as given. Cite only
+  /// where the index `describes` the document, which a citation is made from: not a
+  /// BCP, STD or FYI, nor anything before the index has loaded.
+  public static func referenceActions(
+    opensTabs: Bool, opensWindows: Bool, describes: Bool = true
+  ) -> [[ReferenceAction]] {
     var opening: [ReferenceAction] = []
     if opensTabs { opening.append(.openInNewTab) }
     if opensWindows { opening.append(.openInNewWindow) }
-    return [opening, [.copyLink, .cite]].filter { !$0.isEmpty }
+    return [opening, describes ? [.copyLink, .cite] : [.copyLink]].filter { !$0.isEmpty }
   }
 
   /// The row menu of a row that `isRFC`, or is a BCP, STD or FYI read as itself,
