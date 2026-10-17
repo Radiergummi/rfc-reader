@@ -254,9 +254,9 @@ extension DocumentTextBuilder {
   }
 
   /// A heading's errata chip (#387), after its title and a space: drawn as a
-  /// reference's chip is, in the backlink caption's font, saying how many errata the section has and whether they are
-  /// held, and going nowhere itself: its link names the section, and the reader lists
-  /// the section's errata. The space and the chip are `.rfcReaderOnly`, so a copied
+  /// reference's chip is, in the backlink caption's font, saying how many errata the
+  /// section has and whether they are held, and going nowhere itself: its link names
+  /// the section, and the reader lists the section's errata. The space and the chip are `.rfcReaderOnly`, so a copied
   /// heading is its words alone.
   func errataChip(
     _ anchor: String, items: [ErrataSummary.Item], base: [NSAttributedString.Key: Any]
