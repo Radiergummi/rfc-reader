@@ -433,6 +433,17 @@ struct TextIndexerTests {
     #expect(await indexer.usage().retained == 1)
   }
 
+  /// What the confirmation says Index All RFCs downloads.
+  @Test func `the RFCs not indexed yet are counted`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: sandbox.store())
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id]) { try fetch($0) }
+
+    #expect(await indexer.unindexed([id, .rfc(1), .rfc(2)]) == 2)
+  }
+
   @Test func `only an RFC with a text or an XML can be indexed`() {
     let date = PublicationDate(year: 1990)
     let rfcs = [

@@ -109,6 +109,12 @@ struct RFCListView: View {
       SectionResults.searched(
         found.searched, of: found.narrowedTo ?? library.indexableRFCs.count)
     }
+    // While the index holds fewer than the search could look in, the one way to have
+    // it look in the rest.
+    let offersIndexAll =
+      textFound.map { found in
+        found.searched < (found.narrowedTo ?? library.indexableRFCs.count)
+      } ?? false
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
@@ -214,9 +220,7 @@ struct RFCListView: View {
         } footer: {
           VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: searched)
-            // While the index holds fewer than it could, the one way to have it look
-            // in the rest.
-            if textFound.searched < (textFound.narrowedTo ?? library.indexableRFCs.count) {
+            if offersIndexAll {
               IndexAllRFCsControl(library: library)
             }
           }
@@ -272,6 +276,10 @@ struct RFCListView: View {
               Text(verbatim: searched)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.bottom, offersIndexAll ? 0 : nil)
+            }
+            if offersIndexAll {
+              IndexAllRFCsControl(library: library)
                 .padding(.bottom)
             }
           }

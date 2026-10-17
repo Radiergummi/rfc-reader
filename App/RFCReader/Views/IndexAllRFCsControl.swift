@@ -9,6 +9,8 @@ struct IndexAllRFCsControl: View {
   let library: LibraryModel
 
   @State private var confirms = false
+  /// How many RFCs the run would download, counted when it is asked for.
+  @State private var remaining: Int?
 
   var body: some View {
     let run = library.indexAllRun
@@ -26,17 +28,24 @@ struct IndexAllRFCsControl: View {
       }
     } else {
       VStack(alignment: .leading, spacing: 4) {
-        Button("Index All RFCs…") { confirms = true }
-          .disabled(!library.hasTextIndex || library.index == nil || run.isRemoving)
-          .confirmationDialog(
-            "Index all RFCs?", isPresented: $confirms, titleVisibility: .visible
-          ) {
-            Button("Index All RFCs") { library.indexAllRFCs() }
-          } message: {
+        Button("Index All RFCs…") {
+          Task {
+            remaining = await library.unindexedRFCCount()
+            confirms = true
+          }
+        }
+        .disabled(!library.hasTextIndex || library.index == nil || run.isRemoving)
+        .confirmationDialog(
+          "Index all RFCs?", isPresented: $confirms, titleVisibility: .visible
+        ) {
+          Button("Index All RFCs") { library.indexAllRFCs() }
+        } message: {
+          if let remaining {
             Text(
-              "Every RFC not yet indexed is downloaded, about 650 MB, when the network is not metered. Only its text is kept, in an index of about 700 MB. You can stop at any time and go on later."
+              "The \(remaining) RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later."
             )
           }
+        }
         if let failed = run.progress?.failed, failed > 0 {
           Text("\(failed) RFCs could not be indexed. Index All RFCs tries them again.")
             .font(.caption)

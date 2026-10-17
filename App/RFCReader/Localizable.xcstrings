@@ -1091,16 +1091,6 @@
         }
       }
     },
-    "Every RFC not yet indexed is downloaded, about 650 MB, when the network is not metered. Only its text is kept, in an index of about 700 MB. You can stop at any time and go on later." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jeder noch nicht indizierte RFC wird geladen, etwa 650 MB, sobald das Netzwerk nicht getaktet ist. Nur sein Text wird behalten, in einem Index von etwa 700 MB. Du kannst jederzeit anhalten und später weitermachen."
-          }
-        }
-      }
-    },
     "Expanded" : {
       "localizations" : {
         "de" : {
@@ -2797,6 +2787,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße"
+          }
+        }
+      }
+    },
+    "The %lld RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Der %lld noch nicht indizierte RFC wird geladen, sobald das Netzwerk nicht getaktet ist, und nur sein Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Die %lld noch nicht indizierten RFCs werden geladen, sobald das Netzwerk nicht getaktet ist, und nur ihr Text wird behalten. Du kannst jederzeit anhalten und später weitermachen."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %lld RFC not yet indexed is downloaded when the network is not metered, and only its text is kept. You can stop at any time and go on later."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %lld RFCs not yet indexed are downloaded when the network is not metered, and only their text is kept. You can stop at any time and go on later."
+                }
+              }
+            }
           }
         }
       }

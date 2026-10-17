@@ -273,6 +273,12 @@ public actor TextIndexer {
     await reconcile(changed: changed)
   }
 
+  /// How many of `ids` are not indexed yet: what Index All RFCs would download.
+  public func unindexed(_ ids: [DocumentID]) -> Int {
+    let indexed = indexedDocuments() ?? [:]
+    return ids.count { indexed[$0] == nil }
+  }
+
   /// What the index holds, for Settings.
   public struct Usage: Sendable, Equatable {
     /// How many documents are indexed, and how much of the disk the index takes,

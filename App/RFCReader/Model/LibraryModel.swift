@@ -1134,6 +1134,12 @@ final class LibraryModel {
       }, changed: changed)
   }
 
+  /// How many of `indexableRFCs` Index All RFCs would download; nil while the
+  /// full-text index has not opened.
+  func unindexedRFCCount() async -> Int? {
+    await textIndexer?.unindexed(indexableRFCs.map(\.id))
+  }
+
   /// What the full-text index holds, and how much of the disk it takes; nil while it
   /// has not opened.
   func textIndexUsage() async -> TextIndexer.Usage? {

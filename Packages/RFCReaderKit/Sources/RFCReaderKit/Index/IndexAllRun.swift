@@ -76,3 +76,11 @@ public final class IndexAllRun {
     self.progress = progress
   }
 }
+
+extension RFCMetadata {
+  /// Whether the index lists only a PDF or a PostScript of it, which have no text to
+  /// index. One whose formats are not listed may have a text.
+  var hasOnlyPrintFormats: Bool {
+    !formats.isEmpty && formats.allSatisfy { $0 == .pdf || $0 == .postScript }
+  }
+}
