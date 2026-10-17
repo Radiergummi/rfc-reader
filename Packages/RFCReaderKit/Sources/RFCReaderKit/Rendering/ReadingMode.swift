@@ -66,8 +66,10 @@ public struct FoldingIndex: Sendable {
   let asides: [Aside]
   let length: Int
 
-  public init(_ built: BuiltDocument) {
-    let string = built.text.string as NSString
+  /// The index of `text`, whose anchors are `anchors`. Made once per build, by
+  /// `BuiltDocument` (#723): read it as `built.foldingIndex`.
+  init(text: NSAttributedString, anchors: AnchorIndex) {
+    let string = text.string as NSString
     var paragraphs: [NSRange] = []
     string.enumerateSubstrings(
       in: NSRange(location: 0, length: string.length),
@@ -77,8 +79,8 @@ public struct FoldingIndex: Sendable {
     length = string.length
     // The abstract has a heading of its own but no section, so it is an entry of the
     // outline beside the sections: otherwise nothing could open it.
-    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
-    entries = (abstract + built.anchors.sections.entries)
+    let abstract = anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
+    entries = (abstract + anchors.sections.entries)
       .sorted { $0.offset < $1.offset }
       .map { entry in
         Entry(
@@ -88,12 +90,13 @@ public struct FoldingIndex: Sendable {
           depth: entry.depth ?? 1
         )
       }
-    asides = Self.asides(in: built.text)
+    asides = Self.asides(in: text, string: string)
   }
 
   /// The asides of `text`, each from the first to the last character carrying its
-  /// ordinal: an aside nested in one cuts it into runs.
-  private static func asides(in text: NSAttributedString) -> [Aside] {
+  /// ordinal: an aside nested in one cuts it into runs. `string` is `text`'s, bridged
+  /// once by the caller rather than copied again here.
+  private static func asides(in text: NSAttributedString, string: NSString) -> [Aside] {
     var extents: [Int: Range<Int>] = [:]
     text.enumerateAttribute(.rfcAside, in: NSRange(location: 0, length: text.length)) {
       value, run, _ in
@@ -104,7 +107,6 @@ public struct FoldingIndex: Sendable {
           min($0.lowerBound, range.lowerBound)..<max($0.upperBound, range.upperBound)
         } ?? range
     }
-    let string = text.string as NSString
     return extents.map { ordinal, extent in
       let caption = string.paragraphRange(for: NSRange(location: extent.lowerBound, length: 0))
       return Aside(

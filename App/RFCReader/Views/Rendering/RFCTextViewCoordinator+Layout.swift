@@ -29,12 +29,10 @@ extension RFCTextViewCoordinator {
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
     // Before the text, so the first layout skips what the reading mode folds.
-    let foldingIndex = FoldingIndex(built)
-    self.foldingIndex = foldingIndex
     self.folding = folding
     foldingEcho.forget()
     forgetBands()
-    foldingDelegate.fold(foldingIndex, by: folding, bands: RequirementBands())
+    foldingDelegate.fold(built.foldingIndex, by: folding, bands: RequirementBands())
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
