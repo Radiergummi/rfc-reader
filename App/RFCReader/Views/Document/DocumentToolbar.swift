@@ -114,6 +114,12 @@ import SwiftUI
         Menu("Cite", systemImage: "quote.opening") {
           MenuSections(sections: DocumentMenus.cite(), perform: perform)
         }
+        // Also the Bookmark button's long press (#349), which nothing on screen
+        // shows; here it can be found (#763).
+        Menu("Add to Collection", systemImage: "folder.badge.plus") {
+          AddToCollectionItems(
+            document: id, library: library, navigation: navigation, undoManager: undoManager)
+        }
         Divider()
         MenuSections(
           sections: DocumentMenus.more(
