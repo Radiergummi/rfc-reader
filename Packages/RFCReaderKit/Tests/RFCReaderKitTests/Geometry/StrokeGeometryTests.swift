@@ -88,6 +88,31 @@ struct StrokeGeometryTests {
       StrokeGeometry.line(of: NSRange(location: text.length + 40, length: 12), in: text) == nil)
   }
 
+  /// A fragment's line is the newlines between its block's start and it, read from
+  /// the line starts the block carries rather than counted in the text (#765), which
+  /// copied the whole document on each layout of each fragment.
+  @Test func `every offset of a drawn block is on the line its newlines say`() throws {
+    let document = Fixtures.document(
+      .preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable)))
+    let text = DocumentTextBuilder.build(document, style: ReadingStyle(measure: 600)).text
+    var start: Int?
+    text.enumerateAttribute(.rfcStrokes, in: NSRange(location: 0, length: text.length)) {
+      value, range, stop in
+      guard value != nil else { return }
+      start = range.location
+      stop.pointee = true
+    }
+    let block = try #require(start.flatMap { text.extent(ofBox: .rfcStrokes, at: $0) })
+    let string = text.string as NSString
+    var newlines = 0
+    for offset in block.location..<NSMaxRange(block) {
+      let found = StrokeGeometry.line(of: NSRange(location: offset, length: 1), in: text)
+      #expect(found?.line == newlines, "offset \(offset)")
+      if string.character(at: offset) == 10 { newlines += 1 }
+    }
+    #expect(newlines > 3)
+  }
+
   /// Built, laid out and measured as the reader does: in a block quote, so the
   /// block is indented, and at a column narrow enough that it is scaled down.
   @Test func `strokes land on the centers of the characters they hide`() throws {
