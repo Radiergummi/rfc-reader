@@ -43,7 +43,10 @@ enum ABNFPresentation {
   static func render(
     _ text: String, dialect: ABNF.Dialect = .rfc5234, grammar: DocumentGrammar
   ) -> Rendition? {
-    guard let rules = ABNF.parse(text, dialect: dialect) else { return nil }
+    // Parsed once, as the grammar was collected (#765); a block it did not collect,
+    // which a test can render alone, is parsed here.
+    let collected = grammar.parsed(text, dialect: dialect)
+    guard let rules = collected?.rules ?? ABNF.parse(text, dialect: dialect) else { return nil }
     var definitions: [LinkedText.Definition] = []
     var links: [LinkedText.Link] = []
     for rule in rules {
@@ -54,7 +57,9 @@ enum ABNFPresentation {
         if let target = grammar.target(of: rule.name) {
           links.append(LinkedText.Link(range: rule.nameRange, target: target))
         }
-      } else if grammar.definesHere(anchor, in: text, at: rule.nameRange.location) {
+      } else if let block = collected?.block,
+        grammar.definesHere(anchor, inBlock: block, at: rule.nameRange.location)
+      {
         definitions.append(LinkedText.Definition(range: rule.nameRange, anchor: anchor))
       }
       for use in rule.uses {
@@ -72,13 +77,42 @@ enum ABNFPresentation {
 public struct DocumentGrammar: Sendable, Equatable {
   /// Where a rule's name is first defined, and the rule's lines.
   private struct Definition: Sendable, Equatable {
-    var block: String
+    /// The block the rule is defined in, by its place among the grammar's blocks.
+    var block: Int
     var offset: Int
     var lines: String
   }
 
   /// For each anchor, its first definition.
   private var definitions: [String: Definition] = [:]
+
+  /// A block of the grammar, as it is rendered.
+  private struct BlockKey: Sendable, Hashable {
+    var text: String
+    var dialect: ABNF.Dialect
+  }
+
+  /// Each block's rules as they were parsed to collect the grammar, so rendering the
+  /// block does not parse it again (#765), with its place among the blocks.
+  private var parsedBlocks: [BlockKey: ParsedBlock] = [:]
+
+  /// A block's place among the grammar's blocks, and its rules.
+  struct ParsedBlock: Sendable {
+    let block: Int
+    let rules: [ABNF.Rule]
+  }
+
+  /// The rules of `text` as the grammar parsed them, and its place among the grammar's
+  /// blocks; nil for a block the grammar did not collect.
+  func parsed(_ text: String, dialect: ABNF.Dialect) -> ParsedBlock? {
+    parsedBlocks[BlockKey(text: text, dialect: dialect)]
+  }
+
+  /// Two grammars are equal when they define the same rules: the parsed blocks are
+  /// made from the same text.
+  public static func == (lhs: DocumentGrammar, rhs: DocumentGrammar) -> Bool {
+    lhs.definitions == rhs.definitions
+  }
 
   public init() {}
 
@@ -127,22 +161,27 @@ public struct DocumentGrammar: Sendable, Equatable {
 
   /// The grammar of `blocks`, each in the dialect it is written in.
   init(blocks: [(text: String, dialect: ABNF.Dialect)]) {
-    for (block, dialect) in blocks {
-      guard let rules = ABNF.parse(block, dialect: dialect) else { continue }
+    for (blockIndex, (block, dialect)) in blocks.enumerated() {
+      let key = BlockKey(text: block, dialect: dialect)
+      // A block repeated word for word is one block: its rules are its first copy's.
+      guard parsedBlocks[key] == nil, let rules = ABNF.parse(block, dialect: dialect) else {
+        continue
+      }
+      parsedBlocks[key] = ParsedBlock(block: blockIndex, rules: rules)
       let starts = rules.map(\.nameRange.location)
       for (index, rule) in rules.enumerated() where !rule.isIncremental {
         let anchor = ABNFPresentation.anchor(for: rule.name)
         guard definitions[anchor] == nil else { continue }
         let end = index + 1 < starts.count ? starts[index + 1] : (block as NSString).length
         definitions[anchor] = Definition(
-          block: block, offset: rule.nameRange.location,
+          block: blockIndex, offset: rule.nameRange.location,
           lines: Self.lines(of: block, from: rule.nameRange.location, to: end))
       }
     }
   }
 
-  /// Whether the anchor's definition is the one at `offset` in `block`.
-  func definesHere(_ anchor: String, in block: String, at offset: Int) -> Bool {
+  /// Whether the anchor's definition is the one at `offset` in the grammar's `block`.
+  func definesHere(_ anchor: String, inBlock block: Int, at offset: Int) -> Bool {
     guard let definition = definitions[anchor] else { return false }
     return definition.offset == offset && definition.block == block
   }
