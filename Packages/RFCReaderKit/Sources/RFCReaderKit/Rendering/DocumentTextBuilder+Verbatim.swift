@@ -394,7 +394,10 @@ extension DocumentTextBuilder {
   /// A measured line does not scale exactly with its font's size, a fallback font's
   /// least of all, so a scaled-down block with any line that is not ASCII is measured
   /// again at its scale and set smaller while it still overflows, a few times at
-  /// most. An ASCII line's width is its columns times the advance, exactly in scale.
+  /// most. Each time a little smaller than the ratio says, `fitMargin`: at the ratio
+  /// exactly, rounding left the line a fraction of a point over, and the next ratio
+  /// rounded to 1, so it never came back under (#765). An ASCII line's width is its
+  /// columns times the advance, exactly in scale.
   func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
     let widest = widestLine(of: text, scale: 1)
     guard widest > 0 else { return 1 }
@@ -404,8 +407,11 @@ extension DocumentTextBuilder {
     for _ in 0..<3 {
       let scaled = widestLine(of: text, scale: scale)
       guard scaled > available else { break }
-      scale *= available / scaled
+      scale *= available / scaled * Self.fitMargin
     }
     return scale
   }
+
+  /// What a correction of `monospaceScale` takes off beyond the ratio, a thousandth.
+  static let fitMargin: CGFloat = 0.999
 }
