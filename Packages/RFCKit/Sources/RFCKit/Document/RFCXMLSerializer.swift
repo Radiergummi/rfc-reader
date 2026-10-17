@@ -3,9 +3,11 @@ import Foundation
 /// Writes an `RFCDocument` back out as RFCXML v3.
 ///
 /// This exists for the corpus pipeline: legacy plain-text RFCs are parsed once, offline,
-/// and published as XML so the app has a single runtime path. The output uses the same
-/// conventions as the RFC Editor's prepped XML (`pn` part numbers, `anchor`s, `derivedContent`
-/// omitted), so `RFCXMLParser` reads it back into an equivalent model. Cross references to
+/// and published as XML, so that with a pack installed the app reads them through the XML
+/// parser. The output uses the same conventions as the RFC Editor's prepped XML (`pn` part
+/// numbers, `anchor`s), with `derivedContent` written only where it carries what the model
+/// cannot otherwise say, a section of an entry outside the series' tag, so `RFCXMLParser`
+/// reads it back into an equivalent model. Cross references to
 /// documents that have no entry in the References section become `<eref>`s pointing at
 /// rfc-editor.org, which the parser resolves back into document references.
 public struct RFCXMLSerializer: Sendable {
