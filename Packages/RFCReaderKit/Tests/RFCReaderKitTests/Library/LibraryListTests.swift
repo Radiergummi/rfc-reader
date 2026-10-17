@@ -236,6 +236,54 @@ struct LibraryListTests {
     #expect(qualifier.unknownTerms(in: seriesIndex).map(\.reason) == [.qualifier])
   }
 
+  // MARK: - Dynamic collections (#355)
+
+  /// What its query lists in the whole library, whatever members it once had.
+  @Test func `a dynamic collection lists what its query matches`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "", bookmarked: [.rfc(2026), Self.bcp14, .rfc(9110)],
+      members: [2119], definition: "is:bookmarked")
+
+    #expect(ids(list) == [.rfc(9110), Self.bcp14, .rfc(2026)])
+  }
+
+  /// A search typed into its tab narrows what its query matches, as both were one.
+  @Test func `a search in a dynamic collection narrows what its query matches`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "uppercase",
+      bookmarked: [Self.bcp14, .rfc(9110)], definition: "is:bookmarked")
+
+    #expect(ids(list) == [Self.bcp14])
+  }
+
+  @Test func `a dynamic collection naming something unknown lists nothing and says why`() {
+    let list = LibraryList(filter: .collection(UUID()), query: "", definition: "wg:gone")
+
+    #expect(ids(list).isEmpty)
+    #expect(list.unknownTerms(in: seriesIndex).map(\.reason) == [.workingGroup])
+  }
+
+  /// In the order of publication, as the whole library is, which View Options turns
+  /// round: it has no order of its own to keep.
+  @Test func `a dynamic collection is newest first, and oldest first reverses it`() {
+    let newest = LibraryList(filter: .collection(UUID()), query: "", definition: "s")
+    let oldest = LibraryList(
+      filter: .collection(UUID()), query: "",
+      options: ListOptions(order: .oldestFirst, collectionSort: .manual), definition: "s")
+
+    #expect(ids(newest) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
+    #expect(ids(oldest) == [.rfc(2026), .rfc(2119), .rfc(8174), .rfc(9110)])
+  }
+
+  /// Its rows are matched, not placed, so there is no order to drag them into.
+  @Test func `a dynamic collection's rows cannot be moved`() {
+    let manual = LibraryList(filter: .collection(UUID()), query: "", members: [2119])
+    let dynamic = LibraryList(filter: .collection(UUID()), query: "", definition: "s")
+
+    #expect(manual.allowsMoving)
+    #expect(!dynamic.allowsMoving)
+  }
+
   @Test func `a field of only spaces and newlines is unsearched`() {
     #expect(" \t\n".isUnsearchedQuery)
     #expect("".isUnsearchedQuery)
