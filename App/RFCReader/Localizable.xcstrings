@@ -1311,6 +1311,16 @@
         }
       }
     },
+    "Jump to Selection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Auswahl springen"
+          }
+        }
+      }
+    },
     "Just Published" : {
       "localizations" : {
         "de" : {
@@ -2738,6 +2748,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktualisiert durch"
+          }
+        }
+      }
+    },
+    "Use Selection for Find" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl für Suche verwenden"
           }
         }
       }

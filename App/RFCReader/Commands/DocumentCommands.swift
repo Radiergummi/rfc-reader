@@ -283,6 +283,15 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("g", modifiers: .command)
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
+          // As TextEdit's and Safari's Find menus have them (#761). Only over a
+          // selection: they act on it.
+          Group {
+            Button("Use Selection for Find") { FindCommand.setSearchString.send() }
+              .keyboardShortcut("e", modifiers: .command)
+            Button("Jump to Selection") { FindCommand.jumpToSelection() }
+              .keyboardShortcut("j", modifiers: .command)
+          }
+          .disabled(reader?.hasSelection != true)
         }
         .disabled(!showsDocument)
         // ⌥⌘F, the chord Mail and Notes give their search field. Enabled with any
