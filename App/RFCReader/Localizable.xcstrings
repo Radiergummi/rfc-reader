@@ -1631,16 +1631,6 @@
         }
       }
     },
-    "Nothing in the index matches “%@”." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nichts im Index passt zu „%@“."
-          }
-        }
-      }
-    },
     "Notifications" : {
       "localizations" : {
         "de" : {
@@ -2587,26 +2577,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße: %lld"
-          }
-        }
-      }
-    },
-    "The RFC index couldn't be loaded. A number still opens." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der RFC-Index konnte nicht geladen werden. Eine Nummer lässt sich trotzdem öffnen."
-          }
-        }
-      }
-    },
-    "The RFC index is still loading." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der RFC-Index wird noch geladen."
           }
         }
       }

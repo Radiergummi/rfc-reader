@@ -15,34 +15,26 @@
   /// hosting view in a panel of its own, outside every environment chain.
   struct QuickOpenPalette: View {
     let library: LibraryModel
-    let navigation: NavigationModel
     let dismiss: () -> Void
-
-    @State private var input = ""
-    @State private var results = QuickOpenResults()
+    @State private var controller: QuickOpenController
 
     static let width: CGFloat = 620
 
-    /// What a search depends on. The index is part of it so that a palette opened
-    /// before the index loaded searches again once it has.
-    private struct SearchKey: Equatable {
-      var query: String
-      var hasIndex: Bool
+    init(library: LibraryModel, navigation: NavigationModel, dismiss: @escaping () -> Void) {
+      self.library = library
+      self.dismiss = dismiss
+      _controller = State(
+        initialValue: QuickOpenController(
+          library: library, navigation: navigation, dismiss: dismiss))
     }
 
-    /// What is typed, less the spaces around it, which change nothing it finds.
-    private var query: String {
-      input.normalizedQuery
-    }
+    private var results: QuickOpenResults { controller.results }
 
-    /// Resolves on the keystroke itself, before any ↵ queued behind it can read the
-    /// selection: an `onChange` or the search's task would only run a turn later.
     private var text: Binding<String> {
       Binding {
-        input
-      } set: { text in
-        input = text
-        resolve(text.normalizedQuery)
+        controller.input
+      } set: {
+        controller.type($0)
       }
     }
 
@@ -52,7 +44,7 @@
         if !results.rows.isEmpty {
           Divider()
           rows
-        } else if let message {
+        } else if let message = controller.message {
           Divider()
           HStack {
             Text(message)
@@ -72,22 +64,8 @@
       // The check at launch alone goes stale in an app left open for weeks.
       .onAppear { library.refreshRegistriesIfDue() }
       // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { resolve(query) }
-      .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
-    }
-
-    /// Said in place of rows, once there is something to say: not while a search is
-    /// still running, so it does not flash on every keystroke.
-    private var message: String? {
-      let query = results.query
-      guard !query.isEmpty, !results.isSearching else { return nil }
-      // Not `library.index == nil`, which an offline first launch leaves so for good:
-      // the index has failed then, and saying it is loading promises what won't come.
-      return switch library.indexState {
-      case .idle, .loading: String(localized: "The RFC index is still loading.")
-      case .failed: String(localized: "The RFC index couldn't be loaded. A number still opens.")
-      case .ready: String(localized: "Nothing in the index matches “\(query)”.")
-      }
+      .onChange(of: library.index != nil) { controller.resolve() }
+      .task(id: controller.searchKey) { await controller.search() }
     }
 
     private var field: some View {
@@ -106,13 +84,13 @@
           // ⌘↵ opens a tab behind this one and ⇧↵ one in front, as a click does.
           .onKeyPress(.return) {
             guard !isComposing else { return .ignored }
-            openSelection()
+            controller.openSelection()
             return .handled
           }
           // The same, should the field editor take Return before the key press
           // reaches SwiftUI; a handled press never submits, so it cannot open twice.
-          .onSubmit(openSelection)
-          .onExitCommand(perform: dismiss)
+          .onSubmit(controller.openSelection)
+          .onExitCommand(perform: controller.close)
       }
       .padding(.horizontal, 18)
       .padding(.vertical, 14)
@@ -178,10 +156,10 @@
         }
       }
       .contentShape(.rect)
-      .onTapGesture { open(link) }
+      .onTapGesture { controller.open(link) }
       .accessibilityElement(children: .combine)
       .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-      .accessibilityAction { open(link) }
+      .accessibilityAction { controller.open(link) }
     }
 
     /// An input method's uncommitted text owns the arrows and Return: they pick and
@@ -192,41 +170,8 @@
 
     private func moveSelection(by offset: Int) -> KeyPress.Result {
       guard !isComposing else { return .ignored }
-      results.moveSelection(by: offset)
+      controller.moveSelection(by: offset)
       return .handled
-    }
-
-    /// What was typed, resolved exactly.
-    private func resolve(_ query: String) {
-      let exact = DocumentReference.link(from: query)
-      let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
-      results.show(
-        query: query, exact: exact, members: members,
-        registry: library.registryMatches(for: query),
-        isObsolete: { library.metadata($0)?.isObsolete ?? false })
-    }
-
-    private func search(_ query: String) async {
-      if let hits = await library.quickOpenHits(for: query) {
-        finish(with: hits, for: query)
-      }
-    }
-
-    private func finish(with hits: [DocumentID], for query: String) {
-      if let opening = results.show(hits: hits, for: query) {
-        open(opening.link, activation: opening.activation)
-      }
-    }
-
-    private func openSelection() {
-      if let opening = results.activate(.current) {
-        open(opening.link, activation: opening.activation)
-      }
-    }
-
-    private func open(_ link: RFCLink, activation: LinkActivation = .current) {
-      library.open(link, activation: activation, in: navigation)
-      dismiss()
     }
   }
 #endif
