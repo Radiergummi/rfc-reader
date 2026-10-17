@@ -49,7 +49,9 @@ public struct BuiltDocument: @unchecked Sendable {
   /// text view folds by it and the reader state steps Focus by it (#723).
   public let foldingIndex: FoldingIndex
 
-  public init(
+  /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
+  /// it makes the folding index too (#723).
+  init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
     sectionNumberHang: CGFloat = 0

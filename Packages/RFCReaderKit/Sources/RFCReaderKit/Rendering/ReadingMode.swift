@@ -90,12 +90,13 @@ public struct FoldingIndex: Sendable {
           depth: entry.depth ?? 1
         )
       }
-    asides = Self.asides(in: text)
+    asides = Self.asides(in: text, string: string)
   }
 
   /// The asides of `text`, each from the first to the last character carrying its
-  /// ordinal: an aside nested in one cuts it into runs.
-  private static func asides(in text: NSAttributedString) -> [Aside] {
+  /// ordinal: an aside nested in one cuts it into runs. `string` is `text`'s, bridged
+  /// once by the caller rather than copied again here.
+  private static func asides(in text: NSAttributedString, string: NSString) -> [Aside] {
     var extents: [Int: Range<Int>] = [:]
     text.enumerateAttribute(.rfcAside, in: NSRange(location: 0, length: text.length)) {
       value, run, _ in
@@ -106,7 +107,6 @@ public struct FoldingIndex: Sendable {
           min($0.lowerBound, range.lowerBound)..<max($0.upperBound, range.upperBound)
         } ?? range
     }
-    let string = text.string as NSString
     return extents.map { ordinal, extent in
       let caption = string.paragraphRange(for: NSRange(location: extent.lowerBound, length: 0))
       return Aside(
