@@ -231,6 +231,25 @@ struct BuilderTableTests {
     #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
   }
 
+  /// A caption follows its block, and nothing tied them: printed, a table could end
+  /// a page and its caption open the next alone (#765). The block's last paragraph
+  /// keeps with the caption, as a heading keeps with its text.
+  @Test func `a captioned block's last paragraph keeps with its caption`() throws {
+    let art = Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+")
+    let figure = Block.figure(Figure(title: "Boxes", number: 1, blocks: [.preformatted(art)]))
+    let cases: [(Block, String)] = [
+      (figure, "Figure 1: Boxes"), (.table(narrow), "Table 1: Methods"),
+    ]
+    for (block, captionText) in cases {
+      let built = DocumentTextBuilder.build(Fixtures.document(block), style: ReadingStyle())
+      let text = built.text.string as NSString
+      let caption = text.range(of: captionText)
+      try #require(caption.location != NSNotFound)
+      let last = text.paragraphRange(for: NSRange(location: caption.location - 1, length: 0))
+      #expect(built.keepsWithNext.contains(last.location), "\(captionText)")
+    }
+  }
+
   @Test func `the caption is text`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("Table 1: Methods"))

@@ -217,8 +217,16 @@ extension DocumentTextBuilder {
     return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
   }
 
+  /// A figure's or a table's caption, under its block. The block's last paragraph
+  /// keeps with it (`BuiltDocument.keepsWithNext`), so a printed page never ends on
+  /// the block and opens the next on its caption alone (#765).
   func appendCaption(_ caption: String?, indent: CGFloat) {
     guard let caption, !caption.isEmpty else { return }
+    if output.length > 0 {
+      let last = output.mutableString.paragraphRange(
+        for: NSRange(location: output.length - 1, length: 0))
+      keepsWithNext.insert(last.location)
+    }
     append(
       caption + "\n",
       captionAttributes(
