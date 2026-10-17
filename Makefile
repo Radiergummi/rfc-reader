@@ -147,10 +147,11 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 #   make benchmark-core BENCHMARK_ARGS='--filter "Index.*"'
 #
 # `benchmark` runs both packages with the same arguments, one after the other, so
-# that under `make -j` neither is measured while the other runs. Arguments only one
-# of them can take, such as a `--filter` or `--target`, a baseline saved in only one,
-# or a `baseline check` that fails the first and so skips the second, go to that
-# package alone: `make benchmark-core` or `make benchmark-layout`. A filtered
+# that under `make -j` neither is measured while the other runs, and runs the second
+# even when the first fails, so that a `baseline update` leaves neither stale; it
+# fails if either did. Arguments only one of them can take, such as a `--filter` or
+# `--target`, or a baseline saved in only one, go to that package alone:
+# `make benchmark-core` or `make benchmark-layout`. A filtered
 # `baseline update` through `benchmark` saves an empty baseline in the package the
 # filter matches nothing in, which a later `baseline compare` then fails on.
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
@@ -158,8 +159,7 @@ BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xm
 LAYOUT_BENCHMARK_INPUTS := rfc9000.xml rfc5661.txt
 BENCHMARK_ARGS ?=
 benchmark:
-	$(MAKE) benchmark-core
-	$(MAKE) benchmark-layout
+	$(MAKE) benchmark-core; core=$$?; $(MAKE) benchmark-layout && exit $$core
 
 benchmark-core: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \

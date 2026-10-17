@@ -8,6 +8,8 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("MemberImportVisibility"),
   .enableUpcomingFeature("InferIsolatedConformances"),
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  // A new warning fails the build, as in the packages it measures (#440).
+  .treatAllWarnings(as: .error),
 ]
 
 // Benchmarks of the reader's TextKit 2 layout. A package of their own, beside

@@ -10,9 +10,14 @@ import RFCReaderKit
 // reader is the viewport-layout decision's,
 // docs/decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md.
 //
-// Measured for time and peak memory only. These run without package-benchmark's
-// malloc interposer, which crashes any TextKit layout (#582), so there is no
-// allocation count; Tools/benchmarks keeps them for everything else.
+// Measured for time, and the jump for peak memory too. These run without
+// package-benchmark's malloc interposer, which crashes any TextKit layout (#582), so
+// there is no allocation count; Tools/benchmarks keeps them for everything else.
+// package-benchmark's peak memory is the most the process was resident over the whole
+// run, sampled every 5 ms, less what it was before the first measured sample: one
+// number for the run, not a sample's own. It says something only for the jump, which
+// lays out a whole document and runs with no warmup, so that the baseline is read
+// before any layout. A resize step or a slice ends between two of its samples.
 //
 // A sample is one call of a benchmark's closure, and each measures one step: what
 // the step needs first (a fresh layout, a pinned line, the slices before it) is made
@@ -28,7 +33,7 @@ import RFCReaderKit
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
-    metrics: [.wallClock, .peakMemoryResidentDelta],
+    metrics: [.wallClock],
     maxDuration: .seconds(10),
     maxIterations: 50
   )
@@ -38,13 +43,13 @@ let benchmarks: @Sendable () -> Void = {
   // A jump into RFC 5661 takes long enough that the default budget, which pays for
   // each sample's fresh layout too, leaves too few samples for the upper percentiles.
   var jump = Benchmark.defaultConfiguration
+  jump.metrics.append(.peakMemoryResidentDelta)
+  jump.warmupIterations = 0
   jump.maxDuration = .seconds(30)
 
   for (number, file) in [(9000, "rfc9000.xml"), (5661, "rfc5661.txt")] {
     // From a document nothing has laid out, as a jump from the contents panel
     // right after opening it.
-    // The layout is released after the measurement stops, so that the next sample's
-    // peak memory is its own layout's rather than under the one before it.
     Benchmark("Layout: jump to the last section, RFC \(number)", configuration: jump) {
       benchmark, input async in
       nonisolated(unsafe) let benchmark = benchmark
@@ -53,14 +58,14 @@ let benchmarks: @Sendable () -> Void = {
         benchmark.startMeasurement()
         blackHole(autoreleasepool { input.jumpToLastSection() })
         benchmark.stopMeasurement()
-        input.release()
       }
     } setup: {
       try LayoutInput(document: corpus.document(file))
     }
 
     // One step of a live resize: the column 8 pt narrower or wider, between the
-    // reader's and 320, with the line in the middle of the document kept on top.
+    // reader's and the Mac's narrowest, with the line in the middle of the document
+    // kept on top.
     Benchmark("Layout: resize step, RFC \(number)") { benchmark, input async in
       nonisolated(unsafe) let benchmark = benchmark
       await MainActor.run {
@@ -74,11 +79,13 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     // The next 6,000 characters of background completion, after the ones before
-    // them, as the reader lays them out one frame at a time.
+    // them, as the reader lays them out one frame at a time. The samples are spread
+    // over the whole document, since a slice is laid out from its start.
     Benchmark("Layout: one background slice, RFC \(number)") { benchmark, input async in
       nonisolated(unsafe) let benchmark = benchmark
+      let samples = benchmark.configuration.warmupIterations + benchmark.configuration.maxIterations
       await MainActor.run {
-        input.prepareSlicing()
+        input.prepareSlicing(samples: samples)
         benchmark.startMeasurement()
         autoreleasepool { input.layOutNextSlice() }
         benchmark.stopMeasurement()
@@ -96,7 +103,9 @@ let benchmarks: @Sendable () -> Void = {
 /// process of its own, so no two benchmarks share one.
 final class LayoutInput: @unchecked Sendable {
   private static let widest = ReaderLayout.idealMeasure
-  private static let narrowest: CGFloat = 320
+  /// The column of the Mac's narrowest pane, where a live resize happens.
+  private static let narrowest = ReaderLayout.column(
+    forWidth: ReaderLayout.minimumPaneWidth, measure: .recommended)
   private static let resizeStep: CGFloat = 8
 
   let built: BuiltDocument
@@ -106,6 +115,8 @@ final class LayoutInput: @unchecked Sendable {
   private var width = widest
   private var narrowing = true
   private var slices: SlicePlanner?
+  /// How many slices a sample lays out before the one it measures.
+  private var slicesSkipped = 0
 
   init(document: RFCDocument) {
     built = DocumentTextBuilder.build(document, style: ReadingStyle(measure: Self.widest))
@@ -119,13 +130,8 @@ final class LayoutInput: @unchecked Sendable {
   /// is released here, before the measurement, not in a sample.
   @MainActor
   func layOutAfresh() {
-    release()
-    current = Layout(built.text, width: Self.widest)
-  }
-
-  @MainActor
-  func release() {
     current = nil
+    current = Layout(built.text, width: Self.widest)
   }
 
   @MainActor
@@ -169,12 +175,22 @@ final class LayoutInput: @unchecked Sendable {
   }
 
   /// A fresh layout and planner the first time, and again once every slice is laid
-  /// out, so that a sample always lays out a slice nothing has laid out yet.
+  /// out, so that a sample always lays out a slice nothing has laid out yet; then the
+  /// slices this sample skips, so that `samples` of them cover the whole document.
   @MainActor
-  func prepareSlicing() {
-    guard slices == nil || slices?.isComplete == true else { return }
-    layOutAfresh()
-    slices = SlicePlanner(length: built.text.length)
+  func prepareSlicing(samples: Int) {
+    if slices == nil || slices?.isComplete == true {
+      layOutAfresh()
+      slices = SlicePlanner(length: built.text.length)
+      let count = (built.text.length + SlicePlanner.sliceLength - 1) / SlicePlanner.sliceLength
+      slicesSkipped = max(0, count / samples - 1)
+    }
+    for _ in 0..<slicesSkipped {
+      guard let planner = slices,
+        planner.length - planner.completedThrough > SlicePlanner.sliceLength
+      else { break }
+      layOutNextSlice()
+    }
   }
 
   @MainActor
