@@ -12,20 +12,20 @@
     /// the preview names the reference better. A link to the web keeps UIKit's own
     /// menu. Built rather than edited: UIKit's Copy and Share were found by private
     /// identifiers, and an iOS that renamed them would hand out the `rfc://` again.
+    /// Nil where the reader has nothing to offer, such as a heading's number with no
+    /// public URL: no menu at all rather than an empty one.
     func referenceMenu(
       _ defaultMenu: UIMenu, for url: URL, opens: Bool = true, from textView: UITextView,
       at range: NSRange
-    ) -> UIMenu {
+    ) -> UIMenu? {
       guard let documentID else { return defaultMenu }
       let items = LinkMenu.items(
         for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
-      // UIKit's own for a link to the web; none at all where the reader has nothing to
-      // offer, a heading's number with no public URL, rather than an empty menu.
       guard
         let actions = LinkMenu.actions(
           for: items, opensNewWindows: environment?.library.opensNewWindows == true, opens: opens)
       else { return defaultMenu }
-      guard !actions.isEmpty else { return UIMenu(title: "", children: []) }
+      guard !actions.isEmpty else { return nil }
       return UIMenu(
         title: "",
         children: actions.map { action($0, for: url, from: textView, at: range) })

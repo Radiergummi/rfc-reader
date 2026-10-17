@@ -33,6 +33,9 @@ public enum LinkMenu {
     /// for an anchor or a bibliography entry, which stay in this document, as a
     /// Command-click does.
     public var document: RFCLink?
+    /// Whether the reader follows the link at all: not an `rfc:` URL that names no
+    /// document, which a tap leaves to the system.
+    public var opens = true
 
     /// Whether the link names a document, which a tab of its own can show.
     public var opensInNewTab: Bool { document != nil }
@@ -54,14 +57,14 @@ public enum LinkMenu {
     } else {
       copyLink = .none
     }
-    guard case .document(let document) = destination else {
-      return Items(copyLink: copyLink, document: nil)
+    switch destination {
+    case .document(let document): return Items(copyLink: copyLink, document: document)
+    case .unhandled: return Items(copyLink: copyLink, document: nil, opens: false)
+    case .jump, .reference: return Items(copyLink: copyLink, document: nil)
     }
-    return Items(copyLink: copyLink, document: document)
   }
 
-  /// What iOS's menu for a reader's link holds, in order (#763). Nil for a link to
-  /// the web, whose URL is anyone's, and whose menu is UIKit's own.
+  /// What iOS's menu for a reader's link holds, in order (#763).
   public enum Action: Equatable {
     /// As a tap does.
     case open
@@ -73,12 +76,13 @@ public enum LinkMenu {
   /// The menu for `items`: Open, a window of its own where the device has windows to
   /// open and the link names a document, and the public URL to copy and share where
   /// there is one. `opens` is false for a link to where the reader already is, a
-  /// heading's own number (#433).
+  /// heading's own number (#433). Nil for a link to the web, whose URL is anyone's,
+  /// and whose menu is UIKit's own.
   public static func actions(
     for items: Items, opensNewWindows: Bool, opens: Bool = true
   ) -> [Action]? {
     guard items.copyLink != .system else { return nil }
-    var actions: [Action] = opens ? [.open] : []
+    var actions: [Action] = opens && items.opens ? [.open] : []
     if opensNewWindows, let document = items.document {
       actions.append(.openInNewWindow(document))
     }

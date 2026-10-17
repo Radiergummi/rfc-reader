@@ -8,12 +8,15 @@ struct OriginalTextView: View {
   let text: String?
   let failure: LoadFailure?
   let fontSize: Double
+  /// Whether this is the reader on screen, whose text Find opens over on iOS (#763),
+  /// rather than one the stack keeps below its top.
+  let isShown: Bool
   let tryAgain: () -> Void
 
   var body: some View {
     if let text {
       #if canImport(UIKit)
-        OriginalTextBody(text: text, fontSize: fontSize, reader: reader)
+        OriginalTextBody(text: text, fontSize: fontSize, reader: isShown ? reader : nil)
       #else
         OriginalTextBody(text: text, fontSize: fontSize)
       #endif

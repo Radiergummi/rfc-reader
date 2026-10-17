@@ -13,7 +13,9 @@ import RFCReaderKit
   final class ReaderTextView: UITextView {
     /// The reader state Find is installed in as this comes into a window (#763):
     /// nil for a preview's reader and one the stack keeps below its top.
-    weak var findReader: ReaderState?
+    weak var findReader: ReaderState? {
+      didSet { installsFind(in: findReader) }
+    }
 
     override func didMoveToWindow() {
       super.didMoveToWindow()

@@ -32,14 +32,35 @@ struct LinkMenuActionsTests {
     let actions = try #require(actions("rfc://7932"))
     #expect(actions.count == 4)
     #expect(actions.first == .open)
-    guard case .openInNewWindow = actions[1], case .copyLink(let link) = actions[2],
+    guard case .openInNewWindow(let window) = actions[1], case .copyLink(let link) = actions[2],
       case .share(let shared) = actions[3]
     else {
       Issue.record("unexpected actions: \(actions)")
       return
     }
+    #expect(window == RFCLink(id: .rfc(7932)))
     #expect(link.url.absoluteString.contains("rfc7932"))
     #expect(link == shared)
+  }
+
+  @Test func `a window opens at the place the link names`() throws {
+    let actions = try #require(actions("rfc://7932#section-4.2"))
+    guard case .openInNewWindow(let window) = actions[1] else {
+      Issue.record("unexpected actions: \(actions)")
+      return
+    }
+    #expect(window.id == .rfc(7932))
+    #expect(window.place == "4.2")
+  }
+
+  /// A bibliography entry that names no URL has nothing anyone else can open.
+  @Test func `a reader's link with nothing public to hand out only opens`() {
+    #expect(actions("\(ReaderLinkScheme.referenceScheme):Unlinked") == [.open])
+  }
+
+  /// An `rfc:` URL that names no document goes nowhere, so there is nothing to open.
+  @Test func `a reader's link that names no document offers no Open`() {
+    #expect(actions("rfc://nonsense") == [])
   }
 
   @Test func `without windows to open, there is no Open in New Window`() throws {

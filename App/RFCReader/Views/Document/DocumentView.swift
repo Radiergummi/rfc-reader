@@ -503,6 +503,7 @@ struct DocumentView: View {
         text: session.originalText,
         failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
+        isShown: showsReaderState,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
       .onAppear {

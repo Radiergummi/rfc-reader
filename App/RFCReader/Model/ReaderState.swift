@@ -3,6 +3,10 @@ import Observation
 import RFCKit
 import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 /// What this window's reader is showing, for the parts of the window that are not
 /// inside it.
 ///
@@ -209,12 +213,23 @@ final class ReaderState {
   @ObservationIgnored var openPanel: () -> Void = {}
 
   #if canImport(UIKit)
-    /// Opens Find over the text on screen (#763): the More menu's Find in Document
-    /// and ⌘F. Whichever text view shows, the reader's or the original's, installs it
-    /// as it is made and updated (`UITextView.installsFind(in:)`). Without it an
-    /// iPhone had no way into Find at all: ⌘F reached it only with a keyboard, and
-    /// only once the text view was first responder.
-    @ObservationIgnored var presentFind: () -> Void = {}
+    /// The text view Find opens over (#763): the More menu's Find in Document and
+    /// ⌘F. Whichever text view shows, the reader's or the original's, installs
+    /// itself as it is updated and comes into a window, and leaves as it goes
+    /// (`UITextView.installsFind(in:)`). Without it an iPhone had no way into Find
+    /// at all: ⌘F reached it only with a keyboard, and only once the text view was
+    /// first responder.
+    @ObservationIgnored weak var findTextView: UITextView?
+
+    /// Find over the text on screen, and nothing over a text view that is not.
+    var findInteraction: UIFindInteraction? {
+      guard let findTextView, findTextView.window != nil else { return nil }
+      return findTextView.findInteraction
+    }
+
+    func presentFind() {
+      findInteraction?.presentFindNavigator(showingReplace: false)
+    }
   #endif
 
   /// Shows a bibliography entry: what a citation of anything but an RFC links to

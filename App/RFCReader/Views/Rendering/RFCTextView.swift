@@ -315,7 +315,6 @@ struct ReaderInputs {
       // the reader on screen's.
       let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
       (textView as? ReaderTextView)?.findReader = findReader
-      textView.installsFind(in: findReader)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
