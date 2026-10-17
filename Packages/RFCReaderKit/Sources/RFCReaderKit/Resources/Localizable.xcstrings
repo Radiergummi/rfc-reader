@@ -695,6 +695,26 @@
         }
       }
     },
+    "Bookmark an RFC by swiping its row, or from its menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge ein Lesezeichen hinzu, indem du die Zeile eines RFC wischst, oder über ihr Menü."
+          }
+        }
+      }
+    },
+    "Bookmark an RFC with ⌘D, or from its row’s menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge ein Lesezeichen mit ⌘D oder über das Menü der Zeile eines RFC hinzu."
+          }
+        }
+      }
+    },
     "Bookmarked" : {
       "localizations" : {
         "de" : {
@@ -1315,6 +1335,16 @@
         }
       }
     },
+    "Keep an RFC offline from its Info pane or its row’s menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behalte einen RFC über seine Info oder das Menü seiner Zeile offline."
+          }
+        }
+      }
+    },
     "Keywords" : {
       "localizations" : {
         "de" : {
@@ -1831,6 +1861,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFC-Reihe"
+          }
+        }
+      }
+    },
+    "RFCs you open appear here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die du öffnest, erscheinen hier."
           }
         }
       }

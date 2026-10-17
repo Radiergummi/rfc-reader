@@ -255,9 +255,15 @@ struct RFCListView: View {
           }
         } else if isUnsearched, workingGroupCardAcronym == nil {
           // Not over a working group's card, which says what the group has.
-          ContentUnavailableView(
-            shown.filter.emptyTitle(in: library.collections),
-            systemImage: shown.filter.systemImage)
+          ContentUnavailableView {
+            Label(
+              shown.filter.emptyTitle(in: library.collections),
+              systemImage: shown.filter.systemImage)
+          } description: {
+            if let description = shown.filter.emptyDescription() {
+              Text(verbatim: description)
+            }
+          }
         } else {
           VStack {
             ContentUnavailableView.search(text: shown.query)
