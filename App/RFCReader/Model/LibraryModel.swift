@@ -456,9 +456,9 @@ final class LibraryModel {
     indexState = .loading
     // Before anything is awaited, so that the parse is already running when this
     // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
-    // makes the first window at that suspension: the window is about 255 ms of the
-    // main thread, and the parse, which needs nothing from it, runs beside it rather
-    // than after it (#367). Every `await` stays below this line.
+    // makes the first window at that suspension: the window holds the main thread
+    // until the "First window made" signpost, and the parse, which needs nothing from
+    // it, runs beside it rather than after it (#367). Every `await` stays below this line.
     async let cached = Self.loadCachedIndex(from: store)
     #if DEBUG
       installPackFromLaunchArgument()
@@ -702,7 +702,7 @@ final class LibraryModel {
       case .settle:
         settleIndex()
       case .install(let data, let validators):
-        // Off the main actor: the parse alone is about a second (#124).
+        // Off the main actor: the parse alone is the "Parse index XML" signpost (#124).
         let prepared = try await Self.parse(data)
         try await store.storeIndex(data, parsed: prepared.index, validators: validators)
         apply(prepared, updatedAt: .now)
@@ -1046,7 +1046,7 @@ final class LibraryModel {
   ///
   /// Derived once per index rather than per read: `SidebarView.body` reads this, so
   /// as a computed property it counted all 9,842 RFCs and sorted them again on every
-  /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
+  /// body pass, dozens of times a session.
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
@@ -1061,7 +1061,7 @@ final class LibraryModel {
 
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
-  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  /// than a spinner. Four, since a build of a large RFC holds megabytes.
   ///
   /// The whole preview rather than the build alone, so a build is never paired with
   /// another parse of its document. A document's previews go when it is removed or
