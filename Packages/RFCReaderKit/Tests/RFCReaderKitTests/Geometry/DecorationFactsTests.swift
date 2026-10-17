@@ -93,4 +93,36 @@ struct DecorationFactsTests {
     }
     #expect(checked > 0)
   }
+
+  /// A copy cut inside a block, with text after it, carries a range that still
+  /// contains most of its fragments' offsets and still fits the copy: only the box's
+  /// own extent in the copy says the range is not this text's.
+  @Test func `a copy cut inside a block walks it`() throws {
+    let lines = (0..<40).map { "line \($0)" }.joined(separator: "\n")
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .artwork, text: lines)),
+        .paragraph(Paragraph(text: String(repeating: "word ", count: 200)))),
+      style: style)
+    let start = try Fixtures.offset(of: "line 2\n", in: built.text)
+    let cut = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let walked = NSMutableAttributedString(attributedString: cut)
+    walked.removeAttribute(.rfcDecorationFacts, range: NSRange(location: 0, length: walked.length))
+
+    var checked = 0
+    var location = 0
+    let cutString = cut.string as NSString
+    while location < cut.length {
+      let paragraph = cutString.paragraphRange(for: NSRange(location: location, length: 0))
+      defer { location = NSMaxRange(paragraph) }
+      guard cut.decoration(at: paragraph.location) != nil else { continue }
+      #expect(
+        FragmentGeometry.decorationSpan(in: cut, fragment: paragraph)
+          == FragmentGeometry.decorationSpan(in: walked, fragment: paragraph),
+        "at \(paragraph.location)")
+      checked += 1
+    }
+    #expect(checked == 38)
+  }
 }

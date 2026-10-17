@@ -95,10 +95,7 @@ public enum FragmentGeometry {
     let carried =
       text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
       as? DecorationFacts
-    let isCarriedHere =
-      carried.map {
-        NSLocationInRange(fragment.location, $0.range) && NSMaxRange($0.range) <= text.length
-      } ?? false
+    let isCarriedHere = carried.map { isBlock($0, of: text, at: fragment.location) } ?? false
     guard let facts = isCarriedHere ? carried : decorationFacts(in: text, at: fragment.location)
     else { return nil }
     var effective = facts.range
@@ -126,6 +123,25 @@ public enum FragmentGeometry {
       spacingBefore: paragraph?.paragraphSpacingBefore ?? 0,
       spacingAfter: paragraph?.paragraphSpacing ?? 0
     )
+  }
+
+  /// Whether `facts`, read at `location`, name the extent their box has in `text`:
+  /// starting at the range's start, ending at its end, and around `location`. A copy
+  /// cut out of the build carries ranges into the build's text, which may still
+  /// contain `location` and fit the copy; the box's own ends in the copy do not
+  /// match them. Four lookups, not a walk.
+  private static func isBlock(
+    _ facts: DecorationFacts, of text: NSAttributedString, at location: Int
+  ) -> Bool {
+    func box(at index: Int) -> DecorationFacts? {
+      guard index >= 0, index < text.length else { return nil }
+      return text.attribute(.rfcDecorationFacts, at: index, effectiveRange: nil)
+        as? DecorationFacts
+    }
+    let range = facts.range
+    return NSLocationInRange(location, range)
+      && box(at: range.location) === facts && box(at: NSMaxRange(range) - 1) === facts
+      && box(at: range.location - 1) !== facts && box(at: NSMaxRange(range)) !== facts
   }
 
   /// The facts of the decorated block at `location`, walked out of the text: what
