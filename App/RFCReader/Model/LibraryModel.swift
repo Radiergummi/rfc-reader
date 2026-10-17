@@ -1370,7 +1370,13 @@ final class LibraryModel {
 
     /// Opens `id` in a window of its own, from a menu that offers it.
     func openWindow(for id: DocumentID) {
-      openInNewScene(RFCLink(id: id), inBackground: false)
+      openWindow(for: RFCLink(id: id))
+    }
+
+    /// Opens `link` in a window of its own, at the place it names: a reference's
+    /// long-press menu (#763).
+    func openWindow(for link: RFCLink) {
+      openInNewScene(link, inBackground: false)
     }
   #endif
 

@@ -400,15 +400,13 @@ final class RFCTextViewCoordinator: NSObject {
       // A heading's hung number (#433) links to its own heading, which there is no
       // point previewing: only the menu, its Copy and Share handing out the RFC
       // Editor's URL for the section.
-      if let documentID,
-        let number = textView.textLayoutManager?.attributedText?.sectionNumber(
-          at: textItem.range.location),
+      if let number = textView.textLayoutManager?.attributedText?.sectionNumber(
+        at: textItem.range.location),
         let url = ReaderLinkScheme.url(number.anchor, scheme: ReaderLinkScheme.anchorScheme)
       {
-        let link = LinkCopy.forLink(
-          url, from: documentID, in: environment?.library.index, bibliography: bibliography)
         return .init(
-          menu: referenceMenu(defaultMenu, sharing: link, from: textView, at: number.range))
+          menu: referenceMenu(
+            defaultMenu, for: url, opens: false, from: textView, at: number.range))
       }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
@@ -442,11 +440,7 @@ final class RFCTextViewCoordinator: NSObject {
         host.view.frame.size = size
       }
       let container = previewView(hosting: host)
-      let menu = referenceMenu(
-        defaultMenu,
-        sharing: LinkCopy.forLink(
-          url, from: documentID, in: environment.library.index, bibliography: bibliography),
-        from: textView, at: range)
+      let menu = referenceMenu(defaultMenu, for: url, from: textView, at: range)
       return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
     }
 
