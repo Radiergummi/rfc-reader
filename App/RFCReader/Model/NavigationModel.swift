@@ -171,7 +171,7 @@ final class NavigationModel: Identifiable {
         select(newValue)
       } else {
         // A jump a script waits on is not coming: its reader goes.
-        updateRequests { $0.hide(in: &history) }
+        updateRequests(outcome: .interrupted) { $0.hide(in: &history) }
       }
     }
   }
@@ -210,20 +210,33 @@ final class NavigationModel: Identifiable {
 
   /// The scroll request, and whoever waits for the jump it asked for: a script,
   /// whose next command must find the jump in the history (#482).
-  /// A waiter is told whether its jump landed (#762).
-  @ObservationIgnored private var requests = ScrollRequests<(Bool) -> Void>()
+  /// How a jump within the document ended, for whoever waits on it: a script's
+  /// `jump to section`, which reports all but the first as an error (#762).
+  enum JumpOutcome {
+    /// The reader went there, or the tab went somewhere since.
+    case landed
+    /// The document holds no such place.
+    case noSuchPlace
+    /// There was no document to jump in: none on screen, or it failed to load.
+    case notShown
+    /// The document was hidden, or another jump asked for, before the reader made it.
+    case interrupted
+  }
+
+  @ObservationIgnored private var requests = ScrollRequests<(JumpOutcome) -> Void>()
 
   /// Makes `change` to the requests, publishes the request, and then ends the wait
   /// the change ended, if it ended one.
-  /// Changes the requests and tells the waiter whose wait that ended whether its
-  /// jump `landed`: one replaced by the jump the reader recorded, or by a place
-  /// arrived at since, did; one settled says itself.
+  /// Changes the requests and tells the waiter whose wait that ended how its jump
+  /// ended: one replaced by the jump the reader recorded, or by a place arrived at
+  /// since, `landed`; the rest say their own `outcome`.
   private func updateRequests(
-    landed: Bool = true, _ change: (inout ScrollRequests<(Bool) -> Void>) -> ((Bool) -> Void)?
+    outcome: JumpOutcome = .landed,
+    _ change: (inout ScrollRequests<(JumpOutcome) -> Void>) -> ((JumpOutcome) -> Void)?
   ) {
     let ended = change(&requests)
     if scrollRequest != requests.current { scrollRequest = requests.current }
-    ended?(landed)
+    ended?(outcome)
   }
 
   var canGoBack: Bool { history.canGoBack }
@@ -426,9 +439,12 @@ final class NavigationModel: Identifiable {
   /// records it through `recordJump(to:in:)` where its document holds the place.
   /// `whenSettled` runs once it has, or once the reader has done what else it will
   /// with the place: after the document loads, if it is still loading.
-  func jump(toSection section: String, whenSettled done: @escaping (Bool) -> Void = { _ in }) {
-    // With no document on screen the wait ends at once, and nothing landed.
-    updateRequests(landed: selection != nil) {
+  func jump(
+    toSection section: String, whenSettled done: @escaping (JumpOutcome) -> Void = { _ in }
+  ) {
+    // With no document on screen this jump's wait ends at once; with one, the jump
+    // it replaces is the one whose wait ends, unmade.
+    updateRequests(outcome: selection != nil ? .interrupted : .notShown) {
       $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done)
     }
   }
@@ -436,8 +452,8 @@ final class NavigationModel: Identifiable {
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load.
-  func settle(_ request: ScrollRequest, landed: Bool) {
-    updateRequests(landed: landed) { $0.settle(request) }
+  func settle(_ request: ScrollRequest, as outcome: JumpOutcome) {
+    updateRequests(outcome: outcome) { $0.settle(request) }
   }
 
   /// A place the document on screen holds: its own history entry, so Back undoes

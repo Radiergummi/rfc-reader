@@ -112,6 +112,10 @@
     /// the intents wait for it with `settledSearch()`. An object accessor cannot
     /// suspend its Apple event, so it turns the run loop until the index settles,
     /// which lets the main actor's load run, up to `scriptIndexWait`.
+    ///
+    /// Turning the run loop inside an accessor lets other main-actor work run in the
+    /// middle of it, a link routed or a window made, so nothing here holds on to model
+    /// state across the wait: each accessor reads the index once it is back.
     private var settledIndex: RFCIndex? {
       let library = LibraryModel.shared
       let deadline = Date.now.addingTimeInterval(Self.scriptIndexWait)
@@ -214,13 +218,27 @@
     @objc var scriptInspectorPane: FourCharCode {
       get {
         guard let reader = controller?.reader else { return ScriptPane.contents.code }
-        return ScriptPane(pane: reader.pane, tab: reader.tab.rawValue).code
+        if reader.pane == .info { return ScriptPane.information.code }
+        // A switch rather than names matched, so a tab added or renamed is a
+        // compile error here, not a pane a script quietly cannot reach.
+        let pane: ScriptPane =
+          switch reader.tab {
+          case .contents: .contents
+          case .references: .references
+          case .requirements: .requirements
+          }
+        return pane.code
       }
       set {
         guard let reader = controller?.reader else { return }
         let pane = ScriptPane(code: newValue) ?? .contents
         reader.pane = pane.pane
-        if let tab = pane.tab.flatMap(InspectorTab.init(rawValue:)) { reader.tab = tab }
+        switch pane {
+        case .contents: reader.tab = .contents
+        case .references: reader.tab = .references
+        case .requirements: reader.tab = .requirements
+        case .information: break
+        }
       }
     }
   }
@@ -309,9 +327,17 @@
       nonisolated(unsafe) let command = self
       // A place the document does not hold is an error to the script, in words,
       // as the scripting decision asks, not a jump that went nowhere (#762).
-      window.navigation.jump(toSection: section) { landed in
-        if !landed {
+      window.navigation.jump(toSection: section) { outcome in
+        switch outcome {
+        case .landed:
+          break
+        case .noSuchPlace:
           ScriptError.report("The RFC has no section “\(section)”.", in: command)
+        case .notShown:
+          ScriptError.report("The RFC could not be shown to jump in.", in: command)
+        case .interrupted:
+          ScriptError.report(
+            "The jump to section “\(section)” was interrupted before it was made.", in: command)
         }
         command.resumeExecution(withResult: nil)
       }

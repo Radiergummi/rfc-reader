@@ -22,11 +22,4 @@ public struct WindowLayout: Codable, Equatable, Sendable {
     self.sidebarWidth = sidebarWidth
     self.listWidth = listWidth
   }
-
-  /// Whether a restored window opens its panel once it has `canDescribe` something:
-  /// never over nothing, the panel's rule, and only once, so a panel the reader
-  /// closes since stays closed.
-  public func opensPanel(canDescribe: Bool) -> Bool {
-    panelIsOpen && canDescribe
-  }
 }

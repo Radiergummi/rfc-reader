@@ -45,12 +45,4 @@ struct ScriptCodeTests {
       #expect(ScriptPane(code: pane.code) == pane)
     }
   }
-
-  @Test func `a pane reads back as the panel shows it`() {
-    for pane in ScriptPane.allCases {
-      #expect(ScriptPane(pane: pane.pane, tab: pane.tab ?? "contents") == pane)
-    }
-    #expect(ScriptPane(pane: .info, tab: "references") == .information)
-    #expect(ScriptPane(pane: .navigation, tab: "unknown") == .contents)
-  }
 }

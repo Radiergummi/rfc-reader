@@ -77,19 +77,4 @@ public enum ScriptPane: CaseIterable, Sendable {
   public var pane: InspectorPane {
     self == .information ? .info : .navigation
   }
-
-  /// The navigation pane's tab it is, by the app's `InspectorTab` raw value; nil for
-  /// the information pane, which has no tabs.
-  public var tab: String? {
-    self == .information ? nil : name
-  }
-
-  /// What a panel showing `pane`, on the navigation tab named `tab`, is to a script.
-  public init(pane: InspectorPane, tab: String) {
-    if pane == .info {
-      self = .information
-    } else {
-      self = Self.allCases.first { $0.tab == tab } ?? .contents
-    }
-  }
 }

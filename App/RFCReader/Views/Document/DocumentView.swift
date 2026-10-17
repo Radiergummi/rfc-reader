@@ -725,7 +725,7 @@ struct DocumentView: View {
   /// leaves the history as it is. Nil while there is no build to look in, and
   /// otherwise whether the place was one the document holds (#762).
   @discardableResult
-  private func follow(_ place: String) -> Bool? {
+  private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
@@ -735,20 +735,20 @@ struct DocumentView: View {
     case .jump(let anchor):
       navigation.recordJump(
         to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
-      return true
+      return .landed
     case .reference(let anchor):
       reader.reveal(reference: anchor)
-      return true
+      return .landed
     case .document, .unhandled, nil:
-      return false
+      return .noSuchPlace
     }
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
   /// waits for the text to appear, and is followed there.
   private func follow(_ request: ScrollRequest) {
-    if let landed = follow(request.section) {
-      navigation.settle(request, landed: landed)
+    if let outcome = follow(request.section) {
+      navigation.settle(request, as: outcome)
     }
   }
 

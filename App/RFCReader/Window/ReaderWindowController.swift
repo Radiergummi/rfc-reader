@@ -45,12 +45,17 @@
     /// Set on a window AppKit restores (#155), whose panel is put right once, the
     /// first time it is made key. See `windowDidBecomeKey(_:)`.
     var correctsPanelOnFirstKey = false
-    /// The layout a restored window came back with, until its panel has been put
-    /// back: once its document can be described, the first time it can (#762).
+    /// The layout a restored window came back with, until it has been put back
+    /// (#762): its columns on the window's first turn as key, when it is laid out,
+    /// and its panel once its document can be described. Until then it is what the
+    /// window keeps, since what the window shows is not it yet: a tab left in the
+    /// background is never key, and its saved layout would be lost to the defaults.
     var restoredLayout: WindowLayout?
-    /// The restored layout's column widths, until they are put back, which waits for
-    /// the window's first turn as key, when it is laid out.
-    var restoredColumnWidths: (sidebar: Double?, list: Double?)?
+    var restoresColumns = false
+    var restoresPanel = false
+    /// The column widths last kept, so a resize that moved no column does not ask
+    /// AppKit to encode the window's state again.
+    private var keptColumnWidths: (sidebar: Double?, list: Double?)?
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
@@ -122,8 +127,8 @@
         self.toolbar?.capTitleToList()
         ActiveReaderWindow.shared.sidebarChanged(self)
         // The columns' widths are part of what the window keeps (#762), and nothing
-        // observable says they changed.
-        self.window?.invalidateRestorableState()
+        // observable says they changed. Not on every frame of a drag: once it ends.
+        if self.window?.inLiveResize != true { self.keepColumnWidths() }
       }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
@@ -354,9 +359,10 @@
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
       if reader.canDescribe {
-        if let layout = restoredLayout {
-          restoredLayout = nil
-          if layout.opensPanel(canDescribe: true), !isPanelOpen { splitController.openPanel() }
+        if restoresPanel, let layout = restoredLayout {
+          restoresPanel = false
+          if layout.panelIsOpen, !isPanelOpen { splitController.openPanel() }
+          finishRestoringLayout()
         }
         // The panel may have been opened or shut by the tab group rather than by a
         // toggle, so the floor follows whatever state it is in now.
@@ -557,10 +563,12 @@
       }
       // On the same turn, once the window is in its group and laid out at its frame,
       // which it was not when its state was decoded (#762).
-      if let widths = restoredColumnWidths {
-        restoredColumnWidths = nil
+      if restoresColumns, let layout = restoredLayout {
+        restoresColumns = false
         Task { [weak self] in
-          self?.splitController.restoreColumnWidths(sidebar: widths.sidebar, list: widths.list)
+          self?.splitController.restoreColumnWidths(
+            sidebar: layout.sidebarWidth, list: layout.listWidth)
+          self?.finishRestoringLayout()
         }
       }
     }
@@ -578,6 +586,24 @@
     /// Where a palette asked for while the window was minimized is shown.
     func windowDidDeminiaturize(_ notification: Notification) {
       showOrHideQuickOpen()
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+      keepColumnWidths()
+    }
+
+    /// Asks AppKit to encode the window's state again where the columns moved.
+    private func keepColumnWidths() {
+      let widths = splitController.columnWidths
+      guard keptColumnWidths.map({ $0 != widths }) ?? true else { return }
+      keptColumnWidths = widths
+      window?.invalidateRestorableState()
+    }
+
+    /// Once the restored layout's columns and panel are both back, what the window
+    /// shows is what it keeps.
+    private func finishRestoringLayout() {
+      if !restoresColumns, !restoresPanel { restoredLayout = nil }
     }
 
     func windowWillClose(_ notification: Notification) {

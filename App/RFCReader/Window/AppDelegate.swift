@@ -157,6 +157,9 @@
         controller.splitController.applyMinimumWidth()
       }
       controllers.append(controller)
+      // On the first window: a launch by a script or a link has none until one is
+      // asked for. The warning is claimed once, so later windows show nothing.
+      defer { warnIfTheStoreDidNotOpen() }
 
       if let host = sibling?.window, let fresh = controller.window {
         host.addTabbedWindow(fresh, ordered: .above)

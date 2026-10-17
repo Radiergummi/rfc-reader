@@ -254,7 +254,10 @@
         splitView.setPosition(sidebar, ofDividerAt: 0)
       }
       if let list, !listItem.isCollapsed {
-        let start = sidebarItem.isCollapsed ? 0 : sidebarView.frame.width + divider
+        // From where the sidebar ended up, which AppKit may have held to its own
+        // bounds, not from the width asked for.
+        splitView.layoutSubtreeIfNeeded()
+        let start = sidebarItem.isCollapsed ? 0 : sidebarView.frame.maxX + divider
         splitView.setPosition(start + list, ofDividerAt: 1)
       }
     }

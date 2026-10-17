@@ -17,9 +17,11 @@
     /// panel and columns (#762).
     var sceneSnapshot: SceneSnapshot {
       let widths = splitController.columnWidths
-      let layout = WindowLayout(
-        panelIsOpen: isPanelOpen, pane: reader.pane, sidebarWidth: widths.sidebar,
-        listWidth: widths.list)
+      let layout =
+        restoredLayout
+        ?? WindowLayout(
+          panelIsOpen: isPanelOpen, pane: reader.pane, sidebarWidth: widths.sidebar,
+          listWidth: widths.list)
       return navigation.snapshot(inspectorTab: reader.tab, layout: layout)
     }
 
@@ -44,7 +46,8 @@
       // first becomes key, and the panel only over a document, which has not loaded;
       // `closePanelWithoutDocument()` opens it once there is one.
       restoredLayout = layout
-      restoredColumnWidths = (layout.sidebarWidth, layout.listWidth)
+      restoresColumns = true
+      restoresPanel = true
     }
   }
 
