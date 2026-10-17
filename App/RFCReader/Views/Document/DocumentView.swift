@@ -479,6 +479,11 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+        // Which window's live resize a new column comes from.
+        .background {
+          WindowObserver(resize: resize)
+            .accessibilityHidden(true)
+        }
       #else
         // Which size changes are a rotation, so their new column builds at once.
         .background {
