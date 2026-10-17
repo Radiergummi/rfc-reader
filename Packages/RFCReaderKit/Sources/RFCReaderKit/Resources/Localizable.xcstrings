@@ -695,6 +695,16 @@
         }
       }
     },
+    "Bookmark this RFC. It is not bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen für diesen RFC hinzufügen. Er hat noch keines."
+          }
+        }
+      }
+    },
     "Bookmarked" : {
       "localizations" : {
         "de" : {
@@ -1911,6 +1921,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen entfernen"
+          }
+        }
+      }
+    },
+    "Remove Bookmark. This RFC is bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen entfernen. Dieser RFC hat ein Lesezeichen."
           }
         }
       }
