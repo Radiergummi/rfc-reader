@@ -380,11 +380,21 @@ extension DocumentTextBuilder {
   /// 1 when the block already fits, otherwise the factor that makes its widest line
   /// fit what the measure leaves after `indent` — never less than one indent step,
   /// or a block nested deep enough to eat the measure would scale to nothing.
+  ///
+  /// The widest line as it is set at full size (`widestLine`), not its count of
+  /// characters: a wide character takes two columns, and one from a fallback font
+  /// its own width, so a line of them overflowed a scale its count gave (#765).
+  ///
+  /// A measured line does not scale exactly with its font's size, a fallback font's
+  /// least of all, so a scaled-down block is measured again at its scale and set a
+  /// little smaller where it still overflows.
   func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
-    let columns =
-      text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
-    guard columns > 0, monospaceAdvance > 0 else { return 1 }
-    return min(
-      1, max(style.indentStep, style.measure - indent) / (CGFloat(columns) * monospaceAdvance))
+    let widest = widestLine(of: text, scale: 1)
+    guard widest > 0 else { return 1 }
+    let available = max(style.indentStep, style.measure - indent)
+    let scale = min(1, available / widest)
+    guard scale < 1 else { return 1 }
+    let scaled = widestLine(of: text, scale: scale)
+    return scaled > available ? scale * available / scaled : scale
   }
 }

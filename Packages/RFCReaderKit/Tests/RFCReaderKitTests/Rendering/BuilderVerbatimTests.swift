@@ -126,6 +126,20 @@ struct BuilderVerbatimTests {
         == builder.monospaceScale(for: String(repeating: "#", count: 120), indent: 0))
   }
 
+  /// A wide character is set two columns wide, and one the font lacks comes from a
+  /// fallback font, so a line of them is wider than its count of characters says
+  /// (#765): the scale fits the line as it is set, not its count.
+  @Test func `a line of wide characters scales to fit as it is set`() {
+    let builder = DocumentTextBuilder(style: style)
+    let count = Int(style.measure / builder.monospaceAdvance) - 2
+    let ascii = String(repeating: "#", count: count)
+    let wide = String(repeating: "漢", count: count)
+    #expect(builder.monospaceScale(for: ascii, indent: 0) == 1)
+    let scale = builder.monospaceScale(for: wide, indent: 0)
+    #expect(scale < 1)
+    #expect(builder.widestLine(of: wide, scale: scale) <= style.measure + 1)
+  }
+
   /// Quotes nested deep enough to eat the whole measure must still leave the
   /// artwork a font size: a scale of zero is a block that draws nothing.
   @Test func `artwork indented past the measure still has a size`() {
