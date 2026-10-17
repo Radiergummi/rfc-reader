@@ -10,7 +10,9 @@ struct BacklinksList: View {
   let onSelect: (String) -> Void
 
   /// The list's fixed width: the reference card's.
-  static let width = ReferencePreview.width
+  static var width: CGFloat { ReferencePreview.width }
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   /// The tallest the rows are before they scroll: a section every other one refers
   /// to, such as a terminology section, would otherwise run the popover off the
   /// screen, its last rows out of reach.
@@ -27,7 +29,8 @@ struct BacklinksList: View {
               onSelect(entry.anchor)
             } label: {
               HStack(alignment: .firstTextBaseline) {
-                Text(entry.heading).lineLimit(2).multilineTextAlignment(.leading)
+                Text(entry.heading).lineLimit(dynamicTypeSize.lines(2))
+                  .multilineTextAlignment(.leading)
                 Spacer()
                 if entry.count > 1 {
                   Text(verbatim: "\(entry.count)×").font(.caption).foregroundStyle(.secondary)

@@ -27,8 +27,19 @@ struct ReferencePreview: View {
   /// says neither, and every in-document reference.
   var kind: ReferenceList.Kind = .unknown
 
-  /// The card's fixed width, which the iOS preview is also sized at.
-  static let width: CGFloat = 280
+  /// The card's width, which the iOS preview, the backlinks and the gloss cards are
+  /// also sized at: 280 points, grown with the text on iOS so an accessibility size
+  /// does not cut every line short (#760), and at most twice that, which an iPhone's
+  /// screen still holds.
+  static var width: CGFloat {
+    #if canImport(UIKit)
+      min(UIFontMetrics(forTextStyle: .body).scaledValue(for: 280), 560)
+    #else
+      280
+    #endif
+  }
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   private var documentID: DocumentID? {
     guard case .document(let id, _, _) = reference.target else { return nil }
@@ -39,13 +50,14 @@ struct ReferencePreview: View {
     VStack(alignment: .leading, spacing: 8) {
       if let metadata = documentID.flatMap(library.metadata) {
         HStack(alignment: .firstTextBaseline) {
-          Text(metadata.title).font(.headline).lineLimit(2)
+          Text(metadata.title).font(.headline).lineLimit(dynamicTypeSize.lines(2))
           Spacer()
           StatusBadge(status: metadata.currentStatus)
         }
         kindLine
         if let abstract = metadata.abstract {
-          Text(abstract).font(.callout).foregroundStyle(.secondary).lineLimit(4)
+          Text(abstract).font(.callout).foregroundStyle(.secondary)
+            .lineLimit(dynamicTypeSize.lines(4))
         }
       } else if let documentID {
         // Referenced but not in the library's index — an unpublished draft,
@@ -91,16 +103,18 @@ struct ReferencePreview: View {
       Text(entry.displayAnchor).font(.subheadline.weight(.semibold))
       if entry.title.isEmpty {
         if let raw = entry.rawText {
-          Text(raw).font(.callout).foregroundStyle(.secondary).lineLimit(6)
+          Text(raw).font(.callout).foregroundStyle(.secondary)
+            .lineLimit(dynamicTypeSize.lines(6))
         }
         kindLine
       } else {
-        Text(entry.title).font(.headline).lineLimit(3)
+        Text(entry.title).font(.headline).lineLimit(dynamicTypeSize.lines(3))
         kindLine
         let byline = entry.authors.map(\.displayName).joined(separator: ", ")
         let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
         if !detail.isEmpty {
-          Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+          Text(detail).font(.callout).foregroundStyle(.secondary)
+            .lineLimit(dynamicTypeSize.lines(3))
         }
       }
       if let host = entry.url?.host() {
