@@ -144,6 +144,7 @@ public final class DocumentTextBuilder {
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
     reserveChipPadding(in: builder.output)
+    builder.setDecorationFacts()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected

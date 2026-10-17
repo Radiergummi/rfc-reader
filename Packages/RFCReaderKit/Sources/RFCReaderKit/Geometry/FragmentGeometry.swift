@@ -80,14 +80,17 @@ public enum FragmentGeometry {
   /// A run whose rest a reading mode folds away, an aside closed under its caption
   /// (#700), ends where what is shown of it ends, and the run after it meets no card
   /// there: `hidden` is what the mode hides.
+  ///
+  /// What the whole block says is read from its `DecorationFacts`, which the build
+  /// set; only what differs per fragment, or per reading mode, is looked up here.
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
-    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
-    // depends on that as much as a table does: its last line carries the block's
-    // spacing alone (#31), which is a storage run of its own.
-    guard let run = text.decorationRun(at: fragment.location) else { return nil }
-    var effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
+    guard let decoration = text.decoration(at: fragment.location),
+      let facts = text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
+        as? DecorationFacts
+    else { return nil }
+    var effective = facts.range
     let shownEnd = hidden.shownEnd(of: effective)
     let isFolded = shownEnd < NSMaxRange(effective)
     effective.length = shownEnd - effective.location
@@ -95,24 +98,41 @@ public enum FragmentGeometry {
       text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
       as? NSParagraphStyle
     return DecorationSpan(
-      decoration: run.decoration,
+      decoration: decoration,
       isFirst: fragment.location <= effective.location,
       isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
       runRange: effective,
       // The card is measured from where the block's text would sit without its
-      // inset, so the inset is room inside the card rather than a moved card.
-      indent: indent(in: text, over: effective)
-        - (text.attribute(.rfcCardInset, at: effective.location, effectiveRange: nil) as? CGFloat
-          ?? 0),
+      // inset, so the inset is room inside the card rather than a moved card. A
+      // folded block's indent is that of what is shown of it, which the mode, not
+      // the build, decides.
+      indent: (isFolded ? indent(in: text, over: effective) : facts.indent) - facts.cardInset,
       // A card the mode has folded away above this one is not met either.
       meetsCardAbove: !hidden.contains(effective.location - 1)
         && drawsCard(in: text, at: effective.location - 1),
       meetsCardBelow: !isFolded && drawsCard(in: text, at: NSMaxRange(effective)),
-      contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
-        as? CGFloat,
+      contentWidth: facts.contentWidth,
       spacingBefore: paragraph?.paragraphSpacingBefore ?? 0,
       spacingAfter: paragraph?.paragraphSpacing ?? 0
     )
+  }
+
+  /// The facts of the decorated block at `location`, walked out of the text: what
+  /// the build carries on the block (`DocumentTextBuilder.setDecorationFacts`). Nil
+  /// where nothing is decorated.
+  static func decorationFacts(in text: NSAttributedString, at location: Int) -> DecorationFacts? {
+    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
+    // depends on that as much as a table does: its last line carries the block's
+    // spacing alone (#31), which is a storage run of its own.
+    guard let run = text.decorationRun(at: location) else { return nil }
+    let block = verbatimBlock(in: text, at: location, within: run.range)
+    return DecorationFacts(
+      range: block,
+      indent: indent(in: text, over: block),
+      cardInset: text.attribute(.rfcCardInset, at: block.location, effectiveRange: nil) as? CGFloat
+        ?? 0,
+      contentWidth: text.attribute(.rfcContentWidth, at: block.location, effectiveRange: nil)
+        as? CGFloat)
   }
 
   /// Whether the character at `location` belongs to a block drawn as a card. A

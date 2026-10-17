@@ -88,6 +88,10 @@ extension NSAttributedString.Key {
   /// (`FragmentGeometry.cardInset`), on every character of a block that spans the
   /// column: its card starts that much before the text's indent. A number.
   public static let rfcCardInset = NSAttributedString.Key("rfcCardInset")
+  /// What every fragment of a decorated block measures its band against, worked
+  /// out once as the build ends (`DecorationFacts`), on every character of the
+  /// block.
+  public static let rfcDecorationFacts = NSAttributedString.Key("rfcDecorationFacts")
   /// Makes a block with a rendering one item for a long press, which shows the
   /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
   /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
@@ -242,6 +246,32 @@ extension VerbatimBox {
 public final class StrokeBox: NSObject, Sendable {
   public let strokes: [Stroke]
   public init(_ strokes: [Stroke]) { self.strokes = strokes }
+}
+
+/// What a decorated block's fragments share, walked out of the text once
+/// (`FragmentGeometry.decorationFacts`) rather than by each fragment as it lays out:
+/// a verbatim block is one fragment per line, and walking the block from every line
+/// made a long highlighted block quadratic (#766).
+///
+/// Its extent is still made by `longestEffectiveRange`, only once, so the staircase
+/// it prevents cannot come back. An `NSObject` left with identity equality, like the
+/// other boxes, so two blocks' boxes never merge into one run.
+public final class DecorationFacts: NSObject, Sendable {
+  /// The block's whole extent: its decoration's run, cut to its verbatim block.
+  public let range: NSRange
+  /// The shallowest paragraph indent in the block.
+  public let indent: CGFloat
+  /// How far the block's text is set in from its card (`.rfcCardInset`).
+  public let cardInset: CGFloat
+  /// How wide its content is set, where its card hugs it (`.rfcContentWidth`).
+  public let contentWidth: CGFloat?
+
+  public init(range: NSRange, indent: CGFloat, cardInset: CGFloat, contentWidth: CGFloat?) {
+    self.range = range
+    self.indent = indent
+    self.cardInset = cardInset
+    self.contentWidth = contentWidth
+  }
 }
 
 /// Boxes a `CrossReference` for the same reason.
