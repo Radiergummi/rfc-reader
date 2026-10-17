@@ -8,10 +8,12 @@ rfc-reader/
 │   ├── Sources/RFCKit/
 │   │   ├── Models/           DocumentID, RFCMetadata, RFCIndex, enums for status/stream/format
 │   │   ├── Index/            RFCIndexParser (streaming SAX)
-│   │   ├── XML/              XMLDriver (the one front end every XML parser reads through), XMLTree (small DOM used by the document parser)
+│   │   ├── XML/              XMLDriver (the one front end every XML parser reads through), XMLTree (the small DOM the document parser, the feed and the IANA registries are read into)
 │   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text), RFCXMLSerializer, SectionAlignment (a section's successor)
 │   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), RecentFeed (the Recent RFCs feed)
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
+│   │   ├── Registry/         IANARegistry and RegistryLookup: the IANA registries the app looks values up in (#175)
+│   │   ├── Corpus/           Manifest: a data pack's files, sizes and hashes, which corpus-build writes and the app verifies
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)
 │   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section)
 │   ├── Sources/CSQLite/      the system's SQLite, a product of its own that corpus-build uses too
