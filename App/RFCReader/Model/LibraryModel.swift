@@ -148,6 +148,15 @@ final class LibraryModel {
   /// `UserDataMirror.collections`.
   var collections: CollectionSnapshot { userData.collections }
 
+  /// `UserDataMirror.annotations`: every highlight (#522).
+  var annotations: AnnotationSnapshot { userData.annotations }
+
+  /// `UserDataMirror.editAnnotations`.
+  @discardableResult
+  func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
+    userData.editAnnotations(change)
+  }
+
   /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
   /// is on, what is wanted offline, and what Available Offline lists, whether or not
   /// a body has arrived yet.

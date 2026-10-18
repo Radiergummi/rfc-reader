@@ -106,6 +106,15 @@ struct DocumentCommands: Commands {
         .disabled(
           !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
             || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
+        // The selection, in the color last used (#522): Books' shortcut, and grayed out
+        // where Copy as Quote is, for the same reasons.
+        Button("Highlight") {
+          active.controller?.highlightSelection()
+        }
+        .keyboardShortcut("h", modifiers: [.command, .control])
+        .disabled(
+          !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
+            || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
       #endif
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the

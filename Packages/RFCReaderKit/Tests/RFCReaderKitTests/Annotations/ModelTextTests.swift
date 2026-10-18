@@ -25,9 +25,11 @@ struct ModelTextTests {
   }
 
   @Test func `a paragraph is its inlines, a reference as its derived text`() {
-    let reference = Inline.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    let reference = Inline.crossReference(
+      CrossReference(target: .document(.rfc(9110), section: nil)))
     #expect(
-      text(.paragraph(Paragraph([.text("See "), .emphasis([.text("this")]), .text(" "), reference])))
+      text(
+        .paragraph(Paragraph([.text("See "), .emphasis([.text("this")]), .text(" "), reference])))
         == "Heading\nSee this RFC\u{00A0}9110")
   }
 
@@ -171,7 +173,8 @@ struct PositionMapShapeTests {
   }
 
   @Test func `a section number and a chip's symbol are the storage's own`() throws {
-    let reference = Inline.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    let reference = Inline.crossReference(
+      CrossReference(target: .document(.rfc(9110), section: nil)))
     let built = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph([.text("See "), reference]))), style: ReadingStyle())
     let storage = built.text.string as NSString

@@ -53,7 +53,9 @@ public struct Quote: Sendable, Hashable, Codable {
   public static let exactLimit = 256
   public static let contextLimit = 32
 
-  public init(exact: String, prefix: String, suffix: String, length: Int? = nil, digest: String? = nil) {
+  public init(
+    exact: String, prefix: String, suffix: String, length: Int? = nil, digest: String? = nil
+  ) {
     self.exact = exact
     self.prefix = prefix
     self.suffix = suffix
@@ -148,7 +150,9 @@ public struct Relocator: Sendable {
       let scopes = [
         model.span(of: start.anchor)?.range,
         model.offset(of: start).flatMap { model.section(containing: $0)?.range },
-        model.span(of: end.anchor).flatMap { model.section(containing: $0.range.lowerBound)?.range },
+        model.span(of: end.anchor).flatMap {
+          model.section(containing: $0.range.lowerBound)?.range
+        },
         0..<model.length,
       ]
       var searched: Set<Range<Int>> = []
@@ -334,7 +338,8 @@ struct TextNormalization: Sendable {
   }
 
   private static func isLetter(_ unit: UInt16) -> Bool {
-    (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit) || unit > 0x7F
-      && Character(Unicode.Scalar(unit) ?? " ").isLetter
+    (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit)
+      || unit > 0x7F
+        && Character(Unicode.Scalar(unit) ?? " ").isLetter
   }
 }

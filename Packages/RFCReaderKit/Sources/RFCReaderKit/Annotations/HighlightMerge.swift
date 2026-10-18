@@ -37,8 +37,9 @@ public enum HighlightMerge {
     while let index = remaining.firstIndex(where: { $0.range.overlaps(covered) }) {
       let next = remaining.remove(at: index)
       merged.append(next)
-      covered =
-        min(covered.lowerBound, next.range.lowerBound)..<max(covered.upperBound, next.range.upperBound)
+      let lower = min(covered.lowerBound, next.range.lowerBound)
+      let upper = max(covered.upperBound, next.range.upperBound)
+      covered = lower..<upper
     }
     let ordered = merged.sorted {
       ($0.createdAt, $0.identifier.uuidString) < ($1.createdAt, $1.identifier.uuidString)

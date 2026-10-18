@@ -209,7 +209,8 @@ public final class DocumentTextBuilder {
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
         sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
-        positions: builder.positions?.map ?? PositionMap(model: ModelText(document), runs: [], hidden: []))
+        positions: builder.positions?.map
+          ?? PositionMap(model: ModelText(document), runs: [], hidden: []))
     }
   }
 
@@ -469,7 +470,8 @@ extension DocumentTextBuilder {
       hangsNumber: hangingNumber != nil)
     // The number and an appendix's qualifier are the reader's to compose; the
     // model text of a heading is its title alone.
-    let qualifierWords = section.qualifier == nil ? "" : Array(section.headingWords.prefix(1)).plainText
+    let qualifierWords =
+      section.qualifier == nil ? "" : Array(section.headingWords.prefix(1)).plainText
     if let hangingNumber {
       appendHangingNumber(
         hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)

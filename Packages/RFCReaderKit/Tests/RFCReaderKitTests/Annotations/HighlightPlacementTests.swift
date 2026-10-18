@@ -19,7 +19,8 @@ struct HighlightPlacementTests {
     var found = text.range(of: needle)
     for _ in 0..<occurrence {
       found = text.range(
-        of: needle, range: NSRange(location: NSMaxRange(found), length: text.length - NSMaxRange(found)))
+        of: needle,
+        range: NSRange(location: NSMaxRange(found), length: text.length - NSMaxRange(found)))
     }
     let target = try #require(Target(covering: found.location..<NSMaxRange(found), in: model))
     return AnnotationSnapshot.HighlightEntry(
@@ -54,7 +55,9 @@ struct HighlightPlacementTests {
     quote.suffix = ""
     highlight = AnnotationSnapshot.HighlightEntry(
       id: highlight.id, document: .rfc(9110),
-      target: .range(start: Position(anchor: "p-1", offset: start.offset), end: Position(anchor: "p-1", offset: end.offset), quote: quote),
+      target: .range(
+        start: Position(anchor: "p-1", offset: start.offset),
+        end: Position(anchor: "p-1", offset: end.offset), quote: quote),
       color: .yellow, createdAt: .now, modifiedAt: .now)
     let placement = HighlightPlacement([highlight], in: built)
     #expect(placement.marks.marks.isEmpty)
@@ -122,8 +125,10 @@ struct HighlightPlacementTests {
   }
 
   @Test func `marks are found by the range they meet`() {
-    let first = HighlightMark(range: NSRange(location: 10, length: 5), color: .yellow, highlight: UUID())
-    let second = HighlightMark(range: NSRange(location: 30, length: 5), color: .blue, highlight: UUID())
+    let first = HighlightMark(
+      range: NSRange(location: 10, length: 5), color: .yellow, highlight: UUID())
+    let second = HighlightMark(
+      range: NSRange(location: 30, length: 5), color: .blue, highlight: UUID())
     let marks = HighlightMarks([second, first])
     #expect(marks.marks(meeting: NSRange(location: 12, length: 20)) == [first, second])
     #expect(marks.marks(meeting: NSRange(location: 15, length: 15)).isEmpty)

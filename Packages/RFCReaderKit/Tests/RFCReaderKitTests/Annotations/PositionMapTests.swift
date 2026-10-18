@@ -71,7 +71,8 @@ struct PositionMapTests {
         }
       }
     }
-    #expect(mismatches == 0, "\(fixture) at \(measure): \(mismatches) mismatches, first \(first ?? "")")
+    #expect(
+      mismatches == 0, "\(fixture) at \(measure): \(mismatches) mismatches, first \(first ?? "")")
   }
 
   @Test(arguments: fixtures, measures)

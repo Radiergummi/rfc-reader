@@ -208,6 +208,20 @@ final class RFCTextViewCoordinator: NSObject {
   var requirementBands: RequirementBands?
   /// Finding the bands, off the main actor.
   var bandsTask: Task<Void, Never>?
+  /// The document's highlights (#522), which this text view draws where the
+  /// installed build places them.
+  var highlights: [AnnotationSnapshot.HighlightEntry] = []
+  /// Where they are in the installed build.
+  var highlightPlacement = HighlightPlacement.none
+  /// Placing them, off the main actor.
+  var highlightsTask: Task<Void, Never>?
+  #if !canImport(UIKit)
+    /// A click in a highlight, waiting out the double-click interval before its
+    /// popover opens, so it never opens on the way to a double-click.
+    var highlightClick: Task<Void, Never>?
+    /// The popover of the highlight last clicked, while it is open.
+    var highlightPopover: NSPopover?
+  #endif
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
@@ -240,6 +254,8 @@ final class RFCTextViewCoordinator: NSObject {
   var accessibilityHeadings: [AccessibilityRotorItem] = []
   var accessibilityLinks: [AccessibilityRotorItem] = []
   var accessibilityDiagrams: [AccessibilityRotorItem] = []
+  /// The Highlights rotor's stops (#522), from the placement drawn.
+  var accessibilityHighlights: [AccessibilityRotorItem] = []
 
   #if !canImport(UIKit)
     /// The hover and force-click previews; see `ReferenceHover` for their rules.
@@ -529,12 +545,15 @@ final class RFCTextViewCoordinator: NSObject {
         isLink: { link(at: $0) != nil },
         toggles: { offset in
           foldingIndex.map { folding.toggling(heading: offset, in: $0) != nil } ?? false
-        })
+        },
+        isHighlighted: { highlightPlacement.marks.highlight(at: $0) != nil })
       switch action {
       case .nothing:
         break
       case .toggleSection(let offset):
         _ = toggleSection(atHeading: offset)
+      case .showHighlight(let offset):
+        showHighlightPopover(at: offset)
       case .toggleBars:
         bars.tapped()
       }
@@ -603,6 +622,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// ends any dwell. In a link preview's reader it commits the preview.
     func mouseDownInText() -> Bool {
       takeLead()
+      // A second click is a double-click's, not the highlight's.
+      highlightClick?.cancel()
+      highlightClick = nil
       let withControl = NSEvent.modifierFlags.contains(.control)
       guard hover.send(.mouseDown(withControl: withControl)).contains(.commitPreview),
         let commitsOnClick

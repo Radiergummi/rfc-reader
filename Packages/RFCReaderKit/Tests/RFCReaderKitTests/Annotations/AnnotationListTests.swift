@@ -43,6 +43,6 @@ struct AnnotationListTests {
     let marks = HighlightMarks([
       HighlightMark(range: NSRange(location: 4, length: 3), color: .green, highlight: UUID())
     ])
-    #expect(marks.rotorItems(locale: .english).map(\.label) == ["Highlighted, Green"])
+    #expect(marks.rotorItems(locale: .english).map(\.label) == ["Highlighted, green"])
   }
 }

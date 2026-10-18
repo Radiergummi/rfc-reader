@@ -114,9 +114,19 @@ extension HighlightMarks {
   /// since VoiceOver sees nothing of what the fragments draw.
   public func rotorItems(locale: Locale = .interface) -> [AccessibleReading.RotorItem] {
     marks.map { mark in
-      AccessibleReading.RotorItem(
-        range: mark.range,
-        label: String(kit: "Highlighted, \(mark.color.title(in: locale))", locale: locale))
+      AccessibleReading.RotorItem(range: mark.range, label: Self.spoken(mark.color, locale: locale))
+    }
+  }
+
+  /// A sentence each, rather than the color's name put into one.
+  private static func spoken(_ color: HighlightColor, locale: Locale) -> String {
+    switch color {
+    case .yellow: String(kit: "Highlighted, yellow", locale: locale)
+    case .green: String(kit: "Highlighted, green", locale: locale)
+    case .blue: String(kit: "Highlighted, blue", locale: locale)
+    case .pink: String(kit: "Highlighted, pink", locale: locale)
+    case .purple: String(kit: "Highlighted, purple", locale: locale)
+    case .underline: String(kit: "Underlined", locale: locale)
     }
   }
 }

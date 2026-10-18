@@ -34,7 +34,9 @@ public enum HighlightColor: String, CaseIterable, Sendable, Identifiable {
   /// to 4.5:1 as well left fills too faint to find again, the most any could take
   /// being 1.05:1 against white (`HighlightColorTests`). The underline's is its rule's
   /// color, drawn opaque.
-  public var fill: (light: (color: SRGBColor, opacity: Double), dark: (color: SRGBColor, opacity: Double)) {
+  public var fill:
+    (light: (color: SRGBColor, opacity: Double), dark: (color: SRGBColor, opacity: Double))
+  {
     switch self {
     case .yellow:
       (light: (SRGBColor(hex: 0xFF_D60A), 0.4), dark: (SRGBColor(hex: 0xFF_D60A), 0.16))

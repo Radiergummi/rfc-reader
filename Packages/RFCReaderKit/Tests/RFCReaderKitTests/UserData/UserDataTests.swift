@@ -232,7 +232,8 @@ struct UserDataTests {
         end: Position(anchor: "section-1", offset: 9),
         quote: Quote(exact: "quoted", prefix: "", suffix: ""), color: .green))
     try context.save()
-    let reopened = ModelContext(try UserData.container(configurations: ModelConfiguration(url: url)))
+    let reopened = ModelContext(
+      try UserData.container(configurations: ModelConfiguration(url: url)))
     let highlights = try reopened.fetch(FetchDescriptor<Highlight>())
     #expect(highlights.map(\.colorName) == ["green"])
     #expect(highlights.map(\.endOffset) == [9])

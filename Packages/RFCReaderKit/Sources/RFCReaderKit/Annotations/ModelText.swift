@@ -273,7 +273,8 @@ extension ModelText {
       }
       let start = units.count
       let index = spans.count
-      spans.append(Span(anchor: anchor, range: start..<start, parent: open.last, isSection: isSection))
+      spans.append(
+        Span(anchor: anchor, range: start..<start, parent: open.last, isSection: isSection))
       open.append(index)
       body(&self)
       open.removeLast()

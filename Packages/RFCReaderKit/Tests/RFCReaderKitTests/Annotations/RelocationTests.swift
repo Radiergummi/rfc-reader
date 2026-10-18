@@ -117,7 +117,9 @@ struct RelocationTests {
     #expect(covered(Relocator(after).relocate(target), in: after) == long)
     // The same start, a different whole.
     let shorter = long.replacingOccurrences(of: "word40", with: "word99")
-    let altered = model([Paragraph(text: "Opening."), Paragraph(text: "Start. " + shorter + " End.")])
+    let altered = model([
+      Paragraph(text: "Opening."), Paragraph(text: "Start. " + shorter + " End."),
+    ])
     #expect(Relocator(altered).relocate(target) == .detached)
   }
 

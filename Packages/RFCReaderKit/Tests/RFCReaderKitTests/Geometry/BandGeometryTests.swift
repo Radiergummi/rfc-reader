@@ -150,7 +150,8 @@ struct HighlightGeometryTests {
     let baseline = lines[0].typographicBounds.minY + lines[0].glyphOrigin.y
     #expect(rects[0].rect.minY == baseline + FragmentGeometry.highlightRuleOffset)
     #expect(
-      rects[0].rect.minX == lines[0].typographicBounds.minX + lines[0].locationForCharacter(at: 6).x)
+      rects[0].rect.minX == lines[0].typographicBounds.minX + lines[0].locationForCharacter(at: 6).x
+    )
     let fill = FragmentGeometry.highlightRects(
       [HighlightMark(range: range, color: .yellow, highlight: UUID())], in: text, lines: lines,
       fragment: NSRange(location: 0, length: text.length), origin: .zero)

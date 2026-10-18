@@ -27,6 +27,9 @@ final class ReaderState {
   /// Every BCP 14 requirement the document states, extracted once per document by
   /// `DocumentView` (#180): nil until it has been, which is after the body shows.
   var requirements: [Requirement]?
+  /// Where the build on screen placed each of the document's highlights (#522), which
+  /// the Annotations tab lists: nil until a build has, or when there is none.
+  var highlightStatuses: [UUID: HighlightPlacement.Status]?
   /// What the open RFC can be saved as: PDF, and its grammar where it has one
   /// (#185). Set once the document has loaded.
   var exportFormats: [ExportFormat] = [.pdf]
@@ -280,6 +283,7 @@ final class ReaderState {
     readsTranslation = false
     groups = []
     requirements = nil
+    highlightStatuses = nil
     exportFormats = [.pdf]
     folding.expanded = []
     folding.openAsides = []

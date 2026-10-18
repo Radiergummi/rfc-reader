@@ -256,7 +256,9 @@ extension PositionMap {
   /// one of them has is its own: a tab's spaces in `shown`, the header and the
   /// backslashes of a fold in `model`.
   static func alignment(of shown: [UInt16], to model: [UInt16]) -> [Run] {
-    guard shown != model else { return shown.isEmpty ? [] : [Run(storage: 0, model: 0, length: shown.count)] }
+    guard shown != model else {
+      return shown.isEmpty ? [] : [Run(storage: 0, model: 0, length: shown.count)]
+    }
     let shownLines = lineRanges(of: shown)
     let modelLines = lineRanges(of: model)
     guard shownLines.count == modelLines.count else {
