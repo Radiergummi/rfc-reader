@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 import UniformTypeIdentifiers
+import os
 
 /// The Info pane (#25): what the index knows about the document, from
 /// `DocumentInfo`, and whether it is kept offline.
@@ -384,6 +385,12 @@ private struct SectionRows: View {
   let library: LibraryModel
   let open: (DocumentID) -> Void
   let search: (String) -> Void
+  #if !os(macOS)
+    /// The file a format row's Download fetched, while Save to Files offers it: one
+    /// exporter for the card rather than one a row, as SwiftUI presents only one of
+    /// several sibling exporters reliably (#577).
+    @State private var downloaded: DownloadedFile?
+  #endif
 
   var body: some View {
     switch section.style {
@@ -393,10 +400,29 @@ private struct SectionRows: View {
           if index > 0 {
             Divider().padding(.leading, 38)
           }
-          LinkRow(row: row, library: library)
+          #if os(macOS)
+            LinkRow(row: row, library: library)
+          #else
+            LinkRow(row: row, library: library, downloaded: $downloaded)
+          #endif
         }
       }
       .background(.fill.quaternary, in: .rect(cornerRadius: 10))
+      #if !os(macOS)
+        .fileExporter(
+          isPresented: Binding(
+            get: { downloaded != nil },
+            set: { if !$0 { downloaded = nil } }),
+          document: downloaded,
+          contentType: downloaded?.format.contentType ?? .data,
+          defaultFilename: downloaded?.name
+        ) { result in
+          if case .failure(let error) = result {
+            readerLog.error(
+              "saving a format to Files failed: \(String(describing: error), privacy: .public)")
+          }
+        }
+      #endif
     case .list:
       VStack(alignment: .leading, spacing: 10) {
         ForEach(Array(section.rows.enumerated()), id: \.offset) { _, row in
@@ -536,8 +562,10 @@ private struct LinkRow: View {
   @State private var outcome: Outcome?
   @State private var isOptionHeld = false
   #if !os(macOS)
-    /// The file a Download fetched, while Save to Files is offering it.
-    @State private var downloaded: DownloadedFile?
+    /// Where a Download hands the file it fetched, for the card's Save to Files.
+    @Binding var downloaded: DownloadedFile?
+    /// Whether a Download is fetching, so a second one does not fetch it again.
+    @State private var isDownloading = false
   #endif
   @Environment(\.openURL) private var openURL
 
@@ -576,23 +604,6 @@ private struct LinkRow: View {
           Button("Open", systemImage: "safari") { openURL(url) }
           ShareLink(item: url)
           Button("Download", systemImage: "arrow.down.circle") { save(document, format) }
-        }
-        .fileExporter(
-          isPresented: Binding(
-            get: { downloaded != nil },
-            set: { if !$0 { downloaded = nil } }),
-          document: downloaded,
-          contentType: format.contentType,
-          // The RFC Editor's own name, as the Mac saves it to Downloads.
-          defaultFilename: url.deletingPathExtension().lastPathComponent
-        ) { result in
-          switch result {
-          case .success:
-            outcome = .done
-          case .failure(let error):
-            readerLog.failure(of: document, "saving to Files failed", error)
-            outcome = .failed
-          }
         }
       #endif
       .resets($outcome, to: nil, after: .seconds(1.5))
@@ -641,10 +652,16 @@ private struct LinkRow: View {
         }
       }
     #else
+      guard !isDownloading else { return }
+      isDownloading = true
       Task {
+        defer { isDownloading = false }
         do {
-          downloaded = DownloadedFile(
-            data: try await library.publishedFile(document, format: format))
+          let data = try await library.publishedFile(document, format: format)
+          // The RFC Editor's own name, as the Mac saves it to Downloads.
+          let name = RFCEditorEndpoints.document(document, format: format)
+            .deletingPathExtension().lastPathComponent
+          downloaded = DownloadedFile(data: data, format: format, name: name)
         } catch {
           readerLog.failure(of: document, "downloading for Files failed", error)
           outcome = .failed
@@ -691,9 +708,14 @@ private struct LinkRow: View {
     static var writableContentTypes: [UTType] { FileFormat.allCases.map(\.contentType) }
 
     let data: Data
+    let format: FileFormat
+    /// The file's name without its extension, which Save to Files adds for the type.
+    let name: String
 
-    init(data: Data) {
+    init(data: Data, format: FileFormat, name: String) {
       self.data = data
+      self.format = format
+      self.name = name
     }
 
     init(configuration: ReadConfiguration) throws {
