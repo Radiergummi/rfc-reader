@@ -16,8 +16,12 @@ on:
         description: Attach packs to a GitHub release
         type: boolean
         default: false
+      publish_indexes:
+        description: Publish the indexes pack the app bundles as release indexes-<version> (version YYYY.MM.N)
+        type: boolean
+        default: false
 
-# Only the publish job writes, and it builds nothing.
+# Only the publish jobs write, and they build nothing.
 permissions:
   contents: read
 
@@ -249,3 +253,52 @@ jobs:
             packs/indexes-*.aar \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."
+
+  # The indexes pack the app bundles (#738), as a release of its own, one per pack
+  # version: the repository's releases are immutable, so it is made a draft, given
+  # the pack's two files, and only then published, after which neither can change.
+  # App/indexes-pack.mk pins the tag and the files' SHA-256, which the run's summary
+  # prints for it. Like publish, it checks nothing out and runs only gh over the
+  # build job's artifact.
+  publish-indexes:
+    if: ${{ inputs.publish_indexes }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # For `gh release`; actions: read to download this run's artifact.
+      contents: write
+      actions: read
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The app orders packs by their version, number by number, so it is dated
+      # and counted: 2026.10.1.
+      - name: Check the version
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]]; then
+            echo "::error::The indexes pack's version is YYYY.MM.N, not $VERSION."
+            exit 1
+          fi
+
+      - name: Publish release
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir corpus-artifact
+          cd corpus-artifact/packs/indexes
+          tag="indexes-$VERSION"
+          gh release create "$tag" --draft --target "$GITHUB_SHA" \
+            --title "Indexes pack $VERSION" \
+            --notes "The corpus's index database the app bundles (#738). See docs/DATA_PIPELINE.md."
+          gh release upload "$tag" indexes.sqlite manifest.json
+          gh release edit "$tag" --draft=false
+          {
+            echo "Pin it in App/indexes-pack.mk:"
+            echo
+            echo '```make'
+            echo "INDEXES_PACK_TAG := $tag"
+            echo "INDEXES_PACK_SQLITE_SHA256 := $(sha256sum indexes.sqlite | cut -d' ' -f1)"
+            echo "INDEXES_PACK_MANIFEST_SHA256 := $(sha256sum manifest.json | cut -d' ' -f1)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
