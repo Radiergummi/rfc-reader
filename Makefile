@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -9,6 +9,7 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
+LAYOUT_BENCHMARKS := Tools/benchmarks-layout
 # RFCKit, built as the root package, fails on a warning; the other packages say so
 # in their manifests. See RFCKit's manifest for why it cannot (#440).
 RFCKIT_WARNINGS := -Xswiftc -warnings-as-errors
@@ -135,20 +136,39 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
-# RFCs (Tools/benchmarks). Not part of `check`: the numbers are this machine's,
-# and the first run needs the network. A change is measured against a baseline
-# saved before it:
+# RFCs (Tools/benchmarks), then of the reader's TextKit layout (Tools/benchmarks-layout,
+# without package-benchmark's malloc interposer, which crashes TextKit, #582). Not
+# part of `check`: the numbers are this machine's, and the first run needs the
+# network. A change is measured against a baseline saved before it, which each
+# package keeps of its own:
 #
 #   make benchmark BENCHMARK_ARGS='baseline update before'
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
-#   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
+#   make benchmark-core BENCHMARK_ARGS='--filter "Index.*"'
 #
+# `benchmark` runs both packages with the same arguments, one after the other, so
+# that under `make -j` neither is measured while the other runs, and runs the second
+# even when the first fails, so that a `baseline update` leaves neither stale; it
+# fails if either did. Arguments only one of them can take, such as a `--filter` or
+# `--target`, or a baseline saved in only one, go to that package alone:
+# `make benchmark-core` or `make benchmark-layout`; `benchmark` refuses a `--filter`
+# or `--target`, since a filtered `baseline update` would save an empty baseline in
+# the package the filter matches nothing in, which a later `baseline compare` fails on.
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xml rfc5661.txt rfc793.txt
+LAYOUT_BENCHMARK_INPUTS := rfc9000.xml rfc5661.txt
 BENCHMARK_ARGS ?=
-benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+benchmark:
+	$(if $(filter --filter% --target%,$(BENCHMARK_ARGS)),$(error a --filter or --target is one package's: run make benchmark-core or make benchmark-layout))
+	$(MAKE) benchmark-core; core=$$?; $(MAKE) benchmark-layout && exit $$core
+
+benchmark-core: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+benchmark-layout: $(LAYOUT_BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(LAYOUT_BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 ## Build the benchmarks without running them
 # Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
@@ -156,6 +176,7 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 # next wants a baseline (#419). Debug: it checks that they compile, not how fast.
 build-benchmarks:
 	swift build --package-path $(BENCHMARKS)
+	swift build --package-path $(LAYOUT_BENCHMARKS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the

@@ -29,23 +29,33 @@ private struct AuthorChip: View {
       Button {
         showsCard = true
       } label: {
-        label
+        label(opensCard: true)
       }
       .buttonStyle(.plain)
+      .pressableText()
       .help("Show contact details")
+      .accessibilityHint("Shows the author’s contact details.")
       .background {
         ContactCardPresenter(isPresented: $showsCard, author: author)
       }
     } else {
-      label
+      label(opensCard: false)
     }
   }
 
-  private var label: some View {
+  /// A chip that opens a card ends in a small chevron, the mark iOS gives what opens
+  /// more (#769), so it no longer looks exactly like one that opens nothing.
+  private func label(opensCard: Bool) -> some View {
     HStack(spacing: 5) {
       Monogram(name: author.name)
       Text(author.displayName)
         .lineLimit(1)
+      if opensCard {
+        Image(systemName: "chevron.forward")
+          .font(.caption2.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
+      }
     }
     .padding(.vertical, 2)
     .padding(.leading, 2)

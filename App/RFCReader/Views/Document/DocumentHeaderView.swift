@@ -35,11 +35,15 @@ struct DocumentHeaderView: View {
     let moreRevisions: String?
     /// What the header says of a translation (#749), nil for the English.
     let translation: TranslationMark?
+    /// The errata naming no section the document has (#387), which the chip by the
+    /// date lists.
+    let documentErrata: [ErrataSummary.Item]
 
     /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(
       header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil,
-      translation: TranslationMark? = nil
+      translation: TranslationMark? = nil,
+      documentErrata: [ErrataSummary.Item] = []
     ) {
       let summary = HeaderSummary(header: header, metadata: metadata)
       title = summary.title
@@ -50,6 +54,7 @@ struct DocumentHeaderView: View {
       revisionLines = revisions?.bannerLines ?? []
       moreRevisions = revisions?.moreText
       self.translation = translation
+      self.documentErrata = documentErrata
     }
   }
 
@@ -88,9 +93,22 @@ struct DocumentHeaderView: View {
         if let group = identity.workingGroup {
           Text(group)
         }
+        #if os(macOS)
+          if !identity.documentErrata.isEmpty {
+            DocumentErrataChip(items: identity.documentErrata)
+          }
+        #endif
       }
       .font(.subheadline)
       .foregroundStyle(.secondary)
+      #if !os(macOS)
+        // A line of its own: beside the rest it wraps on an iPhone in portrait.
+        if !identity.documentErrata.isEmpty {
+          DocumentErrataChip(items: identity.documentErrata)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+      #endif
       if !identity.authors.isEmpty {
         AuthorChips(authors: identity.authors)
           .font(.subheadline)
@@ -142,5 +160,36 @@ private struct TranslationNotice: View {
     }
     .font(.subheadline)
     .foregroundStyle(.secondary)
+  }
+}
+
+/// The whole document's errata (#387), those naming no section it has: a chip by the
+/// date on macOS, and on a line of its own under it on iOS, worded as a heading's is,
+/// which lists them in a popover on macOS, and in a sheet the scene presents on iOS,
+/// where the header cannot present (`GlossaryPresentation`).
+private struct DocumentErrataChip: View {
+  let items: [ErrataSummary.Item]
+  @Environment(NavigationModel.self) private var navigation
+  @State private var isShown = false
+
+  var body: some View {
+    Button {
+      #if os(iOS)
+        navigation.errataShown = ErrataRequest(items: items)
+      #else
+        isShown = true
+      #endif
+    } label: {
+      Label {
+        Text(verbatim: ErrataMarks.label(for: items))
+      } icon: {
+        Image(systemName: "exclamationmark.bubble")
+      }
+    }
+    .buttonStyle(.borderless)
+    .help("The errata not marked on any section")
+    .popover(isPresented: $isShown) {
+      ErrataList(items: items)
+    }
   }
 }

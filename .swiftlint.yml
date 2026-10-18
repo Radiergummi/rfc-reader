@@ -13,6 +13,7 @@ included:
   - Tools/corpus-build/Sources
   - Tools/corpus-build/Tests
   - Tools/benchmarks/Benchmarks
+  - Tools/benchmarks-layout/Benchmarks
 
 disabled_rules:
   # The parsers are long, branchy state machines: LegacyTextParser alone decides

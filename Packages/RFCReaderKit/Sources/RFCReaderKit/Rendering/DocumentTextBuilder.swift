@@ -74,6 +74,8 @@ public final class DocumentTextBuilder {
   /// The backlinks to use instead of the document's own: a translation's, which are
   /// its original's (#749).
   var givenBacklinks: [String: [Backlink]]?
+  /// The errata each heading's chip lists (#387).
+  var errata = ErrataMarks.none
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -140,15 +142,19 @@ public final class DocumentTextBuilder {
   ///   above the text, so a print passes one (#375).
   /// - Parameter choices: the blocks the reader asked to see as their source.
   /// - Parameter hints: reviewed artwork types; tests pass their own.
-  /// - Parameter translation: for a translated document (#749), the labels its
-  ///   translation gave; nil for the original, which is English throughout.
+  /// - Parameters:
+  ///   - errata: the errata to mark after the headings (#387); only a build for the
+  ///     reader has them.
+  ///   - translation: for a translated document (#749), the labels its translation
+  ///     gave; nil for the original, which is English throughout.
   public static func build(
     _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
     choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
-    translation: DocumentLabels? = nil
+    errata: ErrataMarks = .none, translation: DocumentLabels? = nil
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(
       style: style, choices: choices, hints: hints, labels: translation ?? .english)
+    builder.errata = errata
     return build(document, title: title, translation: translation, with: builder)
   }
 
@@ -157,11 +163,13 @@ public final class DocumentTextBuilder {
   /// section makes.
   public static func build(
     _ translated: TranslatedDocument, style: ReadingStyle,
-    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(
       style: style, choices: choices, hints: hints, labels: translated.labels)
     builder.givenBacklinks = translated.backlinks
+    builder.errata = errata
     return build(
       translated.document, title: nil, translation: translated.labels, with: builder)
   }
@@ -177,14 +185,18 @@ public final class DocumentTextBuilder {
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
     reserveChipPadding(in: builder.output)
+    // Last: it carries the decorations, indents, insets and widths set so far, and
+    // nothing rewrites them after it.
+    builder.setDecorationFacts()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
-      sectionNumberHang: builder.hang, translation: translation)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+      grammar: builder.grammar.withoutParsedBlocks,
+      sectionNumberHang: builder.hang, errata: builder.errata, translation: translation)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -424,6 +436,9 @@ extension DocumentTextBuilder {
         numberPrefix.isEmpty
         ? words : words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
       output.append(inlineRuns(title, base: attributes))
+    }
+    if let marked = errata.bySection[section.anchor], !marked.isEmpty {
+      output.append(errataChip(section.anchor, items: marked, base: attributes))
     }
     append("\n", attributes)
     if let citing {

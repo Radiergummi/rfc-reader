@@ -20,7 +20,13 @@ public struct ErrataSummary: Equatable, Sendable {
     public let place: String
     /// The first section it names that the document has, to go to; nil when it names
     /// none, or none the document has.
-    public let anchor: String?
+    public var anchor: String? { anchors.first }
+    /// Every section it names that the document has, in its order: where the reader
+    /// marks it (`ErrataMarks`).
+    public let anchors: [String]
+    /// Held for the next revision rather than verified, which the reader's mark
+    /// says.
+    public let isHeld: Bool
     public let original: String
     public let corrected: String
     public let notes: String
@@ -54,7 +60,8 @@ public struct ErrataSummary: Equatable, Sendable {
         place: erratum.sections.isEmpty
           ? Self.place(written: erratum.section, locale: locale)
           : Self.place(of: erratum.sections, locale: locale),
-        anchor: erratum.sections.lazy.compactMap { anchors[$0] }.first,
+        anchors: erratum.sections.compactMap { anchors[$0] },
+        isHeld: erratum.status == .heldForDocumentUpdate,
         original: erratum.original,
         corrected: erratum.corrected,
         notes: erratum.notes,

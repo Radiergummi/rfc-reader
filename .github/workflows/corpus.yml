@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
+    # A full run fetches and converts the 8,457 legacy RFCs that have a text file; this only stops a hung one.
     timeout-minutes: 180
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     # Read-only: this job compiles and runs third-party packages. actions: read to

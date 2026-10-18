@@ -53,6 +53,8 @@ extension DocumentSession {
       skipLoad()
       guard isShown else { return }
       reader.isLoading = false
+      // A jump waiting for the text is not coming, as for a load that failed.
+      if let request = navigation.scrollRequest { navigation.settle(request, as: .notShown) }
       // Recorded as a loaded text would be: Recently Read lists a scan, and a
       // pointer with a pack or without. Here, so once per opening, like a load's.
       positions.markOpened()
@@ -75,7 +77,7 @@ extension DocumentSession {
       guard reader.isCurrent else { return }
       reader { $0.documentFailedToLoad() }
       // A jump waiting for the text is not coming.
-      if let request = navigation.scrollRequest { navigation.settle(request) }
+      if let request = navigation.scrollRequest { navigation.settle(request, as: .notShown) }
     }
   }
 
@@ -196,21 +198,22 @@ extension DocumentSession {
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
-  /// what discards a canceled one. `DocumentPreview` builds through it too.
+  /// what discards a canceled one, unless nothing is on screen yet.
+  /// `DocumentPreview` builds through it too.
   /// - Parameter translation: `document`'s translation (#749), built in its place.
   @concurrent
   static func built(
     _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults,
-    translation: TranslatedDocument? = nil
+    errata: ErrataMarks = .none, translation: TranslatedDocument? = nil
   ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
       if let translation {
-        DocumentTextBuilder.build(translation, style: style, choices: choices)
+        DocumentTextBuilder.build(translation, style: style, choices: choices, errata: errata)
       } else {
-        DocumentTextBuilder.build(document, style: style, choices: choices)
+        DocumentTextBuilder.build(document, style: style, choices: choices, errata: errata)
       }
     }
   }
