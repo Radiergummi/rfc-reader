@@ -71,7 +71,7 @@ public enum PinRecipe {
   /// out what follows never moves it. A pin alone leaves it where TextKit estimated
   /// it, and the viewport in coordinates that the layout from the start later
   /// replaces: on an iPhone, that moved the text under the reader 73,000 characters
-  /// of RFC 5661. Laying out to the middle of that document costs about 0.35 s there.
+  /// of RFC 5661. What laying out up to the line costs is the "Settle" signpost.
   ///
   /// The viewport goes to the document's start first. UIKit moves its viewport from
   /// the fragment it last put at the top, by the distance scrolled from the y it put

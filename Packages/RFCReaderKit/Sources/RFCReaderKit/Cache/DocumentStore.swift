@@ -42,9 +42,9 @@ public actor DocumentStore {
   private let parsing: (@Sendable () async -> Void)?
 
   /// The documents parsed last, so reopening one, or going back to it, skips the
-  /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
-  /// (`make benchmark`). Bounded: it used to keep every document opened for as long
-  /// as the app ran.
+  /// parse, which the "Parse XML" and "Parse text" benchmarks of `make benchmark`
+  /// measure. Bounded: it used to keep every document opened for as long as the app
+  /// ran.
   private var parsed = RecentValues<DocumentID, Parse>(capacity: 8)
 
   /// A document as parsed, with the index entry its parse was given: nil for one
@@ -298,7 +298,8 @@ public actor DocumentStore {
   }
 
   /// Off the actor and after the caller has its index: encoding the whole index
-  /// takes about 165 ms, which a launch should not wait for, and a document opened
+  /// ("Index: encode snapshot" in `make benchmark`, "Write index snapshot" in a trace)
+  /// is work a launch should not wait for, and a document opened
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   public func writeSnapshot(of index: RFCIndex) {
