@@ -160,10 +160,12 @@ extension ExportFormat {
   /// grammar. Nil for PDF, which is laid out (`PDFExport`), for the EPUB, which is
   /// an archive (`data(of:)`), for the RFC Editor's own files, and for a grammar
   /// `document` does not have.
-  public func text(of document: RFCDocument) -> String? {
+  ///
+  /// - Parameter outside: the document `document` is a part of (`ExportedPart`).
+  public func text(of document: RFCDocument, outside: DocumentID? = nil) -> String? {
     switch self {
-    case .html: RFCHTMLSerializer().page(document)
-    case .markdown: RFCMarkdownSerializer().serialize(document)
+    case .html: RFCHTMLSerializer(outside: outside).page(document)
+    case .markdown: RFCMarkdownSerializer(outside: outside).serialize(document)
     case .abnf: GrammarExport.text(for: document)
     case .pdf, .epub, .text, .xml: nil
     }
@@ -172,9 +174,14 @@ extension ExportFormat {
   /// The file this format makes of `document` itself: `text(of:)`'s, or the EPUB.
   /// Nil where `text(of:)` is, but for the EPUB. What every surface that saves a
   /// file asks, so they save the same one.
-  public func data(of document: RFCDocument) -> Data? {
-    if self == .epub { return RFCEPUBWriter().epub(document) }
-    return text(of: document).map { Data($0.utf8) }
+  public func data(of document: RFCDocument, outside: DocumentID? = nil) -> Data? {
+    if self == .epub { return RFCEPUBWriter(outside: outside).epub(document) }
+    return text(of: document, outside: outside).map { Data($0.utf8) }
+  }
+
+  /// `data(of:outside:)` of a part.
+  public func data(of part: ExportedPart) -> Data? {
+    data(of: part.document, outside: part.outside)
   }
 
   /// A legacy RFC as XML, which the RFC Editor never published it as: the document

@@ -96,6 +96,9 @@ final class ReaderState {
   /// Resolved by `DocumentView`, which has the document — rather than handing the
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?
+  /// The anchor of the section the reader is in, when the reader is in one: what
+  /// Export and Print offer to take alone (#386). Nil above the first section.
+  var exportableSection: String?
 
   /// Whether the document's body is here: what the toolbar title, printing and
   /// export need. The panel asks `canDescribe` instead.
@@ -294,6 +297,7 @@ final class ReaderState {
     revealedReference = nil
     currentAnchor = nil
     currentSection = nil
+    exportableSection = nil
     hasDocument = false
     publishedOriginal = nil
     isLoading = false

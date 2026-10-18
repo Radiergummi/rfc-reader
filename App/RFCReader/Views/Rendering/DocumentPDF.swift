@@ -53,8 +53,9 @@ nonisolated enum DocumentPDF {
     if original {
       content = .original(try await library.originalText(for: id))
     } else {
-      let whole = try await library.document(for: id)
-      let document = section.flatMap { whole.narrowed(toSection: $0) } ?? whole
+      let document = try ExportedPart(
+        of: try await library.document(for: id), section: section
+      ).document
       content = .document(
         Printed(
           document: document,

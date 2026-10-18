@@ -61,11 +61,20 @@ struct SectionExtractTests {
   /// rfc-editor.org; one into the section stays in the file.
   @Test func `a reference out of the section links to the published document`() throws {
     let narrowed = try #require(Self.document.narrowed(toSection: "section-2"))
-    let markdown = RFCMarkdownSerializer().serialize(narrowed)
+    let markdown = RFCMarkdownSerializer(outside: .rfc(9999)).serialize(narrowed)
     #expect(markdown.contains("[above](https://www.rfc-editor.org/rfc/rfc9999#section-1)"))
-    let html = RFCHTMLSerializer().page(narrowed)
+    #expect(!markdown.contains("(#section-1)"))
+    let html = RFCHTMLSerializer(outside: .rfc(9999)).page(narrowed)
     #expect(html.contains("href=\"https://www.rfc-editor.org/rfc/rfc9999#section-1\""))
+    let book = RFCHTMLSerializer(outside: .rfc(9999)).chapters(narrowed)
+    #expect(book[1].body.contains("href=\"https://www.rfc-editor.org/rfc/rfc9999#section-1\""))
+  }
+
+  /// A whole document links within itself, whatever anchor a link names: a place
+  /// the document lacks is no other document's.
+  @Test func `a whole document's links stay in it`() {
     let whole = RFCMarkdownSerializer().serialize(Self.document)
     #expect(whole.contains("[below](#section-2.1)"))
+    #expect(!whole.contains("rfc-editor.org/rfc/rfc9999#"))
   }
 }

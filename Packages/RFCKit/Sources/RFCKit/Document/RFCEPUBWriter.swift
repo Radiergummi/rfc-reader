@@ -8,7 +8,13 @@ import Foundation
 /// The archive stores every entry uncompressed (`StoredZip`), and the same document
 /// makes the same bytes.
 public struct RFCEPUBWriter: Sendable {
-  public init() {}
+  /// The document what is written is a part of (#386); see
+  /// `RFCMarkdownSerializer.outside`.
+  public var outside: DocumentID?
+
+  public init(outside: DocumentID? = nil) {
+    self.outside = outside
+  }
 
   public func epub(_ document: RFCDocument) -> Data {
     StoredZip.archive(entries(document))
@@ -16,7 +22,7 @@ public struct RFCEPUBWriter: Sendable {
 
   /// The book's files, in archive order: `mimetype` first, as EPUB asks.
   func entries(_ document: RFCDocument) -> [StoredZip.Entry] {
-    let chapters = RFCHTMLSerializer().chapters(document)
+    let chapters = RFCHTMLSerializer(outside: outside).chapters(document)
     var entries = [
       StoredZip.Entry(path: "mimetype", data: Data("application/epub+zip".utf8)),
       StoredZip.Entry(path: "META-INF/container.xml", data: Data(Self.container.utf8)),

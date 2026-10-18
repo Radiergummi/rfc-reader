@@ -56,7 +56,8 @@
             library: library)
           exported = ExportedFile(
             data: data, format: format,
-            fileStem: ExportFormat.fileStem(for: id, section: format.narrows ? section : nil))
+            fileStem: ExportFormat.fileStem(
+              for: id, section: ExportScope.currentSection.section(section, for: format)))
         } catch {
           isExporting = false
           fail(.export(LoadFailure(error: error)), id)

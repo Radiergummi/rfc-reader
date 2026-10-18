@@ -9,7 +9,13 @@ import Foundation
 /// the same body in content documents of its own, so the styling stays out of the
 /// body, in `stylesheet`, which the page embeds and an EPUB replaces.
 public struct RFCHTMLSerializer: Sendable {
-  public init() {}
+  /// The document what is written is a part of (#386); see
+  /// `RFCMarkdownSerializer.outside`.
+  public var outside: DocumentID?
+
+  public init(outside: DocumentID? = nil) {
+    self.outside = outside
+  }
 
   /// The whole page: the document's body, under a head that names it and embeds
   /// `stylesheet`.
@@ -37,7 +43,8 @@ public struct RFCHTMLSerializer: Sendable {
   /// What the page's `<body>` holds: the document's header, its abstract and its
   /// sections, each section an `<section>` with the section's anchor.
   public func body(_ document: RFCDocument) -> String {
-    var writer = Writer(links: ExportLinks(document: document, inDocument: .fragments))
+    var writer = Writer(
+      links: ExportLinks(document: document, inDocument: .fragments, outside: outside))
     writer.header(document)
     for section in document.sections {
       writer.section(section, level: 2)
@@ -72,7 +79,7 @@ extension RFCHTMLSerializer {
       place(
         sections.map(\.anchor) + sections.flatMap(\.blocks).flattened.flatMap(\.anchors), in: file)
     }
-    var links = ExportLinks(document: document, inDocument: .fragments)
+    var links = ExportLinks(document: document, inDocument: .fragments, outside: outside)
     links.chapterFiles = ExportLinks.ChapterFiles(files: files, fallback: front)
 
     var writer = Writer(links: links)

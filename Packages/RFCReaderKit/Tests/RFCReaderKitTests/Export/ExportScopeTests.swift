@@ -17,14 +17,30 @@ struct ExportScopeTests {
     #expect(ExportScope.currentSection.name(in: .english) == "Current Section")
   }
 
-  @Test func `the current section is the document narrowed to it`() throws {
+  @Test func `only the current section of a format that narrows is a section`() {
+    #expect(ExportScope.currentSection.section("section-2", for: .pdf) == "section-2")
+    #expect(ExportScope.currentSection.section("section-2", for: .text) == nil)
+    #expect(ExportScope.wholeDocument.section("section-2", for: .pdf) == nil)
+    #expect(ExportScope.currentSection.section(nil, for: .pdf) == nil)
+  }
+
+  @Test func `a part is the section narrowed out, linking out to the document`() throws {
     let document = try Fixtures.rfc8999()
     let section = try #require(document.sections.first { $0.number == "2" })
-    #expect(ExportScope.wholeDocument.document(document, section: section.anchor) == document)
-    let narrowed = try #require(
-      ExportScope.currentSection.document(document, section: section.anchor))
-    #expect(narrowed.sections.map(\.anchor) == [section.anchor])
-    #expect(ExportScope.currentSection.document(document, section: nil) == nil)
+    let part = try ExportedPart(of: document, section: section.anchor)
+    #expect(part.document.sections.map(\.anchor) == [section.anchor])
+    #expect(part.outside == document.header.id)
+    let whole = try ExportedPart(of: document, section: nil)
+    #expect(whole.document == document)
+    #expect(whole.outside == nil)
+  }
+
+  /// A section the document no longer has is an error: never the whole document
+  /// saved under the section's name.
+  @Test func `a section the document lacks is an error`() throws {
+    #expect(throws: ExportedPart.SectionMissing.self) {
+      try ExportedPart(of: try Fixtures.rfc8999(), section: "no-such-section")
+    }
   }
 
   @Test func `a section's file is named by its anchor`() {
@@ -36,6 +52,7 @@ struct ExportScopeTests {
         == "RFC-9110-acknowledgments.md")
     #expect(ExportFormat.fileStem(for: .rfc(9110), section: "section-4") == "RFC-9110-section-4")
     #expect(ExportFormat.fileStem(for: .rfc(9110), section: nil) == "RFC-9110")
+    #expect(ExportFormat.pdf.fileName(for: .rfc(9110), section: nil) == "RFC-9110.pdf")
   }
 
   /// A link to what a section's PDF leaves out goes to the document's page.

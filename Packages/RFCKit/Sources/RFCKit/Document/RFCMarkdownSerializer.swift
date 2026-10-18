@@ -13,15 +13,21 @@ import Foundation
 /// rules block kind by block kind.
 public struct RFCMarkdownSerializer: Sendable {
   public var inDocumentLinks: InDocumentLinks
+  /// The document what is written is a part of, a section narrowed out of it
+  /// (#386): a link to anything the part leaves out goes to it on rfc-editor.org.
+  /// Nil for a whole document.
+  public var outside: DocumentID?
 
-  public init(inDocumentLinks: InDocumentLinks = .fragments) {
+  public init(inDocumentLinks: InDocumentLinks = .fragments, outside: DocumentID? = nil) {
     self.inDocumentLinks = inDocumentLinks
+    self.outside = outside
   }
 
   /// The whole document: its title and byline, its abstract, then its sections, one
   /// heading level below the title.
   public func serialize(_ document: RFCDocument) -> String {
-    let writer = Writer(links: ExportLinks(document: document, inDocument: inDocumentLinks))
+    let writer = Writer(
+      links: ExportLinks(document: document, inDocument: inDocumentLinks, outside: outside))
     var parts: [[String]] = [
       ["# " + Writer.headingText(Writer.escaped(document.header.title))]
     ]
@@ -46,7 +52,8 @@ public struct RFCMarkdownSerializer: Sendable {
   public func serialize(
     _ section: Section, in document: RFCDocument, includingSubsections: Bool = true
   ) -> String {
-    let writer = Writer(links: ExportLinks(document: document, inDocument: inDocumentLinks))
+    let writer = Writer(
+      links: ExportLinks(document: document, inDocument: inDocumentLinks, outside: outside))
     return Writer.joined([
       writer.section(section, level: 1, includingSubsections: includingSubsections)
     ])

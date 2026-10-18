@@ -29,14 +29,13 @@ nonisolated extension DocumentPDF {
     _ id: DocumentID, section: String? = nil, paperSize: CGSize, library: LibraryModel
   ) async throws -> Data {
     let whole = try await library.document(for: id)
-    let narrowed = section.flatMap { whole.narrowed(toSection: $0) }
+    let part = try ExportedPart(of: whole, section: section)
     return await renderExport(
-      narrowed ?? whole, metadata: library.metadata(id),
+      part.document, metadata: library.metadata(id),
       choices: library.presentationChoices(
         for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
       paperSize: paperSize,
-      linking: PDFLinking(
-        references: PDFExport.references(in: whole), outside: narrowed == nil ? nil : id))
+      linking: PDFLinking(references: PDFExport.references(in: whole), outside: part.outside))
   }
 
   @concurrent

@@ -146,7 +146,7 @@ import SwiftUI
             Button(format.name()) { exportDocument(format, nil) }
           }
           // The section on screen alone, in a format that takes one (#386).
-          if let section = reader.currentSection {
+          if let section = reader.exportableSection {
             Menu(ExportScope.currentSection.name()) {
               ForEach(reader.exportFormats.filter(\.narrows)) { format in
                 Button(format.name()) { exportDocument(format, section) }

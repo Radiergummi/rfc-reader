@@ -28,8 +28,11 @@
     /// The section to export: the one on screen, when it is chosen and the format
     /// takes a section; nil for the whole document.
     var section: String? {
-      scope == .currentSection && format.narrows ? currentSection : nil
+      scope.section(currentSection, for: format)
     }
+    /// The name the panel was last given for a format and scope, which a change of
+    /// either replaces; a name typed over it is kept, with the extension changed.
+    private var givenName = ""
 
     init(
       panel: NSSavePanel, document: DocumentID, offered: [ExportFormat], currentSection: String?
@@ -64,7 +67,7 @@
       scopePopUp.action = #selector(chooseScope)
       scopePopUp.isEnabled = format.narrows
       panel.allowedContentTypes = [format.contentType]
-      panel.nameFieldStringValue = format.fileName(for: document)
+      giveName()
     }
 
     @objc private func choose() {
@@ -72,23 +75,24 @@
       UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
       panel.allowedContentTypes = [format.contentType]
       scopePopUp.isEnabled = format.narrows
-      // A section's name for a format that takes one, the document's for one that
-      // does not; otherwise whatever the name was changed to, with this extension.
-      panel.nameFieldStringValue =
-        scope == .currentSection ? defaultName : format.renaming(panel.nameFieldStringValue)
+      if panel.nameFieldStringValue == givenName {
+        giveName()
+      } else {
+        panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)
+      }
     }
 
-    /// The name a new export in this format and scope is given.
-    private var defaultName: String {
-      section.map { format.fileName(for: document, section: $0) }
-        ?? format.fileName(for: document)
+    /// The name a new export in this format and scope is given, given.
+    private func giveName() {
+      givenName = format.fileName(for: document, section: section)
+      panel.nameFieldStringValue = givenName
     }
 
     /// The whole document or the section: the name becomes the one this scope
     /// gives, as a new export would.
     @objc private func chooseScope() {
       scope = ExportScope.allCases[scopePopUp.indexOfSelectedItem]
-      panel.nameFieldStringValue = defaultName
+      giveName()
     }
   }
 #endif

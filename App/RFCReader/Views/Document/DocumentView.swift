@@ -736,6 +736,7 @@ struct DocumentView: View {
       // searches the section tree depth first — 305 sections on RFC 9110 — and this
       // runs on every section crossing while scrolling.
       reader.currentSection = session.sectionPlaces[anchor]
+      reader.exportableSection = session.sectionAnchors.contains(anchor) ? anchor : nil
       // Recorded on the history entry when navigating away, so coming back returns
       // here rather than to the top of the document.
       navigation.visiblePosition = anchor

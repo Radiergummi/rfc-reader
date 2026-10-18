@@ -34,9 +34,8 @@ enum DocumentExport {
   private static func rendered(
     _ id: DocumentID, as format: ExportFormat, section: String?, library: LibraryModel
   ) async throws -> Data {
-    let whole = try await library.document(for: id)
-    let document = section.flatMap { whole.narrowed(toSection: $0) } ?? whole
-    guard let data = await serialized(document, as: format) else {
+    let part = try ExportedPart(of: try await library.document(for: id), section: section)
+    guard let data = await serialized(part, as: format) else {
       throw CocoaError(.fileWriteUnknown)
     }
     return data
@@ -45,8 +44,8 @@ enum DocumentExport {
   /// `format.data(of:)`, off the main actor: a large RFC's book is two passes over
   /// the whole document and a checksum over every byte of it.
   @concurrent
-  private static func serialized(_ document: RFCDocument, as format: ExportFormat) async -> Data? {
-    format.data(of: document)
+  private static func serialized(_ part: ExportedPart, as format: ExportFormat) async -> Data? {
+    format.data(of: part)
   }
 
   /// The RFC Editor's XML where it published one, and the app's conversion of the

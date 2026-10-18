@@ -10,7 +10,8 @@ public enum ExportScope: String, CaseIterable, Identifiable, Sendable {
 
   public var id: String { rawValue }
 
-  /// What the save and print panels' pop-up calls it.
+  /// What the save and print panels' pop-up calls it. In title case, as a menu's
+  /// item is, where the errata summary's "Whole document" is a sentence's.
   public func name(in locale: Locale = .interface) -> String {
     switch self {
     case .wholeDocument: String(kit: "Whole Document", locale: locale)
@@ -18,12 +19,39 @@ public enum ExportScope: String, CaseIterable, Identifiable, Sendable {
     }
   }
 
-  /// What `document` becomes for this scope: itself, or the section `section`
-  /// names narrowed out of it. Nil when there is no such section.
-  public func document(_ document: RFCDocument, section: String?) -> RFCDocument? {
-    switch self {
-    case .wholeDocument: document
-    case .currentSection: section.flatMap { document.narrowed(toSection: $0) }
+  /// The section to export in this scope and `format`: `current`, the anchor of
+  /// the section on screen, when this is the current section and the format takes
+  /// one; nil for the whole document.
+  public func section(_ current: String?, for format: ExportFormat) -> String? {
+    self == .currentSection && format.narrows ? current : nil
+  }
+}
+
+/// What an export is made of (#386): the whole document, or one section of it and
+/// the document a link to the rest goes to.
+public struct ExportedPart: Sendable {
+  public let document: RFCDocument
+  /// The document the part was narrowed out of; nil for a whole document.
+  public let outside: DocumentID?
+
+  /// The section the anchor `section` names narrowed out of `whole`, or `whole`
+  /// when `section` is nil. A section the document no longer has is an error, never
+  /// the whole document under the section's name.
+  public init(of whole: RFCDocument, section: String?) throws {
+    guard let section else {
+      self.document = whole
+      self.outside = nil
+      return
+    }
+    guard let narrowed = whole.narrowed(toSection: section) else { throw SectionMissing() }
+    self.document = narrowed
+    self.outside = whole.header.id
+  }
+
+  /// A section to export that the document does not have.
+  public struct SectionMissing: LocalizedError {
+    public var errorDescription: String? {
+      String(kit: "The section is no longer in the document.", locale: .interface)
     }
   }
 }
@@ -41,7 +69,7 @@ extension ExportFormat {
   /// `RFC-9110-section-4.2.pdf`, `RFC-9110-introduction.pdf`: the file of one
   /// section, named as the document's is, then by the section's anchor, which an
   /// RFC's links name it by too. An anchor is an XML name, so it is a file's too.
-  public func fileName(for id: DocumentID, section anchor: String) -> String {
+  public func fileName(for id: DocumentID, section anchor: String?) -> String {
     "\(Self.fileStem(for: id, section: anchor)).\(pathExtension)"
   }
 

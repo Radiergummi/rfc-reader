@@ -59,19 +59,21 @@
       let original = reader.showOriginal
       // The section on screen, which the panel offers to print alone (#386); not
       // for the published text, whose pages are printed as they are.
-      let section = original ? nil : reader.currentSection
+      let section = original ? nil : reader.exportableSection
       isPrinting = true
       printing = Task {
         do {
+          // The section's, beside the whole document's, and short; one that fails
+          // leaves the panel without the choice rather than the print undone.
+          let paperSize = printInfo.paperSize
+          async let sectionData: Data? = {
+            guard let section else { return nil }
+            return try? await DocumentPDF.make(
+              for: id, original: false, section: section, paperSize: paperSize, library: library)
+          }()
           let data = try await DocumentPDF.make(
-            for: id, original: original, paperSize: printInfo.paperSize, library: library)
-          var sectionPDF: PDFDocument?
-          if let section {
-            sectionPDF = PDFDocument(
-              data: try await DocumentPDF.make(
-                for: id, original: false, section: section, paperSize: printInfo.paperSize,
-                library: library))
-          }
+            for: id, original: original, paperSize: paperSize, library: library)
+          let sectionPDF = await sectionData.flatMap(PDFDocument.init(data:))
           guard !Task.isCancelled else { return }
           guard let pdf = PDFDocument(data: data),
             let operation = Self.printOperation(of: pdf, section: sectionPDF, printInfo: printInfo)
@@ -137,7 +139,7 @@
       let panel = NSSavePanel()
       let chooser = ExportFormatChooser(
         panel: panel, document: id, offered: reader.exportFormats,
-        currentSection: reader.currentSection)
+        currentSection: reader.exportableSection)
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true

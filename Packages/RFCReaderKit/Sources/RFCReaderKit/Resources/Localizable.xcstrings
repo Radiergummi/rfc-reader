@@ -3384,6 +3384,16 @@
         }
       }
     },
+    "The section is no longer in the document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Abschnitt ist nicht mehr im Dokument."
+          }
+        }
+      }
+    },
     "The stream was created in 2022, by RFC 9280: its documents are written in the RFC Series Working Group and approved by the RFC Series Approval Board." : {
       "localizations" : {
         "de" : {
