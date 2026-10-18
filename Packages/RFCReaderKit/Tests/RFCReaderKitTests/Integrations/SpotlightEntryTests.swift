@@ -36,8 +36,21 @@ struct SpotlightEntryTests {
     old.id = .rfc(7231)
     old.obsoletedBy = [.rfc(9110)]
     #expect(
-      SpotlightEntry(old).description
+      SpotlightEntry(old, locale: .english).description
         == "Obsoleted by RFC 9110. The Hypertext Transfer Protocol is a stateless protocol.")
+  }
+
+  /// What Spotlight and Shortcuts show of an obsoleted RFC is in the interface's
+  /// language, its list of replacements included.
+  @Test func `the obsoletion note is in the locale's language`() {
+    var old = Self.semantics
+    old.id = .rfc(2616)
+    old.obsoletedBy = [.rfc(7230), .rfc(7231)]
+    #expect(old.obsoletionNote(locale: .english) == "Obsoleted by RFC 7230 and RFC 7231")
+    #expect(
+      old.obsoletionNote(locale: Locale(identifier: "de"))
+        == "Ersetzt durch RFC 7230 und RFC 7231")
+    #expect(Self.semantics.obsoletionNote(locale: .english) == nil)
   }
 
   @Test func `an RFC without an abstract has an empty description`() {

@@ -1785,6 +1785,16 @@
         }
       }
     },
+    "Obsoleted by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt durch %@"
+          }
+        }
+      }
+    },
     "Obsoleted by %@." : {
       "localizations" : {
         "de" : {

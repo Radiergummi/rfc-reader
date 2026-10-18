@@ -25,7 +25,8 @@ enum SpotlightIndexer {
   static func update(_ rfcs: [RFCMetadata]) async {
     guard CSSearchableIndex.isIndexingAvailable() else { return }
     let index = CSSearchableIndex(name: SpotlightEntry.domain)
-    let entries = rfcs.map(SpotlightEntry.init)
+    let locale = Locale.interface
+    let entries = rfcs.map { SpotlightEntry($0, locale: locale) }
     let state = SpotlightEntry.clientState(for: entries, now: .now)
     do {
       if try await index.fetchLastClientState() == state { return }
