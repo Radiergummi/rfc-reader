@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TipKit
 
 @testable import RFCReaderKit
 
@@ -7,10 +8,21 @@ import Testing
 /// its Learn More opens the help. How TipKit presents them is TipKit's.
 @Suite("Reader tips")
 struct ReaderTipsTests {
-  @Test func `each tip shows after the agreed number of its event`() {
-    #expect(ReadingModeTip.documentsOpened == 3)
-    #expect(PreviewTip.citationsFollowed == 1)
-    #expect(GoToRFCTip.searchesTyped == 5)
+  /// TipKit's own rules, evaluated by TipKit over a store of the test's own: each
+  /// tip waits for the agreed number of its event, and shows on the one after.
+  @Test(arguments: [
+    (TipCase.readingMode, 3),
+    (TipCase.preview, 1),
+    (TipCase.goToRFC, 5),
+  ])
+  func `each tip shows after the agreed number of its event`(tip: TipCase, count: Int) async {
+    TipStore.configureOnce()
+    for _ in 1..<count {
+      await tip.event.donate()
+    }
+    #expect(!tip.tip.shouldDisplay)
+    await tip.event.donate()
+    #expect(await tip.becomesDisplayable())
   }
 
   @Test func `each tip's Learn More opens the help at its section`() {
@@ -71,4 +83,53 @@ struct ReaderTipsTests {
     #expect(!ReaderTips.startsSearch(from: "", to: " "))
     #expect(ReaderTips.startsSearch(from: " ", to: " q"))
   }
+}
+
+/// A tip and the event that brings it on.
+enum TipCase: Sendable, CustomTestStringConvertible {
+  case readingMode
+  case preview
+  case goToRFC
+
+  var tip: any Tip {
+    switch self {
+    case .readingMode: ReadingModeTip()
+    case .preview: PreviewTip()
+    case .goToRFC: GoToRFCTip()
+    }
+  }
+
+  var event: Tips.Event<Tips.EmptyDonation> {
+    switch self {
+    case .readingMode: ReaderTips.documentOpened
+    case .preview: ReaderTips.citationFollowed
+    case .goToRFC: ReaderTips.searchTyped
+    }
+  }
+
+  var testDescription: String { "\(self)" }
+
+  /// TipKit settles a donation's effect a moment after it returns: polled for, up to
+  /// two seconds.
+  func becomesDisplayable() async -> Bool {
+    for _ in 0..<40 {
+      if tip.shouldDisplay { return true }
+      try? await Task.sleep(for: .milliseconds(50))
+    }
+    return false
+  }
+}
+
+/// TipKit configured once for the test process, over a store of its own in a
+/// temporary directory, so no run sees another's donations. Each tip's event is its
+/// own, so the cases do not count each other's.
+enum TipStore {
+  private static let configured: Void = {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("ReaderTipsTests-\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try? Tips.configure([.datastoreLocation(.url(directory)), .displayFrequency(.immediate)])
+  }()
+
+  static func configureOnce() { configured }
 }

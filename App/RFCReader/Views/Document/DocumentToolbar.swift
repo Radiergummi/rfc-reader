@@ -50,6 +50,8 @@ import SwiftUI
 
       ToolbarItem(placement: .primaryAction) {
         moreMenu
+          // Reading Mode is in it, and nowhere else on screen (#782).
+          .helpTip(ReadingModeTip())
       }
 
       if showsBottomBar {

@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftUI
 
 #if !os(macOS)
@@ -18,6 +19,9 @@ import SwiftUI
         } label: {
           Label("Go to RFC", systemImage: "number")
         }
+        // After searches typed one after another, for an RFC known by its number or
+        // title (#782).
+        .helpTip(GoToRFCTip())
       }
     }
   }

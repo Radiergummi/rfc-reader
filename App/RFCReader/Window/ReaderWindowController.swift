@@ -643,6 +643,8 @@
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)
       placeInitialFocus()
+      // A tip due while another window was key (#782).
+      toolbar?.showDueTips()
       // A restored window is ordered into its tab group by AppKit, not by
       // `AppDelegate.openWindow(tabbedWith:inBackground:)`, so the correction made
       // there after the ordering call is made here instead. Not when its state is

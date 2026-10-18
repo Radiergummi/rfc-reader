@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 #if os(macOS)
   /// The filters the search sets, named under the Mac's search field, each with a
@@ -114,6 +115,10 @@ import SwiftUI
       Binding {
         SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups).text
       } set: { text in
+        // A search typed, which Go to RFC's tip counts (#782).
+        if ReaderTips.startsSearch(from: navigation.searchText, to: text) {
+          ReaderTips.searchTyped.sendDonation()
+        }
         navigation.searchText = SearchQuery.replacingText(
           in: navigation.searchText, with: text, workingGroups: library.knownWorkingGroups)
       }

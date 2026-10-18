@@ -2,6 +2,7 @@
   import AppKit
   import RFCKit
   import RFCReaderKit
+  import TipKit
 
   extension NSToolbarItem.Identifier {
     static let rfcNewCollection = NSToolbarItem.Identifier("rfc.newCollection")
@@ -88,6 +89,11 @@
       citeMenu.delegate = self
       collectionMenu.delegate = self
       moreMenu.delegate = self
+      observeTips()
+    }
+
+    isolated deinit {
+      tipObservations.forEach { $0.cancel() }
     }
 
     func showTitle(_ title: String, subtitle: String) {
@@ -230,6 +236,7 @@
         // Always both, dimmed when there is nowhere to go, as Safari does. A pair
         // that appears and vanishes with the history shifts everything beside it.
         let back = button(.rfcBack, "Back", "chevron.backward", #selector(goBack))
+        tipAnchors[.rfcBack] = back
         let forward = button(.rfcForward, "Forward", "chevron.forward", #selector(goForward))
         let group = NSToolbarItemGroup(itemIdentifier: identifier)
         group.label = String(localized: "Navigation")
@@ -302,6 +309,7 @@
           systemSymbolName: "ellipsis.circle", accessibilityDescription: String(localized: "More"))
         item.showsIndicator = false
         item.menu = moreMenu
+        tipAnchors[.rfcMore] = item
         return item
 
       case .rfcSidebarToggle:
@@ -361,6 +369,10 @@
             errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           to: menu)
+        // As iOS's More has it, and where Reading Mode's tip points (#782): View ▸
+        // Reading Mode alone was not found.
+        menu.addItem(.separator())
+        menu.addItem(readingModeItem())
       case collectionMenu:
         add(DocumentMenus.addToCollection(id, in: library.collections), to: menu)
       default:
@@ -384,6 +396,23 @@
         printItem.target = self
         menu.addItem(printItem)
       }
+    }
+
+    /// Reading Mode, a submenu of the modes with the one in use checked.
+    private func readingModeItem() -> NSMenuItem {
+      let submenu = NSMenu()
+      for mode in ReadingMode.allCases {
+        let item = NSMenuItem(
+          title: mode.name(), action: #selector(chooseReadingMode), keyEquivalent: "")
+        item.target = self
+        item.representedObject = mode
+        item.state = reader.folding.mode == mode ? .on : .off
+        submenu.addItem(item)
+      }
+      let item = NSMenuItem(
+        title: String(localized: "Reading Mode"), action: nil, keyEquivalent: "")
+      item.submenu = submenu
+      return item
     }
 
     /// Each item carries its action, which `performMenuAction` carries out.
@@ -462,9 +491,67 @@
 
     @objc private func newEmptyCollection() { controller.newCollection() }
 
+    @objc private func chooseReadingMode(_ sender: NSMenuItem) {
+      guard let mode = sender.representedObject as? ReadingMode else { return }
+      reader.choose(mode)
+    }
+
     @objc private func printDocument() { controller.output.printDocument() }
     @objc private func exportDocument() { controller.output.exportDocument() }
     @objc private func exportCurrentSection() { controller.output.exportCurrentSection() }
+
+    // MARK: - Tips (#782)
+
+    /// The items a tip points at, as they are made.
+    private var tipAnchors: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+    /// The tips TipKit has said are due, by the item each points at, whether on show
+    /// or waiting for the window to become key.
+    private var dueTips: [NSToolbarItem.Identifier: any HelpTip] = [:]
+    private var tipPopovers: [NSToolbarItem.Identifier: TipNSPopover] = [:]
+    private var tipObservations: [Task<Void, Never>] = []
+
+    /// Reading Mode's tip on More, Previews' on Back. TipKit's popover for AppKit,
+    /// since the toolbar's items are AppKit's own.
+    private func observeTips() {
+      tipObservations = [
+        observe(ReadingModeTip(), on: .rfcMore),
+        observe(PreviewTip(), on: .rfcBack),
+      ]
+    }
+
+    private func observe(
+      _ tip: some HelpTip, on anchor: NSToolbarItem.Identifier
+    ) -> Task<Void, Never> {
+      Task { [weak self] in
+        for await shouldDisplay in tip.shouldDisplayUpdates {
+          guard let self else { return }
+          if shouldDisplay {
+            dueTips[anchor] = tip
+          } else {
+            dueTips[anchor] = nil
+            tipPopovers.removeValue(forKey: anchor)?.close()
+          }
+          showDueTips()
+        }
+      }
+    }
+
+    /// Shows what is due, in the key window only: TipKit says a tip is due to every
+    /// window at once. Again when a window becomes key, so a tip due while it was
+    /// not still shows.
+    func showDueTips() {
+      guard controller.window?.isKeyWindow == true else { return }
+      for (anchor, tip) in dueTips where tipPopovers[anchor] == nil {
+        guard let item = tipAnchors[anchor] else { continue }
+        let popover = TipNSPopover(tip) { _ in
+          // Learn More: the help at the tip's section, and the tip is done.
+          HelpWindow.show(at: tip.helpSection)
+          tip.invalidate(reason: .actionPerformed)
+        }
+        popover.show(relativeTo: item)
+        tipPopovers[anchor] = popover
+      }
+    }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {

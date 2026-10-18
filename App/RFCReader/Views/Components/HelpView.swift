@@ -1,5 +1,6 @@
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// Where to open the help: a section, or its top. A new value each time it is asked
 /// for, so asking for the section already in view scrolls back to it.
@@ -110,3 +111,42 @@ struct HelpView: View {
     }
   }
 #endif
+
+/// Opens the help at a section, or at its top: its window on the Mac, and on iOS
+/// the scene's sheet, which `ContentView` presents (#782). Called as a function, as
+/// `OpenURLAction` is.
+struct ShowHelpAction: Sendable {
+  let show: @MainActor @Sendable (HelpSection?) -> Void
+
+  @MainActor func callAsFunction(_ section: HelpSection?) { show(section) }
+}
+
+extension EnvironmentValues {
+  @Entry var showHelp = ShowHelpAction { section in
+    #if os(macOS)
+      HelpWindow.show(at: section)
+    #endif
+  }
+}
+
+extension View {
+  /// `tip`'s popover on this view, whose Learn More opens the help at the tip's
+  /// section and ends the tip (#782).
+  func helpTip(_ tip: some HelpTip) -> some View {
+    modifier(HelpTipPopover(tip: tip))
+  }
+}
+
+private struct HelpTipPopover<Shown: HelpTip>: ViewModifier {
+  let tip: Shown
+  @Environment(\.showHelp) private var showHelp
+
+  func body(content: Content) -> some View {
+    let showHelp = showHelp
+    let tip = tip
+    content.popoverTip(tip) { _ in
+      showHelp(tip.helpSection)
+      tip.invalidate(reason: .actionPerformed)
+    }
+  }
+}
