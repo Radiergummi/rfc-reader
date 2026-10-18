@@ -129,7 +129,7 @@
       item.image = NSImage(
         systemSymbolName: showsBookmarked ? "bookmark.fill" : "bookmark",
         accessibilityDescription: String(localized: "Bookmark"))
-      item.toolTip = DocumentActions.bookmarkState(isBookmarked: showsBookmarked)
+      item.toolTip = DocumentActions.bookmarkTooltip(isBookmarked: showsBookmarked)
     }
 
     func updateDocumentTitle(_ state: ToolbarTitleState) {
@@ -146,6 +146,9 @@
       let toolbar = NSToolbar(identifier: "org.rfc-editor.reader.toolbar")
       toolbar.delegate = self
       toolbar.displayMode = .iconOnly
+      // Not customizable: an item moved across the tracking separators would land in
+      // another column's section, and that has not been tried with the app on
+      // screen (#761).
       toolbar.allowsUserCustomization = false
       return toolbar
     }
@@ -277,6 +280,7 @@
       case .rfcCite:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
         item.label = String(localized: "Cite")
+        item.toolTip = item.label
         item.image = NSImage(
           systemSymbolName: "quote.opening", accessibilityDescription: String(localized: "Cite"))
         item.showsIndicator = false
@@ -286,12 +290,14 @@
       case .rfcShare:
         let item = NSSharingServicePickerToolbarItem(itemIdentifier: identifier)
         item.label = String(localized: "Share")
+        item.toolTip = item.label
         item.delegate = self
         return item
 
       case .rfcMore:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
         item.label = String(localized: "More")
+        item.toolTip = item.label
         item.image = NSImage(
           systemSymbolName: "ellipsis.circle", accessibilityDescription: String(localized: "More"))
         item.showsIndicator = false
@@ -436,9 +442,7 @@
       guard let id else { return }
       switch sender.representedObject {
       case let action as DocumentMenus.Action:
-        DocumentActionPerformer(
-          id: id, metadata: metadata, reader: reader, open: { NSWorkspace.shared.open($0) }
-        ).perform(action)
+        controller.perform(action)
       case let action as DocumentMenus.CollectionAction:
         CollectionActionPerformer(
           document: id, library: library, navigation: navigation,

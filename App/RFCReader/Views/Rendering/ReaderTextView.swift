@@ -95,6 +95,27 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
+
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
+    /// action of the text (#760).
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+      get {
+        var actions = super.accessibilityCustomActions ?? []
+        if let (name, toggle) = disclosureAction() {
+          actions.append(
+            UIAccessibilityCustomAction(name: name) { _ in
+              toggle()
+              return true
+            })
+        }
+        return actions
+      }
+      set { super.accessibilityCustomActions = newValue }
+    }
 
     /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
     func copyAsQuote() {
@@ -230,6 +251,12 @@ import RFCReaderKit
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
+    /// What VoiceOver says after each disclosed heading, by offset, from the
+    /// coordinator: whether the reading mode has it open (#760).
+    var spokenStates: () -> [Int: String] = { [:] }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
     var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
@@ -529,8 +556,23 @@ import RFCReaderKit
           toggle.representedObject = (box.presentationKey, FigureMenu.offered(from: shown))
           result.insertItem(toggle, at: 1)
         }
+        // A code block's button as an item too, beside Copy Figure, so Voice Control
+        // can name it (#760).
+        if let code = text.code(ofBlock: box, touching: near) {
+          let copy = NSMenuItem(
+            title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
+            keyEquivalent: "")
+          copy.target = self
+          copy.representedObject = code
+          result.insertItem(copy, at: 1)
+        }
       }
       return result
+    }
+
+    @objc private func copyCodeItem(_ sender: NSMenuItem) {
+      guard let code = sender.representedObject as? String else { return }
+      Clipboard.copy(code, announcing: .code)
     }
 
     @objc private func followGlossItem(_ sender: NSMenuItem) {
@@ -610,6 +652,21 @@ import RFCReaderKit
 
     // MARK: - What VoiceOver reads (#12)
 
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
+    /// action of the text (#760).
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
+      var actions = super.accessibilityCustomActions() ?? []
+      if let (name, toggle) = disclosureAction() {
+        actions.append(
+          NSAccessibilityCustomAction(name: name) {
+            toggle()
+            return true
+          })
+      }
+      return actions
+    }
+
     /// A diagram is said as its label, not read out one box-drawing character at a
     /// time. `AccessibleReading` decides what each part of `range` becomes; the text
     /// parts come from `super`, so they keep every attribute AppKit gives VoiceOver.
@@ -621,6 +678,7 @@ import RFCReaderKit
       AccessibleReading.reading(
         range,
         in: attributedString(),
+        saying: spokenStates(),
         text: { super.accessibilityAttributedString(for: $0) },
         label: { NSAttributedString(string: $0) },
         // A chip said as a label is still a link (#457): the label takes the
@@ -646,6 +704,7 @@ import RFCReaderKit
       AccessibleReading.reading(
         range,
         in: attributedString(),
+        saying: spokenStates(),
         text: { super.accessibilityString(for: $0) },
         label: { $0 },
         join: { $0.joined() })

@@ -865,6 +865,16 @@
         }
       }
     },
+    "Bookmark this document. It is not bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen für dieses Dokument hinzufügen. Es hat noch keines."
+          }
+        }
+      }
+    },
     "Bookmarked" : {
       "localizations" : {
         "de" : {
@@ -1271,6 +1281,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Für die nächste Revision vorgemerkt"
+          }
+        }
+      }
+    },
+    "Hide Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt ausblenden"
+          }
+        }
+      }
+    },
+    "Hide Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info ausblenden"
           }
         }
       }
@@ -2025,6 +2055,16 @@
         }
       }
     },
+    "RFC number, BCP 14, title words, or a link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Nummer, BCP 14, Wörter aus dem Titel oder ein Link"
+          }
+        }
+      }
+    },
     "RFCs you open appear here." : {
       "localizations" : {
         "de" : {
@@ -2091,6 +2131,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen entfernen"
+          }
+        }
+      }
+    },
+    "Remove Bookmark. This document is bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen entfernen. Dieses Dokument hat ein Lesezeichen."
           }
         }
       }
@@ -2321,6 +2371,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kurz"
+          }
+        }
+      }
+    },
+    "Show Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt einblenden"
+          }
+        }
+      }
+    },
+    "Show Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info einblenden"
           }
         }
       }
@@ -3019,6 +3089,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "zur Veröffentlichung freigegeben"
+          }
+        }
+      }
+    },
+    "collapsed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zugeklappt"
+          }
+        }
+      }
+    },
+    "expanded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aufgeklappt"
           }
         }
       }

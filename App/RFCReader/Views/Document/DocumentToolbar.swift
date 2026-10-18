@@ -131,6 +131,11 @@ import SwiftUI
         Divider()
         ReadingModePicker(reader: reader)
         FocusSteps(reader: reader)
+        // On an iPad, as its menu bar would hold them; an iPhone's VoiceOver and
+        // Voice Control reach them as the reader's own actions (#760).
+        if horizontalSizeClass == .regular {
+          OutlineSectionItems(reader: reader)
+        }
         if SideBySide.isOffered(in: horizontalSizeClass) {
           CompareItems(id: id, library: library, reader: reader)
         }

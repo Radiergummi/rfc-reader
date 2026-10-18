@@ -267,6 +267,9 @@ struct ReaderInputs {
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
+      }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // Found or sent to its end, this side leads a side-by-side reading (#187).
@@ -419,8 +422,14 @@ struct ReaderInputs {
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
+      }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation
+      }
+      textView.spokenStates = { [weak coordinator = context.coordinator] in
+        coordinator?.spokenStates() ?? [:]
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }

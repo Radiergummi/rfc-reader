@@ -9,11 +9,14 @@ import SwiftUI
 struct GlossCard: View {
   let gloss: Gloss
 
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       // The document's own words, never looked up in a catalog.
       Text(verbatim: gloss.title).font(.headline)
-      Text(verbatim: gloss.text).font(.callout).foregroundStyle(.secondary).lineLimit(10)
+      Text(verbatim: gloss.text).font(.callout).foregroundStyle(.secondary)
+        .lineLimit(dynamicTypeSize.lines(10))
     }
     .padding(12)
     .frame(width: ReferencePreview.width, alignment: .leading)
