@@ -600,6 +600,26 @@
         }
       }
     },
+    "Check for Updates…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Updates suchen …"
+          }
+        }
+      }
+    },
+    "Check for updates automatically" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch nach Updates suchen"
+          }
+        }
+      }
+    },
     "Choose a legacy XML pack: an .aar archive, or a folder with its manifest." : {
       "localizations" : {
         "de" : {
