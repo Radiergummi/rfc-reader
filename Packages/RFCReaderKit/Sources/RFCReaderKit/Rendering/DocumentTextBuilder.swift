@@ -141,27 +141,33 @@ public final class DocumentTextBuilder {
     choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
     errata: ErrataMarks = .none
   ) -> BuiltDocument {
-    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
-    builder.errata = errata
-    if style.emitsLinks {
-      builder.hang = style.sectionNumberHang
+    // In an autorelease pool of its own: a build runs off the main actor, where what
+    // it autoreleases was not drained when it ended, so every document opened left
+    // a build's worth behind. A run of builds in an `@concurrent` function shows it
+    // in the process's footprint (#853).
+    autoreleasepool {
+      let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
+      builder.errata = errata
+      if style.emitsLinks {
+        builder.hang = style.sectionNumberHang
+      }
+      if let title { builder.appendTitle(title) }
+      builder.appendDocument(document)
+      builder.setDecoratedLinesOnWholePoints()
+      reserveChipPadding(in: builder.output)
+      // Last: it carries the decorations, indents, insets and widths set so far, and
+      // nothing rewrites them after it.
+      builder.setDecorationFacts()
+      // Handed over, not copied: `builder` ends here, so nothing is left that could
+      // write `output` once the result leaves this function. A copy would also be
+      // shallow, sharing every attribute value with the original, so it protected
+      // nothing and cost a pass over the whole text. See `BuiltDocument`.
+      return BuiltDocument(
+        text: builder.output, anchors: AnchorIndex(builder.entries),
+        keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+        grammar: builder.grammar.withoutParsedBlocks,
+        sectionNumberHang: builder.hang, errata: errata)
     }
-    if let title { builder.appendTitle(title) }
-    builder.appendDocument(document)
-    builder.setDecoratedLinesOnWholePoints()
-    reserveChipPadding(in: builder.output)
-    // Last: it carries the decorations, indents, insets and widths set so far, and
-    // nothing rewrites them after it.
-    builder.setDecorationFacts()
-    // Handed over, not copied: `builder` ends here, so nothing is left that could
-    // write `output` once the result leaves this function. A copy would also be
-    // shallow, sharing every attribute value with the original, so it protected
-    // nothing and cost a pass over the whole text. See `BuiltDocument`.
-    return BuiltDocument(
-      text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
-      grammar: builder.grammar.withoutParsedBlocks,
-      sectionNumberHang: builder.hang, errata: errata)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.

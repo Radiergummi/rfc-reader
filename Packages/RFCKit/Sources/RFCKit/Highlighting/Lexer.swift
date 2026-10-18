@@ -417,7 +417,8 @@ struct PatternShape {
 /// `body` in an autorelease pool of its own, so what a search autoreleases — the
 /// window bridged to `NSString`, the matches — is freed as it returns. Without one it
 /// waits for the caller's pool, and a build off the main actor runs where none drains
-/// between builds (#853). Linux's Foundation has no pools.
+/// between builds: a run of them in an `@concurrent` function shows it in the
+/// process's footprint (#853). Linux's Foundation has no pools.
 @inline(__always)
 func drainingAutoreleases<Result>(_ body: () throws -> Result) rethrows -> Result {
   #if canImport(ObjectiveC)

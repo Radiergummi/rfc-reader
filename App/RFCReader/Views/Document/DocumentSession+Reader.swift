@@ -194,10 +194,6 @@ extension DocumentSession {
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
   /// what discards a canceled one, unless nothing is on screen yet.
   /// `DocumentPreview` builds through it too.
-  ///
-  /// In an autorelease pool of its own: off the main actor, what a build autoreleases
-  /// was not drained when it ended, so every document opened left one build's worth
-  /// more behind (#853).
   @concurrent
   static func built(
     _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults,
@@ -207,9 +203,7 @@ extension DocumentSession {
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      autoreleasepool {
-        DocumentTextBuilder.build(document, style: style, choices: choices, errata: errata)
-      }
+      DocumentTextBuilder.build(document, style: style, choices: choices, errata: errata)
     }
   }
 }
