@@ -16,7 +16,10 @@ public enum RecentFeedRefresh {
   public static func run(
     store: DocumentStore, client: RFCEditorClient, show: ([RecentRFC]) -> Void
   ) async throws {
-    let kept = await store.cachedRecentFeed().flatMap { try? RecentRFC.parseFeed($0) }
+    var kept: [RecentRFC]?
+    if let data = await store.cachedRecentFeed() {
+      kept = try? await parse(data)
+    }
     if let kept { show(kept) }
     // Without a feed shown, a `304` would leave nothing to show.
     let validators = kept == nil ? nil : store.recentFeedCheck()?.validators(at: .now)
@@ -24,7 +27,13 @@ public enum RecentFeedRefresh {
       unlessMatching: validators, onExpensiveNetworks: false)
     guard case .changed(let data, let newValidators) = fetched else { return }
     // Shown before it is kept, so a failed write loses only the copy on disk.
-    show(try RecentRFC.parseFeed(data))
+    show(try await parse(data))
     try await store.storeRecentFeed(data, validators: newValidators)
+  }
+
+  /// Off the caller's actor, which is the main actor during launch.
+  @concurrent
+  private static func parse(_ data: Data) async throws -> [RecentRFC] {
+    try RecentRFC.parseFeed(data)
   }
 }

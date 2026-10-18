@@ -79,8 +79,8 @@ final class LibraryModel {
   /// arrived while launch was still loading it (#191).
   @ObservationIgnored private let indexLoaded = Latch()
   private(set) var recent: [RecentRFC] = []
-  /// Just Published's refresh (#421), held, so that a second call joins it rather
-  /// than fetching the feed beside it.
+  /// Just Published's refresh at launch (#421), held rather than left to run
+  /// unowned.
   @ObservationIgnored private let recentRefresh = SharedRefresh(name: "Refresh recent RFCs")
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
