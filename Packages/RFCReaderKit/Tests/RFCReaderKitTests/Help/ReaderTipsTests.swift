@@ -45,7 +45,7 @@ struct ReaderTipsTests {
   }
 
   /// The Mac's tip names the chord the command answers, so the two cannot drift.
-  @Test func `Go to RFC is taught by its chord on the Mac and its button on iOS`() {
+  @Test func `going to an RFC is taught by its chord on the Mac and its button on iOS`() {
     let chord = ReaderShortcut.quickOpen.chord(on: .mac)?.symbols
     #expect(chord == "⌘K")
     #expect(GoToRFCTip.words(on: .mac, locale: .english).message.contains("⌘K"))

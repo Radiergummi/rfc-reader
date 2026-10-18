@@ -93,7 +93,7 @@
     }
 
     isolated deinit {
-      tipObservations.forEach { $0.cancel() }
+      for observation in tipObservations { observation.cancel() }
     }
 
     func showTitle(_ title: String, subtitle: String) {
