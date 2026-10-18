@@ -490,6 +490,10 @@ struct ReferencesView: View {
   /// The revealed entry, marked for a moment so the eye finds it in the list. The
   /// reveal rather than its anchor, so revealing the same entry again marks it anew.
   @State private var highlighted: ReaderState.RevealedReference?
+  #if canImport(UIKit)
+    /// The window's size, which a row's long-press preview is measured against.
+    @State private var windowSize: CGSize?
+  #endif
 
   var body: some View {
     if groups.isEmpty {
@@ -502,15 +506,20 @@ struct ReferencesView: View {
               ForEach(group.entries) { entry in
                 // Identified by its anchor already (`Reference.id`), which is
                 // what the reveal scrolls to.
-                ReferenceRow(entry: entry, open: open, menu: menu)
-                  .listRowBackground(
-                    highlighted?.anchor == entry.anchor
-                      ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
+                ReferenceRow(
+                  entry: entry, open: open, menu: menu, previewSize: previewSize
+                )
+                .listRowBackground(
+                  highlighted?.anchor == entry.anchor
+                    ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
               }
             }
           }
         }
         .listStyle(.sidebar)
+        #if canImport(UIKit)
+          .background(WindowSizeReader { windowSize = $0 })
+        #endif
         // A sidebar list is announced as "Sidebar", which is the window's own (#300).
         .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
@@ -527,6 +536,16 @@ struct ReferencesView: View {
       }
     }
   }
+
+  /// A row's document preview: a context menu's on iOS, fitted to the window as
+  /// the reader's are, and the popover's full size on the Mac.
+  private var previewSize: CGSize {
+    #if canImport(UIKit)
+      windowSize.map(LinkPreview.documentSize(fitting:)) ?? LinkPreview.documentSize
+    #else
+      LinkPreview.documentSize
+    #endif
+  }
 }
 
 /// One entry, as a row rather than the four stacked indented paragraphs the body
@@ -534,8 +553,18 @@ struct ReferencesView: View {
 struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
-  /// What the row offers on a right click or a long press; nil for none.
+  /// What the row offers on a right click or a long press, and the preview of its
+  /// RFC on a long press or a force click; nil for neither.
   let menu: ReferenceMenu?
+  /// The size of that preview of the RFC.
+  var previewSize = LinkPreview.documentSize
+
+  #if os(macOS)
+    /// Whether the click under way pressed through to the preview, so its release
+    /// does not open the RFC as well (`ForceClickReader`).
+    @State private var isForceClick = false
+    @State private var isPreviewing = false
+  #endif
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -543,16 +572,54 @@ struct ReferenceRow: View {
       // not announce the row as one and Full Keyboard Access could not press it
       // (#156). An entry that names no RFC opens nothing and stays plain text.
       if let id = entry.documentID {
-        Button {
+        let button = Button {
+          #if os(macOS)
+            guard !isForceClick else { return }
+          #endif
           open(id)
         } label: {
           entryDescription.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
-          if let menu {
-            menu.items(for: id)
+        if let menu {
+          // What a citation of the entry previews in the prose (#580). An entry
+          // that names no RFC would preview its card, which says what its row says.
+          if case .document(let previewed, let place) = LinkPreview.resolve(
+            entry, in: menu.library.index)
+          {
+            #if os(macOS)
+              button
+                .contextMenu { menu.items(for: id) }
+                .background(
+                  ForceClickReader { isForceClick in
+                    self.isForceClick = isForceClick
+                    if isForceClick { isPreviewing = true }
+                  }
+                )
+                .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
+                  // A click in it opens what it shows, as the prose's does.
+                  DocumentPreview(
+                    library: menu.library, id: previewed, place: place, size: previewSize
+                  ) {
+                    isPreviewing = false
+                    open(previewed)
+                  }
+                }
+            #else
+              // A tap on the preview closes it; the row's tap opens the RFC.
+              button.contextMenu {
+                menu.items(for: id)
+              } preview: {
+                DocumentPreview(
+                  library: menu.library, id: previewed, place: place, size: previewSize
+                ) {}
+              }
+            #endif
+          } else {
+            button.contextMenu { menu.items(for: id) }
           }
+        } else {
+          button
         }
       } else {
         // Not a button, so the combined element needs a role of its own, or macOS
