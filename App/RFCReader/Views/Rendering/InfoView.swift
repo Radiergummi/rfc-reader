@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The Info pane (#25): what the index knows about the document, from
 /// `DocumentInfo`, and whether it is kept offline.
@@ -536,13 +537,18 @@ private struct KeywordTag: View {
 ///
 /// A file opens in the browser like a page, and on a Mac Option-click saves it to
 /// Downloads instead, as it does in Safari; while Option is held its arrow turns into
-/// a download, so the row says what a click will do.
+/// a download, so the row says what a click will do. iOS has no Option key, so a
+/// long press offers Open, Share and Download, which saves the file to Files (#577).
 private struct LinkRow: View {
   let row: DocumentInfo.Row
   let library: LibraryModel
   /// A check for a moment after a copy or a download, a warning after a failed one.
   @State private var outcome: Outcome?
   @State private var isOptionHeld = false
+  #if !os(macOS)
+    /// The file a Download fetched, while Save to Files is offering it.
+    @State private var downloaded: DownloadedFile?
+  #endif
   @Environment(\.openURL) private var openURL
 
   private enum Outcome {
@@ -574,6 +580,29 @@ private struct LinkRow: View {
         .help("Open \(url.lastPathComponent) on rfc-editor.org. Option-click to download it.")
         .contextMenu {
           Button("Download") { save(document, format) }
+        }
+      #else
+        .contextMenu {
+          Button("Open", systemImage: "safari") { openURL(url) }
+          ShareLink(item: url)
+          Button("Download", systemImage: "arrow.down.circle") { save(document, format) }
+        }
+        .fileExporter(
+          isPresented: Binding(
+            get: { downloaded != nil },
+            set: { if !$0 { downloaded = nil } }),
+          document: downloaded,
+          contentType: format.contentType,
+          // The RFC Editor's own name, as the Mac saves it to Downloads.
+          defaultFilename: url.deletingPathExtension().lastPathComponent
+        ) { result in
+          switch result {
+          case .success:
+            outcome = .done
+          case .failure(let error):
+            readerLog.failure(of: document, "saving to Files failed", error)
+            outcome = .failed
+          }
         }
       #endif
       .resets($outcome, to: nil, after: .seconds(1.5))
@@ -621,6 +650,16 @@ private struct LinkRow: View {
           outcome = .failed
         }
       }
+    #else
+      Task {
+        do {
+          downloaded = DownloadedFile(
+            data: try await library.publishedFile(document, format: format))
+        } catch {
+          readerLog.failure(of: document, "downloading for Files failed", error)
+          outcome = .failed
+        }
+      }
     #endif
   }
 
@@ -653,6 +692,29 @@ private struct LinkRow: View {
     .contentShape(.rect)
   }
 }
+
+#if !os(macOS)
+  /// A published format a format row's Download fetched, for SwiftUI's `fileExporter`,
+  /// which saves a `FileDocument` (#577). Written only, as `ExportedFile` is.
+  nonisolated private struct DownloadedFile: FileDocument {
+    static var readableContentTypes: [UTType] { [] }
+    static var writableContentTypes: [UTType] { FileFormat.allCases.map(\.contentType) }
+
+    let data: Data
+
+    init(data: Data) {
+      self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+      throw CocoaError(.fileReadUnsupportedScheme)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+      FileWrapper(regularFileWithContents: data)
+    }
+  }
+#endif
 
 /// Whether the document is kept offline, and how much it takes: the one part of the
 /// pane that is the store's rather than the index's.
