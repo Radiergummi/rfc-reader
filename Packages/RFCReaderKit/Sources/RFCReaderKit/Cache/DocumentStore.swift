@@ -58,6 +58,7 @@ public actor DocumentStore {
   /// The app's build, which keys the parses kept encoded beside their bodies (#606):
   /// a model written by another build is parsed again, whatever in the model or a
   /// parser changed between them. Nil keeps none, as in tests that do not ask for them.
+  /// See `appBuild`.
   private let build: String?
 
   /// The last model write, which the next one waits for, as snapshots do.
@@ -165,7 +166,19 @@ public actor DocumentStore {
   ) {
     self.init(
       directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil,
-      build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+      build: Self.appBuild)
+  }
+
+  /// The app's build number, `CFBundleVersion`, and when its executable was built:
+  /// every local build is build 1 (`project.yml`), and a parser changed in one must
+  /// still reach the documents an earlier one parsed.
+  private static var appBuild: String? {
+    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    else { return nil }
+    let built = Bundle.main.executableURL.flatMap {
+      try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+    return built.map { "\(number) \($0.timeIntervalSinceReferenceDate)" } ?? number
   }
 
   /// The store above, with `parsing` awaited at the start of each look at the disk
