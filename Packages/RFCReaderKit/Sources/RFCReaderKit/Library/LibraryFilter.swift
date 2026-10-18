@@ -54,6 +54,24 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
     }
   }
 
+  /// What the empty list says under `emptyTitle(in:)`: how to fill it, for a list
+  /// the reader fills. Nil for a list the index fills, which the reader cannot.
+  public func emptyDescription(locale: Locale = .interface) -> String? {
+    switch self {
+    case .recent: String(kit: "RFCs you open appear here.", locale: locale)
+    case .bookmarks:
+      #if os(macOS)
+        String(kit: "Bookmark an RFC with ⌘D, or from its row’s menu.", locale: locale)
+      #else
+        String(kit: "Bookmark an RFC by swiping its row, or from its menu.", locale: locale)
+      #endif
+    case .downloaded:
+      String(kit: "Keep an RFC offline from its Info pane or its row’s menu.", locale: locale)
+    case .all, .standards, .bestCurrentPractice, .stream, .workingGroup, .series, .collection:
+      nil
+    }
+  }
+
   /// The prompt of the list's search field, which narrows what this list shows.
   public func searchPrompt(
     in collections: CollectionSnapshot, locale: Locale = .interface

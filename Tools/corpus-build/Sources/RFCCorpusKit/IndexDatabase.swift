@@ -9,13 +9,9 @@ import RFCKit
 ///
 /// Written in one transaction, and only once `close()` commits it is it whole.
 ///
-/// The schema:
-///
-///     meta (key, value)
-///     citations (citing, cited, place, section, count, kind)
-///     successions (old, old_section, new, new_section, score)
-///
-/// `meta` holds `schema` (`schemaVersion`) and whatever the build adds, such as the
+/// The tables are `IndexSchema`'s, shared with the app's reader: `meta`,
+/// `citations` and `successions`. `meta` holds
+/// `schema` (`IndexSchema.version`) and whatever the build adds, such as the
 /// packs' version. A citation's documents are `DocumentID.description`s (`RFC9110`);
 /// its `place` is `abstract`, `section`, with the section's anchor in `section`, or
 /// `bibliography`; its `kind` is a `ReferenceList.Kind`, or null for a citation no
@@ -23,10 +19,6 @@ import RFCKit
 /// and the section of the document obsoleting it that replaces it, both by anchor,
 /// with how alike the two are. See `AlignedSection`.
 public final class IndexDatabase {
-  /// Raised when the tables change shape, so a reader can refuse a database it does
-  /// not know.
-  public static let schemaVersion = 2
-
   public struct Failure: Error, CustomStringConvertible {
     public let description: String
   }
@@ -43,33 +35,10 @@ public final class IndexDatabase {
     guard sqlite3_open(url.path, &connection) == SQLITE_OK else {
       throw Failure(description: Self.message(of: connection))
     }
-    try execute(
-      """
-      CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
-      CREATE TABLE citations (
-        citing TEXT NOT NULL,
-        cited TEXT NOT NULL,
-        place TEXT NOT NULL,
-        section TEXT,
-        count INTEGER NOT NULL,
-        kind TEXT
-      );
-      CREATE TABLE successions (
-        old TEXT NOT NULL,
-        old_section TEXT NOT NULL,
-        new TEXT NOT NULL,
-        new_section TEXT NOT NULL,
-        score REAL NOT NULL
-      );
-      BEGIN;
-      """)
-    insertCitation = try prepare(
-      "INSERT INTO citations (citing, cited, place, section, count, kind) VALUES (?, ?, ?, ?, ?, ?)"
-    )
-    insertSuccession = try prepare(
-      "INSERT INTO successions (old, old_section, new, new_section, score) VALUES (?, ?, ?, ?, ?)"
-    )
-    try setMeta("schema", to: String(Self.schemaVersion))
+    try execute(IndexSchema.tables + "BEGIN;")
+    insertCitation = try prepare(IndexSchema.insertCitation)
+    insertSuccession = try prepare(IndexSchema.insertSuccession)
+    try setMeta("schema", to: String(IndexSchema.version))
   }
 
   deinit {

@@ -1,0 +1,16 @@
+# The project's site on rfc-reader.mazetti.me, a Worker that serves ./public and
+# nothing else (#911). It holds Sparkle's update feed, appcast.xml, until the
+# website moves in beside it. Deployed by Tools/release/publish-feed.sh.
+#
+# No script: Workers Assets serves the directory and sets each file's
+# Content-Type from its extension, which gives the feed the XML type Sparkle needs.
+name = "rfc-reader"
+compatibility_date = "2026-10-17"
+
+[assets]
+directory = "./public"
+
+# The hostname is the Worker's alone; no other DNS record may hold it.
+[[routes]]
+pattern = "rfc-reader.mazetti.me"
+custom_domain = true

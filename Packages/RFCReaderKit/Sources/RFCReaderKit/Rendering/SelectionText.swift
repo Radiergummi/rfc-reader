@@ -155,7 +155,7 @@ public enum SelectionText {
       }
     }
     result.enumerateAttribute(.link, in: whole) { value, range, _ in
-      guard let link = linkURL(value) else { return }
+      guard let link = value.flatMap(ReaderLinkScheme.url(fromLink:)) else { return }
       if let url = publicURL(link) {
         result.addAttribute(.link, value: url, range: range)
       } else {
@@ -242,7 +242,9 @@ public enum SelectionText {
     var result = ""
     func linked(_ text: String, to link: Any?) -> String {
       let escaped = PasteboardMarkup.escaped(text)
-      guard let url = linkURL(link).flatMap(publicURL) else { return escaped }
+      guard let url = link.flatMap(ReaderLinkScheme.url(fromLink:)).flatMap(publicURL) else {
+        return escaped
+      }
       return "<a href=\"\(PasteboardMarkup.escaped(url.absoluteString))\">\(escaped)</a>"
     }
     let whole = NSRange(location: 0, length: paragraph.length)
@@ -259,11 +261,6 @@ public enum SelectionText {
       }
     }
     return result
-  }
-
-  /// A link attribute's value as a URL: AppKit may hold it as its string.
-  private static func linkURL(_ value: Any?) -> URL? {
-    value as? URL ?? (value as? String).flatMap(URL.init(string:))
   }
 
   /// A label with its typesetting taken back out.

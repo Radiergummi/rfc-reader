@@ -6,10 +6,8 @@ import RFCKit
 public enum FocusCitations {
   /// The anchors of the entries cited in the section `anchor` names and its
   /// subsections, from the references the build set there.
-  public static func entries(citedIn anchor: String, in built: BuiltDocument, index: FoldingIndex)
-    -> Set<String>
-  {
-    guard let subtree = index.subtree(of: anchor) else { return [] }
+  public static func entries(citedIn anchor: String, in built: BuiltDocument) -> Set<String> {
+    guard let subtree = built.foldingIndex.subtree(of: anchor) else { return [] }
     var cited: Set<String> = []
     built.text.enumerateAttribute(
       .rfcReference,
