@@ -48,6 +48,65 @@ public struct RFCHTMLSerializer: Sendable {
 }
 
 extension RFCHTMLSerializer {
+  /// One content document of a document cut into several, as an EPUB is (#408).
+  struct Chapter: Equatable {
+    var file: String
+    var title: String
+    var body: String
+  }
+
+  /// `document` cut into the header and abstract, then one chapter per top-level
+  /// section, with every link to an anchor qualified by the file it is in.
+  func chapters(_ document: RFCDocument) -> [Chapter] {
+    let front = "front.xhtml"
+    let fileNames = document.sections.indices.map { "chapter-\($0 + 1).xhtml" }
+    var files: [String: String] = [:]
+    func place(_ anchors: [String], in file: String) {
+      for anchor in anchors where files[anchor] == nil { files[anchor] = file }
+    }
+    place(
+      [FullTextIndex.abstractAnchor] + document.header.abstract.flattened.flatMap(\.anchors),
+      in: front)
+    for (section, file) in zip(document.sections, fileNames) {
+      var sections: [Section] = []
+      func collect(_ section: Section) {
+        sections.append(section)
+        section.subsections.forEach(collect)
+      }
+      collect(section)
+      place(
+        sections.map(\.anchor) + sections.flatMap(\.blocks).flattened.flatMap(\.anchors), in: file)
+    }
+    var links = ExportLinks(document: document, inDocument: .fragments)
+    links.files = files
+    links.firstFile = front
+
+    var writer = Writer(links: links)
+    writer.header(document)
+    var chapters = [Chapter(file: front, title: document.header.title, body: writer.output)]
+    for (section, file) in zip(document.sections, fileNames) {
+      var writer = Writer(links: links)
+      writer.section(section, level: 1)
+      chapters.append(Chapter(file: file, title: Self.title(of: section), body: writer.output))
+    }
+    return chapters
+  }
+
+  /// What a chapter or a contents entry calls `section`: its heading, or for one
+  /// with neither number nor words, which a legacy RFC can have, its anchor, since a
+  /// title and a link in a book's contents may not be empty.
+  static func title(of section: Section) -> String {
+    let title = section.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? section.anchor : title
+  }
+
+  /// `text` escaped for XML, as the page escapes it.
+  static func escaped(_ text: String) -> String {
+    Writer.escaped(text)
+  }
+}
+
+extension RFCHTMLSerializer {
   fileprivate struct Writer {
     let links: ExportLinks
     var output = ""

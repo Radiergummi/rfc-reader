@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app epubcheck xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -144,6 +144,18 @@ test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) \
   $(CORPUS_TEST_APP_TEXT_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
 	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked
+
+## Validate the EPUB export with epubcheck, over the committed fixtures
+# Not part of `check` or CI: epubcheck needs Java (`brew install epubcheck`). The
+# EPUB writer's tests write each fixture's book into .build/epub when
+# RFC_EPUB_OUTPUT names it, and epubcheck reads every one (#408).
+EPUB_OUTPUT := .build/epub
+epubcheck:
+	@command -v epubcheck >/dev/null || { echo "epubcheck is not installed: brew install epubcheck" >&2; exit 1; }
+	rm -rf $(EPUB_OUTPUT)
+	RFC_EPUB_OUTPUT=$(abspath $(EPUB_OUTPUT)) \
+	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter "write the book for epubcheck"
+	@status=0; for book in $(EPUB_OUTPUT)/*.epub; do epubcheck --quiet "$$book" || status=1; done; exit $$status
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
