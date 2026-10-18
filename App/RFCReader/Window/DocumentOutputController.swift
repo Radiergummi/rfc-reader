@@ -143,6 +143,42 @@
       }
     }
 
+    // MARK: - Send to Books
+
+    /// File > Send to Books (#408): the document as an EPUB, written to a folder of
+    /// its own in the temporary directory and opened with Books, which imports it.
+    /// There is no Books API beyond opening a file with it.
+    func sendToBooks() {
+      guard !isExporting, let id = navigation.shown, reader.offersPrintAndExport, let window
+      else {
+        return
+      }
+      isExporting = true
+      Task { [library] in
+        defer { self.isExporting = false }
+        do {
+          let data = try await DocumentExport.data(
+            for: id, as: .epub, paperSize: NSPrintInfo.shared.paperSize, library: library)
+          let folder = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+          try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+          let file = folder.appending(path: ExportFormat.epub.fileName(for: id))
+          try data.write(to: file, options: .atomic)
+          guard let books = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.books)
+          else {
+            throw CocoaError(.fileNoSuchFile)
+          }
+          try await NSWorkspace.shared.open(
+            [file], withApplicationAt: books, configuration: NSWorkspace.OpenConfiguration())
+        } catch {
+          _ = window.presentError(error)
+        }
+      }
+    }
+
+    /// Books' bundle identifier on the Mac.
+    private static let books = "com.apple.iBooksX"
+
     // MARK: - Page Setup
 
     /// File > Page Setup…, which sets the paper `printDocument()` lays out for.

@@ -148,6 +148,9 @@ struct DocumentCommands: Commands {
         Button("Export…") { active.controller?.output.exportDocument() }
           .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
           .disabled(!offersPrintAndExport)
+        // The document as an EPUB, opened with Books, which imports it (#408).
+        Button("Send to Books") { active.controller?.output.sendToBooks() }
+          .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }
           .disabled(!showsDocument)

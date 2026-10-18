@@ -18,20 +18,20 @@ enum DocumentExport {
     case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
     case .text: try await library.publishedFile(for: id, format: .text)
     case .xml: try await xml(of: id, library: library)
-    case .html, .markdown, .abnf: try await rendered(id, as: format, library: library)
+    case .epub, .html, .markdown, .abnf: try await rendered(id, as: format, library: library)
     }
   }
 
-  /// The page, the Markdown or the collected grammar (#185); the grammar is offered
+  /// The book, the page, the Markdown or the collected grammar (#185); the grammar is offered
   /// only for a document that has one (`ReaderState.exportFormats`).
   private static func rendered(_ id: DocumentID, as format: ExportFormat, library: LibraryModel)
     async throws -> Data
   {
     let document = try await library.document(for: id)
-    guard let text = format.text(of: document) else {
+    guard let data = format.data(of: document) else {
       throw CocoaError(.fileWriteUnknown)
     }
-    return Data(text.utf8)
+    return data
   }
 
   /// The RFC Editor's XML where it published one, and the app's conversion of the

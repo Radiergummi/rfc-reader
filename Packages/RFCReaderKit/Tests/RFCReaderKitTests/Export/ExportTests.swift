@@ -83,7 +83,8 @@ struct ExportFormatTests {
 
   @Test func `every document offers the page, the Markdown, the text and the XML`() throws {
     #expect(
-      ExportFormat.available(for: try Fixtures.rfc2119()) == [.pdf, .html, .markdown, .text, .xml])
+      ExportFormat.available(for: try Fixtures.rfc2119())
+        == [.pdf, .epub, .html, .markdown, .text, .xml])
   }
 
   /// The page and the Markdown are the serializers' (RFCKit pins what they write);
@@ -95,6 +96,18 @@ struct ExportFormatTests {
     for format in [ExportFormat.pdf, .text, .xml] {
       #expect(format.text(of: document) == nil, "\(format)")
     }
+  }
+
+  /// The book is the EPUB writer's, typed and named as an EPUB (#408).
+  @Test func `the book is made from the document`() throws {
+    let document = try Fixtures.rfc8999()
+    #expect(ExportFormat.epub.source == .rendered)
+    #expect(ExportFormat.epub.contentType == .epub)
+    #expect(ExportFormat.epub.fileName(for: .rfc(9110)) == "RFC-9110.epub")
+    #expect(ExportFormat.epub.data(of: document) == RFCEPUBWriter().epub(document))
+    #expect(ExportFormat.epub.text(of: document) == nil)
+    #expect(ExportFormat.html.data(of: document) == Data(RFCHTMLSerializer().page(document).utf8))
+    #expect(ExportFormat.pdf.data(of: document) == nil)
   }
 
   /// A legacy RFC's XML says it is a conversion, and names the text it came from;

@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 /// it ends in. A format is added as a case here, and every surface offers it.
 public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   case pdf
+  /// An EPUB 3 book, one content document per top-level section (#408).
+  case epub
   /// One self-contained page that reads like the reader (#377).
   case html
   case markdown
@@ -34,6 +36,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public func name(in locale: Locale = .interface) -> String {
     switch self {
     case .pdf: "PDF"
+    case .epub: "EPUB"
     case .html: "HTML"
     case .markdown: "Markdown"
     case .text: String(kit: "Plain Text", locale: locale)
@@ -44,7 +47,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 
   public var source: Source {
     switch self {
-    case .pdf, .html, .markdown, .abnf: .rendered
+    case .pdf, .epub, .html, .markdown, .abnf: .rendered
     case .text, .xml: .published
     }
   }
@@ -52,6 +55,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var contentType: UTType {
     switch self {
     case .pdf: .pdf
+    case .epub: .epub
     case .html: .html
     // Gruber's own identifier, which macOS declares; the extension where it is not.
     case .markdown:
@@ -68,6 +72,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var pathExtension: String {
     switch self {
     case .pdf: contentType.preferredFilenameExtension ?? rawValue
+    case .epub: "epub"
     case .html: "html"
     case .markdown: "md"
     case .text: "txt"
@@ -77,7 +82,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   }
 
   /// The formats every document can be saved as.
-  public static let everyDocument: [ExportFormat] = [.pdf, .html, .markdown, .text, .xml]
+  public static let everyDocument: [ExportFormat] = [
+    .pdf, .epub, .html, .markdown, .text, .xml,
+  ]
 
   /// The formats `document` can be saved as: `everyDocument`, and its grammar where
   /// it has one.
@@ -158,8 +165,15 @@ extension ExportFormat {
     case .html: RFCHTMLSerializer().page(document)
     case .markdown: RFCMarkdownSerializer().serialize(document)
     case .abnf: GrammarExport.text(for: document)
-    case .pdf, .text, .xml: nil
+    case .pdf, .epub, .text, .xml: nil
     }
+  }
+
+  /// The file this format makes of `document` itself: `text(of:)`'s, or the EPUB.
+  /// Nil where `text(of:)` is, but for the EPUB.
+  public func data(of document: RFCDocument) -> Data? {
+    if self == .epub { return RFCEPUBWriter().epub(document) }
+    return text(of: document).map { Data($0.utf8) }
   }
 
   /// A legacy RFC as XML, which the RFC Editor never published it as: the document
