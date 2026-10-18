@@ -123,9 +123,6 @@ import TipKit
               HistoryButtons()
             }
             .controlGroupStyle(.navigation)
-            // Once a citation has given Back somewhere to go: previews read it
-            // without going (#782). Not on an iPhone, which has no Back of ours.
-            .helpTip(PreviewTip())
           }
         }
       }
