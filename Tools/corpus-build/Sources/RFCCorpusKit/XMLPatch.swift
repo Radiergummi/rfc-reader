@@ -95,6 +95,10 @@ public struct XMLPatch: Sendable {
     for child in root.children ?? [] {
       switch child.kind {
       case .comment:
+        // `corpus-build patch` writes one before each operation, for its reason (#742).
+        if (child.stringValue ?? "").contains("TODO:") {
+          throw failure("a comment still says TODO: give the operation after it its reason")
+        }
         continue
       case .text where Self.isWhitespace(child.stringValue):
         continue

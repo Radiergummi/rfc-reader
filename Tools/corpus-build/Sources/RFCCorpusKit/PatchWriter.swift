@@ -1,0 +1,454 @@
+import Foundation
+import RFCKit
+
+#if canImport(FoundationXML)
+  import FoundationXML
+#endif
+
+/// Writes the override patch that turns the converter's output for one document into
+/// a hand-edited copy of it (#742), by the rules of `corpus/overrides/README.md`: each
+/// difference becomes the smallest operation that covers it, selected by anchor, then
+/// by content, never by position.
+///
+/// The two documents are walked together from the root. Children are paired first by
+/// equal content or equal anchor, by a longest common subsequence so that a removed
+/// block does not shift what follows, and what is left between two pairs by element
+/// name. An element only in the original is removed, one only in the copy is added
+/// beside a paired sibling, a changed attribute is added, replaced or removed, and a
+/// change to text replaces the lowest element that holds it, never a bare text node.
+///
+/// Each operation is applied to the original as it is written, and its selector is
+/// made against the document as that operation will find it, so a selector can rely
+/// on what the operations before it did. The patch is then proven: applied to the
+/// original as `convert` applies it, it must give the edited copy as `convert` would
+/// write it, or it is not returned.
+public enum PatchWriter {
+  /// Why no patch was written.
+  public struct Failure: Error, CustomStringConvertible, Sendable {
+    public var description: String
+  }
+
+  /// The comment written before each operation, for its author to replace with the
+  /// operation's reason. A patch that still holds it fails (`XMLPatch`).
+  public static let reasonPlaceholder = "TODO: why, and the issue it fixes"
+
+  /// The patch, named `name` (`rfc822.xml`), that turns `original`, the converter's
+  /// output, into `edited`.
+  public static func patch(original: Data, edited: Data, name: String) throws(Failure) -> String {
+    let working = try document(original, "the original")
+    let target = try document(edited, "the edited copy")
+    let isPatched = (working.children ?? []).contains {
+      $0.kind == .comment && ($0.stringValue ?? "").contains("patched by corpus/overrides/")
+    }
+    guard !isPatched else {
+      throw Failure(
+        description:
+          "the original is a patched document; a patch applies to the converter's own output, from a convert run without --overrides"
+      )
+    }
+    guard let originalRoot = working.rootElement(), let editedRoot = target.rootElement() else {
+      throw Failure(description: "a document has no root element")
+    }
+
+    var writer = Writer(document: working, name: name)
+    try writer.reconcile(Node(originalRoot), Node(editedRoot))
+    guard !writer.operations.isEmpty else {
+      throw Failure(description: "the edited copy holds the original's content; nothing to patch")
+    }
+    try prove(writer.operations, original: original, edited: edited, name: name)
+
+    var lines = [#"<?xml version="1.0" encoding="UTF-8"?>"#, "<diff>"]
+    for operation in writer.operations {
+      lines.append("  <!-- \(reasonPlaceholder) -->")
+      lines.append("  \(operation)")
+    }
+    lines.append("</diff>")
+    return lines.joined(separator: "\n") + "\n"
+  }
+
+  private static func document(_ data: Data, _ what: String) throws(Failure) -> XMLDocument {
+    do {
+      return try XMLDocument(data: data, options: .nodePreserveWhitespace)
+    } catch {
+      throw Failure(description: "\(what) is not XML: \(error)")
+    }
+  }
+
+  /// Applies `operations` to `original` as `convert` does, and fails unless the result
+  /// is `edited` as `convert` would write it.
+  private static func prove(
+    _ operations: [String], original: Data, edited: Data, name: String
+  ) throws(Failure) {
+    let serializer = RFCXMLSerializer()
+    do {
+      let patch = try XMLPatch(
+        parsing: Data("<diff>\(operations.joined())</diff>".utf8), name: name)
+      let (_, written) = try DocumentConverter.apply(patch, to: original, serializer: serializer)
+      let expected = serializer.serialize(try RFCXMLParser.parse(edited))
+      let actual = String(decoding: written, as: UTF8.self)
+      if actual != expected {
+        let line = DocumentConverter.firstDifferingLine(actual, expected)
+        throw Failure(
+          description: "the patch does not give the edited copy, which differs from line \(line)")
+      }
+    } catch let failure as Failure {
+      throw failure
+    } catch let failure as DocumentConverter.PatchFailure {
+      throw Failure(description: "the patch does not apply: \(failure.message)")
+    } catch {
+      throw Failure(description: "\(error)")
+    }
+  }
+
+  // MARK: - The two trees
+
+  /// An element or a text node, with what pairing it compares: its content as one
+  /// string, comments and the whitespace that lays elements out left out.
+  private struct Node {
+    var xml: XMLNode
+    /// Nil for text.
+    var name: String?
+    var anchor: String?
+    var children: [Node]
+    var content: String
+
+    init(_ node: XMLNode) {
+      xml = node
+      guard node.kind == .element, let element = node as? XMLElement else {
+        name = nil
+        anchor = nil
+        children = []
+        content = "#" + (node.stringValue ?? "")
+        return
+      }
+      name = element.name
+      anchor = element.attribute(forName: "anchor")?.stringValue
+      children = (element.children ?? []).filter(Self.isSignificant).map(Node.init)
+      let attributes = (element.attributes ?? [])
+        .map { "\($0.name ?? "")=\"\($0.stringValue ?? "")\"" }.sorted()
+      content =
+        "<\(([name ?? ""] + attributes).joined(separator: " "))>"
+        + children.map(\.content).joined() + "</\(name ?? "")>"
+    }
+
+    var isText: Bool { name == nil }
+
+    static func isSignificant(_ node: XMLNode) -> Bool {
+      switch node.kind {
+      case .element: true
+      case .text: !PatchWriter.words(of: node.stringValue ?? "").isEmpty
+      default: false
+      }
+    }
+  }
+
+  /// What became of one child.
+  private enum Alignment {
+    case pair(Node, Node)
+    case removed(Node)
+    case added(Node)
+  }
+
+  /// The children of two paired elements, aligned: first by equal content or an equal
+  /// anchor, then, between two of those, by element name.
+  private static func align(_ original: [Node], _ edited: [Node]) -> [Alignment] {
+    var alignment: [Alignment] = []
+    let strong = commonSubsequence(original, edited) { first, second in
+      first.content == second.content
+        || (first.anchor != nil && first.name == second.name && first.anchor == second.anchor)
+    }
+    var start = (0, 0)
+    for end in strong + [(original.count, edited.count)] {
+      let gapOriginal = Array(original[start.0..<end.0])
+      let gapEdited = Array(edited[start.1..<end.1])
+      let weak = commonSubsequence(gapOriginal, gapEdited) { first, second in
+        !first.isText && first.name == second.name
+      }
+      var gapStart = (0, 0)
+      for gapEnd in weak + [(gapOriginal.count, gapEdited.count)] {
+        alignment += gapOriginal[gapStart.0..<gapEnd.0].map(Alignment.removed)
+        alignment += gapEdited[gapStart.1..<gapEnd.1].map(Alignment.added)
+        if gapEnd.0 < gapOriginal.count {
+          alignment.append(.pair(gapOriginal[gapEnd.0], gapEdited[gapEnd.1]))
+        }
+        gapStart = (gapEnd.0 + 1, gapEnd.1 + 1)
+      }
+      if end.0 < original.count { alignment.append(.pair(original[end.0], edited[end.1])) }
+      start = (end.0 + 1, end.1 + 1)
+    }
+    return alignment
+  }
+
+  /// The index pairs of a longest common subsequence of `first` and `second` under
+  /// `matches`, in order.
+  private static func commonSubsequence(
+    _ first: [Node], _ second: [Node], matches: (Node, Node) -> Bool
+  ) -> [(Int, Int)] {
+    let rows = first.count
+    let columns = second.count
+    guard rows > 0, columns > 0 else { return [] }
+    // lengths[i][j]: the longest common subsequence of first[i...] and second[j...].
+    var lengths = Array(repeating: Array(repeating: 0, count: columns + 1), count: rows + 1)
+    for row in stride(from: rows - 1, through: 0, by: -1) {
+      for column in stride(from: columns - 1, through: 0, by: -1) {
+        lengths[row][column] =
+          matches(first[row], second[column])
+          ? lengths[row + 1][column + 1] + 1
+          : max(lengths[row + 1][column], lengths[row][column + 1])
+      }
+    }
+    var pairs: [(Int, Int)] = []
+    var row = 0
+    var column = 0
+    while row < rows, column < columns {
+      if matches(first[row], second[column]),
+        lengths[row][column] == lengths[row + 1][column + 1] + 1
+      {
+        pairs.append((row, column))
+        row += 1
+        column += 1
+      } else if lengths[row + 1][column] >= lengths[row][column + 1] {
+        row += 1
+      } else {
+        column += 1
+      }
+    }
+    return pairs
+  }
+
+  // MARK: - Writing the operations
+
+  private struct Writer {
+    var document: XMLDocument
+    var name: String
+    var operations: [String] = []
+
+    /// Writes the operations that turn `original`, an element of the working
+    /// document, into `edited`, and returns the element that stands for `original`
+    /// afterwards: itself, or what replaced it.
+    @discardableResult
+    mutating func reconcile(_ original: Node, _ edited: Node) throws(Failure) -> XMLElement {
+      guard let element = original.xml as? XMLElement else {
+        throw Failure(description: "only an element is reconciled")
+      }
+      guard original.content != edited.content else { return element }
+      let alignment = PatchWriter.align(original.children, edited.children)
+      let holdsText =
+        original.children.contains(where: \.isText)
+        || edited.children.contains(where: \.isText)
+      let changesChildren = alignment.contains {
+        if case .pair = $0 { false } else { true }
+      }
+      // A change to text, or around it, replaces the element that holds it: an
+      // operation on a bare text node is not a block.
+      if original.name != edited.name || (holdsText && changesChildren) {
+        return try replace(element, with: edited.xml)
+      }
+
+      try reconcileAttributes(element, edited.xml as? XMLElement)
+
+      var previous: XMLElement?
+      var added: [Node] = []
+      for item in alignment {
+        switch item {
+        case .removed(let node):
+          try perform("<remove sel=\"\(escaped(try selector(node.xml)))\"/>")
+        case .added(let node):
+          added.append(node)
+        case .pair(let first, let second):
+          // Elements only: paired text is equal text, and any other change to text
+          // replaced this element above.
+          guard let next = first.xml as? XMLElement else { continue }
+          try add(added, after: previous, before: next, in: element)
+          added = []
+          previous = try reconcile(first, second)
+        }
+      }
+      try add(added, after: previous, before: nil, in: element)
+      return element
+    }
+
+    private mutating func reconcileAttributes(
+      _ element: XMLElement, _ edited: XMLElement?
+    ) throws(Failure) {
+      let editedAttributes = edited?.attributes ?? []
+      for attribute in editedAttributes {
+        guard let attributeName = attribute.name else { continue }
+        let value = escaped(attribute.stringValue ?? "")
+        switch element.attribute(forName: attributeName)?.stringValue {
+        case nil:
+          let target = escaped(try selector(element))
+          try perform("<add sel=\"\(target)\" type=\"@\(attributeName)\">\(value)</add>")
+        case attribute.stringValue:
+          continue
+        default:
+          let target = escaped(try selector(element) + "/@\(attributeName)")
+          try perform("<replace sel=\"\(target)\">\(value)</replace>")
+        }
+      }
+      let kept = Set(editedAttributes.compactMap(\.name))
+      for attribute in element.attributes ?? [] {
+        guard let attributeName = attribute.name, !kept.contains(attributeName) else { continue }
+        try perform("<remove sel=\"\(escaped(try selector(element) + "/@\(attributeName)"))\"/>")
+      }
+    }
+
+    /// Adds `nodes` after `previous`, else before `next`, else at the end of `parent`.
+    private mutating func add(
+      _ nodes: [Node], after previous: XMLElement?, before next: XMLElement?,
+      in parent: XMLElement
+    ) throws(Failure) {
+      guard !nodes.isEmpty else { return }
+      let content = nodes.map { PatchWriter.markup($0.xml) }.joined(separator: "\n")
+      if let previous {
+        let target = escaped(try selector(previous))
+        try perform("<add sel=\"\(target)\" pos=\"after\">\(content)</add>")
+      } else if let next {
+        let target = escaped(try selector(next))
+        try perform("<add sel=\"\(target)\" pos=\"before\">\(content)</add>")
+      } else {
+        try perform("<add sel=\"\(escaped(try selector(parent)))\">\(content)</add>")
+      }
+    }
+
+    private mutating func replace(
+      _ element: XMLElement, with edited: XMLNode
+    ) throws(Failure) -> XMLElement {
+      let target = escaped(try selector(element))
+      let parent = element.parent
+      let index = element.index
+      try perform("<replace sel=\"\(target)\">\(PatchWriter.markup(edited))</replace>")
+      let replacement =
+        parent is XMLDocument ? document.rootElement() : parent?.child(at: index) as? XMLElement
+      guard let replacement else {
+        throw Failure(description: "the replacement of \(target) is not in the document")
+      }
+      return replacement
+    }
+
+    /// Applies `operation` to the working document, as `convert` would, and keeps it.
+    private mutating func perform(_ operation: String) throws(Failure) {
+      do {
+        let patch = try XMLPatch(parsing: Data("<diff>\(operation)</diff>".utf8), name: name)
+        try patch.apply(to: document)
+      } catch {
+        throw Failure(description: "\(operation) does not apply: \(error)")
+      }
+      operations.append(operation)
+    }
+
+    // MARK: Selectors
+
+    /// The selector of `node` in the working document as it is now: from its nearest
+    /// ancestor-or-self with an anchor, or the root, one step by name and content
+    /// each. Checked to select `node` alone.
+    private func selector(_ node: XMLNode) throws(Failure) -> String {
+      var steps: [String] = []
+      var current = node
+      while true {
+        guard let element = current as? XMLElement, let elementName = element.name else {
+          throw Failure(description: "only an element is selected")
+        }
+        if let anchor = element.attribute(forName: "anchor")?.stringValue,
+          let literal = PatchWriter.literal(anchor),
+          count("//\(elementName)[@anchor=\(literal)]") == 1
+        {
+          steps.insert("//\(elementName)[@anchor=\(literal)]", at: 0)
+          break
+        }
+        guard let parent = element.parent as? XMLElement else {
+          steps.insert("/\(elementName)", at: 0)
+          break
+        }
+        steps.insert("/" + (try step(element, among: parent, isTarget: element === node)), at: 0)
+        current = parent
+      }
+      let selector = steps.joined()
+      let matches = (try? document.nodes(forXPath: selector)) ?? []
+      guard matches.count == 1, matches.first?.xPath == node.xPath else {
+        throw Failure(description: "\(selector) does not select \(node.xPath ?? "its node") alone")
+      }
+      return selector
+    }
+
+    private func count(_ selector: String) -> Int {
+      (try? document.nodes(forXPath: selector))?.count ?? 0
+    }
+
+    /// The step that selects `element` among the children of `parent`: by name and
+    /// the shortest run of its first words that no sibling of that name opens with,
+    /// so that a sibling a parser change adds does not take its place; else its first
+    /// word and a run of words further on that no sibling opening with that word
+    /// holds. An element without words, and an ancestor of the node selected, is
+    /// selected by its name alone where no sibling shares it.
+    private func step(
+      _ element: XMLElement, among parent: XMLElement, isTarget: Bool
+    ) throws(Failure) -> String {
+      let elementName = element.name ?? ""
+      let others = (parent.children ?? []).compactMap { $0 as? XMLElement }
+        .filter { $0.name == elementName && $0.index != element.index }
+        .map { PatchWriter.words(of: $0.stringValue ?? "").joined(separator: " ") }
+      let words = PatchWriter.words(of: element.stringValue ?? "")
+      guard !others.isEmpty || (isTarget && words.first.flatMap(PatchWriter.literal) != nil)
+      else {
+        return elementName
+      }
+
+      for length in 1...max(1, min(words.count, PatchWriter.longestPrefix)) where !words.isEmpty {
+        let prefix = words[..<length].joined(separator: " ")
+        guard let literal = PatchWriter.literal(prefix) else { break }
+        if !others.contains(where: { $0.hasPrefix(prefix) }) {
+          return "\(elementName)[starts-with(normalize-space(), \(literal))]"
+        }
+      }
+      if let first = words.first, let firstLiteral = PatchWriter.literal(first) {
+        let rivals = others.filter { $0.hasPrefix(first) }
+        // Runs ending at the last word first, as a page footer would tell two apart.
+        for end in stride(from: words.count, to: 1, by: -1) {
+          for length in 1...min(PatchWriter.longestRun, end - 1) {
+            let run = words[(end - length)..<end].joined(separator: " ")
+            guard let literal = PatchWriter.literal(run) else { break }
+            if !rivals.contains(where: { $0.contains(run) }) {
+              return
+                "\(elementName)[starts-with(normalize-space(), \(firstLiteral))][contains(normalize-space(), \(literal))]"
+            }
+          }
+        }
+      }
+      let opening = words.prefix(6).joined(separator: " ")
+      throw Failure(
+        description:
+          "<\(elementName)> “\(opening)” in \(parent.xPath ?? "its parent") has a sibling with the same words; only its position would select it"
+      )
+    }
+  }
+
+  /// How many first words a step names before it looks further on.
+  private static let longestPrefix = 8
+  /// How many words a run further on holds at most.
+  private static let longestRun = 4
+
+  /// The words of `text` as XPath's `normalize-space()` separates them.
+  static func words(of text: String) -> [String] {
+    text.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
+      .map(String.init)
+  }
+
+  /// `text` as an XPath string literal, or nil when it holds both kinds of quote.
+  static func literal(_ text: String) -> String? {
+    if !text.contains("'") { return "'\(text)'" }
+    if !text.contains("\"") { return "\"\(text)\"" }
+    return nil
+  }
+
+  /// `node` as XML, without the whitespace before it that lays out its document.
+  static func markup(_ node: XMLNode) -> String {
+    String(node.xmlString.drop { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
+  }
+}
+
+/// `text` escaped for an attribute value or an element's text.
+private func escaped(_ text: String) -> String {
+  text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+    .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+}
