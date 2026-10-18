@@ -176,23 +176,29 @@ struct AccessibleReadingTests {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
     )
-    // Read as its words, not as a diagram.
+    // Read as its words, not as a diagram: the one label is the copy button's.
     let labels = AccessibleReading.pieces(of: whole(text), in: text).compactMap { piece in
       if case .label(let label) = piece { label } else { nil }
     }
-    #expect(labels.isEmpty)
+    #expect(labels.allSatisfy { $0 == DocumentTextBuilder.copyButtonLabel })
     #expect(reading(whole(text), in: text).contains("a = b"))
   }
 
-  /// The copy button is a pointer's control VoiceOver cannot press, so it is said
-  /// neither as a label nor as the object-replacement character it is set as.
-  @Test func `a code block's copy button is not read`() {
+  /// The copy button is a pointer's control VoiceOver cannot press, but it is named
+  /// rather than passed over as an unnamed attachment (#760): said as Copy Code,
+  /// which the block's menu offers, and never as the object-replacement character
+  /// it is set as.
+  @Test func `a code block's copy button is said by its name`() {
     let text = built(
       Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
     )
     let reading = reading(whole(text), in: text)
     #expect(!reading.contains("\u{FFFC}"))
-    #expect(!reading.contains("["))
+    #if canImport(UIKit)
+      #expect(!reading.contains("["), "no button on iOS")
+    #else
+      #expect(reading.contains("[Copy Code]"))
+    #endif
     #expect(reading.contains("ABNF"), "the language is still read")
   }
 

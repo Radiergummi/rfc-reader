@@ -13,7 +13,7 @@ import RFCKit
 ///   to be immutable rather than merely unshared, because Foundation uniques equal
 ///   attribute dictionaries across every string in the process and two builds do
 ///   end up holding the same ones.
-/// - `AnchorIndex` is a `Sendable` value.
+/// - `AnchorIndex` and `FoldingIndex` are `Sendable` values.
 ///
 /// Once handed over, a build may be installed more than once: a force-click
 /// preview keeps its builds, and a repeated preview installs the same one into a
@@ -44,11 +44,26 @@ public struct BuiltDocument: @unchecked Sendable {
   /// paragraph is set in by: the text container is this much wider than the column,
   /// on its leading side. Zero in a build that hangs nothing.
   public let sectionNumberHang: CGFloat
+  /// The errata the build was given, which its chips list (#387).
+  public let errata: ErrataMarks
+  /// Where the text's paragraphs, headings and asides are, which the reading modes
+  /// fold by (#698). Made here, with the build and off the main actor, once: the
+  /// text view folds by it and the reader state steps Focus by it (#723).
+  public let foldingIndex: FoldingIndex
+  /// The labels a translated document's build was given (#749), nil for the
+  /// original's.
+  public let translation: DocumentLabels?
+  /// Whether this is a translated document's build, whose sentences are not the
+  /// original's (`RequirementBands`).
+  public var isTranslation: Bool { translation != nil }
 
-  public init(
+  /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
+  /// it makes the folding index too (#723).
+  init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
-    sectionNumberHang: CGFloat = 0
+    sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none,
+    translation: DocumentLabels? = nil
   ) {
     self.text = text
     self.anchors = anchors
@@ -56,6 +71,14 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
+    self.translation = translation
+    self.errata = errata
+    foldingIndex = FoldingIndex(text: text, anchors: anchors)
+  }
+
+  /// What the errata chip of the section at `anchor` lists (#387).
+  public func errata(of anchor: String) -> [ErrataSummary.Item] {
+    errata.bySection[anchor] ?? []
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the
@@ -64,7 +87,8 @@ public struct BuiltDocument: @unchecked Sendable {
     (backlinks[anchor] ?? []).compactMap { backlink in
       guard let section = backlink.section else {
         return BacklinkEntry(
-          anchor: DocumentTextBuilder.abstractAnchor, heading: "Abstract", count: backlink.count)
+          anchor: DocumentTextBuilder.abstractAnchor, heading: (translation ?? .english).abstract,
+          count: backlink.count)
       }
       guard let heading = anchors.heading(of: section) else { return nil }
       return BacklinkEntry(anchor: section, heading: heading, count: backlink.count)
@@ -92,10 +116,15 @@ public struct BacklinkEntry: Sendable, Hashable {
 public struct BuildKey: Hashable, Sendable {
   public let document: DocumentID
   public let style: ReadingStyle
+  /// Bold Text, which the platform applies to the fonts as they are made rather than
+  /// through the style, so a build made before it changed is not the one after
+  /// (#765), as `BuildInputs.legibilityWeight` is a reason to build again.
+  public let boldText: Bool
 
-  public init(document: DocumentID, style: ReadingStyle) {
+  public init(document: DocumentID, style: ReadingStyle, boldText: Bool) {
     self.document = document
     self.style = style
+    self.boldText = boldText
   }
 }
 

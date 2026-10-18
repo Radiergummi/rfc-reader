@@ -11,8 +11,6 @@ import SQLite3
 public final class CitationIndex {
   /// The database's name inside the pack.
   public static let fileName = "indexes.sqlite"
-  /// The `IndexDatabase.schemaVersion` this reads; any other is refused.
-  public static let schemaVersion = 2
   /// The share of the corpus that has to cite a document normatively for the
   /// document to be assumed: more than 2%, about 200 documents, decided on #189.
   public static let assumedShare = 0.02
@@ -42,7 +40,7 @@ public final class CitationIndex {
       // SQLite opens lazily: a file that is not a database fails at the first query.
       throw Failure.unreadable(message)
     }
-    guard schema == String(Self.schemaVersion) else { throw Failure.unknownSchema(schema) }
+    guard schema == String(IndexSchema.version) else { throw Failure.unknownSchema(schema) }
   }
 
   deinit { sqlite3_close(connection) }

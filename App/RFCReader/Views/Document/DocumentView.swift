@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import Translation
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -14,6 +15,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
@@ -45,7 +47,7 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
-  /// The text of the build the reader's folding index was made of (#699).
+  /// The text of the build whose folding index the reader state holds (#699, #723).
   @State private var foldedText: NSAttributedString?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
@@ -121,6 +123,16 @@ struct DocumentView: View {
   /// reader state is this reader's, and what it last was otherwise.
   private var showsOriginal: Bool { showsReaderState ? reader.showOriginal : keptOriginal }
 
+  /// The translation or the English (#749): the window's choice while the reader
+  /// state is this reader's, and what it last was otherwise.
+  private var showsTranslation: Bool {
+    showsReaderState ? reader.showTranslation : session.showsTranslation
+  }
+
+  /// The framework's configuration for translating the document, nil until it is
+  /// first asked for; `.translationTask` runs the translation whenever it changes.
+  @State private var translationConfiguration: TranslationSession.Configuration?
+
   #if !os(macOS)
     @Binding private var showsInspector: Bool
     /// Export and Print, and the sheets they present.
@@ -190,11 +202,22 @@ struct DocumentView: View {
     ReadingPositionKeeper(id: identity, context: modelContext)
   }
 
+  /// The document's verified and held errata, where the reader marks them (#387):
+  /// none until its body is here, so a build is not made for marks that move, and
+  /// none in a text the original-only page loaded but does not show, whose header
+  /// lists them all.
+  private var errataMarks: ErrataMarks {
+    guard session.state.document != nil, originalOnlyPage == nil else { return .none }
+    return session.errataMarks(for: library.errata?[id])
+  }
+
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
+      errata: errataMarks,
+      translated: showsTranslation && session.translatedDocument != nil,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -204,11 +227,13 @@ struct DocumentView: View {
 
   /// The folding index of the build on screen, and in Focus the References tab's
   /// groups, filtered to what its section cites (#699). Only for the reader on
-  /// screen, whose the reader state is, and only in Focus, which alone needs them;
+  /// screen, whose the reader state is, and only in Focus, which steps through it,
+  /// and the outline, whose Expand Section and Collapse Section look it up (#760);
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
-    guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
+    guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
       // would redraw on every disclosure the outline turns.
@@ -217,15 +242,20 @@ struct DocumentView: View {
       foldedText = nil
       return
     }
-    // Held, and compared by reference: a new build can be allocated where the old
-    // one was, and an identifier alone would take it for the old one.
+    // The build's own index (#723), written only when the build changes, since every
+    // write notifies. The text is held and compared by reference: a new build can be
+    // allocated where the old one was, and an identifier alone would take it for it.
     if reader.foldingIndex == nil || foldedText !== built.text {
-      reader.foldingIndex = FoldingIndex(built)
+      reader.foldingIndex = built.foldingIndex
       foldedText = built.text
     }
-    guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
-    else { return }
-    let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+    guard reader.folding.mode == .focus,
+      let anchor = reader.folding.focusedAnchor(in: built.foldingIndex)
+    else {
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      return
+    }
+    let cited = FocusCitations.entries(citedIn: anchor, in: built)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying
     // the document has none.
@@ -263,6 +293,15 @@ struct DocumentView: View {
       .onChange(of: reader.showOriginal) {
         if showsReaderState { keptOriginal = reader.showOriginal }
         updateFolding()
+      }
+      .onChange(of: reader.showTranslation) {
+        if showsReaderState { session.showsTranslation = reader.showTranslation }
+        requestTranslation()
+      }
+      // Asked for before the document was here, it is translated once it is.
+      .onChange(of: session.state.document != nil) { requestTranslation() }
+      .translationTask(translationConfiguration) { [session] translator in
+        await session.translate(with: translator, cache: TranslationCache())
       }
       // On iOS, covered by a reader pushed over it, or on top again once that one
       // is popped (#263).
@@ -439,6 +478,26 @@ struct DocumentView: View {
     }
   #endif
 
+  /// Starts the translation the reader asked for, unless it is made: again after
+  /// one that failed or stopped, and in place of one still under way, which stops.
+  private func requestTranslation() {
+    guard showsTranslation, session.state.document != nil,
+      session.translationPhase.translated == nil
+    else { return }
+    if translationConfiguration == nil {
+      translationConfiguration = DocumentSession.translationConfiguration()
+    } else {
+      translationConfiguration?.invalidate()
+    }
+  }
+
+  /// What the header says of a translation asked for, nil showing the English.
+  private var translationMark: TranslationMark? {
+    TranslationMark(
+      session.translationPhase, showsTranslation: showsTranslation,
+      buildIsTranslation: session.state.built?.isTranslation == true)
+  }
+
   private func saveNow() {
     placeSaver.cancel()
     guard !isBeside else { return }
@@ -479,6 +538,11 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+        // Which window's live resize a new column comes from.
+        .background {
+          WindowObserver(resize: resize)
+          .accessibilityHidden(true)
+        }
       #else
         // Which size changes are a rotation, so their new column builds at once.
         .background {
@@ -488,13 +552,18 @@ struct DocumentView: View {
       #endif
   }
 
+  /// The page of an RFC that is its PDF or PostScript original (#207), shown in place
+  /// of a body; nil for any other.
+  private var originalOnlyPage: PublishedOriginalPage? {
+    guard let metadata else { return nil }
+    return PublishedOriginalPage(
+      id, formats: metadata.formats, showsOriginal: showsOriginal,
+      text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
+  }
+
   @ViewBuilder
   private var states: some View {
-    if let metadata,
-      let page = PublishedOriginalPage(
-        id, formats: metadata.formats, showsOriginal: showsOriginal,
-        text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
-    {
+    if let metadata, let page = originalOnlyPage {
       originalOnly(page, metadata: metadata)
     } else if showsOriginal {
       // At the size the reader sets its body, the system's text size included, so
@@ -503,6 +572,7 @@ struct DocumentView: View {
         text: session.originalText,
         failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
+        isShown: showsReaderState,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
       .onAppear {
@@ -511,7 +581,8 @@ struct DocumentView: View {
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
-        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) },
+        translation: translationMark, documentErrata: built.errata.document)
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -575,7 +646,7 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(identity.displayName)", systemImage: failure.kind.symbol)
+        Label("Couldn’t Load \(identity.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
         Text(failure.kind.recoverySuggestion(for: .document))
@@ -613,7 +684,10 @@ struct DocumentView: View {
           identity: DocumentHeaderView.Identity(
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,
-            revisions: library.revisionsSummary(for: metadata.id)),
+            revisions: library.revisionsSummary(for: metadata.id),
+            // No body to mark: every erratum is the whole document's.
+            documentErrata: session.errataMarks(for: library.errata?[id], drawsBody: false)
+              .document),
           reader: controller
         )
         .padding(.top, 16)
@@ -668,7 +742,8 @@ struct DocumentView: View {
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
-      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
+      // The bars slide: with Reduce Motion they go and come without it (#760).
+      withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { barsHidden = hidden }
     #endif
   }
 
@@ -717,31 +792,37 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is. False while there is no build to look in.
+  /// leaves the history as it is. Nil while there is no build to look in, and
+  /// otherwise whether the place was one the document holds (#762).
   @discardableResult
-  private func follow(_ place: String) -> Bool {
+  private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
       let built = session.state.built
-    else { return false }
+    else { return nil }
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
         to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+      return .landed
     case .reference(let anchor):
       reader.reveal(reference: anchor)
+      return .landed
     case .document, .unhandled, nil:
-      break
+      return .noSuchPlace
     }
-    return true
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there.
+  /// waits for the text to appear, and is followed there; where no text is coming,
+  /// a scan's or a pointer's page or a load that failed, it is settled unmade
+  /// (#762), or a script's `jump to section` would wait on it forever.
   private func follow(_ request: ScrollRequest) {
-    if follow(request.section) {
-      navigation.settle(request)
+    if let outcome = follow(request.section) {
+      navigation.settle(request, as: outcome)
+    } else if isShown, !session.awaitsDocument, session.state.document == nil {
+      navigation.settle(request, as: .notShown)
     }
   }
 

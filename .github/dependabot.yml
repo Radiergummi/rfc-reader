@@ -13,10 +13,15 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  # Only corpus-build has remote dependencies; RFCKit and RFCReaderKit depend on
-  # nothing but each other, by path.
+  # corpus-build and the two benchmarks packages have remote dependencies; RFCKit
+  # and RFCReaderKit depend on nothing but each other, by path. Both benchmarks
+  # packages pin package-benchmark exactly, to the same release, so one grouped pull
+  # request moves them together.
   - package-ecosystem: swift
-    directory: /Tools/corpus-build
+    directories:
+      - /Tools/corpus-build
+      - /Tools/benchmarks
+      - /Tools/benchmarks-layout
     schedule:
       interval: weekly
       day: monday

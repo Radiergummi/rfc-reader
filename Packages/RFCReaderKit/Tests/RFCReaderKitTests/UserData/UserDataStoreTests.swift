@@ -93,6 +93,116 @@ struct UserDataStoreTests {
       try BookmarkStore.bookmarkedDocuments(in: context) == [DocumentID(series: .bcp, number: 14)])
   }
 
+  /// A stray swipe or ⌘D loses nothing: undo puts the bookmark back with its title
+  /// and the date it was added (#769).
+  @Test func `an undone removal restores the bookmark as it was`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let added = Date(timeIntervalSince1970: 1_700_000_000)
+    context.insert(Bookmark(document: .rfc(9110), title: "HTTP Semantics", createdAt: added))
+    try context.save()
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "Another Title", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context).isEmpty)
+
+    undoManager.undo()
+    let restored = try context.fetch(FetchDescriptor<Bookmark>())
+    #expect(restored.map(\.document) == [.rfc(9110)])
+    #expect(restored.first?.title == "HTTP Semantics")
+    #expect(restored.first?.createdAt == added)
+    #expect(!context.hasChanges)
+
+    undoManager.redo()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context).isEmpty)
+  }
+
+  /// Bookmarked again since, the document has a bookmark: undo adds no second.
+  @Test func `an undone removal adds nothing beside a bookmark made since`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    try BookmarkStore.toggle(.rfc(9110), title: "HTTP Semantics", in: context)
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    try BookmarkStore.toggle(.rfc(9110), title: "HTTP Semantics", in: context)
+
+    undoManager.undo()
+    #expect(try context.fetch(FetchDescriptor<Bookmark>()).count == 1)
+  }
+
+  /// Removed, then bookmarked again: Undo takes the new bookmark away, rather than
+  /// offering to restore one that is already there and doing nothing.
+  @Test func `undoing a new bookmark removes it`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    try BookmarkStore.toggle(.rfc(9110), title: "HTTP Semantics", in: context)
+
+    for _ in 0..<2 {
+      undoManager.beginUndoGrouping()
+      try BookmarkStore.toggle(
+        .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+        onUndoFailure: Self.undoFailed, in: context)
+      undoManager.endUndoGrouping()
+    }
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context) == [.rfc(9110)])
+
+    undoManager.undo()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context).isEmpty)
+    undoManager.undo()
+    #expect(try BookmarkStore.bookmarkedDocuments(in: context) == [.rfc(9110)])
+  }
+
+  /// Undo and Redo name what the reader did, whichever way they go: a new bookmark
+  /// is "Bookmark" in both, not "Remove Bookmark" once undone.
+  @Test func `undo and redo keep the name of the action they undo`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let adding = DocumentActions.bookmarkCommand(isBookmarked: false)
+    let removing = DocumentActions.bookmarkCommand(isBookmarked: true)
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    #expect(undoManager.undoActionName == adding)
+    undoManager.undo()
+    #expect(undoManager.redoActionName == adding)
+    undoManager.redo()
+    #expect(undoManager.undoActionName == adding)
+
+    undoManager.beginUndoGrouping()
+    try BookmarkStore.toggle(
+      .rfc(9110), title: "HTTP Semantics", undoManager: undoManager,
+      onUndoFailure: Self.undoFailed, in: context)
+    undoManager.endUndoGrouping()
+    #expect(undoManager.undoActionName == removing)
+    undoManager.undo()
+    #expect(undoManager.redoActionName == removing)
+    undoManager.redo()
+    #expect(undoManager.undoActionName == removing)
+  }
+
+  /// What an undo or redo reports failing, which none here should.
+  private static func undoFailed(_ error: any Error) {
+    Issue.record(error, "an undo or redo failed")
+  }
+
   @Test func `a toggle is saved before it returns`() throws {
     let container = try makeContainer()
     let context = container.mainContext

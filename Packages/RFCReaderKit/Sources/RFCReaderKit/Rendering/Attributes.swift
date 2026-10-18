@@ -63,8 +63,8 @@ extension NSAttributedString.Key {
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow
   /// would otherwise be read out, carried by every character of the caption but its
-  /// line break; and an informative chip, said as "informative" and its label
-  /// (#457, #862). A `String`. A code block's copy button has none, and is not read.
+  /// line break; an informative chip, said as "informative" and its label (#457,
+  /// #862); and a code block's copy button, said as Copy Code (#760). A `String`.
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
@@ -88,6 +88,10 @@ extension NSAttributedString.Key {
   /// (`FragmentGeometry.cardInset`), on every character of a block that spans the
   /// column: its card starts that much before the text's indent. A number.
   public static let rfcCardInset = NSAttributedString.Key("rfcCardInset")
+  /// What every fragment of a decorated block measures its band against, worked
+  /// out once as the build ends (`DecorationFacts`), on every character of the
+  /// block.
+  static let rfcDecorationFacts = NSAttributedString.Key("rfcDecorationFacts")
   /// Makes a block with a rendering one item for a long press, which shows the
   /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
   /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
@@ -119,10 +123,11 @@ extension RFCDecoration {
   /// insertions. A block whose decoration is applied once — artwork, appended in a
   /// single call — merged fine; one applied per piece — a stacked table's cells,
   /// an authors' block — did not, so every paragraph reported itself as a complete
-  /// decoration run. The renderer reads that run's `effectiveRange` to cap the
-  /// band's rounded corners and to place its left edge, so unmerged runs drew one
-  /// fully rounded card per line at its own indent: the staircase. `NSString`
-  /// compares by value, so runs merge.
+  /// decoration run. The renderer reads the run's extent, `decorationRun(at:)` through
+  /// `longestEffectiveRange`, to cap the band's rounded corners and to place its left
+  /// edge, and that coalesces only equal values: unmerged runs drew one fully rounded
+  /// card per line at its own indent, the staircase. `NSString` compares by value, so
+  /// runs merge.
   public init?(attributeValue: Any?) {
     guard let raw = attributeValue as? String, let decoration = RFCDecoration(rawValue: raw) else {
       return nil
@@ -241,7 +246,47 @@ extension VerbatimBox {
 /// one instance per block, so the attribute's extent is the block.
 public final class StrokeBox: NSObject, Sendable {
   public let strokes: [Stroke]
-  public init(_ strokes: [Stroke]) { self.strokes = strokes }
+  /// Where each of the block's lines starts, as offsets from the block's start, the
+  /// first at 0: a fragment's line is read from these rather than by counting the
+  /// newlines before it in the text, which copied the whole document (#765).
+  public let lineStarts: [Int]
+
+  public init(_ strokes: [Stroke], lineStarts: [Int]) {
+    self.strokes = strokes
+    self.lineStarts = lineStarts
+  }
+
+  /// The line the character at `offset` from the block's start is on.
+  public func line(at offset: Int) -> Int {
+    max(0, lineStarts.partitioningIndex { $0 > offset } - 1)
+  }
+}
+
+/// What a decorated block's fragments share, walked out of the text once
+/// (`FragmentGeometry.decorationFacts`) rather than by each fragment as it lays out:
+/// a verbatim block is one fragment per line, and walking the block from every line
+/// made a long highlighted block quadratic (#766), which the benchmark
+/// `Decoration spans: RFC 8727` measures.
+///
+/// Its extent is still a longest effective range, merged across storage runs, made
+/// once, so the staircase cannot come back. An `NSObject` left with identity
+/// equality, like the other boxes, so two blocks' boxes never merge into one run.
+final class DecorationFacts: NSObject, Sendable {
+  /// The block's whole extent: its decoration's run, cut to its verbatim block.
+  let range: NSRange
+  /// The shallowest paragraph indent in the block.
+  let indent: CGFloat
+  /// How far the block's text is set in from its card (`.rfcCardInset`).
+  let cardInset: CGFloat
+  /// How wide its content is set, where its card hugs it (`.rfcContentWidth`).
+  let contentWidth: CGFloat?
+
+  init(range: NSRange, indent: CGFloat, cardInset: CGFloat, contentWidth: CGFloat?) {
+    self.range = range
+    self.indent = indent
+    self.cardInset = cardInset
+    self.contentWidth = contentWidth
+  }
 }
 
 /// Boxes a `CrossReference` for the same reason.
@@ -328,6 +373,23 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
+  /// The errata chip at this character offset (#387): the section whose errata it
+  /// lists, and the chip's whole extent, which its list is anchored to.
+  public func errataChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+    // The link first, as a backlink caption is found: a longest range of nothing
+    // would reach out to the next chip.
+    guard offset >= 0, offset < length,
+      let url = attribute(.link, at: offset, effectiveRange: nil).flatMap(
+        ReaderLinkScheme.url(fromLink:)),
+      let anchor = ReaderLinkScheme.errata(from: url),
+      attribute(.rfcChip, at: offset, effectiveRange: nil) != nil
+    else { return nil }
+    var chip = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcChip, at: offset, longestEffectiveRange: &chip, in: NSRange(location: 0, length: length))
+    return (anchor, chip)
+  }
+
   /// The hung heading number at this character offset (#433): the anchor of the
   /// heading it links to, and the number's own extent, which the pointer lights up
   /// and a copy's feedback is shown over.
@@ -352,6 +414,38 @@ extension NSAttributedString {
       if value != nil { buttons.append(run) }
     }
     return buttons
+  }
+
+  /// What the copy button of the code block at this character offset copies, its
+  /// menu's Copy Code (#760): nil for a block with no button. Only the block's own
+  /// extent is searched.
+  public func code(ofBlockAt offset: Int) -> String? {
+    guard let block = extent(ofBox: .rfcVerbatim, at: offset),
+      let button = copyButtons(in: block).first
+    else { return nil }
+    return code(ofCopyButtonAt: button.location)
+  }
+
+  /// What the copy button of `box`'s block copies, found from `range`, which touches
+  /// the block: the block's menu's Copy Code (#760), found as its Copy Figure is
+  /// (`FigureMenu.itemRange(of:touching:in:)`). Nil for a block with no button.
+  public func code(ofBlock box: VerbatimBox, touching range: NSRange) -> String? {
+    location(of: box, touching: range).flatMap(code(ofBlockAt:))
+  }
+
+  /// Where `box`'s block is first found in `range`, which touches it: a selection
+  /// that may begin anywhere before it. An empty range is a location.
+  func location(of box: VerbatimBox, touching range: NSRange) -> Int? {
+    let searched = NSIntersectionRange(
+      NSRange(location: range.location, length: max(range.length, 1)),
+      NSRange(location: 0, length: length))
+    var location: Int?
+    enumerateAttribute(.rfcVerbatim, in: searched) { value, run, stop in
+      guard (value as? VerbatimBox) === box else { return }
+      location = run.location
+      stop.pointee = true
+    }
+    return location
   }
 
   /// What the copy button at this character offset copies: its block as Copy

@@ -7,7 +7,11 @@ extension RFCMetadata {
   ///
   /// VoiceOver read the row's number, year, title, status and group as separate
   /// stops (#156), so the row hides its children and speaks this instead.
-  public func accessibilityLabel(isBookmarked: Bool, locale: Locale = .interface) -> String {
+  ///
+  /// `isAvailableOffline` is whether Available Offline lists it, which the row marks.
+  public func accessibilityLabel(
+    isBookmarked: Bool, isAvailableOffline: Bool = false, locale: Locale = .interface
+  ) -> String {
     var parts = [id.displayName, title, currentStatus.displayName]
     if isObsolete {
       parts.append(String(kit: "Obsolete", locale: locale))
@@ -20,6 +24,9 @@ extension RFCMetadata {
     parts.append(String(date.year))
     if isBookmarked {
       parts.append(String(kit: "Bookmarked", locale: locale))
+    }
+    if isAvailableOffline {
+      parts.append(String(kit: "Available offline", locale: locale))
     }
     return parts.joined(separator: ", ")
   }
@@ -38,8 +45,13 @@ extension RFCMetadata {
 extension LibraryRow {
   /// What the row is, spoken as one element. A series is spoken with the RFCs it
   /// names, and with no status or group: those belong to its members.
-  public func accessibilityLabel(isBookmarked: Bool, locale: Locale = .interface) -> String {
-    if let rfc { return rfc.accessibilityLabel(isBookmarked: isBookmarked, locale: locale) }
+  public func accessibilityLabel(
+    isBookmarked: Bool, isAvailableOffline: Bool = false, locale: Locale = .interface
+  ) -> String {
+    if let rfc {
+      return rfc.accessibilityLabel(
+        isBookmarked: isBookmarked, isAvailableOffline: isAvailableOffline, locale: locale)
+    }
     guard let memberList else { return id.displayName }
     var parts = [id.displayName, title, memberList, String(date.year)]
     if isBookmarked {
