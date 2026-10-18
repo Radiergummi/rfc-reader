@@ -15,7 +15,7 @@ rfc-reader/
 │   │   ├── Registry/         IANARegistry and RegistryLookup: the IANA registries the app looks values up in (#175)
 │   │   ├── Corpus/           Manifest: a data pack's files, sizes and hashes, which corpus-build writes and the app verifies
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)
-│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section)
+│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section), SQLiteDatabase (the one SQLite connection helper, which corpus-build's IndexDatabase and the app's CitationIndex use too)
 │   ├── Sources/CSQLite/      the system's SQLite, a product of its own that corpus-build uses too
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, DocumentStore (actor, disk cache), the stores and the SwiftData schema. Needs an Apple SDK.
