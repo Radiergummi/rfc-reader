@@ -37,6 +37,25 @@ struct DocumentCommands: Commands {
     }
     private var isBookmarked: Bool { active.controller?.isBookmarked == true }
     private func toggleBookmark() { active.controller?.toggleBookmark() }
+
+    /// Whether Use Selection for Find and Jump to Selection have a selection to act
+    /// on: the reader's, the one beside a compared document's, or the original
+    /// text's, which reports none and is let through.
+    private var hasFindableSelection: Bool {
+      reader?.showOriginal == true || reader?.hasSelection == true
+        || reader?.sideBySide?.reader.hasSelection == true
+    }
+
+    /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
+    private func paneTitle(_ pane: InspectorPane) -> String {
+      InspectorPane.menuTitle(
+        pane, isOpen: active.isPanelOpen, showing: active.controller?.reader.pane ?? .navigation)
+    }
+
+    /// What an item of the Document menu does, as the toolbar's Cite and More do it.
+    private func perform(_ action: DocumentMenus.Action) {
+      active.controller?.perform(action)
+    }
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
@@ -75,13 +94,14 @@ struct DocumentCommands: Commands {
       #if os(macOS)
         // Handed to the reader's text view (#186); see
         // `ReaderWindowController.copyAsQuote()`. Grayed out without a selection, as
-        // Copy is; the original text is not the reader's, and has no quote to copy.
+        // Copy is; the original text is not the reader's, and has no quote to copy,
+        // and a translation's words are not the RFC's (#749).
         Button("Copy as Quote") {
           active.controller?.copyAsQuote()
         }
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(
-          !showsDocument || reader?.showOriginal == true
+          !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
             || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
       #endif
       Section {
@@ -112,6 +132,41 @@ struct DocumentCommands: Commands {
         Button("Export…") { active.controller?.output.exportDocument() }
           .keyboardShortcut("e", modifiers: [.command, .shift])
           .disabled(!offersPrintAndExport)
+        // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
+        Button("Share…") { active.controller?.share() }
+          .disabled(!showsDocument)
+      }
+      // The document's own actions, the toolbar's Cite and More menus rendered from
+      // the same sections, so the two cannot drift (#761): with the toolbar hidden or
+      // in full screen they were nowhere else. One menu, as the toolbar keeps them
+      // together, rather than spread over Edit, View and a Go menu.
+      CommandMenu("Document") {
+        Group {
+          Menu("Cite") {
+            // ⌘⇧C, the citation people copy most, in the menu's first style.
+            MenuSections(
+              sections: DocumentMenus.cite(),
+              shortcuts: [
+                .copyCitation(CitationStyle.allCases[0]): KeyboardShortcut(
+                  "c", modifiers: [.command, .shift])
+              ],
+              perform: perform)
+          }
+          // A citation is made from the index's entry, as the References menu's is.
+          .disabled(navigation?.shown.flatMap { active.controller?.library.metadata($0) } == nil)
+          Divider()
+          // Disabled rather than gone with no reader window, as the other menus'
+          // items are: an empty menu in the bar says nothing.
+          MenuSections(
+            sections: DocumentMenus.more(
+              showsOriginal: reader?.showOriginal == true,
+              showsTranslation: reader?.showTranslation == true,
+              errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
+                .errataURL,
+              precedingDraft: reader?.precedingDraft),
+            perform: perform)
+        }
+        .disabled(!showsDocument)
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.
@@ -163,6 +218,8 @@ struct DocumentCommands: Commands {
             .disabled(!showsDocument)
           FocusSteps(reader: reader)
             .disabled(!showsDocument)
+          OutlineSectionItems(reader: reader)
+            .disabled(!showsDocument)
         }
         // View ▸ Compare Side by Side (#187), beside the other ways of reading it.
         if let controller = active.controller, let reader,
@@ -194,7 +251,7 @@ struct DocumentCommands: Commands {
           // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
           // which every tabbed Mac app gives to reopening the last closed tab
           // (#157).
-          Button("Contents") { active.controller?.press(.navigation) }
+          Button(paneTitle(.navigation)) { active.controller?.press(.navigation) }
             .keyboardShortcut("i", modifiers: [.command, .option])
             // As the toolbar's button is: on whatever the index describes, a
             // document still loading or one that failed to included (#325), and
@@ -203,16 +260,27 @@ struct DocumentCommands: Commands {
             // panel that is still open.
             .disabled(reader?.canDescribe != true)
           // ⌘I, Get Info in Finder and Preview.
-          Button("Info") { active.controller?.press(.info) }
+          Button(paneTitle(.info)) { active.controller?.press(.info) }
             .keyboardShortcut("i", modifiers: .command)
             .disabled(reader?.canDescribe != true)
         #endif
-        // Cmd+arrow, as Safari and Finder bind it.
+        // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
+        // the arrows: AppKit gives a menu item its key before a text field, and ⌘←
+        // and ⌘→ are a field's line start and end. The reader window answers them
+        // where no field is being edited (`HistoryArrowShortcut`). The iPad keeps
+        // the arrows, which nothing else there answers.
+        #if os(macOS)
+          let back = KeyboardShortcut("[", modifiers: .command)
+          let forward = KeyboardShortcut("]", modifiers: .command)
+        #else
+          let back = KeyboardShortcut(.leftArrow, modifiers: .command)
+          let forward = KeyboardShortcut(.rightArrow, modifiers: .command)
+        #endif
         Button("Back") { navigation?.goBack() }
-          .keyboardShortcut(.leftArrow, modifiers: .command)
+          .keyboardShortcut(back)
           .disabled(navigation?.canGoBack != true)
         Button("Forward") { navigation?.goForward() }
-          .keyboardShortcut(.rightArrow, modifiers: .command)
+          .keyboardShortcut(forward)
           .disabled(navigation?.canGoForward != true)
       }
     }
@@ -233,6 +301,15 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("g", modifiers: .command)
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
+          // As TextEdit's and Safari's Find menus have them (#761). Only over a
+          // selection: they act on it.
+          Group {
+            Button("Use Selection for Find") { active.controller?.useSelectionForFind() }
+              .keyboardShortcut("e", modifiers: .command)
+            Button("Jump to Selection") { active.controller?.jumpToSelection() }
+              .keyboardShortcut("j", modifiers: .command)
+          }
+          .disabled(!hasFindableSelection)
         }
         .disabled(!showsDocument)
         // ⌥⌘F, the chord Mail and Notes give their search field. Enabled with any

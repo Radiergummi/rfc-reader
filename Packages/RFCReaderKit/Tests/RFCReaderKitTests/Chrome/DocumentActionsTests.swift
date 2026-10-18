@@ -111,6 +111,13 @@ struct DocumentActionsTests {
   /// bookmarked in words VoiceOver reads, which the glyph alone never did (#278).
   @Test func `the bookmark state is said in words`() {
     #expect(DocumentActions.bookmarkState(isBookmarked: true, locale: .english) == "Bookmarked")
+    // The tooltip leads with what a click does (#761).
+    #expect(
+      DocumentActions.bookmarkTooltip(isBookmarked: true, locale: .english)
+        .hasPrefix(DocumentActions.bookmarkCommand(isBookmarked: true, locale: .english)))
+    #expect(
+      DocumentActions.bookmarkTooltip(isBookmarked: false, locale: .english)
+        .hasPrefix(DocumentActions.bookmarkCommand(isBookmarked: false, locale: .english)))
     #expect(
       DocumentActions.bookmarkState(isBookmarked: false, locale: .english) == "Not bookmarked")
   }

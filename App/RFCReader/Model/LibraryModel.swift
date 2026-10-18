@@ -55,8 +55,13 @@ final class LibraryModel {
     didSet {
       groupRFCs = [:]
       indexVersion += 1
+      indexableRFCs = index.map { IndexAllRun.indexable($0.rfcs) } ?? []
     }
   }
+
+  /// The RFCs Index All RFCs can index (`IndexAllRun.indexable`), worked out once per
+  /// index: the footer and Settings count them as they draw.
+  @ObservationIgnored private(set) var indexableRFCs: [RFCMetadata] = []
   /// Which index is installed, counted: what a tab compares to tell whether the
   /// rows and hits it has were made over the index there is now (#597), where
   /// comparing two indexes would compare 9,842 entries.
@@ -181,6 +186,11 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
+  /// Whether the installed indexes pack holds a citation index (#189), without which
+  /// a reading path can only say there is none: the Reading Path items are offered
+  /// only while it is true (#769), and come back once #738 delivers the pack.
+  private(set) var hasCitationIndex = false
+
   /// `UserDataMirror.recentlyReadCount`.
   var recentlyReadCount: Int { userData.recentlyReadCount }
 
@@ -225,6 +235,12 @@ final class LibraryModel {
       pathChanged: { [weak self] in self?.reconcileOffline(forgettingFailures: true) },
       // Low Power Mode decides whether a fetch waits, not whether it fails.
       powerChanged: { [weak self] in self?.reconcileOffline() })
+  }
+
+  /// Whether Available Offline lists `id`: what a library row marks as offline
+  /// (#769). Only an RFC: the list holds the RFCs a series names, not the series.
+  func isAvailableOffline(_ id: DocumentID) -> Bool {
+    id.series == .rfc && availableOfflineNumbers.contains(id.number)
   }
 
   /// Lists what is wanted offline, and brings the disk in line with it.
@@ -299,11 +315,14 @@ final class LibraryModel {
   }
 
   /// Adds the bookmark or removes it (`UserDataMirror.toggleBookmark`), titled from
-  /// the index or else `documentTitle`, what an open reader has parsed.
-  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+  /// the index or else `documentTitle`, what an open reader has parsed. A removal
+  /// registers its undo with `undoManager` (#769).
+  func toggleBookmark(
+    _ id: DocumentID, documentTitle: String? = nil, undoManager: UndoManager? = nil
+  ) {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
-    userData.toggleBookmark(id, title: title)
+    userData.toggleBookmark(id, title: title, undoManager: undoManager)
   }
 
   /// What a change to the bookmarks means beyond the set itself.
@@ -318,6 +337,12 @@ final class LibraryModel {
     let pointers = await store.pointersInPack()
     guard pointers != pointersInPack else { return }
     pointersInPack = pointers
+  }
+
+  private func refreshCitationIndex() async {
+    let hasIndex = await store.citationIndexURL() != nil
+    guard hasIndex != hasCitationIndex else { return }
+    hasCitationIndex = hasIndex
   }
 
   private let client = RFCEditorClient()
@@ -336,6 +361,12 @@ final class LibraryModel {
   /// Counts the full-text index's changes, for a tab to search the text again once
   /// a document is added to it or removed.
   private(set) var textIndexVersion = 0
+
+  /// Index All RFCs (#37), which Settings and the search's footer start and stop.
+  let indexAllRun = IndexAllRun()
+
+  /// Whether the full-text index has opened, for Index All RFCs to be offered.
+  private(set) var hasTextIndex = false
 
   // MARK: - Bootstrap
 
@@ -378,6 +409,8 @@ final class LibraryModel {
       indexState = .failed(error)
       settleIndex()
     }
+    // Only the Reading Path items wait for it, so not the list.
+    Task(name: "Look for a citation index") { await refreshCitationIndex() }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
@@ -392,6 +425,7 @@ final class LibraryModel {
         return
       }
       self?.textIndexer = indexer
+      self?.hasTextIndex = true
       // A list made before the index opened has no section hits, and an index that is
       // already up to date never reports a change: its tabs search the text now.
       self?.textIndexChanged()
@@ -520,6 +554,7 @@ final class LibraryModel {
           do {
             let pack = try await store.installIndexesPack(
               from: PackInstaller.source(fromArgument: indexes))
+            await refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {
             libraryLog.error(
@@ -996,6 +1031,45 @@ final class LibraryModel {
     textIndexVersion += 1
   }
 
+  /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
+  /// on a network that is neither metered nor in Low Data Mode, and indexes it without
+  /// keeping its body.
+  func indexAllRFCs() {
+    guard let textIndexer else { return }
+    let entries = Dictionary(
+      indexableRFCs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let client = clientOnCheapNetworks
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    indexAllRun.start(
+      entries.keys.sorted(), indexer: textIndexer,
+      fetch: { id in
+        let entry = entries[id]
+        return try await client.fetchPreferredDocument(
+          id, availableFormats: entry?.formats, entry: entry
+        ).document
+      }, changed: changed)
+  }
+
+  /// How many of `indexableRFCs` Index All RFCs would download; nil while the
+  /// full-text index has not opened.
+  func unindexedRFCCount() async -> Int? {
+    await textIndexer?.unindexed(indexableRFCs.map(\.id))
+  }
+
+  /// What the full-text index holds, and how much of the disk it takes; nil while it
+  /// has not opened.
+  func textIndexUsage() async -> TextIndexer.Usage? {
+    await textIndexer?.usage()
+  }
+
+  /// Remove Full-Text Index: stops Index All RFCs, and keeps in the index only the
+  /// RFCs whose bodies are stored.
+  func removeIndexOfAllRFCs() async {
+    guard let textIndexer else { return }
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await indexAllRun.remove(from: textIndexer, changed: changed)
+  }
+
   /// What the full-text search finds for `list` (#37): its section hits, narrowed as
   /// its RFC rows are. Nil while there is no index, or when the list asks the text
   /// nothing (`LibraryList.textQuery`).
@@ -1301,6 +1375,14 @@ final class LibraryModel {
         openInNewWindow(link)
       }
     }
+
+    /// Opens `link` in a new tab of the window showing `scene`, from a menu in it
+    /// (#761): a right click does not make a background window key, and a new tab
+    /// joins the key window's group.
+    func openTab(_ link: RFCLink, beside scene: NavigationModel) {
+      windows?.bringForward(scene)
+      openInNewScene(link, inBackground: false)
+    }
   #endif
 
   // MARK: - Documents
@@ -1326,6 +1408,8 @@ final class LibraryModel {
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
     let pack = try await store.installLegacyPack(from: source)
     await refreshPointersInPack()
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await textIndexer?.legacyPackInstalled(changed: changed)
     return pack
   }
 

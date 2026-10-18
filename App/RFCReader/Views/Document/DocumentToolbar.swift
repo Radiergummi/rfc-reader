@@ -123,12 +123,19 @@ import SwiftUI
         Divider()
         MenuSections(
           sections: DocumentMenus.more(
-            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            showsOriginal: reader.showOriginal,
+            showsTranslation: reader.showTranslation,
+            errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           perform: perform)
         Divider()
         ReadingModePicker(reader: reader)
         FocusSteps(reader: reader)
+        // On an iPad, as its menu bar would hold them; an iPhone's VoiceOver and
+        // Voice Control reach them as the reader's own actions (#760).
+        if horizontalSizeClass == .regular {
+          OutlineSectionItems(reader: reader)
+        }
         if SideBySide.isOffered(in: horizontalSizeClass) {
           CompareItems(id: id, library: library, reader: reader)
         }
@@ -162,14 +169,15 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      library.toggleBookmark(identity, documentTitle: reader.documentTitle)
+      library.toggleBookmark(
+        identity, documentTitle: reader.documentTitle, undoManager: undoManager)
     }
   }
 
   /// The reader's own text size on iOS, and how diagrams are shown: "Aa" opens a
   /// menu, as Safari's page menu does. Its first row is a small "A", the size as a
   /// percentage of the system's, and a large "A", and stays open while the size is
-  /// stepped; below it are Use System Size, Draw diagrams, and Reading Settings,
+  /// stepped; below it are Use System Size, Show Diagrams as Figures, and Reading Settings,
   /// which opens the rest of the settings (#703), iOS having no Settings scene. The
   /// platform's own menu rather than a popover: a compact control group is the
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
@@ -217,7 +225,8 @@ import SwiftUI
         }
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
 
-        Toggle("Draw Diagrams", systemImage: "square.grid.3x3", isOn: $settings.drawDiagrams)
+        Toggle(
+          "Show Diagrams as Figures", systemImage: "square.grid.3x3", isOn: $settings.drawDiagrams)
 
         Button("Reading Settings…", systemImage: "gearshape") {
           showsSettings = true

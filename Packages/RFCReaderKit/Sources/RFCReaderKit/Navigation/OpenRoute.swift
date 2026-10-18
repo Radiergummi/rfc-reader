@@ -33,4 +33,25 @@ public enum OpenRoute: Equatable, Sendable {
     case .navigate: true
     }
   }
+
+  /// Whether the open has to change the list to show its document's row: only
+  /// where the route reveals at all, and the row is not among `shown`, the rows on
+  /// show, or there are none yet. Revealing then clears whatever can hide a row,
+  /// the filter, the search and the obsolete option alike (#769); a list that
+  /// already shows it is the reader's, and stays as it is.
+  public func reveals(selected: DocumentID?, among shown: [DocumentID]?) -> Bool {
+    guard reveals else { return false }
+    guard let row = row(selected: selected), let shown else { return true }
+    return !shown.contains(row)
+  }
+
+  /// The row the open asks the list for, with `selected` the row the list has
+  /// selected: a jump stays in the document on screen, whose row that is, which may
+  /// be the BCP, STD or FYI it is a member of; a navigation goes to its entry's.
+  public func row(selected: DocumentID?) -> DocumentID? {
+    switch self {
+    case .jump: selected
+    case .navigate(let entry): entry.id
+    }
+  }
 }

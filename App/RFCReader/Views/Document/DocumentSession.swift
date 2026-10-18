@@ -37,6 +37,14 @@ struct BuildInputs: Equatable {
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
+  /// Whether the document is built as its translation (#749): asked for, and made.
+  /// A flag rather than the translation, which once made does not change, and which
+  /// would be compared whole on every update pass.
+  let translated: Bool
+  /// The errata marked after the headings (#387): none until the feed and the
+  /// document are both here, so a build made before is made again once, and a
+  /// refresh that changes nothing builds nothing.
+  let errata: ErrataMarks
 
   /// - Parameter hang: how far the headings' numbers hang in the gutter, in a style,
   ///   or zero where they don't (#433). Asked of the style rather than given, since
@@ -45,6 +53,7 @@ struct BuildInputs: Equatable {
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
+    errata: ErrataMarks = .none, translated: Bool = false,
     hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
@@ -56,6 +65,8 @@ struct BuildInputs: Equatable {
       return style
     }
     self.choices = choices
+    self.translated = translated
+    self.errata = errata
   }
 }
 
@@ -119,6 +130,18 @@ final class DocumentSession {
   private(set) var originalText: String?
   private(set) var originalTextFailure: LoadFailure?
 
+  /// Where a translation of the document stands (#749); see `translate(with:cache:)`.
+  var translationPhase = TranslationPhase.idle
+  /// Whether the reader shows the translation: the window's choice while the reader
+  /// state is this reader's, kept here for when it is not, as on iOS under a reader
+  /// pushed over it (#263).
+  var showsTranslation = false
+
+  /// The translation, once it is made.
+  var translatedDocument: TranslatedDocument? { translationPhase.translated }
+  /// Which run of `translate(with:cache:)` is the latest, so an earlier one stops.
+  @ObservationIgnored var translationAttempt = 0
+
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the
   /// original text view was canceled by the spurious disappearance, and its failure
@@ -130,6 +153,29 @@ final class DocumentSession {
   /// What the document on screen was built from, so a change that comes back to
   /// where it started does not build it again.
   @ObservationIgnored private var builtInputs: BuildInputs?
+
+  /// The last marks worked out, with what they were worked out from: the view asks
+  /// on every pass, and a summary localizes and formats every erratum.
+  @ObservationIgnored private var markedErrata:
+    (from: (errata: [Erratum], onBody: Bool), marks: ErrataMarks)?
+
+  /// The document's verified and held errata, where the reader marks them (#387): on
+  /// its sections once its body is here, by the title before and without one.
+  /// - Parameter drawsBody: false for an original shown without a body, whose loaded
+  ///   text, if any, only says where the original is: every erratum is the whole
+  ///   document's.
+  func errataMarks(for errata: [Erratum]?, drawsBody: Bool = true) -> ErrataMarks {
+    guard let errata, !errata.isEmpty else { return .none }
+    let document = drawsBody ? state.document : nil
+    if let markedErrata, markedErrata.from.errata == errata,
+      markedErrata.from.onBody == (document != nil)
+    {
+      return markedErrata.marks
+    }
+    let marks = ErrataMarks(errata: errata, document: document)
+    markedErrata = ((errata, document != nil), marks)
+    return marks
+  }
 
   init(id: DocumentID, identity: DocumentID, depth: Int?) {
     self.id = id
@@ -295,13 +341,28 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await Self.built(document, style: style, choices: inputs.choices)
-      guard let self, !Task.isCancelled else { return }
+      let translation = inputs.translated ? self?.translatedDocument : nil
+      let shown = translation?.document ?? document
+      let rebuilt = await Self.built(
+        document, style: style, choices: inputs.choices, errata: inputs.errata,
+        translation: translation)
+      guard let self else { return }
+      if Task.isCancelled {
+        // Shown anyway while nothing is: the build that replaced it is under way,
+        // and the reader would otherwise stay blank until that one finished too, as
+        // it did when the errata feed arrived during a document's first build (#387).
+        guard state.built == nil else { return }
+        trace("canceled, installed: nothing was on screen")
+      } else {
+        buildingFor = nil
+        trace("built")
+      }
       state.install(rebuilt)
       builtInputs = inputs
-      buildingFor = nil
-      trace("built")
-      reader { $0.sections = rebuilt.reachableSections(of: document) }
+      reader {
+        $0.sections = rebuilt.reachableSections(of: shown)
+        $0.readsTranslation = rebuilt.isTranslation
+      }
     }
   }
 

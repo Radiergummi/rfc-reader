@@ -6,7 +6,7 @@ RFCKit has no user-facing text and no catalog.
 
 The reader body stays in English, including what `DocumentTextBuilder` writes into it ("Abstract", "Section 7.2", a heading's backlink caption) and what is exported from it (PDF outline, grammar export).
 The RFCs are English documents, and the app's labels written in another language beside English prose read worse than English throughout.
-A reader who wants the document in their language gets a translation on demand from the Translation framework instead (#749), not from a catalog.
+A reader who wants the document in their language gets a translation on demand from the Translation framework instead (#749), not from a catalog. In a translated document the builder's words are the translation's too, so the body is still in one language ([the decision](2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)).
 
 The catalogs are derived from the code, never edited by hand for their keys.
 The compiler records every localizable string it type-checks (`SWIFT_EMIT_LOC_STRINGS`).

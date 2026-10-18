@@ -343,6 +343,78 @@ final class FullTextIndexTests {
     #expect(try index().indexed() == [.rfc(8999): written])
   }
 
+  /// A document indexed by Index All RFCs has no body to be indexed from again, so the
+  /// index says which are, for the app not to drop them with the bodies it evicts.
+  @Test func `a document added as retained is retained`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"), retained: true)
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    #expect(try index.retained() == [.rfc(8999)])
+  }
+
+  /// A retained document's body stored later is indexed again from it, and stays
+  /// retained: the body may be evicted again.
+  @Test func `a retained document added again stays retained`() throws {
+    let index = try index()
+    let document = try Fixtures.document("rfc8999.xml")
+    try index.add(document, retained: true)
+    try index.add(document, written: .now)
+
+    #expect(try index.retained() == [.rfc(8999)])
+  }
+
+  @Test func `retaining marks only documents already indexed`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    try index.retain([.rfc(2119), .rfc(8999)])
+
+    #expect(try index.retained() == [.rfc(2119)])
+    #expect(try Set(index.indexed().keys) == [.rfc(2119)])
+  }
+
+  /// Remove Full-Text Index removes nearly the whole index: the file has to shrink
+  /// with it, or Settings goes on showing its old size. Documents that differ, since
+  /// what FTS5 leaves of a removed row is its own postings.
+  @Test func `removing every document gives back the disk`() throws {
+    let index = try index()
+    let names = [
+      "rfc1.txt", "rfc1005.txt", "rfc1540.txt", "rfc2049.txt", "rfc2078.txt", "rfc2371.txt",
+      "rfc2511.txt", "rfc5234.txt", "rfc8999.xml",
+    ]
+    for name in names {
+      try index.add(Fixtures.document(name), retained: true)
+    }
+    let before = try bytes()
+
+    try index.removeAll()
+
+    #expect(try bytes() < before / 10)
+    #expect(try index.indexed().isEmpty)
+    #expect(try index.retained().isEmpty)
+    #expect(try index.search("protocol").isEmpty)
+  }
+
+  /// The database and its journal.
+  func bytes() throws -> Int {
+    try ["", "-wal"].reduce(0) { total, suffix in
+      let file = URL(filePath: url.path + suffix)
+      guard FileManager.default.fileExists(atPath: file.path) else { return total }
+      return total + (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+    }
+  }
+
+  @Test func `a removed document is no longer retained`() throws {
+    let index = try index()
+    try index.add(Fixtures.document("rfc8999.xml"), retained: true)
+
+    try index.remove(.rfc(8999))
+    try index.add(Fixtures.document("rfc8999.xml"))
+
+    #expect(try index.retained().isEmpty)
+  }
+
   /// A change to what a section's text is, or to the tables, raises the version: an
   /// index made under another is emptied, and the stored bodies are indexed again.
   @Test func `an index of another version is emptied when opened`() throws {
