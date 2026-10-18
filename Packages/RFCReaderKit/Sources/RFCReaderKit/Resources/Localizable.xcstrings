@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@ %@, %@." : {
+      "comment" : "A draft's relation to the RFC, its name and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -50,6 +51,7 @@
       }
     },
     "%@ %@, revision %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {

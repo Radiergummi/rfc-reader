@@ -40,6 +40,19 @@ struct LocalizationTests {
     #expect(notice?.body == "Ersetzt durch RFC 9991 und RFC 9992.")
   }
 
+  /// A key written as a `LocalizedStringResource`, for its translator's comment, is
+  /// looked up in RFCReaderKit's catalog all the same.
+  @Test func `a German draft line is worded in German`() throws {
+    let revision = RFCRevisions.Revision(
+      relation: .obsoletes, draft: "draft-example", revision: "07", published: .now,
+      stream: "ietf", group: "example", intendedStatus: "Proposed Standard", stage: .inGroup)
+    let summary = RevisionsSummary(
+      RFCRevisions(generatedAt: .now, revisions: [9990: [revision]]), for: .rfc(9990), now: .now,
+      locale: .german, timeZone: .gmt)
+    let line = try #require(summary.bannerLines.first)
+    #expect(line.accessibilityLabel.contains("draft-example, Revision 7, "))
+  }
+
   /// A collection's name is the reader's own text: never looked up, even when it is
   /// a word the catalog translates.
   @Test func `a collection's name is never translated`() {

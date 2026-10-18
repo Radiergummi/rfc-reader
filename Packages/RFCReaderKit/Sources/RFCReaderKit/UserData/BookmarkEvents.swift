@@ -179,11 +179,13 @@ public struct BookmarkNotice: Equatable, Sendable {
       String(kit: "Updated by \(list(documents, locale: locale)).", locale: locale)
     case .revisionStarted(_, let draft, let relation, let stage, let stream):
       String(
-        kit: """
+        localized: LocalizedStringResource(
+          """
           \(RevisionsSummary.relationLabel(relation, locale: locale)) \(draft), \
           \(RevisionsSummary.stagePhrase(stage, stream: stream, locale: locale)).
           """,
-        locale: locale)
+          locale: locale, bundle: .kit,
+          comment: "A draft's relation to the RFC, its name and its stage"))
     case .revisionQueued(_, let draft, let relation):
       String(
         kit: """
