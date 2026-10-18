@@ -491,8 +491,8 @@ struct ReferencesView: View {
   /// reveal rather than its anchor, so revealing the same entry again marks it anew.
   @State private var highlighted: ReaderState.RevealedReference?
   #if canImport(UIKit)
-    /// The window's size, which a row's long-press preview is measured against.
-    @State private var windowSize: CGSize?
+    /// The window, which a row's long-press preview is measured against.
+    @State private var window = WindowSizeReader()
   #endif
 
   var body: some View {
@@ -518,7 +518,7 @@ struct ReferencesView: View {
         }
         .listStyle(.sidebar)
         #if canImport(UIKit)
-          .background(WindowSizeReader { windowSize = $0 })
+          .reading(window)
         #endif
         // A sidebar list is announced as "Sidebar", which is the window's own (#300).
         .accessibilityLabel("References")
@@ -537,11 +537,11 @@ struct ReferencesView: View {
     }
   }
 
-  /// A row's document preview: a context menu's on iOS, fitted to the window as
-  /// the reader's are, and the popover's full size on the Mac.
-  private var previewSize: CGSize {
+  /// A row's document preview, at the press: a context menu's on iOS, fitted to the
+  /// window as the reader's are, and the popover's full size on the Mac.
+  private func previewSize() -> CGSize {
     #if canImport(UIKit)
-      windowSize.map(LinkPreview.documentSize(fitting:)) ?? LinkPreview.documentSize
+      window.size.map(LinkPreview.documentSize(fitting:)) ?? LinkPreview.documentSize
     #else
       LinkPreview.documentSize
     #endif
@@ -556,8 +556,8 @@ struct ReferenceRow: View {
   /// What the row offers on a right click or a long press, and the preview of its
   /// RFC on a long press or a force click; nil for neither.
   let menu: ReferenceMenu?
-  /// The size of that preview of the RFC.
-  var previewSize = LinkPreview.documentSize
+  /// The size of that preview of the RFC, asked at the press.
+  var previewSize: () -> CGSize = { LinkPreview.documentSize }
 
   #if os(macOS)
     /// Whether the click under way pressed through to the preview, so its release
@@ -574,7 +574,11 @@ struct ReferenceRow: View {
       if let id = entry.documentID {
         let button = Button {
           #if os(macOS)
-            guard !isForceClick else { return }
+            // The release of the click that pressed through to the preview.
+            if isForceClick {
+              isForceClick = false
+              return
+            }
           #endif
           open(id)
         } label: {
@@ -582,42 +586,36 @@ struct ReferenceRow: View {
         }
         .buttonStyle(.plain)
         if let menu {
-          // What a citation of the entry previews in the prose (#580). An entry
-          // that names no RFC would preview its card, which says what its row says.
-          if case .document(let previewed, let place) = LinkPreview.resolve(
-            entry, in: menu.library.index)
-          {
-            #if os(macOS)
-              button
-                .contextMenu { menu.items(for: id) }
-                .background(
-                  ForceClickReader { isForceClick in
-                    self.isForceClick = isForceClick
-                    if isForceClick { isPreviewing = true }
-                  }
-                )
-                .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
-                  // A click in it opens what it shows, as the prose's does.
-                  DocumentPreview(
-                    library: menu.library, id: previewed, place: place, size: previewSize
-                  ) {
-                    isPreviewing = false
-                    open(previewed)
-                  }
+          #if os(macOS)
+            button
+              .contextMenu { menu.items(for: id) }
+              .background(
+                ForceClickReader {
+                  isForceClick = true
+                  isPreviewing = true
                 }
-            #else
-              // A tap on the preview closes it; the row's tap opens the RFC.
-              button.contextMenu {
-                menu.items(for: id)
-              } preview: {
-                DocumentPreview(
-                  library: menu.library, id: previewed, place: place, size: previewSize
-                ) {}
+              )
+              .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
+                // A click in it opens what the row does, as the prose's opens what
+                // its reference does.
+                documentPreview(library: menu.library) {
+                  isPreviewing = false
+                  open(id)
+                }
               }
-            #endif
-          } else {
-            button.contextMenu { menu.items(for: id) }
-          }
+              // Whatever ended the preview, the next press of the button is its own.
+              .onChange(of: isPreviewing) {
+                if !isPreviewing { isForceClick = false }
+              }
+          #else
+            // UIKit's tap on a SwiftUI menu's preview closes it and commits nothing:
+            // the row's own tap opens the RFC.
+            button.contextMenu {
+              menu.items(for: id)
+            } preview: {
+              documentPreview(library: menu.library) {}
+            }
+          #endif
         } else {
           button
         }
@@ -652,6 +650,16 @@ struct ReferenceRow: View {
       // than the denser macOS inspector gives them (#248).
       .padding(.vertical, 8)
     #endif
+  }
+
+  /// What a citation of the entry previews in the prose (#580): the RFC it names.
+  @ViewBuilder
+  private func documentPreview(library: LibraryModel, commit: @escaping () -> Void)
+    -> some View
+  {
+    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.index) {
+      DocumentPreview(library: library, id: id, place: place, size: previewSize(), commit: commit)
+    }
   }
 
   private var entryDescription: some View {

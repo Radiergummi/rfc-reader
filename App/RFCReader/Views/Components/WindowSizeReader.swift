@@ -2,39 +2,36 @@
   import SwiftUI
   import UIKit
 
-  /// Reports the size of the window a view is in, which SwiftUI does not say: a
-  /// context menu's preview is shown over the whole window and sized against it, as
-  /// the reader's own previews are (`LinkPreview.documentSize(fitting:)`, #580).
-  struct WindowSizeReader: UIViewRepresentable {
-    let report: (CGSize) -> Void
+  /// The size of the window a view is in, read when it is asked for, which SwiftUI
+  /// does not say: a context menu's preview is shown over the whole window and sized
+  /// against it at the press, as the reader's own previews are
+  /// (`LinkPreview.documentSize(fitting:)`, #580). Put in place with `reading(_:)`.
+  @MainActor
+  final class WindowSizeReader {
+    fileprivate weak var view: UIView?
 
-    func makeUIView(context: Context) -> ReaderView {
-      ReaderView()
+    var size: CGSize? { view?.window?.bounds.size }
+  }
+
+  extension View {
+    /// Lets `reader` find the window this view is in.
+    func reading(_ reader: WindowSizeReader) -> some View {
+      background(WindowSizeReaderView(reader: reader))
+    }
+  }
+
+  private struct WindowSizeReaderView: UIViewRepresentable {
+    let reader: WindowSizeReader
+
+    func makeUIView(context: Context) -> UIView {
+      let view = UIView()
+      view.isUserInteractionEnabled = false
+      reader.view = view
+      return view
     }
 
-    func updateUIView(_ view: ReaderView, context: Context) {
-      view.report = report
-    }
-
-    final class ReaderView: UIView {
-      var report: (CGSize) -> Void = { _ in }
-      private var reported: CGSize?
-
-      override func didMoveToWindow() {
-        super.didMoveToWindow()
-        setNeedsLayout()
-      }
-
-      /// Laid out again whenever the view it is the background of is, which a
-      /// window's resize does.
-      override func layoutSubviews() {
-        super.layoutSubviews()
-        guard let size = window?.bounds.size, size != reported else { return }
-        reported = size
-        // Not during the layout SwiftUI's update is part of.
-        let report = report
-        Task { report(size) }
-      }
+    func updateUIView(_ view: UIView, context: Context) {
+      reader.view = view
     }
   }
 #endif
