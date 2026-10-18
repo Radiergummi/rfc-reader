@@ -93,6 +93,12 @@ public struct CollectionSnapshot: Equatable, Sendable {
     collections.first { $0.id == identifier }
   }
 
+  /// The collection a query's `in:` names, by its name in any case: the first in the
+  /// sidebar's order of that name.
+  public func collection(named name: String) -> Entry? {
+    collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+  }
+
   /// The collections `document` is in, for the Add to Collection menus' checkmarks.
   public func collections(containing document: DocumentID) -> Set<UUID> {
     memberships[document] ?? []

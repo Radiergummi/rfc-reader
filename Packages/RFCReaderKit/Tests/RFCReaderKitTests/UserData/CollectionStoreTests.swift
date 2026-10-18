@@ -78,6 +78,17 @@ struct CollectionStoreTests {
     #expect(!entry.isDynamic)
   }
 
+  /// A query naming a section is about sections, which a collection's list never
+  /// shows: it would always be empty.
+  @Test func `a query naming a section is refused`() throws {
+    let container = try makeContainer()
+    #expect(!CollectionStore.isValidQuery("section:security tls"))
+    #expect(throws: CollectionStore.Failure.sectionQuery) {
+      try CollectionStore.create(
+        named: "TLS", color: .blue, query: "section:security tls", in: container.mainContext)
+    }
+  }
+
   /// An empty query would list the whole library, which is All RFCs.
   @Test func `a query of only spaces is refused, on create and on edit`() throws {
     let container = try makeContainer()

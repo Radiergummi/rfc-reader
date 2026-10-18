@@ -85,7 +85,7 @@ struct DocumentCommands: Commands {
           .keyboardShortcut("n", modifiers: [.command, .shift])
           .disabled(navigation == nil)
         // The search on show, kept as a collection made from a query (#355).
-        Button("Save as Collection…") { navigation?.saveAsCollection() }
+        Button("Save as Collection…") { active.controller?.saveAsCollection() }
           .disabled(navigation?.savedQuery == nil)
       #endif
     }

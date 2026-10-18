@@ -63,6 +63,31 @@ struct ListedRowsTests {
     #expect(again.rows.map(\.id.number) == [4, 3])
   }
 
+  /// A dynamic collection's hits are its query's and the tab's together (#355): never
+  /// another list's for the tab's words alone, nor the other way round.
+  @Test func `a dynamic collection's hits are not another list's`() {
+    let library = listed(LibraryList(filter: .all, query: "host"), indexVersion: 3)
+    let dynamic = listed(
+      LibraryList(filter: .collection(UUID()), query: "host", definition: "protocol"),
+      indexVersion: 3)
+    let unsearched = listed(
+      LibraryList(filter: .collection(UUID()), query: "", definition: "host"), indexVersion: 3)
+
+    #expect(dynamic.rows.map(\.id.number) == [2])
+    #expect(library.hits(for: dynamic.list, indexVersion: 3) == nil)
+    #expect(dynamic.hits(for: library.list, indexVersion: 3) == nil)
+    // The same words searched for are the same hits, whichever list asked.
+    #expect(unsearched.hits.map(\.number) == library.hits.map(\.number))
+    #expect(unsearched.hits(for: library.list, indexVersion: 3) != nil)
+  }
+
+  /// The iPhone sidebar's results are the whole library's, not narrowed by the
+  /// dynamic collection the tab shows.
+  @Test func `the library's results ignore a dynamic collection's query`() {
+    let list = LibraryList(filter: .collection(UUID()), query: "host", definition: "protocol")
+    #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
+  }
+
   @Test func `an unsearched listing keeps no hits`() {
     #expect(listed(LibraryList(filter: .all, query: "")).hits.isEmpty)
   }

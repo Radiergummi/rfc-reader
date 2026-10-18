@@ -84,7 +84,9 @@ final class NavigationModel: Identifiable {
   /// list is not searched: there is nothing to keep that the sidebar doesn't list.
   var savedQuery: String? {
     guard let list = listed?.list, !list.query.isUnsearchedQuery else { return nil }
-    return list.savedQuery(in: library.collections)
+    // Not a search for a section, which a collection's list never shows.
+    let query = list.savedQuery(in: library.collections)
+    return CollectionStore.isValidQuery(query) ? query : nil
   }
 
   /// Whether the tab lists a collection made from a query (#355), which is in the
@@ -94,7 +96,8 @@ final class NavigationModel: Identifiable {
     return library.collections[identifier]?.isDynamic ?? false
   }
 
-  /// Save as Collection…: the editor, with the query to keep.
+  /// Save as Collection…: the editor, with the query to keep. On the Mac through
+  /// `ReaderWindowController.saveAsCollection()`, which opens the sidebar first.
   func saveAsCollection() {
     guard let savedQuery else { return }
     collectionEditor = .save(query: savedQuery)
@@ -635,8 +638,7 @@ extension NavigationModel: ListSources {
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
-      .id
+    library.collections.collection(named: name)?.id
   }
 
   func query(of collection: UUID) -> String? {

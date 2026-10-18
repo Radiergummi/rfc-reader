@@ -302,8 +302,7 @@ final class LibraryModel {
 
   /// A collection made from a query as a tab lists it unsearched, for the sidebar's
   /// count (#355): the same evaluation, so the list and the count cannot differ. It
-  /// reads, as a tab does, only what its query asks for, so the sidebar counts again
-  /// for a change to that and no other.
+  /// reads, as a tab does, only what its query asks for.
   func list(of entry: CollectionSnapshot.Entry) -> LibraryList {
     LibraryList.reading(
       .collection(entry.id), query: "", options: ListOptions(), from: LibrarySources(library: self))
@@ -1658,8 +1657,7 @@ private struct LibrarySources: ListSources {
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
-      .id
+    library.collections.collection(named: name)?.id
   }
 
   func query(of collection: UUID) -> String? {

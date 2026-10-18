@@ -289,6 +289,16 @@ struct LibraryListTests {
       ])
   }
 
+  /// A query that orders the collection orders it whatever View Options says.
+  @Test func `a dynamic collection's own sort is not reversed`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "",
+      options: ListOptions(order: .oldestFirst, collectionSort: .manual),
+      definition: "s sort:newest")
+
+    #expect(ids(list) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
+  }
+
   /// Its rows are matched, not placed, so there is no order to drag them into.
   @Test func `a dynamic collection's rows cannot be moved`() {
     let manual = LibraryList(filter: .collection(UUID()), query: "", members: [2119])

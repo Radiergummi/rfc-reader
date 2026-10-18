@@ -333,21 +333,35 @@ struct SidebarView: View {
     #endif
     if entry.isDynamic {
       // Takes no drops: its members are whatever its query matches (#355).
-      let list = library.list(of: entry)
       collectionRowActions(label, entry: entry)
-        .task(id: CountRequest(list: list, indexVersion: library.indexVersion)) {
-          dynamicCounts[entry.id] = await library.count(of: list)
+        .task(id: CountRequest(library: library, entry: entry)) {
+          // Read here rather than in the body: Recently Read is a fetch.
+          dynamicCounts[entry.id] = await library.count(of: library.list(of: entry))
         }
     } else {
       collectionRowActions(droppingInto(label, entry: entry), entry: entry)
     }
   }
 
-  /// What a dynamic collection's count is made from: when either changes, it is
-  /// counted again.
+  /// What a dynamic collection's count is made from: when any of it changes, it is
+  /// counted again. Every input a query can ask for, by what the library observes of
+  /// it: Recently Read by its count, which changes when a document is first read.
   private struct CountRequest: Equatable {
-    let list: LibraryList
+    let query: String?
+    let collections: CollectionSnapshot
+    let bookmarked: Set<DocumentID>
+    let downloaded: Set<Int>
+    let recentlyReadCount: Int
     let indexVersion: Int
+
+    init(library: LibraryModel, entry: CollectionSnapshot.Entry) {
+      query = entry.query
+      collections = library.collections
+      bookmarked = library.bookmarkedDocuments
+      downloaded = library.availableOfflineNumbers
+      recentlyReadCount = library.recentlyReadCount
+      indexVersion = library.indexVersion
+    }
   }
 
   /// List rows dropped here join the collection at its end.

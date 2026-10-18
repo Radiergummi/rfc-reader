@@ -21,6 +21,9 @@ public enum CollectionStore {
     case dynamic
     /// A manual collection was given a query.
     case notDynamic
+    /// A dynamic collection's query named a section, which only the full-text search
+    /// has: its list would always be empty.
+    case sectionQuery
   }
 
   // MARK: - Collections
@@ -266,18 +269,19 @@ public enum CollectionStore {
     return value
   }
 
-  /// Whether `create` and `update` take the name: one with more than spaces.
   /// What the editor enables its button by for a dynamic collection: a query that
-  /// asks for something, so the button and the store agree.
+  /// asks for something, and not for a section, so the button and the store agree.
   public static func isValidQuery(_ query: String) -> Bool {
-    !query.isUnsearchedQuery
+    !query.isUnsearchedQuery && IndexSearch.parseQuery(query).filters.section == nil
   }
 
   private static func validQuery(_ query: String) throws -> String {
-    guard isValidQuery(query) else { throw Failure.emptyQuery }
+    guard !query.isUnsearchedQuery else { throw Failure.emptyQuery }
+    guard isValidQuery(query) else { throw Failure.sectionQuery }
     return query.normalizedQuery
   }
 
+  /// Whether `create` and `update` take the name: one with more than spaces.
   public static func isValidName(_ name: String) -> Bool {
     !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }

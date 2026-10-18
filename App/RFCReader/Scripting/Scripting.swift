@@ -109,9 +109,10 @@
           ScriptError.report("A collection's name can't be empty.")
           return
         }
-        LibraryModel.shared.editCollections {
+        let saved = LibraryModel.shared.editCollections {
           try CollectionStore.update(entry.id, name: newValue, color: entry.color, in: $0)
         }
+        if !saved { ScriptError.report("The collection's name could not be saved.") }
       }
     }
 
@@ -128,15 +129,28 @@
           ScriptError.report("“\(entry.name)” holds RFCs chosen one by one, not a query.")
           return
         }
-        guard let newValue, CollectionStore.isValidQuery(newValue) else {
-          ScriptError.report("A collection's query can't be empty.")
+        if let refusal = Self.refusal(of: newValue) {
+          ScriptError.report(refusal)
           return
         }
-        LibraryModel.shared.editCollections {
+        let saved = LibraryModel.shared.editCollections {
           try CollectionStore.update(
             entry.id, name: entry.name, color: entry.color, query: newValue, in: $0)
         }
+        if !saved { ScriptError.report("The collection's query could not be saved.") }
       }
+    }
+
+    /// Why the store would refuse `query` for a collection made from one, in a
+    /// script's words; nil when it takes it.
+    static func refusal(of query: String?) -> String? {
+      guard let query, !query.isUnsearchedQuery else {
+        return "A collection's query can't be empty."
+      }
+      guard CollectionStore.isValidQuery(query) else {
+        return "A collection's query can't name a section: its list shows RFCs, not sections."
+      }
+      return nil
     }
 
     /// The application's `scriptCollections`, by identifier.
@@ -185,15 +199,16 @@
         ScriptError.report("A collection needs a name, or a query to be named by.")
         return
       }
-      if let query, !CollectionStore.isValidQuery(query) {
-        ScriptError.report("A collection's query can't be empty.")
+      if query != nil, let refusal = ScriptableCollection.refusal(of: query) {
+        ScriptError.report(refusal)
         return
       }
-      LibraryModel.shared.editCollections {
+      let saved = LibraryModel.shared.editCollections {
         collection.identifier = try CollectionStore.create(
           named: name, color: .default, query: query, in: $0
         ).identifier
       }
+      if !saved { ScriptError.report("The collection could not be made.") }
     }
 
     @objc(insertObject:inScriptCollectionsAtIndex:)

@@ -87,7 +87,7 @@ public struct LibraryList: Hashable, Sendable {
   private var listedFilter: LibraryFilter { isDynamic ? .all : filter }
 
   /// What the list is searched for: a dynamic collection's query and the tab's, as one.
-  private var searchedQuery: String {
+  var searchedQuery: String {
     guard let definition else { return query }
     return query.isEmpty ? definition : "\(definition) \(query)"
   }
@@ -110,8 +110,9 @@ public struct LibraryList: Hashable, Sendable {
       return sources.query(of: identifier)
     }
     let defined = definition
-    let searched = [defined ?? "", query.normalizedQuery].joined(separator: " ")
-    let asked = IndexSearch.parseQuery(searched.normalizedQuery).filters
+    let asked = IndexSearch.parseQuery(
+      LibraryList(filter: filter, query: query, definition: defined).searchedQuery
+    ).filters
     // A dynamic collection's members are whatever its query matches.
     var members: [Int] {
       guard case .collection(let identifier) = filter, defined == nil else { return [] }
@@ -217,7 +218,11 @@ public struct LibraryList: Hashable, Sendable {
     // A dynamic collection has no order of its own: newest first, unless its query
     // sorts it, or the tab searches it, which puts it in order of relevance.
     var sort = parsed.filters.sort
-    if isDynamic, sort == nil, query.isUnsearchedQuery { sort = .newest }
+    var options = self.options
+    if isDynamic, query.isUnsearchedQuery {
+      // Its own `sort:` is kept as it is: View Options reverses only the default.
+      if sort == nil { sort = .newest } else { options.order = .newestFirst }
+    }
     return options.apply(to: sorted(base, by: sort), filter: listedFilter, query: query)
   }
 
