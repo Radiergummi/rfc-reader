@@ -98,7 +98,7 @@ private struct ReadingSettings: View {
       value: $settings.fontSize, in: ReaderPreferences.fontSizes,
       step: ReaderPreferences.fontSizeStep
     ) {
-      Text("Reading font size: \(Int(settings.fontSize))")
+      Text("Text Size: \(Int(settings.fontSize))")
     } minimumValueLabel: {
       Image(systemName: "textformat.size.smaller")
     } maximumValueLabel: {
@@ -111,7 +111,7 @@ private struct ReadingSettings: View {
     }
     Toggle("Underline links", isOn: $settings.underlineLinks)
     Toggle(isOn: $settings.drawDiagrams) {
-      Text("Draw diagrams")
+      Text("Show Diagrams as Figures")
       Text(
         "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it."
       )
@@ -244,7 +244,7 @@ struct StorageSettings: View {
         Text("Keep bookmarked documents offline")
         Text("Downloaded when the network is not metered, and kept while bookmarked.")
       }
-      LabeledContent("Kept Offline") { UsageValue(usage: usage?.kept) }
+      LabeledContent("Available Offline") { UsageValue(usage: usage?.kept) }
       Button("Remove All Offline Documents…", role: .destructive) {
         confirmsRemoval = true
       }

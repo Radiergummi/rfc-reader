@@ -44,6 +44,8 @@ public struct BuiltDocument: @unchecked Sendable {
   /// paragraph is set in by: the text container is this much wider than the column,
   /// on its leading side. Zero in a build that hangs nothing.
   public let sectionNumberHang: CGFloat
+  /// The errata the build was given, which its chips list (#387).
+  public let errata: ErrataMarks
   /// Where the text's paragraphs, headings and asides are, which the reading modes
   /// fold by (#698). Made here, with the build and off the main actor, once: the
   /// text view folds by it and the reader state steps Focus by it (#723).
@@ -54,7 +56,7 @@ public struct BuiltDocument: @unchecked Sendable {
   init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
-    sectionNumberHang: CGFloat = 0
+    sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none
   ) {
     self.text = text
     self.anchors = anchors
@@ -62,7 +64,13 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
+    self.errata = errata
     foldingIndex = FoldingIndex(text: text, anchors: anchors)
+  }
+
+  /// What the errata chip of the section at `anchor` lists (#387).
+  public func errata(of anchor: String) -> [ErrataSummary.Item] {
+    errata.bySection[anchor] ?? []
   }
 
   /// What a heading's backlink caption lists (#183): the sections that refer to the

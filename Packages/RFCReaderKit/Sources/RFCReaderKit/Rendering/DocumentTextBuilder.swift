@@ -71,6 +71,8 @@ public final class DocumentTextBuilder {
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
+  /// The errata each heading's chip lists (#387).
+  var errata = ErrataMarks.none
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -132,11 +134,15 @@ public final class DocumentTextBuilder {
   ///   above the text, so a print passes one (#375).
   /// - Parameter choices: the blocks the reader asked to see as their source.
   /// - Parameter hints: reviewed artwork types; tests pass their own.
+  /// - Parameter errata: the errata to mark after the headings (#387); only a build
+  ///   for the reader has them.
   public static func build(
     _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
-    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
+    builder.errata = errata
     if style.emitsLinks {
       builder.hang = style.sectionNumberHang
     }
@@ -155,7 +161,7 @@ public final class DocumentTextBuilder {
       text: builder.output, anchors: AnchorIndex(builder.entries),
       keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
       grammar: builder.grammar.withoutParsedBlocks,
-      sectionNumberHang: builder.hang)
+      sectionNumberHang: builder.hang, errata: errata)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -379,6 +385,9 @@ extension DocumentTextBuilder {
       output.append(inlineRuns(section.headingWords, base: attributes))
     } else {
       output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+    }
+    if let marked = errata.bySection[section.anchor], !marked.isEmpty {
+      output.append(errataChip(section.anchor, items: marked, base: attributes))
     }
     append("\n", attributes)
     if let citing {

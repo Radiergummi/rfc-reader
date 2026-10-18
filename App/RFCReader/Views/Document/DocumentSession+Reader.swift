@@ -192,16 +192,18 @@ extension DocumentSession {
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
-  /// what discards a canceled one. `DocumentPreview` builds through it too.
+  /// what discards a canceled one, unless nothing is on screen yet.
+  /// `DocumentPreview` builds through it too.
   @concurrent
   static func built(
-    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
+    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults,
+    errata: ErrataMarks = .none
   ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      DocumentTextBuilder.build(document, style: style, choices: choices)
+      DocumentTextBuilder.build(document, style: style, choices: choices, errata: errata)
     }
   }
 }

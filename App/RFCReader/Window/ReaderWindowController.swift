@@ -513,7 +513,8 @@
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
       guard let id = navigation.selection else { return }
-      library.toggleBookmark(id, documentTitle: reader.documentTitle)
+      library.toggleBookmark(
+        id, documentTitle: reader.documentTitle, undoManager: window?.undoManager)
     }
 
     // MARK: - Go to RFC

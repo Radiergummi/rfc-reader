@@ -42,7 +42,7 @@ extension DocumentTextBuilder {
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     // Code is highlighted whatever the choices say: it has no other presentation, and
-    // "Draw diagrams" and "Show as Text" are about drawings. A grammar's links change
+    // "Show Diagrams as Figures" and "Show as Text" are about drawings. A grammar's links change
     // nothing that is drawn, so it is plain, with no presentation to switch, and its
     // links and anchors are there whatever the reader prefers for figures (#185).
     let shown: VerbatimBox.Shown =
