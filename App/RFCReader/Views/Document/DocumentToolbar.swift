@@ -107,8 +107,18 @@ import SwiftUI
     /// the print sheet.
     private var moreMenu: some View {
       Menu {
+        // The way into Find from the screen (#763); ⌘F is `DocumentCommands`'.
+        Button("Find in Document", systemImage: "magnifyingglass") { reader.presentFind() }
+          .disabled(!reader.hasDocument)
+        Divider()
         Menu("Cite", systemImage: "quote.opening") {
           MenuSections(sections: DocumentMenus.cite(), perform: perform)
+        }
+        // Also the Bookmark button's long press (#349), which nothing on screen
+        // shows; here it can be found (#763).
+        Menu("Add to Collection", systemImage: "folder.badge.plus") {
+          AddToCollectionItems(
+            document: id, library: library, navigation: navigation, undoManager: undoManager)
         }
         Divider()
         MenuSections(

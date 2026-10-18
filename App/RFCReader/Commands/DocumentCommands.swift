@@ -243,6 +243,22 @@ struct DocumentCommands: Commands {
             .disabled(active.controller == nil)
         }
       }
+    #else
+      // ⌘F on an iPad's keyboard, whatever has focus, as VISION promises (#763):
+      // UIKit's own reached Find only with the text view first responder. In place
+      // of UIKit's, so the menu bar has one Find and ⌘F one handler; with Find Next
+      // and Find Previous, which went with UIKit's group, as the Mac's has them.
+      CommandGroup(replacing: .textEditing) {
+        Section {
+          Button("Find…") { reader?.presentFind() }
+            .keyboardShortcut("f", modifiers: .command)
+          Button("Find Next") { reader?.findInteraction?.findNext() }
+            .keyboardShortcut("g", modifiers: .command)
+          Button("Find Previous") { reader?.findInteraction?.findPrevious() }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+        }
+        .disabled(navigation?.selection == nil || reader?.hasDocument != true)
+      }
     #endif
   }
 }

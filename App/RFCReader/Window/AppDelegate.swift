@@ -43,8 +43,13 @@
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-      // A window of its own only when none came back from the last session.
-      if controllers.isEmpty {
+      // A window of its own only when none came back from the last session, and only
+      // for a launch from the Finder or the Dock (#762): a script, a Shortcut or an
+      // intent that launched the app to ask it something left a window behind. A
+      // link that launched it makes the window it needs (`LibraryModel.route(_:)`).
+      let isDefaultLaunch =
+        notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
+      if controllers.isEmpty, isDefaultLaunch {
         openWindow(tabbedWith: nil, inBackground: false)
         signposter.emitEvent("First window made")
       }
@@ -126,8 +131,10 @@
       openWindow(tabbedWith: activeController, inBackground: inBackground)
     }
 
+    /// A window of its own, whatever the user's "Prefer tabs" setting: a link or a
+    /// script that asked for one (`LibraryModel.Placement.newWindow`).
     func openWindow() {
-      openWindow(tabbedWith: nil, inBackground: false)
+      openWindow(tabbedWith: nil, inBackground: false, standsAlone: true)
     }
 
     var activeNavigation: NavigationModel? { activeController?.navigation }
@@ -138,8 +145,12 @@
       controller?.window?.makeKeyAndOrderFront(nil)
     }
 
-    /// Opens a window, as a tab of `sibling` when there is one.
-    func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) {
+    /// Opens a window, as a tab of `sibling` when there is one. Without one, AppKit
+    /// tabs it into the front group where the user prefers tabs, unless it
+    /// `standsAlone`.
+    func openWindow(
+      tabbedWith sibling: ReaderWindowController?, inBackground: Bool, standsAlone: Bool = false
+    ) {
       let controller = ReaderWindowController(library: LibraryModel.shared)
       // Only the first window of the session remembers its frame: an autosave name
       // belongs to one window, and sharing it across tabs mangles all of them.
@@ -149,6 +160,9 @@
         controller.splitController.applyMinimumWidth()
       }
       controllers.append(controller)
+      // On the first window: a launch by a script or a link has none until one is
+      // asked for. The warning is claimed once, so later windows show nothing.
+      defer { warnIfTheStoreDidNotOpen() }
 
       if let host = sibling?.window, let fresh = controller.window {
         host.addTabbedWindow(fresh, ordered: .above)
@@ -164,8 +178,15 @@
         // by something other than the document changing — and the one place that
         // has to put it back. See `closePanelWithoutDocument()` for the readings.
         controller.closePanelWithoutDocument()
-      } else {
+      } else if let fresh = controller.window {
+        // Disallowed only while it is shown, which is when AppKit decides: tabs can
+        // still be added to it afterwards.
+        if standsAlone { fresh.tabbingMode = .disallowed }
         controller.showWindow(nil)
+        fresh.tabbingMode = .automatic
+        // Where the user prefers tabs, AppKit ordered it into the front group, which
+        // copies the group's panel onto it, as `addTabbedWindow` does above.
+        controller.closePanelWithoutDocument()
       }
     }
 
