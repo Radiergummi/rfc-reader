@@ -34,6 +34,8 @@
       // Before launch finishes, which is when a tap on a notification that launched
       // the app is delivered (#191).
       BookmarkNotifications.install()
+      // Before any window, whose toolbar observes its tips (#782).
+      ReaderTips.configure()
       NSApp.servicesProvider = citationServices
       // The scene's `.task` did this; there is no scene on macOS any more.
       // Immediate, so that the bootstrap has started reading the cached index by

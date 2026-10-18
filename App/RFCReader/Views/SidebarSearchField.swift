@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 #if os(macOS)
   /// The sidebar's search field: AppKit's own `NSSearchField`, so it draws, clears and
@@ -114,6 +115,10 @@ import SwiftUI
       /// or the field's action: the list filters as the reader types.
       func controlTextDidChange(_ notification: Notification) {
         guard let field = notification.object as? NSSearchField else { return }
+        // A search typed, which Go to RFC's tip counts (#782).
+        if ReaderTips.startsSearch(from: navigation.searchText, to: field.stringValue) {
+          ReaderTips.searchTyped.sendDonation()
+        }
         navigation.searchText = field.stringValue
       }
 

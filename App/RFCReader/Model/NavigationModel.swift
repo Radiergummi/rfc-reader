@@ -2,6 +2,7 @@ import Observation
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// Everything one tab is looking at: which document, which sidebar filter, what was
 /// typed into search, and the back/forward stack that got it here.
@@ -334,7 +335,10 @@ final class NavigationModel: Identifiable {
   private func follow(_ route: OpenRoute) {
     switch route {
     case .jump(let place, _): jump(toSection: place)
-    case .navigate(let entry): go(to: entry)
+    case .navigate(let entry):
+      // Another RFC cited, which gives Back somewhere to go: Previews' tip (#782).
+      if entry.arrival == .citation { ReaderTips.citationFollowed.sendDonation() }
+      go(to: entry)
     }
   }
 
@@ -562,12 +566,15 @@ final class NavigationModel: Identifiable {
     ending outcome: JumpOutcome = .interrupted
   ) {
     var arrived: HistoryEntry?
+    let leaving = history.shown?.id
     updateRequests(outcome: outcome) {
       let went = $0.go(to: place, in: &history, leaving: visiblePosition, places: places)
       arrived = went.arrived
       return went.ended
     }
     if let arrived { visiblePosition = arrived.section }
+    // Another document in the reader, which Reading Mode's tip counts (#782).
+    if let arrived, arrived.id != leaving { ReaderTips.documentOpened.sendDonation() }
   }
 
   private func arrive(at place: HistoryEntry) {

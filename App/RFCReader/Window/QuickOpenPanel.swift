@@ -2,6 +2,7 @@
   import AppKit
   import RFCReaderKit
   import SwiftUI
+  import TipKit
 
   /// The window the Go to RFC palette floats in.
   ///
@@ -75,6 +76,8 @@
       setFrameOrigin(origin)
       parent.addChildWindow(self, ordered: .above)
       makeKeyAndOrderFront(nil)
+      // Found: Go to RFC's tip has no more to say (#782).
+      GoToRFCTip().invalidate(reason: .actionPerformed)
       // The field takes the keyboard here, not from SwiftUI: a `@FocusState` set as
       // the palette appears lands before this panel is key, and is dropped. The
       // field only exists as a view once the hosting view has laid out.
