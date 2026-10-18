@@ -28,6 +28,8 @@ struct DocumentPreview: View {
   @ReaderSettingsValue private var settings
   /// The reader follows Dynamic Type (#331), so the preview of it does too.
   @Environment(\.dynamicTypeSize) private var textSize
+  /// Bold Text, part of what a kept preview was built for (#765).
+  @Environment(\.legibilityWeight) private var legibilityWeight
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var controller = ReaderController()
@@ -49,7 +51,8 @@ struct DocumentPreview: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(width: size.width, height: size.height)
-    .task { await load() }
+    // Again when Bold Text changes, which the kept build was made without (#765).
+    .task(id: legibilityWeight) { await load() }
   }
 
   /// What is being previewed, above the text: the reader's own header would name
@@ -101,7 +104,7 @@ struct DocumentPreview: View {
   private func load() async {
     let column = ReaderLayout.column(forWidth: size.width, measure: settings.measure)
     let style = settings.style(column: column, textSize: textSize)
-    let key = BuildKey(document: id, style: style)
+    let key = BuildKey(document: id, style: style, boldText: legibilityWeight == .bold)
     do {
       let kept = library.keptPreview(for: key)
       let shown: Loaded
@@ -113,6 +116,9 @@ struct DocumentPreview: View {
           document: document, built: await DocumentSession.built(document, style: style),
           bibliography: ReferenceGroup.groups(in: document))
       }
+      // Bold Text changed while this was built: the load for the new weight shows
+      // and keeps its own, and this one, made in either weight, is neither.
+      guard !Task.isCancelled else { return }
       loaded = shown
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
@@ -125,6 +131,7 @@ struct DocumentPreview: View {
         await library.keep(shown, for: key)
       }
     } catch {
+      guard !Task.isCancelled else { return }
       failure = error.localizedDescription
     }
   }

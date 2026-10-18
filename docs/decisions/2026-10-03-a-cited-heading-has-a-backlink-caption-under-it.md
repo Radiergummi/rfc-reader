@@ -31,5 +31,7 @@ Passing them through underlined every link in the document, as the first build o
 So the delegate starts from the text view's own attributes, kept by the coordinator behind a `Mutex` because TextKit may ask off the main thread.
 On macOS that is a copy of `linkTextAttributes`, taken once the view is configured: `linkColor`, without the underline the reader removes.
 On iOS `linkTextAttributes` is only the view's tint, the color as it was when read; measured in the Simulator, it was the same `systemBlueColor` as `tintColor`, where TextKit's default is `linkColor` and underlined.
-So on iOS the delegate starts from the dynamic `.tintColor` instead, which follows the view's tint as UIKit's own link coloring does.
+So on iOS the delegate started from the dynamic `.tintColor` instead, which follows the view's tint as UIKit's own link coloring does.
 Every other link is drawn as before.
+
+*Amended (#680): the iOS text view's `linkTextAttributes` are now the reader's own link color, `RFCColors.readerLink`, which clears the minimum contrast in both appearances where the system tint does not (#317). So the delegate starts from them on iOS as on macOS (`RFCTextViewCoordinator`), and no longer from `.tintColor`.*

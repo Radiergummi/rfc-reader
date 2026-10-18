@@ -10,8 +10,9 @@ public enum DocumentSource: String, Sendable, Codable {
 
 /// A parsed RFC, independent of the source format.
 ///
-/// The renderer works exclusively against this model, so the same SwiftUI code
-/// handles a 1990 text-only RFC and a 2026 RFCXML document.
+/// The reader works exclusively against this model, so the same builder
+/// (`DocumentTextBuilder`, in RFCReaderKit) sets a 1990 text-only RFC and a 2026
+/// RFCXML document.
 public struct RFCDocument: Sendable, Hashable, Codable {
   public var header: DocumentHeader
   /// Sections of the body (`<middle>` in RFCXML) and back matter (references, appendices).

@@ -19,7 +19,7 @@ struct AsideCaptionTests {
   /// its ordinal to the last.
   private static func asides(of built: BuiltDocument) -> [[String]] {
     let string = built.text.string as NSString
-    return FoldingIndex(built).asides.map { aside in
+    return built.foldingIndex.asides.map { aside in
       let range = NSRange(location: aside.caption, length: aside.body.upperBound - aside.caption)
       var paragraphs: [String] = []
       string.enumerateSubstrings(in: range, options: .byParagraphs) { paragraph, _, _, _ in
@@ -35,7 +35,7 @@ struct AsideCaptionTests {
   @Test(arguments: ["rfc9271.xml", "rfc9197.xml", "rfc9631.xml"])
   func `an aside opens with a note caption in place of its label`(name: String) throws {
     let built = try Self.build(name)
-    let index = FoldingIndex(built)
+    let index = built.foldingIndex
     let asides = Self.asides(of: built)
     #expect(!asides.isEmpty)
     for (aside, paragraphs) in zip(index.asides, asides) {
@@ -66,7 +66,7 @@ struct AsideCaptionTests {
   /// Paper has no caption and nothing to fold: an aside prints as its words.
   @Test func `a build without live links keeps the aside's words and adds no caption`() throws {
     let built = try Self.build("rfc9271.xml", style: ReadingStyle(emitsLinks: false))
-    #expect(FoldingIndex(built).asides.isEmpty)
+    #expect(built.foldingIndex.asides.isEmpty)
     #expect(!built.text.string.contains("NOTE\n"))
     #expect(built.text.string.contains("Note:"))
   }
@@ -97,7 +97,7 @@ extension AsideCaptionTests {
   /// than running on into the body Implementer folds away; open, it runs on.
   @Test func `a closed aside's card ends at its caption`() throws {
     let built = try Self.build("rfc9271.xml")
-    let index = FoldingIndex(built)
+    let index = built.foldingIndex
     let aside = try #require(index.asides.first)
     let caption = NSRange(location: aside.caption, length: aside.body.lowerBound - aside.caption)
     let closed = Folding(mode: .implementer).hidden(in: index)
@@ -120,7 +120,7 @@ extension AsideCaptionTests {
         .aside([.paragraph(Paragraph(text: "aside"))]),
         .preformatted(Preformatted(kind: .artwork, text: "AAAA"))),
       style: ReadingStyle())
-    let closed = Folding(mode: .implementer).hidden(in: FoldingIndex(built))
+    let closed = Folding(mode: .implementer).hidden(in: built.foldingIndex)
     let offset = try Fixtures.offset(of: "AAAA", in: built.text)
     let span = try #require(
       FragmentGeometry.decorationSpan(
