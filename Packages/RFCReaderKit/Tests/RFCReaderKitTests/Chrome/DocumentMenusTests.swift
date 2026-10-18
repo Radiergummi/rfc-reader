@@ -23,13 +23,18 @@ struct DocumentMenusTests {
 
   @Test func `more has the original text apart from the pages elsewhere`() {
     let more = DocumentMenus.more(
-      showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)
-    #expect(titles(more) == [["Original Text"], ["Open on rfc-editor.org", "Datatracker"]])
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(
+      titles(more) == [["Original Text", "Translate"], ["Open on rfc-editor.org", "Datatracker"]])
   }
 
   @Test func `errata and the preceding draft appear only where the document has them`() {
     let more = DocumentMenus.more(
-      showsOriginal: false, errata: errata, precedingDraft: draft, locale: .english)
+      showsOriginal: false, showsTranslation: false, errata: errata, precedingDraft: draft,
+      offersTranslation: true,
+      locale: .english)
     #expect(
       titles(more)[1] == ["Open on rfc-editor.org", "Errata", "Datatracker", "Preceding Draft"])
     #expect(more[1][1].action == .openErrata(errata))
@@ -38,12 +43,45 @@ struct DocumentMenusTests {
 
   @Test func `original text is a toggle showing whether it is on`() {
     #expect(
-      DocumentMenus.more(showsOriginal: true, errata: nil, precedingDraft: nil, locale: .english)[
-        0][0].isOn == true)
+      DocumentMenus.more(
+        showsOriginal: true, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
+        locale: .english)[
+          0][0].isOn == true)
     #expect(
-      DocumentMenus.more(showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)[
-        0][0].isOn == false
+      DocumentMenus.more(
+        showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
+        locale: .english)[
+          0][0].isOn == false
     )
+  }
+
+  /// The translation is the reader's text in another language (#749), not a page
+  /// elsewhere, so it sits beside the original text.
+  @Test func `translate is a toggle beside the original text`() {
+    let shown = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: true, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(shown[0][1].action == .toggleTranslation)
+    #expect(shown[0][1].isOn == true)
+    let hidden = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(hidden[0][1].isOn == false)
+    #expect(
+      DocumentMenus.Action.toggleTranslation.effect(for: .rfc(9110), metadata: nil, section: nil)
+        == .toggleTranslation)
+  }
+
+  @Test func `a reader of English alone is not offered a translation`() {
+    let more = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: false,
+      locale: .english)
+    #expect(titles(more)[0] == ["Original Text"])
   }
 
   @Test func `with no collections, add to collection offers only a new one`() {

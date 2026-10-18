@@ -94,13 +94,14 @@ struct DocumentCommands: Commands {
       #if os(macOS)
         // Handed to the reader's text view (#186); see
         // `ReaderWindowController.copyAsQuote()`. Grayed out without a selection, as
-        // Copy is; the original text is not the reader's, and has no quote to copy.
+        // Copy is; the original text is not the reader's, and has no quote to copy,
+        // and a translation's words are not the RFC's (#749).
         Button("Copy as Quote") {
           active.controller?.copyAsQuote()
         }
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(
-          !showsDocument || reader?.showOriginal == true
+          !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
             || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
       #endif
       Section {
@@ -159,6 +160,7 @@ struct DocumentCommands: Commands {
           MenuSections(
             sections: DocumentMenus.more(
               showsOriginal: reader?.showOriginal == true,
+              showsTranslation: reader?.showTranslation == true,
               errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
                 .errataURL,
               precedingDraft: reader?.precedingDraft),

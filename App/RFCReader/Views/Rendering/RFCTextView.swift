@@ -258,6 +258,9 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
@@ -409,6 +412,9 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
       }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)

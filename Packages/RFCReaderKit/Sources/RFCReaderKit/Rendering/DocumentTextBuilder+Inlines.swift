@@ -297,7 +297,7 @@ extension DocumentTextBuilder {
       .rfcReaderOnly: "",
     ]
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
-    let words = Self.backlinksCaption(count: count)
+    let words = labels.backlinksCaption(count: count)
     attributes[.rfcSpoken] = words
     if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
@@ -341,18 +341,6 @@ extension DocumentTextBuilder {
     return chipSymbolRun(
       "doc.on.doc", pointSize: style.codeLabelFont.pointSize * Self.copyButtonScale,
       attributes: attributes)
-  }
-
-  /// What a backlink caption says, and VoiceOver says for it: the number of
-  /// sections that refer to the section — not of references, of which one section
-  /// may make several — in words up to three.
-  public static func backlinksCaption(count: Int) -> String {
-    switch count {
-    case 1: "One Backlink"
-    case 2: "Two Backlinks"
-    case 3: "Three Backlinks"
-    default: "\(count) Backlinks"
-    }
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's

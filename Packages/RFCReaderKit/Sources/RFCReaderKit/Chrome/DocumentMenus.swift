@@ -14,6 +14,9 @@ public enum DocumentMenus {
     case copyCitation(CitationStyle)
     case copySectionLink
     case toggleOriginalText
+    /// Shows the document translated into the reader's language, or the original
+    /// again (#749).
+    case toggleTranslation
     case openInfoPage
     case openErrata(URL)
     case openDatatracker
@@ -34,6 +37,7 @@ public enum DocumentMenus {
     case copy(String, CopyFeedback)
     case open(URL)
     case toggleOriginalText
+    case toggleTranslation
   }
 
   /// An item's symbol, and the color it is drawn in where it has one of its own —
@@ -78,10 +82,13 @@ public enum DocumentMenus {
     ]
   }
 
-  /// What is used least: the original text, and the document's pages elsewhere —
-  /// errata and the preceding draft only where the document has them.
+  /// What is used least: the original text and a translation, and the document's
+  /// pages elsewhere — errata and the preceding draft only where the document has
+  /// them. A translation is not offered to a reader who reads only English
+  /// (`DocumentTranslation.target`).
   public static func more(
-    showsOriginal: Bool, errata: URL?, precedingDraft: URL?, locale: Locale = .interface
+    showsOriginal: Bool, showsTranslation: Bool, errata: URL?, precedingDraft: URL?,
+    offersTranslation: Bool = DocumentTranslation.target != nil, locale: Locale = .interface
   ) -> Sections<Action> {
     var pages: [Item<Action>] = [
       Item(String(kit: "Open on rfc-editor.org", locale: locale), .openInfoPage)
@@ -94,7 +101,10 @@ public enum DocumentMenus {
     }
     let original = Item(
       String(kit: "Original Text", locale: locale), Action.toggleOriginalText, isOn: showsOriginal)
-    return [[original], pages]
+    guard offersTranslation else { return [[original], pages] }
+    let translation = Item(
+      String(kit: "Translate", locale: locale), Action.toggleTranslation, isOn: showsTranslation)
+    return [[original, translation], pages]
   }
 
   /// Every collection, checked where `document` is already in it, and New
@@ -191,6 +201,7 @@ extension DocumentMenus.Action {
       }
     case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section), .link)
     case .toggleOriginalText: .toggleOriginalText
+    case .toggleTranslation: .toggleTranslation
     case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
     case .openErrata(let url), .openPrecedingDraft(let url): .open(url)
     case .openDatatracker: .open(RFCEditorEndpoints.datatracker(id))

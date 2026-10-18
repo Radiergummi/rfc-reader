@@ -202,6 +202,7 @@ is that way, and what was measured or tried first.
 - [How the legacy parser recovers structure](decisions/2026-10-17-how-the-legacy-parser-recovers-structure.md)
 - [A folded block is shown unfolded where it fits](decisions/2026-10-17-a-folded-block-is-shown-unfolded-where-it-fits.md)
 - [The Mac app is released from CI and updated by Sparkle](decisions/2026-10-17-the-mac-app-is-released-from-ci-and-updated-by-sparkle.md)
+- [A translated document is a second build of a translated model](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)
 
 ## Planned engines
 
