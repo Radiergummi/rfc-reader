@@ -315,6 +315,8 @@
       toolbar?.showDocumentTitle(title.documentTitle, subtitle: title.documentSubtitle)
       toolbar?.showBookmarked(title.isBookmarked)
       window?.toolbar?.validateVisibleItems()
+      // Another document, or none, and Back with somewhere to go or not (#782).
+      toolbar?.showDueTips()
     }
 
     /// The title over the list names the list: the collection the sidebar chose and
@@ -611,6 +613,11 @@
     }
 
     // MARK: - Lifetime
+
+    /// A tip on show goes with the key status, to the window that takes it (#782).
+    func windowDidResignKey(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
 
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)
