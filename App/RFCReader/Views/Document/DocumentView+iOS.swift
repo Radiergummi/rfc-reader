@@ -96,14 +96,10 @@
           readingPathAfterPanel = nil
           navigation.readingPath = request
         } content: {
-          // A stack of its own for a bar of its own, which the panel's tabs take
-          // as the sheet's title (#301).
-          NavigationStack {
-            PanelHost(
-              isPresented: $showsInspector, closesAfterChoice: true,
-              readingPathAfterClosing: $readingPathAfterPanel
-            )
-          }
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
           .presentationDetents([.medium, .large])
           .presentationDragIndicator(.visible)
         }

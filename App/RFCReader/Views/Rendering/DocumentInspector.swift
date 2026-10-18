@@ -112,7 +112,8 @@ struct DocumentInspector: View {
         // Not in a toolbar beside the reader: `.inspector` lifts its content's
         // toolbar items into the reader's own bar, even through a `NavigationStack`
         // of the panel's own, so the tabs ended up above the reader, apart from the
-        // panel they switch and in the place of the reader's title.
+        // panel they switch and in the place of the reader's title. The insets
+        // are those the sheet had before the tabs went into its bar (#247).
         VStack(spacing: 0) {
           tabPicker
             .padding(.horizontal, 20)
@@ -215,8 +216,8 @@ struct DocumentInspector: View {
 /// `DocumentInspector` wired to the window's `ReaderState`, and the one place that
 /// wiring is written.
 ///
-/// macOS hosts this in the window's own split item and iOS presents it with
-/// `.inspector`; the six inputs are the same either way, so the next one added to
+/// macOS hosts this in the window's own split item; iOS presents it with
+/// `.inspector` beside the reader, or in a sheet of its own in compact width; the six inputs are the same either way, so the next one added to
 /// `DocumentInspector` is added once.
 struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
@@ -243,13 +244,23 @@ struct PanelHost: View {
   #endif
 
   var body: some View {
-    @Bindable var reader = reader
     #if os(macOS)
-      let isSheet = false
+      panel(isSheet: false)
     #else
-      // The one panel that closes after a choice is the sheet.
-      let isSheet = closesAfterChoice
+      // The one panel that closes after a choice is the sheet, whose bar of its own
+      // the tabs take as its title (#301). The stack is made here, beside the flag
+      // that puts the tabs in its bar, so that neither is without the other.
+      if closesAfterChoice {
+        NavigationStack { panel(isSheet: true) }
+      } else {
+        panel(isSheet: false)
+      }
     #endif
+  }
+
+  @ViewBuilder
+  private func panel(isSheet: Bool) -> some View {
+    @Bindable var reader = reader
     // On what the index describes, not only the body: a document still loading, or
     // one that failed to or was offline, has its Info (#325).
     if reader.canDescribe {
