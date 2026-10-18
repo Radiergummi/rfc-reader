@@ -252,6 +252,8 @@ struct RFCListView: View {
       .headerProminence(.increased)
     #endif
     .overlay {
+      // Only while there is no index, when nothing below shows.
+      IndexPlaceholderView()
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
       if rows.isEmpty, navigation.listed != nil, !hasTextHits, !awaitsSections {
@@ -468,10 +470,59 @@ struct ListViewOptions: View {
 /// Where the index stands: loading, when it was last updated, or why it failed
 /// and a way to try again — the last of which is the only place a failed refresh
 /// is reported at all.
+/// The first launch's download of the index, or why there is no index (#770), in
+/// place of the list's rows. A view of its own, so the download's progress redraws it
+/// rather than the list.
+private struct IndexPlaceholderView: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    switch library.indexPlaceholder {
+    case .downloading(let bytesReceived):
+      ContentUnavailableView {
+        Label("Downloading the RFC Index", systemImage: "arrow.down.circle")
+      } description: {
+        Text("The list of every RFC is downloaded once, then kept up to date.")
+      } actions: {
+        VStack {
+          ProgressView()
+          Text("\(bytesReceived.formatted(.byteCount(style: .file))) received")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+      }
+    case .failed(let kind, let message):
+      ContentUnavailableView {
+        Label("Couldn’t Load the RFC Index", systemImage: kind.symbol)
+      } description: {
+        Text(verbatim: message)
+        Text(verbatim: kind.recoverySuggestion(for: .index))
+      } actions: {
+        Button("Try Again") { library.retryIndex() }
+        #if !os(macOS)
+          if kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
+      }
+    case nil:
+      EmptyView()
+    }
+  }
+}
+
 struct IndexStatusView: View {
   @Environment(LibraryModel.self) private var library
 
   var body: some View {
+    // What the placeholder over the list says already.
+    if library.indexPlaceholder == nil {
+      status
+    }
+  }
+
+  private var status: some View {
     HStack(spacing: 6) {
       switch library.indexState {
       case .idle, .loading:

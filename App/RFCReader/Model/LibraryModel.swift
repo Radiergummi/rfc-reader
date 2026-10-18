@@ -75,6 +75,14 @@ final class LibraryModel {
       indexLoaded.open()
     }
   }
+  /// The bytes the index's download has received, while one is under way with no
+  /// index to show (#770); nil otherwise.
+  private(set) var indexBytesReceived: Int64?
+  /// What the list shows in place of its rows while there is no index (#770).
+  var indexPlaceholder: IndexPlaceholder? {
+    IndexPlaceholder(
+      state: indexState, hasIndex: index != nil, bytesReceived: indexBytesReceived)
+  }
   /// Open once the index is ready or has failed, for a background refresh that
   /// arrived while launch was still loading it (#191).
   @ObservationIgnored private let indexLoaded = Latch()
@@ -606,13 +614,32 @@ final class LibraryModel {
       // show, so the whole index is asked for.
       let kept = index == nil ? nil : store.indexCheck()
       let validators = kept?.validators(at: .now)
+      // With no index to show, the list shows the download instead (#770), until
+      // the index downloaded has been applied or has failed.
+      let isFirstDownload = index == nil
+      var onReceived: (@Sendable (Int64) -> Void)?
+      if isFirstDownload {
+        indexBytesReceived = 0
+        onReceived = { [weak self] bytes in
+          Task { @MainActor in
+            self?.indexReceived(bytes)
+          }
+        }
+      }
+      defer {
+        if isFirstDownload {
+          indexBytesReceived = nil
+        }
+      }
       let interval = signposter.beginInterval("Fetch index")
       let fetched: IndexFetch
       do {
         // Ended on a throw too, so an offline refresh does not leave it open.
         defer { signposter.endInterval("Fetch index", interval) }
         fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
-          .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
+          .fetchIndexData(
+            unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks,
+            onReceived: onReceived)
       }
       switch IndexRefreshOutcome(fetched, kept: kept) {
       case .recordUnchanged(let kept):
@@ -636,6 +663,13 @@ final class LibraryModel {
         settleIndex()
       }
     }
+  }
+
+  /// Records the download's bytes in the steps of 100 KB the list shows them in, so
+  /// it is not redrawn for every packet; ignored once the download has ended.
+  private func indexReceived(_ bytes: Int64) {
+    guard let shown = indexBytesReceived, bytes >= shown + 100_000 else { return }
+    indexBytesReceived = bytes
   }
 
   /// Only assigns: everything in `prepared` was built off the main actor.

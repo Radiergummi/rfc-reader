@@ -80,6 +80,16 @@
         }
       }
     },
+    "%@ received" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ empfangen"
+          }
+        }
+      }
+    },
     "%@: searched as text" : {
       "localizations" : {
         "de" : {
@@ -970,6 +980,16 @@
         }
       }
     },
+    "Couldn’t Load the RFC Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index konnte nicht geladen werden"
+          }
+        }
+      }
+    },
     "Create" : {
       "localizations" : {
         "de" : {
@@ -1097,6 +1117,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geladen, wenn das Netzwerk keine Datenbegrenzung hat, und behalten, solange ein Lesezeichen besteht."
+          }
+        }
+      }
+    },
+    "Downloading the RFC Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index wird geladen"
           }
         }
       }
@@ -2997,6 +3027,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das installierte Indexpaket konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "The list of every RFC is downloaded once, then kept up to date." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Liste aller RFCs wird einmal geladen und danach aktuell gehalten."
           }
         }
       }
