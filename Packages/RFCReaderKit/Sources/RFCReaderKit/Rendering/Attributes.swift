@@ -246,7 +246,20 @@ extension VerbatimBox {
 /// one instance per block, so the attribute's extent is the block.
 public final class StrokeBox: NSObject, Sendable {
   public let strokes: [Stroke]
-  public init(_ strokes: [Stroke]) { self.strokes = strokes }
+  /// Where each of the block's lines starts, as offsets from the block's start, the
+  /// first at 0: a fragment's line is read from these rather than by counting the
+  /// newlines before it in the text, which copied the whole document (#765).
+  public let lineStarts: [Int]
+
+  public init(_ strokes: [Stroke], lineStarts: [Int]) {
+    self.strokes = strokes
+    self.lineStarts = lineStarts
+  }
+
+  /// The line the character at `offset` from the block's start is on.
+  public func line(at offset: Int) -> Int {
+    max(0, lineStarts.partitioningIndex { $0 > offset } - 1)
+  }
 }
 
 /// What a decorated block's fragments share, walked out of the text once

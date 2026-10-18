@@ -48,7 +48,7 @@ struct BuilderTableTests {
     measure: CGFloat = ReadingStyle().measure
   ) -> TableShape {
     let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
-    return builder.tableShape(widths: builder.naturalColumnWidths(table))
+    return builder.tableShape(widths: builder.naturalColumnWidths(table), indent: 0)
   }
 
   @Test func `a narrow table uses the grid`() {
@@ -70,6 +70,35 @@ struct BuilderTableTests {
 
     #expect(shape(narrow, measure: total + 1) == .grid)
     #expect(shape(narrow, measure: total - 1) == .stacked)
+  }
+
+  /// A grid starts at its indent and does not wrap, so a table set inside a list, a
+  /// quotation or an aside has the column less its indent to fit in (#765).
+  @Test func `a table's indent is taken from the measure it has to fit`() {
+    let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
+    let widths = wide.naturalColumnWidths(narrow)
+    let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
+    let builder = DocumentTextBuilder(style: ReadingStyle(measure: total + 1))
+    #expect(builder.tableShape(widths: widths, indent: 0) == .grid)
+    #expect(builder.tableShape(widths: widths, indent: 24) == .stacked)
+  }
+
+  /// Through a build: a table in a list item that would fit the column stacks when
+  /// it does not fit the item's indent, rather than being clipped at the column.
+  @Test func `a table in a list stacks where its indent leaves too little room`() throws {
+    let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
+    let widths = wide.naturalColumnWidths(narrow)
+    let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
+    let list = Block.list(ListBlock(style: .bullet, items: [ListItem(blocks: [.table(narrow)])]))
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(list), style: ReadingStyle(measure: total + 1))
+    // A grid row is one paragraph with its cells tab-separated; stacked has none.
+    #expect(!built.text.string.contains("GET\tyes\tyes"))
+    #expect(built.text.string.contains("GET"))
+    // The same table at the column's edge still fits as a grid.
+    let unindented = DocumentTextBuilder.build(
+      Fixtures.document(.table(narrow)), style: ReadingStyle(measure: total + 1))
+    #expect(unindented.text.string.contains("GET\tyes\tyes"))
   }
 
   /// A cell is measured as it is set: strong text in a data cell renders bold, and
@@ -200,6 +229,60 @@ struct BuilderTableTests {
     let offset = try Fixtures.offset(of: "[RFC 9110]", in: built.text)
     #expect(built.text.attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox)
     #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
+  }
+
+  /// A caption follows its block, and nothing tied them: printed, a table could end
+  /// a page and its caption open the next alone (#765). The block's last paragraph
+  /// keeps with the caption, as a heading keeps with its text.
+  @Test func `a captioned block's last paragraph keeps with its caption`() throws {
+    let art = Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+")
+    let figure = Block.figure(Figure(title: "Boxes", number: 1, blocks: [.preformatted(art)]))
+    // A table too wide for the measure stacks, and a stacked table ends on a blank
+    // line between rows, which has to keep with the caption as its last cell does.
+    let cases: [(BuiltDocument, String)] = [
+      (
+        DocumentTextBuilder.build(Fixtures.document(figure), style: ReadingStyle()),
+        "Figure 1: Boxes"
+      ),
+      (
+        DocumentTextBuilder.build(Fixtures.document(.table(narrow)), style: ReadingStyle()),
+        "Table 1: Methods"
+      ),
+      (
+        DocumentTextBuilder.build(
+          Fixtures.document(.table(narrow)), style: ReadingStyle(measure: 120)),
+        "Table 1: Methods"
+      ),
+    ]
+    for (index, (built, captionText)) in cases.enumerated() {
+      let text = built.text.string as NSString
+      let caption = text.range(of: captionText)
+      try #require(caption.location != NSNotFound)
+      var paragraph = text.paragraphRange(for: NSRange(location: caption.location - 1, length: 0))
+      while true {
+        #expect(built.keepsWithNext.contains(paragraph.location), "case \(index)")
+        guard paragraph.length == 1, paragraph.location > 0 else { break }
+        paragraph = text.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+      }
+    }
+  }
+
+  /// A figure that emitted nothing has no paragraph to keep with its caption, and the
+  /// paragraph before it is not its own.
+  @Test func `an empty figure keeps nothing before it with its caption`() throws {
+    let blocks: [Block] = [
+      .paragraph(Paragraph(text: "Prose before.")),
+      .figure(Figure(title: "Nothing", number: 1, blocks: [])),
+    ]
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: blocks)],
+      source: .xml)
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let text = built.text.string as NSString
+    let prose = text.range(of: "Prose before.")
+    try #require(prose.location != NSNotFound)
+    #expect(!built.keepsWithNext.contains(prose.location))
   }
 
   @Test func `the caption is text`() {

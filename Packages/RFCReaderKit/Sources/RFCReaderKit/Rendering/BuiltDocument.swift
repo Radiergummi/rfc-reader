@@ -99,10 +99,15 @@ public struct BacklinkEntry: Sendable, Hashable {
 public struct BuildKey: Hashable, Sendable {
   public let document: DocumentID
   public let style: ReadingStyle
+  /// Bold Text, which the platform applies to the fonts as they are made rather than
+  /// through the style, so a build made before it changed is not the one after
+  /// (#765), as `BuildInputs.legibilityWeight` is a reason to build again.
+  public let boldText: Bool
 
-  public init(document: DocumentID, style: ReadingStyle) {
+  public init(document: DocumentID, style: ReadingStyle, boldText: Bool) {
     self.document = document
     self.style = style
+    self.boldText = boldText
   }
 }
 

@@ -153,7 +153,8 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+      grammar: builder.grammar.withoutParsedBlocks,
       sectionNumberHang: builder.hang)
   }
 
