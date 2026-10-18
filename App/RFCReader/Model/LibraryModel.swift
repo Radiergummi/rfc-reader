@@ -20,7 +20,7 @@ nonisolated private let libraryLog = Logger(
   /// `LibraryModel.windows`. The library says what it needs, and never reaches for
   /// the delegate itself.
   protocol WindowOpening: AnyObject {
-    /// A window of its own, in front.
+    /// A window of its own, in front, whatever the user's "Prefer tabs" setting.
     func openWindow()
     /// A tab of the window the user is looking at.
     func openTab(inBackground: Bool)
@@ -632,6 +632,10 @@ final class LibraryModel {
   /// then on an intent takes what there is rather than waiting in `settledSearch()`.
   /// Not `indexState`, which a launch whose fetch answers nothing leaves loading.
   @ObservationIgnored private let indexSettled = Latch()
+
+  /// Whether the index has loaded or failed to, for a caller that cannot wait for
+  /// `settledSearch()`: a script's accessor (#762).
+  var hasIndexSettled: Bool { indexSettled.isOpen }
 
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
@@ -1516,6 +1520,9 @@ final class LibraryModel {
       let data = try await client.fetchDocumentData(id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
+      // Not private API, but not documented either: the notification Safari posts,
+      // which the Dock answers today. If a macOS stops answering it, the stack stops
+      // bouncing and nothing says so; the file is saved all the same (#762).
       DistributedNotificationCenter.default().post(
         name: Notification.Name("com.apple.DownloadFileFinished"), object: file.path)
     }
