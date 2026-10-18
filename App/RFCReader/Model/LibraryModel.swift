@@ -79,6 +79,9 @@ final class LibraryModel {
   /// arrived while launch was still loading it (#191).
   @ObservationIgnored private let indexLoaded = Latch()
   private(set) var recent: [RecentRFC] = []
+  /// Just Published's refresh (#421), held, so that a second call joins it rather
+  /// than fetching the feed beside it.
+  @ObservationIgnored private let recentRefresh = SharedRefresh(name: "Refresh recent RFCs")
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
   /// until the cached copy or a fetch has arrived.
@@ -383,16 +386,8 @@ final class LibraryModel {
       installPackFromLaunchArgument()
     #endif
     // Just Published needs neither the index nor the downloads, so it starts beside
-    // them rather than after the index is applied. It is decoration: a failure leaves
-    // it empty, and is logged rather than shown (#125).
-    Task(name: "Fetch recent RFCs") {
-      do {
-        recent = try await client.fetchRecent()
-      } catch {
-        libraryLog.error(
-          "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
-      }
-    }
+    // them rather than after the index is applied.
+    recentRefresh.start { await self.refreshRecent() }
     await refreshPointersInPack()
     do {
       if let (prepared, updatedAt) = try await cached {
@@ -883,6 +878,22 @@ final class LibraryModel {
     } catch {
       libraryLog.error(
         "fetching working groups failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  // MARK: - Just Published
+
+  /// The feed kept, then a newer one if the RFC Editor has it, asked for only on a
+  /// cheap network (`RecentFeedRefresh`). It is decoration: a failure keeps what is
+  /// shown, and is logged rather than shown (#125).
+  private func refreshRecent() async {
+    do {
+      try await RecentFeedRefresh.run(store: store, client: clientOnCheapNetworks) { feed in
+        if feed != recent { recent = feed }
+      }
+    } catch {
+      libraryLog.error(
+        "refreshing recent RFCs failed: \(String(describing: error), privacy: .public)")
     }
   }
 
