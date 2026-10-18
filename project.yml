@@ -60,6 +60,26 @@ targets:
         buildPhase: resources
       # One app icon per Xcode version; the settings below pick which is built.
       - path: App/icons
+    # The RFC index, for a first launch to list every RFC offline (#770):
+    # `make bundled-index` fetches it into App/Resources, which git ignores, and
+    # `DocumentStore.cachedIndexLocation()` reads it until the app has one of its own.
+    # A phase rather than a resource, because a resource that is missing fails every
+    # build, and a Debug build goes without it.
+    postBuildScripts:
+      - name: Bundle the RFC index
+        basedOnDependencyAnalysis: false
+        script: |
+          index="$SRCROOT/App/Resources/rfc-index.xml"
+          bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/rfc-index.xml"
+          if [ -f "$index" ]; then
+            cp "$index" "$bundled"
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: A Release build bundles the RFC index: run make bundled-index first."
+            exit 1
+          else
+            # Not one an earlier build left behind.
+            rm -f "$bundled"
+          fi
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit

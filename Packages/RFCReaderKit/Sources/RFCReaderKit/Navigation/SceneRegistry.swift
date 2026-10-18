@@ -13,8 +13,8 @@ import RFCKit
 /// before the index is read, and a series link handed over then would select the series
 /// itself, because resolving it to its first RFC needs the index. A plain RFC link needs
 /// nothing from the index and does not wait for it. Making every link wait was set
-/// aside: no index is bundled with the app, so on a first launch every link would wait
-/// for the index's whole download.
+/// aside when no index was bundled with the app, and on a first launch every link would
+/// have waited for the index's whole download; a Debug build still bundles none (#770).
 ///
 /// Two kinds of link wait, apart, so that neither displaces the other:
 /// - **For a new tab**, opened behind or in front from a tab already open: in order,

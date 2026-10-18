@@ -226,15 +226,22 @@ public actor DocumentStore {
   /// Only a lookup, and nonisolated: the caller reads it, off this actor (#367).
   /// Read here, the index held the store for as long as the parse took, so a
   /// document opened during launch — an `rfc://` link — waited behind it.
-  public nonisolated func cachedIndexLocation() -> CachedIndex? {
+  ///
+  /// - Parameter bundled: The index a Release build bundles (#770), nil in a Debug
+  ///   build, which goes without.
+  public nonisolated func cachedIndexLocation(
+    bundled: URL? = Bundle.main.url(forResource: "rfc-index", withExtension: "xml")
+  ) -> CachedIndex? {
     let url: URL
-    var updatedAt = Date.distantPast
+    let updatedAt: Date
     if FileManager.default.fileExists(atPath: indexURL.path) {
       url = indexURL
       updatedAt = indexCheck()?.checkedAt ?? Self.modificationDate(of: url) ?? .distantPast
-    } else if let bundled = Bundle.main.url(forResource: "rfc-index", withExtension: "xml") {
-      // A snapshot shipped with the app makes first launch work offline.
+    } else if let bundled {
+      // Makes a first launch work offline. As current as when the app was built,
+      // when the build copied it, so the daily check replaces it once that is a day ago.
       url = bundled
+      updatedAt = Self.modificationDate(of: bundled) ?? .distantPast
     } else {
       return nil
     }
