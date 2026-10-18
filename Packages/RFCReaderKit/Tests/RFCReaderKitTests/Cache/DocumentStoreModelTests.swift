@@ -53,8 +53,8 @@ extension DocumentStoreTests {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let id = DocumentID.rfc(2119)
-    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
     let first = sandbox.store(build: "1")
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
     let parsed = try await first.document(id, formats: [.text], client: Self.openFetcher())
     await first.untilModelsWritten()
     try Self.overwriteInPlace(sandbox.file(id, format: .text))

@@ -112,7 +112,8 @@ Both XML parsers ignore a parser error reported *after* the root element has clo
 ```
 RFC Editor ──HTTP──▶ RFCEditorClient ──────────bytes──▶ DocumentStore (actor)
                                                           │  writes rfcNNNN.xml/.txt to Application Support
-                                                          │  parses on demand, memoizes RFCDocument
+                                                          │  parses on demand, memoizes RFCDocument,
+                                                          │  keeps it encoded beside its body for the next launch
                                                           ▼
                        LibraryModel (@Observable, one per process) ── index, search, lists, document cache, open tabs
                                                           ▼
@@ -204,6 +205,7 @@ is that way, and what was measured or tried first.
 - [The Mac app is released from CI and updated by Sparkle](decisions/2026-10-17-the-mac-app-is-released-from-ci-and-updated-by-sparkle.md)
 - [A translated document is a second build of a translated model](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)
 - [Highlights are anchored to the model text and drawn from the position map](decisions/2026-10-18-highlights-are-drawn-from-the-position-map.md)
+- [A parsed document is kept encoded beside its body](decisions/2026-10-18-a-parsed-document-is-kept-encoded-beside-its-body.md)
 
 ## Planned engines
 

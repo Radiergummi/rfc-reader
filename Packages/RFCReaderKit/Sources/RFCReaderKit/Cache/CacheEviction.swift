@@ -83,7 +83,8 @@ public enum CacheEviction {
   /// last opened. The store sets that date on every open; a body is otherwise
   /// never modified after it is written.
   ///
-  /// Only the files `DocumentCacheIndex` counts as bodies. An enumeration, so it is
+  /// Only the files `DocumentCacheIndex` counts as bodies, and their models (#606).
+  /// An enumeration, so it is
   /// asked once per download rather than per question.
   public static func entries(in directory: URL) -> [Entry] {
     let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
@@ -92,7 +93,7 @@ public enum CacheEviction {
         at: directory, includingPropertiesForKeys: keys)) ?? []
     var found: [DocumentID: (bytes: Int, date: Date)] = [:]
     for url in urls {
-      guard let id = DocumentCacheIndex.document(named: url.lastPathComponent),
+      guard let id = DocumentCacheIndex.owner(named: url.lastPathComponent),
         let values = try? url.resourceValues(forKeys: Set(keys))
       else {
         continue
