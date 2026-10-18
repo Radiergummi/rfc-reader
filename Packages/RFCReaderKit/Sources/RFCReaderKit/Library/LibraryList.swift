@@ -398,3 +398,41 @@ extension SearchFilters {
     return indexed
   }
 }
+
+extension LibraryList {
+  /// What Save as Collection… keeps (#355): the list as a query of the whole library,
+  /// so the collection lists what the tab listed. The tab's filter becomes the
+  /// qualifier that lists the same, as the built-ins' table on #355 has them, and
+  /// what the tab searches for follows it. A dynamic collection's own query stands
+  /// for its filter.
+  public func savedQuery(in collections: CollectionSnapshot) -> String {
+    let qualifier: String
+    switch filter {
+    case .all: qualifier = ""
+    case .bookmarks: qualifier = "is:bookmarked"
+    case .recent: qualifier = "is:read sort:last-read"
+    case .downloaded: qualifier = "is:offline"
+    case .standards: qualifier = "status:internet-standard"
+    case .bestCurrentPractice: qualifier = "status:bcp"
+    case .stream(let stream): qualifier = Self.formatted { $0.streams = [stream] }
+    case .workingGroup(let group): qualifier = Self.formatted { $0.workingGroups = [group] }
+    case .series(let id): qualifier = Self.formatted { $0.scopes = [.document(id)] }
+    case .collection(let identifier):
+      if let definition {
+        qualifier = definition
+      } else if let name = collections[identifier]?.name {
+        qualifier = Self.formatted { $0.scopes = [.collection(name)] }
+      } else {
+        qualifier = ""
+      }
+    }
+    return "\(qualifier) \(query)".normalizedQuery
+  }
+
+  /// The qualifiers of filters set by `set`, as the search field writes them.
+  private static func formatted(_ set: (inout SearchFilters) -> Void) -> String {
+    var filters = SearchFilters()
+    set(&filters)
+    return SearchQuery.format(text: "", filters: filters)
+  }
+}

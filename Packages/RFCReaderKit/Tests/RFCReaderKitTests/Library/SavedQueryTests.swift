@@ -1,0 +1,46 @@
+import Foundation
+import RFCKit
+import Testing
+
+@testable import RFCReaderKit
+
+/// What Save as Collection… keeps (#355): the list as a query of the whole library,
+/// so the collection lists what the tab listed.
+@Suite("Saved query")
+struct SavedQueryTests {
+  @Test(arguments: [
+    (LibraryFilter.all, "quic"),
+    (.bookmarks, "is:bookmarked quic"),
+    (.recent, "is:read sort:last-read quic"),
+    (.downloaded, "is:offline quic"),
+    (.standards, "status:internet-standard quic"),
+    (.bestCurrentPractice, "status:bcp quic"),
+    (.stream(.iab), "stream:iab quic"),
+    (.workingGroup("httpbis"), "wg:httpbis quic"),
+    (.series(DocumentID(series: .bcp, number: 14)), "in:bcp14 quic"),
+  ])
+  func `a built-in list is kept as its qualifier`(filter: LibraryFilter, saved: String) {
+    let list = LibraryList(filter: filter, query: "quic")
+    #expect(list.savedQuery(in: CollectionSnapshot(collections: [])) == saved)
+  }
+
+  @Test func `a manual collection is kept as in its name`() {
+    let identifier = UUID()
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: identifier, name: "Key Words", color: .blue, members: [.rfc(2119)])
+    ])
+    let list = LibraryList(filter: .collection(identifier), query: "uppercase")
+    #expect(list.savedQuery(in: snapshot) == #"in:"Key Words" uppercase"#)
+  }
+
+  @Test func `a dynamic collection is kept as its query and the search`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "congestion", definition: "wg:quic")
+    #expect(list.savedQuery(in: CollectionSnapshot(collections: [])) == "wg:quic congestion")
+  }
+
+  @Test func `an unsearched list is kept as its qualifier alone`() {
+    let list = LibraryList(filter: .workingGroup("quic"), query: "")
+    #expect(list.savedQuery(in: CollectionSnapshot(collections: [])) == "wg:quic")
+  }
+}
