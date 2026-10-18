@@ -154,3 +154,73 @@ struct DocumentMenuEffectsTests {
     #expect(effect(.toggleOriginalText) == .toggleOriginalText)
   }
 }
+
+/// A library row's and a reference's menus (#761): one table each for the Mac and iOS.
+@Suite("Row and reference menus")
+struct RowAndReferenceMenusTests {
+
+  /// The Mac opens a row in a tab or a window, then everything the library does
+  /// with it, then Share.
+  @Test func `a Mac row opens first, then the library's actions, then share`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
+        == [
+          [.openInNewTab, .openInNewWindow],
+          [.bookmark, .addToCollection, .readingPath, .keepOffline],
+          [.share],
+        ])
+  }
+
+  /// An iPhone opens no window, an iPad one, and neither a tab.
+  @Test func `a device offers only the windows and tabs it can open`() {
+    let iPhone = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+      hasCitationIndex: true)
+    #expect(iPhone.first == [.bookmark, .addToCollection, .readingPath, .keepOffline])
+    let iPad = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: true, inCollection: false,
+      hasCitationIndex: true)
+    #expect(iPad.first == [.openInNewWindow])
+  }
+
+  /// A series is bookmarked and opened as itself, but a collection holds RFCs, and
+  /// a series is not shared (#321).
+  @Test func `a series is bookmarked and opened, not collected or shared`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: false, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
+        == [[.openInNewTab, .openInNewWindow], [.bookmark]])
+  }
+
+  /// A reference opens where the device can, then copies its link or cites it.
+  @Test func `a reference opens first, then copies its link or cites it`() {
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: true, opensWindows: true)
+        == [[.openInNewTab, .openInNewWindow], [.copyLink, .cite]])
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false) == [[.copyLink, .cite]])
+    // Nothing to cite from without the index's entry.
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false, describes: false)
+        == [[.copyLink]])
+  }
+
+  /// Without a citation index a reading path could only say there is none (#769).
+  @Test func `a row offers no reading path without a citation index`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+        hasCitationIndex: false
+      ).first == [.bookmark, .addToCollection, .keepOffline])
+  }
+
+  @Test func `a collection's row can be removed from it, last`() {
+    let actions = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: true, opensWindows: true, inCollection: true,
+      hasCitationIndex: true)
+    #expect(actions.last == [.removeFromCollection])
+  }
+}

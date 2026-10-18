@@ -410,16 +410,6 @@
         }
       }
     },
-    "A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine Nummer, RFC 9110, BCP 14, Wörter wie „http caching“ oder ein Link auf rfc-editor.org."
-          }
-        }
-      }
-    },
     "A reading path is computed from the citation index, which is a data pack of its own and isn't installed." : {
       "localizations" : {
         "de" : {
@@ -1481,6 +1471,16 @@
         }
       }
     },
+    "Jump to Selection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Auswahl springen"
+          }
+        }
+      }
+    },
     "Just Published" : {
       "localizations" : {
         "de" : {
@@ -2207,26 +2207,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFC"
-          }
-        }
-      }
-    },
-    "RFC number, BCP 14, or a link" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RFC-Nummer, BCP 14 oder ein Link"
-          }
-        }
-      }
-    },
-    "RFC number, title words, or link" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RFC-Nummer, Wörter aus dem Titel oder Link"
           }
         }
       }
@@ -2998,6 +2978,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktualisiert durch"
+          }
+        }
+      }
+    },
+    "Use Selection for Find" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl für Suche verwenden"
           }
         }
       }

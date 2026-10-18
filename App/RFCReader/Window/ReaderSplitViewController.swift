@@ -12,8 +12,9 @@
   /// the window may be are this controller's alone. The reasons are in
   /// `docs/decisions/2026-09-22-the-window-layer-is-appkits-on-macos.md`.
   final class ReaderSplitViewController: NSSplitViewController {
-    /// Told when a column is dragged, or the sidebar collapses or expands, so the
-    /// toolbar can cap the title to the list it sits over.
+    /// Told when a column is dragged, or the sidebar or the panel collapses or
+    /// expands, so the toolbar can cap the title to the list it sits over and the
+    /// View menu can title its items.
     var didResizeSubviews: (() -> Void)?
 
     private let sidebarItem: NSSplitViewItem

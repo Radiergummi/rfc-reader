@@ -13,6 +13,18 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// As many rows as a palette shows before it stops being a glance.
   public static let limit = 8
 
+  /// The field's placeholder, on the Mac's palette and iOS's sheet alike (#761):
+  /// both take all four.
+  public static func placeholder(locale: Locale = .interface) -> String {
+    String(kit: "RFC number, BCP 14, title words, or a link", locale: locale)
+  }
+
+  /// One of each of the four, shown under the field while it is empty. Not
+  /// language: a number, a series, an RFC's own title words and a link, as typed.
+  /// The link in full: one without its scheme is not taken for a link.
+  public static let example =
+    "9110 · bcp 14 · http semantics · https://www.rfc-editor.org/rfc/rfc9110"
+
   /// One row: what it opens, and the registry value it stands for, if it is one.
   ///
   /// A row rather than its link, because two registry values can open one place:

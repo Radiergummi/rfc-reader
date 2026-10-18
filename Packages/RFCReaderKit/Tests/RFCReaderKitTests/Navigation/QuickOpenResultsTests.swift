@@ -31,6 +31,17 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link.id) == [.rfc(9110), .rfc(9111)])
   }
 
+  /// What the placeholder says it takes, the example shows one of each (#761), and
+  /// the number, the series and the link resolve as typed. The title words are a
+  /// search, which needs the index, so only their place is pinned.
+  @Test func `the example is one of each thing the field takes`() {
+    let parts = QuickOpenResults.example.components(separatedBy: " · ")
+    #expect(parts.count == 4)
+    #expect(DocumentReference.link(from: parts[0])?.id == .rfc(9110))
+    #expect(DocumentReference.link(from: parts[1])?.id == DocumentID(series: .bcp, number: 14))
+    #expect(DocumentReference.link(from: parts[3])?.id == .rfc(9110))
+  }
+
   /// One sentence for the sheet and the palette alike (#769), and none until there
   /// is something to say.
   @Test func `the message says why nothing is listed, once the search has answered`() {
