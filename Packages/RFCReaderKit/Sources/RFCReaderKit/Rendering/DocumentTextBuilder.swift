@@ -150,13 +150,17 @@ public final class DocumentTextBuilder {
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
     reserveChipPadding(in: builder.output)
+    // Last: it carries the decorations, indents, insets and widths set so far, and
+    // nothing rewrites them after it.
+    builder.setDecorationFacts()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+      grammar: builder.grammar.withoutParsedBlocks,
       sectionNumberHang: builder.hang, errata: errata)
   }
 

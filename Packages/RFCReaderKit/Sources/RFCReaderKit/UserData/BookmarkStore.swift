@@ -10,7 +10,7 @@ import SwiftData
 /// had to be made twice — and the two had already drifted over the title a new
 /// bookmark stores, which is now `DocumentActions.bookmarkTitle`.
 ///
-/// Nobody displays the state by asking here: `LibraryModel` reads
+/// Nobody displays the state by asking here: `UserDataMirror` reads
 /// `bookmarkedDocuments(in:)` after every save of a bookmark, and the toolbars, the
 /// menu and the list rows read its set, which is cheap enough for `NSToolbar` to
 /// revalidate against on every event.

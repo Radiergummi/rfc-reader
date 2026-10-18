@@ -13,7 +13,7 @@ import RFCKit
 ///   to be immutable rather than merely unshared, because Foundation uniques equal
 ///   attribute dictionaries across every string in the process and two builds do
 ///   end up holding the same ones.
-/// - `AnchorIndex` is a `Sendable` value.
+/// - `AnchorIndex` and `FoldingIndex` are `Sendable` values.
 ///
 /// Once handed over, a build may be installed more than once: a force-click
 /// preview keeps its builds, and a repeated preview installs the same one into a
@@ -46,8 +46,14 @@ public struct BuiltDocument: @unchecked Sendable {
   public let sectionNumberHang: CGFloat
   /// The errata the build was given, which its chips list (#387).
   public let errata: ErrataMarks
+  /// Where the text's paragraphs, headings and asides are, which the reading modes
+  /// fold by (#698). Made here, with the build and off the main actor, once: the
+  /// text view folds by it and the reader state steps Focus by it (#723).
+  public let foldingIndex: FoldingIndex
 
-  public init(
+  /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
+  /// it makes the folding index too (#723).
+  init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
     sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none
@@ -59,6 +65,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
     self.errata = errata
+    foldingIndex = FoldingIndex(text: text, anchors: anchors)
   }
 
   /// What the errata chip of the section at `anchor` lists (#387).
@@ -100,10 +107,15 @@ public struct BacklinkEntry: Sendable, Hashable {
 public struct BuildKey: Hashable, Sendable {
   public let document: DocumentID
   public let style: ReadingStyle
+  /// Bold Text, which the platform applies to the fonts as they are made rather than
+  /// through the style, so a build made before it changed is not the one after
+  /// (#765), as `BuildInputs.legibilityWeight` is a reason to build again.
+  public let boldText: Bool
 
-  public init(document: DocumentID, style: ReadingStyle) {
+  public init(document: DocumentID, style: ReadingStyle, boldText: Bool) {
     self.document = document
     self.style = style
+    self.boldText = boldText
   }
 }
 

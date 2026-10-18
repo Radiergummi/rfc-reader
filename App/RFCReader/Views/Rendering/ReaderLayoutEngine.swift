@@ -110,11 +110,29 @@ final class ReaderLayoutEngine: PinSurface {
     }
   }
 
+  /// Draws the fragments again without laying them out (#747): what a change only
+  /// to what they draw needs, such as Implementer's bands.
+  func redraw() {
+    guard let textView, let layout = textView.textLayoutManager else { return }
+    let interval = signposter.beginInterval(
+      "Redraw", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
+    defer { signposter.endInterval("Redraw", interval) }
+    layout.invalidateRenderingAttributes(for: layout.documentRange)
+    #if canImport(UIKit)
+      textView.setNeedsDisplay()
+    #else
+      textView.needsDisplay = true
+    #endif
+  }
+
   /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
   /// and the reader's line kept, at the shown paragraph nearest it where it was
   /// folded, or put at `place`, a jump's target the folding has just shown.
   func refold(_ hidden: HiddenText, placeAt place: Int? = nil) {
     guard let layout = textView?.textLayoutManager else { return }
+    let interval = signposter.beginInterval(
+      "Refold", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
+    defer { signposter.endInterval("Refold", interval) }
     if let place {
       keeper.jumped(to: ReaderAnchor(characterOffset: place))
     } else if case .line(let anchor) = keeper.place, hidden.contains(anchor.characterOffset) {
@@ -243,8 +261,8 @@ final class ReaderLayoutEngine: PinSurface {
   private var completionInterval: OSSignpostIntervalState?
 
   /// How long this engine's completion lays out before it yields to let the run loop
-  /// draw and take input: a slice is 3–5 ms and the budget is checked before each,
-  /// so a turn is one or two slices. Each text view's engine has a budget of its own.
+  /// draw and take input: a slice fits in a frame (`SlicePlanner`) and the budget is
+  /// checked before each, so a turn is one or two slices. Each text view's engine has a budget of its own.
   private static let turnBudget = Duration.milliseconds(4)
 
   /// Lays the document out from its start in the background, a turn's budget at a

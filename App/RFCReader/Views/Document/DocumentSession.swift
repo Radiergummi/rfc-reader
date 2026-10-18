@@ -75,7 +75,7 @@ struct BuildInputs: Equatable {
 ///
 /// A reference held in the view's state, so it goes when that state does, which is
 /// when the view is replaced by the next document's (`.id(selection)`): the old
-/// reader's fetch and 650 ms build are canceled then, rather than running on for a
+/// reader's fetch and build are canceled then, rather than running on for a
 /// document nobody will see. Disappearing is not going (#252).
 @Observable
 final class DocumentSession {
