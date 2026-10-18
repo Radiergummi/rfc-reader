@@ -176,9 +176,25 @@ struct PatchWriterTests {
     #expect(failure.description.contains("TODO"), "\(failure)")
   }
 
+  /// Laid out anew, the copy holds the same content.
   @Test func `an edited copy the same as the original has nothing to patch`() throws {
-    let failure = try Self.failure([("<t>The opening", "<t>The  opening")])
-    #expect(failure.contains("nothing"), "\(failure)")
+    let failure = try Self.failure([("      <t>The opening", "<t>The opening")])
+    #expect(failure.contains("nothing to patch"), "\(failure)")
+  }
+
+  /// Not the closing note, the first of two siblings in the gap, which an edit in
+  /// place would pair with the rewritten one.
+  @Test func `a removed element beside a rewritten one is removed, and the other replaced`()
+    throws
+  {
+    let patch = try Self.patch([
+      ("<t>Use <em>this</em> form.</t>", ""), ("A closing note.", "A closing remark."),
+    ])
+    #expect(
+      Self.operations(patch) == [
+        #"<remove sel="//section[@anchor='name-overview']/t[starts-with(normalize-space(), 'Use')]"/>"#,
+        #"<replace sel="//section[@anchor='name-overview']/t[starts-with(normalize-space(), 'A closing')]"><t>A closing remark.</t></replace>"#,
+      ])
   }
 
   /// The writer puts `version="3"` back, so the patch would not give the edited copy.

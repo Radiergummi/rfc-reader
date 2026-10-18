@@ -255,7 +255,8 @@ struct CommandLineTests {
   }
 
   /// `patch` writes the override for a hand-edited copy of the converter's output,
-  /// and never over one that exists, whose reasons were written by hand (#742).
+  /// and never over one that exists, whose reasons were written by hand (#742). It
+  /// takes the document's stem only.
   @Test func `patch writes a new override and refuses to replace one`() throws {
     let out = Self.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: out) }
@@ -286,5 +287,10 @@ struct CommandLineTests {
     let second = try Self.run(arguments)
     #expect(second.status == 1)
     #expect(second.standardError.contains("exists"), "\(second.standardError)")
+
+    // Not a stem: the override would be rfc2119.xml.xml, which convert never reads.
+    var withExtension = arguments
+    withExtension[1] = "rfc2119.xml"
+    #expect(try Self.run(withExtension).status == 64, "EX_USAGE")
   }
 }

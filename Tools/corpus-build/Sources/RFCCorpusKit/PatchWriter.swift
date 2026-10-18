@@ -161,8 +161,12 @@ public enum PatchWriter {
     for end in strong + [(original.count, edited.count)] {
       let gapOriginal = Array(original[start.0..<end.0])
       let gapEdited = Array(edited[start.1..<end.1])
+      // As many on each side: each was edited in place. Otherwise some were removed
+      // or added, and an element is paired only with one that keeps most of its words,
+      // so a removed paragraph is not paired with its rewritten neighbor.
+      let inPlace = gapOriginal.count == gapEdited.count
       let weak = commonSubsequence(gapOriginal, gapEdited) { first, second in
-        !first.isText && first.name == second.name
+        !first.isText && first.name == second.name && (inPlace || isSimilar(first, second))
       }
       var gapStart = (0, 0)
       for gapEnd in weak + [(gapOriginal.count, gapEdited.count)] {
@@ -177,6 +181,14 @@ public enum PatchWriter {
       start = (end.0 + 1, end.1 + 1)
     }
     return alignment
+  }
+
+  /// Whether `first` and `second` share at least half of their words.
+  private static func isSimilar(_ first: Node, _ second: Node) -> Bool {
+    let firstWords = Set(words(of: first.xml.stringValue ?? ""))
+    let secondWords = Set(words(of: second.xml.stringValue ?? ""))
+    let union = firstWords.union(secondWords)
+    return union.isEmpty || firstWords.intersection(secondWords).count * 2 >= union.count
   }
 
   /// The index pairs of a longest common subsequence of `first` and `second` under
@@ -397,18 +409,18 @@ public enum PatchWriter {
       for length in 1...max(1, min(words.count, PatchWriter.longestPrefix)) where !words.isEmpty {
         let prefix = words[..<length].joined(separator: " ")
         guard let literal = PatchWriter.literal(prefix) else { break }
-        if !others.contains(where: { $0.hasPrefix(prefix) }) {
+        if !others.contains(where: { PatchWriter.opens($0, with: prefix) }) {
           return "\(elementName)[starts-with(normalize-space(), \(literal))]"
         }
       }
       if let first = words.first, let firstLiteral = PatchWriter.literal(first) {
-        let rivals = others.filter { $0.hasPrefix(first) }
+        let rivals = others.filter { PatchWriter.opens($0, with: first) }
         // Runs ending at the last word first, as a page footer would tell two apart.
         for end in stride(from: words.count, to: 1, by: -1) {
           for length in 1...min(PatchWriter.longestRun, end - 1) {
             let run = words[(end - length)..<end].joined(separator: " ")
             guard let literal = PatchWriter.literal(run) else { break }
-            if !rivals.contains(where: { $0.contains(run) }) {
+            if !rivals.contains(where: { $0.range(of: run, options: .literal) != nil }) {
               return
                 "\(elementName)[starts-with(normalize-space(), \(firstLiteral))][contains(normalize-space(), \(literal))]"
             }
@@ -432,6 +444,13 @@ public enum PatchWriter {
   static func words(of text: String) -> [String] {
     text.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
       .map(String.init)
+  }
+
+  /// Whether `text` opens with `prefix` as XPath's `starts-with` compares them, code
+  /// point by code point, where `hasPrefix` would take canonically equivalent
+  /// characters as equal.
+  static func opens(_ text: String, with prefix: String) -> Bool {
+    text.unicodeScalars.starts(with: prefix.unicodeScalars)
   }
 
   /// `text` as an XPath string literal, or nil when it holds both kinds of quote.

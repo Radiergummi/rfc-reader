@@ -31,7 +31,7 @@ struct PatchCommand: ParsableCommand {
   var toStandardOutput = false
 
   func validate() throws {
-    guard ConversionPlan.rfcNumber(of: document) != nil else {
+    guard let number = ConversionPlan.rfcNumber(of: document), document == "rfc\(number)" else {
       throw ValidationError("\(document) is not an RFC's file stem, such as rfc822.")
     }
   }
@@ -39,6 +39,14 @@ struct PatchCommand: ParsableCommand {
   func run() throws {
     let originalPath = original ?? "corpus/xml.noindex/\(document).xml"
     let name = "\(document).xml"
+    let output = URL(fileURLWithPath: overrides).appending(path: name)
+    // Its reasons are written by hand, and would be lost.
+    if !toStandardOutput, FileManager.default.fileExists(atPath: output.path) {
+      Self.logger.error(
+        "the override exists; --print writes the new patch to compare with it",
+        metadata: ["path": "\(output.path)"])
+      throw ExitCode.failure
+    }
     let patch: String
     do {
       patch = try PatchWriter.patch(
@@ -51,14 +59,6 @@ struct PatchCommand: ParsableCommand {
     if toStandardOutput {
       print(patch, terminator: "")
       return
-    }
-    let output = URL(fileURLWithPath: overrides).appending(path: name)
-    // Its reasons are written by hand, and would be lost.
-    guard !FileManager.default.fileExists(atPath: output.path) else {
-      Self.logger.error(
-        "the override exists; --print writes the new patch to compare with it",
-        metadata: ["path": "\(output.path)"])
-      throw ExitCode.failure
     }
     try Data(patch.utf8).write(to: output)
     Self.logger.info(

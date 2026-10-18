@@ -156,7 +156,7 @@ public struct DocumentConverter: Sendable {
       }
       let writtenTree = try XMLDocument(data: written, options: .nodePreserveWhitespace)
       if let divergence = Self.divergence(
-        tree.rootElement()?.stringValue ?? "", writtenTree.rootElement()?.stringValue ?? "")
+        Self.text(of: tree.rootElement()), Self.text(of: writtenTree.rootElement()))
       {
         throw PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)")
       }
@@ -168,6 +168,15 @@ public struct DocumentConverter: Sendable {
     } catch {
       throw PatchFailure(message: "\(patch.name): \(error)")
     }
+  }
+
+  /// The text of `node`, one text node from the next apart. A node's string value
+  /// joins them as they are, and on Linux a block added beside another, with no
+  /// whitespace between the two, runs its first word into the other's last.
+  static func text(of node: XMLNode?) -> String {
+    guard let node else { return "" }
+    if node.kind == .text { return node.stringValue ?? "" }
+    return (node.children ?? []).map { text(of: $0) }.joined(separator: " ")
   }
 
   /// Where the words of `patched` and `written` part, or nil when they are the same.
