@@ -63,8 +63,11 @@ public struct RetryingTransport: HTTPTransport {
       } catch let error as URLError where error.code != .cancelled {
         // A network failure: retried like a transient status.
       }
-      // The server's wait when it asks for longer than the backoff would.
-      try await sleep(max(delay * jitter(), retryAfter))
+      // The server's wait when it asks for longer than the backoff would, spread
+      // upwards only by the same jitter: never shorter than asked, and downloads
+      // told the same wait do not all come back at once.
+      let factor = jitter()
+      try await sleep(max(delay * factor, retryAfter * (1 + abs(factor - 1))))
       delay *= 2
     }
     return try await transport.response(for: request)
@@ -74,9 +77,13 @@ public struct RetryingTransport: HTTPTransport {
   /// when there is none. Only its delay in seconds is read: the HTTP-date form is
   /// left to the backoff.
   private static func retryAfter(_ response: HTTPURLResponse) -> Duration {
-    guard let value = response.value(forHTTPHeaderField: "Retry-After"),
-      let seconds = Int(value.trimmingCharacters(in: .whitespaces)), seconds > 0
+    guard
+      let value = response.value(forHTTPHeaderField: "Retry-After")?
+        .trimmingCharacters(in: .whitespaces),
+      !value.isEmpty, value.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) })
     else { return .zero }
+    // Digits too many for an Int ask for longer than the cap.
+    guard let seconds = Int(value) else { return longestRetryAfter }
     return min(.seconds(seconds), longestRetryAfter)
   }
 

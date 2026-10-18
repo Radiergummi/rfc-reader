@@ -16,9 +16,7 @@ enum CorpusText {
 
   /// The RFC index, from `RFC_CORPUS_INDEX`, for a suite that converts as a corpus run
   /// does, with each document's metadata. `make test-corpus` fetches it.
-  static var hasIndex: Bool {
-    !(ProcessInfo.processInfo.environment["RFC_CORPUS_INDEX"] ?? "").isEmpty
-  }
+  static var hasIndex: Bool { parsedIndex != nil }
 
   static func index() throws -> RFCIndex {
     guard let parsedIndex else { throw CorpusTextError.indexNotConfigured }

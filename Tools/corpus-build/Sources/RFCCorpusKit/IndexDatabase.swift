@@ -9,13 +9,8 @@ import RFCKit
 ///
 /// Written in one transaction, and only once `close()` commits it is it whole.
 ///
-/// The schema:
-///
-///     meta (key, value)
-///     citations (citing, cited, place, section, count, kind)
-///     successions (old, old_section, new, new_section, score)
-///
-/// The tables are `IndexSchema`'s, shared with the app's reader. `meta` holds
+/// The tables are `IndexSchema`'s, shared with the app's reader: `meta`,
+/// `citations` and `successions`. `meta` holds
 /// `schema` (`IndexSchema.version`) and whatever the build adds, such as the
 /// packs' version. A citation's documents are `DocumentID.description`s (`RFC9110`);
 /// its `place` is `abstract`, `section`, with the section's anchor in `section`, or

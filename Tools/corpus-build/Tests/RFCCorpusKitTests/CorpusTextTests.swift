@@ -11,8 +11,15 @@ import Testing
     }
   }
 
-  @Test func `an index that is not set is reported as RFC_CORPUS_INDEX`() {
+  @Test(.disabled(if: CorpusText.hasIndex, "RFC_CORPUS_INDEX is set"))
+  func `an index that is not set is reported as RFC_CORPUS_INDEX`() {
     #expect(CorpusText.parseIndex(atPath: nil) == nil)
-    #expect(CorpusTextError.indexNotConfigured.description == "RFC_CORPUS_INDEX is not set")
+    #expect(CorpusText.parseIndex(atPath: "") == nil)
+    do {
+      _ = try CorpusText.index()
+      Issue.record("an index that is not set was read")
+    } catch {
+      #expect((error as? CorpusTextError)?.description == "RFC_CORPUS_INDEX is not set")
+    }
   }
 }

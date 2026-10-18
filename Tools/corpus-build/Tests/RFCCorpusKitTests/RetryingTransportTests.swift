@@ -95,10 +95,23 @@ struct RetryingTransportTests {
   }
 
   @Test func `a Retry-After is waited out only up to the cap`() async throws {
-    let transport = ScriptedTransport([.statusRetryingAfter(503, "86400")])
+    let transport = ScriptedTransport([
+      .statusRetryingAfter(503, "86400"), .statusRetryingAfter(503, "99999999999999999999"),
+    ])
     let sleeps = Sleeps()
     _ = try await Self.retrying(transport, sleeps: sleeps).response(for: URLRequest(url: Self.url))
-    #expect(sleeps.recorded == [RetryingTransport.longestRetryAfter])
+    #expect(
+      sleeps.recorded == [RetryingTransport.longestRetryAfter, RetryingTransport.longestRetryAfter])
+  }
+
+  @Test func `a Retry-After is spread by the jitter, never below what was asked`() async throws {
+    for (jitter, expected) in [(0.5, Duration.seconds(15)), (1.5, .seconds(15))] {
+      let transport = ScriptedTransport([.statusRetryingAfter(429, "10")])
+      let sleeps = Sleeps()
+      _ = try await Self.retrying(transport, sleeps: sleeps, jitter: jitter)
+        .response(for: URLRequest(url: Self.url))
+      #expect(sleeps.recorded == [expected])
+    }
   }
 
   @Test func `a Retry-After given as a date leaves the backoff`() async throws {

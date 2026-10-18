@@ -6,7 +6,9 @@ name: Corpus-backed tests
 # heuristic change cannot merge without them (#243); weekly, for what changes on
 # the RFC Editor's side; and on demand. The documents are fetched fresh each time.
 on:
+  # ready_for_review too, for the macOS job, which skips a draft.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - Packages/RFCKit/**
       - Packages/RFCReaderKit/**
@@ -44,10 +46,11 @@ jobs:
       # document a test reads is among them, and runs the suites.
       - run: make test-corpus
 
-  # RFCReaderKit builds on a Mac only, so its suites run here; `make test-corpus`
-  # runs them after RFCKit's and corpus-build's wherever it runs on Darwin.
+  # RFCReaderKit builds on a Mac only, so its suites run here, alone: the job above
+  # has run the rest. Not for a draft, as ci-macos.yml's macOS jobs are not.
   test-corpus-macos:
     name: Corpus-backed tests (macOS)
+    if: ${{ !github.event.pull_request.draft }}
     # Xcode 26.4, as ci-macos.yml's package tests: the first to ship Swift 6.3.
     runs-on: macos-26
     timeout-minutes: 30
@@ -57,4 +60,4 @@ jobs:
           persist-credentials: false
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
-      - run: make test-corpus
+      - run: make test-corpus-app
