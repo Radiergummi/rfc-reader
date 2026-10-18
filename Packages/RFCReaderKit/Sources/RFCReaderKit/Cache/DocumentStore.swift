@@ -941,25 +941,40 @@ public actor DocumentStore {
   private func writeModel(of read: Read, for id: DocumentID) {
     guard let build, let body = read.body, let created = read.created else { return }
     let model = Model(build: build, body: created, parse: read.parse)
+    let removalsBefore = removals[id]
     modelWrite = Task(name: "Write document model") { [modelWrite] in
       await modelWrite?.value
-      await Self.write(model, of: id, beside: body)
+      guard let data = await Self.encode(model) else { return }
+      write(data, of: id, beside: body, removalsBefore: removalsBefore)
     }
   }
 
   @concurrent
-  private static func write(_ model: Model, of id: DocumentID, beside body: URL) async {
-    let interval = signposter.beginInterval("Write document model")
-    defer { signposter.endInterval("Write document model", interval) }
+  private static func encode(_ model: Model) async -> Data? {
+    let interval = signposter.beginInterval("Encode document model")
+    defer { signposter.endInterval("Encode document model", interval) }
     do {
-      let data = try JSONEncoder().encode(model)
-      // A body removed while its model was encoded takes nothing with it: the model
-      // would be left behind it.
-      guard FileManager.default.fileExists(atPath: body.path) else { return }
-      try data.write(to: modelURL(of: id, beside: body), options: .atomic)
+      return try JSONEncoder().encode(model)
     } catch {
       storeLog.error(
-        "writing a document model failed: \(String(describing: error), privacy: .public)")
+        "encoding a document model failed: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  /// Written on the actor, so a removal cannot come between the check and the write:
+  /// a body removed, or moved, while its model was encoded gets none, which would be
+  /// left behind it.
+  private func write(_ data: Data, of id: DocumentID, beside body: URL, removalsBefore: Int?) {
+    guard removals[id] == removalsBefore, FileManager.default.fileExists(atPath: body.path) else {
+      return
+    }
+    do {
+      try data.write(to: Self.modelURL(of: id, beside: body), options: .atomic)
+    } catch {
+      storeLog.error(
+        "\(id.displayName, privacy: .public): its model was not written: \(String(describing: error), privacy: .public)"
+      )
     }
   }
 

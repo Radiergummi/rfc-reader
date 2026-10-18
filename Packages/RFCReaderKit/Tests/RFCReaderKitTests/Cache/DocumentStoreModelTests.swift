@@ -121,6 +121,20 @@ extension DocumentStoreTests {
     #expect(!FileManager.default.fileExists(atPath: sandbox.model(id).path))
   }
 
+  /// A removal made while the model is still to be written leaves no model behind:
+  /// one written after it would belong to no body.
+  @Test func `a body removed before its model is written gets none`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let id = DocumentID.rfc(8999)
+    let store = sandbox.store(build: "1")
+    _ = try await store.document(id, formats: [.xml], client: Self.openFetcher())
+    await store.remove(id)
+    await store.untilModelsWritten()
+
+    #expect(!FileManager.default.fileExists(atPath: sandbox.model(id).path))
+  }
+
   /// A body kept offline keeps its model beside it, moved with it between the tiers.
   @Test func `a model moves with its body`() async throws {
     let sandbox = Sandbox()
