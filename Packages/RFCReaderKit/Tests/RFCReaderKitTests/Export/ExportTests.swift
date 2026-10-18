@@ -121,6 +121,17 @@ struct ExportFormatTests {
     #expect(try RFCXMLParser.parse(Data(xml.utf8)).header.title == document.header.title)
   }
 
+  /// The Mac's pop-up remembers the last format by its raw value; one this build
+  /// does not have, or none, falls back to the first rather than to nothing.
+  @Test func `a remembered format falls back to the first`() {
+    #expect(ExportFormat(remembered: "pdf") == .pdf)
+    #expect(ExportFormat(remembered: "no-such-format") == ExportFormat.allCases[0])
+    #expect(ExportFormat(remembered: nil) == ExportFormat.allCases[0])
+  }
+}
+
+@Suite("Export: published formats")
+struct PublishedFormatTests {
   /// A published file downloaded on iOS goes to Files by its type, which keeps a
   /// name's extension only for a type that is the extension's own (#577).
   @Test func `every published format is typed by its own extension`() {
@@ -128,14 +139,6 @@ struct ExportFormatTests {
       #expect(!format.contentType.isDynamic, "\(format)")
       #expect(format.contentType.preferredFilenameExtension == format.pathExtension, "\(format)")
     }
-  }
-
-  /// The Mac's pop-up remembers the last format by its raw value; one this build
-  /// does not have, or none, falls back to the first rather than to nothing.
-  @Test func `a remembered format falls back to the first`() {
-    #expect(ExportFormat(remembered: "pdf") == .pdf)
-    #expect(ExportFormat(remembered: "no-such-format") == ExportFormat.allCases[0])
-    #expect(ExportFormat(remembered: nil) == ExportFormat.allCases[0])
   }
 }
 
