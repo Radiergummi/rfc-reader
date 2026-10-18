@@ -72,14 +72,20 @@ targets:
         script: |
           pack="$SRCROOT/App/Resources/indexes"
           bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/indexes"
-          # Never one an earlier build left behind.
-          rm -rf "$bundled"
           if [ -f "$pack/indexes.sqlite" ] && [ -f "$pack/manifest.json" ]; then
-            mkdir -p "$bundled"
-            cp "$pack/indexes.sqlite" "$pack/manifest.json" "$bundled/"
+            # Copied only when it changed: it is tens of megabytes, and every build
+            # runs this.
+            if ! cmp -s "$pack/manifest.json" "$bundled/manifest.json" \
+              || ! cmp -s "$pack/indexes.sqlite" "$bundled/indexes.sqlite"; then
+              rm -rf "$bundled" && mkdir -p "$bundled"
+              cp "$pack/indexes.sqlite" "$pack/manifest.json" "$bundled/"
+            fi
           elif [ "$CONFIGURATION" = Release ]; then
             echo "error: A Release build bundles the indexes pack: run make indexes-pack first."
             exit 1
+          else
+            # Never one an earlier build left behind.
+            rm -rf "$bundled"
           fi
     dependencies:
       - package: RFCKit

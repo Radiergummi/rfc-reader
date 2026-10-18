@@ -58,6 +58,18 @@ struct IndexesPackTests {
         == nil)
   }
 
+  /// A copy this build cannot read, such as one of another schema, is passed over,
+  /// whichever is later.
+  @Test func `a copy that is not readable is passed over`() {
+    let installed = Self.pack("/packs/indexes", version: "dev")
+    let notInstalled = { (pack: InstalledPack) in pack.directory != installed.directory }
+    #expect(
+      IndexesPack.preferred(bundled: bundled, installed: installed, isReadable: notInstalled)?
+        .directory == bundled.directory)
+    #expect(
+      IndexesPack.preferred(bundled: nil, installed: installed, isReadable: notInstalled) == nil)
+  }
+
   @Test func `versions compare number by number`() {
     #expect(IndexesPack.isLater("2026.10.1", than: "2026.9"))
     #expect(IndexesPack.isLater("2026.10.1", than: "2026.10"))

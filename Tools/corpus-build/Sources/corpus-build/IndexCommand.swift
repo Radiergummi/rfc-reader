@@ -40,15 +40,15 @@ struct IndexCommand: ParsableCommand {
     var readFiles: [DocumentID: URL] = [:]
     var obsoletes: [DocumentID: [DocumentID]] = [:]
     let reading = try corpus.read { offset, file, id, document in
+      // As the document its file names, for every table: the second pass names it
+      // so too (`document(_:at:)`).
+      var document = document
+      document.header.id = id
       let cited = Citations.of(document, citing: id)
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
-      // As the document its file names, as the citations are, and for the same
-      // reason the second pass names it so.
-      var named = document
-      named.header.id = id
-      let amended = Amendments.links(in: named)
+      let amended = Amendments.links(in: document)
       try database.insert(amended)
       amendments += amended.count
       readFiles[id] = file

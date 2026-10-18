@@ -11,14 +11,18 @@ public enum IndexesPack {
 
   /// The copy to read: the installed one when its version is later than the bundled
   /// one's, and otherwise the bundled one; either when it is the only one. A copy
-  /// whose manifest lists no `CitationIndex.fileName` is not one.
-  public static func preferred(bundled: InstalledPack?, installed: InstalledPack?)
-    -> InstalledPack?
-  {
-    let bundled = bundled.flatMap(holdingDatabase)
-    let installed = installed.flatMap(holdingDatabase)
-    guard let bundled else { return installed }
-    guard let installed else { return bundled }
+  /// whose manifest lists no `CitationIndex.fileName`, or that `isReadable` refuses,
+  /// such as one of another `IndexSchema.version`, is not one, so a pack installed
+  /// before an app update changed the schema gives way to the update's bundled one.
+  public static func preferred(
+    bundled: InstalledPack?, installed: InstalledPack?,
+    isReadable: (InstalledPack) -> Bool = { _ in true }
+  ) -> InstalledPack? {
+    func usable(_ pack: InstalledPack?) -> InstalledPack? {
+      pack.flatMap { holdsDatabase($0) && isReadable($0) ? $0 : nil }
+    }
+    guard let installed = usable(installed) else { return usable(bundled) }
+    guard let bundled = usable(bundled) else { return installed }
     return isLater(installed.manifest.version, than: bundled.manifest.version)
       ? installed : bundled
   }
@@ -31,7 +35,7 @@ public enum IndexesPack {
     version.compare(other, options: .numeric) == .orderedDescending
   }
 
-  private static func holdingDatabase(_ pack: InstalledPack) -> InstalledPack? {
-    pack.manifest.files.contains { $0.path == CitationIndex.fileName } ? pack : nil
+  private static func holdsDatabase(_ pack: InstalledPack) -> Bool {
+    pack.manifest.files.contains { $0.path == CitationIndex.fileName }
   }
 }

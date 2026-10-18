@@ -384,12 +384,14 @@ run: build-app
 ## Fetch the indexes pack the app bundles (#738)
 # The release App/indexes-pack.mk pins, into App/Resources/indexes, which git
 # ignores: its two files are downloaded beside it and moved in only once both match
-# the pinned SHA-256, and a pack already there that matches is kept. project.yml's
-# "Bundle the indexes pack" phase copies it into the app; a Release build fails
-# without it, and a Debug build bundles it only when it is there. `install`, `trace`
-# and the release script fetch it first.
+# the pinned SHA-256, and a pack already there that matches is kept; a pack of
+# another schema than IndexSchema.version, which the app would refuse, fails it.
+# project.yml's "Bundle the indexes pack" phase copies it into the app; a Release
+# build fails without it, and a Debug build bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
 include App/indexes-pack.mk
 INDEXES_PACK := App/Resources/indexes
+INDEX_SCHEMA := Packages/RFCKit/Sources/RFCKit/Index/IndexSchema.swift
 INDEXES_PACK_URL ?= https://github.com/Radiergummi/rfc-reader/releases/download/$(INDEXES_PACK_TAG)
 define indexes_pack_digests
 printf '%s  indexes.sqlite\n%s  manifest.json\n' \
@@ -408,6 +410,11 @@ indexes-pack:
 	  (cd $(INDEXES_PACK).part && $(indexes_pack_digests) | shasum -a 256 -c -) && \
 	  rm -rf $(INDEXES_PACK) && mv $(INDEXES_PACK).part $(INDEXES_PACK); \
 	fi
+	@schema=$$(sqlite3 -readonly $(INDEXES_PACK)/indexes.sqlite "SELECT value FROM meta WHERE key = 'schema'"); \
+	  expected=$$(sed -n 's/.*static let version = \([0-9]*\).*/\1/p' $(INDEX_SCHEMA)); \
+	  test "$$schema" = "$$expected" || { \
+	    echo "$(INDEXES_PACK_TAG) has schema $$schema, and the app reads $$expected: pin a pack built by this commit"; \
+	    exit 1; }
 
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release

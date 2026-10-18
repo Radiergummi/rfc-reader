@@ -47,6 +47,16 @@ jobs:
       VERSION: ${{ inputs.version }}
       LIMIT: ${{ inputs.limit }}
     steps:
+      # The app orders indexes packs by their version, number by number, so one to
+      # be published is dated and counted, 2026.10.1: refused before hours of build.
+      - name: Check the indexes pack's version
+        if: ${{ inputs.publish_indexes }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]]; then
+            echo "::error::The indexes pack's version is YYYY.MM.N, not $VERSION."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -261,7 +271,9 @@ jobs:
   # prints for it. Like publish, it checks nothing out and runs only gh over the
   # build job's artifact.
   publish-indexes:
-    if: ${{ inputs.publish_indexes }}
+    # Never a smoke run's: a release cannot be replaced, so a partial pack would use
+    # up its version.
+    if: ${{ inputs.publish_indexes && inputs.limit == '' }}
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -274,24 +286,18 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      # The app orders packs by their version, number by number, so it is dated
-      # and counted: 2026.10.1.
-      - name: Check the version
-        run: |
-          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]]; then
-            echo "::error::The indexes pack's version is YYYY.MM.N, not $VERSION."
-            exit 1
-          fi
-
       - name: Publish release
         run: |
           gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir corpus-artifact
           cd corpus-artifact/packs/indexes
           tag="indexes-$VERSION"
-          gh release create "$tag" --draft --target "$GITHUB_SHA" \
-            --title "Indexes pack $VERSION" \
-            --notes "The corpus's index database the app bundles (#738). See docs/DATA_PIPELINE.md."
-          gh release upload "$tag" indexes.sqlite manifest.json
+          # A re-run after a failed upload finds its draft and uploads again.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" \
+              --title "Indexes pack $VERSION" \
+              --notes "The corpus's index database the app bundles (#738). See docs/DATA_PIPELINE.md."
+          fi
+          gh release upload "$tag" indexes.sqlite manifest.json --clobber
           gh release edit "$tag" --draft=false
           {
             echo "Pin it in App/indexes-pack.mk:"

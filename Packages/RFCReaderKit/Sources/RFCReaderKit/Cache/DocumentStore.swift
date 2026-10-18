@@ -963,16 +963,21 @@ public actor DocumentStore {
 
   /// The citation database of the `indexes` pack the app reads, or nil when there is
   /// none: the one in the app's bundle, at `bundled`, or an installed one that is a
-  /// later build (`IndexesPack.preferred`). A Debug build may have no bundled pack
-  /// (project.yml, "Bundle the indexes pack"). Read from the disk on each call: it is
-  /// asked once per reading path.
+  /// later build of the schema this build reads (`IndexesPack.preferred`). A Debug
+  /// build may have no bundled pack (project.yml, "Bundle the indexes pack"). Read
+  /// from the disk on each call: it is asked once per reading path.
   public func citationIndexURL(
     bundled: URL? = Bundle.main.url(forResource: IndexesPack.name, withExtension: nil)
   ) -> URL? {
     let installed = Self.installedPack(
       in: packsDirectory.appending(path: IndexesPack.name, directoryHint: .isDirectory))
+    // Opened to read its schema: a pack this build cannot read is passed over.
     let pack = IndexesPack.preferred(
-      bundled: bundled.flatMap(Self.installedPack(in:)), installed: installed)
+      bundled: bundled.flatMap(Self.installedPack(in:)), installed: installed
+    ) { pack in
+      (try? CitationIndex(contentsOf: pack.directory.appending(path: CitationIndex.fileName)))
+        != nil
+    }
     return pack?.directory.appending(path: CitationIndex.fileName)
   }
 
