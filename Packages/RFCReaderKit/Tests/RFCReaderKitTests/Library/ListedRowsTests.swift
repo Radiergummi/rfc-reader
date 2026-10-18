@@ -111,7 +111,11 @@ struct LibraryListInputsTests {
     }
     func collection(named name: String) -> UUID? {
       reads.append("collection \(name)")
-      return name == "Mine" ? UUID() : nil
+      switch name {
+      case "Mine": return UUID()
+      case "Queried": return dynamic
+      default: return nil
+      }
     }
     /// The one dynamic collection, whose query asks for the bookmarks.
     let dynamic = UUID()
@@ -148,6 +152,16 @@ struct LibraryListInputsTests {
     #expect(list.members.isEmpty)
   }
 
+  /// A collection made from a query that `in:` names has no members to read: it is
+  /// an unknown term.
+  @Test func `in a dynamic collection reads no members`() {
+    let sources = Sources()
+    let list = LibraryList.reading(
+      .all, query: #"in:"Queried""#, options: ListOptions(), from: sources)
+    #expect(list.dynamicCollections == ["queried"])
+    #expect(list.collections.isEmpty)
+  }
+
   @Test(arguments: [LibraryFilter.all, .standards, .workingGroup("httpbis")])
   func `a filter of the index reads none of them`(filter: LibraryFilter) {
     let sources = Sources()
@@ -162,7 +176,8 @@ struct LibraryListInputsTests {
     ("is:read", ["recentlyRead"]),
     ("sort:last-read", ["recentlyRead"]),
     ("is:offline", ["downloaded"]),
-    (#"in:"Mine""#, ["collection Mine", "members"]),
+    (#"in:"Mine""#, ["collection Mine", "query", "members"]),
+    (#"in:"Queried""#, ["collection Queried", "query"]),
     (#"in:"Gone""#, ["collection Gone"]),
     ("in:9110 status:bcp", []),
   ])

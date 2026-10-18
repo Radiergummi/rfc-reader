@@ -52,6 +52,9 @@ public struct LibraryList: Hashable, Sendable {
   /// The members of each collection the query's `in:` names, by its name lowercased.
   /// A name missing here is a collection the library doesn't hold.
   public let collections: [String: [Int]]
+  /// The collections the query's `in:` names that are made from a query, by their
+  /// names lowercased: unknown terms, since they have no members to search in.
+  public let dynamicCollections: Set<String>
   /// A dynamic collection's query (#355), normalized: the collection lists what it
   /// matches in the whole library, as if it were typed before `query`. Nil for every
   /// other list.
@@ -61,7 +64,8 @@ public struct LibraryList: Hashable, Sendable {
     filter: LibraryFilter, query: String, bookmarked: Set<DocumentID> = [],
     recentlyRead: [DocumentID] = [],
     downloaded: Set<Int> = [], options: ListOptions = ListOptions(), members: [Int] = [],
-    collections: [String: [Int]] = [:], definition: String? = nil
+    collections: [String: [Int]] = [:], dynamicCollections: Set<String> = [],
+    definition: String? = nil
   ) {
     self.filter = filter
     self.query = query.normalizedQuery
@@ -71,6 +75,7 @@ public struct LibraryList: Hashable, Sendable {
     self.options = options
     self.members = members
     self.collections = collections
+    self.dynamicCollections = dynamicCollections
     self.definition = definition?.normalizedQuery
   }
 
@@ -113,9 +118,14 @@ public struct LibraryList: Hashable, Sendable {
       return sources.members(of: identifier)
     }
     var collections: [String: [Int]] = [:]
+    var dynamicCollections: Set<String> = []
     for name in asked.collectionNames {
       guard let identifier = sources.collection(named: name) else { continue }
-      collections[name.lowercased()] = sources.members(of: identifier)
+      if sources.query(of: identifier) != nil {
+        dynamicCollections.insert(name.lowercased())
+      } else {
+        collections[name.lowercased()] = sources.members(of: identifier)
+      }
     }
     return LibraryList(
       filter: filter,
@@ -129,13 +139,14 @@ public struct LibraryList: Hashable, Sendable {
       options: options,
       members: members,
       collections: collections,
+      dynamicCollections: dynamicCollections,
       definition: defined
     )
   }
 
   /// The terms of the query that name something unknown: a qualifier or a value this
   /// version doesn't know, a working group `index` doesn't name, or a collection the
-  /// library doesn't hold. While there is one, the list is empty, and these say why.
+  /// library doesn't hold or that is made from a query. While there is one, the list is empty, and these say why.
   public func unknownTerms(in index: RFCIndex) -> [UnknownSearchTerm] {
     unknownTerms(of: IndexSearch.parseQuery(searchedQuery), in: index)
   }
@@ -147,13 +158,16 @@ public struct LibraryList: Hashable, Sendable {
     let known = SearchQuery.unknownTerms(in: searchedQuery, index: index)
     guard parsed.filters.collectionNames.contains(where: { collections[$0.lowercased()] == nil })
     else { return known }
-    // Each word naming a collection the library doesn't hold, as it was written.
-    let missing = SearchQuery.words(in: searchedQuery).filter { word in
-      IndexSearch.parseQuery(word).filters.collectionNames.contains {
-        collections[$0.lowercased()] == nil
-      }
+    // Each word naming a collection the library doesn't hold, or holds as a query,
+    // as it was written.
+    let missing = SearchQuery.words(in: searchedQuery).compactMap { word -> UnknownSearchTerm? in
+      let names = IndexSearch.parseQuery(word).filters.collectionNames.map { $0.lowercased() }
+      guard let name = names.first(where: { collections[$0] == nil }) else { return nil }
+      let reason: UnknownSearchTerm.Reason =
+        dynamicCollections.contains(name) ? .dynamicCollection : .collection
+      return UnknownSearchTerm(word: word, reason: reason)
     }
-    return known + missing.map { UnknownSearchTerm(word: $0, reason: .collection) }
+    return known + missing
   }
 
   /// The search's hits for the part of the query the index can answer, best first:
@@ -357,7 +371,7 @@ extension LibraryList {
     let narrowing = LibraryList(
       filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
       downloaded: downloaded, options: options, members: members, collections: collections,
-      definition: definition)
+      dynamicCollections: dynamicCollections, definition: definition)
     let rows = narrowing.rows(in: index, search: search)
     // An RFC published only as a PDF or a PostScript has no text to index: counted,
     // a search over it could never say it had searched everything.

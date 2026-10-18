@@ -275,6 +275,19 @@ struct LibraryListTests {
     #expect(ids(oldest) == [.rfc(2026), .rfc(2119), .rfc(8174), .rfc(9110)])
   }
 
+  /// A collection made from a query has no members to search in, so `in:` naming one
+  /// is an unknown term rather than a list that is silently empty (answered on #355,
+  /// 2026-10-17).
+  @Test func `in a dynamic collection lists nothing and says why`() {
+    let list = LibraryList(
+      filter: .all, query: #"in:"QUIC" in:9110"#, dynamicCollections: ["quic"])
+
+    #expect(ids(list, in: seriesIndex).isEmpty)
+    #expect(list.unknownTerms(in: seriesIndex) == [
+      UnknownSearchTerm(word: #"in:"QUIC""#, reason: .dynamicCollection)
+    ])
+  }
+
   /// Its rows are matched, not placed, so there is no order to drag them into.
   @Test func `a dynamic collection's rows cannot be moved`() {
     let manual = LibraryList(filter: .collection(UUID()), query: "", members: [2119])

@@ -718,6 +718,9 @@ public struct UnknownSearchTerm: Sendable, Hashable {
     case workingGroup
     /// A collection `in:` names that the library doesn't hold.
     case collection
+    /// A collection `in:` names that is made from a query, which has no members to
+    /// search in.
+    case dynamicCollection
   }
 
   /// The word as written in the query.
