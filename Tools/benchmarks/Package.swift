@@ -21,7 +21,7 @@ let package = Package(
     .macOS(.v26)
   ],
   dependencies: [
-    .package(url: "https://github.com/ordo-one/package-benchmark", exact: "1.36.2"),
+    .package(url: "https://github.com/ordo-one/package-benchmark", exact: "1.38.0"),
     .package(path: "../../Packages/RFCKit"),
     .package(path: "../../Packages/RFCReaderKit"),
   ],
