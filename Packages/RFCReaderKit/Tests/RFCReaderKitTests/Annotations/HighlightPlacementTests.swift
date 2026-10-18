@@ -58,7 +58,11 @@ struct HighlightPlacementTests {
       color: .yellow, createdAt: .now, modifiedAt: .now)
     let placement = HighlightPlacement([highlight], in: built)
     #expect(placement.marks.marks.isEmpty)
-    #expect(placement.statuses[highlight.id] == .ambiguous)
+    guard case .ambiguous(let places)? = placement.statuses[highlight.id] else {
+      Issue.record("not ambiguous")
+      return
+    }
+    #expect(places.count == 2)
   }
 
   @Test func `one that moved is drawn where it went, and its relocation reported`() throws {

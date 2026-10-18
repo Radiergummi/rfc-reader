@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Observation
 
 /// The reader's text view, as far as `ReaderController` drives it: its coordinator.
@@ -131,6 +132,9 @@ public final class ReaderController {
   /// toggled — for the scene to take (`takeFolding()`). A request rather than a
   /// value, so that the same folding asked for twice reaches the scene twice.
   public private(set) var foldingRequest: Folding?
+  /// What became of each highlight of the document in the build on screen (#522):
+  /// where it is, or why it is drawn nowhere. The Annotations tab lists it.
+  public private(set) var highlightStatuses: [UUID: HighlightPlacement.Status] = [:]
 
   public init() {}
 
@@ -158,6 +162,11 @@ public final class ReaderController {
 
   public func reportBars(hidden: Bool) {
     publish(.bars(hidden))
+  }
+
+  /// Where the build on screen placed the document's highlights.
+  public func reportHighlights(_ statuses: [UUID: HighlightPlacement.Status]) {
+    publish(.highlights(statuses))
   }
 
   /// The text view changed the folding itself, and the scene is to follow.
@@ -223,6 +232,7 @@ public final class ReaderController {
     case selection(Bool)
     case bars(Bool)
     case folding(Folding)
+    case highlights([UUID: HighlightPlacement.Status])
   }
 
   /// The one hop: what the coordinator reports from inside SwiftUI's update reaches
@@ -237,6 +247,8 @@ public final class ReaderController {
     case .selection(let hasSelection): self.hasSelection = hasSelection
     case .bars(let hidden): barsHidden = hidden
     case .folding(let folding): foldingRequest = folding
+    case .highlights(let statuses):
+      if statuses != highlightStatuses { highlightStatuses = statuses }
     }
   }
 }

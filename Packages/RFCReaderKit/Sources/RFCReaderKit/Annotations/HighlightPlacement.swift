@@ -10,8 +10,9 @@ public struct HighlightPlacement: Sendable, Equatable {
   public enum Status: Sendable, Equatable {
     /// Where it is now, in the model text, and the target that says so.
     case placed(Range<Int>, Target)
-    /// Its quote is in several places, so it is drawn in none.
-    case ambiguous
+    /// Its quote is in several places, so it is drawn in none: each place it could go,
+    /// with the target that would put it there.
+    case ambiguous([Target])
     /// Its quote is nowhere: kept, and listed apart.
     case detached
   }
@@ -50,8 +51,13 @@ public struct HighlightPlacement: Sendable, Equatable {
       if entry.relocated != nil, !relocation.isExact {
         relocation = relocator.relocate(entry.target)
       }
+      if case .ambiguous(let ranges) = relocation {
+        statuses[entry.id] = .ambiguous(
+          ranges.compactMap { Target(covering: $0, in: model, quote: entry.quote) })
+        continue
+      }
       guard let target = relocation.target, let range = target.range(in: model) else {
-        statuses[entry.id] = relocation == .ambiguous ? .ambiguous : .detached
+        statuses[entry.id] = .detached
         continue
       }
       statuses[entry.id] = .placed(range, target)

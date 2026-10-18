@@ -97,8 +97,9 @@ public enum Relocation: Sendable, Hashable {
   case exact(Target)
   /// Found once, elsewhere.
   case moved(Target)
-  /// Found more than once: drawn nowhere, since the code never guesses between them.
-  case ambiguous
+  /// Found more than once, at each of these raw ranges of the model text: drawn
+  /// nowhere, since the code never guesses between them. The reader may choose one.
+  case ambiguous([Range<Int>])
   /// Found nowhere. Kept, never deleted.
   case detached
 
@@ -156,7 +157,7 @@ public struct Relocator: Sendable {
         if found.count == 1, let target = Target(covering: found[0], in: model, quote: quote) {
           return .moved(target)
         }
-        if found.count > 1 { return .ambiguous }
+        if found.count > 1 { return .ambiguous(found) }
       }
       return .detached
     }

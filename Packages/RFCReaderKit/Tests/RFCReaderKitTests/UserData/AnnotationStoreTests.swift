@@ -147,3 +147,20 @@ struct AnnotationStoreTests {
     #expect(try snapshot().map(\.color) == [.blue])
   }
 }
+
+extension AnnotationStoreTests {
+  @Test func `an ambiguous highlight is placed where the reader chooses, undoably`() throws {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let identifier = try highlight("brown fox")
+    let chosen = try #require(Target(covering: try range(of: "lazy dog"), in: model))
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.place(
+      identifier, at: chosen, undoManager: undoManager, onUndoFailure: { Issue.record($0) },
+      context: context)
+    undoManager.endUndoGrouping()
+    #expect(try snapshot().first.map(covered) == "lazy dog")
+    undoManager.undo()
+    #expect(try snapshot().first.map(covered) == "brown fox")
+  }
+}

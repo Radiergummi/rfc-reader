@@ -92,6 +92,31 @@ public enum AnnotationStore {
       onUndoFailure: onUndoFailure, context: context)
   }
 
+  /// Puts a highlight where the reader chose among the places its quote is (an
+  /// ambiguous one, `Relocation.ambiguous`): the reader's own edit, so it is where the
+  /// highlight is from now on, and it can be undone.
+  public static func place(
+    _ identifier: UUID, at target: Target, undoManager: UndoManager?,
+    onUndoFailure: @escaping @MainActor (any Error) -> Void, context: ModelContext
+  ) throws {
+    guard let row = try highlight(identifier, in: context),
+      case .range(let start, let end, let quote) = target
+    else { return }
+    let before = HighlightValues(row)
+    row.startAnchor = start.anchor
+    row.startOffset = start.offset
+    row.endAnchor = end.anchor
+    row.endOffset = end.offset
+    row.setQuote(quote)
+    row.clearRelocation()
+    row.modifiedAt = .now
+    try context.save()
+    registerUndo(
+      replacing: [identifier], with: [before], redo: [HighlightValues(row)],
+      actionName: String(kit: "Place Highlight", locale: .interface), undoManager: undoManager,
+      onUndoFailure: onUndoFailure, context: context)
+  }
+
   /// Where relocation found a highlight (#522), in its relocated fields: never its
   /// original position, and never `modifiedAt`, since nobody edited it. A target the
   /// same as the original clears them. Nothing to undo: it is not the reader's change.

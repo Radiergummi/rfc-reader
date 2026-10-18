@@ -84,7 +84,11 @@ struct RelocationTests {
       Paragraph(text: "The sender MUST NOT retry. Then it stops."),
       Paragraph(text: "The sender MUST NOT retry. Then it stops."),
     ])
-    #expect(Relocator(after).relocate(target) == .ambiguous)
+    guard case .ambiguous(let places) = Relocator(after).relocate(target) else {
+      Issue.record("not ambiguous")
+      return
+    }
+    #expect(places.map { after.text(in: $0) } == ["MUST NOT retry", "MUST NOT retry"])
   }
 
   @Test func `text that is gone is detached`() throws {
