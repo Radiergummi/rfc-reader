@@ -45,6 +45,16 @@ public enum LinkPreview: Equatable, Sendable {
     return resolve(url, from: currentDocument, in: index)
   }
 
+  /// What pressing an entry's row in the References panel previews (#580): what a
+  /// citation of the entry in the prose previews, which links to the RFC the entry
+  /// names, so the two cannot drift. An entry that names no RFC keeps its card.
+  public static func resolve(_ entry: Reference, in index: RFCIndex?) -> LinkPreview {
+    guard let id = entry.documentID,
+      let preview = resolve(RFCLink(id: id).appURL, from: id, in: index)
+    else { return .card(entry.anchor) }
+    return preview
+  }
+
   /// Nil for a URL the reader does not own: a link to the web previews nothing. A
   /// BCP, STD or FYI previews its first member RFC, as a click on it opens that one
   /// (`NavigationModel.open`): the series has no document of its own to fetch.
