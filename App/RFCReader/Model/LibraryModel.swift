@@ -209,15 +209,21 @@ final class LibraryModel {
   }
 
   /// Follows the group or stops following it. A failure is logged rather than shown,
-  /// as a bookmark's is (#125), and leaves the command as it was. A group followed
-  /// reports nothing it published before (`BookmarkBaseline`).
+  /// as a bookmark's is (#125), and leaves the command as it was.
+  ///
+  /// Then compares at once, so the baseline lists a newly followed group's RFCs now:
+  /// a group followed reports nothing it published before (`BookmarkBaseline`), and
+  /// left to the next refresh of the index, what that refresh brings would count as
+  /// before.
   func toggleFollowed(_ group: String) {
     do {
       try FollowedGroupStore.setFollowed(group, !isFollowed(group), in: container.mainContext)
     } catch {
       libraryLog.error(
         "following a working group failed: \(String(describing: error), privacy: .public)")
+      return
     }
+    compareBookmarks()
   }
 
   /// The user's data, which `userData` reads its sets from.
