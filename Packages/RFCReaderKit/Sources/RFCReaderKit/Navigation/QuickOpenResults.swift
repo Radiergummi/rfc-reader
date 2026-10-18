@@ -26,9 +26,16 @@ public struct QuickOpenResults: Equatable, Sendable {
   }
 
   /// The digits of what was typed into iOS's field, which is all it takes (#579):
-  /// the number pad types nothing else, but a paste or an iPad's keyboard can.
+  /// the number pad types nothing else, but a paste or an iPad's keyboard can. As
+  /// ASCII, whatever digits the number pad types in the reader's region.
   public static func digits(in text: String) -> String {
-    String(text.filter { $0.isASCII && $0.isNumber })
+    String(
+      text.compactMap { character in
+        guard character.isNumber, let digit = character.wholeNumberValue, digit < 10 else {
+          return nil
+        }
+        return Character(String(digit))
+      })
   }
 
   /// One of each of the four, shown under the field while it is empty. Not
@@ -130,7 +137,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     hitsQuery != query
   }
 
-  /// What the sheet and the palette say in place of rows, once there is something
+  /// What the Mac's palette says in place of rows, once there is something
   /// to say: not while nothing is typed, nor while a search is still running, so it
   /// does not flash on every keystroke.
   ///
@@ -213,7 +220,9 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// whose numbers begin with it nor a registry value: the search field beside it
   /// finds those.
   public mutating func show(number digits: String) {
-    show(query: digits, exact: Int(digits).map { RFCLink(id: .rfc($0)) })
+    // Parsed as the Mac's palette parses a number, so no RFC 0.
+    let id = DocumentID(parsing: digits).flatMap { $0.series == .rfc ? $0 : nil }
+    show(query: digits, exact: id.map { RFCLink(id: $0) })
     show(hits: [], for: digits)
   }
 
