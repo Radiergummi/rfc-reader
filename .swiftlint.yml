@@ -28,10 +28,6 @@ disabled_rules:
   # flags them unless every literal has one.
   - trailing_comma
 
-  # `if cond { x }` followed by `else if cond { y }` on the next line reads as a
-  # table of cases; the rule wants the `else` pulled up onto the closing brace.
-  - statement_position
-
   # `String(data:encoding:)` is used where a decode failure and empty input are
   # handled the same way; the failable initializer the rule prefers buys nothing.
   - optional_data_string_conversion
