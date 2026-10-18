@@ -128,7 +128,8 @@ final class IndexDatabaseTests {
 
   @Test func `amendments read back as they were written`() throws {
     let amendments = [
-      Amendment(amended: .rfc(2850), section: "1.2", amending: .rfc(9283), amendingSection: "intro"),
+      Amendment(
+        amended: .rfc(2850), section: "1.2", amending: .rfc(9283), amendingSection: "intro"),
       Amendment(amended: .rfc(2850), section: "2", amending: .rfc(9283), amendingSection: nil),
     ]
     let connection = try written { try $0.insert(amendments) }
