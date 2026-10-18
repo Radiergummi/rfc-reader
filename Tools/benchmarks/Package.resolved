@@ -1,5 +1,5 @@
 {
-  "originHash" : "b6d6bbf51df9e866b47b50706f19b495d8482487565f90150dfae718f7c195f4",
+  "originHash" : "bcf82f3d444c69b7d27ed38bba26ace521c7675af458c35c8fade47a2a176404",
   "pins" : [
     {
       "identity" : "hdrhistogram-swift",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/malloc-interposer.git",
       "state" : {
-        "revision" : "9221411ac2e845a93ce65b9ca2ab84f8c1084b0d",
-        "version" : "1.4.0"
+        "revision" : "f479398f73b14dbd1d25f4e01fd667171ddc9f18",
+        "version" : "1.6.0"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/package-benchmark",
       "state" : {
-        "revision" : "2f192a6502392735b33466e3c5ae07e95a8065da",
-        "version" : "1.36.2"
+        "revision" : "def9afdba446b03efbbbcecb3b892e97e8294214",
+        "version" : "1.38.0"
       }
     },
     {

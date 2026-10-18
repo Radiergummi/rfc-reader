@@ -191,11 +191,21 @@ struct DocumentView: View {
     ReadingPositionKeeper(id: identity, context: modelContext)
   }
 
+  /// The document's verified and held errata, where the reader marks them (#387):
+  /// none until its body is here, so a build is not made for marks that move, and
+  /// none in a text the original-only page loaded but does not show, whose header
+  /// lists them all.
+  private var errataMarks: ErrataMarks {
+    guard session.state.document != nil, originalOnlyPage == nil else { return .none }
+    return session.errataMarks(for: library.errata?[id])
+  }
+
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
+      errata: errataMarks,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -501,13 +511,18 @@ struct DocumentView: View {
       #endif
   }
 
+  /// The page of an RFC that is its PDF or PostScript original (#207), shown in place
+  /// of a body; nil for any other.
+  private var originalOnlyPage: PublishedOriginalPage? {
+    guard let metadata else { return nil }
+    return PublishedOriginalPage(
+      id, formats: metadata.formats, showsOriginal: showsOriginal,
+      text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
+  }
+
   @ViewBuilder
   private var states: some View {
-    if let metadata,
-      let page = PublishedOriginalPage(
-        id, formats: metadata.formats, showsOriginal: showsOriginal,
-        text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
-    {
+    if let metadata, let page = originalOnlyPage {
       originalOnly(page, metadata: metadata)
     } else if showsOriginal {
       // At the size the reader sets its body, the system's text size included, so
@@ -525,7 +540,8 @@ struct DocumentView: View {
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
-        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) },
+        documentErrata: built.errata.document)
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -589,7 +605,7 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(identity.displayName)", systemImage: failure.kind.symbol)
+        Label("Couldn’t Load \(identity.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
         Text(failure.kind.recoverySuggestion(for: .document))
@@ -627,7 +643,10 @@ struct DocumentView: View {
           identity: DocumentHeaderView.Identity(
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,
-            revisions: library.revisionsSummary(for: metadata.id)),
+            revisions: library.revisionsSummary(for: metadata.id),
+            // No body to mark: every erratum is the whole document's.
+            documentErrata: session.errataMarks(for: library.errata?[id], drawsBody: false)
+              .document),
           reader: controller
         )
         .padding(.top, 16)

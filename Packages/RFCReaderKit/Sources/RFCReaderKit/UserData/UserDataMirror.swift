@@ -213,10 +213,17 @@ public final class UserDataMirror {
   /// Adds the bookmark or removes it, on the main context, titled `title`. A failure
   /// is logged rather than shown, as a collection's is (#125). A failed lookup
   /// changes nothing; a failed save leaves the change pending in the context, saved
-  /// with the next save that succeeds.
-  public func toggleBookmark(_ id: DocumentID, title: String) {
+  /// with the next save that succeeds. A removal registers its undo with
+  /// `undoManager` (#769), whose own failures are logged too.
+  public func toggleBookmark(_ id: DocumentID, title: String, undoManager: UndoManager? = nil) {
     do {
-      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
+      try BookmarkStore.toggle(
+        id, title: title, undoManager: undoManager,
+        onUndoFailure: { error in
+          mirrorLog.error(
+            "undoing or redoing a bookmark's removal failed: \(String(describing: error), privacy: .public)"
+          )
+        }, in: container.mainContext)
     } catch {
       mirrorLog.error(
         "toggling a bookmark failed: \(String(describing: error), privacy: .public)")

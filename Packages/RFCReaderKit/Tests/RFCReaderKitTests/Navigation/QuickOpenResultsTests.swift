@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 import Testing
 
@@ -28,6 +29,24 @@ struct QuickOpenResultsTests {
     results.show(hits: [.rfc(9110), .rfc(9111)], for: "http")
     results.show(query: "http c", exact: nil)
     #expect(results.rows.map(\.link.id) == [.rfc(9110), .rfc(9111)])
+  }
+
+  /// One sentence for the sheet and the palette alike (#769), and none until there
+  /// is something to say.
+  @Test func `the message says why nothing is listed, once the search has answered`() {
+    var results = QuickOpenResults()
+    #expect(results.message(indexState: .loading, locale: .english) == nil)
+    results.show(query: "zzz", exact: nil)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+    results.show(hits: [], for: "zzz")
+    #expect(
+      results.message(indexState: .ready(updatedAt: .now), locale: .english)
+        == "Nothing in the index matches “zzz”.")
+    #expect(
+      results.message(indexState: .loading, locale: .english) == "The RFC index is still loading.")
+    #expect(
+      results.message(indexState: .failed(.offline, message: ""), locale: .english)
+        == "The RFC index couldn't be loaded. A number still opens.")
   }
 
   @Test func `nothing typed lists nothing and selects nothing`() {
