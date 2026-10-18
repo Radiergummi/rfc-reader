@@ -18,7 +18,7 @@ struct BuilderHandoverTests {
   /// The app's own shape: `DocumentSession` builds off the main actor, in an
   /// `@concurrent` function, and awaits the value. A build that quietly came to
   /// need the main actor would trap or diverge here rather than pass.
-  @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
+  @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9271.xml"])
   func `a build off the main actor matches one on it`(fixture: String) async throws {
     let document = try Fixtures.document(named: fixture)
     let style = ReadingStyle()
@@ -27,6 +27,7 @@ struct BuilderHandoverTests {
 
     #expect(detached.text.string == onMain.text.string)
     #expect(detached.anchors == onMain.anchors)
+    #expect(detached.foldingIndex.asides == onMain.foldingIndex.asides)
     #expect(
       Self.runs(of: detached.text) == Self.runs(of: onMain.text),
       "\(Self.fontsWhereRunsDiffer(offMain: detached.text, onMain: onMain.text))")

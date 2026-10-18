@@ -50,9 +50,9 @@ struct RevisionsFetchTests {
     }
   }
 
-  @Test func `the file is fetched from the revisions release`() {
+  @Test func `the file is fetched from the data bucket`() {
     #expect(
       RFCEditorEndpoints.revisions.absoluteString
-        == "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/revisions.json")
+        == "https://data.rfc-reader.mazetti.me/revisions.json")
   }
 }

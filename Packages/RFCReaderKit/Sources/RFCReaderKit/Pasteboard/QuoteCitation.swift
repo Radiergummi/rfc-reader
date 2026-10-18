@@ -59,7 +59,9 @@ public enum QuoteCitation {
   public static func quote(of range: NSRange, in built: BuiltDocument, document: DocumentID)
     -> Quote?
   {
-    guard range.length > 0, NSMaxRange(range) <= built.text.length else { return nil }
+    // A translation's words are a machine's, not the RFC's (#749).
+    guard !built.isTranslation, range.length > 0, NSMaxRange(range) <= built.text.length
+    else { return nil }
     // Cited from the first character quoted: a selection dragged from the end of one
     // section's last line opens on its line break, but quotes only the next section.
     let first = (built.text.string as NSString).rangeOfCharacter(

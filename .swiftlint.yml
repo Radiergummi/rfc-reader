@@ -13,6 +13,7 @@ included:
   - Tools/corpus-build/Sources
   - Tools/corpus-build/Tests
   - Tools/benchmarks/Benchmarks
+  - Tools/benchmarks-layout/Benchmarks
 
 disabled_rules:
   # The parsers are long, branchy state machines: LegacyTextParser alone decides
@@ -26,10 +27,6 @@ disabled_rules:
   # Trailing commas in multi-line literals are the house style, and the rule
   # flags them unless every literal has one.
   - trailing_comma
-
-  # `if cond { x }` followed by `else if cond { y }` on the next line reads as a
-  # table of cases; the rule wants the `else` pulled up onto the closing brace.
-  - statement_position
 
   # `String(data:encoding:)` is used where a decode failure and empty input are
   # handled the same way; the failable initializer the rule prefers buys nothing.

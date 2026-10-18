@@ -42,7 +42,7 @@ extension DocumentTextBuilder {
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     // Code is highlighted whatever the choices say: it has no other presentation, and
-    // "Draw diagrams" and "Show as Text" are about drawings. A grammar's links change
+    // "Show Diagrams as Figures" and "Show as Text" are about drawings. A grammar's links change
     // nothing that is drawn, so it is plain, with no presentation to switch, and its
     // links and anchors are there whatever the reader prefers for figures (#185).
     let shown: VerbatimBox.Shown =
@@ -217,7 +217,13 @@ extension DocumentTextBuilder {
   /// color and its border characters in `hiddenColor`. The text is unchanged.
   func decorate(_ decorated: DecoratedText, from bodyStart: Int) {
     let body = NSRange(location: bodyStart, length: output.length - bodyStart)
-    output.addAttribute(.rfcStrokes, value: StrokeBox(decorated.strokes), range: body)
+    let text = output.mutableString
+    var lineStarts = [0]
+    for offset in 0..<max(0, body.length - 1) where text.character(at: bodyStart + offset) == 10 {
+      lineStarts.append(offset + 1)
+    }
+    output.addAttribute(
+      .rfcStrokes, value: StrokeBox(decorated.strokes, lineStarts: lineStarts), range: body)
     for (ranges, color) in [
       (decorated.secondary, RFCColors.secondaryLabel), (decorated.hidden, Self.hiddenColor),
     ] {
@@ -380,11 +386,32 @@ extension DocumentTextBuilder {
   /// 1 when the block already fits, otherwise the factor that makes its widest line
   /// fit what the measure leaves after `indent` — never less than one indent step,
   /// or a block nested deep enough to eat the measure would scale to nothing.
+  ///
+  /// The widest line as it is set at full size (`widestLine`), not its count of
+  /// characters: a wide character takes two columns, and one from a fallback font
+  /// its own width, so a line of them overflowed a scale its count gave (#765).
+  ///
+  /// A measured line does not scale exactly with its font's size, a fallback font's
+  /// least of all, so a scaled-down block with any line that is not ASCII is measured
+  /// again at its scale and set smaller while it still overflows, a few times at
+  /// most. Each time a little smaller than the ratio says, `fitMargin`: at the ratio
+  /// exactly, rounding left the line a fraction of a point over, and the next ratio
+  /// rounded to 1, so it never came back under (#765). An ASCII line's width is its
+  /// columns times the advance, exactly in scale.
   func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
-    let columns =
-      text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
-    guard columns > 0, monospaceAdvance > 0 else { return 1 }
-    return min(
-      1, max(style.indentStep, style.measure - indent) / (CGFloat(columns) * monospaceAdvance))
+    let widest = widestLine(of: text, scale: 1)
+    guard widest > 0 else { return 1 }
+    let available = max(style.indentStep, style.measure - indent)
+    var scale = min(1, available / widest)
+    guard scale < 1, !text.utf8.allSatisfy({ $0 < 0x80 }) else { return scale }
+    for _ in 0..<3 {
+      let scaled = widestLine(of: text, scale: scale)
+      guard scaled > available else { break }
+      scale *= available / scaled * Self.fitMargin
+    }
+    return scale
   }
+
+  /// What a correction of `monospaceScale` takes off beyond the ratio, a thousandth.
+  static let fitMargin: CGFloat = 0.999
 }
