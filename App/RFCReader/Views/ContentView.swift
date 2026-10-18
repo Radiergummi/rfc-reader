@@ -239,47 +239,35 @@ struct EmptyDetailView: View {
 
 #if !os(macOS)
   /// Command-L style jump to an RFC by its number, typed on the number pad (#579):
-  /// the search field beside the button already finds by keyword.
+  /// the search field beside the button already finds by keyword, so this lists the
+  /// RFC with the number typed and nothing else, with no search to wait for.
   ///
   /// iOS only. The Mac has `QuickOpenPalette`, which takes a series, title words and
   /// links as well, because a form in a sheet is the right shape for a phone and the
   /// wrong one for ⌘L on a desktop (#26).
   struct GoToDocumentSheet: View {
     let library: LibraryModel
-    @State private var controller: QuickOpenController
+    let navigation: NavigationModel
+    /// What the field shows: the digits of what was typed, written back when a
+    /// paste or an iPad's keyboard brings anything else, which a binding through a
+    /// filter would leave on screen when the digits did not change.
+    @State private var text = ""
+    @State private var results = QuickOpenResults()
     @FocusState private var focused: Bool
-
-    init(library: LibraryModel, navigation: NavigationModel) {
-      self.library = library
-      _controller = State(
-        initialValue: QuickOpenController(
-          library: library, navigation: navigation, takesNumbersOnly: true,
-          dismiss: { navigation.isShowingGoToSheet = false }))
-    }
-
-    private var results: QuickOpenResults { controller.results }
-
-    private var text: Binding<String> {
-      Binding {
-        controller.input
-      } set: {
-        controller.type($0)
-      }
-    }
 
     var body: some View {
       NavigationStack {
         Form {
-          TextField(QuickOpenResults.numberPlaceholder(), text: text)
+          TextField(QuickOpenResults.numberPlaceholder(), text: $text)
             .focused($focused)
             .keyboardType(.numberPad)
-            .onSubmit(controller.openSelection)
-          if results.rows.isEmpty {
-            status
-          } else {
+            // A hardware keyboard's Return; the number pad has none, and Open is
+            // in the bar.
+            .onSubmit(openSelection)
+          if !results.rows.isEmpty {
             Section {
               ForEach(results.rows, id: \.self) { row in
-                self.row(for: row)
+                self.row(for: row.link)
               }
             }
           }
@@ -287,74 +275,60 @@ struct EmptyDetailView: View {
         .navigationTitle("Go to RFC")
         .toolbar {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", action: controller.close)
+            Button("Cancel", action: close)
           }
           ToolbarItem(placement: .confirmationAction) {
-            Button("Open", action: controller.openSelection)
-              .disabled(results.openable == nil && !results.isSearching)
+            Button("Open", action: openSelection)
+              .disabled(results.openable == nil)
           }
         }
       }
-      .onAppear { focused = true }
-    }
-
-    /// Said while nothing is listed under digits typed: that no RFC has a number
-    /// that long. The placeholder says what the field takes.
-    @ViewBuilder
-    private var status: some View {
-      if let message = controller.message {
-        HStack {
-          Text(verbatim: message)
-          if case .failed = library.indexState {
-            Button("Retry") { library.retryIndex() }
-          }
+      .onChange(of: text) {
+        let digits = QuickOpenResults.digits(in: text)
+        if digits != text {
+          text = digits
         }
+        results.show(number: digits)
+      }
+      .onAppear {
+        focused = true
+        // The check at launch alone goes stale in an app left open for weeks; the
+        // registries answer Look Up (`LookUpIdentifierIntent`).
+        library.refreshRegistriesIfDue()
       }
     }
 
-    private func row(for row: QuickOpenResults.Row) -> some View {
+    private func row(for link: RFCLink) -> some View {
       let title = QuickOpenResults.title(
-        library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
+        library.metadata(link.id)?.title, isIndexLoaded: library.index != nil)
       return Button {
-        controller.open(row.link)
+        open(link)
       } label: {
         HStack(spacing: 12) {
-          if let entry = row.entry {
-            // What was looked up, then where it is defined, as the Mac's palette
-            // lists it: "HTTP status 425 · Too Early", RFC 8470.
-            Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
-              .fontWeight(.semibold)
-              .monospacedDigit()
-              .lineLimit(1)
-            if let name = entry.name {
-              Text(name)
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Text(row.link.id.displayName)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          } else {
-            Text(row.link.id.displayName)
-              .fontWeight(.semibold)
-              .monospacedDigit()
-            Text(title)
-              .lineLimit(1)
-              .foregroundStyle(.secondary)
-          }
-          if let section = row.link.section {
-            // A registry row already ends at the far edge.
-            if row.entry == nil {
-              Spacer(minLength: 0)
-            }
-            Text(PlaceName.abbreviated(section))
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          }
+          Text(link.id.displayName)
+            .fontWeight(.semibold)
+            .monospacedDigit()
+          Text(title)
+            .lineLimit(1)
+            .foregroundStyle(.secondary)
         }
       }
       .tint(.primary)
+    }
+
+    private func openSelection() {
+      if let link = results.openable {
+        open(link)
+      }
+    }
+
+    private func open(_ link: RFCLink) {
+      library.open(link, activation: .current, in: navigation)
+      close()
+    }
+
+    private func close() {
+      navigation.isShowingGoToSheet = false
     }
   }
 #endif

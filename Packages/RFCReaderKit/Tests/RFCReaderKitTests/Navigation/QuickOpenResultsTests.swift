@@ -439,7 +439,13 @@ struct QuickOpenNumberTests {
     #expect(QuickOpenResults.digits(in: "9110") == "9110")
     #expect(QuickOpenResults.digits(in: "RFC 9110") == "9110")
     #expect(QuickOpenResults.digits(in: "http") == "")
-    #expect(QuickOpenResults.digits(in: "٩١١٠") == "")
+    #expect(QuickOpenResults.digits(in: "½") == "")
+  }
+
+  /// A region whose number pad types Eastern Arabic digits types an RFC number all
+  /// the same.
+  @Test func `another script's digits are kept as ASCII`() {
+    #expect(QuickOpenResults.digits(in: "٩١١٠") == "9110")
   }
 
   /// The RFC with that number, and none of those whose numbers begin with it, nor a
@@ -460,11 +466,14 @@ struct QuickOpenNumberTests {
     #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
   }
 
-  /// Digits past any RFC's number name none.
-  @Test func `a number too long for any RFC lists nothing`() {
+  /// Digits past any RFC's number name none, and nor does zero.
+  @Test func `a number no RFC can have lists nothing`() {
     var results = QuickOpenResults()
     results.show(number: "99999999999999999999999")
     #expect(results.rows.isEmpty)
+    results.show(number: "0")
+    #expect(results.rows.isEmpty)
+    #expect(results.openable == nil)
   }
 
   @Test func `the placeholder asks for a number`() {
