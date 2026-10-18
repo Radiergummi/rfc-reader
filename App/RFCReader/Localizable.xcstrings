@@ -410,6 +410,16 @@
         }
       }
     },
+    "A copied heading keeps its number, as in “4.2. Overview”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine kopierte Überschrift behält ihre Nummer, wie in „4.2. Overview“."
+          }
+        }
+      }
+    },
     "A reading path is computed from the citation index, which is a data pack of its own and isn't installed." : {
       "localizations" : {
         "de" : {
@@ -496,6 +506,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zur Sammlung hinzufügen"
+          }
+        }
+      }
+    },
+    "Advanced" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
           }
         }
       }
@@ -670,6 +690,16 @@
         }
       }
     },
+    "Citation Style" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitierstil"
+          }
+        }
+      }
+    },
     "Cite" : {
       "localizations" : {
         "de" : {
@@ -820,6 +850,16 @@
         }
       }
     },
+    "Copy As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopieren als"
+          }
+        }
+      }
+    },
     "Copy Checklist as CSV" : {
       "localizations" : {
         "de" : {
@@ -836,6 +876,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste als Markdown kopieren"
+          }
+        }
+      }
+    },
+    "Copy Citation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellenangabe kopieren"
           }
         }
       }
@@ -870,12 +920,42 @@
         }
       }
     },
+    "Copy Selection As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl kopieren als"
+          }
+        }
+      }
+    },
     "Copy as Quote" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Zitat kopieren"
+          }
+        }
+      }
+    },
+    "Copy as Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Text kopieren"
+          }
+        }
+      }
+    },
+    "Copy section numbers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnittsnummern kopieren"
           }
         }
       }
@@ -1271,6 +1351,26 @@
         }
       }
     },
+    "For Copy Citation, and the line after a quote." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für „Quellenangabe kopieren“ und die Zeile nach einem Zitat."
+          }
+        }
+      }
+    },
+    "For Share, Copy Link and citations." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für Teilen, „Link kopieren“ und Quellenangaben."
+          }
+        }
+      }
+    },
     "Format:" : {
       "localizations" : {
         "de" : {
@@ -1587,6 +1687,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bibliothek"
+          }
+        }
+      }
+    },
+    "Links Point To" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links führen zu"
           }
         }
       }
@@ -2657,6 +2767,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Teilen …"
+          }
+        }
+      }
+    },
+    "Sharing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilen"
           }
         }
       }
