@@ -258,11 +258,17 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
+      }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -407,14 +413,23 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
+      }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation
+      }
+      textView.spokenStates = { [weak coordinator = context.coordinator] in
+        coordinator?.spokenStates() ?? [:]
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }

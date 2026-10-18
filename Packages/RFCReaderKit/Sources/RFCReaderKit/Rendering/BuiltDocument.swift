@@ -50,13 +50,20 @@ public struct BuiltDocument: @unchecked Sendable {
   /// fold by (#698). Made here, with the build and off the main actor, once: the
   /// text view folds by it and the reader state steps Focus by it (#723).
   public let foldingIndex: FoldingIndex
+  /// The labels a translated document's build was given (#749), nil for the
+  /// original's.
+  public let translation: DocumentLabels?
+  /// Whether this is a translated document's build, whose sentences are not the
+  /// original's (`RequirementBands`).
+  public var isTranslation: Bool { translation != nil }
 
   /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
   /// it makes the folding index too (#723).
   init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
-    sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none
+    sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none,
+    translation: DocumentLabels? = nil
   ) {
     self.text = text
     self.anchors = anchors
@@ -64,6 +71,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.backlinks = backlinks
     self.grammar = grammar
     self.sectionNumberHang = sectionNumberHang
+    self.translation = translation
     self.errata = errata
     foldingIndex = FoldingIndex(text: text, anchors: anchors)
   }
@@ -79,7 +87,8 @@ public struct BuiltDocument: @unchecked Sendable {
     (backlinks[anchor] ?? []).compactMap { backlink in
       guard let section = backlink.section else {
         return BacklinkEntry(
-          anchor: DocumentTextBuilder.abstractAnchor, heading: "Abstract", count: backlink.count)
+          anchor: DocumentTextBuilder.abstractAnchor, heading: (translation ?? .english).abstract,
+          count: backlink.count)
       }
       guard let heading = anchors.heading(of: section) else { return nil }
       return BacklinkEntry(anchor: section, heading: heading, count: backlink.count)

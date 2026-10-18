@@ -297,7 +297,7 @@ extension DocumentTextBuilder {
       .rfcReaderOnly: "",
     ]
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
-    let words = Self.backlinksCaption(count: count)
+    let words = labels.backlinksCaption(count: count)
     attributes[.rfcSpoken] = words
     if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
@@ -318,6 +318,9 @@ extension DocumentTextBuilder {
     return result
   }
 
+  /// What the copy button is called to VoiceOver: English, as the body is.
+  public static let copyButtonLabel = "Copy Code"
+
   /// How large the copy button's symbol is against its label's font: smaller than
   /// the capitals beside it, so it does not outweigh them. The checkmark shown after
   /// a copy takes the same size.
@@ -328,27 +331,16 @@ extension DocumentTextBuilder {
   /// line with the code under it: an attachment in its own `.rfcCopyCode` run, which
   /// the attachment guard sanctions as it does a chip's. No link: a link is a web
   /// page's control, with its pointing hand, and the reader takes a click on the
-  /// button itself (`copyButtons(in:)`). Nothing for VoiceOver to say, either: it
-  /// cannot press the button, and Copy Figure is in the block's menu
-  /// (`AccessibleReading` leaves it out).
+  /// button itself (`copyButtons(in:)`). VoiceOver cannot press it, but says what
+  /// it is (#760), rather than passing over an unnamed attachment: Copy Code, which
+  /// the block's menu also offers (`ReaderTextView.menu(for:)`).
   func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     var attributes = base
     attributes[.rfcCopyCode] = ""
+    attributes[.rfcSpoken] = Self.copyButtonLabel
     return chipSymbolRun(
       "doc.on.doc", pointSize: style.codeLabelFont.pointSize * Self.copyButtonScale,
       attributes: attributes)
-  }
-
-  /// What a backlink caption says, and VoiceOver says for it: the number of
-  /// sections that refer to the section — not of references, of which one section
-  /// may make several — in words up to three.
-  public static func backlinksCaption(count: Int) -> String {
-    switch count {
-    case 1: "One Backlink"
-    case 2: "Two Backlinks"
-    case 3: "Three Backlinks"
-    default: "\(count) Backlinks"
-    }
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's

@@ -34,6 +34,16 @@ public enum DocumentActions {
       ? String(kit: "Bookmarked", locale: locale) : String(kit: "Not bookmarked", locale: locale)
   }
 
+  /// The Mac's Bookmark button's tooltip (#761): what a click does, as every other
+  /// tooltip says, then the state, which VoiceOver reads from it (#278). One
+  /// sentence pair per state, not the command and the state put together. A
+  /// document, not an RFC: a BCP, STD or FYI read as itself is bookmarked as itself.
+  public static func bookmarkTooltip(isBookmarked: Bool, locale: Locale = .interface) -> String {
+    isBookmarked
+      ? String(kit: "Remove Bookmark. This document is bookmarked.", locale: locale)
+      : String(kit: "Bookmark this document. It is not bookmarked.", locale: locale)
+  }
+
   /// What the ⌘D command and a row's bookmark action are called: what they will do,
   /// on the Mac's Edit menu and the iPad's alike, where the button's label stays
   /// "Bookmark" (#278).

@@ -133,7 +133,7 @@ extension DocumentTextBuilder {
     }
     decorate(from: start, with: .table)
     appendCaption(
-      Self.caption("Table", number: table.number, title: table.title), indent: indent,
+      Self.caption(labels.table, number: table.number, title: table.title), indent: indent,
       blockStart: start)
   }
 

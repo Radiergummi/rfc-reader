@@ -18,6 +18,9 @@ import os
 ///
 /// Not main-actor bound: TextKit enumerates the content and draws as it lays out,
 /// which it does off the main thread too, so what it holds is behind a lock.
+/// Written from outside layout as well — the coordinator folds and bands while the
+/// text is laid out — which is what a fragment's own caches never are
+/// (`RFCTextLayoutFragment`), and why they need no lock of their own.
 nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate, Sendable {
   private struct State {
     var hidden = HiddenText()

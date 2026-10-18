@@ -71,6 +71,36 @@ struct CodeCopyTests {
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
 
+    /// The block's menu's Copy Code copies what its button does, found from anywhere
+    /// in the block, or from a selection that begins before it; a block with no
+    /// button offers none (#760).
+    @Test func `copy code in the menu copies what the button does`() throws {
+      let text = DocumentTextBuilder.build(
+        Fixtures.document(
+          .preformatted(Self.indented),
+          .preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+        style: ReadingStyle(measure: 4000)
+      ).text
+      let value = try Fixtures.offset(of: "value", in: text)
+      #expect(text.code(ofBlockAt: value) == Self.copied)
+      #expect(text.code(ofBlockAt: try Fixtures.offset(of: "+--+", in: text)) == nil)
+
+      let box = try #require(
+        text.attribute(.rfcVerbatim, at: value, effectiveRange: nil) as? VerbatimBox)
+      let selection = NSRange(location: 0, length: value + 1)
+      #expect(text.code(ofBlock: box, touching: selection) == Self.copied)
+    }
+
+    /// VoiceOver names the button rather than passing over an unnamed attachment
+    /// (#760).
+    @Test func `the copy button is said as Copy Code`() throws {
+      let text = Self.built(measure: 4000)
+      let button = try #require(
+        text.copyButtons(in: NSRange(location: 0, length: text.length)).first)
+      let pieces = AccessibleReading.pieces(of: button, in: text)
+      #expect(pieces == [.label("Copy Code")])
+    }
+
     /// Where the pointer is the arrow (#724): each button in the range, whole, and
     /// none outside it.
     @Test func `the copy buttons in a range are found whole`() throws {

@@ -54,6 +54,9 @@
         signposter.emitEvent("First window made")
       }
       warnIfTheStoreDidNotOpen()
+      // Made by the menu's commands as a rule, which come first; made here if not, so
+      // the scheduled checks never wait on the menu.
+      _ = Updater.shared
     }
 
     /// Once, at launch, when the bookmarks store fell back to memory (#152):
@@ -247,17 +250,23 @@
     /// Sidebar. A SwiftUI menu item cannot ask the split view when the menu opens,
     /// so the window reports it here.
     private(set) var isSidebarCollapsed = false
+    /// Whether the key window's panel is open, for the titles of View ▸ Show
+    /// Contents and Show Info (#761), reported for the same reason.
+    private(set) var isPanelOpen = false
 
     private init() {}
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
       isSidebarCollapsed = controller.splitController.isSidebarCollapsed
+      isPanelOpen = controller.isPanelOpen
     }
 
-    func sidebarChanged(_ controller: ReaderWindowController) {
+    /// The sidebar or the panel opened or closed: both resize the subviews.
+    func layoutChanged(_ controller: ReaderWindowController) {
       guard self.controller === controller else { return }
       isSidebarCollapsed = controller.splitController.isSidebarCollapsed
+      isPanelOpen = controller.isPanelOpen
     }
 
     func willClose(_ controller: ReaderWindowController) {

@@ -121,12 +121,12 @@
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
       // that column is dragged.
-      // Collapsing or expanding the sidebar resizes the subviews too, so this is also
-      // where View ▸ Show Sidebar learns which title to show.
+      // Collapsing or expanding the sidebar or the panel resizes the subviews too, so
+      // this is also where View ▸ Show Sidebar, Contents and Info learn their titles.
       splitController.didResizeSubviews = { [weak self] in
         guard let self else { return }
         self.toolbar?.capTitleToList()
-        ActiveReaderWindow.shared.sidebarChanged(self)
+        ActiveReaderWindow.shared.layoutChanged(self)
         // The columns' widths are part of what the window keeps (#762), and nothing
         // observable says they changed. Not on every frame of a resize of the window,
         // only once it ends; a divider's drag is no live resize, and is kept as it goes.
@@ -488,6 +488,34 @@
       window.makeFirstResponder(text)
     }
 
+    /// Edit ▸ Jump to Selection (#761), handed to the text with the selection, as Copy
+    /// as Quote is and for its reason: with the find bar's field focused, the
+    /// responder chain would center the field's own selection. Scrolled to first,
+    /// which `centerSelectionInVisibleArea` never does: that is what opens a folded
+    /// section, makes this side lead a side-by-side reading and places a far-off
+    /// range exactly (`ReaderTextView.revealRange`).
+    func jumpToSelection() {
+      guard let text = selectedText else { return }
+      text.scrollRangeToVisible(text.selectedRange())
+      text.centerSelectionInVisibleArea(nil)
+    }
+
+    /// Edit ▸ Use Selection for Find (#761), from the text with the selection, for
+    /// Jump to Selection's reason.
+    func useSelectionForFind() {
+      selectedText?.performTextFinderAction(FindCommand.setSearchString)
+    }
+
+    /// The text Use Selection for Find and Jump to Selection act on, when something
+    /// in it is selected: the original text's selection is not mirrored in
+    /// `ReaderState`, so the menu lets it through and this checks.
+    private var selectedText: NSTextView? {
+      guard let text = FirstResponderSearch.searchableText(in: quotedReaderView),
+        text.selectedRange().length > 0
+      else { return nil }
+      return text
+    }
+
     /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
     /// responder chain, which reaches no text view with the sidebar, the contents
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
@@ -507,6 +535,25 @@
       let focused = window?.firstResponder as? NSView
       if !reader.hasSelection || focused?.isDescendant(of: beside) == true { return beside }
       return splitController.readerView
+    }
+
+    /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
+    func perform(_ action: DocumentMenus.Action) {
+      guard let id = navigation.shown else { return }
+      DocumentActionPerformer(
+        id: id, metadata: library.metadata(id), reader: reader,
+        open: { NSWorkspace.shared.open($0) }
+      ).perform(action)
+    }
+
+    /// File ▸ Share… (#761): the picker the toolbar's Share item opens, hanging below
+    /// the toolbar's middle, for a window whose toolbar is hidden.
+    func share() {
+      guard let id = navigation.shown, let window, let content = window.contentView else { return }
+      let picker = NSSharingServicePicker(items: [RFCEditorEndpoints.infoPage(id)])
+      let below = NSRect(
+        x: content.bounds.midX, y: window.contentLayoutRect.maxY, width: 1, height: 1)
+      picker.show(relativeTo: below, of: content, preferredEdge: .minY)
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
