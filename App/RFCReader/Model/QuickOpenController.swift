@@ -13,6 +13,9 @@ final class QuickOpenController {
   private let library: LibraryModel
   private let navigation: NavigationModel
   private let dismiss: () -> Void
+  /// Whether it takes an RFC number alone, as iOS's sheet does (#579), and lists the
+  /// RFC with that number without searching.
+  private let takesNumbersOnly: Bool
 
   private(set) var input = ""
   private(set) var results = QuickOpenResults()
@@ -21,9 +24,13 @@ final class QuickOpenController {
   /// after Cancel or a chosen row.
   private var isClosing = false
 
-  init(library: LibraryModel, navigation: NavigationModel, dismiss: @escaping () -> Void) {
+  init(
+    library: LibraryModel, navigation: NavigationModel, takesNumbersOnly: Bool = false,
+    dismiss: @escaping () -> Void
+  ) {
     self.library = library
     self.navigation = navigation
+    self.takesNumbersOnly = takesNumbersOnly
     self.dismiss = dismiss
   }
 
@@ -46,13 +53,17 @@ final class QuickOpenController {
   /// queued behind it can read the selection: an `onChange` or the search's task
   /// would only run a turn later.
   func type(_ text: String) {
-    input = text
+    input = takesNumbersOnly ? QuickOpenResults.digits(in: text) : text
     resolve()
   }
 
   /// What was typed, resolved exactly: again once the index loads, so a series
   /// typed before it is listed as its members.
   func resolve() {
+    if takesNumbersOnly {
+      results.show(number: query)
+      return
+    }
     let exact = DocumentReference.link(from: query)
     let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
     results.show(
