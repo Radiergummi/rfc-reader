@@ -377,7 +377,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// The long-press preview: Safari's link preview, for documents (#29). A
     /// reference to an RFC, or to a place in this one, previews that document at
     /// that place; a bibliography entry that names no RFC gets its card. The
-    /// `defaultMenu` (Open, Copy, etc.) still shows beside it, and a tap on the
+    /// reader's own menu shows beside it (`referenceMenu`), and a tap on the
     /// preview performs the item's primary action, which follows the reference.
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
@@ -391,28 +391,32 @@ final class RFCTextViewCoordinator: NSObject {
       // A heading's hung number (#433) links to its own heading, which there is no
       // point previewing: only the menu, its Copy and Share handing out the RFC
       // Editor's URL for the section.
-      if let documentID,
-        let number = textView.textLayoutManager?.attributedText?.sectionNumber(
-          at: textItem.range.location),
+      if let number = textView.textLayoutManager?.attributedText?.sectionNumber(
+        at: textItem.range.location),
         let url = ReaderLinkScheme.url(number.anchor, scheme: ReaderLinkScheme.anchorScheme)
       {
-        let link = LinkCopy.forLink(
-          url, from: documentID, in: environment?.library.index, bibliography: bibliography)
-        return .init(
-          menu: referenceMenu(defaultMenu, sharing: link, from: textView, at: number.range))
+        guard
+          let menu = referenceMenu(
+            defaultMenu, for: url, opens: false, from: textView, at: number.range)
+        else { return nil }
+        return .init(menu: menu)
       }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
-      guard let environment, let documentID,
-        let (box, range) = reference(at: textItem.range.location),
-        let url = link(at: range.location),
+      let reference = reference(at: textItem.range.location)
+      let range = reference?.range ?? textItem.range
+      guard let url = link(at: range.location) else { return .init(menu: defaultMenu) }
+      // Whatever the preview comes to, the menu is the reader's own: UIKit's would
+      // hand out the `rfc://` URL (#763).
+      let menu = referenceMenu(defaultMenu, for: url, from: textView, at: range)
+      guard let environment, let documentID, let box = reference?.box,
         let target = LinkPreview.resolve(
           box.reference, linkedTo: url, from: documentID, in: environment.library.index)
-      else { return .init(menu: defaultMenu) }
+      else { return menu.map { .init(menu: $0) } }
       let host: UIHostingController<AnyView>
       switch target {
       case .card:
-        guard let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
+        guard let preview = preview(for: box.reference) else { return menu.map { .init(menu: $0) } }
         host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         // Sized here, the way the header host is in `layOut`: the preview is shown
         // at its view's own size, and a hosting controller's view is not sized to
@@ -422,7 +426,7 @@ final class RFCTextViewCoordinator: NSObject {
       case .document(let id, let place):
         // Measured against the window, not the text view: the preview is shown
         // over the whole window, whatever the reader's own width.
-        guard let window = textView.window else { return .init(menu: defaultMenu) }
+        guard let window = textView.window else { return menu.map { .init(menu: $0) } }
         let size = LinkPreview.documentSize(fitting: window.bounds.size)
         // The commit is the tap, performed as the primary action; nothing in a
         // context menu's preview is clicked.
@@ -433,12 +437,8 @@ final class RFCTextViewCoordinator: NSObject {
         host.view.frame.size = size
       }
       let container = previewView(hosting: host)
-      let menu = referenceMenu(
-        defaultMenu,
-        sharing: LinkCopy.forLink(
-          url, from: documentID, in: environment.library.index, bibliography: bibliography),
-        from: textView, at: range)
-      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+      return UITextItem.MenuConfiguration(
+        preview: .view(container), menu: menu ?? UIMenu(children: []))
     }
 
     /// `host`'s view as a long-press preview: a reference's card or document, or a

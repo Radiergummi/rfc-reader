@@ -5,51 +5,61 @@
   import UniformTypeIdentifiers
 
   extension RFCTextViewCoordinator {
-    /// The long-press menu under a reference's preview (#431): UIKit's own, with
-    /// Copy and Share handing out `link` instead of the reference's URL, which is
-    /// the reader's `rfc://` and opens nowhere else. Without a link to hand out
-    /// they go. Untitled, because UIKit titles it with that same URL and the
-    /// preview names the reference better.
-    ///
-    /// UIKit's two actions are found by their data detector identifiers, and each
-    /// is replaced in place, keeping its title, image and position. Anything they
-    /// fail to match stays UIKit's, so the menu never shows both.
+    /// The long-press menu under a reference's preview (#431, #763): the reader's own
+    /// actions for a link of the reader's (`LinkMenu.actions`), Copy Link and Share
+    /// handing out the URL anyone can open rather than the reader's `rfc://`, which
+    /// opens nowhere else. Untitled, because UIKit titles it with that same URL and
+    /// the preview names the reference better. A link to the web keeps UIKit's own
+    /// menu. Built rather than edited: UIKit's Copy and Share were found by private
+    /// identifiers, and an iOS that renamed them would hand out the `rfc://` again.
+    /// Nil where the reader has nothing to offer, such as a heading's number with no
+    /// public URL: no menu at all rather than an empty one.
     func referenceMenu(
-      _ defaultMenu: UIMenu, sharing link: LinkCopy?, from textView: UITextView, at range: NSRange
-    ) -> UIMenu {
-      func replaced(_ elements: [UIMenuElement]) -> [UIMenuElement] {
-        elements.compactMap { element in
-          if let menu = element as? UIMenu {
-            return menu.replacingChildren(replaced(menu.children))
-          }
-          guard let action = element as? UIAction else { return element }
-          let identifier = action.identifier.rawValue
-          if identifier.contains("DDCopyAction") {
-            return link.map { Self.copyAction(like: action, link: $0) }
-          }
-          if identifier.contains("DDShareAction") {
-            return link.map { share(like: action, link: $0, from: textView, at: range) }
-          }
-          return action
-        }
-      }
+      _ defaultMenu: UIMenu, for url: URL, opens: Bool = true, from textView: UITextView,
+      at range: NSRange
+    ) -> UIMenu? {
+      guard let documentID else { return defaultMenu }
+      let items = LinkMenu.items(
+        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+      guard
+        let actions = LinkMenu.actions(
+          for: items, opensNewWindows: environment?.library.opensNewWindows == true, opens: opens)
+      else { return defaultMenu }
+      guard !actions.isEmpty else { return nil }
       return UIMenu(
-        title: "", options: defaultMenu.options, children: replaced(defaultMenu.children))
+        title: "",
+        children: actions.map { action($0, for: url, from: textView, at: range) })
     }
 
-    /// The link in every form an app might take (`PasteboardContent.link`).
-    private static func copyAction(like action: UIAction, link: LinkCopy) -> UIAction {
-      UIAction(title: action.title, image: action.image) { _ in
-        Clipboard.write(.link(link), announcing: .link)
-      }
-    }
-
-    private func share(
-      like action: UIAction, link: LinkCopy, from textView: UITextView, at range: NSRange
+    private func action(
+      _ action: LinkMenu.Action, for url: URL, from textView: UITextView, at range: NSRange
     ) -> UIAction {
-      UIAction(title: action.title, image: action.image) { [weak textView] _ in
-        guard let textView else { return }
-        Self.share([SharedLink(link)], from: textView, at: range)
+      switch action {
+      case .open:
+        return UIAction(title: String(localized: "Open"), image: UIImage(systemName: "doc.text")) {
+          [weak self] _ in
+          _ = self?.onLink(url, .here)
+        }
+      case .openInNewWindow(let link):
+        return UIAction(
+          title: String(localized: "Open in New Window"),
+          image: UIImage(systemName: "macwindow.badge.plus")
+        ) { [weak self] _ in
+          self?.environment?.library.openWindow(for: link)
+        }
+      case .copyLink(let link):
+        // The link in every form an app might take (`PasteboardContent.link`).
+        return UIAction(title: String(localized: "Copy Link"), image: UIImage(systemName: "link")) {
+          _ in
+          Clipboard.write(.link(link), announcing: .link)
+        }
+      case .share(let link):
+        return UIAction(
+          title: String(localized: "Share…"), image: UIImage(systemName: "square.and.arrow.up")
+        ) { [weak textView] _ in
+          guard let textView else { return }
+          Self.share([SharedLink(link)], from: textView, at: range)
+        }
       }
     }
 

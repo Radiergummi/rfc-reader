@@ -11,6 +11,17 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
+    /// The reader state Find is installed in as this comes into a window (#763):
+    /// nil for a preview's reader and one the stack keeps below its top.
+    weak var findReader: ReaderState? {
+      didSet { installsFind(in: findReader) }
+    }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      installsFind(in: findReader)
+    }
+
     /// Whether the bars are hidden, set by the coordinator the moment `ReaderChrome`
     /// decides so, before the safe area follows: the top inset holds at the bars'
     /// height meanwhile (`ReaderChrome.topInset`).
