@@ -58,7 +58,40 @@ struct RFCEPUBWriterTests {
       header: DocumentHeader(title: "A Protocol"),
       sections: [Section(anchor: "section-0", title: "")], source: .text)
     #expect(RFCHTMLSerializer().chapters(document)[1].title == "section-0")
-    #expect(RFCEPUBWriter.navigation(document).contains("#section-0\">section-0</a>"))
+    let chapters = RFCHTMLSerializer().chapters(document)
+    #expect(
+      RFCEPUBWriter.navigation(document, chapters: chapters).contains("#section-0\">section-0</a>"))
+  }
+
+  @Test func `a document with no title or number is called Untitled`() {
+    let document = RFCDocument(header: DocumentHeader(title: " "), sections: [], source: .text)
+    let chapters = RFCHTMLSerializer().chapters(document)
+    #expect(chapters[0].title == "Untitled")
+    #expect(
+      RFCEPUBWriter.package(document, chapters: chapters).contains("<dc:title>Untitled</dc:title>"))
+    #expect(
+      RFCEPUBWriter.navigation(document, chapters: chapters).contains(
+        "<a href=\"front.xhtml\">Untitled</a>"))
+  }
+
+  /// A legacy RFC can have a section anchored `abstract`; a link to it goes to the
+  /// section, which the front matter, writing no such id then, does not take.
+  @Test func `a section anchored abstract keeps its links`() {
+    let link = CrossReference(target: .anchor("abstract"), text: "there")
+    let document = RFCDocument(
+      header: DocumentHeader(
+        title: "A Protocol", abstract: [.paragraph(Paragraph([.crossReference(link)]))]),
+      sections: [Section(anchor: "abstract", title: "Abstract")], source: .text)
+    let chapters = RFCHTMLSerializer().chapters(document)
+    #expect(chapters[0].body.contains("href=\"chapter-1.xhtml#abstract\""))
+    #expect(!chapters[0].body.contains("id=\"abstract\""))
+    #expect(chapters[1].body.contains("id=\"abstract\""))
+  }
+
+  @Test func `a day the month does not have is left out of the date`() {
+    #expect(RFCEPUBWriter.w3cDate(PublicationDate(year: 2001, month: 2, day: 30)) == "2001-02")
+    #expect(RFCEPUBWriter.w3cDate(PublicationDate(year: 2024, month: 2, day: 29)) == "2024-02-29")
+    #expect(RFCEPUBWriter.w3cDate(PublicationDate(year: 1997, month: 13)) == "1997")
   }
 
   /// Books' themes set the colors and the body font; the book's stylesheet leaves

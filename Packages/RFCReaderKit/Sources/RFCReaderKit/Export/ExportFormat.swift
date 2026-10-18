@@ -157,9 +157,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 
 extension ExportFormat {
   /// The file this format makes of `document` itself: the page, the Markdown or the
-  /// grammar. Nil for PDF, which is laid out (`PDFExport`), for the RFC Editor's own
-  /// files, and for a grammar `document` does not have. What every surface that
-  /// saves a file asks, so they save the same one.
+  /// grammar. Nil for PDF, which is laid out (`PDFExport`), for the EPUB, which is
+  /// an archive (`data(of:)`), for the RFC Editor's own files, and for a grammar
+  /// `document` does not have.
   public func text(of document: RFCDocument) -> String? {
     switch self {
     case .html: RFCHTMLSerializer().page(document)
@@ -170,7 +170,8 @@ extension ExportFormat {
   }
 
   /// The file this format makes of `document` itself: `text(of:)`'s, or the EPUB.
-  /// Nil where `text(of:)` is, but for the EPUB.
+  /// Nil where `text(of:)` is, but for the EPUB. What every surface that saves a
+  /// file asks, so they save the same one.
   public func data(of document: RFCDocument) -> Data? {
     if self == .epub { return RFCEPUBWriter().epub(document) }
     return text(of: document).map { Data($0.utf8) }

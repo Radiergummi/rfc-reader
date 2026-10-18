@@ -17,12 +17,17 @@ public enum InDocumentLinks: Sendable, Hashable {
 struct ExportLinks {
   let document: RFCDocument
   let inDocument: InDocumentLinks
-  /// The file each anchor is in, for a document cut into several (an EPUB's
-  /// content documents, #408); empty for one file.
-  var files: [String: String] = [:]
-  /// The first of those files, nil for one file: where a link to an anchor in
-  /// none of them goes, so that it still opens somewhere.
-  var firstFile: String?
+  /// The files of a document cut into several (an EPUB's content documents, #408);
+  /// nil for one file. Every link to an anchor then names the file it is in.
+  var chapterFiles: ChapterFiles?
+
+  struct ChapterFiles {
+    /// The file each anchor is in.
+    var files: [String: String]
+    /// Where a link to an anchor in none of them goes: the first file's top, so
+    /// that it still opens somewhere.
+    var fallback: String
+  }
 
   /// Where `reference` goes.
   func href(for reference: CrossReference) -> String {
@@ -38,8 +43,8 @@ struct ExportLinks {
 
   /// Where a link to `anchor`, in this document, goes.
   func href(forAnchor anchor: String) -> String {
-    if let firstFile {
-      return files[anchor].map { "\($0)#\(anchor)" } ?? firstFile
+    if let chapterFiles {
+      return chapterFiles.files[anchor].map { "\($0)#\(anchor)" } ?? chapterFiles.fallback
     }
     guard inDocument == .absolute, let id = document.header.id else { return "#" + anchor }
     return RFCLink(id: id, anchor: anchor).webURL.absoluteString

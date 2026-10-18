@@ -14,8 +14,7 @@ public struct RFCHTMLSerializer: Sendable {
   /// The whole page: the document's body, under a head that names it and embeds
   /// `stylesheet`.
   public func page(_ document: RFCDocument) -> String {
-    let title = [document.header.id?.displayName, document.header.title]
-      .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
+    let title = Self.documentTitle(of: document.header)
     return """
       <!DOCTYPE html>
       <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
@@ -64,32 +63,40 @@ extension RFCHTMLSerializer {
     func place(_ anchors: [String], in file: String) {
       for anchor in anchors where files[anchor] == nil { files[anchor] = file }
     }
-    place(
-      [FullTextIndex.abstractAnchor] + document.header.abstract.flattened.flatMap(\.anchors),
-      in: front)
+    // The abstract's anchor where the header writes it: not when there is no
+    // abstract, nor when a section has the anchor (`Writer.header`).
+    if Writer.writesAbstractAnchor(document) { place([FullTextIndex.abstractAnchor], in: front) }
+    place(document.header.abstract.flattened.flatMap(\.anchors), in: front)
     for (section, file) in zip(document.sections, fileNames) {
-      var sections: [Section] = []
-      func collect(_ section: Section) {
-        sections.append(section)
-        section.subsections.forEach(collect)
-      }
-      collect(section)
+      let sections = section.withSubsections
       place(
         sections.map(\.anchor) + sections.flatMap(\.blocks).flattened.flatMap(\.anchors), in: file)
     }
     var links = ExportLinks(document: document, inDocument: .fragments)
-    links.files = files
-    links.firstFile = front
+    links.chapterFiles = ExportLinks.ChapterFiles(files: files, fallback: front)
 
     var writer = Writer(links: links)
     writer.header(document)
-    var chapters = [Chapter(file: front, title: document.header.title, body: writer.output)]
+    var chapters = [
+      Chapter(file: front, title: Self.documentTitle(of: document.header), body: writer.output)
+    ]
     for (section, file) in zip(document.sections, fileNames) {
       var writer = Writer(links: links)
       writer.section(section, level: 1)
       chapters.append(Chapter(file: file, title: Self.title(of: section), body: writer.output))
     }
     return chapters
+  }
+
+  /// What an exported document is called: `RFC 9110: HTTP Semantics`, the title
+  /// alone, or the number alone; `Untitled` for one with neither, since a page's,
+  /// a book's and a contents entry's title may not be empty.
+  static func documentTitle(of header: DocumentHeader) -> String {
+    let title = [
+      header.id?.displayName, header.title.trimmingCharacters(in: .whitespacesAndNewlines),
+    ]
+    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
+    return title.isEmpty ? "Untitled" : title
   }
 
   /// What a chapter or a contents entry calls `section`: its heading, or for one
@@ -127,12 +134,19 @@ extension RFCHTMLSerializer {
       if !byline.isEmpty { output += "<p class=\"byline\">\(Self.escaped(byline))</p>\n" }
       output += "</header>\n"
       guard !header.abstract.isEmpty else { return }
-      // The anchor the full-text index gives the abstract, unless a section has it.
-      let isTaken = document.allSections.contains { $0.anchor == FullTextIndex.abstractAnchor }
-      open("section", id: isTaken ? nil : FullTextIndex.abstractAnchor, class: "abstract")
+      open(
+        "section", id: Self.writesAbstractAnchor(document) ? FullTextIndex.abstractAnchor : nil,
+        class: "abstract")
       output += "<h2>Abstract</h2>\n"
       blocks(header.abstract)
       output += "</section>\n"
+    }
+
+    /// Whether the abstract is written with the anchor the full-text index gives
+    /// it: when there is one, and no section has the anchor.
+    static func writesAbstractAnchor(_ document: RFCDocument) -> Bool {
+      !document.header.abstract.isEmpty
+        && !document.allSections.contains { $0.anchor == FullTextIndex.abstractAnchor }
     }
 
     mutating func section(_ section: Section, level: Int) {

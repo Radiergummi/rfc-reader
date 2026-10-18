@@ -146,8 +146,9 @@
     // MARK: - Send to Books
 
     /// File > Send to Books (#408): the document as an EPUB, written to a folder of
-    /// its own in the temporary directory and opened with Books, which imports it.
-    /// There is no Books API beyond opening a file with it.
+    /// the temporary directory and opened with Books, which imports a copy. There is
+    /// no Books API beyond opening a file with it. The folder holds the last book
+    /// sent alone: Books has its own copy of any before it.
     func sendToBooks() {
       guard !isExporting, let id = navigation.shown, reader.offersPrintAndExport, let window
       else {
@@ -160,17 +161,23 @@
           let data = try await DocumentExport.data(
             for: id, as: .epub, paperSize: NSPrintInfo.shared.paperSize, library: library)
           let folder = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+            .appending(path: "Send to Books", directoryHint: .isDirectory)
+          try? FileManager.default.removeItem(at: folder)
           try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
           let file = folder.appending(path: ExportFormat.epub.fileName(for: id))
           try data.write(to: file, options: .atomic)
           guard let books = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.books)
           else {
-            throw CocoaError(.fileNoSuchFile)
+            throw CocoaError(
+              .featureUnsupported,
+              userInfo: [
+                NSLocalizedDescriptionKey: String(localized: "Books isn't available on this Mac.")
+              ])
           }
           try await NSWorkspace.shared.open(
             [file], withApplicationAt: books, configuration: NSWorkspace.OpenConfiguration())
         } catch {
+          readerLog.failure(of: id, "send to Books failed", error)
           _ = window.presentError(error)
         }
       }

@@ -81,7 +81,7 @@ struct ExportFormatTests {
     #expect(ExportFormat.text.name(in: .english) == "Plain Text")
   }
 
-  @Test func `every document offers the page, the Markdown, the text and the XML`() throws {
+  @Test func `every document offers every format but the grammar`() throws {
     #expect(
       ExportFormat.available(for: try Fixtures.rfc2119())
         == [.pdf, .epub, .html, .markdown, .text, .xml])

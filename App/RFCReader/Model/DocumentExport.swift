@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 /// The one place an export format becomes a file's contents (#376): the Mac's save
 /// panel and iOS's Save to Files both ask here, so they save the same file. What a
-/// format makes of the document itself is `ExportFormat.text(of:)`'s; here is only
+/// format makes of the document itself is `ExportFormat.data(of:)`'s; here is only
 /// where the document and the published files come from.
 enum DocumentExport {
   /// - Parameter paperSize: the page a rendered, paged format is laid out for.
@@ -28,10 +28,17 @@ enum DocumentExport {
     async throws -> Data
   {
     let document = try await library.document(for: id)
-    guard let data = format.data(of: document) else {
+    guard let data = await serialized(document, as: format) else {
       throw CocoaError(.fileWriteUnknown)
     }
     return data
+  }
+
+  /// `format.data(of:)`, off the main actor: a large RFC's book is two passes over
+  /// the whole document and a checksum over every byte of it.
+  @concurrent
+  private static func serialized(_ document: RFCDocument, as format: ExportFormat) async -> Data? {
+    format.data(of: document)
   }
 
   /// The RFC Editor's XML where it published one, and the app's conversion of the
@@ -46,7 +53,12 @@ enum DocumentExport {
         // Never published as XML: converted below.
       }
     }
-    return Data(ExportFormat.convertedXML(of: try await library.document(for: id)).utf8)
+    return await converted(try await library.document(for: id))
+  }
+
+  @concurrent
+  private static func converted(_ document: RFCDocument) async -> Data {
+    Data(ExportFormat.convertedXML(of: document).utf8)
   }
 }
 

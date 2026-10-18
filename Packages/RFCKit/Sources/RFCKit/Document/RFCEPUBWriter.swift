@@ -1,8 +1,8 @@
 import Foundation
 
 /// Writes an `RFCDocument` as an EPUB 3 book (#408): the HTML export's body, cut
-/// into one content document per top-level section, since Books slows down on one
-/// very large spine item, with a navigation document from the section tree and a
+/// into one content document per top-level section, as #408 decided for the reading
+/// app's sake, with a navigation document from the section tree and a
 /// stylesheet that leaves color and the body font to the reading app.
 ///
 /// The archive stores every entry uncompressed (`StoredZip`), and the same document
@@ -22,7 +22,8 @@ public struct RFCEPUBWriter: Sendable {
       StoredZip.Entry(path: "META-INF/container.xml", data: Data(Self.container.utf8)),
       StoredZip.Entry(
         path: "OEBPS/content.opf", data: Data(Self.package(document, chapters: chapters).utf8)),
-      StoredZip.Entry(path: "OEBPS/nav.xhtml", data: Data(Self.navigation(document).utf8)),
+      StoredZip.Entry(
+        path: "OEBPS/nav.xhtml", data: Data(Self.navigation(document, chapters: chapters).utf8)),
       StoredZip.Entry(path: "OEBPS/style.css", data: Data(Self.stylesheet.utf8)),
     ]
     for chapter in chapters {
@@ -42,12 +43,6 @@ public struct RFCEPUBWriter: Sendable {
 
     """
 
-  /// `RFC 9110: HTTP Semantics`, or the title alone.
-  static func title(of header: DocumentHeader) -> String {
-    [header.id?.displayName, header.title].compactMap { $0 }.filter { !$0.isEmpty }
-      .joined(separator: ": ")
-  }
-
   /// The book's identifier: an RFC's DOI, `10.17487/RFC9110`, and for a document of
   /// another series its page on rfc-editor.org.
   static func identifier(of header: DocumentHeader) -> String {
@@ -60,7 +55,7 @@ public struct RFCEPUBWriter: Sendable {
     let header = document.header
     var metadata = [
       "<dc:identifier id=\"book-id\">\(escaped(identifier(of: header)))</dc:identifier>",
-      "<dc:title>\(escaped(title(of: header)))</dc:title>",
+      "<dc:title>\(escaped(RFCHTMLSerializer.documentTitle(of: header)))</dc:title>",
       "<dc:language>en</dc:language>",
     ]
     metadata += header.authors.map { "<dc:creator>\(escaped($0.name))</dc:creator>" }
@@ -101,7 +96,8 @@ public struct RFCEPUBWriter: Sendable {
       """
   }
 
-  /// `2022-06`, `2022`: as much of the date as the document gives.
+  /// `2022-06`, `2022`: as much of the date as the document gives, and no day the
+  /// month does not have.
   static func w3cDate(_ date: PublicationDate) -> String {
     func padded(_ value: Int, to width: Int) -> String {
       let digits = String(value)
@@ -110,9 +106,16 @@ public struct RFCEPUBWriter: Sendable {
     var parts = [padded(date.year, to: 4)]
     if let month = date.month, (1...12).contains(month) {
       parts.append(padded(month, to: 2))
-      if let day = date.day, (1...31).contains(day) { parts.append(padded(day, to: 2)) }
+      if let day = date.day, isDay(day, of: month, in: date.year) {
+        parts.append(padded(day, to: 2))
+      }
     }
     return parts.joined(separator: "-")
+  }
+
+  static func isDay(_ day: Int, of month: Int, in year: Int) -> Bool {
+    let components = DateComponents(year: year, month: month, day: day)
+    return components.isValidDate(in: Calendar(identifier: .gregorian))
   }
 
   /// `date` as a whole timestamp, its missing parts the first of each.
@@ -124,8 +127,8 @@ public struct RFCEPUBWriter: Sendable {
 
   /// The navigation document: the abstract, then the sections as the document nests
   /// them, each linking into the chapter that holds it.
-  static func navigation(_ document: RFCDocument) -> String {
-    let files = RFCHTMLSerializer().chapters(document).map(\.file)
+  static func navigation(_ document: RFCDocument, chapters: [RFCHTMLSerializer.Chapter]) -> String {
+    let files = chapters.map(\.file)
     func item(_ section: Section, file: String) -> String {
       let link =
         "<a href=\"\(file)#\(escaped(section.anchor))\">\(escaped(RFCHTMLSerializer.title(of: section)))</a>"
@@ -133,7 +136,7 @@ public struct RFCEPUBWriter: Sendable {
       let children = section.subsections.map { item($0, file: file) }
       return "<li>\(link)\n<ol>\n\(children.joined(separator: "\n"))\n</ol></li>"
     }
-    var items = ["<li><a href=\"\(files[0])\">\(escaped(document.header.title))</a></li>"]
+    var items = ["<li><a href=\"\(files[0])\">\(escaped(chapters[0].title))</a></li>"]
     for (section, file) in zip(document.sections, files.dropFirst()) {
       items.append(item(section, file: file))
     }
