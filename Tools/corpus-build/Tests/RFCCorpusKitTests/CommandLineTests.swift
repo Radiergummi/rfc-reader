@@ -230,6 +230,39 @@ struct CommandLineTests {
     #expect(sqlite3_column_int(statement, 1) == rows, "every section pairs with itself")
   }
 
+  /// `index` writes the sections each RFC amends: RFC 9283 updates RFC 2850, and
+  /// cites the two sections it changes.
+  @Test func `index writes the amendments of every RFC it reads`() throws {
+    let out = Self.temporaryDirectory()
+    let input = out.appending(path: "xml")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.copyItem(
+      at: Fixtures.url("rfc9283.xml"), to: input.appending(path: "rfc9283.xml"))
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", input.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status == 0, "\(result.standardError)")
+
+    var connection: OpaquePointer?
+    #expect(sqlite3_open_v2(database.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
+    defer { sqlite3_close(connection) }
+    var statement: OpaquePointer?
+    let sql = """
+      SELECT section FROM amendments WHERE amended = 'RFC2850' AND amending = 'RFC9283'
+      ORDER BY section
+      """
+    #expect(sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK)
+    defer { sqlite3_finalize(statement) }
+    var sections: [String] = []
+    while sqlite3_step(statement) == SQLITE_ROW {
+      sections.append(String(cString: sqlite3_column_text(statement, 0)))
+    }
+    #expect(sections == ["1.2", "2"])
+  }
+
   /// An RFC that does not parse would leave a hole in the graph that nothing else
   /// shows, so the run fails, naming it, after writing the rest.
   @Test func `index fails on an RFC it cannot read`() throws {

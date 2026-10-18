@@ -10,14 +10,16 @@ import RFCKit
 /// Written in one transaction, and only once `close()` commits it is it whole.
 ///
 /// The tables are `IndexSchema`'s, shared with the app's reader: `meta`,
-/// `citations` and `successions`. `meta` holds
+/// `citations`, `successions` and `amendments`. `meta` holds
 /// `schema` (`IndexSchema.version`) and whatever the build adds, such as the
 /// packs' version. A citation's documents are `DocumentID.description`s (`RFC9110`);
 /// its `place` is `abstract`, `section`, with the section's anchor in `section`, or
 /// `bibliography`; its `kind` is a `ReferenceList.Kind`, or null for a citation no
 /// entry names. See `Citation`. A succession is a section of an obsoleted document
 /// and the section of the document obsoleting it that replaces it, both by anchor,
-/// with how alike the two are. See `AlignedSection`.
+/// with how alike the two are. See `AlignedSection`. An amendment is a section of
+/// one document, as the citation names it, and the document amending it, with the
+/// anchor of the section that says so, or null for its abstract. See `Amendment`.
 public final class IndexDatabase {
   public struct Failure: Error, CustomStringConvertible {
     public let description: String
@@ -26,6 +28,7 @@ public final class IndexDatabase {
   private var connection: OpaquePointer?
   private var insertCitation: OpaquePointer?
   private var insertSuccession: OpaquePointer?
+  private var insertAmendment: OpaquePointer?
 
   /// Creates the database at `url`, replacing any file there.
   public init(creatingAt url: URL) throws {
@@ -38,12 +41,14 @@ public final class IndexDatabase {
     try execute(IndexSchema.tables + "BEGIN;")
     insertCitation = try prepare(IndexSchema.insertCitation)
     insertSuccession = try prepare(IndexSchema.insertSuccession)
+    insertAmendment = try prepare(IndexSchema.insertAmendment)
     try setMeta("schema", to: String(IndexSchema.version))
   }
 
   deinit {
     sqlite3_finalize(insertCitation)
     sqlite3_finalize(insertSuccession)
+    sqlite3_finalize(insertAmendment)
     sqlite3_close(connection)
   }
 
@@ -94,6 +99,20 @@ public final class IndexDatabase {
     }
   }
 
+  /// The sections of other documents a document amends, as `Amendments.links` lists
+  /// them.
+  public func insert(_ amendments: [Amendment]) throws {
+    let statement = insertAmendment
+    for amendment in amendments {
+      try check(sqlite3_reset(statement))
+      try bind(amendment.amended.description, at: 1, in: statement)
+      try bind(amendment.section, at: 2, in: statement)
+      try bind(amendment.amending.description, at: 3, in: statement)
+      try bind(amendment.amendingSection, at: 4, in: statement)
+      try step(statement)
+    }
+  }
+
   /// Indexes what a reader looks up and commits: until this returns, the file holds
   /// nothing a reader should trust.
   public func close() throws {
@@ -103,6 +122,7 @@ public final class IndexDatabase {
       CREATE INDEX citations_by_citing ON citations (citing);
       CREATE INDEX successions_by_old ON successions (old);
       CREATE INDEX successions_by_new ON successions (new);
+      CREATE INDEX amendments_by_amended ON amendments (amended);
       COMMIT;
       VACUUM;
       """)

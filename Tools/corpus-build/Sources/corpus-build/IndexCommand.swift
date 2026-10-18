@@ -33,6 +33,7 @@ struct IndexCommand: ParsableCommand {
     try database.setMeta("version", to: version)
     var indexed = 0
     var citations = 0
+    var amendments = 0
     // Every document read, and what it obsoletes, for the second pass, which needs
     // the documents of an edge at once: holding every parsed document for it would
     // hold the corpus.
@@ -43,6 +44,13 @@ struct IndexCommand: ParsableCommand {
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
+      // As the document its file names, as the citations are, and for the same
+      // reason the second pass names it so.
+      var named = document
+      named.header.id = id
+      let amended = Amendments.links(in: named)
+      try database.insert(amended)
+      amendments += amended.count
       readFiles[id] = file
       if !document.header.obsoletes.isEmpty {
         obsoletes[id] = document.header.obsoletes
@@ -75,7 +83,7 @@ struct IndexCommand: ParsableCommand {
       "wrote index",
       metadata: [
         "documents": "\(indexed)", "citations": "\(citations)",
-        "successions": "\(successions)", "bytes": "\(size)",
+        "successions": "\(successions)", "amendments": "\(amendments)", "bytes": "\(size)",
         "duration": "\(clock.now - started)", "path": "\(out)",
       ])
     // An RFC left out is a gap in the graph nothing else would show, so the run fails
