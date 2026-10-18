@@ -52,6 +52,13 @@ extension RFCMarkdownSerializer {
   /// blank line, and a container indents what it holds.
   fileprivate struct Writer {
     let links: ExportLinks
+    /// Whether what is written goes in a GitHub table's cell, where a `|` ends the
+    /// cell even inside a code span unless it is escaped.
+    var isInTable = false
+
+    init(links: ExportLinks) {
+      self.links = links
+    }
 
     static func joined(_ parts: [[String]]) -> String {
       parts.filter { !$0.isEmpty }.map { $0.joined(separator: "\n") }.joined(separator: "\n\n")
@@ -84,8 +91,30 @@ extension RFCMarkdownSerializer {
 
     // MARK: Blocks
 
+    /// Blocks, separated by blank lines. Two lists in a row are kept apart by an
+    /// empty comment, which CommonMark would otherwise read as one list.
     func blocks(_ blocks: [Block]) -> [String] {
-      Self.lines(blocks.map(block))
+      var parts: [[String]] = []
+      for part in blocks.map(block) where !part.isEmpty {
+        if let previous = parts.last, Self.isList(previous), Self.isList(part) {
+          parts.append(["<!-- -->"])
+        }
+        parts.append(part)
+      }
+      return Self.lines(parts)
+    }
+
+    /// Whether `lines` open with a list item, past their anchors.
+    static func isList(_ lines: [String]) -> Bool {
+      guard let first = lines.first(where: { !isAnchor($0) }) else { return false }
+      if first.hasPrefix("- ") || first == "-" { return true }
+      let digits = first.prefix { $0.isASCII && $0.isNumber }
+      let rest = first.dropFirst(digits.count)
+      return !digits.isEmpty && (rest.hasPrefix(". ") || rest.hasPrefix(") "))
+    }
+
+    static func isAnchor(_ line: String) -> Bool {
+      line.hasPrefix("<!-- anchor:")
     }
 
     /// Parts separated by blank lines, the empty ones left out.
@@ -104,7 +133,7 @@ extension RFCMarkdownSerializer {
       case .preformatted(let content):
         return anchor(content.anchor) + fenced(content)
       case .figure(let figure):
-        let caption = ExportLinks.caption("Figure", number: figure.number, title: figure.title)
+        let caption = BlockCaption.text("Figure", number: figure.number, title: figure.title)
         return anchor(figure.anchor)
           + Self.lines([
             blocks(figure.blocks), caption.map { ["*" + Self.escaped($0) + "*"] } ?? [],
@@ -127,9 +156,16 @@ extension RFCMarkdownSerializer {
 
     /// A paragraph reflowed: one line, but for where the source breaks it.
     func paragraphLines(_ inlines: [Inline]) -> [String] {
-      // A break that opens or closes a paragraph breaks nothing.
-      let inlines = inlines.drop { $0 == .lineBreak }.reversed().drop { $0 == .lineBreak }
-        .reversed()
+      // A break that opens or closes a paragraph breaks nothing, nor does one with
+      // only spaces between it and either end.
+      func isBlank(_ inline: Inline) -> Bool {
+        switch inline {
+        case .lineBreak: true
+        case .text(let text): text.allSatisfy(\.isWhitespace)
+        default: false
+        }
+      }
+      let inlines = inlines.drop(while: isBlank).reversed().drop(while: isBlank).reversed()
       let text = self.inlines(Array(inlines), breaks: "\\\n")
       guard !text.isEmpty else { return [] }
       return text.split(separator: "\n", omittingEmptySubsequences: false).map {
@@ -161,17 +197,24 @@ extension RFCMarkdownSerializer {
           let marker = numbering.marker(at: index)
           let content = anchor(item.anchor) + blocks(item.blocks)
           if isCommonMark { return Self.item(marker, content) }
+          // The marker opens the item's first paragraph; ahead of anything else, a
+          // fence or a table, it would stop it being one, so it stands alone.
+          guard case .paragraph = item.blocks.first else {
+            return Self.item("-", [Self.escaped(marker), ""] + content)
+          }
           return Self.item("-", Self.prefixing(Self.escaped(marker), to: content))
         }
       }
-      // A list is loose, items set apart, when any item holds more than one line.
-      let isLoose = items.contains { $0.count > 1 }
+      // A list is loose, items set apart, when any item holds more than one line
+      // past its anchors, which keep their own lines in a tight list. Text never
+      // holds an anchor's comment: its `<` is escaped.
+      let isLoose = items.contains { $0.filter { !$0.contains("<!-- anchor:") }.count > 1 }
       return isLoose ? Self.lines(items) : items.flatMap { $0 }
     }
 
     /// `content` with `marker` ahead of its first line that is not an anchor.
     static func prefixing(_ marker: String, to content: [String]) -> [String] {
-      guard let index = content.firstIndex(where: { !$0.hasPrefix("<!-- anchor:") }) else {
+      guard let index = content.firstIndex(where: { !isAnchor($0) }) else {
         return content + [marker]
       }
       var content = content
@@ -215,7 +258,7 @@ extension RFCMarkdownSerializer {
 
     func table(_ table: Table) -> [String] {
       let rows = table.header + table.rows
-      let caption = ExportLinks.caption("Table", number: table.number, title: table.title)
+      let caption = BlockCaption.text("Table", number: table.number, title: table.title)
       let fitsOneLine = rows.allSatisfy { row in
         row.cells.allSatisfy { cell in !cell.flattened.contains(.lineBreak) }
       }
@@ -227,9 +270,12 @@ extension RFCMarkdownSerializer {
 
     private func gitHubTable(_ table: Table) -> [String] {
       let columns = max(1, (table.header + table.rows).map(\.cells.count).max() ?? 1)
+      var cellWriter = self
+      cellWriter.isInTable = true
       func row(_ cells: [[Inline]]) -> String {
         let padded = cells + Array(repeating: [], count: columns - cells.count)
-        return "| " + padded.map { inlines($0, breaks: " ") }.joined(separator: " | ") + " |"
+        return "| " + padded.map { cellWriter.inlines($0, breaks: " ") }.joined(separator: " | ")
+          + " |"
       }
       let rowAnchors = (table.header + table.rows).flatMap { anchor($0.anchor) }
       let header = row(table.header.first?.cells ?? [])
@@ -268,9 +314,9 @@ extension RFCMarkdownSerializer {
         } else if !title.isEmpty {
           parts.append(Self.escaped(Self.reflowed(title)) + ".")
         }
-        let authors = entry.authors.map(\.name).joined(separator: ", ")
+        let authors = entry.authors.map(\.displayName).joined(separator: ", ")
         if !authors.isEmpty { parts.append(Self.escaped(authors) + ".") }
-        let provenance = ExportLinks.provenance(of: entry)
+        let provenance = entry.provenance(separator: ", ")
         if !provenance.isEmpty { parts.append(Self.escaped(provenance) + ".") }
         let annotation = inlines(entry.annotation, breaks: " ")
         if !annotation.isEmpty { parts.append(annotation) }
@@ -305,11 +351,12 @@ extension RFCMarkdownSerializer {
         case .text(let text):
           result += Self.escaped(Self.reflowed(text))
         case .emphasis(let inner):
-          result += Self.wrapped(run(inner, breaks: breaks), in: "*")
+          result += Self.wrapped(run(inner, breaks: breaks), in: "*", tag: "em")
         case .strong(let inner):
-          result += Self.wrapped(run(inner, breaks: breaks), in: "**")
+          result += Self.wrapped(run(inner, breaks: breaks), in: "**", tag: "strong")
         case .code(let code):
-          result += Self.codeSpan(code)
+          let span = Self.codeSpan(code)
+          result += isInTable ? span.replacingOccurrences(of: "|", with: "\\|") : span
         case .superscript(let text):
           result += "<sup>" + Self.escaped(text) + "</sup>"
         case .subscript(let text):
@@ -319,7 +366,7 @@ extension RFCMarkdownSerializer {
           let label = text.isEmpty ? Self.escaped(url.absoluteString) : text
           result += "[\(label)](\(Self.destination(url.absoluteString)))"
         case .crossReference(let reference):
-          let label = Self.escaped(reference.display.text)
+          let label = Self.escaped(Self.reflowed(reference.display.text))
           result += "[\(label)](\(Self.destination(links.href(for: reference))))"
         case .lineBreak:
           result += breaks
@@ -345,13 +392,22 @@ extension RFCMarkdownSerializer {
     }
 
     /// `text` between `delimiter`s, with the spaces it opens or closes with kept
-    /// outside them, where CommonMark asks for them.
-    static func wrapped(_ text: String, in delimiter: String) -> String {
+    /// outside them, where CommonMark asks for them. Text that opens or closes with
+    /// punctuation is put in `tag` instead: beside a letter outside it, CommonMark
+    /// would not read the delimiters as emphasis, and would show them.
+    static func wrapped(_ text: String, in delimiter: String, tag: String) -> String {
       let trimmed = text.trimmingCharacters(in: .whitespaces)
-      guard !trimmed.isEmpty else { return text }
+      guard let first = trimmed.first, let last = trimmed.last else { return text }
       let leading = text.prefix { $0 == " " }
       let trailing = String(text.reversed().prefix { $0 == " " })
+      if isPunctuation(first) || isPunctuation(last) {
+        return leading + "<\(tag)>" + trimmed + "</\(tag)>" + trailing
+      }
       return leading + delimiter + trimmed + delimiter + trailing
+    }
+
+    static func isPunctuation(_ character: Character) -> Bool {
+      character.isPunctuation || character.isSymbol
     }
 
     static func codeSpan(_ code: String) -> String {

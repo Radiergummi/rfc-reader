@@ -52,14 +52,14 @@ struct RFCMarkdownSerializerTests {
   @Test func `a whole document opens with its title, and its sections are one level down`() {
     let document = RFCDocument(
       header: DocumentHeader(
-        id: .rfc(9999), title: "A Protocol", authors: [Author(name: "A. Writer")],
+        id: .rfc(9999), title: "A Protocol", authors: [Author(name: "A. Writer", role: .editor)],
         date: PublicationDate(year: 2026, month: 6),
         abstract: [.paragraph(Paragraph(text: "What it does."))]),
       sections: [Section(anchor: "section-1", number: "1", title: "Introduction")],
       source: .xml)
     let lines = RFCMarkdownSerializer().serialize(document).split(separator: "\n")
     #expect(lines.first == "# A Protocol")
-    #expect(lines.contains("RFC 9999 · June 2026 · A. Writer"))
+    #expect(lines.contains("RFC 9999 · June 2026 · A. Writer, Ed."))
     #expect(lines.contains("## Abstract"))
     #expect(lines.contains("What it does."))
     #expect(lines.contains("## 1. Introduction"))
@@ -182,6 +182,50 @@ struct RFCMarkdownSerializerTests {
     #expect(Self.markdown([.list(list)]).contains("\n1. first\n\n   more\n"))
   }
 
+  @Test func `a list whose items carry anchors stays tight`() {
+    let list = ListBlock(
+      style: .bullet,
+      items: [
+        ListItem(blocks: [.paragraph(Paragraph(text: "one"))], anchor: "s-1"),
+        ListItem(blocks: [.paragraph(Paragraph(text: "two"))], anchor: "s-2"),
+      ])
+    #expect(
+      Self.markdown([.list(list)]).contains(
+        "\n- <!-- anchor: s-1 -->\n  one\n- <!-- anchor: s-2 -->\n  two\n"))
+  }
+
+  /// A marker CommonMark has no list for, ahead of a fence, would stop it being one.
+  @Test func `a marker ahead of anything but a paragraph stands on its own line`() {
+    let item = ListItem(blocks: [.preformatted(Preformatted(kind: .sourceCode, text: "x = 1"))])
+    let list = ListBlock(
+      style: .numbered(ListNumbering(counter: .lowerAlpha, prefix: "(", suffix: ")")),
+      items: [item])
+    #expect(Self.markdown([.list(list)]).contains("\n- (a)\n\n  ```\n  x = 1\n  ```\n"))
+  }
+
+  @Test func `two lists in a row are kept apart`() {
+    let first = ListBlock(style: .bullet, items: [ListItem(text: "one")])
+    let second = ListBlock(style: .bullet, items: [ListItem(text: "two")])
+    #expect(Self.markdown([.list(first), .list(second)]).contains("- one\n\n<!-- -->\n\n- two"))
+  }
+
+  @Test func `emphasis that opens or closes with punctuation is an element`() {
+    let inlines: [Inline] = [.text("RFC"), .emphasis([.text("(opt)")]), .text("s")]
+    #expect(Self.markdown([.paragraph(Paragraph(inlines))]).contains("RFC<em>(opt)</em>s"))
+  }
+
+  @Test func `a reference's label is reflowed`() {
+    let reference = CrossReference(target: .anchor("section-2"), text: "Section 2 of\n   this")
+    let markdown = Self.markdown([.paragraph(Paragraph([.crossReference(reference)]))])
+    #expect(markdown.contains("[Section 2 of this](#section-2)"))
+  }
+
+  @Test func `a break with only spaces after it ends nothing`() {
+    let markdown = Self.markdown([.paragraph(Paragraph([.text("a"), .lineBreak, .text("  ")]))])
+    #expect(markdown.contains("\na\n"))
+    #expect(!markdown.contains("a\\"))
+  }
+
   @Test func `a definition list is a bold term with its definition indented under it`() {
     let list = DefinitionList([
       DefinitionItem(term: [.text("Term")], definition: [.paragraph(Paragraph(text: "Meaning."))])
@@ -199,6 +243,13 @@ struct RFCMarkdownSerializerTests {
     let markdown = Self.markdown([.table(table)])
     #expect(markdown.contains("| Code | Meaning |\n| --- | --- |\n| 1 | a\\|b |\n"))
     #expect(markdown.contains("*Table 2: Codes*"))
+  }
+
+  @Test func `a pipe in a table cell's code is escaped`() {
+    let table = Table(
+      title: nil, header: [Table.Row(cells: [[.text("Rule")]])],
+      rows: [Table.Row(cells: [[.code("a|b")]])])
+    #expect(Self.markdown([.table(table)]).contains("| `a\\|b` |"))
   }
 
   @Test func `a table with a cell of several lines is stacked`() {

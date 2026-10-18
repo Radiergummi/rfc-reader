@@ -33,8 +33,7 @@ struct ExportLinks {
   /// Where a link to `anchor`, in this document, goes.
   func href(forAnchor anchor: String) -> String {
     guard inDocument == .absolute, let id = document.header.id else { return "#" + anchor }
-    let page = RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)")
-    return RFCLink.url(page, fragment: anchor).absoluteString
+    return RFCLink(id: id, anchor: anchor).webURL.absoluteString
   }
 
   /// Where a bibliography entry's title links: the address it gives, or the page of
@@ -43,13 +42,6 @@ struct ExportLinks {
     if let url = entry.url { return url }
     guard let id = entry.documentID else { return nil }
     return CitationFormatter.url(for: id)
-  }
-
-  /// `BCP 14, RFC 2119, March 1997`: an entry's place in its series and its date,
-  /// without the DOI, which names the same document again.
-  static func provenance(of entry: Reference) -> String {
-    let series = entry.seriesInfo.filter { $0.name != "DOI" }.map { "\($0.name) \($0.value)" }
-    return (series + [entry.date?.formatted].compactMap { $0 }).joined(separator: ", ")
   }
 
   /// `Normative` or `Informative`, as a list's title says; nil when it says neither.
@@ -64,20 +56,8 @@ struct ExportLinks {
   /// `RFC 9110 · June 2022 · R. Fielding, M. Nottingham`: what a document's title is
   /// followed by.
   static func byline(of header: DocumentHeader) -> String {
-    let authors = header.authors.map(\.name).joined(separator: ", ")
+    let authors = header.authors.map(\.displayName).joined(separator: ", ")
     return [header.id?.displayName, header.date?.formatted, authors.isEmpty ? nil : authors]
       .compactMap { $0 }.joined(separator: " · ")
-  }
-
-  /// `Figure 3: A Box`, `Table 2`, or the title alone; nil when there is neither.
-  static func caption(_ word: String, number: Int?, title: String?) -> String? {
-    let title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let label = number.map { "\(word) \($0)" }
-    switch (label, title?.isEmpty == false ? title : nil) {
-    case (let label?, let title?): return "\(label): \(title)"
-    case (let label?, nil): return label
-    case (nil, let title?): return title
-    case (nil, nil): return nil
-    }
   }
 }

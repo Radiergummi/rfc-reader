@@ -124,7 +124,7 @@ extension RFCHTMLSerializer {
       case .figure(let figure):
         open("figure", id: figure.anchor)
         blocks(figure.blocks)
-        if let caption = ExportLinks.caption("Figure", number: figure.number, title: figure.title) {
+        if let caption = BlockCaption.text("Figure", number: figure.number, title: figure.title) {
           output += "<figcaption>\(Self.escaped(caption))</figcaption>\n"
         }
         output += "</figure>\n"
@@ -205,7 +205,7 @@ extension RFCHTMLSerializer {
     mutating func table(_ table: Table) {
       open("div", class: "table")
       open("table", id: table.anchor)
-      if let caption = ExportLinks.caption("Table", number: table.number, title: table.title) {
+      if let caption = BlockCaption.text("Table", number: table.number, title: table.title) {
         output += "<caption>\(Self.escaped(caption))</caption>\n"
       }
       for (group, rows, cell) in [("thead", table.header, "th"), ("tbody", table.rows, "td")]
@@ -239,9 +239,9 @@ extension RFCHTMLSerializer {
             parts.append(escaped + ".")
           }
         }
-        let authors = entry.authors.map(\.name).joined(separator: ", ")
+        let authors = entry.authors.map(\.displayName).joined(separator: ", ")
         if !authors.isEmpty { parts.append(Self.escaped(authors) + ".") }
-        let provenance = ExportLinks.provenance(of: entry)
+        let provenance = entry.provenance(separator: ", ")
         if !provenance.isEmpty { parts.append(Self.escaped(provenance) + ".") }
         if !entry.annotation.isEmpty { parts.append(inlines(entry.annotation)) }
         if let kind { parts.append("<span class=\"kind\">\(kind).</span>") }
