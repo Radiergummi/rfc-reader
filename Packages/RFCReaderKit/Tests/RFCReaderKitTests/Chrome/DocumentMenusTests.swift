@@ -90,7 +90,7 @@ struct DocumentMenusTests {
   @Test func `cite names each style`() {
     #expect(
       titles(DocumentMenus.cite(locale: .english))[0]
-        == ["Short", "Full citation", "Markdown link", "BibTeX", "URL"])
+        == ["Short", "Full Citation", "Markdown Link", "BibTeX", "URL"])
   }
 
   @Test func `a collection's item is its folder in its color`() {
@@ -164,7 +164,8 @@ struct RowAndReferenceMenusTests {
   @Test func `a Mac row opens first, then the library's actions, then share`() {
     #expect(
       DocumentMenus.rowActions(
-        isRFC: true, opensTabs: true, opensWindows: true, inCollection: false)
+        isRFC: true, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
         == [
           [.openInNewTab, .openInNewWindow],
           [.bookmark, .addToCollection, .readingPath, .keepOffline],
@@ -175,10 +176,12 @@ struct RowAndReferenceMenusTests {
   /// An iPhone opens no window, an iPad one, and neither a tab.
   @Test func `a device offers only the windows and tabs it can open`() {
     let iPhone = DocumentMenus.rowActions(
-      isRFC: true, opensTabs: false, opensWindows: false, inCollection: false)
+      isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+      hasCitationIndex: true)
     #expect(iPhone.first == [.bookmark, .addToCollection, .readingPath, .keepOffline])
     let iPad = DocumentMenus.rowActions(
-      isRFC: true, opensTabs: false, opensWindows: true, inCollection: false)
+      isRFC: true, opensTabs: false, opensWindows: true, inCollection: false,
+      hasCitationIndex: true)
     #expect(iPad.first == [.openInNewWindow])
   }
 
@@ -187,7 +190,8 @@ struct RowAndReferenceMenusTests {
   @Test func `a series is bookmarked and opened, not collected or shared`() {
     #expect(
       DocumentMenus.rowActions(
-        isRFC: false, opensTabs: true, opensWindows: true, inCollection: false)
+        isRFC: false, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
         == [[.openInNewTab, .openInNewWindow], [.bookmark]])
   }
 
@@ -204,9 +208,19 @@ struct RowAndReferenceMenusTests {
         == [[.copyLink]])
   }
 
+  /// Without a citation index a reading path could only say there is none (#769).
+  @Test func `a row offers no reading path without a citation index`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+        hasCitationIndex: false
+      ).first == [.bookmark, .addToCollection, .keepOffline])
+  }
+
   @Test func `a collection's row can be removed from it, last`() {
     let actions = DocumentMenus.rowActions(
-      isRFC: true, opensTabs: true, opensWindows: true, inCollection: true)
+      isRFC: true, opensTabs: true, opensWindows: true, inCollection: true,
+      hasCitationIndex: true)
     #expect(actions.last == [.removeFromCollection])
   }
 }

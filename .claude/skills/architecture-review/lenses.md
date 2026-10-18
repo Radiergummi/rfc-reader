@@ -62,7 +62,7 @@ For each home-grown candidate in the inventory (a lexer engine, an XML DOM, a ca
 - Scrolling and hangs: work on the main actor during scroll or layout (hitches), and anything synchronous on the main actor that can take over 250 ms on a large document (a hang the system reports).
 - Energy and network: polling, timers, background refreshes, and downloads nobody is waiting for.
 - Size: the app bundle and its data packs, and what of it every user downloads whether they need it or not.
-- Measure where you can: `make benchmark` covers the index and document parsers, search and the builder; `make trace` records signposts (macOS only); Instruments' Allocations, Leaks, Hangs, Animation Hitches and App Launch templates cover the rest. Name the benchmark, signpost or template. Anything unmeasured is a hypothesis and says which measurement would settle it, or that one is missing.
+- Measure where you can: `make benchmark` covers the index and document parsers, search, the builder and the reader's TextKit layout (a jump, a resize step, a background slice); `make trace` records signposts (macOS only); Instruments' Allocations, Leaks, Hangs, Animation Hitches and App Launch templates cover the rest. Name the benchmark, signpost or template. Anything unmeasured is a hypothesis and says which measurement would settle it, or that one is missing.
 
 ## 8. Concentrations of complexity
 

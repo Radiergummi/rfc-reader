@@ -305,12 +305,8 @@ final class RFCTextViewCoordinator: NSObject {
     guard let text = textView?.textLayoutManager?.attributedText,
       offset >= 0, offset < text.length
     else { return nil }
-    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(Self.url(fromLink:))
-  }
-
-  /// A link attribute's value as a URL: AppKit may hand it over as its string.
-  private static func url(fromLink link: Any) -> URL? {
-    link as? URL ?? (link as? String).flatMap(URL.init(string:))
+    return text.attribute(.link, at: offset, effectiveRange: nil).flatMap(
+      ReaderLinkScheme.url(fromLink:))
   }
 
   /// The card for a reference, on either platform, or nil when it would say no
@@ -360,6 +356,12 @@ final class RFCTextViewCoordinator: NSObject {
           self?.showBacklinks(at: offset)
         }
       }
+      // Nor does an errata chip: it lists its section's errata (#387).
+      if errataChip(at: offset) != nil {
+        return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+          self?.showErrata(at: offset)
+        }
+      }
       guard let url = link(at: offset), let documentID,
         LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
       else { return defaultAction }
@@ -385,9 +387,9 @@ final class RFCTextViewCoordinator: NSObject {
       if case .tag = textItem.content {
         return glossMenu(for: textItem, in: textView) ?? figureMenu(for: textItem, in: textView)
       }
-      // A backlink caption's link is ours alone, and nothing in the default menu —
-      // Copy Link, Share — means anything for it.
-      if backlinkCaption(at: textItem.range.location) != nil { return nil }
+      // A backlink caption's link is ours alone, and so is an errata chip's: nothing
+      // in the default menu — Copy Link, Share — means anything for it.
+      if listsRatherThanGoes(at: textItem.range.location) { return nil }
       // A heading's hung number (#433) links to its own heading, which there is no
       // point previewing: only the menu, its Copy and Share handing out the RFC
       // Editor's URL for the section.
@@ -542,7 +544,12 @@ final class RFCTextViewCoordinator: NSObject {
         showBacklinks(at: charIndex)
         return true
       }
-      guard let url = Self.url(fromLink: link) else { return false }
+      // Nor does an errata chip: it lists its section's errata (#387).
+      if errataChip(at: charIndex) != nil {
+        showErrata(at: charIndex)
+        return true
+      }
+      guard let url = ReaderLinkScheme.url(fromLink: link) else { return false }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)

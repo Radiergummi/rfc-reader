@@ -108,6 +108,23 @@ public struct QuickOpenResults: Equatable, Sendable {
     hitsQuery != query
   }
 
+  /// What the sheet and the palette say in place of rows, once there is something
+  /// to say: not while nothing is typed, nor while a search is still running, so it
+  /// does not flash on every keystroke.
+  ///
+  /// From `indexState`, not from whether there is an index, which an offline first
+  /// launch leaves missing for good: the index has failed then, and saying it is
+  /// loading promises what won't come.
+  public func message(indexState: IndexState, locale: Locale = .interface) -> String? {
+    guard !query.isEmpty, !isSearching else { return nil }
+    return switch indexState {
+    case .idle, .loading: String(kit: "The RFC index is still loading.", locale: locale)
+    case .failed:
+      String(kit: "The RFC index couldn't be loaded. A number still opens.", locale: locale)
+    case .ready: String(kit: "Nothing in the index matches “\(query)”.", locale: locale)
+    }
+  }
+
   /// What ↵ opens now. Nothing while the selection is a hit found for what was
   /// typed a keystroke ago: opening it would open something the reader did not ask
   /// for. The exact and registry rows belong to what is typed now, so they never

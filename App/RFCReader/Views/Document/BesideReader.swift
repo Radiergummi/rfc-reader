@@ -57,6 +57,9 @@ struct BesideReader: View {
         .sheet(item: Bindable(reading.navigation).glossaryTerm) { term in
           GlossarySheet(term: term)
         }
+        .sheet(item: Bindable(reading.navigation).errataShown) { request in
+          ErrataSheet(items: request.items)
+        }
       #endif
   }
 }

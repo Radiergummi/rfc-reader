@@ -118,8 +118,10 @@ struct RFCListView: View {
     let row = { (row: LibraryRow, showsYear: Bool) in
       OfflineStated(document: row.id, isShown: showsOfflineState) { offline in
         RFCRow(
-          row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
-          filter: shown.filter, offline: offline
+          row: row, isBookmarked: bookmarked.contains(row.id),
+          // Available Offline's own rows say where their bodies stand instead.
+          isAvailableOffline: !showsOfflineState && library.isAvailableOffline(row.id),
+          showsYear: showsYear, filter: shown.filter, offline: offline
         ) { library.downloadNow(row.id) }
       }
       .tag(row.id)
@@ -255,9 +257,15 @@ struct RFCListView: View {
           }
         } else if isUnsearched, workingGroupCardAcronym == nil {
           // Not over a working group's card, which says what the group has.
-          ContentUnavailableView(
-            shown.filter.emptyTitle(in: library.collections),
-            systemImage: shown.filter.systemImage)
+          ContentUnavailableView {
+            Label(
+              shown.filter.emptyTitle(in: library.collections),
+              systemImage: shown.filter.systemImage)
+          } description: {
+            if let description = shown.filter.emptyDescription() {
+              Text(verbatim: description)
+            }
+          }
         } else {
           VStack {
             ContentUnavailableView.search(text: shown.query)
@@ -498,6 +506,9 @@ private struct OfflineStated<Content: View>: View {
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool
+  /// Whether Available Offline lists it, marked beside the bookmark (#769): what the
+  /// reader asked to keep offline, whose body may still be on its way.
+  var isAvailableOffline = false
   /// False under a year's header, which already says it (#347).
   var showsYear = true
   /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
@@ -575,6 +586,9 @@ struct RFCRow: View {
           if isBookmarked {
             Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
           }
+          if isAvailableOffline {
+            offlineMark.font(.caption)
+          }
         }
       #endif
       if let offline {
@@ -585,7 +599,9 @@ struct RFCRow: View {
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(row.accessibilityLabel(isBookmarked: isBookmarked))
+    .accessibilityLabel(
+      row.accessibilityLabel(isBookmarked: isBookmarked, isAvailableOffline: isAvailableOffline)
+    )
     .accessibilityValue(offline.map { Text(verbatim: $0.description()) } ?? Text(verbatim: ""))
     .accessibilityActions {
       // The row is one element, so its button is reached as an action of it.
@@ -624,12 +640,21 @@ struct RFCRow: View {
         if isBookmarked {
           Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
         }
+        if isAvailableOffline {
+          offlineMark.font(.caption2)
+        }
         if showsYear {
           Text(String(row.date.year)).font(.caption).foregroundStyle(.tertiary)
         }
       }
     }
   #endif
+
+  /// Quieter than the bookmark: this says only what is kept on the device, which the
+  /// Available Offline list says more of.
+  private var offlineMark: some View {
+    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.secondary)
+  }
 
   private var title: some View {
     Text(row.title)

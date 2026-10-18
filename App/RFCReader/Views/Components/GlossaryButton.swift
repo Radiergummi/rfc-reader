@@ -30,6 +30,7 @@ struct GlossaryButton<Label: View>: View {
       label.contentShape(.rect)
     }
     .buttonStyle(.plain)
+    .pressableText()
     .glossaryTooltip(term)
     .accessibilityHint("Explains \(Glossary.entry(for: term).title)")
     #if os(macOS)
@@ -56,6 +57,17 @@ struct GlossaryButton<Label: View>: View {
 }
 
 extension View {
+  /// A control set as plain text, which #362 keeps as it was at rest, saying that it
+  /// can be pressed where a pointer can (#769): the pointing hand on a Mac, the
+  /// system's hover highlight on an iPad. Nothing changes under a finger.
+  func pressableText() -> some View {
+    #if os(macOS)
+      pointerStyle(.link)
+    #else
+      hoverEffect(.highlight)
+    #endif
+  }
+
   /// A term's summary as this view's tooltip: on its own, all a list row gets, since a
   /// row is selected by a click and a popover inside it would fight that (#362).
   func glossaryTooltip(_ term: Glossary.Term) -> some View {

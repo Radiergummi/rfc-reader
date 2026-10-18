@@ -42,13 +42,15 @@ struct InfoView: View {
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
-            let summary = ErrataSummary(errata: errata, sections: sections)
+            // The sections the reader draws, as the chips find them.
+            let summary = ErrataSummary(errata: errata, sections: ErrataMarks.drawn(sections))
             // Errata of only a status a later feed adds are neither listed nor counted.
             if !summary.items.isEmpty || summary.notListed != nil {
               ErrataSection(summary: summary, selectSection: selectSection)
             }
           }
-          if let document, document.series == .rfc {
+          // Without a citation index a reading path can only say there is none.
+          if let document, document.series == .rfc, library.hasCitationIndex {
             InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)
@@ -313,14 +315,17 @@ private struct ErrataSection: View {
   }
 }
 
-private struct ErratumView: View {
+/// One erratum, as the Info pane and an errata chip's list show it (#387).
+struct ErratumView: View {
   let item: ErrataSummary.Item
-  let selectSection: (String) -> Void
+  /// Goes to the section the erratum names; nil where the list is already there, as a
+  /// chip's is.
+  var selectSection: ((String) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(alignment: .firstTextBaseline) {
-        if let anchor = item.anchor {
+        if let anchor = item.anchor, let selectSection {
           Button {
             selectSection(anchor)
           } label: {
@@ -674,6 +679,13 @@ private struct OfflineSection: View {
     document.series == .rfc && library.offlineMarks.contains(document)
   }
 
+  /// Whether Available Offline lists it, which the status says as a row's mark does
+  /// (#769): kept by its mark, or as a bookmark while bookmarks are kept. The control
+  /// stays the mark's.
+  private var isAvailable: Bool {
+    library.isAvailableOffline(document)
+  }
+
   var body: some View {
     InfoSection(title: String(localized: "Offline")) {
       HStack(spacing: 10) {
@@ -693,9 +705,9 @@ private struct OfflineSection: View {
         Text(
           downloadFailed
             ? (hadNoRoom ? "Not enough space" : "Couldn't download")
-            : isKept ? "Kept offline" : "Not kept offline"
+            : isAvailable ? "Available offline" : "Not available offline"
         )
-        .foregroundStyle(isKept ? .primary : .secondary)
+        .foregroundStyle(isAvailable ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))

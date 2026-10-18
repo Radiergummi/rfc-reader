@@ -156,14 +156,21 @@ public enum DocumentMenus {
   /// which is bookmarked and opened but neither added to a collection nor shared:
   /// a collection holds RFCs (#321). `opensTabs` and `opensWindows` are what the
   /// device can open it in; `inCollection` is whether the list is a collection's.
+  /// Reading Path is offered only with `hasCitationIndex`, without which it can only
+  /// say there is none (#769).
   public static func rowActions(
-    isRFC: Bool, opensTabs: Bool, opensWindows: Bool, inCollection: Bool
+    isRFC: Bool, opensTabs: Bool, opensWindows: Bool, inCollection: Bool,
+    hasCitationIndex: Bool
   ) -> [[RowAction]] {
     var opening: [RowAction] = []
     if opensTabs { opening.append(.openInNewTab) }
     if opensWindows { opening.append(.openInNewWindow) }
     var library: [RowAction] = [.bookmark]
-    if isRFC { library += [.addToCollection, .readingPath, .keepOffline] }
+    if isRFC {
+      library.append(.addToCollection)
+      if hasCitationIndex { library.append(.readingPath) }
+      library.append(.keepOffline)
+    }
     let sections = [
       opening, library, isRFC ? [.share] : [], inCollection ? [.removeFromCollection] : [],
     ]

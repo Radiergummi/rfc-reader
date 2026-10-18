@@ -18,7 +18,7 @@ import SwiftUI
       content.contextMenu {
         let sections = DocumentMenus.rowActions(
           isRFC: row.rfc != nil, opensTabs: true, opensWindows: true,
-          inCollection: collection != nil)
+          inCollection: collection != nil, hasCitationIndex: library.hasCitationIndex)
         DividedSections(sections: sections, item: item)
       }
     }
@@ -79,7 +79,7 @@ import SwiftUI
     private var isBookmarked: Bool { library.bookmarkedDocuments.contains(row.id) }
 
     private func toggleBookmark() {
-      library.toggleBookmark(row.id)
+      library.toggleBookmark(row.id, undoManager: undoManager)
     }
   }
 #endif
