@@ -12,8 +12,8 @@
     /// own key equivalents ignore them. ⌘⇧= arrives as "+", which the menu item
     /// answers.
     public static func matches(characters: String?, modifiers: NSEvent.ModifierFlags) -> Bool {
-      let significant = modifiers.intersection([.command, .shift, .option, .control])
-      return significant == .command && characters == "="
+      ReaderShortcut.biggerAlternate.chord(on: .mac)?.matches(
+        characters: characters, modifiers: modifiers) == true
     }
   }
 #endif

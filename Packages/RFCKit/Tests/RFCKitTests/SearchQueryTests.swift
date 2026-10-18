@@ -6,6 +6,18 @@ import Testing
 /// back out in its canonical form, and completion for the qualifier being typed.
 @Suite("Search query")
 struct SearchQueryTests {
+  // MARK: - The vocabulary
+
+  /// The help lists the filters from here, so a new one is listed without a hand edit
+  /// of the list (#780).
+  @Test func `the filter names are the grammar's, in its order`() {
+    #expect(
+      SearchQuery.filterNames == [
+        "wg", "status", "author", "stream", "year", "after", "before", "published", "has", "is",
+        "in", "section", "sort",
+      ])
+  }
+
   // MARK: - Round trip
 
   /// Everything `parseQuery` understands comes back out as a query it reads the same

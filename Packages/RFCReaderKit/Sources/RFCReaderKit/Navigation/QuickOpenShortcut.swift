@@ -10,8 +10,9 @@
     /// different shortcut. Caps Lock and the function key are ignored, as AppKit's
     /// own key equivalents ignore them.
     public static func matches(characters: String?, modifiers: NSEvent.ModifierFlags) -> Bool {
-      let significant = modifiers.intersection([.command, .shift, .option, .control])
-      return significant == .command && characters?.lowercased() == "k"
+      ReaderShortcut.quickOpen.chord(on: .mac)?.matches(
+        characters: characters, modifiers: modifiers)
+        == true
     }
   }
 #endif

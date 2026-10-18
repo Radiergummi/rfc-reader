@@ -22,15 +22,17 @@
       characters: String?, modifiers: NSEvent.ModifierFlags, inText: Bool
     ) -> Step? {
       guard !inText else { return nil }
-      let significant = modifiers.intersection([.command, .shift, .option, .control])
-      guard significant == .command, let scalar = characters?.unicodeScalars.first else {
-        return nil
+      if ReaderShortcut.backArrow.chord(on: .mac)?.matches(
+        characters: characters, modifiers: modifiers) == true
+      {
+        return .back
       }
-      return switch Int(scalar.value) {
-      case NSLeftArrowFunctionKey: .back
-      case NSRightArrowFunctionKey: .forward
-      default: nil
+      if ReaderShortcut.forwardArrow.chord(on: .mac)?.matches(
+        characters: characters, modifiers: modifiers) == true
+      {
+        return .forward
       }
+      return nil
     }
   }
 #endif
