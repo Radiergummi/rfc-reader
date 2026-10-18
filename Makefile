@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -124,15 +124,21 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
 # saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
-# run on a Mac only, where the package builds; the weekly Linux job skips them.
+# run on a Mac only, where the package builds: `test-corpus-app`.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
-	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
+	$(if $(DARWIN),$(MAKE) test-corpus-app)
+
+## Run RFCReaderKit's corpus-backed suites alone, fetching the RFCXML they read
+# On a Mac only, where the package builds; `test-corpus` runs it after the others.
+# CI's macOS job runs it on its own, since the Linux job has run the rest.
+test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
+	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
@@ -184,11 +190,11 @@ build-benchmarks:
 # text.noindex. Written to a partial file first, like the legacy RFCs below.
 $(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
 
 $(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
 # The RFC index, fetched when it is missing, for what reads it without a corpus run:
 # the overrides check and `test-corpus`. What they take from it was fixed when each

@@ -166,8 +166,9 @@ jobs:
           persist-credentials: false
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_27.app && xcodebuild -version
+      # The pinned release, as in the job above.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: make xcodegen-install
       # A month to a store, as in the job above.
       - name: Name the cache's month
         id: cache-month
