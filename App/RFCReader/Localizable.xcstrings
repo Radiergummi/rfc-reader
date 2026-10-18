@@ -1591,6 +1591,16 @@
         }
       }
     },
+    "Lists every RFC that matches, as the search field would." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listet jeden RFC, der passt, wie es das Suchfeld täte."
+          }
+        }
+      }
+    },
     "Lists the BCP 14 requirements an RFC states, in one section and its subsections or in the whole RFC, each with its section's number." : {
       "localizations" : {
         "de" : {
@@ -2261,6 +2271,16 @@
         }
       }
     },
+    "Query" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abfrage"
+          }
+        }
+      }
+    },
     "Quit" : {
       "localizations" : {
         "de" : {
@@ -2527,6 +2547,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Sammlung sichern"
+          }
+        }
+      }
+    },
+    "Save as Collection…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Sammlung sichern …"
           }
         }
       }

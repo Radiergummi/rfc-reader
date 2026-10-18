@@ -75,10 +75,130 @@
     }
   }
 
+  /// A collection the reader made, as a script sees it (#355), named by its
+  /// identifier. `make new collection` builds one with `init()`, sets the properties
+  /// it was given, and only then inserts it, which is when it is made in the store:
+  /// until then it holds what it was given.
+  @objc(ScriptableCollection)
+  final class ScriptableCollection: NSObject {
+    /// Nil until `make` has inserted it.
+    fileprivate(set) var identifier: UUID?
+    fileprivate var givenName: String?
+    fileprivate var givenQuery: String?
+
+    override init() {}
+
+    init(_ identifier: UUID) {
+      self.identifier = identifier
+    }
+
+    private var entry: CollectionSnapshot.Entry? {
+      identifier.flatMap { LibraryModel.shared.collections[$0] }
+    }
+
+    @objc var uniqueID: String { identifier?.uuidString ?? "" }
+
+    @objc var name: String {
+      get { entry?.name ?? givenName ?? "" }
+      set {
+        guard let entry else {
+          givenName = newValue
+          return
+        }
+        guard CollectionStore.isValidName(newValue) else {
+          ScriptError.report("A collection's name can't be empty.")
+          return
+        }
+        LibraryModel.shared.editCollections {
+          try CollectionStore.update(entry.id, name: newValue, color: entry.color, in: $0)
+        }
+      }
+    }
+
+    @objc var query: String? {
+      get { identifier == nil ? givenQuery : entry?.query }
+      set {
+        guard let entry else {
+          givenQuery = newValue
+          return
+        }
+        // A collection's kind is fixed when it is made: its RFCs are chosen, or a
+        // query's.
+        guard entry.isDynamic else {
+          ScriptError.report("“\(entry.name)” holds RFCs chosen one by one, not a query.")
+          return
+        }
+        guard let newValue, CollectionStore.isValidQuery(newValue) else {
+          ScriptError.report("A collection's query can't be empty.")
+          return
+        }
+        LibraryModel.shared.editCollections {
+          try CollectionStore.update(
+            entry.id, name: entry.name, color: entry.color, query: newValue, in: $0)
+        }
+      }
+    }
+
+    /// The application's `scriptCollections`, by identifier.
+    nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
+      guard let application = NSScriptClassDescription(for: NSApplication.self) else { return nil }
+      let uniqueID = MainActor.assumeIsolated { self.uniqueID }
+      return NSUniqueIDSpecifier(
+        containerClassDescription: application,
+        containerSpecifier: nil,
+        key: "scriptCollections",
+        uniqueID: uniqueID
+      )
+    }
+  }
+
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
-      key == "rfcs" || key == "orderedWindows"
+      key == "rfcs" || key == "orderedWindows" || key == "scriptCollections"
+    }
+
+    /// Every collection, in the sidebar's order.
+    @objc var scriptCollections: [ScriptableCollection] {
+      LibraryModel.shared.collections.collections.map { ScriptableCollection($0.id) }
+    }
+
+    @objc(valueInScriptCollectionsWithUniqueID:)
+    func valueInScriptCollections(withUniqueID uniqueID: Any) -> ScriptableCollection? {
+      guard let string = uniqueID as? String, let identifier = UUID(uuidString: string),
+        LibraryModel.shared.collections[identifier] != nil
+      else { return nil }
+      return ScriptableCollection(identifier)
+    }
+
+    /// `make new collection`: made in the store from what it was given, at the end
+    /// of the sidebar, as New Collection makes one. With a query it is made from
+    /// that query; named, if it was given no name, by its query.
+    @objc(insertInScriptCollections:)
+    func insertInScriptCollections(_ collection: ScriptableCollection) {
+      if AppData.isStoredInMemory {
+        ScriptError.report(AppData.storeWarning.message)
+      }
+      let query = collection.givenQuery
+      let name = collection.givenName ?? query ?? ""
+      guard CollectionStore.isValidName(name) else {
+        ScriptError.report("A collection needs a name, or a query to be named by.")
+        return
+      }
+      if let query, !CollectionStore.isValidQuery(query) {
+        ScriptError.report("A collection's query can't be empty.")
+        return
+      }
+      LibraryModel.shared.editCollections {
+        collection.identifier = try CollectionStore.create(
+          named: name, color: .default, query: query, in: $0
+        ).identifier
+      }
+    }
+
+    @objc(insertObject:inScriptCollectionsAtIndex:)
+    func insert(_ collection: ScriptableCollection, inScriptCollectionsAt index: Int) {
+      insertInScriptCollections(collection)
     }
 
     /// The application's `windows`, less any reader window that has closed but is

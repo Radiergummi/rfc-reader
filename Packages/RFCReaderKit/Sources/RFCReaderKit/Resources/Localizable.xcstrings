@@ -1685,6 +1685,26 @@
         }
       }
     },
+    "No collection is named by “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Sammlung heißt so, wie „%@“ sie nennt."
+          }
+        }
+      }
+    },
+    "No working group in the index is named by “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Arbeitsgruppe im Index heißt so, wie „%@“ sie nennt."
+          }
+        }
+      }
+    },
     "Normal" : {
       "localizations" : {
         "de" : {
@@ -2833,6 +2853,16 @@
         }
       }
     },
+    "This version doesn’t know “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Version kennt „%@“ nicht."
+          }
+        }
+      }
+    },
     "Today every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
       "localizations" : {
         "de" : {
@@ -2889,6 +2919,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In Prüfung"
+          }
+        }
+      }
+    },
+    "Unknown Search Term" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbekannter Suchbegriff"
+          }
+        }
+      }
+    },
+    "Unknown Search Terms" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbekannte Suchbegriffe"
           }
         }
       }
@@ -3199,6 +3249,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "in Prüfung"
+          }
+        }
+      }
+    },
+    "“%@” isn’t a value this version knows." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ ist kein Wert, den diese Version kennt."
+          }
+        }
+      }
+    },
+    "“%@” names a collection made from a query, which has no documents of its own to search in." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ nennt eine Sammlung aus einer Abfrage, die keine eigenen Dokumente zum Durchsuchen hat."
           }
         }
       }
