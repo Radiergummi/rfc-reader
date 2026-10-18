@@ -246,11 +246,12 @@ struct EmptyDetailView: View {
 }
 
 #if !os(macOS)
-  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, words from a title, or any RFC
-  /// Editor / Datatracker URL.
+  /// Command-L style jump to an RFC by its number, typed on the number pad (#579):
+  /// the search field beside the button already finds by keyword.
   ///
-  /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
-  /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
+  /// iOS only. The Mac has `QuickOpenPalette`, which takes a series, title words and
+  /// links as well, because a form in a sheet is the right shape for a phone and the
+  /// wrong one for ⌘L on a desktop (#26).
   struct GoToDocumentSheet: View {
     let library: LibraryModel
     @State private var controller: QuickOpenController
@@ -260,7 +261,7 @@ struct EmptyDetailView: View {
       self.library = library
       _controller = State(
         initialValue: QuickOpenController(
-          library: library, navigation: navigation,
+          library: library, navigation: navigation, takesNumbersOnly: true,
           dismiss: { navigation.isShowingGoToSheet = false }))
     }
 
@@ -277,30 +278,11 @@ struct EmptyDetailView: View {
     var body: some View {
       NavigationStack {
         Form {
-          TextField(QuickOpenResults.placeholder(), text: text)
+          TextField(QuickOpenResults.numberPlaceholder(), text: text)
             .focused($focused)
+            .keyboardType(.numberPad)
             .onSubmit(controller.openSelection)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-          if let draft = results.draft {
-            // The draft typed (#728), which Open and ↵ open.
-            Section {
-              Button {
-                controller.open(.draft(draft))
-              } label: {
-                HStack(spacing: 12) {
-                  Text(verbatim: draft.id.displayName)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                  Spacer(minLength: 0)
-                  Text("Internet-Draft")
-                    .foregroundStyle(.secondary)
-                }
-              }
-              .tint(.primary)
-            }
-          } else if results.rows.isEmpty {
+          if results.rows.isEmpty {
             status
           } else {
             Section {
@@ -325,24 +307,14 @@ struct EmptyDetailView: View {
         focused = true
         // Found: its tip has no more to say (#782).
         GoToRFCTip().invalidate(reason: .actionPerformed)
-        // The check at launch alone goes stale in an app left open for weeks.
-        library.refreshRegistriesIfDue()
       }
-      // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { controller.resolve() }
-      .task(id: controller.searchKey) { await controller.search() }
     }
 
-    /// Said while nothing is listed: what the field takes, or why nothing matches,
-    /// the one line under the field that turns a blind text box into something that
-    /// tells the reader whether it understood them. Not while a search is still
-    /// running, so it does not flash on every keystroke.
+    /// Said while nothing is listed under digits typed: that no RFC has a number
+    /// that long. The placeholder says what the field takes.
     @ViewBuilder
     private var status: some View {
-      if controller.query.isEmpty {
-        // The same as the Mac's palette (#761).
-        Text(verbatim: QuickOpenResults.example)
-      } else if let message = controller.message {
+      if let message = controller.message {
         HStack {
           Text(verbatim: message)
           if case .failed = library.indexState {

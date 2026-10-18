@@ -13,10 +13,22 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// As many rows as a palette shows before it stops being a glance.
   public static let limit = 8
 
-  /// The field's placeholder, on the Mac's palette and iOS's sheet alike (#761):
-  /// both take all four.
+  /// The Mac's palette's placeholder (#761), which takes all four. iOS's sheet takes
+  /// a number alone (`numberPlaceholder`).
   public static func placeholder(locale: Locale = .interface) -> String {
     String(kit: "RFC number, BCP 14, title words, or a link", locale: locale)
+  }
+
+  /// iOS's field (#579): beside a search field that already finds by keyword, it
+  /// takes an RFC number alone.
+  public static func numberPlaceholder(locale: Locale = .interface) -> String {
+    String(kit: "RFC number", locale: locale)
+  }
+
+  /// The digits of what was typed into iOS's field, which is all it takes (#579):
+  /// the number pad types nothing else, but a paste or an iPad's keyboard can.
+  public static func digits(in text: String) -> String {
+    String(text.filter { $0.isASCII && $0.isNumber })
   }
 
   /// One of each of the four, shown under the field while it is empty. Not
@@ -194,6 +206,15 @@ public struct QuickOpenResults: Equatable, Sendable {
     } else {
       keepSelection()
     }
+  }
+
+  /// What iOS's field shows for the digits typed into it (#579): the RFC with that
+  /// number, and nothing else, so there is no search to wait for. Neither the RFCs
+  /// whose numbers begin with it nor a registry value: the search field beside it
+  /// finds those.
+  public mutating func show(number digits: String) {
+    show(query: digits, exact: Int(digits).map { RFCLink(id: .rfc($0)) })
+    show(hits: [], for: digits)
   }
 
   /// What the search found for `query`. Ignored when the reader has typed on since:

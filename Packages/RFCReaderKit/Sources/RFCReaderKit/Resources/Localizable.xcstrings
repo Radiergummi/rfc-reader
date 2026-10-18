@@ -2718,6 +2718,16 @@
         }
       }
     },
+    "RFC number" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Nummer"
+          }
+        }
+      }
+    },
     "RFC number, BCP 14, title words, or a link" : {
       "localizations" : {
         "de" : {
