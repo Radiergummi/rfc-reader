@@ -77,8 +77,8 @@ struct UserDataMirrorsTests {
   /// The names in the table are SwiftData's own, and a model added to the schema
   /// without a mirror for it fails here rather than going unrefreshed.
   @Test func `every entity of the schema feeds a mirror`() {
-    let entities = Schema(versionedSchema: SchemaV5.self).entities.map(\.name)
-    #expect(entities.count == SchemaV5.models.count)
+    let entities = Schema(versionedSchema: SchemaV6.self).entities.map(\.name)
+    #expect(entities.count == SchemaV6.models.count)
     for entity in entities {
       #expect(!UserDataMirrors.changed(byEntities: [entity]).isEmpty, "\(entity)")
     }

@@ -292,7 +292,8 @@ struct DocumentStoreTests {
         obsoletedBy: [.rfc(9999)])
     ])
     let baseline = BookmarkBaseline(
-      bookmarks: [.rfc(8999)], index: index, revisions: nil, carryingOver: nil)
+      bookmarks: [.rfc(8999)], followedGroups: [], index: index, revisions: nil,
+      carryingOver: nil)
 
     #expect(await store.bookmarkBaseline() == nil)
     try await store.storeBookmarkBaseline(baseline)
