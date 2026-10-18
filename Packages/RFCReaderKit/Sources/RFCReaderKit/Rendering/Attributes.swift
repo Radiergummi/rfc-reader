@@ -63,8 +63,8 @@ extension NSAttributedString.Key {
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow
   /// would otherwise be read out, carried by every character of the caption but its
-  /// line break; and an informative chip, said as "informative" and its label
-  /// (#457, #862). A `String`. A code block's copy button has none, and is not read.
+  /// line break; an informative chip, said as "informative" and its label (#457,
+  /// #862); and a code block's copy button, said as Copy Code (#760). A `String`.
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
@@ -414,6 +414,38 @@ extension NSAttributedString {
       if value != nil { buttons.append(run) }
     }
     return buttons
+  }
+
+  /// What the copy button of the code block at this character offset copies, its
+  /// menu's Copy Code (#760): nil for a block with no button. Only the block's own
+  /// extent is searched.
+  public func code(ofBlockAt offset: Int) -> String? {
+    guard let block = extent(ofBox: .rfcVerbatim, at: offset),
+      let button = copyButtons(in: block).first
+    else { return nil }
+    return code(ofCopyButtonAt: button.location)
+  }
+
+  /// What the copy button of `box`'s block copies, found from `range`, which touches
+  /// the block: the block's menu's Copy Code (#760), found as its Copy Figure is
+  /// (`FigureMenu.itemRange(of:touching:in:)`). Nil for a block with no button.
+  public func code(ofBlock box: VerbatimBox, touching range: NSRange) -> String? {
+    location(of: box, touching: range).flatMap(code(ofBlockAt:))
+  }
+
+  /// Where `box`'s block is first found in `range`, which touches it: a selection
+  /// that may begin anywhere before it. An empty range is a location.
+  func location(of box: VerbatimBox, touching range: NSRange) -> Int? {
+    let searched = NSIntersectionRange(
+      NSRange(location: range.location, length: max(range.length, 1)),
+      NSRange(location: 0, length: length))
+    var location: Int?
+    enumerateAttribute(.rfcVerbatim, in: searched) { value, run, stop in
+      guard (value as? VerbatimBox) === box else { return }
+      location = run.location
+      stop.pointee = true
+    }
+    return location
   }
 
   /// What the copy button at this character offset copies: its block as Copy

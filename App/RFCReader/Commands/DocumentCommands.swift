@@ -216,6 +216,8 @@ struct DocumentCommands: Commands {
             .disabled(!showsDocument)
           FocusSteps(reader: reader)
             .disabled(!showsDocument)
+          OutlineSectionItems(reader: reader)
+            .disabled(!showsDocument)
         }
         // View ▸ Compare Side by Side (#187), beside the other ways of reading it.
         if let controller = active.controller, let reader,

@@ -324,6 +324,16 @@ struct PanelHost: View {
       // inside it rather than flush with its edge.
       .padding(2)
       .background(.quaternary.opacity(0.7), in: .capsule)
+      // Three buttons to look at, one control with three choices to VoiceOver, as
+      // a segmented control is (#760).
+      .accessibilityRepresentation {
+        Picker("Tab", selection: $tab) {
+          ForEach(InspectorTab.allCases, id: \.self) { tab in
+            Text(verbatim: tab.title).tag(tab)
+          }
+        }
+        .pickerStyle(.segmented)
+      }
     }
 
     /// The accent, darkened in each appearance until the white label on it clears the
@@ -362,8 +372,6 @@ struct PanelHost: View {
           .contentShape(.rect)
       }
       .buttonStyle(.plain)
-      // The pill shows which tab is chosen; this says so to VoiceOver (#156).
-      .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
   }
 #endif
