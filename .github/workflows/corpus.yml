@@ -230,12 +230,14 @@ jobs:
       GH_REPO: ${{ github.repository }}
       LEGACY_PACK_CLEARED: ${{ vars.LEGACY_PACK_CLEARED == 'true' }}
     steps:
+      # Tagged at the commit that built the packs, not the default branch's head: a
+      # run takes hours and can come from any ref.
       - name: Publish release
         run: |
           gh run download "$GITHUB_RUN_ID" --name "packs-$VERSION" --dir packs
           legacy=()
           if [ "$LEGACY_PACK_CLEARED" = true ]; then legacy=(packs/legacy-xml-*.aar); fi
-          gh release create "corpus-$VERSION" \
+          gh release create "corpus-$VERSION" --target "$GITHUB_SHA" \
             "${legacy[@]}" packs/modern-xml-*.aar \
             packs/indexes-*.aar \
             packs/corpus/manifest.json \
