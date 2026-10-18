@@ -8,17 +8,28 @@ import Testing
 /// storage's own, every model character is mapped or hidden in that build, never both
 /// and never twice, a mapped character is the model's character, and model → storage
 /// → model comes back. At two columns, so a table is set as a grid in one and stacked
-/// in the other, and a folded block unfolded in one and as published in the other.
+/// in the other, and a folded block unfolded in one and as published in the other, and
+/// in the print's style, whose references are plain text.
 @Suite("Annotations: the position map")
 struct PositionMapTests {
   static let fixtures = ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml", "rfc9290.xml"]
-  /// A phone's column and a wide Mac's.
-  static let measures: [CGFloat] = [300, 900]
+  /// A phone's column and a wide Mac's, and paper's, which has no links or chips.
+  static let measures: [CGFloat] = [300, 900, 0]
+
+  /// The style at `measure`; 0 is the print's.
+  static func style(_ measure: CGFloat) -> ReadingStyle {
+    guard measure > 0 else {
+      return ReadingStyle(
+        bodySize: 10, measure: 450, lineHeightMultiple: 1.2, emitsLinks: false,
+        references: .plainText)
+    }
+    return ReadingStyle(measure: measure)
+  }
 
   @Test(arguments: fixtures, measures)
   func `every model character is mapped once or hidden`(fixture: String, measure: CGFloat) throws {
     let document = try Fixtures.document(named: fixture)
-    let built = DocumentTextBuilder.build(document, style: ReadingStyle(measure: measure))
+    let built = DocumentTextBuilder.build(document, style: Self.style(measure))
     let map = built.positions
     // How many times each model character is mapped, and hidden.
     var mapped = [Int](repeating: 0, count: map.model.length)
@@ -44,7 +55,7 @@ struct PositionMapTests {
   @Test(arguments: fixtures, measures)
   func `a mapped character is the model's character`(fixture: String, measure: CGFloat) throws {
     let document = try Fixtures.document(named: fixture)
-    let built = DocumentTextBuilder.build(document, style: ReadingStyle(measure: measure))
+    let built = DocumentTextBuilder.build(document, style: Self.style(measure))
     let storage = built.text.string as NSString
     var mismatches = 0
     var first: String?
@@ -66,7 +77,7 @@ struct PositionMapTests {
   @Test(arguments: fixtures, measures)
   func `model to storage to model comes back`(fixture: String, measure: CGFloat) throws {
     let document = try Fixtures.document(named: fixture)
-    let built = DocumentTextBuilder.build(document, style: ReadingStyle(measure: measure))
+    let built = DocumentTextBuilder.build(document, style: Self.style(measure))
     let map = built.positions
     var failures = 0
     for offset in stride(from: 0, to: map.model.length, by: 7) {
