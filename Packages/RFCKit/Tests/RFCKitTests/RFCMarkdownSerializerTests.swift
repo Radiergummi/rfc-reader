@@ -146,9 +146,9 @@ struct RFCMarkdownSerializerTests {
   }
 
   @Test func `a reference within the document links to its anchor in an export`() {
-    let reference = CrossReference(target: .anchor("section-2"), text: "Section 2")
+    let reference = CrossReference(target: .anchor("section-1"), text: "Section 1")
     let markdown = Self.markdown([.paragraph(Paragraph([.crossReference(reference)]))])
-    #expect(markdown.contains("[Section 2](#section-2)"))
+    #expect(markdown.contains("[Section 1](#section-1)"))
   }
 
   @Test func `a reference within the document links to rfc-editor.org when asked`() {
@@ -262,9 +262,9 @@ struct RFCMarkdownSerializerTests {
   }
 
   @Test func `a reference's label is reflowed`() {
-    let reference = CrossReference(target: .anchor("section-2"), text: "Section 2 of\n   this")
+    let reference = CrossReference(target: .anchor("section-1"), text: "Section 2 of\n   this")
     let markdown = Self.markdown([.paragraph(Paragraph([.crossReference(reference)]))])
-    #expect(markdown.contains("[Section 2 of this](#section-2)"))
+    #expect(markdown.contains("[Section 2 of this](#section-1)"))
   }
 
   @Test func `a break with only spaces after it ends nothing`() {

@@ -29,6 +29,16 @@ struct ExportLinks {
     var fallback: String
   }
 
+  /// Every anchor the document has: a link to one it lacks, such as one out of a
+  /// section exported alone (#386), goes to the document on rfc-editor.org.
+  private let anchors: Set<String>
+
+  init(document: RFCDocument, inDocument: InDocumentLinks) {
+    self.document = document
+    self.inDocument = inDocument
+    anchors = document.anchors
+  }
+
   /// Where `reference` goes.
   func href(for reference: CrossReference) -> String {
     switch reference.target {
@@ -43,6 +53,9 @@ struct ExportLinks {
 
   /// Where a link to `anchor`, in this document, goes.
   func href(forAnchor anchor: String) -> String {
+    if !anchors.contains(anchor), let id = document.header.id {
+      return RFCLink(id: id, anchor: anchor).webURL.absoluteString
+    }
     if let chapterFiles {
       return chapterFiles.files[anchor].map { "\($0)#\(anchor)" } ?? chapterFiles.fallback
     }
