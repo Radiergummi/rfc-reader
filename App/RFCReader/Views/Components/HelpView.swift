@@ -131,20 +131,23 @@ extension EnvironmentValues {
 
 extension View {
   /// `tip`'s popover on this view, whose Learn More opens the help at the tip's
-  /// section and ends the tip (#782).
-  func helpTip(_ tip: some HelpTip) -> some View {
-    modifier(HelpTipPopover(tip: tip))
+  /// section and ends the tip (#782). `arrowEdge` is the edge of the popover its
+  /// arrow is on: `.bottom` for a view in a bottom bar, whose popover would otherwise
+  /// be put below it, off the screen.
+  func helpTip(_ tip: some HelpTip, arrowEdge: Edge = .top) -> some View {
+    modifier(HelpTipPopover(tip: tip, arrowEdge: arrowEdge))
   }
 }
 
 private struct HelpTipPopover<Shown: HelpTip>: ViewModifier {
   let tip: Shown
+  let arrowEdge: Edge
   @Environment(\.showHelp) private var showHelp
 
   func body(content: Content) -> some View {
     let showHelp = showHelp
     let tip = tip
-    content.popoverTip(tip) { _ in
+    content.popoverTip(tip, arrowEdge: arrowEdge) { _ in
       showHelp(tip.helpSection)
       tip.invalidate(reason: .actionPerformed)
     }

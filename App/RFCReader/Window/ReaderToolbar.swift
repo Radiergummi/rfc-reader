@@ -536,11 +536,12 @@
       }
     }
 
-    /// Shows what is due, in the key window only: TipKit says a tip is due to every
-    /// window at once. Again when a window becomes key, so a tip due while it was
-    /// not still shows.
+    /// Shows what is due, in one window only, the one last key (the menu bar's,
+    /// `ActiveReaderWindow`): TipKit says a tip is due to every window at once.
+    /// Again when a window becomes key, so a tip due while it was not still shows.
     func showDueTips() {
-      guard controller.window?.isKeyWindow == true else { return }
+      let active = ActiveReaderWindow.shared.controller
+      guard active == nil || active === controller else { return }
       for (anchor, tip) in dueTips where tipPopovers[anchor] == nil {
         guard let item = tipAnchors[anchor] else { continue }
         let popover = TipNSPopover(tip) { _ in

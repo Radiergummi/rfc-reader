@@ -17,11 +17,14 @@ import SwiftUI
         Button {
           navigation.isShowingGoToSheet = true
         } label: {
-          Label("Go to RFC", systemImage: "number")
+          // An image, not a `Label`: with a label, iOS 26 never shows a toolbar
+          // item's popover tip (#782).
+          Image(systemName: "number")
+            .accessibilityLabel("Go to RFC")
         }
         // After searches typed one after another, for an RFC known by its number or
         // title (#782).
-        .helpTip(GoToRFCTip())
+        .helpTip(GoToRFCTip(), arrowEdge: .bottom)
       }
     }
   }
