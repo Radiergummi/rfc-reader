@@ -65,18 +65,9 @@ final class RFCTextViewCoordinator: NSObject {
   /// and costs neither a rebuild nor the reader's place. So is Increase Contrast,
   /// which outlines every chip (#457).
   func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
-    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView,
-      let layoutManager = textView.textLayoutManager
-    else { return }
-    // Asks TextKit to render the laid-out fragments again, which reads the box;
-    // the text view's own redraw covers what it draws itself. Not yet seen on a
-    // device: #703's pull request lists it to check.
-    layoutManager.invalidateRenderingAttributes(for: layoutManager.documentRange)
-    #if canImport(UIKit)
-      textView.setNeedsDisplay()
-    #else
-      textView.needsDisplay = true
-    #endif
+    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip) else { return }
+    // The laid-out fragments are rendered again, which reads the box.
+    engine.redraw()
   }
 
   /// A text view's link attributes, the same for a link on a card (#694), and what
