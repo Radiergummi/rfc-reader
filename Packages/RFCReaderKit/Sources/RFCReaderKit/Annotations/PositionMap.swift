@@ -95,6 +95,33 @@ public struct PositionMap: Sendable {
     return joined
   }
 
+  /// Where a model range is drawn as one shape each: `storageRanges(forModel:)`, with
+  /// two pieces joined where only the storage's own characters lie between them, such
+  /// as a chip's symbol, a list marker or a section number. A highlight across a
+  /// heading and the paragraph under it is then one fill, as it reads, and one over a
+  /// figure's title and its artwork stays two, the caption being far from the start.
+  public func drawnRanges(forModel range: Range<Int>) -> [NSRange] {
+    var joined: [NSRange] = []
+    for piece in storageRanges(forModel: range) {
+      if let last = joined.last,
+        !mapsAny(in: NSRange(location: NSMaxRange(last), length: piece.location - NSMaxRange(last)))
+      {
+        joined[joined.count - 1] = NSRange(
+          location: last.location, length: NSMaxRange(piece) - last.location)
+      } else {
+        joined.append(piece)
+      }
+    }
+    return joined
+  }
+
+  /// Whether any storage character in `range` maps to a model character.
+  private func mapsAny(in range: NSRange) -> Bool {
+    guard range.length > 0 else { return false }
+    let index = runs.partitioningIndex { $0.storageEnd > range.location }
+    return index < runs.count && runs[index].storage < NSMaxRange(range)
+  }
+
   /// The storage offset the model character at `offset` is drawn at, or nil when this
   /// build does not show it.
   public func storageOffset(forModel offset: Int) -> Int? {

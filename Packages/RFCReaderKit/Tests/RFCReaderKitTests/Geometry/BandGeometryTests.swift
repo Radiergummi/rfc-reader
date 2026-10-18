@@ -116,3 +116,44 @@ struct BandGeometryTests {
     #expect(moved.map(\.rect) == atZero.map { $0.rect.offsetBy(dx: 10, dy: 20) })
   }
 }
+
+/// Where a highlight is drawn (#522): a fill as a requirement band is, an underline
+/// as a rule under each line's piece of it.
+@Suite("Highlight geometry")
+struct HighlightGeometryTests {
+  @Test func `an underline is a rule under the glyphs of each line`() throws {
+    let words = (0..<60).map { "word\($0)" }.joined(separator: " ")
+    let text = NSAttributedString(
+      string: words, attributes: [.font: PlatformFont.systemFont(ofSize: 17, weight: .regular)])
+    let storage = NSTextContentStorage()
+    storage.textStorage?.setAttributedString(text)
+    let layout = NSTextLayoutManager()
+    storage.addTextLayoutManager(layout)
+    let container = NSTextContainer(size: CGSize(width: 260, height: 100_000))
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
+    layout.ensureLayout(for: layout.documentRange)
+    var lines: [NSTextLineFragment] = []
+    layout.enumerateTextLayoutFragments(from: layout.documentRange.location, options: []) {
+      lines += $0.textLineFragments
+      return false
+    }
+    withExtendedLifetime(storage) {}
+    try #require(lines.count >= 2)
+    let range = NSRange(location: 6, length: lines[1].characterRange.location + 4 - 6)
+    let mark = HighlightMark(range: range, color: .underline, highlight: UUID())
+    let rects = FragmentGeometry.highlightRects(
+      [mark], in: text, lines: lines, fragment: NSRange(location: 0, length: text.length),
+      origin: .zero)
+    try #require(rects.count == 2)
+    #expect(rects.allSatisfy { $0.rect.height == FragmentGeometry.highlightRuleWidth })
+    let baseline = lines[0].typographicBounds.minY + lines[0].glyphOrigin.y
+    #expect(rects[0].rect.minY == baseline + FragmentGeometry.highlightRuleOffset)
+    #expect(
+      rects[0].rect.minX == lines[0].typographicBounds.minX + lines[0].locationForCharacter(at: 6).x)
+    let fill = FragmentGeometry.highlightRects(
+      [HighlightMark(range: range, color: .yellow, highlight: UUID())], in: text, lines: lines,
+      fragment: NSRange(location: 0, length: text.length), origin: .zero)
+    #expect(fill.map(\.corners) == [.top, .bottom])
+  }
+}

@@ -102,6 +102,11 @@ public enum Relocation: Sendable, Hashable {
   /// Found nowhere. Kept, never deleted.
   case detached
 
+  /// Whether it is where it was stored.
+  public var isExact: Bool {
+    if case .exact = self { true } else { false }
+  }
+
   /// The target to draw, or nil for one that is drawn nowhere.
   public var target: Target? {
     switch self {
