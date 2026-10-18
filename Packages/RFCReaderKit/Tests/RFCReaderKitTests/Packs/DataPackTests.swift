@@ -31,7 +31,8 @@ struct DataPackTests {
 
   /// A pack directory holding `files` and a manifest that lists them.
   static func makePack(
-    in parent: URL, named name: String = "pack", files: [String: String] = files
+    in parent: URL, named name: String = "pack", files: [String: String] = files,
+    version: String = "2026.09"
   )
     throws -> URL
   {
@@ -45,7 +46,7 @@ struct DataPackTests {
         Manifest.Entry(path: path, bytes: data.count, sha256: Manifest.hex(SHA256.hash(data: data)))
       )
     }
-    let manifest = Manifest(version: "2026.09", files: entries)
+    let manifest = Manifest(version: version, files: entries)
     try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
     return directory
   }

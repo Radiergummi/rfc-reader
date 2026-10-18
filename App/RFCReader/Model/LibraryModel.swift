@@ -186,9 +186,10 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// Whether the installed indexes pack holds a citation index (#189), without which
-  /// a reading path can only say there is none: the Reading Path items are offered
-  /// only while it is true (#769), and come back once #738 delivers the pack.
+  /// Whether there is a citation index (#189), bundled with the app (#738) or
+  /// installed, without which a reading path can only say there is none: the Reading
+  /// Path items are offered only while it is true (#769), which a Debug build without
+  /// the bundled pack is not.
   private(set) var hasCitationIndex = false
 
   /// `UserDataMirror.recentlyReadCount`.

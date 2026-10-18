@@ -925,6 +925,37 @@ struct DocumentStoreTests {
     #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
   }
 
+  /// The app reads the `indexes` pack in its bundle until a later build is installed
+  /// beside it (#738); with neither, there is no citation index.
+  @Test func `the bundled indexes pack is read until a later one is installed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let database = [CitationIndex.fileName: "not read here"]
+    #expect(await store.citationIndexURL(bundled: nil) == nil)
+
+    let bundled = try DataPackTests.makePack(
+      in: sandbox.root.appending(path: "Bundle"), named: IndexesPack.name, files: database,
+      version: "2026.10.1")
+    #expect(
+      await store.citationIndexURL(bundled: bundled)?.standardizedFileURL
+        == bundled.appending(path: CitationIndex.fileName).standardizedFileURL)
+
+    let earlier = try DataPackTests.makePack(
+      in: sandbox.root, named: "earlier", files: database, version: "2026.09")
+    _ = try await store.installIndexesPack(from: earlier)
+    #expect(
+      await store.citationIndexURL(bundled: bundled)?.standardizedFileURL
+        == bundled.appending(path: CitationIndex.fileName).standardizedFileURL)
+
+    let later = try DataPackTests.makePack(
+      in: sandbox.root, named: "later", files: database, version: "2026.10.2")
+    let installed = try await store.installIndexesPack(from: later)
+    #expect(
+      await store.citationIndexURL(bundled: bundled)?.standardizedFileURL
+        == installed.directory.appending(path: CitationIndex.fileName).standardizedFileURL)
+  }
+
   /// A legacy XML pack holding RFC 2119, converted from its committed text the way
   /// corpus-build converts it, with a manifest listing it.
   static func legacyPack(in parent: URL) throws -> URL {
