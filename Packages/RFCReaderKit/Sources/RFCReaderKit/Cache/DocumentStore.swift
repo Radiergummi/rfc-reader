@@ -729,6 +729,21 @@ public actor DocumentStore {
       id, from: bodies, entry: nil, signpostID: signposter.makeSignpostID())?.document
   }
 
+  /// `id` as the installed legacy pack holds it, parsed, for Index All RFCs (#37);
+  /// nil when no pack is installed or it does not hold `id`.
+  public func packDocument(_ id: DocumentID) async -> RFCDocument? {
+    guard let pack = legacyPack?.file(for: id) else { return nil }
+    return await Self.parseCached(
+      id, from: Bodies(xml: [], pack: pack, text: []), entry: nil,
+      signpostID: signposter.makeSignpostID())?.document
+  }
+
+  /// Those of `ids` the installed legacy pack holds; none when no pack is installed.
+  public func inLegacyPack(_ ids: Set<DocumentID>) -> Set<DocumentID> {
+    guard let legacyPack else { return [] }
+    return ids.filter { legacyPack.file(for: $0) != nil }
+  }
+
   /// `document(_:formats:entry:client:)`'s parse, before the entry is applied. The
   /// entry is passed to a parse that runs, so the title the page sets is kept out of
   /// the lead-in as the converter keeps it.
