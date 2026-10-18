@@ -78,6 +78,27 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+
+  /// What Save as Collection… would keep (#355): the list on show as a query of the
+  /// whole library (`LibraryList.savedQuery`). Nil, and the item disabled, while the
+  /// list is not searched: there is nothing to keep that the sidebar doesn't list.
+  var savedQuery: String? {
+    guard let list = listed?.list, !list.query.isUnsearchedQuery else { return nil }
+    return list.savedQuery(in: library.collections)
+  }
+
+  /// Whether the tab lists a collection made from a query (#355), which is in the
+  /// whole library's order rather than one of its own.
+  var listsDynamicCollection: Bool {
+    guard case .collection(let identifier) = filter else { return false }
+    return library.collections[identifier]?.isDynamic ?? false
+  }
+
+  /// Save as Collection…: the editor, with the query to keep.
+  func saveAsCollection() {
+    guard let savedQuery else { return }
+    collectionEditor = .save(query: savedQuery)
+  }
   /// The reading path sheet on show, if any (#189): asked for by a row's context
   /// menu or the Info pane, presented by `ReaderScene`, for the same reason.
   var readingPath: ReadingPathRequest?
@@ -616,5 +637,9 @@ extension NavigationModel: ListSources {
   func collection(named name: String) -> UUID? {
     library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
       .id
+  }
+
+  func query(of collection: UUID) -> String? {
+    library.collections[collection]?.query
   }
 }

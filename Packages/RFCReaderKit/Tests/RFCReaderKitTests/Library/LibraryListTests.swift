@@ -283,9 +283,10 @@ struct LibraryListTests {
       filter: .all, query: #"in:"QUIC" in:9110"#, dynamicCollections: ["quic"])
 
     #expect(ids(list, in: seriesIndex).isEmpty)
-    #expect(list.unknownTerms(in: seriesIndex) == [
-      UnknownSearchTerm(word: #"in:"QUIC""#, reason: .dynamicCollection)
-    ])
+    #expect(
+      list.unknownTerms(in: seriesIndex) == [
+        UnknownSearchTerm(word: #"in:"QUIC""#, reason: .dynamicCollection)
+      ])
   }
 
   /// Its rows are matched, not placed, so there is no order to drag them into.

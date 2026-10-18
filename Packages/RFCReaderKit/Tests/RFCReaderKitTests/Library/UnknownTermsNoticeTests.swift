@@ -9,7 +9,10 @@ import Testing
 @Suite("Unknown terms notice")
 struct UnknownTermsNoticeTests {
   @Test(arguments: [
-    (UnknownSearchTerm.Reason.qualifier, "published:2024", "This version doesn’t know “published:2024”."),
+    (
+      UnknownSearchTerm.Reason.qualifier, "published:2024",
+      "This version doesn’t know “published:2024”."
+    ),
     (.value, "status:nonsense", "“status:nonsense” isn’t a value this version knows."),
     (.workingGroup, "wg:gone", "No working group in the index is named by “wg:gone”."),
     (.collection, #"in:"Gone""#, "No collection is named by “in:\"Gone\"”."),

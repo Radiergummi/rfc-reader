@@ -41,9 +41,13 @@ struct RFCListView: View {
     @Environment(\.editMode) private var editMode
   #endif
 
-  /// The collection the list shows, if it shows one.
+  /// The collection the list shows, if it shows one whose members are chosen: not
+  /// one made from a query (#355), which takes nothing added and nothing removed.
   private var collection: UUID? {
-    if case .collection(let identifier) = shown.filter { identifier } else { nil }
+    guard case .collection(let identifier) = shown.filter, shown.definition == nil else {
+      return nil
+    }
+    return identifier
   }
 
   /// The working group whose card heads the list (#363): while its RFCs are listed
@@ -155,7 +159,7 @@ struct RFCListView: View {
     }
     // A collection in its own order can be rearranged and emptied (#349). Never
     // sectioned by year, so this is the branch a collection uses.
-    let allowsMoving = shown.options.allowsMoving(in: shown.filter, query: shown.query)
+    let allowsMoving = shown.allowsMoving
     let visible = Array(window)
     let unsectioned = ForEach(window) { listed in
       row(listed, true)
@@ -258,7 +262,16 @@ struct RFCListView: View {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery
-        if isUnsearched, let collection {
+        // A query naming something unknown says which term, and why (#355).
+        if let notice = library.index.flatMap({
+          UnknownTermsNotice(shown.unknownTerms(in: $0))
+        }) {
+          ContentUnavailableView {
+            Label(notice.title, systemImage: "questionmark.circle")
+          } description: {
+            Text(verbatim: notice.description)
+          }
+        } else if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
           } description: {
@@ -372,8 +385,11 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
-        // The tab's collection rather than the rows': a control follows the tab.
-        if case .collection(let collection) = navigation.filter {
+        // The tab's collection rather than the rows': a control follows the tab. Not
+        // one made from a query, which takes nothing added (#355).
+        if case .collection(let collection) = navigation.filter,
+          !navigation.listsDynamicCollection
+        {
           ToolbarItem(placement: .primaryAction) {
             Button {
               addingTo = PickerTarget(id: collection)
@@ -397,6 +413,14 @@ struct RFCListView: View {
     private var optionsMenu: some View {
       Menu {
         ListViewOptions(navigation: navigation)
+        Section {
+          // The search on show, kept as a collection made from a query (#355).
+          if navigation.savedQuery != nil {
+            Button("Save as Collection…", systemImage: "folder.badge.gearshape") {
+              navigation.saveAsCollection()
+            }
+          }
+        }
         Section {
           // iOS has no Settings scene, and the reader's settings are the app's own
           // rather than the Settings app's (#703).
@@ -439,12 +463,15 @@ struct ListViewOptions: View {
     private let sortTitle: LocalizedStringKey = "Sort"
   #endif
 
+  /// A collection made from a query lists in the whole library's order (#355).
   private var canReorder: Bool {
-    ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery)
+    ListOptions.canReorder(
+      navigation.listsDynamicCollection ? .all : navigation.filter,
+      query: navigation.appliedQuery)
   }
 
   var body: some View {
-    if case .collection = navigation.filter {
+    if case .collection = navigation.filter, !navigation.listsDynamicCollection {
       Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
         ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text(verbatim: $0.title()) }
       }

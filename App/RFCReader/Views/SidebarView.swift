@@ -19,6 +19,9 @@ struct SidebarView: View {
   @State private var deleting: CollectionSnapshot.Entry?
   /// The store warning, shown again from the sidebar's unsaved-session row (#318).
   @State private var showsStoreWarning = false
+  /// What each collection made from a query lists, by its identifier (#355): counted
+  /// off the main actor, as its tab lists it.
+  @State private var dynamicCounts: [UUID: Int] = [:]
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -114,7 +117,7 @@ struct SidebarView: View {
     } message: { entry in
       // The count the sidebar shows, in words that agree with it: "The 1
       // documents" was what a one-document collection said.
-      let count = library.count(of: entry) ?? entry.rfcNumbers.count
+      let count = count(of: entry) ?? entry.rfcNumbers.count
       Text(
         "It holds ^[\(count) document](inflect: true). Only the collection is removed; the documents stay in the library."
       )
@@ -310,21 +313,48 @@ struct SidebarView: View {
 
   // MARK: - Collections
 
+  /// A collection's count: its members the index knows, or what its query lists.
+  private func count(of entry: CollectionSnapshot.Entry) -> Int? {
+    entry.isDynamic ? dynamicCounts[entry.id] : library.count(of: entry)
+  }
+
+  @ViewBuilder
   private func collectionRow(_ entry: CollectionSnapshot.Entry) -> some View {
-    let filter = LibraryFilter.collection(entry.id)
-    return HStack {
+    let label = HStack {
       Label {
         Text(entry.name)
       } icon: {
-        CollectionFolderIcon(color: entry.color)
+        CollectionFolderIcon(color: entry.color, isDynamic: entry.isDynamic)
       }
-      accessories(count: library.count(of: entry))
+      accessories(count: count(of: entry))
     }
     #if os(macOS)
-      .badge(badge(library.count(of: entry)))
+      .badge(badge(count(of: entry)))
     #endif
-    // List rows dropped here join the collection at its end.
-    .dropDestination(for: String.self) { keys, _ in
+    if entry.isDynamic {
+      // Takes no drops: its members are whatever its query matches (#355).
+      let list = library.list(of: entry)
+      collectionRowActions(label, entry: entry)
+        .task(id: CountRequest(list: list, indexVersion: library.indexVersion)) {
+          dynamicCounts[entry.id] = await library.count(of: list)
+        }
+    } else {
+      collectionRowActions(droppingInto(label, entry: entry), entry: entry)
+    }
+  }
+
+  /// What a dynamic collection's count is made from: when either changes, it is
+  /// counted again.
+  private struct CountRequest: Equatable {
+    let list: LibraryList
+    let indexVersion: Int
+  }
+
+  /// List rows dropped here join the collection at its end.
+  private func droppingInto(
+    _ row: some View, entry: CollectionSnapshot.Entry
+  ) -> some View {
+    row.dropDestination(for: String.self) { keys, _ in
       // A collection holds RFCs: a series row dragged here is not taken (#321).
       let documents = keys.compactMap(DocumentID.init(fileStem:)).filter { $0.series == .rfc }
       guard !documents.isEmpty else { return false }
@@ -335,13 +365,19 @@ struct SidebarView: View {
       }
       return true
     }
-    .tag(filter)
-    .contextMenu {
-      // The editor holds the name and the color both: one place to change either.
-      Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
-      Divider()
-      Button("Delete…", role: .destructive) { deleting = entry }
-    }
+  }
+
+  private func collectionRowActions(
+    _ row: some View, entry: CollectionSnapshot.Entry
+  ) -> some View {
+    row
+      .tag(LibraryFilter.collection(entry.id))
+      .contextMenu {
+        // The editor holds the name and the color both: one place to change either.
+        Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
+        Divider()
+        Button("Delete…", role: .destructive) { deleting = entry }
+      }
   }
 
   private func moveCollections(from source: IndexSet, to destination: Int) {
@@ -434,16 +470,18 @@ private struct SidebarLabelStyle: LabelStyle {
   }
 }
 
-/// A collection's folder, in its color (#349).
+/// A collection's folder, in its color (#349): with a gear, as Finder draws a smart
+/// folder, for one made from a query (#355).
 private struct CollectionFolderIcon: View {
   let color: CollectionColor
+  var isDynamic = false
 
   #if os(macOS)
     @Environment(\.backgroundProminence) private var prominence
   #endif
 
   var body: some View {
-    Image(systemName: "folder")
+    Image(systemName: isDynamic ? "folder.badge.gearshape" : "folder")
       .foregroundStyle(style)
   }
 
