@@ -103,6 +103,30 @@ struct GrammarLinksTests {
       ])
   }
 
+  /// The grammar keeps each block's rules from the pass that collected it, which the
+  /// rendering takes rather than parsing the block again (#765).
+  @Test func `the grammar keeps each block's parsed rules`() throws {
+    let first = Self.text("record = field *( \",\" field )", "field = 1*letter")
+    let second = Self.text("letter = ALPHA / DIGIT")
+    let grammar = DocumentGrammar(blocks: [first, second])
+    let parsed = try #require(grammar.parsed(first, dialect: .rfc5234))
+    #expect(parsed.block == 0)
+    #expect(parsed.rules.map(\.name) == ["record", "field"])
+    #expect(grammar.parsed(second, dialect: .rfc5234)?.block == 1)
+    #expect(grammar.parsed("other = 1*ALPHA", dialect: .rfc5234) == nil)
+  }
+
+  /// A build's grammar keeps its definitions but not the rules it parsed, which only
+  /// the build needed: a kept build would otherwise hold every one of them (#765).
+  @Test func `a build's grammar keeps no parsed rules`() throws {
+    let text = Self.text("record = field *( \",\" field )", "field = 1*ALPHA")
+    let block = Preformatted(kind: .sourceCode, text: text, type: "abnf")
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(block)), style: ReadingStyle())
+    #expect(built.grammar.definition(of: "abnf-field") != nil)
+    #expect(built.grammar.parsed(text, dialect: .rfc5234) == nil)
+  }
+
   /// One grammar spread over several blocks is one grammar: a use links to a
   /// definition in another block, and the first definition of a name is its anchor.
   @Test func `blocks share one grammar, and the first definition wins`() throws {

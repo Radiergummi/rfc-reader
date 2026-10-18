@@ -25,9 +25,42 @@ final class ReaderResize {
 
     var isLive: Bool { discreteTransitions == 0 }
   #else
-    var isLive: Bool { NSApp.windows.contains { $0.inLiveResize } }
+    /// The reader's own window, which `WindowObserver` reports. Every window was
+    /// asked before (#762): dragging one made a column change in any other count as
+    /// live, and wait to settle.
+    fileprivate weak var window: NSWindow?
+
+    var isLive: Bool { window?.inLiveResize ?? false }
   #endif
 }
+
+#if os(macOS)
+  /// Tells `ReaderResize` which window the reader is in. Invisible: a view in the
+  /// reader's hierarchy only for the window it is moved into.
+  struct WindowObserver: NSViewRepresentable {
+    let resize: ReaderResize
+
+    func makeNSView(context: Context) -> View {
+      let view = View()
+      view.resize = resize
+      return view
+    }
+
+    func updateNSView(_ view: View, context: Context) {
+      view.resize = resize
+      resize.window = view.window
+    }
+
+    final class View: NSView {
+      var resize: ReaderResize?
+
+      override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        resize?.window = window
+      }
+    }
+  }
+#endif
 
 #if canImport(UIKit)
   /// Tells `ReaderResize` when a size transition that is not interactive — a

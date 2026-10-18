@@ -2,8 +2,8 @@ import Foundation
 
 /// Which slice of the document background completion lays out next. Slices run
 /// from the document's start, because TextKit's positions are exact only once
-/// everything above them is laid out, and are small enough to fit in a frame: the
-/// probe measured 10–16 ms for 20,000 characters, so 6,000 is about 3–5 ms.
+/// everything above them is laid out, and are small enough to fit in a frame, as the
+/// probe of #583 measured; no signpost times a slice of its own.
 public struct SlicePlanner: Sendable, Equatable {
   public static let sliceLength = 6_000
 

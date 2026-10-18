@@ -5,8 +5,8 @@ import Foundation
 ///
 /// Kept builds are what it is for (#374): a force-click preview built its document
 /// again every time, the same reference twice in a row included, and the spinner
-/// waited for the build — 15 to 55 ms in release on the largest RFCs. A build holds
-/// 4.5 to 8 MB, so only a few are kept.
+/// waited for the build, which the "Build: RFC N" benchmarks of `make benchmark`
+/// measure. A build of a large RFC holds megabytes, so only a few are kept.
 ///
 /// A handful of entries, so a list in order of use rather than a dictionary with a
 /// linked list beside it: every operation is a scan of at most `capacity`.
