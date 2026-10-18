@@ -24,8 +24,8 @@ let package = Package(
   ],
   products: [
     .library(name: "RFCKit", targets: ["RFCKit"]),
-    // For corpus-build, which writes the index database with it, so there is one
-    // module of that name in its build.
+    // For corpus-build's tests, which read the index database back through SQLite's
+    // own API rather than `SQLiteDatabase`, which wrote it.
     .library(name: "CSQLite", targets: ["CSQLite"]),
   ],
   targets: [
