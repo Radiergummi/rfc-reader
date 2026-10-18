@@ -1211,6 +1211,16 @@
         }
       }
     },
+    "Every RFC was exported." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle RFCs wurden exportiert."
+          }
+        }
+      }
+    },
     "Expand Aside" : {
       "localizations" : {
         "de" : {
@@ -1277,6 +1287,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktuellen Abschnitt exportieren …"
+          }
+        }
+      }
+    },
+    "Export “%@”" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ exportieren"
+          }
+        }
+      }
+    },
+    "Exporting…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird exportiert …"
           }
         }
       }
@@ -2731,6 +2761,16 @@
         }
       }
     },
+    "Save…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichern …"
+          }
+        }
+      }
+    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -3221,6 +3261,16 @@
         }
       }
     },
+    "The export was cancelled." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Export wurde abgebrochen."
+          }
+        }
+      }
+    },
     "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again." : {
       "localizations" : {
         "de" : {
@@ -3237,6 +3287,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Liste aller RFCs wird einmal geladen und danach aktuell gehalten."
+          }
+        }
+      }
+    },
+    "These RFCs were not exported:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese RFCs wurden nicht exportiert:"
           }
         }
       }
