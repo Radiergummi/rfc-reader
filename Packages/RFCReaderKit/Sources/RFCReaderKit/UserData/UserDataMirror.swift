@@ -8,7 +8,8 @@ private let mirrorLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
 /// The sets the app keeps read from the user's data (#595): the bookmarked documents,
-/// the collections, the Recently Read count and the Keep Offline marks, each read
+/// the collections, the Recently Read count, the Keep Offline marks and the followed
+/// working groups, each read
 /// again on a save of what feeds it (`UserDataMirrors`, #603), and after a failed read
 /// on the next save of any kind (#613). Each is published only when it changed, and
 /// its `on…Changed` is then called, for what the app does about it; the bookmarks'
@@ -35,6 +36,10 @@ public final class UserDataMirror {
   /// Every document marked Keep Offline (#358), synced, so a mark made on another
   /// device arrives here too.
   public private(set) var offlineMarks: Set<DocumentID> = []
+
+  /// The acronym of every followed working group, in lower case (#731), synced, so a
+  /// group followed on another device is listed here too.
+  public private(set) var followedGroups: Set<String> = []
 
   /// Whether `offlineMarks` has been read from the store at least once. Until it
   /// has, its emptiness means nothing, and reconciling against it would move every
@@ -106,6 +111,22 @@ public final class UserDataMirror {
     if mirrors.contains(.collections) { refreshCollections() }
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
     if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
+    if mirrors.contains(.followedGroups) { refreshFollowedGroups() }
+  }
+
+  private func refreshFollowedGroups() {
+    let groups: Set<String>
+    do {
+      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
+    } catch {
+      // The last set read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.followedGroups)
+      mirrorLog.error(
+        "reading followed groups failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    guard groups != followedGroups else { return }
+    followedGroups = groups
   }
 
   /// Reads the marks again now. A save of a mark reads them already, synchronously

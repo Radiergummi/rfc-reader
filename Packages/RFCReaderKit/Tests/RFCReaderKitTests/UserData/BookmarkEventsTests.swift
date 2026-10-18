@@ -198,7 +198,7 @@ struct BookmarkEventsTests {
   /// A baseline kept before #731 has no groups, and its first comparison after only
   /// sets them.
   @Test func `a baseline from before groups were compared decodes and reports nothing`() throws {
-    let kept = Data(#"{"index":{},"revisions":{}}"#.utf8)
+    let kept = Data(#"{"index":[],"revisions":[]}"#.utf8)
     let old = try BookmarkBaseline.decode(kept)
     #expect(old.groups == nil)
     let new = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["httpbis"], after: old)

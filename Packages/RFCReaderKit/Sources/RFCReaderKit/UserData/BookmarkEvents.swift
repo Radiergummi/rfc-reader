@@ -2,15 +2,17 @@ import Foundation
 import RFCKit
 
 /// What the bookmarked RFCs looked like at the last comparison (#191): what the index
-/// says of each, and which drafts revise it at which stage. The next comparison reports
-/// what changed since.
+/// says of each, and which drafts revise it at which stage; and which RFCs the index
+/// lists under each followed working group (#731). The next comparison reports what
+/// changed since.
 ///
 /// Kept per device and never synced, so a new device starts from what it first sees
 /// rather than reporting history, and both a Mac and an iPhone tell their own reader.
 ///
 /// A section is nil when its data was not there to read. An RFC is compared in a
 /// section only when both baselines have an entry for it, which they have only while it
-/// is bookmarked: a newly bookmarked RFC reports nothing from before.
+/// is bookmarked: a newly bookmarked RFC reports nothing from before. A group, likewise,
+/// only while it is followed.
 public struct BookmarkBaseline: Codable, Sendable, Equatable {
   /// What the index says of a bookmarked document: its entry's obsoleted-by,
   /// updated-by and errata. A document the index does not list has no entry.
@@ -19,6 +21,9 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
   /// draft the file stops listing is kept at the stage it was last seen at, so one
   /// that drops out of a day's file and comes back is not reported again.
   public var revisions: [DocumentID: [String: RevisionRecord]]?
+  /// Each followed group's RFCs, by its acronym in lower case. Nil in a baseline kept
+  /// before groups were compared, whose first comparison after only sets them.
+  public var groups: [String: Set<DocumentID>]?
 
   public struct IndexRecord: Codable, Sendable, Equatable {
     public var obsoletedBy: Set<DocumentID>
@@ -33,13 +38,26 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
     public var stream: String
   }
 
-  /// The baseline of `bookmarks` now. A section whose data is missing keeps what
-  /// `previous` had of it, for the RFCs still bookmarked, so a launch that has no
-  /// index yet neither reports nor forgets anything.
+  /// The baseline of `bookmarks` and `followedGroups` (acronyms in lower case) now. A
+  /// section whose data is missing keeps what `previous` had of it, for the RFCs still
+  /// bookmarked and the groups still followed, so a launch that has no index yet
+  /// neither reports nor forgets anything.
   public init(
-    bookmarks: Set<DocumentID>, index: RFCIndex?, revisions: RFCRevisions?,
-    carryingOver previous: BookmarkBaseline?
+    bookmarks: Set<DocumentID>, followedGroups: Set<String>, index: RFCIndex?,
+    revisions: RFCRevisions?, carryingOver previous: BookmarkBaseline?
   ) {
+    if let index {
+      var groups = Dictionary(uniqueKeysWithValues: followedGroups.map { ($0, Set<DocumentID>()) })
+      for rfc in index.rfcs {
+        guard let group = rfc.workingGroup?.lowercased(), followedGroups.contains(group) else {
+          continue
+        }
+        groups[group, default: []].insert(rfc.id)
+      }
+      self.groups = groups
+    } else {
+      self.groups = previous?.groups?.filter { followedGroups.contains($0.key) }
+    }
     if let index {
       var records: [DocumentID: IndexRecord] = [:]
       for document in bookmarks {
@@ -78,13 +96,17 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
   }
 }
 
-/// One change to a bookmarked RFC, worth telling its reader about.
+/// One change to a bookmarked RFC, or an RFC from a followed working group, worth
+/// telling its reader about.
 public enum BookmarkEvent: Hashable, Sendable {
   case obsoleted(DocumentID, newer: [DocumentID])
   case updated(DocumentID, newer: [DocumentID])
   /// A draft now intends to obsolete or update the RFC.
   case revisionStarted(
     DocumentID, draft: String, relation: RevisionRelation, stage: RevisionStage, stream: String)
+  /// The index lists the RFC under a followed working group, by its acronym in lower
+  /// case, where it did not before: the group published it (#731).
+  case groupPublished(DocumentID, group: String)
   /// A draft already listed reached the RFC Editor queue: publication is near.
   case revisionQueued(DocumentID, draft: String, relation: RevisionRelation)
   /// The index lists errata for the RFC where it listed none. It does not say whether
@@ -95,7 +117,7 @@ public enum BookmarkEvent: Hashable, Sendable {
     switch self {
     case .obsoleted(let document, _), .updated(let document, _),
       .revisionStarted(let document, _, _, _, _), .revisionQueued(let document, _, _),
-      .errataListed(let document):
+      .errataListed(let document), .groupPublished(let document, _):
       document
     }
   }
@@ -103,8 +125,8 @@ public enum BookmarkEvent: Hashable, Sendable {
 
 public enum BookmarkEvents {
   /// What changed from `old` to `new`, by document, and for each: obsoleted, updated,
-  /// its drafts by name, errata. Nothing when there is no `old`: a first comparison
-  /// only sets the baseline.
+  /// its drafts by name, errata; then each followed group's new RFCs, by group. Nothing
+  /// when there is no `old`: a first comparison only sets the baseline.
   public static func between(_ old: BookmarkBaseline?, _ new: BookmarkBaseline) -> [BookmarkEvent] {
     guard let old else { return [] }
     var events: [BookmarkEvent] = []
@@ -134,6 +156,12 @@ public enum BookmarkEvents {
         !before.hasErrata, after.hasErrata
       {
         events.append(.errataListed(document))
+      }
+    }
+    for (group, after) in (new.groups ?? [:]).sorted(by: { $0.key < $1.key }) {
+      guard let before = old.groups?[group] else { continue }
+      for document in after.subtracting(before).sorted() {
+        events.append(.groupPublished(document, group: group))
       }
     }
     return events
@@ -193,6 +221,8 @@ public struct BookmarkNotice: Equatable, Sendable {
         locale: locale)
     case .errataListed:
       String(kit: "Now has errata.", locale: locale)
+    case .groupPublished(_, let group):
+      String(kit: "Published by the \(group.uppercased()) working group.", locale: locale)
     }
   }
 
