@@ -252,7 +252,7 @@ struct ReadingModeTests {
   /// by its heading, and say whether it is open (#760).
   @Test func `the reader's line names the outline section to open or close`() throws {
     let built = try Self.rfc8999()
-    let index = FoldingIndex(built)
+    let index = built.foldingIndex
     let section = built.anchors.sections.entries[2]
     let heading = try #require(index.entries.first { $0.anchor == section.anchor }).paragraph
 
@@ -272,7 +272,7 @@ struct ReadingModeTests {
   /// open after the heading, before its line break, and nowhere in Normal (#760).
   @Test func `a disclosed heading says whether it is open, before its line break`() throws {
     let built = try Self.rfc8999()
-    let index = FoldingIndex(built)
+    let index = built.foldingIndex
     let section = built.anchors.sections.entries[2]
     let string = built.text.string as NSString
     let heading = string.paragraphRange(for: NSRange(location: section.offset, length: 0))
@@ -294,7 +294,7 @@ struct ReadingModeTests {
   /// Nothing to open in another mode, nor where no section's heading is shown.
   @Test func `there is no outline section out of the outline`() throws {
     let built = try Self.rfc8999()
-    let index = FoldingIndex(built)
+    let index = built.foldingIndex
     let section = built.anchors.sections.entries[2]
     #expect(Folding(mode: .normal).outlineSection(section.anchor, in: index) == nil)
     #expect(Folding(mode: .outline).outlineSection("no-such-anchor", in: index) == nil)
@@ -661,7 +661,7 @@ struct ReadingModeTests {
   /// Without a pointer, the text's action acts on the aside the line is in, by its
   /// caption, from the caption or its body, and nowhere out of Implementer (#760).
   @Test func `the line names the aside to open or close`() throws {
-    let index = FoldingIndex(try Self.rfc9271())
+    let index = try Self.rfc9271().foldingIndex
     let aside = try #require(index.asides.first)
     let closed = Folding(mode: .implementer)
     let found = try #require(closed.aside(atLine: aside.caption + 1, in: index))
