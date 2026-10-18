@@ -319,7 +319,11 @@ extension LibraryList {
       filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
       downloaded: downloaded, options: options, members: members, collections: collections)
     let rows = narrowing.rows(in: index, search: search)
-    let documents = rows.flatMap { row in row.rfc.map { [$0.id] } ?? row.members.map(\.id) }
+    // An RFC published only as a PDF or a PostScript has no text to index: counted,
+    // a search over it could never say it had searched everything.
+    let documents = rows.flatMap { row in row.rfc.map { [$0] } ?? row.members }
+      .filter { !$0.hasOnlyPrintFormats }
+      .map(\.id)
     return TextQuery(words: parsed.text, section: section, documents: Set(documents))
   }
 }

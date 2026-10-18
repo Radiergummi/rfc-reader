@@ -73,4 +73,20 @@ struct InspectorPaneTests {
           hasBody: hasBody, isLoading: isLoading, readsAsOriginal: true) == .publishedOriginal)
     }
   }
+
+  /// View ▸ Contents and Info say what they will do, as View ▸ Show Sidebar does
+  /// (#761): an item hides only the pane that is showing.
+  @Test func `the menu says whether it will show or hide a pane`() {
+    #expect(
+      InspectorPane.menuTitle(.navigation, isOpen: false, showing: .info, locale: .english)
+        == "Show Contents")
+    #expect(
+      InspectorPane.menuTitle(.navigation, isOpen: true, showing: .navigation, locale: .english)
+        == "Hide Contents")
+    #expect(
+      InspectorPane.menuTitle(.info, isOpen: true, showing: .navigation, locale: .english)
+        == "Show Info")
+    #expect(
+      InspectorPane.menuTitle(.info, isOpen: true, showing: .info, locale: .english) == "Hide Info")
+  }
 }

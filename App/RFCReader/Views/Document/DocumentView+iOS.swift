@@ -24,6 +24,7 @@
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
     @State private var readingPathAfterPanel: ReadingPathRequest?
 
@@ -158,7 +159,8 @@
         }
         .buttonStyle(.glass)
         .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        // Rising from the bottom edge is motion: with Reduce Motion it fades (#760).
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
     }
   }

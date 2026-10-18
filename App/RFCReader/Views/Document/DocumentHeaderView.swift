@@ -33,6 +33,8 @@ struct DocumentHeaderView: View {
     /// it was made and so would never compare equal.
     let revisionLines: [RevisionsSummary.Line]
     let moreRevisions: String?
+    /// What the header says of a translation (#749), nil for the English.
+    let translation: TranslationMark?
     /// The errata naming no section the document has (#387), which the chip by the
     /// date lists.
     let documentErrata: [ErrataSummary.Item]
@@ -40,6 +42,7 @@ struct DocumentHeaderView: View {
     /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(
       header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil,
+      translation: TranslationMark? = nil,
       documentErrata: [ErrataSummary.Item] = []
     ) {
       let summary = HeaderSummary(header: header, metadata: metadata)
@@ -50,6 +53,7 @@ struct DocumentHeaderView: View {
       self.metadata = metadata
       revisionLines = revisions?.bannerLines ?? []
       moreRevisions = revisions?.moreText
+      self.translation = translation
       self.documentErrata = documentErrata
     }
   }
@@ -109,6 +113,10 @@ struct DocumentHeaderView: View {
         AuthorChips(authors: identity.authors)
           .font(.subheadline)
       }
+      if let translation = identity.translation {
+        TranslationNotice(mark: translation)
+          .padding(.top, 4)
+      }
       if let metadata = identity.metadata {
         StatusBanner(
           metadata: metadata, revisionLines: identity.revisionLines,
@@ -123,6 +131,35 @@ struct DocumentHeaderView: View {
     // the column's leading edge, and by a distance that changes with the title's
     // length. Filling the column is the same instruction the body text gets.
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// That the text below is a machine's translation, not the RFC (#749), for as long
+/// as it is shown, with the way back to the English beside it.
+private struct TranslationNotice: View {
+  /// Hosted outside the SwiftUI hierarchy, by a host that `ReaderEnvironment`
+  /// guarantees gave it the environment.
+  @Environment(ReaderState.self) private var reader
+  let mark: TranslationMark
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Image(systemName: "translate")
+      switch mark {
+      case .translating(let progress):
+        Text("Translating…")
+        ProgressView(value: progress)
+          .frame(maxWidth: 120)
+      case .translated:
+        Text("Machine-translated from English")
+      case .failed:
+        Text("Couldn't translate this document")
+      }
+      Button("Show Original") { reader.showTranslation = false }
+        .buttonStyle(.borderless)
+    }
+    .font(.subheadline)
+    .foregroundStyle(.secondary)
   }
 }
 

@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import Translation
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -14,6 +15,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   #endif
@@ -121,6 +123,16 @@ struct DocumentView: View {
   /// reader state is this reader's, and what it last was otherwise.
   private var showsOriginal: Bool { showsReaderState ? reader.showOriginal : keptOriginal }
 
+  /// The translation or the English (#749): the window's choice while the reader
+  /// state is this reader's, and what it last was otherwise.
+  private var showsTranslation: Bool {
+    showsReaderState ? reader.showTranslation : session.showsTranslation
+  }
+
+  /// The framework's configuration for translating the document, nil until it is
+  /// first asked for; `.translationTask` runs the translation whenever it changes.
+  @State private var translationConfiguration: TranslationSession.Configuration?
+
   #if !os(macOS)
     @Binding private var showsInspector: Bool
     /// Export and Print, and the sheets they present.
@@ -205,6 +217,7 @@ struct DocumentView: View {
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
       errata: errataMarks,
+      translated: showsTranslation && session.translatedDocument != nil,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -214,11 +227,13 @@ struct DocumentView: View {
 
   /// The folding index of the build on screen, and in Focus the References tab's
   /// groups, filtered to what its section cites (#699). Only for the reader on
-  /// screen, whose the reader state is, and only in Focus, which alone needs them;
+  /// screen, whose the reader state is, and only in Focus, which steps through it,
+  /// and the outline, whose Expand Section and Collapse Section look it up (#760);
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
-    guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
+    guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
       // would redraw on every disclosure the outline turns.
@@ -234,7 +249,12 @@ struct DocumentView: View {
       reader.foldingIndex = built.foldingIndex
       foldedText = built.text
     }
-    guard let anchor = reader.folding.focusedAnchor(in: built.foldingIndex) else { return }
+    guard reader.folding.mode == .focus,
+      let anchor = reader.folding.focusedAnchor(in: built.foldingIndex)
+    else {
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      return
+    }
     let cited = FocusCitations.entries(citedIn: anchor, in: built)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying
@@ -273,6 +293,15 @@ struct DocumentView: View {
       .onChange(of: reader.showOriginal) {
         if showsReaderState { keptOriginal = reader.showOriginal }
         updateFolding()
+      }
+      .onChange(of: reader.showTranslation) {
+        if showsReaderState { session.showsTranslation = reader.showTranslation }
+        requestTranslation()
+      }
+      // Asked for before the document was here, it is translated once it is.
+      .onChange(of: session.state.document != nil) { requestTranslation() }
+      .translationTask(translationConfiguration) { [session] translator in
+        await session.translate(with: translator, cache: TranslationCache())
       }
       // On iOS, covered by a reader pushed over it, or on top again once that one
       // is popped (#263).
@@ -449,6 +478,26 @@ struct DocumentView: View {
     }
   #endif
 
+  /// Starts the translation the reader asked for, unless it is made: again after
+  /// one that failed or stopped, and in place of one still under way, which stops.
+  private func requestTranslation() {
+    guard showsTranslation, session.state.document != nil,
+      session.translationPhase.translated == nil
+    else { return }
+    if translationConfiguration == nil {
+      translationConfiguration = DocumentSession.translationConfiguration()
+    } else {
+      translationConfiguration?.invalidate()
+    }
+  }
+
+  /// What the header says of a translation asked for, nil showing the English.
+  private var translationMark: TranslationMark? {
+    TranslationMark(
+      session.translationPhase, showsTranslation: showsTranslation,
+      buildIsTranslation: session.state.built?.isTranslation == true)
+  }
+
   private func saveNow() {
     placeSaver.cancel()
     guard !isBeside else { return }
@@ -533,7 +582,7 @@ struct DocumentView: View {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
         revisions: metadata.map { library.revisionsSummary(for: $0.id) },
-        documentErrata: built.errata.document)
+        translation: translationMark, documentErrata: built.errata.document)
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -693,7 +742,8 @@ struct DocumentView: View {
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
-      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
+      // The bars slide: with Reduce Motion they go and come without it (#760).
+      withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { barsHidden = hidden }
     #endif
   }
 
