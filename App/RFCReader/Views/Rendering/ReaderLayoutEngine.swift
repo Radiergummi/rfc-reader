@@ -261,8 +261,8 @@ final class ReaderLayoutEngine: PinSurface {
   private var completionInterval: OSSignpostIntervalState?
 
   /// How long this engine's completion lays out before it yields to let the run loop
-  /// draw and take input: a slice is 3–5 ms and the budget is checked before each,
-  /// so a turn is one or two slices. Each text view's engine has a budget of its own.
+  /// draw and take input: a slice fits in a frame (`SlicePlanner`) and the budget is
+  /// checked before each, so a turn is one or two slices. Each text view's engine has a budget of its own.
   private static let turnBudget = Duration.milliseconds(4)
 
   /// Lays the document out from its start in the background, a turn's budget at a

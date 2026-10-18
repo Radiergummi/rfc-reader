@@ -119,10 +119,11 @@ extension RFCDecoration {
   /// insertions. A block whose decoration is applied once — artwork, appended in a
   /// single call — merged fine; one applied per piece — a stacked table's cells,
   /// an authors' block — did not, so every paragraph reported itself as a complete
-  /// decoration run. The renderer reads that run's `effectiveRange` to cap the
-  /// band's rounded corners and to place its left edge, so unmerged runs drew one
-  /// fully rounded card per line at its own indent: the staircase. `NSString`
-  /// compares by value, so runs merge.
+  /// decoration run. The renderer reads the run's extent, `decorationRun(at:)` through
+  /// `longestEffectiveRange`, to cap the band's rounded corners and to place its left
+  /// edge, and that coalesces only equal values: unmerged runs drew one fully rounded
+  /// card per line at its own indent, the staircase. `NSString` compares by value, so
+  /// runs merge.
   public init?(attributeValue: Any?) {
     guard let raw = attributeValue as? String, let decoration = RFCDecoration(rawValue: raw) else {
       return nil
