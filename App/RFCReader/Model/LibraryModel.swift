@@ -78,6 +78,9 @@ final class LibraryModel {
   /// The bytes the index's download has received, while one is under way with no
   /// index to show (#770); nil otherwise.
   private(set) var indexBytesReceived: Int64?
+  /// Counts the index's downloads, so the bytes a download reports after it has ended
+  /// are not taken for the next one's.
+  @ObservationIgnored private var indexDownloads = 0
   /// What the list shows in place of its rows while there is no index (#770).
   var indexPlaceholder: IndexPlaceholder? {
     IndexPlaceholder(
@@ -620,9 +623,20 @@ final class LibraryModel {
       var onReceived: (@Sendable (Int64) -> Void)?
       if isFirstDownload {
         indexBytesReceived = 0
+        indexDownloads += 1
+        let download = indexDownloads
+        // Off the main actor, every packet: only the 100 KB steps the list shows go
+        // over to it.
+        let reported = OSAllocatedUnfairLock<Int64>(initialState: 0)
         onReceived = { [weak self] bytes in
+          let isStep = reported.withLock { last in
+            guard bytes >= last + 100_000 else { return false }
+            last = bytes
+            return true
+          }
+          guard isStep else { return }
           Task { @MainActor in
-            self?.indexReceived(bytes)
+            self?.indexReceived(bytes, in: download)
           }
         }
       }
@@ -665,10 +679,11 @@ final class LibraryModel {
     }
   }
 
-  /// Records the download's bytes in the steps of 100 KB the list shows them in, so
-  /// it is not redrawn for every packet; ignored once the download has ended.
-  private func indexReceived(_ bytes: Int64) {
-    guard let shown = indexBytesReceived, bytes >= shown + 100_000 else { return }
+  /// Records the bytes `download` has received; ignored once it has ended.
+  private func indexReceived(_ bytes: Int64, in download: Int) {
+    guard download == indexDownloads, let shown = indexBytesReceived, bytes > shown else {
+      return
+    }
     indexBytesReceived = bytes
   }
 

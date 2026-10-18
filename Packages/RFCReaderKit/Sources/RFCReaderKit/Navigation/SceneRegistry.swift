@@ -14,7 +14,7 @@ import RFCKit
 /// itself, because resolving it to its first RFC needs the index. A plain RFC link needs
 /// nothing from the index and does not wait for it. Making every link wait was set
 /// aside when no index was bundled with the app, and on a first launch every link would
-/// have waited for the index's whole download; a Debug build still bundles none (#770).
+/// have waited for the index's whole download; a Debug build may bundle none (#770).
 ///
 /// Two kinds of link wait, apart, so that neither displaces the other:
 /// - **For a new tab**, opened behind or in front from a tab already open: in order,

@@ -233,7 +233,10 @@ struct RFCListView: View {
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
+      // Nor while the placeholder over the list says what it would (#770).
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits),
+        library.indexPlaceholder == nil
+      {
         IndexStatusView()
           .frame(maxWidth: .infinity)
           .padding(.vertical, 8)
@@ -467,9 +470,6 @@ struct ListViewOptions: View {
   }
 }
 
-/// Where the index stands: loading, when it was last updated, or why it failed
-/// and a way to try again — the last of which is the only place a failed refresh
-/// is reported at all.
 /// The first launch's download of the index, or why there is no index (#770), in
 /// place of the list's rows. A view of its own, so the download's progress redraws it
 /// rather than the list.
@@ -512,17 +512,13 @@ private struct IndexPlaceholderView: View {
   }
 }
 
+/// Where the index stands: loading, when it was last updated, or why it failed
+/// and a way to try again — the last of which is the only place a failed refresh
+/// is reported at all.
 struct IndexStatusView: View {
   @Environment(LibraryModel.self) private var library
 
   var body: some View {
-    // What the placeholder over the list says already.
-    if library.indexPlaceholder == nil {
-      status
-    }
-  }
-
-  private var status: some View {
     HStack(spacing: 6) {
       switch library.indexState {
       case .idle, .loading:

@@ -18,17 +18,17 @@ struct BundledIndexTests {
     return url
   }
 
-  /// As current as when the app was built, so the list does not say it was updated
+  /// As current as when it was fetched, so the list does not say it was updated
   /// never, and the daily check replaces it once it is a day old.
-  @Test func `with no index kept, the bundled one is read, dated when it was built`()
+  @Test func `with no index kept, the bundled one is read, dated when it was fetched`()
     throws
   {
     let bundled = try bundled(age: 3 * 86_400)
     let cached = try #require(sandbox.store().cachedIndexLocation(bundled: bundled))
     #expect(cached.url == bundled)
-    let builtAt = try #require(
+    let fetchedAt = try #require(
       bundled.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
-    #expect(cached.updatedAt == builtAt)
+    #expect(cached.updatedAt == fetchedAt)
     #expect(IndexCheck.isDue(checkedAt: cached.updatedAt, now: .now))
   }
 

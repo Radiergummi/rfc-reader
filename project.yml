@@ -64,7 +64,9 @@ targets:
     # `make bundled-index` fetches it into App/Resources, which git ignores, and
     # `DocumentStore.cachedIndexLocation()` reads it until the app has one of its own.
     # A phase rather than a resource, because a resource that is missing fails every
-    # build, and a Debug build goes without it.
+    # build, and a Debug build bundles it only when it is there. Copied with its
+    # date, which is when it was fetched, and which the app shows as when it was
+    # current.
     postBuildScripts:
       - name: Bundle the RFC index
         basedOnDependencyAnalysis: false
@@ -72,7 +74,7 @@ targets:
           index="$SRCROOT/App/Resources/rfc-index.xml"
           bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/rfc-index.xml"
           if [ -f "$index" ]; then
-            cp "$index" "$bundled"
+            cp -p "$index" "$bundled"
           elif [ "$CONFIGURATION" = Release ]; then
             echo "error: A Release build bundles the RFC index: run make bundled-index first."
             exit 1
@@ -192,6 +194,9 @@ targets:
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
+        # "Bundle the RFC index" reads App/Resources, which it declares no input for:
+        # the file may be missing, which a declared input may not be.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.
         ASSETCATALOG_COMPILER_APPICON_NAME: $(APP_ICON_$(XCODE_VERSION_MAJOR))
