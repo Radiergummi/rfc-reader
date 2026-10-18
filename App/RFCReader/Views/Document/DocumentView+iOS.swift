@@ -96,11 +96,16 @@
           readingPathAfterPanel = nil
           navigation.readingPath = request
         } content: {
-          PanelHost(
-            isPresented: $showsInspector, closesAfterChoice: true,
-            readingPathAfterClosing: $readingPathAfterPanel
-          )
+          // A stack of its own for a bar of its own, which the panel's tabs take
+          // as the sheet's title (#301).
+          NavigationStack {
+            PanelHost(
+              isPresented: $showsInspector, closesAfterChoice: true,
+              readingPathAfterClosing: $readingPathAfterPanel
+            )
+          }
           .presentationDetents([.medium, .large])
+          .presentationDragIndicator(.visible)
         }
         .fileExporter(
           isPresented: Binding(
