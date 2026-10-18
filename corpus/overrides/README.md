@@ -27,6 +27,7 @@ A patch fails, and the run with it, when:
 - a selector matches no node, or more than one;
 - the node does not suit the operation: `add pos="before"` on the root, or `replace` of an attribute with an element;
 - the file holds an operation or an attribute this does not know, so a typo like `postion=` fails rather than appending, or holds no operation at all;
+- a comment still says `TODO:`, as `corpus-build patch` writes one before each operation for its reason;
 - writing the patched document again would lose some of its text, because the patch added something the document model cannot hold;
 - an operation changes nothing in the written output, because writing undid it, such as an attribute the writer derives. Each operation is checked on its own, so one that writing undoes cannot pass behind another that takes effect.
 
@@ -40,6 +41,24 @@ A failed document gets no output, an earlier run's is removed, and `convert` log
 - **Select by anchor first, then by content**, as in `artwork[starts-with(normalize-space(), ':DEL')]`, since the text is frozen even where structure is not. **Never by position** (`section[3]/t[4]`): a parser change shifts every count. A legacy anchor is not fully stable either: it is `name-` and the slug of the detected heading, and moves when detection does. `preamble` is the one fixed anchor.
 - **A patch shape that recurs in about three documents is a parser bug**, not an override. Fix the heuristic (see `CLAUDE.md`) and delete the patches.
 - **When a parser change breaks an operation**, check first whether the change made it unnecessary. Often the node it corrected is now right, and the fix is to delete the operation.
+
+## Writing one with `corpus-build patch`
+
+Rather than writing the operations by hand, copy the converter's output for the document, edit the copy into what it should be, and let `corpus-build patch` write the patch (#742):
+
+```sh
+cp corpus/xml.noindex/rfc1000.xml /tmp/rfc1000.xml   # then edit /tmp/rfc1000.xml
+make corpus-tool && Tools/corpus-build/.build/release/corpus-build patch rfc1000 --edited /tmp/rfc1000.xml
+```
+
+It diffs the copy against `corpus/xml.noindex/rfcNNNN.xml`, or `--original`, and writes `corpus/overrides/rfcNNNN.xml`, or with `--print` standard output. The original must be the converter's own output: an overridden document's output in `corpus/xml.noindex` is already patched, and the command refuses it; convert it again without `--overrides` for one. It never writes over an existing override.
+
+Each difference becomes the smallest operation that covers it: a removed element a `<remove>`, an added one an `<add>` beside a sibling, an attribute an `<add type="@name">`, `<replace>` or `<remove>`, and changed text a `<replace>` of the lowest element that holds it. Selectors follow the rules above, by anchor, then by name and first words, adding words further on where two siblings open alike; where only a position would select a node, the command stops and names it. The patch is proven before it is written: applied to the original as `convert` applies it, it must give the edited copy.
+
+What it cannot know is still the author's:
+
+- **Each operation's reason.** Every operation is written after a `<!-- TODO: … -->` comment, and a patch that still holds one fails, so it cannot be committed without its reasons.
+- **The content's text.** A replacement or an addition holds what the edited copy holds. Keep it to the minimal text a misclassification took, as above: an edit that rewrites a sentence makes a patch that carries it.
 
 The source texts are never committed: `make corpus-overrides-check` fetches the ones it needs into `corpus/overrides-check.noindex/`, out of the way of a corpus run, `make test-corpus` its own into `corpus/text.noindex/`, and the RFC index into `corpus/rfc-index.xml` when it is missing. `make corpus-fetch` downloads a fresh index over it.
 
