@@ -8,8 +8,9 @@ import RFCKit
 public struct HighlightPlacement: Sendable, Equatable {
   /// What became of one highlight in this document.
   public enum Status: Sendable, Equatable {
-    /// Where it is now, in the model text, and the target that says so.
-    case placed(Range<Int>, Target)
+    /// Where it is now, in the model text, the target that says so, and the section
+    /// (or the abstract) it starts in.
+    case placed(Range<Int>, Target, section: String?)
     /// Its quote is in several places, so it is drawn in none: each place it could go,
     /// with the target that would put it there.
     case ambiguous([Target])
@@ -60,7 +61,8 @@ public struct HighlightPlacement: Sendable, Equatable {
         statuses[entry.id] = .detached
         continue
       }
-      statuses[entry.id] = .placed(range, target)
+      statuses[entry.id] = .placed(
+        range, target, section: model.section(containing: range.lowerBound)?.anchor)
       if target != entry.current { relocations[entry.id] = target }
       for drawn in built.positions.drawnRanges(forModel: range) {
         marks.append(HighlightMark(range: drawn, color: entry.color, highlight: entry.id))
@@ -104,5 +106,17 @@ public struct HighlightMarks: Sendable, Equatable {
   /// The highlight at storage offset `offset`, if any.
   public func highlight(at offset: Int) -> HighlightMark? {
     marks(meeting: NSRange(location: offset, length: 1)).first
+  }
+}
+
+extension HighlightMarks {
+  /// The Highlights rotor's stops (#522): every mark, said as highlighted in its color,
+  /// since VoiceOver sees nothing of what the fragments draw.
+  public func rotorItems(locale: Locale = .interface) -> [AccessibleReading.RotorItem] {
+    marks.map { mark in
+      AccessibleReading.RotorItem(
+        range: mark.range,
+        label: String(kit: "Highlighted, \(mark.color.title(in: locale))", locale: locale))
+    }
   }
 }

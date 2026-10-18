@@ -265,6 +265,8 @@ extension ReaderChrome {
     /// Opens or closes the section, or the aside, whose heading or caption starts at
     /// or holds this offset.
     case toggleSection(heading: Int)
+    /// Shows what can be done with the highlight at this offset (#522).
+    case showHighlight(at: Int)
     /// Brings the bars back, or puts them away.
     case toggleBars
   }
@@ -279,8 +281,11 @@ extension ReaderChrome {
   /// - Parameters:
   ///   - isLink: whether the character at an offset is part of a link.
   ///   - toggles: whether there is a heading or caption at an offset to toggle.
+  ///   - isHighlighted: whether the character at an offset is in a highlight, whose
+  ///     popover a tap shows rather than the bars (#522); a link in one still opens.
   public static func action(
-    for tap: Tap, discloses: Bool, isLink: (Int) -> Bool, toggles: (Int) -> Bool
+    for tap: Tap, discloses: Bool, isLink: (Int) -> Bool, toggles: (Int) -> Bool,
+    isHighlighted: (Int) -> Bool = { _ in false }
   ) -> TapAction {
     guard !tap.clearsSelectionOrStopsFling, !tap.isOnHeader else { return .nothing }
     if discloses, let paragraph = tap.besideDisclosure, toggles(paragraph) {
@@ -289,6 +294,7 @@ extension ReaderChrome {
     if let character = tap.character {
       if isLink(character) { return .nothing }
       if discloses, toggles(character) { return .toggleSection(heading: character) }
+      if isHighlighted(character) { return .showHighlight(at: character) }
     }
     return .toggleBars
   }
