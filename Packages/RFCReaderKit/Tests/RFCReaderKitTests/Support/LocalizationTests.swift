@@ -84,8 +84,14 @@ struct LocalizationTests {
 
   /// French first and German second: the catalog has German, so German it is, in
   /// the reader's region.
-  @Test func `a language the catalog lacks gives way to the catalog's, in the reader's region`() {
-    let interface = Locale.interface(localization: "de", current: Locale(identifier: "fr_FR"))
+  @Test func `a language the catalog lacks gives way to the catalog's, in the reader's region`() throws {
+    let localization = try #require(
+      Bundle.preferredLocalizations(
+        from: Bundle.kit.localizations, forPreferences: ["fr-FR", "de-DE"]
+      ).first)
+    #expect(localization == "de")
+    let interface = Locale.interface(
+      localization: localization, current: Locale(identifier: "fr_FR"))
     #expect(interface.language.languageCode?.identifier == "de")
     #expect(interface.region?.identifier == "FR")
   }
