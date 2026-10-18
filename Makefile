@@ -184,11 +184,11 @@ build-benchmarks:
 # text.noindex. Written to a partial file first, like the legacy RFCs below.
 $(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
 
 $(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
 # The RFC index, fetched when it is missing, for what reads it without a corpus run:
 # the overrides check and `test-corpus`. What they take from it was fixed when each
