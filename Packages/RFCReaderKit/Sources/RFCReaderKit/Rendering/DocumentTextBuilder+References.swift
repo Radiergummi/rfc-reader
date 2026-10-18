@@ -16,7 +16,7 @@ extension DocumentTextBuilder {
         output.addAttribute(.rfcCaption, value: caption, range: subrange)
       }
     }
-    appendCaption(caption, indent: indent)
+    appendCaption(caption, indent: indent, blockStart: start)
   }
 
   /// The rule and the background are drawn by `RFCTextLayoutFragment`; the builder

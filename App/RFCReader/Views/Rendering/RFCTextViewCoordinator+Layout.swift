@@ -29,12 +29,10 @@ extension RFCTextViewCoordinator {
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
     // Before the text, so the first layout skips what the reading mode folds.
-    let foldingIndex = FoldingIndex(built)
-    self.foldingIndex = foldingIndex
     self.folding = folding
     foldingEcho.forget()
     forgetBands()
-    foldingDelegate.fold(foldingIndex, by: folding, bands: RequirementBands())
+    foldingDelegate.fold(built.foldingIndex, by: folding, bands: RequirementBands())
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
@@ -104,15 +102,31 @@ extension RFCTextViewCoordinator {
       let built, !requirements.isEmpty
     else { return }
     let requirements = requirements
+    // From the install, the requirements' arrival or a switch into a mode that bands
+    // them, until the bands are drawn (#747).
+    let interval = signposter.beginInterval(
+      "Find bands", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     bandsTask = Task {
       let bands = await Self.bands(of: requirements, in: built)
       // A later build or requirements have forgotten this task and started their own.
-      guard self.built?.text === built.text, self.requirements == requirements else { return }
+      guard !Task.isCancelled, self.built?.text === built.text, self.requirements == requirements
+      else {
+        signposter.endInterval("Find bands", interval, "superseded")
+        return
+      }
       bandsTask = nil
       requirementBands = bands
-      guard folding.mode.bandsRequirements, let foldingIndex else { return }
-      foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
-      engine.refold(foldingDelegate.hidden)
+      guard folding.mode.bandsRequirements else {
+        signposter.endInterval("Find bands", interval, "not drawn")
+        return
+      }
+      // The bands change only what the fragments draw, not what the folding hides:
+      // they are drawn again, not laid out again, which a refold does for the whole
+      // document on the main actor (the "Refold" and "Redraw" signposts, #747).
+      foldingDelegate.band(bands)
+      engine.redraw()
+      signposter.endInterval("Find bands", interval)
     }
   }
 

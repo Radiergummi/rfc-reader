@@ -6,7 +6,7 @@ import Foundation
 /// Each has its own toolbar button, and they behave as Pages' Format and Document
 /// buttons do: a button opens a closed inspector on its pane, swaps an open one to
 /// it, and closes the inspector when its pane is already showing.
-public enum InspectorPane: Sendable {
+public enum InspectorPane: String, Codable, Sendable {
   case navigation
   case info
 
