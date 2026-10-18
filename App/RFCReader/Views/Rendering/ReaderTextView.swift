@@ -11,6 +11,17 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
+    /// The reader state Find is installed in as this comes into a window (#763):
+    /// nil for a preview's reader and one the stack keeps below its top.
+    weak var findReader: ReaderState? {
+      didSet { installsFind(in: findReader) }
+    }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      installsFind(in: findReader)
+    }
+
     /// Whether the bars are hidden, set by the coordinator the moment `ReaderChrome`
     /// decides so, before the safe area follows: the top inset holds at the bars'
     /// height meanwhile (`ReaderChrome.topInset`).
@@ -252,9 +263,10 @@ import RFCReaderKit
       Clipboard.write(.quote(quote), announcing: .quote)
     }
 
-    /// Look Up from the menu or the keyboard: a reference under the selection is
-    /// still previewed rather than looked up. A force click never arrives here; see
-    /// `trackReferenceClick(_:link:at:)`.
+    /// Look Up. A gesture on a reference previews it, as a force click does (the
+    /// coordinator's `quickLookReference(with:)`); anywhere else, and from the menu or
+    /// the keyboard, which have no location to test, it is AppKit's own Look Up. A force
+    /// click never arrives here; see `trackReferenceClick(_:link:at:)`.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }
       super.quickLook(with: event)

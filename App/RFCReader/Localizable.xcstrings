@@ -1181,6 +1181,16 @@
         }
       }
     },
+    "Find in Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Dokument suchen"
+          }
+        }
+      }
+    },
     "Find the requirements in ${document}" : {
       "localizations" : {
         "de" : {
@@ -2491,6 +2501,16 @@
         }
       }
     },
+    "Share…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilen …"
+          }
+        }
+      }
+    },
     "Show All %@ Results" : {
       "localizations" : {
         "de" : {
@@ -2621,12 +2641,32 @@
         }
       }
     },
+    "Stop Keeping Offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr offline behalten"
+          }
+        }
+      }
+    },
     "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht mehr offline behalten. Die Kopie kommt in den Lese-Cache, der sie entfernen kann, wenn er Platz braucht."
+          }
+        }
+      }
+    },
+    "Stop keeping this RFC offline?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diesen RFC nicht mehr offline behalten?"
           }
         }
       }

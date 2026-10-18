@@ -46,7 +46,7 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
-  /// The text of the build the reader's folding index was made of (#699).
+  /// The text of the build whose folding index the reader state holds (#699, #723).
   @State private var foldedText: NSAttributedString?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
@@ -220,19 +220,20 @@ struct DocumentView: View {
       foldedText = nil
       return
     }
-    // Held, and compared by reference: a new build can be allocated where the old
-    // one was, and an identifier alone would take it for the old one.
+    // The build's own index (#723), written only when the build changes, since every
+    // write notifies. The text is held and compared by reference: a new build can be
+    // allocated where the old one was, and an identifier alone would take it for it.
     if reader.foldingIndex == nil || foldedText !== built.text {
-      reader.foldingIndex = FoldingIndex(built)
+      reader.foldingIndex = built.foldingIndex
       foldedText = built.text
     }
-    guard reader.folding.mode == .focus, let index = reader.foldingIndex,
-      let anchor = reader.folding.focusedAnchor(in: index)
+    guard reader.folding.mode == .focus,
+      let anchor = reader.folding.focusedAnchor(in: built.foldingIndex)
     else {
       if reader.focusGroups != nil { reader.focusGroups = nil }
       return
     }
-    let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+    let cited = FocusCitations.entries(citedIn: anchor, in: built)
     let groups = FocusCitations.groups(reader.groups, citing: cited)
     // A section that cites nothing lists the whole bibliography, rather than saying
     // the document has none.
@@ -486,6 +487,11 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+        // Which window's live resize a new column comes from.
+        .background {
+          WindowObserver(resize: resize)
+          .accessibilityHidden(true)
+        }
       #else
         // Which size changes are a rotation, so their new column builds at once.
         .background {
@@ -510,6 +516,7 @@ struct DocumentView: View {
         text: session.originalText,
         failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
+        isShown: showsReaderState,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
       .onAppear {
@@ -725,31 +732,37 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is. False while there is no build to look in.
+  /// leaves the history as it is. Nil while there is no build to look in, and
+  /// otherwise whether the place was one the document holds (#762).
   @discardableResult
-  private func follow(_ place: String) -> Bool {
+  private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
     guard isShown, let document = session.state.document,
       let built = session.state.built
-    else { return false }
+    else { return nil }
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
         to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+      return .landed
     case .reference(let anchor):
       reader.reveal(reference: anchor)
+      return .landed
     case .document, .unhandled, nil:
-      break
+      return .noSuchPlace
     }
-    return true
   }
 
   /// A place handed over unrecorded, settled once followed. Without a build it
-  /// waits for the text to appear, and is followed there.
+  /// waits for the text to appear, and is followed there; where no text is coming,
+  /// a scan's or a pointer's page or a load that failed, it is settled unmade
+  /// (#762), or a script's `jump to section` would wait on it forever.
   private func follow(_ request: ScrollRequest) {
-    if follow(request.section) {
-      navigation.settle(request)
+    if let outcome = follow(request.section) {
+      navigation.settle(request, as: outcome)
+    } else if isShown, !session.awaitsDocument, session.state.document == nil {
+      navigation.settle(request, as: .notShown)
     }
   }
 

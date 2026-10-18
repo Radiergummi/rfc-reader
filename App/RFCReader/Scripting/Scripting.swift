@@ -95,23 +95,48 @@
     /// indexed accessors below instead, which build one object or none rather than
     /// all 9,842.
     @objc var rfcs: [ScriptableRFC] {
-      LibraryModel.shared.index?.rfcs.map { ScriptableRFC($0.id) } ?? []
+      Self.settledIndex?.rfcs.map { ScriptableRFC($0.id) } ?? []
     }
 
     @objc func countOfRfcs() -> Int {
-      LibraryModel.shared.index?.rfcs.count ?? 0
+      Self.settledIndex?.rfcs.count ?? 0
     }
 
     @objc(objectInRfcsAtIndex:)
     func objectInRfcs(at index: Int) -> ScriptableRFC? {
-      LibraryModel.shared.index.map { ScriptableRFC($0.rfcs[index].id) }
+      Self.settledIndex.map { ScriptableRFC($0.rfcs[index].id) }
     }
+
+    /// The index once it has loaded or failed to, for a script (#762). A script that
+    /// launched the app asks before the index has loaded, and found no RFCs at all;
+    /// the intents wait for it with `settledSearch()`. An object accessor cannot
+    /// suspend its Apple event, so it turns the run loop until the index settles,
+    /// which lets the main actor's load run, until `indexDeadline`.
+    ///
+    /// Turning the run loop inside an accessor lets other main-actor work run in the
+    /// middle of it, a link routed or a window made, so nothing here holds on to model
+    /// state across the wait: each accessor reads the index once it is back.
+    static var settledIndex: RFCIndex? {
+      let library = LibraryModel.shared
+      let deadline = indexDeadline
+      while !library.hasIndexSettled, Date.now < deadline {
+        RunLoop.current.run(mode: .default, before: min(deadline, .now.addingTimeInterval(0.05)))
+      }
+      return library.index
+    }
+
+    /// Until when scripts wait for the index before they find none: 30 s from the
+    /// first that asked, longer than a launch takes to read the cached index, short of
+    /// an Apple event's default timeout of two minutes. One deadline for the process,
+    /// so a script's every command does not wait 30 s again for an index that is not
+    /// coming. Lazy, as a static `let` is.
+    private static let indexDeadline = Date.now.addingTimeInterval(30)
 
     /// `rfc id 9110`, looked up by number rather than found by walking `rfcs`.
     @objc(valueInRfcsWithUniqueID:)
     func valueInRfcs(withUniqueID uniqueID: Any) -> ScriptableRFC? {
       guard let number = (uniqueID as? NSNumber)?.intValue,
-        LibraryModel.shared.index?[number] != nil
+        Self.settledIndex?[number] != nil
       else { return nil }
       return ScriptableRFC(.rfc(number))
     }
@@ -146,7 +171,8 @@
       }
       set {
         let library = LibraryModel.shared
-        let groups = Set(library.index?.rfcs.compactMap(\.workingGroup) ?? [])
+        // Once the index has settled, or a working group's name is not yet one.
+        let groups = Set(AppDelegate.settledIndex?.rfcs.compactMap(\.workingGroup) ?? [])
         guard
           let filter = LibraryFilter(
             scriptName: newValue, workingGroups: groups,
@@ -191,31 +217,30 @@
       command.performDefaultImplementation()
     }
 
-    /// An enumeration's value crosses as its four-character code.
+    /// An enumeration's value crosses as its four-character code (`ScriptPane`).
     @objc var scriptInspectorPane: FourCharCode {
       get {
-        guard let reader = controller?.reader else { return ScriptCode.contents }
-        if reader.pane == .info { return ScriptCode.info }
-        switch reader.tab {
-        case .contents: return ScriptCode.contents
-        case .references: return ScriptCode.references
-        case .requirements: return ScriptCode.requirements
-        }
+        guard let reader = controller?.reader else { return ScriptPane.contents.code }
+        if reader.pane == .info { return ScriptPane.information.code }
+        // A switch rather than names matched, so a tab added or renamed is a
+        // compile error here, not a pane a script quietly cannot reach.
+        let pane: ScriptPane =
+          switch reader.tab {
+          case .contents: .contents
+          case .references: .references
+          case .requirements: .requirements
+          }
+        return pane.code
       }
       set {
         guard let reader = controller?.reader else { return }
-        switch newValue {
-        case ScriptCode.info:
-          reader.pane = .info
-        case ScriptCode.references:
-          reader.pane = .navigation
-          reader.tab = .references
-        case ScriptCode.requirements:
-          reader.pane = .navigation
-          reader.tab = .requirements
-        default:
-          reader.pane = .navigation
-          reader.tab = .contents
+        let pane = ScriptPane(code: newValue) ?? .contents
+        reader.pane = pane.pane
+        switch pane {
+        case .contents: reader.tab = .contents
+        case .references: reader.tab = .references
+        case .requirements: reader.tab = .requirements
+        case .information: break
         }
       }
     }
@@ -262,10 +287,10 @@
       }
       let code = (evaluatedArguments?["placement"] as? NSNumber)?.uint32Value
       let placement: LibraryModel.Placement =
-        switch code {
-        case ScriptCode.newTab: .newTab
-        case ScriptCode.newWindow: .newWindow
-        default: .frontTab
+        switch code.flatMap(ScriptPlacement.init(code:)) {
+        case .newTab: .newTab
+        case .newWindow: .newWindow
+        case .frontTab, nil: .frontTab
         }
       LibraryModel.shared.open(link, placement: placement)
     }
@@ -303,23 +328,22 @@
       }
       suspendExecution()
       nonisolated(unsafe) let command = self
-      window.navigation.jump(toSection: section) {
+      // A place the document does not hold is an error to the script, in words,
+      // as the scripting decision asks, not a jump that went nowhere (#762).
+      window.navigation.jump(toSection: section) { outcome in
+        switch outcome {
+        case .landed:
+          break
+        case .noSuchPlace:
+          ScriptError.report("The RFC has no section “\(section)”.", in: command)
+        case .notShown:
+          ScriptError.report("The RFC could not be shown to jump in.", in: command)
+        case .interrupted:
+          ScriptError.report(
+            "The jump to section “\(section)” was interrupted before it was made.", in: command)
+        }
         command.resumeExecution(withResult: nil)
       }
-    }
-  }
-
-  /// The dictionary's enumerators, as the four-character codes Apple events carry.
-  enum ScriptCode {
-    static let contents = code("RIpC")
-    static let references = code("RIpR")
-    static let requirements = code("RIpQ")
-    static let info = code("RIpI")
-    static let newTab = code("RPnT")
-    static let newWindow = code("RPnW")
-
-    private static func code(_ string: String) -> FourCharCode {
-      string.utf8.reduce(0) { $0 << 8 | FourCharCode($1) }
     }
   }
 

@@ -26,7 +26,7 @@ Everything goes through the `Makefile`:
 | `make install` | build Release and copy it into `/Applications` |
 | `make trace` | build Release, record a Time Profiler trace of a scripted session into `traces/`, and print the app's signpost intervals; `TRACE_SCENARIO='wait 6; open 9110; wait 5'` for another session |
 | `make benchmark` | Release benchmarks of the index and document parsers, the search and the builder over real RFCs (`Tools/benchmarks`); `BENCHMARK_ARGS='baseline update before'`, then `'baseline compare before'` after a change; `make build-benchmarks` only compiles them, as `make build` does on a Mac |
-| `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,457 |
+| `make corpus` | fetch the text and the XML, check the schema, convert, index, write the manifest; 20 documents, `CORPUS_LIMIT=` for all 8,457 |
 
 The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle ID `me.mazetti.rfc-reader`) and may create provisioning profiles as they go. CI has no certificates and passes `CODE_SIGNING_ALLOWED=NO`, which does the same locally.
 
@@ -34,7 +34,7 @@ The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle I
 
 **RFCKit knows nothing about SwiftUI; the app knows nothing about XML or the 72-column text format.** The boundary is the `RFCDocument` model. RFCKit is tested on Linux in CI, so it must stay free of Apple-only dependencies — `FoundationXML` and `FoundationNetworking` are imported behind `#if canImport(…)`. Anything platform-specific belongs in `App/RFCReader`.
 
-`Tools/corpus-build` is the third consumer of RFCKit: it runs `LegacyTextParser` + `RFCXMLSerializer` over the legacy corpus offline, so the app can have a single runtime document path (the XML parser) for all 9,842 RFCs.
+`Tools/corpus-build` is the third consumer of RFCKit: it runs `LegacyTextParser` + `RFCXMLSerializer` over the legacy corpus offline, so that with a legacy pack installed the app reads every RFC through one parser, the XML one. Without a pack the app parses a legacy RFC's text on the device (`DocumentStore`, `RFCEditorClient`), which stays the fallback (ARCHITECTURE.md, "Data flow in the app").
 
 Swift 6 language mode with complete strict concurrency, everywhere. The app target defaults to main-actor isolation with approachable concurrency (`project.yml`), so app code is main-actor unless marked `nonisolated` — as `RFCTextLayoutFragment` is, because TextKit lays out off the main thread — and off-main work is an `@concurrent` function, not a `Task.detached`. The packages keep nonisolated defaults.
 
