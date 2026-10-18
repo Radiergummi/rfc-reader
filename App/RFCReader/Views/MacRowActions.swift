@@ -28,12 +28,14 @@ import SwiftUI
               document: row.id, library: library, navigation: navigation,
               undoManager: undoManager)
           }
-          Button {
-            navigation.readingPath = ReadingPathRequest(root: row.id)
-          } label: {
-            Label("Reading Path", systemImage: "list.number")
+          if library.hasCitationIndex {
+            Button {
+              navigation.readingPath = ReadingPathRequest(root: row.id)
+            } label: {
+              Label("Reading Path", systemImage: "list.number")
+            }
+            .labelStyle(.titleAndIcon)
           }
-          .labelStyle(.titleAndIcon)
           KeepOfflineButton(document: row.id, library: library)
             .labelStyle(.titleAndIcon)
         }
@@ -46,7 +48,7 @@ import SwiftUI
     private var isBookmarked: Bool { library.bookmarkedDocuments.contains(row.id) }
 
     private func toggleBookmark() {
-      library.toggleBookmark(row.id)
+      library.toggleBookmark(row.id, undoManager: undoManager)
     }
   }
 #endif

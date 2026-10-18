@@ -581,7 +581,7 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(identity.displayName)", systemImage: failure.kind.symbol)
+        Label("Couldn’t Load \(identity.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
         Text(failure.kind.recoverySuggestion(for: .document))
