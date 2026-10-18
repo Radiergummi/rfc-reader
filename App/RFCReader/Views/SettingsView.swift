@@ -206,7 +206,10 @@ struct NotificationSettings: View {
     Toggle(isOn: toggle) {
       Text("Notify me about bookmarked RFCs")
       Text(
-        "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it."
+        """
+        When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor \
+        queue, or errata are listed for it; and when a working group you follow publishes an RFC.
+        """
       )
     }
     if wasRefused {

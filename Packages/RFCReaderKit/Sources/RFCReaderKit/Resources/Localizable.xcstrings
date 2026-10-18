@@ -1205,6 +1205,16 @@
         }
       }
     },
+    "Follow Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group folgen"
+          }
+        }
+      }
+    },
     "Formats" : {
       "localizations" : {
         "de" : {
@@ -1991,6 +2001,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Veröffentlicht, bevor der RFC Editor festhielt, über welchen Stream ein Dokument kam."
+          }
+        }
+      }
+    },
+    "Published by the %@ working group." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von der Working Group %@ veröffentlicht."
           }
         }
       }
@@ -2889,6 +2909,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In Prüfung"
+          }
+        }
+      }
+    },
+    "Unfollow Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group nicht mehr folgen"
           }
         }
       }

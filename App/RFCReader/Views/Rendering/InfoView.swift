@@ -196,13 +196,13 @@ private struct ProvenanceStep: View {
       .accessibilityLabel(Text(verbatim: step.accessibilityLabel))
       #if os(macOS)
         .popover(item: $card, arrowEdge: .bottom) { card in
-          WorkingGroupCard(summary: card.summary)
+          WorkingGroupCard(group: card.id, summary: card.summary)
           .padding()
           .frame(width: GlossaryCard.width)
         }
       #else
         .sheet(item: $card) { card in
-          WorkingGroupSheet(summary: card.summary)
+          WorkingGroupSheet(group: card.id, summary: card.summary)
         }
       #endif
     }
@@ -226,13 +226,14 @@ private struct GroupCard: Identifiable {
   /// A working group's card as a sheet, as a glossary entry is one: a medium detent,
   /// so the document stays in view above it.
   private struct WorkingGroupSheet: View {
+    let group: String
     let summary: WorkingGroupSummary
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
       NavigationStack {
         ScrollView {
-          WorkingGroupCard(summary: summary)
+          WorkingGroupCard(group: group, summary: summary)
             .padding()
         }
         .toolbar {

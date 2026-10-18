@@ -175,7 +175,7 @@ struct RFCListView: View {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
       if let acronym = workingGroupCardAcronym {
-        WorkingGroupCard(summary: library.workingGroupSummary(acronym))
+        WorkingGroupCard(group: acronym, summary: library.workingGroupSummary(acronym))
           .listRowSeparator(.hidden)
           .selectionDisabled()
       }

@@ -169,10 +169,13 @@ struct SidebarView: View {
         row(.stream(stream))
       }
     }
-    if !library.topWorkingGroups.isEmpty {
+    // The followed groups first, then the busiest of the rest (#731).
+    let workingGroups = library.sidebarWorkingGroups
+    if !workingGroups.isEmpty {
       group("Working Groups", isExpanded: $workingGroupsExpanded) {
-        ForEach(library.topWorkingGroups, id: \.self) { group in
+        ForEach(workingGroups, id: \.self) { group in
           row(.workingGroup(group))
+            .contextMenu { FollowGroupButton(group: group) }
         }
       }
     }

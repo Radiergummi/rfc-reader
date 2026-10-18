@@ -3142,12 +3142,12 @@
         }
       }
     },
-    "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it." : {
+    "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it; and when a working group you follow publishes an RFC." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn einer ersetzt oder aktualisiert wird, ein Draft beginnt, ihn zu überarbeiten, oder die Warteschlange des RFC Editor erreicht, oder Errata für ihn aufgeführt werden."
+            "value" : "Wenn einer ersetzt oder aktualisiert wird, ein Draft beginnt, ihn zu überarbeiten, oder die Warteschlange des RFC Editor erreicht, oder Errata für ihn aufgeführt werden; und wenn eine Working Group, der du folgst, einen RFC veröffentlicht."
           }
         }
       }
