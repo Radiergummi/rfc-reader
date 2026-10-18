@@ -49,10 +49,11 @@ jobs:
     steps:
       # The app orders indexes packs by their version, number by number, so one to
       # be published is dated and counted, 2026.10.1: refused before hours of build.
+      # The container's shell is sh, so grep rather than bash's [[ =~ ]].
       - name: Check the indexes pack's version
         if: ${{ inputs.publish_indexes }}
         run: |
-          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]]; then
+          if ! printf '%s\n' "$VERSION" | grep -Eqx '[0-9]{4}\.[0-9]{2}\.[0-9]+'; then
             echo "::error::The indexes pack's version is YYYY.MM.N, not $VERSION."
             exit 1
           fi
