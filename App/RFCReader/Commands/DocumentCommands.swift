@@ -160,6 +160,7 @@ struct DocumentCommands: Commands {
           MenuSections(
             sections: DocumentMenus.more(
               showsOriginal: reader?.showOriginal == true,
+              showsTranslation: reader?.showTranslation == true,
               errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
                 .errataURL,
               precedingDraft: reader?.precedingDraft),
