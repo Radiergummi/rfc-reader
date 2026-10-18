@@ -17,6 +17,12 @@ public struct RecentRFC: Sendable, Hashable, Identifiable {
     self.link = link
     self.publishedAt = publishedAt
   }
+
+  /// The entries of a Recent RFCs feed, as `RFCEditorClient.fetchRecentData` fetched
+  /// it or the caller kept it. A document that is not RSS is an error.
+  public static func parseFeed(_ data: Data) throws -> [RecentRFC] {
+    try RecentFeedParser.parse(data)
+  }
 }
 
 enum RecentFeedParser {
