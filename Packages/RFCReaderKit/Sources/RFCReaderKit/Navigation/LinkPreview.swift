@@ -46,13 +46,11 @@ public enum LinkPreview: Equatable, Sendable {
   }
 
   /// What pressing an entry's row in the References panel previews (#580): what a
-  /// citation of the entry in the prose previews, which links to the RFC the entry
-  /// names, so the two cannot drift. An entry that names no RFC keeps its card.
-  public static func resolve(_ entry: Reference, in index: RFCIndex?) -> LinkPreview {
-    guard let id = entry.documentID,
-      let preview = resolve(RFCLink(id: id).appURL, from: id, in: index)
-    else { return .card(entry.anchor) }
-    return preview
+  /// citation of the entry in the prose previews, the RFC it names from the top, by
+  /// the same rule. Nil for an entry that names no RFC, whose card would say no more
+  /// than its row does.
+  public static func resolve(_ entry: Reference, in index: RFCIndex?) -> LinkPreview? {
+    entry.documentID.map { document($0, place: nil, in: index) }
   }
 
   /// Nil for a URL the reader does not own: a link to the web previews nothing. A
@@ -68,9 +66,17 @@ public enum LinkPreview: Equatable, Sendable {
       return .card(entry)
     }
     guard let link = RFCLink(url: url) else { return nil }
-    if link.id.series != .rfc, let first = index?.series(link.id)?.members.first {
-      return .document(first, place: link.place)
+    return document(link.id, place: link.place, in: index)
+  }
+
+  /// `id` at `place`, or a series' first member there: the series has no document of
+  /// its own to fetch.
+  private static func document(_ id: DocumentID, place: String?, in index: RFCIndex?)
+    -> LinkPreview
+  {
+    if id.series != .rfc, let first = index?.series(id)?.members.first {
+      return .document(first, place: place)
     }
-    return .document(link.id, place: link.place)
+    return .document(id, place: place)
   }
 }

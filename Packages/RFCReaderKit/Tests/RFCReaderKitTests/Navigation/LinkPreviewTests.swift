@@ -71,8 +71,8 @@ struct LinkPreviewTests {
   }
 
   /// A References panel row previews what a citation of its entry in the prose
-  /// does (#580): the RFC it names, from the top, a series' first member, or the
-  /// card for an entry that names no RFC.
+  /// does (#580): the RFC it names, from the top, or a series' first member. An
+  /// entry that names no RFC previews nothing: its card would say what its row says.
   @Test func `a references panel entry previews what its citation does`() {
     let index = RFCIndex(
       rfcs: [], series: [SeriesEntry(id: bcp14, members: [.rfc(2119), .rfc(8174)])])
@@ -83,7 +83,7 @@ struct LinkPreviewTests {
     let elsewhere = Reference(anchor: "IEEE.802.3_2018", title: "Ethernet")
     #expect(LinkPreview.resolve(rfc, in: index) == .document(other, place: nil))
     #expect(LinkPreview.resolve(series, in: index) == .document(.rfc(2119), place: nil))
-    #expect(LinkPreview.resolve(elsewhere, in: index) == .card("IEEE.802.3_2018"))
+    #expect(LinkPreview.resolve(elsewhere, in: index) == nil)
   }
 
   /// macOS's popover gets the whole preview; a phone's context menu gets what its
