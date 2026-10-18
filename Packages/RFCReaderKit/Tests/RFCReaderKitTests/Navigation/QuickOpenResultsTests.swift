@@ -429,3 +429,45 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(9113))])
   }
 }
+
+/// iOS's Go to RFC, beside a search field that already finds by keyword, takes an
+/// RFC number and nothing else, from the number pad (#579).
+@Suite("Quick open results: a number alone")
+struct QuickOpenNumberTests {
+  /// The number pad types digits only, but a paste or an iPad's keyboard does not.
+  @Test func `only the digits of what is typed are kept`() {
+    #expect(QuickOpenResults.digits(in: "9110") == "9110")
+    #expect(QuickOpenResults.digits(in: "RFC 9110") == "9110")
+    #expect(QuickOpenResults.digits(in: "http") == "")
+    #expect(QuickOpenResults.digits(in: "٩١١٠") == "")
+  }
+
+  /// The RFC with that number, and none of those whose numbers begin with it, nor a
+  /// registry value: `911` is RFC 911 alone.
+  @Test func `a number lists the RFC with that number alone`() {
+    var results = QuickOpenResults()
+    results.show(number: "911")
+    #expect(results.rows == [QuickOpenResults.Row(link: RFCLink(id: .rfc(911)))])
+    #expect(results.openable == RFCLink(id: .rfc(911)))
+    #expect(!results.isSearching)
+  }
+
+  @Test func `nothing typed lists nothing and says nothing`() {
+    var results = QuickOpenResults()
+    results.show(number: "")
+    #expect(results.rows.isEmpty)
+    #expect(results.openable == nil)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+  }
+
+  /// Digits past any RFC's number name none.
+  @Test func `a number too long for any RFC lists nothing`() {
+    var results = QuickOpenResults()
+    results.show(number: "99999999999999999999999")
+    #expect(results.rows.isEmpty)
+  }
+
+  @Test func `the placeholder asks for a number`() {
+    #expect(QuickOpenResults.numberPlaceholder(locale: .english) == "RFC number")
+  }
+}
