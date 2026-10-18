@@ -33,6 +33,7 @@ extension DocumentSession {
       // this one; `install()` reports the real anchor a moment later.
       reader.clear()
       reader.showOriginal = showsOriginal
+      reader.showTranslation = false
       reader.isLoading = true
       // Its header is on its way until the reader reports, so the title stays out
       // of the toolbar rather than showing and then dropping (#281).
@@ -52,6 +53,8 @@ extension DocumentSession {
       skipLoad()
       guard isShown else { return }
       reader.isLoading = false
+      // A jump waiting for the text is not coming, as for a load that failed.
+      if let request = navigation.scrollRequest { navigation.settle(request, as: .notShown) }
       // Recorded as a loaded text would be: Recently Read lists a scan, and a
       // pointer with a pack or without. Here, so once per opening, like a load's.
       positions.markOpened()
@@ -74,7 +77,7 @@ extension DocumentSession {
       guard reader.isCurrent else { return }
       reader { $0.documentFailedToLoad() }
       // A jump waiting for the text is not coming.
-      if let request = navigation.scrollRequest { navigation.settle(request) }
+      if let request = navigation.scrollRequest { navigation.settle(request, as: .notShown) }
     }
   }
 
@@ -91,6 +94,7 @@ extension DocumentSession {
     reader { reader in
       reader.clear()
       reader.showOriginal = showsOriginal
+      reader.showTranslation = showsTranslation
       // The mode is the window's, and stays from one document to the next.
       reader.folding.expanded = folding.expanded
       reader.folding.focused = folding.focused
@@ -107,7 +111,11 @@ extension DocumentSession {
       // is on top again (`RFCTextView.isShown`).
       reader { $0.documentStartsLoading() }
       Self.present(document, id: id, into: reader, library: library)
-      if let built { reader.sections = built.reachableSections(of: document) }
+      if let built {
+        let shown = built.isTranslation ? translatedDocument?.document : nil
+        reader.sections = built.reachableSections(of: shown ?? document)
+        reader.readsTranslation = built.isTranslation
+      }
     case .failed:
       reader { $0.documentFailedToLoad() }
     }
@@ -190,16 +198,23 @@ extension DocumentSession {
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
-  /// what discards a canceled one. `DocumentPreview` builds through it too.
+  /// what discards a canceled one, unless nothing is on screen yet.
+  /// `DocumentPreview` builds through it too.
+  /// - Parameter translation: `document`'s translation (#749), built in its place.
   @concurrent
   static func built(
-    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
+    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults,
+    errata: ErrataMarks = .none, translation: TranslatedDocument? = nil
   ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      DocumentTextBuilder.build(document, style: style, choices: choices)
+      if let translation {
+        DocumentTextBuilder.build(translation, style: style, choices: choices, errata: errata)
+      } else {
+        DocumentTextBuilder.build(document, style: style, choices: choices, errata: errata)
+      }
     }
   }
 }

@@ -131,7 +131,7 @@ final class IndexDatabaseTests {
     defer { sqlite3_close(connection) }
     #expect(
       Self.rows("SELECT key, value FROM meta ORDER BY key", in: connection)
-        == [["schema", String(IndexDatabase.schemaVersion)], ["version", "2026.10"]])
+        == [["schema", String(IndexSchema.version)], ["version", "2026.10"]])
   }
 
   @Test func `writing over a database replaces it`() throws {

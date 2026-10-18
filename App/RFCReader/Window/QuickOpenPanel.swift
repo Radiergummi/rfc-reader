@@ -50,6 +50,11 @@
       )
       hosting.sizingOptions = []
       contentView = hosting
+      // A borderless panel is a window of no kind and no name to VoiceOver (#760),
+      // which names a window by its title; this one draws none.
+      setAccessibilitySubrole(.floatingWindow)
+      setAccessibilityTitle(String(localized: "Go to RFC"))
+      setAccessibilityLabel(String(localized: "Go to RFC"))
     }
 
     /// A borderless window refuses key status by default, and a field in a window

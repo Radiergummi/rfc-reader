@@ -1,14 +1,17 @@
 name: Corpus-backed tests
 
-# The RFCKit and corpus-build suites that read whole legacy RFCs (`Corpus-backed:
-# ...`), which `make check` and CI skip because the documents are fetched, not
-# committed. On every pull request that changes what they test or read, so a
+# The RFCKit, corpus-build and RFCReaderKit suites that read whole RFCs
+# (`Corpus-backed: ...`), which `make check` and CI skip because the documents are
+# fetched, not committed. On every pull request that changes what they test or read, so a
 # heuristic change cannot merge without them (#243); weekly, for what changes on
 # the RFC Editor's side; and on demand. The documents are fetched fresh each time.
 on:
+  # ready_for_review too, for the macOS job, which skips a draft.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - Packages/RFCKit/**
+      - Packages/RFCReaderKit/**
       - Tools/corpus-build/**
       - corpus/overrides/**
       - Makefile
@@ -42,3 +45,19 @@ jobs:
       # Fetches the documents in the Makefile's CORPUS_TEST_DOCUMENTS, checks every
       # document a test reads is among them, and runs the suites.
       - run: make test-corpus
+
+  # RFCReaderKit builds on a Mac only, so its suites run here, alone: the job above
+  # has run the rest. Not for a draft, as ci-macos.yml's macOS jobs are not.
+  test-corpus-macos:
+    name: Corpus-backed tests (macOS)
+    if: ${{ !github.event.pull_request.draft }}
+    # Xcode 26.4, as ci-macos.yml's package tests: the first to ship Swift 6.3.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
+      - run: make test-corpus-app

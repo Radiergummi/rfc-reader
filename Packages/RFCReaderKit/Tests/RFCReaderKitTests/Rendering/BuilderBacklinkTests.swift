@@ -87,11 +87,11 @@ struct BuilderBacklinkTests {
 
   /// "One Backlink" to "Three Backlinks" in words, and figures from there on.
   @Test func `the caption counts in words up to three`() {
-    #expect(DocumentTextBuilder.backlinksCaption(count: 1) == "One Backlink")
-    #expect(DocumentTextBuilder.backlinksCaption(count: 2) == "Two Backlinks")
-    #expect(DocumentTextBuilder.backlinksCaption(count: 3) == "Three Backlinks")
-    #expect(DocumentTextBuilder.backlinksCaption(count: 4) == "4 Backlinks")
-    #expect(DocumentTextBuilder.backlinksCaption(count: 391_511) == "391511 Backlinks")
+    #expect(DocumentLabels.english.backlinksCaption(count: 1) == "One Backlink")
+    #expect(DocumentLabels.english.backlinksCaption(count: 2) == "Two Backlinks")
+    #expect(DocumentLabels.english.backlinksCaption(count: 3) == "Three Backlinks")
+    #expect(DocumentLabels.english.backlinksCaption(count: 4) == "4 Backlinks")
+    #expect(DocumentLabels.english.backlinksCaption(count: 391_511) == "391511 Backlinks")
   }
 
   /// On paper there is nothing to press.

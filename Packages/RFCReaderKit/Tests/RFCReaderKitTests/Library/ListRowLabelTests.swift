@@ -24,6 +24,15 @@ struct ListRowLabelTests {
     )
   }
 
+  /// The row's offline mark is spoken after the bookmark, as it is drawn (#769).
+  @Test func `a document kept offline says so`() {
+    let metadata = Fixtures.metadata(
+      9110, title: "HTTP Semantics", year: 2022, month: 6, currentStatus: .internetStandard)
+    #expect(
+      metadata.accessibilityLabel(isBookmarked: true, isAvailableOffline: true, locale: .english)
+        == "RFC 9110, HTTP Semantics, Internet Standard, 2022, Bookmarked, Available offline")
+  }
+
   /// The index's placeholder for "no group" is not a group's name.
   @Test func `the index placeholder for no group is not spoken as a group`() {
     let metadata = Fixtures.metadata(

@@ -44,8 +44,9 @@ public enum FragmentGeometry {
     /// measured against.
     public let runRange: NSRange
     /// The shallowest paragraph indent anywhere in that run: where the band
-    /// starts. Computed with the span because it is a scan over the run, and
-    /// the drawing path asks for it on every draw.
+    /// starts. Carried with the span because the drawing path asks for it on
+    /// every draw; the build worked it out once (`DecorationFacts`), except for a
+    /// folded block, whose indent is that of what is shown of it.
     public let indent: CGFloat
     /// Whether the run starts directly below another card, and ends directly
     /// above one: the ends `Placement.cardRect` cuts rather than caps.
@@ -71,23 +72,33 @@ public enum FragmentGeometry {
   /// A decoration can span several fragments — a multi-line artwork block lays out
   /// one fragment per line, and a multi-row table one per row — because the builder
   /// stores the attribute once per contiguous run rather than once per fragment.
-  /// `decorationRun(at:)` names that whole run; comparing the fragment's own start and
-  /// end against it says whether this fragment is the run's first, its last, both
-  /// (the common single-fragment case), or neither (a middle fragment, which draws
-  /// no cap and must not repeat the run's outer padding or its rounding, or the
-  /// band would show a seam at every fragment boundary).
+  /// The block's `DecorationFacts` name that whole run, or the verbatim block cut out
+  /// of it; comparing the fragment's own start and end against it says whether this
+  /// fragment is the run's first, its last, both (the common single-fragment case),
+  /// or neither (a middle fragment, which draws no cap and must not repeat the run's
+  /// outer padding or its rounding, or the band would show a seam at every fragment
+  /// boundary).
   ///
   /// A run whose rest a reading mode folds away, an aside closed under its caption
   /// (#700), ends where what is shown of it ends, and the run after it meets no card
   /// there: `hidden` is what the mode hides.
+  ///
+  /// What the whole block says is read from its `DecorationFacts`, which the build
+  /// set; only what differs per fragment, or per reading mode, is looked up here.
+  /// Text that did not come from a build has no facts, and is walked instead; so is a
+  /// copy whose offsets moved, such as a substring, since the facts' range is an
+  /// offset into the build's text.
   public static func decorationSpan(
     in text: NSAttributedString, fragment: NSRange, hidden: HiddenText = HiddenText()
   ) -> DecorationSpan? {
-    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
-    // depends on that as much as a table does: its last line carries the block's
-    // spacing alone (#31), which is a storage run of its own.
-    guard let run = text.decorationRun(at: fragment.location) else { return nil }
-    var effective = verbatimBlock(in: text, at: fragment.location, within: run.range)
+    guard let decoration = text.decoration(at: fragment.location) else { return nil }
+    let carried =
+      text.attribute(.rfcDecorationFacts, at: fragment.location, effectiveRange: nil)
+      as? DecorationFacts
+    let isCarriedHere = carried.map { isBlock($0, of: text, at: fragment.location) } ?? false
+    guard let facts = isCarriedHere ? carried : decorationFacts(in: text, at: fragment.location)
+    else { return nil }
+    var effective = facts.range
     let shownEnd = hidden.shownEnd(of: effective)
     let isFolded = shownEnd < NSMaxRange(effective)
     effective.length = shownEnd - effective.location
@@ -95,24 +106,65 @@ public enum FragmentGeometry {
       text.attribute(.paragraphStyle, at: fragment.location, effectiveRange: nil)
       as? NSParagraphStyle
     return DecorationSpan(
-      decoration: run.decoration,
+      decoration: decoration,
       isFirst: fragment.location <= effective.location,
       isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
       runRange: effective,
       // The card is measured from where the block's text would sit without its
-      // inset, so the inset is room inside the card rather than a moved card.
-      indent: indent(in: text, over: effective)
-        - (text.attribute(.rfcCardInset, at: effective.location, effectiveRange: nil) as? CGFloat
-          ?? 0),
+      // inset, so the inset is room inside the card rather than a moved card. A
+      // folded block's indent is that of what is shown of it, which the mode, not
+      // the build, decides.
+      indent: (isFolded ? indent(in: text, over: effective) : facts.indent) - facts.cardInset,
       // A card the mode has folded away above this one is not met either.
       meetsCardAbove: !hidden.contains(effective.location - 1)
         && drawsCard(in: text, at: effective.location - 1),
       meetsCardBelow: !isFolded && drawsCard(in: text, at: NSMaxRange(effective)),
-      contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
-        as? CGFloat,
+      contentWidth: facts.contentWidth,
       spacingBefore: paragraph?.paragraphSpacingBefore ?? 0,
       spacingAfter: paragraph?.paragraphSpacing ?? 0
     )
+  }
+
+  /// Whether `facts`, read at `location`, name the extent their box has in `text`:
+  /// starting at the range's start, ending at its end, and around `location`. A copy
+  /// cut out of the build carries ranges into the build's text, which may still
+  /// contain `location` and fit the copy; the box's own ends in the copy do not
+  /// match them. Four lookups, not a walk.
+  private static func isBlock(
+    _ facts: DecorationFacts, of text: NSAttributedString, at location: Int
+  ) -> Bool {
+    func box(at index: Int) -> DecorationFacts? {
+      guard index >= 0, index < text.length else { return nil }
+      return text.attribute(.rfcDecorationFacts, at: index, effectiveRange: nil)
+        as? DecorationFacts
+    }
+    let range = facts.range
+    return NSLocationInRange(location, range)
+      && box(at: range.location) === facts && box(at: NSMaxRange(range) - 1) === facts
+      && box(at: range.location - 1) !== facts && box(at: NSMaxRange(range)) !== facts
+  }
+
+  /// The facts of the decorated block at `location`, walked out of the text: what
+  /// the build carries on the block (`DocumentTextBuilder.setDecorationFacts`). Nil
+  /// where nothing is decorated.
+  static func decorationFacts(in text: NSAttributedString, at location: Int) -> DecorationFacts? {
+    // The block's whole run, across its storage runs (`decorationRun(at:)`). Artwork
+    // depends on that as much as a table does: its last line carries the block's
+    // spacing alone (#31), which is a storage run of its own.
+    guard let run = text.decorationRun(at: location) else { return nil }
+    return decorationFacts(
+      in: text, block: verbatimBlock(in: text, at: location, within: run.range))
+  }
+
+  /// The facts of the decorated block whose whole extent is `block`.
+  static func decorationFacts(in text: NSAttributedString, block: NSRange) -> DecorationFacts {
+    DecorationFacts(
+      range: block,
+      indent: indent(in: text, over: block),
+      cardInset: text.attribute(.rfcCardInset, at: block.location, effectiveRange: nil) as? CGFloat
+        ?? 0,
+      contentWidth: text.attribute(.rfcContentWidth, at: block.location, effectiveRange: nil)
+        as? CGFloat)
   }
 
   /// Whether the character at `location` belongs to a block drawn as a card. A
