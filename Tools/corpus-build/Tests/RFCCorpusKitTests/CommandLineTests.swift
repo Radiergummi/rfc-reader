@@ -4,6 +4,10 @@ import RFCCorpusKit
 import RFCKit
 import Testing
 
+#if canImport(FoundationXML)
+  import FoundationXML
+#endif
+
 /// The corpus-build binary, run as `make` and the corpus workflow run it. What is
 /// tested here is the command line itself: which flags it accepts, and that `--only`
 /// reaches the conversion. Which files it picks is `ConversionPlan`, and what a
@@ -248,5 +252,39 @@ struct CommandLineTests {
     #expect(result.status != 0)
     #expect(result.standardError.contains("rfc1"), "\(result.standardError)")
     #expect(FileManager.default.fileExists(atPath: database.path))
+  }
+
+  /// `patch` writes the override for a hand-edited copy of the converter's output,
+  /// and never over one that exists, whose reasons were written by hand (#742).
+  @Test func `patch writes a new override and refuses to replace one`() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    let text = LegacyTextParser.text(
+      decoding: try Data(contentsOf: Fixtures.url("rfc2119.txt")))
+    let converted = try #require(
+      DocumentConverter().convert(text: text, stem: "rfc2119", metadata: nil).xml)
+    let edited = try XMLDocument(data: converted, options: .nodePreserveWhitespace)
+    try XMLPatch(
+      parsing: Data("<diff><remove sel=\"//section[@pn='section-9']\"/></diff>".utf8),
+      name: "edit"
+    ).apply(to: edited)
+    let originalURL = out.appending(path: "original.xml")
+    let editedURL = out.appending(path: "edited.xml")
+    try converted.write(to: originalURL)
+    try edited.xmlData.write(to: editedURL)
+    let arguments = [
+      "patch", "rfc2119", "--original", originalURL.path, "--edited", editedURL.path,
+      "--overrides", out.path,
+    ]
+
+    let first = try Self.run(arguments)
+    #expect(first.status == 0, "\(first.standardError)")
+    let patch = try String(contentsOf: out.appending(path: "rfc2119.xml"), encoding: .utf8)
+    #expect(patch.contains("<remove sel="), "\(patch)")
+
+    let second = try Self.run(arguments)
+    #expect(second.status == 1)
+    #expect(second.standardError.contains("exists"), "\(second.standardError)")
   }
 }
