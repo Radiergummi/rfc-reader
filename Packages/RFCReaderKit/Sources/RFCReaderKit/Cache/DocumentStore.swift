@@ -400,6 +400,32 @@ public actor DocumentStore {
     _ = try Self.recordUnchanged(kept, at: errataCheckURL)
   }
 
+  // MARK: - Recent feed
+
+  private nonisolated var recentFeedURL: URL { directory.appending(path: "rfcrss.xml") }
+  private nonisolated var recentFeedCheckURL: URL {
+    directory.appending(path: "rfcrss-check.json")
+  }
+
+  /// The Recent RFCs feed kept (#421), as the RFC Editor served it; nil when none is.
+  public func cachedRecentFeed() -> Data? {
+    try? Data(contentsOf: recentFeedURL)
+  }
+
+  /// What identified the feed kept, as `errataCheck()` is the errata's: nil when no
+  /// feed is kept for the validators to describe.
+  public nonisolated func recentFeedCheck() -> IndexCheck? {
+    Self.check(of: recentFeedURL, keptAt: recentFeedCheckURL)
+  }
+
+  /// Keeps a fetched feed and what identifies it for the next fetch.
+  public func storeRecentFeed(_ data: Data, validators: CacheValidators?) throws {
+    try data.write(to: recentFeedURL, options: .atomic)
+    try Self.store(
+      IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators),
+      at: recentFeedCheckURL)
+  }
+
   // MARK: - Registries
 
   /// The IANA registries the Go to RFC palette looks values up in (#175), one file
