@@ -2,7 +2,8 @@ import Foundation
 import RFCKit
 import SwiftData
 
-/// The reader's own data: bookmarks, reading positions (#152) and collections (#349).
+/// The reader's own data: bookmarks, reading positions (#152), collections (#349),
+/// Keep Offline marks (#358) and highlights (#522).
 ///
 /// Versioned from the start, so a change to the schema is a migration rather than a
 /// store that no longer opens. `SchemaV6` is the one the app uses, V3's keys and
@@ -17,6 +18,7 @@ public typealias ReadingPosition = SchemaV6.ReadingPosition
 public typealias DocumentCollection = SchemaV6.DocumentCollection
 public typealias DocumentCollectionItem = SchemaV6.DocumentCollectionItem
 public typealias OfflineMark = SchemaV6.OfflineMark
+public typealias Highlight = SchemaV6.Highlight
 
 /// Today's models as they were before #152, exactly: a bare RFC number, unique.
 public enum SchemaV1: VersionedSchema {
@@ -367,14 +369,15 @@ public enum SchemaV5: VersionedSchema {
   }
 }
 
-/// V5 and a collection's query (#355). Its own copies of V5's models, identical to
-/// them but for `DocumentCollection.query`, for the reason V4 has its own of V3's.
+/// V5, a collection's query (#355) and the highlights (#522). Its own copies of V5's
+/// models, identical to them but for `DocumentCollection.query`, for the reason V4
+/// has its own of V3's.
 public enum SchemaV6: VersionedSchema {
   public static let versionIdentifier = Schema.Version(6, 0, 0)
   public static var models: [any PersistentModel.Type] {
     [
       Bookmark.self, ReadingPosition.self, DocumentCollection.self, DocumentCollectionItem.self,
-      OfflineMark.self,
+      OfflineMark.self, Highlight.self,
     ]
   }
 
@@ -495,6 +498,60 @@ public enum SchemaV6: VersionedSchema {
 
     public var document: DocumentID? { DocumentID(fileStem: documentKey) }
   }
+
+
+  /// Color over a passage of a document (#522), from one position of its model text
+  /// to another (`Target`), with the quote it covered. A row of its own, keyed on the
+  /// document's `fileStem`, in CloudKit's shape: nothing unique, every attribute
+  /// defaulted or optional. `identifier` is the highlight's identity, which a note
+  /// names.
+  @Model
+  public final class Highlight {
+    public var identifier: UUID = UUID()
+    /// The document's `fileStem`: `rfc9110`.
+    public var documentKey: String = ""
+    /// Where the highlight was made. Never overwritten by relocation.
+    public var startAnchor: String = ""
+    public var startOffset: Int = 0
+    public var endAnchor: String = ""
+    public var endOffset: Int = 0
+    /// Where relocation found it since, when it moved or a finer anchor holds it now.
+    public var relocatedStartAnchor: String?
+    public var relocatedStartOffset: Int?
+    public var relocatedEndAnchor: String?
+    public var relocatedEndOffset: Int?
+    public var quoteExact: String = ""
+    public var quotePrefix: String = ""
+    public var quoteSuffix: String = ""
+    public var quoteLength: Int?
+    public var quoteDigest: String?
+    /// A `HighlightColor` raw value. An unknown name reads as the default.
+    public var colorName: String = HighlightColor.default.rawValue
+    public var createdAt: Date = Date.distantPast
+    public var modifiedAt: Date = Date.distantPast
+
+    public init(
+      document: DocumentID, start: Position, end: Position, quote: Quote, color: HighlightColor,
+      createdAt: Date = .now
+    ) {
+      self.identifier = UUID()
+      self.documentKey = document.fileStem
+      self.startAnchor = start.anchor
+      self.startOffset = start.offset
+      self.endAnchor = end.anchor
+      self.endOffset = end.offset
+      self.quoteExact = quote.exact
+      self.quotePrefix = quote.prefix
+      self.quoteSuffix = quote.suffix
+      self.quoteLength = quote.length
+      self.quoteDigest = quote.digest
+      self.colorName = color.rawValue
+      self.createdAt = createdAt
+      self.modifiedAt = createdAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
 }
 
 /// V1 to V3 by way of V2 (#152). Every row survives, as `rfcN`, and a section
@@ -527,8 +584,8 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
   static let v4ToV5 = MigrationStage.lightweight(
     fromVersion: SchemaV4.self, toVersion: SchemaV5.self)
 
-  /// Adds a collection's query, nil for every collection there is, which is manual,
-  /// and changes nothing else (#355).
+  /// Adds a collection's query, nil for every collection there is, which is manual
+  /// (#355), and the highlights' entity (#522), and changes nothing else.
   static let v5ToV6 = MigrationStage.lightweight(
     fromVersion: SchemaV5.self, toVersion: SchemaV6.self)
 
