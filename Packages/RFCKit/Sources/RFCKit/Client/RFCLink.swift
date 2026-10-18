@@ -63,13 +63,10 @@ public struct RFCLink: Hashable, Sendable {
     return components.url ?? url
   }
 
+  /// The link at the RFC Editor (`LinkSite.rfcEditor`), whatever site Settings
+  /// chose: what an export writes, and what a link anyone can open is by default.
   public var webURL: URL {
-    guard section == nil, let anchor else {
-      return CitationFormatter.url(for: id, section: section)
-    }
-    // The document's page, which defines the anchor, rather than its info page.
-    return Self.url(
-      RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), fragment: anchor)
+    LinkSite.rfcEditor.url(for: self)
   }
 
   /// The link `url` makes, where a citation can say all of it: an RFC itself, or one
@@ -158,9 +155,10 @@ public struct RFCLink: Hashable, Sendable {
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "www.ietf.org", "ietf.org":
-      // /rfc/rfc2119.txt, the IETF's own copy.
-      guard !strictly, components.count == 2, components[0] == "rfc",
-        let id = DocumentID(parsing: Self.stem(of: components[1]))
+      // /rfc/rfc2119.txt, the IETF's own copy, and /rfc/bcp/bcp14.txt a series'.
+      guard !strictly, (2...3).contains(components.count), components[0] == "rfc",
+        let id = DocumentID(parsing: Self.stem(of: components[components.count - 1])),
+        components.count == 2 || components[1] == id.series.rawValue.lowercased()
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":
