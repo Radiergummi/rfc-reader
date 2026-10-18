@@ -48,7 +48,7 @@ struct SpotlightEntryTests {
     old.obsoletedBy = [.rfc(7230), .rfc(7231)]
     #expect(old.obsoletionNote(locale: .english) == "Obsoleted by RFC 7230 and RFC 7231")
     #expect(
-      old.obsoletionNote(locale: Locale(identifier: "de"))
+      old.obsoletionNote(locale: .german)
         == "Ersetzt durch RFC 7230 und RFC 7231")
     #expect(Self.semantics.obsoletionNote(locale: .english) == nil)
   }

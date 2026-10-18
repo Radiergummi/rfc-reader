@@ -38,7 +38,7 @@ enum SpotlightIndexer {
         let end = min(start + batchSize, entries.count)
         // The entities only here, past the check that most launches stop at.
         let items = (start..<end).map {
-          item(entries[$0], for: RFCEntity(rfcs[$0]), expiring: expiration)
+          item(entries[$0], for: RFCEntity(rfcs[$0], locale: locale), expiring: expiration)
         }
         index.beginBatch()
         add(items, to: index)

@@ -35,6 +35,7 @@
       }
     },
     "%@ %@, revision %@ from %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision, its month and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
