@@ -19,7 +19,7 @@ struct HistoryButtons: View {
     // Once a citation has given Back somewhere to go: previews read it without
     // going (#782). Only beside other columns, the one place this is shown: an
     // iPhone has no Back of ours.
-    .helpTip(PreviewTip())
+    .helpTip(PreviewTip(), isOffered: navigation.canGoBack)
 
     Button {
       navigation.goForward()

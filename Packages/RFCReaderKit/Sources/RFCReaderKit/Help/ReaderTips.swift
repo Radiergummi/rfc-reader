@@ -63,9 +63,8 @@ public struct ReadingModeTip: HelpTip {
 
   public var helpSection: HelpSection { .readingModes }
 
-  public static func words(
-    on platform: ReaderShortcut.Platform = .current, locale: Locale = .interface
-  ) -> TipWords {
+  /// The same on every platform: Reading Mode is in More on each.
+  public static func words(locale: Locale = .interface) -> TipWords {
     TipWords(
       title: String(kit: "Read an Outline, or One Section", locale: locale),
       message: String(

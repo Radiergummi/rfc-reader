@@ -443,6 +443,8 @@
       case #selector(exportDocument), #selector(printDocument): reader.offersPrintAndExport
       case #selector(exportCurrentSection):
         reader.offersPrintAndExport && reader.exportableSection != nil
+      // As View ▸ Reading Mode: a document on screen, not one loading or failed.
+      case #selector(chooseReadingMode): reader.hasDocument
       default: true
       }
     }
@@ -536,14 +538,21 @@
       }
     }
 
-    /// Shows what is due, in one window only, the one last key (the menu bar's,
-    /// `ActiveReaderWindow`): TipKit says a tip is due to every window at once.
-    /// Again when a window becomes key, so a tip due while it was not still shows.
+    /// Shows what is due, in the key window only, since TipKit says a tip is due to
+    /// every window at once, and only where what it teaches can be done: Reading
+    /// Mode with a document, Previews while Back has somewhere to go. Closes what no
+    /// longer is. Called as a tip falls due, and as the window's key status or its
+    /// document changes.
     func showDueTips() {
-      let active = ActiveReaderWindow.shared.controller
-      guard active == nil || active === controller else { return }
-      for (anchor, tip) in dueTips where tipPopovers[anchor] == nil {
-        guard let item = tipAnchors[anchor] else { continue }
+      for (anchor, tip) in dueTips {
+        let isOffered =
+          controller.window?.isKeyWindow == true && id != nil
+          && (anchor != .rfcBack || navigation.canGoBack)
+        guard isOffered else {
+          tipPopovers.removeValue(forKey: anchor)?.close()
+          continue
+        }
+        guard tipPopovers[anchor] == nil, let item = tipAnchors[anchor] else { continue }
         let popover = TipNSPopover(tip) { _ in
           // Learn More: the help at the tip's section, and the tip is done.
           HelpWindow.show(at: tip.helpSection)

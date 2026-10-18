@@ -55,12 +55,12 @@ struct ReaderTipsTests {
   @Test func `every tip has words in English and in German`() {
     for platform in ReaderShortcut.Platform.allCases {
       let english = [
-        ReadingModeTip.words(on: platform, locale: .english),
+        ReadingModeTip.words(locale: .english),
         PreviewTip.words(on: platform, locale: .english),
         GoToRFCTip.words(on: platform, locale: .english),
       ]
       let german = [
-        ReadingModeTip.words(on: platform, locale: Locale(identifier: "de_DE")),
+        ReadingModeTip.words(locale: Locale(identifier: "de_DE")),
         PreviewTip.words(on: platform, locale: Locale(identifier: "de_DE")),
         GoToRFCTip.words(on: platform, locale: Locale(identifier: "de_DE")),
       ]

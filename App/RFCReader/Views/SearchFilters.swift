@@ -116,7 +116,11 @@ import TipKit
         SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups).text
       } set: { text in
         // A search typed, which Go to RFC's tip counts (#782).
-        if ReaderTips.startsSearch(from: navigation.searchText, to: text) {
+        // Compared with the field's own text, without the filters' tokens.
+        let shown = SearchQuery.tokenized(
+          navigation.searchText, workingGroups: library.knownWorkingGroups
+        ).text
+        if ReaderTips.startsSearch(from: shown, to: text) {
           ReaderTips.searchTyped.sendDonation()
         }
         navigation.searchText = SearchQuery.replacingText(
