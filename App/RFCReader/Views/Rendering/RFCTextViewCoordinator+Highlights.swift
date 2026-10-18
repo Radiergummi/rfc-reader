@@ -62,9 +62,30 @@ extension RFCTextViewCoordinator {
       foldingDelegate.highlight(placement.marks)
       // Drawn again, not laid out again: a highlight changes no line.
       engine.redraw()
+      redrawFragmentViews()
     }
     if !placement.relocations.isEmpty {
       environment?.library.recordHighlightRelocations(placement.relocations)
+    }
+  }
+
+  /// Marks the views TextKit draws the laid-out fragments in as needing display.
+  /// `ReaderLayoutEngine.redraw()` is not enough for a fragment already on screen:
+  /// the text view's own display does not reach the views its fragments are drawn
+  /// in, and invalidating the rendering attributes redisplays only what had some, so
+  /// a highlight made in view was drawn only once its paragraph was laid out again,
+  /// as a run of the app showed. Only those views are drawn again; nothing is laid out.
+  private func redrawFragmentViews() {
+    guard let textView else { return }
+    // Not the hosted header, which draws no text.
+    var views = textView.subviews.filter { $0 !== headerHost?.view }
+    while let view = views.popLast() {
+      #if canImport(UIKit)
+        view.setNeedsDisplay()
+      #else
+        view.needsDisplay = true
+      #endif
+      views += view.subviews
     }
   }
 
@@ -90,7 +111,19 @@ extension RFCTextViewCoordinator {
     guard let model = built.positions.modelRange(forStorage: snapped) else { return }
     library.highlight(
       model, of: documentID, in: built.positions.model,
-      color: color ?? library.lastHighlightColor, undoManager: textView?.undoManager)
+      color: color ?? library.lastHighlightColor, undoManager: undoManager)
+  }
+
+  /// Where a change to a highlight registers its undo: the window's on the Mac, as a
+  /// bookmark's does, which Edit ▸ Undo reaches wherever the focus is. A read-only
+  /// text view's own undo manager is not that one: a highlight registered there
+  /// left Undo grayed out.
+  private var undoManager: UndoManager? {
+    #if canImport(UIKit)
+      textView?.undoManager
+    #else
+      textView?.window?.undoManager
+    #endif
   }
 
   /// The colors offered, the one last used first.
@@ -113,7 +146,7 @@ extension RFCTextViewCoordinator {
       let library = environment?.library, let range = highlightRange(of: mark.highlight)
     else { return nil }
     let identifier = mark.highlight
-    let undoManager = textView?.undoManager
+    let undoManager = undoManager
     return HighlightPopover(
       color: mark.color, colors: HighlightColor.allCases,
       choose: { color in
