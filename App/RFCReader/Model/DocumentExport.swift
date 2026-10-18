@@ -10,24 +10,32 @@ import UniformTypeIdentifiers
 /// format makes of the document itself is `ExportFormat.data(of:)`'s; here is only
 /// where the document and the published files come from.
 enum DocumentExport {
-  /// - Parameter paperSize: the page a rendered, paged format is laid out for.
+  /// - Parameters:
+  ///   - section: the anchor of the one section to export, with its subsections
+  ///     (#386), for a format that `narrows`; nil for the whole document.
+  ///   - paperSize: the page a rendered, paged format is laid out for.
   static func data(
-    for id: DocumentID, as format: ExportFormat, paperSize: CGSize, library: LibraryModel
+    for id: DocumentID, as format: ExportFormat, section: String? = nil, paperSize: CGSize,
+    library: LibraryModel
   ) async throws -> Data {
-    switch format {
-    case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
+    let section = format.narrows ? section : nil
+    return switch format {
+    case .pdf:
+      try await DocumentPDF.export(id, section: section, paperSize: paperSize, library: library)
     case .text: try await library.publishedFile(for: id, format: .text)
     case .xml: try await xml(of: id, library: library)
-    case .epub, .html, .markdown, .abnf: try await rendered(id, as: format, library: library)
+    case .epub, .html, .markdown, .abnf:
+      try await rendered(id, as: format, section: section, library: library)
     }
   }
 
   /// The book, the page, the Markdown or the collected grammar (#185); the grammar is offered
   /// only for a document that has one (`ReaderState.exportFormats`).
-  private static func rendered(_ id: DocumentID, as format: ExportFormat, library: LibraryModel)
-    async throws -> Data
-  {
-    let document = try await library.document(for: id)
+  private static func rendered(
+    _ id: DocumentID, as format: ExportFormat, section: String?, library: LibraryModel
+  ) async throws -> Data {
+    let whole = try await library.document(for: id)
+    let document = section.flatMap { whole.narrowed(toSection: $0) } ?? whole
     guard let data = await serialized(document, as: format) else {
       throw CocoaError(.fileWriteUnknown)
     }
@@ -71,10 +79,13 @@ enum DocumentExport {
 
     let data: Data
     let format: ExportFormat
+    /// What Save to Files names it, without the extension it adds.
+    let fileStem: String
 
-    init(data: Data, format: ExportFormat) {
+    init(data: Data, format: ExportFormat, fileStem: String) {
       self.data = data
       self.format = format
+      self.fileStem = fileStem
     }
 
     init(configuration: ReadConfiguration) throws {

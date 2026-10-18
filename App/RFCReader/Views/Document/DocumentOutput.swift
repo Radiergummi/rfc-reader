@@ -40,7 +40,11 @@
 
     /// Save to Files, with the document in `format` (#376). Laid out for the
     /// region's paper, as a print is.
-    func exportDocument(_ id: DocumentID, as format: ExportFormat, library: LibraryModel) {
+    /// - Parameter section: the anchor of the one section to export (#386); nil for
+    ///   the whole document.
+    func exportDocument(
+      _ id: DocumentID, as format: ExportFormat, section: String? = nil, library: LibraryModel
+    ) {
       // A second tap while the file is made would make it again, and present Save to
       // Files over the first.
       guard !isExporting else { return }
@@ -48,9 +52,11 @@
       Task {
         do {
           let data = try await DocumentExport.data(
-            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
+            for: id, as: format, section: section, paperSize: PrintLayout.paperSize(for: .current),
             library: library)
-          exported = ExportedFile(data: data, format: format)
+          exported = ExportedFile(
+            data: data, format: format,
+            fileStem: ExportFormat.fileStem(for: id, section: format.narrows ? section : nil))
         } catch {
           isExporting = false
           fail(.export(LoadFailure(error: error)), id)

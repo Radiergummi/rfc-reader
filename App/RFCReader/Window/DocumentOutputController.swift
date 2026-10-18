@@ -57,15 +57,24 @@
       printInfo.topMargin = 0
       printInfo.bottomMargin = 0
       let original = reader.showOriginal
+      // The section on screen, which the panel offers to print alone (#386); not
+      // for the published text, whose pages are printed as they are.
+      let section = original ? nil : reader.currentSection
       isPrinting = true
       printing = Task {
         do {
           let data = try await DocumentPDF.make(
             for: id, original: original, paperSize: printInfo.paperSize, library: library)
+          var sectionPDF: PDFDocument?
+          if let section {
+            sectionPDF = PDFDocument(
+              data: try await DocumentPDF.make(
+                for: id, original: false, section: section, paperSize: printInfo.paperSize,
+                library: library))
+          }
           guard !Task.isCancelled else { return }
           guard let pdf = PDFDocument(data: data),
-            let operation = pdf.printOperation(
-              for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+            let operation = Self.printOperation(of: pdf, section: sectionPDF, printInfo: printInfo)
           else {
             isPrinting = false
             readerLog.error(
@@ -92,6 +101,23 @@
       }
     }
 
+    /// PDFKit's print operation of `pdf`, or with a section to offer, one through a
+    /// view of the app's, whose panel chooses between the two (`PrintScopeAccessory`).
+    private static func printOperation(
+      of pdf: PDFDocument, section: PDFDocument?, printInfo: NSPrintInfo
+    ) -> NSPrintOperation? {
+      guard let section else {
+        return pdf.printOperation(for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+      }
+      let pages = PrintedPDFView(document: pdf)
+      let operation = NSPrintOperation(view: pages, printInfo: printInfo)
+      operation.printPanel.options.insert(.showsPreview)
+      operation.printPanel.addAccessoryController(
+        PrintScopeAccessory(
+          pages: pages, documents: [.wholeDocument: pdf, .currentSection: section]))
+      return operation
+    }
+
     @objc private func printOperationDidRun(
       _ operation: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?
     ) {
@@ -109,7 +135,9 @@
         return
       }
       let panel = NSSavePanel()
-      let chooser = ExportFormatChooser(panel: panel, document: id, offered: reader.exportFormats)
+      let chooser = ExportFormatChooser(
+        panel: panel, document: id, offered: reader.exportFormats,
+        currentSection: reader.currentSection)
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true
@@ -123,11 +151,13 @@
         // Read here, not captured earlier: the chooser is what the panel's pop-up
         // changed, and holding it in this closure is what keeps it alive.
         let format = chooser.format
+        let section = chooser.section
         let tags = panel.tagNames ?? []
         Task {
           do {
             let data = try await DocumentExport.data(
-              for: id, as: format, paperSize: NSPrintInfo.shared.paperSize, library: library)
+              for: id, as: format, section: section, paperSize: NSPrintInfo.shared.paperSize,
+              library: library)
             try data.write(to: url, options: .atomic)
             // The panel only collects the tags; the file is written after it, and
             // an atomic write replaces it, so they are set on what was written.

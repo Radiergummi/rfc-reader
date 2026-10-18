@@ -8,7 +8,8 @@
   ///
   /// It keeps the panel's file type and the name's extension in step with the
   /// format, keeping whatever the name was changed to, and remembers the last format
-  /// chosen for the next export.
+  /// chosen for the next export. With a section on screen, a second pop-up chooses
+  /// the whole document or that section (#386), for a format that narrows.
   final class ExportFormatChooser: NSObject {
     static let rememberedKey = "exportFormat"
 
@@ -18,24 +19,50 @@
     private let popUp = NSPopUpButton()
     /// The formats this document can be saved as (#185).
     private let offered: [ExportFormat]
+    private let document: DocumentID
+    /// The anchor of the section on screen, which the scope pop-up offers.
+    private let currentSection: String?
+    private let scopePopUp = NSPopUpButton()
+    private(set) var scope = ExportScope.wholeDocument
 
-    init(panel: NSSavePanel, document: DocumentID, offered: [ExportFormat]) {
+    /// The section to export: the one on screen, when it is chosen and the format
+    /// takes a section; nil for the whole document.
+    var section: String? {
+      scope == .currentSection && format.narrows ? currentSection : nil
+    }
+
+    init(
+      panel: NSSavePanel, document: DocumentID, offered: [ExportFormat], currentSection: String?
+    ) {
       self.panel = panel
       self.offered = offered
+      self.document = document
+      self.currentSection = currentSection
       format = ExportFormat(
         remembered: UserDefaults.standard.string(forKey: Self.rememberedKey), offered: offered)
       popUp.addItems(withTitles: offered.map { $0.name() })
       popUp.selectItem(at: offered.firstIndex(of: format) ?? 0)
       let label = NSTextField(labelWithString: String(localized: "Format:"))
-      let row = NSStackView(views: [label, popUp])
-      row.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+      var rows = [NSStackView(views: [label, popUp])]
+      if currentSection != nil {
+        scopePopUp.addItems(withTitles: ExportScope.allCases.map { $0.name() })
+        let scopeLabel = NSTextField(labelWithString: String(localized: "Contents:"))
+        rows.append(NSStackView(views: [scopeLabel, scopePopUp]))
+      }
+      let stack = NSStackView(views: rows)
+      stack.orientation = .vertical
+      stack.alignment = .trailing
+      stack.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
       // The panel sizes its accessory by the view's frame, which a view made in
       // code starts without.
-      row.frame.size = row.fittingSize
-      view = row
+      stack.frame.size = stack.fittingSize
+      view = stack
       super.init()
       popUp.target = self
       popUp.action = #selector(choose)
+      scopePopUp.target = self
+      scopePopUp.action = #selector(chooseScope)
+      scopePopUp.isEnabled = format.narrows
       panel.allowedContentTypes = [format.contentType]
       panel.nameFieldStringValue = format.fileName(for: document)
     }
@@ -44,7 +71,24 @@
       format = offered[popUp.indexOfSelectedItem]
       UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
       panel.allowedContentTypes = [format.contentType]
-      panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)
+      scopePopUp.isEnabled = format.narrows
+      // A section's name for a format that takes one, the document's for one that
+      // does not; otherwise whatever the name was changed to, with this extension.
+      panel.nameFieldStringValue =
+        scope == .currentSection ? defaultName : format.renaming(panel.nameFieldStringValue)
+    }
+
+    /// The name a new export in this format and scope is given.
+    private var defaultName: String {
+      section.map { format.fileName(for: document, section: $0) }
+        ?? format.fileName(for: document)
+    }
+
+    /// The whole document or the section: the name becomes the one this scope
+    /// gives, as a new export would.
+    @objc private func chooseScope() {
+      scope = ExportScope.allCases[scopePopUp.indexOfSelectedItem]
+      panel.nameFieldStringValue = defaultName
     }
   }
 #endif

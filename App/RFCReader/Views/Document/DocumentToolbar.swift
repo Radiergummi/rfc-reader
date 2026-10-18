@@ -17,7 +17,8 @@ import SwiftUI
     @Binding var showsInspector: Bool
     /// Save to Files and the print sheet, which are the reader's: their state and
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
-    let exportDocument: (ExportFormat) -> Void
+    /// A format, and the anchor of the one section to export or nil (#386).
+    let exportDocument: (ExportFormat, String?) -> Void
     let printDocument: () -> Void
     /// False while reading on has put the bars away (`ReaderChrome`). The bottom
     /// bar goes by losing its items, which dissolve in place, rather than by
@@ -142,7 +143,15 @@ import SwiftUI
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
-            Button(format.name()) { exportDocument(format) }
+            Button(format.name()) { exportDocument(format, nil) }
+          }
+          // The section on screen alone, in a format that takes one (#386).
+          if let section = reader.currentSection {
+            Menu(ExportScope.currentSection.name()) {
+              ForEach(reader.exportFormats.filter(\.narrows)) { format in
+                Button(format.name()) { exportDocument(format, section) }
+              }
+            }
           }
         }
         // Not for a document read as its PDF or PostScript original (#207).
