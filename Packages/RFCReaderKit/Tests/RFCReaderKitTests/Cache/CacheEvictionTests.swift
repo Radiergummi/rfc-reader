@@ -92,19 +92,18 @@ struct CacheEvictionTests {
     #expect(CacheEviction.readCutoff(now: now) == now - 30 * 86_400)
   }
 
-  @Test func `bookmarks, reading, marks, annotations and open documents are pinned`() {
+  @Test func `bookmarks, reading, marks and open documents are pinned`() {
     let pinned = CacheEviction.pinned(
-      bookmarked: [.rfc(1)], read: [.rfc(2)], marked: [.rfc(3)], annotated: [.rfc(5)],
-      open: [.rfc(4)], withMembers: withMembers)
-    #expect(pinned == [.rfc(1), .rfc(2), .rfc(3), .rfc(4), .rfc(5)])
+      bookmarked: [.rfc(1)], read: [.rfc(2)], marked: [.rfc(3)], open: [.rfc(4)],
+      withMembers: withMembers)
+    #expect(pinned == [.rfc(1), .rfc(2), .rfc(3), .rfc(4)])
   }
 
   /// A bookmarked BCP stands for its members' bodies (#656).
   @Test func `a series pinned pins its members`() {
     let bcp14 = DocumentID(series: .bcp, number: 14)
     let pinned = CacheEviction.pinned(
-      bookmarked: [bcp14], read: [], marked: [], annotated: [], open: [],
-      withMembers: withMembers)
+      bookmarked: [bcp14], read: [], marked: [], open: [], withMembers: withMembers)
     #expect(pinned == [bcp14, .rfc(2119), .rfc(8174)])
   }
 
@@ -112,8 +111,7 @@ struct CacheEvictionTests {
   @Test func `an open series is pinned as itself`() {
     let bcp14 = DocumentID(series: .bcp, number: 14)
     let pinned = CacheEviction.pinned(
-      bookmarked: [], read: [], marked: [], annotated: [], open: [bcp14],
-      withMembers: withMembers)
+      bookmarked: [], read: [], marked: [], open: [bcp14], withMembers: withMembers)
     #expect(pinned == [bcp14])
   }
 

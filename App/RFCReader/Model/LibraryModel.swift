@@ -1527,9 +1527,10 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
+    // A document with annotations is kept as a bookmarked one is (#522).
     let annotated = try AnnotationStore.annotatedDocuments(in: context)
     return CacheEviction.pinned(
-      bookmarked: bookmarked, read: read, marked: marked, annotated: annotated,
+      bookmarked: bookmarked.union(annotated), read: read, marked: marked,
       open: Set(sceneRegistry.open.compactMap(\.shown)), withMembers: withMembers(of:))
   }
 

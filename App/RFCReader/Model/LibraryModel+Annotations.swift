@@ -20,6 +20,13 @@ extension LibraryModel {
 
   private static let lastHighlightColorKey = "lastHighlightColor"
 
+  private static func edit(_ context: ModelContext, _ undoManager: UndoManager?)
+    -> AnnotationStore.Edit
+  {
+    AnnotationStore.Edit(
+      context, undoManager: undoManager, onUndoFailure: UserDataMirror.logAnnotationUndoFailure)
+  }
+
   /// Highlights `range` of `document`'s model text, merging it with what it overlaps.
   func highlight(
     _ range: Range<Int>, of document: DocumentID, in model: ModelText, color: HighlightColor,
@@ -28,8 +35,7 @@ extension LibraryModel {
     lastHighlightColor = color
     editAnnotations { context in
       try AnnotationStore.highlight(
-        range, of: document, in: model, color: color, undoManager: undoManager,
-        onUndoFailure: UserDataMirror.logAnnotationUndoFailure, context: context)
+        range, of: document, in: model, color: color, edit: Self.edit(context, undoManager))
     }
   }
 
@@ -37,16 +43,14 @@ extension LibraryModel {
     lastHighlightColor = color
     editAnnotations { context in
       try AnnotationStore.setColor(
-        color, of: identifier, undoManager: undoManager,
-        onUndoFailure: UserDataMirror.logAnnotationUndoFailure, context: context)
+        color, of: identifier, edit: Self.edit(context, undoManager))
     }
   }
 
   func deleteHighlight(_ identifier: UUID, undoManager: UndoManager?) {
     editAnnotations { context in
       try AnnotationStore.delete(
-        identifier, undoManager: undoManager,
-        onUndoFailure: UserDataMirror.logAnnotationUndoFailure, context: context)
+        identifier, edit: Self.edit(context, undoManager))
     }
   }
 
@@ -54,8 +58,7 @@ extension LibraryModel {
   func placeHighlight(_ identifier: UUID, at target: Target, undoManager: UndoManager?) {
     editAnnotations { context in
       try AnnotationStore.place(
-        identifier, at: target, undoManager: undoManager,
-        onUndoFailure: UserDataMirror.logAnnotationUndoFailure, context: context)
+        identifier, at: target, edit: Self.edit(context, undoManager))
     }
   }
 

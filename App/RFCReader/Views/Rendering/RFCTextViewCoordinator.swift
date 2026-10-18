@@ -552,7 +552,7 @@ final class RFCTextViewCoordinator: NSObject {
         break
       case .toggleSection(let offset):
         _ = toggleSection(atHeading: offset)
-      case .showHighlight(let offset):
+      case .showHighlight(character: let offset):
         showHighlightPopover(at: offset)
       case .toggleBars:
         bars.tapped()

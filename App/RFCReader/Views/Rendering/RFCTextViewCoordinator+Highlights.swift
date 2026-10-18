@@ -185,7 +185,9 @@ extension RFCTextViewCoordinator {
       guard
         let offset = characterOffset(
           atContainerPoint: CGPoint(x: point.x - origin.x, y: point.y - origin.y)),
-        highlightPlacement.marks.highlight(at: offset) != nil
+        highlightPlacement.marks.highlight(at: offset) != nil,
+        // A link in a highlight opens, and that is all the click does.
+        link(at: offset) == nil
       else { return }
       highlightClick?.cancel()
       highlightClick = Task { [weak self] in

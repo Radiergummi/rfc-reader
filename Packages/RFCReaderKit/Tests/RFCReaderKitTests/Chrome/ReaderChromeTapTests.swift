@@ -38,7 +38,7 @@ struct ReaderChromeTapTests {
   }
 
   @Test func `a tap in a highlight shows its popover, but a link in it still opens`() {
-    #expect(Self.action(for: Self.tap(character: 32)) == .showHighlight(at: 32))
+    #expect(Self.action(for: Self.tap(character: 32)) == .showHighlight(character: 32))
     #expect(Self.action(for: Self.tap(character: 35)) == .nothing)
     // A tap that only clears the selection shows nothing.
     #expect(Self.action(for: Self.tap(clears: true, character: 32)) == .nothing)

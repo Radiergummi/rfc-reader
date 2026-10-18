@@ -302,11 +302,16 @@ struct TextNormalization: Sendable {
     end.append(rawEnd)
   }
 
-  /// `RFC2119` for `[RFC2119]`, `RFC 2119` or `RFC2119` at `index`, with where each of
-  /// its characters came from; nil anywhere else.
-  private static func reference(in raw: [UInt16], at index: Int)
-    -> (units: [UInt16], sources: [Int], end: Int)?
-  {
+  /// A reference's one spelling, where each of its characters came from in the raw
+  /// text, and where the raw spelling ends.
+  private struct Reference {
+    let units: [UInt16]
+    let sources: [Int]
+    let end: Int
+  }
+
+  /// `RFC2119` for `[RFC2119]`, `RFC 2119` or `RFC2119` at `index`; nil anywhere else.
+  private static func reference(in raw: [UInt16], at index: Int) -> Reference? {
     var cursor = index
     let opens = raw[cursor] == 0x5B
     if opens { cursor += 1 }
@@ -327,7 +332,7 @@ struct TextNormalization: Sendable {
       guard cursor < raw.count, raw[cursor] == 0x5D else { return nil }
       cursor += 1
     }
-    return (units, sources, cursor)
+    return Reference(units: units, sources: sources, end: cursor)
   }
 
   private static func isWhitespace(_ unit: UInt16) -> Bool {

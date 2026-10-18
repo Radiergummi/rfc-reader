@@ -34,8 +34,12 @@ struct AnnotationStoreTests {
     _ needle: String, color: HighlightColor = .yellow, undoManager: UndoManager? = nil
   ) throws -> UUID {
     try AnnotationStore.highlight(
-      try range(of: needle), of: .rfc(9110), in: model, color: color, undoManager: undoManager,
-      onUndoFailure: { Issue.record($0) }, context: context)
+      try range(of: needle), of: .rfc(9110), in: model, color: color,
+      edit: edit(undoManager))
+  }
+
+  private func edit(_ undoManager: UndoManager?) -> AnnotationStore.Edit {
+    AnnotationStore.Edit(context, undoManager: undoManager, onUndoFailure: { Issue.record($0) })
   }
 
   private func snapshot() throws -> [AnnotationSnapshot.HighlightEntry] {
@@ -97,13 +101,12 @@ struct AnnotationStoreTests {
     let identifier = try highlight("brown fox")
     undoManager.beginUndoGrouping()
     try AnnotationStore.setColor(
-      .purple, of: identifier, undoManager: undoManager, onUndoFailure: { Issue.record($0) },
-      context: context)
+      .purple, of: identifier, edit: edit(undoManager))
     undoManager.endUndoGrouping()
     #expect(try snapshot().first?.color == .purple)
     undoManager.beginUndoGrouping()
     try AnnotationStore.delete(
-      identifier, undoManager: undoManager, onUndoFailure: { Issue.record($0) }, context: context)
+      identifier, edit: edit(undoManager))
     undoManager.endUndoGrouping()
     #expect(try snapshot().isEmpty)
     undoManager.undo()
@@ -156,8 +159,7 @@ extension AnnotationStoreTests {
     let chosen = try #require(Target(covering: try range(of: "lazy dog"), in: model))
     undoManager.beginUndoGrouping()
     try AnnotationStore.place(
-      identifier, at: chosen, undoManager: undoManager, onUndoFailure: { Issue.record($0) },
-      context: context)
+      identifier, at: chosen, edit: edit(undoManager))
     undoManager.endUndoGrouping()
     #expect(try snapshot().first.map(covered) == "lazy dog")
     undoManager.undo()

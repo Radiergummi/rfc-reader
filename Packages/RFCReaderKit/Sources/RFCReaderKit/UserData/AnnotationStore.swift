@@ -13,14 +13,32 @@ public enum AnnotationStore {
     case nothingToHighlight
   }
 
+  /// Where a change is made, and where its undo goes: the reader's undo manager, and
+  /// what to do with a failure of an undo or redo, which runs long after the change
+  /// returned, where nothing can catch it (#759).
+  public struct Edit {
+    public let context: ModelContext
+    public let undoManager: UndoManager?
+    public let onUndoFailure: @MainActor (any Error) -> Void
+
+    public init(
+      _ context: ModelContext, undoManager: UndoManager?,
+      onUndoFailure: @escaping @MainActor (any Error) -> Void
+    ) {
+      self.context = context
+      self.undoManager = undoManager
+      self.onUndoFailure = onUndoFailure
+    }
+  }
+
   /// Highlights `range` of `document`'s model text in `color`, merging it with every
   /// highlight it overlaps (`HighlightMerge`). Answers the highlight's identifier.
   @discardableResult
   public static func highlight(
     _ range: Range<Int>, of document: DocumentID, in model: ModelText, color: HighlightColor,
-    undoManager: UndoManager?, onUndoFailure: @escaping @MainActor (any Error) -> Void,
-    context: ModelContext
+    edit: Edit
   ) throws -> UUID {
+    let context = edit.context
     let rows = try highlights(of: document, in: context)
     let existing = rows.compactMap { row -> HighlightMerge.Existing? in
       guard let entry = AnnotationSnapshot.HighlightEntry(row: row),
@@ -55,16 +73,13 @@ public enum AnnotationStore {
     try context.save()
     registerUndo(
       replacing: [row.identifier], with: before, redo: [HighlightValues(row)],
-      actionName: String(kit: "Highlight", locale: .interface), undoManager: undoManager,
-      onUndoFailure: onUndoFailure, context: context)
+      actionName: String(kit: "Highlight", locale: .interface), edit: edit)
     return row.identifier
   }
 
   /// A highlight's color.
-  public static func setColor(
-    _ color: HighlightColor, of identifier: UUID, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, context: ModelContext
-  ) throws {
+  public static func setColor(_ color: HighlightColor, of identifier: UUID, edit: Edit) throws {
+    let context = edit.context
     guard let row = try highlight(identifier, in: context), row.colorName != color.rawValue
     else { return }
     let before = HighlightValues(row)
@@ -74,31 +89,26 @@ public enum AnnotationStore {
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
       actionName: String(kit: "Change Highlight Color", locale: .interface),
-      undoManager: undoManager, onUndoFailure: onUndoFailure, context: context)
+      edit: edit)
   }
 
   /// Deletes a highlight.
-  public static func delete(
-    _ identifier: UUID, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, context: ModelContext
-  ) throws {
+  public static func delete(_ identifier: UUID, edit: Edit) throws {
+    let context = edit.context
     guard let row = try highlight(identifier, in: context) else { return }
     let before = HighlightValues(row)
     context.delete(row)
     try context.save()
     registerUndo(
       replacing: [], with: [before], redo: [],
-      actionName: String(kit: "Delete Highlight", locale: .interface), undoManager: undoManager,
-      onUndoFailure: onUndoFailure, context: context)
+      actionName: String(kit: "Delete Highlight", locale: .interface), edit: edit)
   }
 
   /// Puts a highlight where the reader chose among the places its quote is (an
   /// ambiguous one, `Relocation.ambiguous`): the reader's own edit, so it is where the
   /// highlight is from now on, and it can be undone.
-  public static func place(
-    _ identifier: UUID, at target: Target, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, context: ModelContext
-  ) throws {
+  public static func place(_ identifier: UUID, at target: Target, edit: Edit) throws {
+    let context = edit.context
     guard let row = try highlight(identifier, in: context),
       case .range(let start, let end, let quote) = target
     else { return }
@@ -113,8 +123,7 @@ public enum AnnotationStore {
     try context.save()
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
-      actionName: String(kit: "Place Highlight", locale: .interface), undoManager: undoManager,
-      onUndoFailure: onUndoFailure, context: context)
+      actionName: String(kit: "Place Highlight", locale: .interface), edit: edit)
   }
 
   /// Where relocation found a highlight (#522), in its relocated fields: never its
@@ -160,21 +169,19 @@ public enum AnnotationStore {
   /// it throws goes to `onUndoFailure`, as `CollectionStore.remove`'s does.
   private static func registerUndo(
     replacing after: [UUID], with before: [HighlightValues], redo: [HighlightValues],
-    actionName: String, undoManager: UndoManager?,
-    onUndoFailure: @escaping @MainActor (any Error) -> Void, context: ModelContext
+    actionName: String, edit: Edit
   ) {
-    guard let undoManager else { return }
-    undoManager.registerUndo(withTarget: context) { context in
+    guard let undoManager = edit.undoManager else { return }
+    undoManager.registerUndo(withTarget: edit.context) { context in
       // On the main thread, which drives the Edit menu and the shake gesture.
       MainActor.assumeIsolated {
         do {
           try replace(after, with: before, in: context)
           registerUndo(
             replacing: before.map(\.identifier), with: redo, redo: before,
-            actionName: actionName, undoManager: undoManager, onUndoFailure: onUndoFailure,
-            context: context)
+            actionName: actionName, edit: edit)
         } catch {
-          onUndoFailure(error)
+          edit.onUndoFailure(error)
         }
       }
     }

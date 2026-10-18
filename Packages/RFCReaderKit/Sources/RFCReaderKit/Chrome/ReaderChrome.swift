@@ -266,7 +266,7 @@ extension ReaderChrome {
     /// or holds this offset.
     case toggleSection(heading: Int)
     /// Shows what can be done with the highlight at this offset (#522).
-    case showHighlight(at: Int)
+    case showHighlight(character: Int)
     /// Brings the bars back, or puts them away.
     case toggleBars
   }
@@ -294,7 +294,7 @@ extension ReaderChrome {
     if let character = tap.character {
       if isLink(character) { return .nothing }
       if discloses, toggles(character) { return .toggleSection(heading: character) }
-      if isHighlighted(character) { return .showHighlight(at: character) }
+      if isHighlighted(character) { return .showHighlight(character: character) }
     }
     return .toggleBars
   }
