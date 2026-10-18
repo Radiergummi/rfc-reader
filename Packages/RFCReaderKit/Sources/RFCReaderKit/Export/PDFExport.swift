@@ -42,6 +42,13 @@ public enum PDFExport {
     return followable(url)
   }
 
+  /// Where a link to `anchor` goes when the file does not hold it, as a section
+  /// exported alone does not hold the rest of the document (#386): to the place in
+  /// the document on rfc-editor.org. Nil for a document with no number.
+  public static func outside(_ anchor: String, of id: DocumentID?) -> Target? {
+    id.map { .web(RFCLink(id: $0, anchor: anchor).webURL) }
+  }
+
   /// `url` as a link, when a PDF reader can follow it: the web, or mail.
   private static func followable(_ url: URL) -> Target? {
     guard let scheme = url.scheme?.lowercased(), ["http", "https", "mailto"].contains(scheme)
