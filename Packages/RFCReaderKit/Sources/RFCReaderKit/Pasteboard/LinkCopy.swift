@@ -11,8 +11,9 @@ import RFCKit
 ///
 /// A reference's own URL is the reader's (`rfc://9110`, an anchor in this
 /// document, a bibliography entry), which nothing outside the app opens. So a
-/// document is shared by its rfc-editor.org URL, as `DocumentActions.sectionLink`
-/// is, and a bibliography entry by the URL it names, labelled with its title.
+/// document is shared by its URL on the site Settings chose (#712), rfc-editor.org
+/// unless it chose otherwise, as `DocumentActions.sectionLink` is, and a
+/// bibliography entry by the URL it names, labelled with its title.
 public struct LinkCopy: Equatable, Sendable {
   public let url: URL
   /// `RFC 9110: HTTP Semantics`, or the bare designation where the index has no
@@ -23,16 +24,13 @@ public struct LinkCopy: Equatable, Sendable {
   /// names no URL: there is nothing of ours to hand out for either.
   public static func forLink(
     _ link: URL, from currentDocument: DocumentID, in index: RFCIndex?,
-    bibliography: [ReferenceGroup]
+    bibliography: [ReferenceGroup], site: LinkSite = .rfcEditor
   ) -> LinkCopy? {
     if let anchor = ReaderLinkScheme.anchor(from: link) {
       // The RFC Editor's HTML carries the document's own anchors as ids, and a
-      // section's is the `section-4.2` a number would have made.
-      var components = URLComponents(
-        url: RFCEditorEndpoints.base.appending(path: "rfc/\(currentDocument.fileStem)"),
-        resolvingAgainstBaseURL: false)
-      components?.fragment = anchor
-      guard let url = components?.url else { return nil }
+      // section's is the `section-4.2` a number would have made; so does
+      // Datatracker's.
+      let url = site.url(for: RFCLink(id: currentDocument, anchor: anchor))
       return LinkCopy(url: url, label: label(for: currentDocument, in: index))
     }
     if let anchor = ReaderLinkScheme.reference(from: link) {
@@ -42,7 +40,7 @@ public struct LinkCopy: Equatable, Sendable {
       return LinkCopy(url: url, label: entry.title)
     }
     guard let reference = RFCLink(url: link) else { return nil }
-    return LinkCopy(url: reference.webURL, label: label(for: reference.id, in: index))
+    return LinkCopy(url: site.url(for: reference), label: label(for: reference.id, in: index))
   }
 
   /// Whether `link` is the reader's own, which opens nowhere else: `rfc:`, an anchor

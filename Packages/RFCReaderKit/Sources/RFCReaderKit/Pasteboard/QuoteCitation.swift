@@ -18,10 +18,14 @@ import RFCKit
 /// — [RFC 9110, Section 8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.3)
 /// ```
 ///
-/// The citation line is `CitationFormatter`'s Markdown style, the Cite menu's, so the
-/// two cannot disagree, and it links the public rfc-editor.org page, which works for a
-/// reader without the app. The text is `SelectionText`'s, so a reference reads as its
-/// label, as Copy writes it.
+/// The citation line is `CitationFormatter`'s, in the style Settings chose (#712),
+/// Markdown unless it chose otherwise, so it and the Cite menu cannot disagree; it
+/// links the site Settings chose, the public rfc-editor.org page unless it chose
+/// otherwise, which works for a reader without the app. A style that needs the
+/// index's entry falls back to Markdown for a document the index doesn't list. The
+/// rich flavors and the HTML link the short citation whatever the style: a rich
+/// target shows a link, not a BibTeX entry. The text is `SelectionText`'s, so a
+/// reference reads as its label, as Copy writes it.
 public enum QuoteCitation {
   /// The flavors for the pasteboard, each target taking the richest it reads.
   public struct Quote {
@@ -54,28 +58,38 @@ public enum QuoteCitation {
     return sections.index(at: offset).flatMap { sections.entries[$0].place }
   }
 
-  /// The quote for `range` of a built document's text, cited from the section it
-  /// starts in, or nil when the range selects nothing of it.
-  public static func quote(of range: NSRange, in built: BuiltDocument, document: DocumentID)
-    -> Quote?
-  {
-    // A translation's words are a machine's, not the RFC's (#749).
-    guard !built.isTranslation, range.length > 0, NSMaxRange(range) <= built.text.length
-    else { return nil }
-    // Cited from the first character quoted: a selection dragged from the end of one
-    // section's last line opens on its line break, but quotes only the next section.
+  /// The place `range` of a built document's text is cited from: the section of its
+  /// first character, as `section(at:anchors:)` says. A selection dragged from the
+  /// end of one section's last line opens on its line break, but quotes only the
+  /// next section.
+  public static func section(of range: NSRange, in built: BuiltDocument) -> String? {
     let first = (built.text.string as NSString).rangeOfCharacter(
       from: CharacterSet.whitespacesAndNewlines.inverted, options: [], range: range
     ).location
+    return section(at: first == NSNotFound ? range.location : first, anchors: built.anchors)
+  }
+
+  /// The quote for `range` of a built document's text, cited from the section it
+  /// starts in, or nil when the range selects nothing of it. `document` is what is
+  /// cited, a series as itself (#656), and `cited` its entry in the index, where it
+  /// has one; `settings` say how (#712).
+  public static func quote(
+    of range: NSRange, in built: BuiltDocument, document: DocumentID,
+    cited: CitedDocument? = nil, settings: ReaderSettings = ReaderSettings()
+  ) -> Quote? {
+    // A translation's words are a machine's, not the RFC's (#749).
+    guard !built.isTranslation, range.length > 0, NSMaxRange(range) <= built.text.length
+    else { return nil }
     return quote(
       of: built.text.attributedSubstring(from: range), document: document,
-      section: section(at: first == NSNotFound ? range.location : first, anchors: built.anchors))
+      section: section(of: range, in: built), cited: cited, settings: settings)
   }
 
   public static func quote(
-    of selection: NSAttributedString, document: DocumentID, section: String?
+    of selection: NSAttributedString, document: DocumentID, section: String?,
+    cited: CitedDocument? = nil, settings: ReaderSettings = ReaderSettings()
   ) -> Quote {
-    let blocks = blocks(of: selection)
+    let blocks = blocks(of: selection, keepingSectionNumbers: settings.copiesSectionNumbers)
     let quoted = blocks.map { block in
       // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
       // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
@@ -93,12 +107,16 @@ public enum QuoteCitation {
       return lines.map { $0.isEmpty ? ">" : "> \($0)" }.joined(separator: "\n")
     }
 
-    // `short` and `markdown` read only the number; the rest of the metadata is not
-    // needed, and not having it -- a document the index does not list -- costs nothing.
-    let metadata = RFCMetadata(id: document, title: "", date: PublicationDate(year: 0))
-    let citation = CitationFormatter.cite(metadata, section: section, style: .markdown)
-    let label = CitationFormatter.cite(metadata, section: section, style: .short)
-    let url = CitationFormatter.url(for: document, section: section)
+    // Only the styles that need the index's entry need `cited`; without it, the
+    // line is Markdown's, which reads the designation alone.
+    let style =
+      cited == nil && settings.citationStyle.needsIndexEntry ? .markdown : settings.citationStyle
+    let citation = DocumentActions.citation(
+      cited ?? CitedDocument(bare: document), section: section, style: style,
+      site: settings.linkSite)
+    let label = CitationFormatter.shortCitation(document, section: section)
+    let url = CitationFormatter.citationURL(
+      for: document, section: section, site: settings.linkSite)
 
     // A figure in a fixed-pitch font, or a rich target lays it out in a proportional
     // one and its columns fall apart. Menlo rather than the system's monospaced font,
@@ -162,14 +180,17 @@ public enum QuoteCitation {
   /// belong together, told apart from the next block's by their box. The label the
   /// reader puts above source code is not the code, and is left out. A reference reads
   /// as its label, through `SelectionText`.
-  private static func blocks(of selection: NSAttributedString) -> [Block] {
+  private static func blocks(of selection: NSAttributedString, keepingSectionNumbers: Bool)
+    -> [Block]
+  {
     var blocks: [Block] = []
     let string = selection.string as NSString
     string.enumerateSubstrings(
       in: NSRange(location: 0, length: string.length), options: .byParagraphs
     ) { _, range, enclosingRange, _ in
       let line = SelectionText.plainText(
-        of: selection.attributedSubstring(from: range), unfolding: false
+        of: selection.attributedSubstring(from: range), unfolding: false,
+        keepingSectionNumbers: keepingSectionNumbers
       )
       .trimmingTrailingSpaces()
       // An empty line has no character of its own; its line break carries the attribute.

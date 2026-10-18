@@ -108,10 +108,10 @@ public enum CitationFormatter {
     case .short:
       return shortCitation(id, section: section)
     case .url:
-      return link(to: id, section: section, site: site).absoluteString
+      return citationURL(for: id, section: section, site: site).absoluteString
     case .markdown:
       let label = shortCitation(id, section: section)
-      return "[\(label)](\(link(to: id, section: section, site: site).absoluteString))"
+      return "[\(label)](\(citationURL(for: id, section: section, site: site).absoluteString))"
     case .full:
       switch document {
       case .rfc(let rfc): return fullCitation(rfc, section: section, site: site)
@@ -136,7 +136,7 @@ public enum CitationFormatter {
   /// web. A series has no page of its own sections, the RFC Editor's
   /// `rfc/bcp14#section-2` is no page at all, so the link is to the series and the
   /// label names the section. The app opens a series at a section.
-  private static func link(to id: DocumentID, section: String?, site: LinkSite) -> URL {
+  public static func citationURL(for id: DocumentID, section: String?, site: LinkSite) -> URL {
     let linksSection = id.series == .rfc || site == .app
     return url(for: id, section: linksSection ? section : nil, site: site)
   }

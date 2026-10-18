@@ -437,11 +437,14 @@ extension DocumentTextBuilder {
         hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
       output.append(inlineRuns(section.headingWords, base: attributes))
     } else {
-      let words = section.headingWords
-      let title: [Inline] =
-        numberPrefix.isEmpty
-        ? words : words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
-      output.append(inlineRuns(title, base: attributes))
+      // The number inline is marked as what it copies as too, so a copy can leave
+      // it out (#712), as it can the hung one.
+      if !numberPrefix.isEmpty {
+        var prefix = attributes
+        prefix[.rfcCopiedAs] = numberPrefix
+        output.append(inlineRuns([.text(numberPrefix)], base: prefix))
+      }
+      output.append(inlineRuns(section.headingWords, base: attributes))
     }
     if let marked = errata.bySection[section.anchor], !marked.isEmpty {
       output.append(errataChip(section.anchor, items: marked, base: attributes))

@@ -58,7 +58,8 @@ import Synchronization
       guard let documentID, let number = sectionNumber(under: event),
         let url = ReaderLinkScheme.url(number.anchor, scheme: ReaderLinkScheme.anchorScheme),
         let link = LinkCopy.forLink(
-          url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+          url, from: documentID, in: environment?.library.index, bibliography: bibliography,
+          site: ReaderSettings(defaults: .standard).linkSite)
       else { return false }
       Clipboard.write(.link(link), announcing: .link)
       showLinkCopied(over: number.range)

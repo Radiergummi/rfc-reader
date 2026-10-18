@@ -29,6 +29,31 @@ struct ReaderSettingsTests {
     #expect(settings.drawDiagrams == ReaderPreferences.defaultDrawDiagrams)
     #expect(settings.syntaxTheme.id == ReaderPreferences.defaultSyntaxTheme)
     #expect(settings.palette.id == ReaderPreferences.defaultPalette)
+    #expect(settings.citationStyle == .markdown)
+    #expect(settings.linkSite == .rfcEditor)
+    #expect(settings.copyFormat == .text)
+    #expect(settings.copiesSectionNumbers)
+  }
+
+  /// What a copy cites in, where it links and what Copy copies (#712).
+  @Test func `the sharing settings decode, and garbage falls back`() throws {
+    try withDefaults { defaults in
+      defaults.set("xml2rfc", forKey: ReaderPreferences.citationStyleKey)
+      defaults.set("datatracker", forKey: ReaderPreferences.linkSiteKey)
+      defaults.set("quote", forKey: ReaderPreferences.copyFormatKey)
+      defaults.set(false, forKey: ReaderPreferences.copiesSectionNumbersKey)
+      let settings = ReaderSettings(defaults: defaults)
+      #expect(settings.citationStyle == .xml2rfc)
+      #expect(settings.linkSite == .datatracker)
+      #expect(settings.copyFormat == .quote)
+      #expect(!settings.copiesSectionNumbers)
+
+      defaults.set("chicago", forKey: ReaderPreferences.citationStyleKey)
+      defaults.set("example.com", forKey: ReaderPreferences.linkSiteKey)
+      defaults.set("markdown", forKey: ReaderPreferences.copyFormatKey)
+      defaults.set("no", forKey: ReaderPreferences.copiesSectionNumbersKey)
+      #expect(ReaderSettings(defaults: defaults) == ReaderSettings())
+    }
   }
 
   /// Every key user defaults hold reads into the one value.
@@ -82,6 +107,10 @@ struct ReaderSettingsTests {
       settings.measure = .fullWidth
       settings.preferOriginalText = true
       settings.drawDiagrams = false
+      settings.citationStyle = .bibtex
+      settings.linkSite = .app
+      settings.copyFormat = .quote
+      settings.copiesSectionNumbers = false
       settings.write(to: defaults, replacing: ReaderSettings())
       #expect(ReaderSettings(defaults: defaults) == settings)
     }

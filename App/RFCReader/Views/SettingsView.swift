@@ -4,10 +4,10 @@ import SwiftUI
 
 /// The app's settings, tabbed the way a Mac app's are. A tab joins as a feature
 /// arrives that has something worth configuring, rather than ahead of it: Advanced
-/// arrives with the first setting that belongs there (#705).
+/// arrived with the first setting that belongs there (#712).
 ///
 /// Reading and Appearance hold the standard settings, the ones a reader expects of
-/// Apple Books; Advanced will hold the rest, and never the quick panel (#702). The
+/// Apple Books; Advanced holds the rest, and never the quick panel (#702). The
 /// same sections make up `SettingsScreen`, iOS's, so the two cannot drift.
 struct SettingsView: View {
   /// Handed in rather than read from the environment: the Settings scene is a root of
@@ -25,8 +25,11 @@ struct SettingsView: View {
           .formStyle(.grouped)
       }
       Tab("General", systemImage: "gearshape") {
-        Form { GeneralSettings() }
-          .formStyle(.grouped)
+        Form {
+          GeneralSettings()
+          Section("Sharing") { SharingSettings() }
+        }
+        .formStyle(.grouped)
       }
       Tab("Notifications", systemImage: "bell") {
         Form {
@@ -36,6 +39,10 @@ struct SettingsView: View {
       }
       Tab("Storage", systemImage: "internaldrive") {
         Form { StorageSettings(library: library) }
+          .formStyle(.grouped)
+      }
+      Tab("Advanced", systemImage: "gearshape.2") {
+        Form { AdvancedSettings() }
           .formStyle(.grouped)
       }
     }
@@ -63,8 +70,10 @@ struct SettingsScreen: View {
         Section("Reading") { ReadingSettings() }
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
+        Section("Sharing") { SharingSettings() }
         Section("Notifications") { NotificationSettings() }
         Section("Storage") { StorageSettings(library: library) }
+        Section("Advanced") { AdvancedSettings() }
       }
       .navigationTitle("Settings")
       #if !os(macOS)
@@ -151,6 +160,47 @@ private struct GeneralSettings: View {
         // Every build shares the release's defaults, so only a release changes them.
         .disabled(!Updater.starts)
     #endif
+  }
+}
+
+/// What a copy cites in, where a shared link points and what Copy copies (#712).
+private struct SharingSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Picker(selection: $settings.citationStyle) {
+      ForEach(CitationStyle.allCases) { style in
+        Text(verbatim: style.title()).tag(style)
+      }
+    } label: {
+      Text("Citation Style")
+      Text("For Copy Citation, and the line after a quote.")
+    }
+    Picker(selection: $settings.linkSite) {
+      ForEach(LinkSite.allCases) { site in
+        Text(verbatim: site.title()).tag(site)
+      }
+    } label: {
+      Text("Links Point To")
+      Text("For Share, Copy Link and citations.")
+    }
+    Picker("Copy Selection As", selection: $settings.copyFormat) {
+      ForEach(CopyFormat.allCases) { format in
+        Text(verbatim: format.title()).tag(format)
+      }
+    }
+  }
+}
+
+/// What few readers change (#702): how a copy treats a heading's number (#712).
+private struct AdvancedSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Toggle(isOn: $settings.copiesSectionNumbers) {
+      Text("Copy section numbers")
+      Text("A copied heading keeps its number, as in “4.2. Overview”.")
+    }
   }
 }
 

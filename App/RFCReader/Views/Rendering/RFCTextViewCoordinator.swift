@@ -109,19 +109,37 @@ final class RFCTextViewCoordinator: NSObject {
   var bibliography: [ReferenceGroup] = []
   /// The document on screen; see `RFCTextView.documentID`.
   var documentID: DocumentID?
+  /// What a copy cites; see `ReaderInputs.citing`.
+  var citing: DocumentID?
   /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
-  /// or nil when nothing is selected (#186); see `QuoteCitation`.
+  /// or nil when nothing is selected (#186); see `QuoteCitation`. Cited as Settings
+  /// say (#712).
   func quote(of range: NSRange) -> QuoteCitation.Quote? {
-    guard let documentID, let built else { return nil }
-    return QuoteCitation.quote(of: range, in: built, document: documentID)
+    guard let citing, let built else { return nil }
+    return QuoteCitation.quote(
+      of: range, in: built, document: citing, cited: environment?.library.citedDocument(citing),
+      settings: ReaderSettings(defaults: .standard))
   }
 
-  /// The URL a copy links `link` to (#778): one anyone can open, or nil where the
-  /// reader has none to hand out.
-  func publicURL(for link: URL) -> URL? {
+  /// Copy Citation's citation of the section `range` starts in, in the style Settings
+  /// chose (#712), or nil where the index has no entry to cite from.
+  func citation(of range: NSRange) -> String? {
+    guard let citing, let built, let cited = environment?.library.citedDocument(citing) else {
+      return nil
+    }
+    let settings = ReaderSettings(defaults: .standard)
+    return DocumentActions.citation(
+      cited, section: QuoteCitation.section(of: range, in: built), style: settings.citationStyle,
+      site: settings.linkSite)
+  }
+
+  /// The URL a copy links `link` to on `site` (#778, #712): one anyone can open, or
+  /// nil where the reader has none to hand out.
+  func publicURL(for link: URL, site: LinkSite) -> URL? {
     guard let documentID else { return nil }
     return LinkCopy.publicURL(
-      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
+      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography,
+      site: site)
   }
   /// See `RFCTextView.onChoosePresentation`.
   var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?

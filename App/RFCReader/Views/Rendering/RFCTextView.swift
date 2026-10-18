@@ -29,6 +29,7 @@ struct RFCTextView: View {
     bibliography: [ReferenceGroup],
     measure: MeasurePreference,
     documentID: DocumentID,
+    citing: DocumentID? = nil,
     commitsOnClick: (() -> Void)? = nil,
     controller: ReaderController,
     onLink: @escaping (URL, LinkActivation) -> Bool,
@@ -49,6 +50,7 @@ struct RFCTextView: View {
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
+      citing: citing ?? documentID,
       commitsOnClick: commitsOnClick,
       controller: controller,
       onLink: onLink,
@@ -98,6 +100,9 @@ struct ReaderInputs {
   let measure: MeasurePreference
   /// The document on screen, which a force click on an anchor previews (#29).
   let documentID: DocumentID
+  /// What a copy of it cites (#712): the document the tab opened, a series as itself
+  /// rather than the RFC shown for it (#656).
+  let citing: DocumentID
   /// Set only for the reader inside a link preview (#29): a click anywhere in it
   /// commits the preview rather than selecting, and it previews nothing itself.
   let commitsOnClick: (() -> Void)?
@@ -130,6 +135,7 @@ struct ReaderInputs {
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
     coordinator.documentID = documentID
+    coordinator.citing = citing
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onChoosePresentation = onChoosePresentation
     #if canImport(UIKit)
@@ -261,8 +267,11 @@ struct ReaderInputs {
       textView.isTranslation = { [weak coordinator = context.coordinator] in
         coordinator?.built?.isTranslation == true
       }
-      textView.publicURL = { [weak coordinator = context.coordinator] link in
-        coordinator?.publicURL(for: link)
+      textView.citeSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.citation(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link, site in
+        coordinator?.publicURL(for: link, site: site)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
@@ -416,8 +425,11 @@ struct ReaderInputs {
       textView.isTranslation = { [weak coordinator = context.coordinator] in
         coordinator?.built?.isTranslation == true
       }
-      textView.publicURL = { [weak coordinator = context.coordinator] link in
-        coordinator?.publicURL(for: link)
+      textView.citeSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.citation(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link, site in
+        coordinator?.publicURL(for: link, site: site)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
