@@ -33,24 +33,27 @@ struct CitationIndexTests {
 
     /// `rows` in the order the index writes them.
     init(
-      schema: String = String(CitationIndex.schemaVersion), documents: Int,
+      schema: String = String(IndexSchema.version), documents: Int,
       rows: [Row]
     ) throws {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       var connection: OpaquePointer?
       guard sqlite3_open(url.path, &connection) == SQLITE_OK else { throw WriteFailed() }
       defer { sqlite3_close(connection) }
-      var sql = """
-        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE citations (
-          citing TEXT NOT NULL, cited TEXT NOT NULL, place TEXT NOT NULL,
-          section TEXT, count INTEGER NOT NULL, kind TEXT);
-        INSERT INTO meta VALUES ('schema', '\(schema)'), ('documents', '\(documents)');
+      // The tables the writer creates, and rows by column name, so a renamed column
+      // fails here as it would in the app.
+      var sql = IndexSchema.tables
+      sql += """
+        INSERT INTO meta (key, value) VALUES ('schema', '\(schema)'), ('documents', '\(documents)');
+
         """
       for row in rows {
         let kind = row.kind.map { "'\($0)'" } ?? "NULL"
-        sql +=
-          "INSERT INTO citations VALUES ('\(row.citing)', '\(row.cited)', '\(row.place)', NULL, 1, \(kind));\n"
+        sql += """
+          INSERT INTO citations (citing, cited, place, section, count, kind)
+            VALUES ('\(row.citing)', '\(row.cited)', '\(row.place)', NULL, 1, \(kind));
+
+          """
       }
       guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else { throw WriteFailed() }
     }

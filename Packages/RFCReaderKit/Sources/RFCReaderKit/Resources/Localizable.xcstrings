@@ -235,6 +235,146 @@
         }
       }
     },
+    "%lld errata" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Erratum"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Errata"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Erratum"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld errata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld errata, %lld held" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@verified@, %2$lld zurückgestellt"
+          },
+          "substitutions" : {
+            "verified" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Erratum"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Errata"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@verified@, %2$lld held"
+          },
+          "substitutions" : {
+            "verified" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg erratum"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg errata"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld held errata" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Zurückgestelltes Erratum"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld zurückgestellte Errata"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Held erratum"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld held errata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld not yet reviewed" : {
       "localizations" : {
         "de" : {
@@ -595,6 +735,16 @@
         }
       }
     },
+    "Available offline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline verfügbar"
+          }
+        }
+      }
+    },
     "BCP Series" : {
       "localizations" : {
         "de" : {
@@ -691,6 +841,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen hinzufügen"
+          }
+        }
+      }
+    },
+    "Bookmark an RFC by swiping its row, or from its menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge ein Lesezeichen hinzu, indem du die Zeile eines RFC wischst, oder über ihr Menü."
+          }
+        }
+      }
+    },
+    "Bookmark an RFC with ⌘D, or from its row’s menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge ein Lesezeichen mit ⌘D oder über das Menü der Zeile eines RFC hinzu."
+          }
+        }
+      }
+    },
+    "Bookmark this document. It is not bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen für dieses Dokument hinzufügen. Es hat noch keines."
           }
         }
       }
@@ -1035,7 +1215,7 @@
         }
       }
     },
-    "Full citation" : {
+    "Full Citation" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1101,6 +1281,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Für die nächste Revision vorgemerkt"
+          }
+        }
+      }
+    },
+    "Hide Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt ausblenden"
+          }
+        }
+      }
+    },
+    "Hide Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info ausblenden"
           }
         }
       }
@@ -1315,6 +1515,16 @@
         }
       }
     },
+    "Keep an RFC offline from its Info pane or its row’s menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behalte einen RFC über seine Info oder das Menü seiner Zeile offline."
+          }
+        }
+      }
+    },
     "Keywords" : {
       "localizations" : {
         "de" : {
@@ -1375,7 +1585,7 @@
         }
       }
     },
-    "Markdown link" : {
+    "Markdown Link" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1531,6 +1741,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch nichts gelesen"
+          }
+        }
+      }
+    },
+    "Nothing in the index matches “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts im Index passt zu „%@“."
           }
         }
       }
@@ -1835,6 +2055,26 @@
         }
       }
     },
+    "RFC number, BCP 14, title words, or a link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Nummer, BCP 14, Wörter aus dem Titel oder ein Link"
+          }
+        }
+      }
+    },
+    "RFCs you open appear here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die du öffnest, erscheinen hier."
+          }
+        }
+      }
+    },
     "Reading Path: %@" : {
       "localizations" : {
         "de" : {
@@ -1891,6 +2131,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen entfernen"
+          }
+        }
+      }
+    },
+    "Remove Bookmark. This document is bookmarked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen entfernen. Dieses Dokument hat ein Lesezeichen."
           }
         }
       }
@@ -2125,6 +2375,26 @@
         }
       }
     },
+    "Show Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt einblenden"
+          }
+        }
+      }
+    },
+    "Show Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info einblenden"
+          }
+        }
+      }
+    },
     "Show as Figure" : {
       "localizations" : {
         "de" : {
@@ -2331,12 +2601,32 @@
         }
       }
     },
+    "The RFC index couldn't be loaded. A number still opens." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index konnte nicht geladen werden. Eine Nummer lässt sich trotzdem öffnen."
+          }
+        }
+      }
+    },
     "The RFC index couldn't be read. Try again later." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der RFC-Index konnte nicht gelesen werden. Versuche es später erneut."
+          }
+        }
+      }
+    },
+    "The RFC index is still loading." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der RFC-Index wird noch geladen."
           }
         }
       }
@@ -2549,6 +2839,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Heute beginnt jeder RFC als Internet-Draft, den jeder schreiben und einreichen kann. Ein Draft ist ein Zwischenstand, kein Standard: Er verfällt nach sechs Monaten, wenn er nicht überarbeitet wird, und viele werden nie veröffentlicht."
+          }
+        }
+      }
+    },
+    "Translate" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzen"
           }
         }
       }
@@ -2789,6 +3089,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "zur Veröffentlichung freigegeben"
+          }
+        }
+      }
+    },
+    "collapsed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zugeklappt"
+          }
+        }
+      }
+    },
+    "expanded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aufgeklappt"
           }
         }
       }

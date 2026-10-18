@@ -11,7 +11,7 @@ import Foundation
 public struct SceneSnapshot: Codable, Equatable, Sendable {
   /// Raised whenever what is kept changes shape, so a snapshot an older build wrote
   /// starts the tab afresh rather than failing to make it.
-  public static let version = 1
+  public static let version = 2
   /// How many places of its history a tab keeps: the current one and those nearest it.
   public static let historyLimit = 50
 
@@ -21,13 +21,18 @@ public struct SceneSnapshot: Codable, Equatable, Sendable {
   /// The inspector's tab, by name: the tabs are the app's, and a name it no longer
   /// knows leaves the inspector on its first.
   public var inspectorTab: String?
+  /// The window's panel and columns, on the Mac (#762); nil on iOS, whose scene
+  /// keeps its own.
+  public var layout: WindowLayout?
 
   public init(
-    history: NavigationHistory.Snapshot, filter: LibraryFilter, inspectorTab: String? = nil
+    history: NavigationHistory.Snapshot, filter: LibraryFilter, inspectorTab: String? = nil,
+    layout: WindowLayout? = nil
   ) {
     self.history = history
     self.filter = filter
     self.inspectorTab = inspectorTab
+    self.layout = layout
   }
 
   public func encoded() -> Data? {

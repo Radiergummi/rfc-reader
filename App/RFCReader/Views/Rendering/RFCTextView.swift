@@ -258,11 +258,17 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
+      }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -311,6 +317,10 @@ struct ReaderInputs {
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
+      // the reader on screen's.
+      let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
+      (textView as? ReaderTextView)?.findReader = findReader
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -403,14 +413,23 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
+      }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation
+      }
+      textView.spokenStates = { [weak coordinator = context.coordinator] in
+        coordinator?.spokenStates() ?? [:]
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }

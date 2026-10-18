@@ -133,7 +133,8 @@ struct ReaderSettingsTests {
     let id = DocumentID.rfc(9110)
     let base = ReaderSettings()
     func key(_ settings: ReaderSettings) -> BuildKey {
-      BuildKey(document: id, style: settings.style(column: 500, textSize: .large))
+      BuildKey(
+        document: id, style: settings.style(column: 500, textSize: .large), boldText: false)
     }
     var bigger = base
     bigger.fontSize += 1
@@ -144,5 +145,15 @@ struct ReaderSettingsTests {
     for changed in [bigger, underlined, themed] {
       #expect(key(changed) != key(base))
     }
+  }
+
+  /// Bold Text is applied to the fonts as they are made, so a build made before it
+  /// was turned on is not the build after (#765): a kept preview keyed without it
+  /// came back in the old weight.
+  @Test func `bold text changes the build key`() {
+    let style = ReaderSettings().style(column: 500, textSize: .large)
+    #expect(
+      BuildKey(document: .rfc(9110), style: style, boldText: true)
+        != BuildKey(document: .rfc(9110), style: style, boldText: false))
   }
 }

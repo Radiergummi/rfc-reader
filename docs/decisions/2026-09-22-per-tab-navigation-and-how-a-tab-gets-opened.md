@@ -15,3 +15,9 @@ So a new tab comes from AppKit: `NSApp.sendAction(#selector(NSResponder.newWindo
 Nothing can be passed along that path, which is why `LibraryModel` holds the link in a private latch for the scene that appears to take in `register(_:)`.
 A background tab is opened and then the previous window is made key again on the next turn of the run loop — the new tab is ordered front as part of being made, so taking focus back any sooner is simply undone by it.
 This is the part to re-read before reaching for `openWindow` again.
+
+## Why only a series link waits for the index
+
+*Moved here from ARCHITECTURE.md on 17 October 2026 (#756).*
+
+Only series links wait for the index because only they need it to resolve; making every link wait was set aside because no index is bundled with the app, and a first launch would hold every link for the index's whole download.

@@ -4,8 +4,8 @@ import RFCKit
 /// Everything the library derives from the RFC index, built together so it can be
 /// built off the main actor.
 ///
-/// Parsing the 14 MB index takes about a second, building its search about 50 ms,
-/// and counting the working groups a few more. All three ran on the main actor
+/// Parsing the index, building its search and counting the working groups ("Index:
+/// parse" and "Index: prepare" in `make benchmark`) all ran on the main actor
 /// whenever the index was downloaded (#124). They are pure functions of the parsed
 /// index and every part is `Sendable`, so they are made in one place, in an
 /// `@concurrent` function, and the main actor only assigns the result.

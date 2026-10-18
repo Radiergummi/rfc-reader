@@ -43,6 +43,16 @@ struct QuoteCitationTests {
     #expect(QuoteCitation.section(at: 20, anchors: anchors) == nil)
   }
 
+  /// A translation is a machine's words, which are not cited as the RFC's (#749).
+  @Test func `a translated build quotes nothing`() throws {
+    let document = Fixtures.document(.paragraph(Paragraph(text: "Quoted.")))
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle(), translation: .english)
+    let start = try Fixtures.offset(of: "Quoted", in: built.text)
+    #expect(
+      QuoteCitation.quote(of: NSRange(location: start, length: 7), in: built, document: .rfc(9110))
+        == nil)
+  }
+
   /// A range of the reader's text is quoted from its own section, which the build
   /// alone knows, and one that selects nothing, or runs past the text, quotes nothing.
   @Test func `a range of the built text is quoted from its section`() throws {
