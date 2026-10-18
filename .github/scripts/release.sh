@@ -52,6 +52,9 @@ notarize() {
 step "Generating the Xcode project"
 make xcodeproj
 
+step "Fetching the indexes pack to bundle"
+make indexes-pack
+
 step "Archiving"
 rm -rf "$archive" "$export_dir" "$stage"
 # SELF_UPDATING starts the updater, which no other build does (Window/Updater.swift).

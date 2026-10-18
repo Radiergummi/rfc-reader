@@ -60,6 +60,27 @@ targets:
         buildPhase: resources
       # One app icon per Xcode version; the settings below pick which is built.
       - path: App/icons
+    # The indexes pack (#738), the corpus's citations, successions and amendments:
+    # `make indexes-pack` fetches the release App/indexes-pack.mk pins into
+    # App/Resources, which git ignores, and `DocumentStore.citationIndexURL()` reads it
+    # in place unless a later one is installed. A phase rather than a resource,
+    # because a resource that is missing fails every build, and a Debug build bundles
+    # it only when it is there.
+    postBuildScripts:
+      - name: Bundle the indexes pack
+        basedOnDependencyAnalysis: false
+        script: |
+          pack="$SRCROOT/App/Resources/indexes"
+          bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/indexes"
+          # Never one an earlier build left behind.
+          rm -rf "$bundled"
+          if [ -f "$pack/indexes.sqlite" ] && [ -f "$pack/manifest.json" ]; then
+            mkdir -p "$bundled"
+            cp "$pack/indexes.sqlite" "$pack/manifest.json" "$bundled/"
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: A Release build bundles the indexes pack: run make indexes-pack first."
+            exit 1
+          fi
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit
@@ -172,6 +193,9 @@ targets:
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
+        # "Bundle the indexes pack" reads App/Resources, which it declares no input
+        # for: the pack may be missing, which a declared input may not be.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.
         ASSETCATALOG_COMPILER_APPICON_NAME: $(APP_ICON_$(XCODE_VERSION_MAJOR))
