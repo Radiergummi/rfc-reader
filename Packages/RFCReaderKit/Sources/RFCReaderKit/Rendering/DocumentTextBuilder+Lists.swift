@@ -39,6 +39,7 @@ extension DocumentTextBuilder {
     markerAttributes[.foregroundColor] = RFCColors.secondaryLabel
 
     for (index, item) in list.items.enumerated() {
+      if index > 0 { joinModel() }
       mark(item.anchor)
       let marker = markers[index]
       let firstLine = NSMutableAttributedString(string: marker + "\t", attributes: markerAttributes)
@@ -52,7 +53,7 @@ extension DocumentTextBuilder {
       if case .paragraph(let paragraph) = first {
         // On the marker's line, in the list's attributes rather than its own indent.
         appendParagraph(paragraph, attributes: attributes)
-        appendBlocks(Array(item.blocks.dropFirst()), indent: markerColumn)
+        appendRest(item.blocks.dropFirst(), indent: markerColumn)
       } else {
         append("\n", attributes)
         appendBlocks(item.blocks, indent: markerColumn)
@@ -78,35 +79,48 @@ extension DocumentTextBuilder {
       paragraphStyle(indent: definitionIndent, spacingAfter: spacing))
 
     for (index, item) in list.items.enumerated() {
+      if index > 0 { joinModel() }
       mark(item.anchor)
       // The term beside its definition's first paragraph, in one paragraph, when it
       // fits the gutter; otherwise on a line of its own, so one long term does not
       // push every definition in the list across (#352).
       if let hanging, hanging.fits[index], case .paragraph(let first)? = item.definition.first {
-        output.append(inlineRuns(item.term, base: hanging.termAttributes))
+        appendModel(inlineRuns(item.term, base: hanging.termAttributes))
         append("\t", hanging.termAttributes)
+        joinModel()
         mark(item.definitionAnchor)
         appendParagraph(first, attributes: hanging.attributes)
-        appendBlocks(Array(item.definition.dropFirst()), indent: hanging.gutter)
+        appendRest(item.definition.dropFirst(), indent: hanging.gutter)
         continue
       }
-      output.append(inlineRuns(item.term, base: termAttributes))
+      appendModel(inlineRuns(item.term, base: termAttributes))
       // A definition's own anchor goes where its text starts. An empty `<dd>`
       // has no text, and marking it after the term's newline would put it at the
       // next item's term, so a link to it would land one item late; the end of
       // its own term keeps it on the item it belongs to.
       if item.definition.isEmpty { mark(item.definitionAnchor) }
       append("\n", termAttributes)
+      joinModel()
       if !item.definition.isEmpty { mark(item.definitionAnchor) }
       if list.isCompact, case .paragraph(let first)? = item.definition.first, first.indent == 0 {
         // A compact list's spacing, as a compact list item's first paragraph takes it.
         // An author's indent keeps the ordinary paragraph's, which sets it.
         appendParagraph(first, attributes: compactAttributes)
-        appendBlocks(Array(item.definition.dropFirst()), indent: definitionIndent)
+        appendRest(item.definition.dropFirst(), indent: definitionIndent)
       } else {
         appendBlocks(item.definition, indent: definitionIndent)
       }
     }
+  }
+
+  /// The blocks after the first of an item or a definition, which was set on a line
+  /// of its own: joined to it in the model text, as `appendBlocks` joins its own.
+  private func appendRest(_ blocks: ArraySlice<Block>, indent: CGFloat) {
+    let isText = blocks.contains { block in
+      if case .references = block { false } else { true }
+    }
+    if isText { joinModel() }
+    appendBlocks(Array(blocks), indent: indent)
   }
 
   /// The space after a list's item, or a definition list's: a paragraph's, or in a

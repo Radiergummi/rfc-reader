@@ -5,6 +5,12 @@ extension DocumentTextBuilder {
   func appendFigure(_ figure: Figure, indent: CGFloat) {
     mark(figure.anchor)
     let start = output.length
+    // The model text opens with the title and a join, which the caption draws after
+    // the artwork: kept for it, and the cursor moved past them.
+    let titleModel = figure.title.flatMap { title in positions.map { ($0.cursor, title) } }
+    if let title = figure.title {
+      positions?.cursor += title.utf16.count + 1
+    }
     appendBlocks(figure.blocks, indent: indent)
     let caption = Self.caption(labels.figure, number: figure.number, title: figure.title)
     // Tag any artwork the figure just contributed with the caption, so the
@@ -16,7 +22,7 @@ extension DocumentTextBuilder {
         output.addAttribute(.rfcCaption, value: caption, range: subrange)
       }
     }
-    appendCaption(caption, indent: indent, blockStart: start)
+    appendCaption(caption, indent: indent, blockStart: start, title: titleModel)
   }
 
   /// The rule and the background are drawn by `RFCTextLayoutFragment`; the builder
