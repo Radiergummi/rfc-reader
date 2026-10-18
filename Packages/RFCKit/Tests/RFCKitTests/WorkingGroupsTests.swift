@@ -70,9 +70,9 @@ struct WorkingGroupsTests {
     #expect(fetched.data == data)
   }
 
-  @Test func `the file is fetched from the revisions release`() {
+  @Test func `the file is fetched from the data bucket`() {
     #expect(
       RFCEditorEndpoints.workingGroups.absoluteString
-        == "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/groups.json")
+        == "https://data.rfc-reader.mazetti.me/groups.json")
   }
 }

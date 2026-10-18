@@ -66,8 +66,10 @@ public struct FoldingIndex: Sendable {
   let asides: [Aside]
   let length: Int
 
-  public init(_ built: BuiltDocument) {
-    let string = built.text.string as NSString
+  /// The index of `text`, whose anchors are `anchors`. Made once per build, by
+  /// `BuiltDocument` (#723): read it as `built.foldingIndex`.
+  init(text: NSAttributedString, anchors: AnchorIndex) {
+    let string = text.string as NSString
     var paragraphs: [NSRange] = []
     string.enumerateSubstrings(
       in: NSRange(location: 0, length: string.length),
@@ -77,8 +79,8 @@ public struct FoldingIndex: Sendable {
     length = string.length
     // The abstract has a heading of its own but no section, so it is an entry of the
     // outline beside the sections: otherwise nothing could open it.
-    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
-    entries = (abstract + built.anchors.sections.entries)
+    let abstract = anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
+    entries = (abstract + anchors.sections.entries)
       .sorted { $0.offset < $1.offset }
       .map { entry in
         Entry(
@@ -88,12 +90,13 @@ public struct FoldingIndex: Sendable {
           depth: entry.depth ?? 1
         )
       }
-    asides = Self.asides(in: built.text)
+    asides = Self.asides(in: text, string: string)
   }
 
   /// The asides of `text`, each from the first to the last character carrying its
-  /// ordinal: an aside nested in one cuts it into runs.
-  private static func asides(in text: NSAttributedString) -> [Aside] {
+  /// ordinal: an aside nested in one cuts it into runs. `string` is `text`'s, bridged
+  /// once by the caller rather than copied again here.
+  private static func asides(in text: NSAttributedString, string: NSString) -> [Aside] {
     var extents: [Int: Range<Int>] = [:]
     text.enumerateAttribute(.rfcAside, in: NSRange(location: 0, length: text.length)) {
       value, run, _ in
@@ -104,7 +107,6 @@ public struct FoldingIndex: Sendable {
           min($0.lowerBound, range.lowerBound)..<max($0.upperBound, range.upperBound)
         } ?? range
     }
-    let string = text.string as NSString
     return extents.map { ordinal, extent in
       let caption = string.paragraphRange(for: NSRange(location: extent.lowerBound, length: 0))
       return Aside(
@@ -350,6 +352,63 @@ public struct Folding: Sendable, Equatable {
       toggled.expanded.insert(entry.anchor)
     }
     return toggled
+  }
+
+  /// An outline section as Expand Section and Collapse Section act on it, without a
+  /// pointer (#760): where its heading's paragraph starts, which `toggling(heading:in:)`
+  /// takes, and whether it is open.
+  public struct OutlineSection: Sendable, Equatable {
+    public let heading: Int
+    public let isExpanded: Bool
+
+    /// What VoiceOver says after the heading: whether the section is open.
+    public func spokenState(locale: Locale = .interface) -> String {
+      isExpanded
+        ? String(kit: "expanded", locale: locale) : String(kit: "collapsed", locale: locale)
+    }
+  }
+
+  /// The outline section the entry `anchor` names: nil outside the outline, for an
+  /// anchor that names no entry, and for a section whose heading it does not show.
+  public func outlineSection(_ anchor: String?, in index: FoldingIndex) -> OutlineSection? {
+    guard mode == .outline, let entry = index.entries.first(where: { $0.anchor == anchor }),
+      let isExpanded = disclosures(in: index)[entry.paragraph]
+    else { return nil }
+    return OutlineSection(heading: entry.paragraph, isExpanded: isExpanded)
+  }
+
+  /// What VoiceOver says after each heading, or caption, with a disclosure: whether
+  /// it is open (#760), by the offset of its paragraph's last character, its line
+  /// break, before which it is said (`AccessibleReading.reading(_:in:saying:...)`).
+  /// The chevron is drawn, not set as text, so nothing else says it.
+  public func spokenStates(in index: FoldingIndex, locale: Locale = .interface) -> [Int: String] {
+    let disclosures = disclosures(in: index)
+    guard !disclosures.isEmpty else { return [:] }
+    var said: [Int: String] = [:]
+    for (start, isOpen) in disclosures {
+      let after = index.paragraphs.partitioningIndex { $0.location > start }
+      guard after > 0, index.paragraphs[after - 1].location == start else { continue }
+      let paragraph = index.paragraphs[after - 1]
+      said[NSMaxRange(paragraph) - 1] = OutlineSection(heading: start, isExpanded: isOpen)
+        .spokenState(locale: locale)
+    }
+    return said
+  }
+
+  /// The outline section the reader's line at `line` is in.
+  public func outlineSection(atLine line: Int, in index: FoldingIndex) -> OutlineSection? {
+    outlineSection(index.entry(covering: line)?.anchor, in: index)
+  }
+
+  /// In Implementer, the innermost aside whose caption or body holds `line` and whose
+  /// caption is shown, as an `OutlineSection` whose heading is the caption: what the
+  /// text's Expand Aside or Collapse Aside acts on (#760). Nil in another mode.
+  public func aside(atLine line: Int, in index: FoldingIndex) -> OutlineSection? {
+    guard mode == .implementer else { return nil }
+    let disclosures = disclosures(in: index)
+    return index.asides.reversed()
+      .first { ($0.caption..<$0.body.upperBound).contains(line) && disclosures[$0.caption] != nil }
+      .map { OutlineSection(heading: $0.caption, isExpanded: openAsides.contains($0.ordinal)) }
   }
 
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored

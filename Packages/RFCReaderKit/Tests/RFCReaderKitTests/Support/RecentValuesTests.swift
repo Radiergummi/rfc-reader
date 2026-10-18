@@ -69,25 +69,28 @@ struct RecentValuesTests {
   @Test func `a build key differs by document and by every part of the style`() {
     let style = ReadingStyle()
     let document = DocumentID(series: .rfc, number: 9110)
-    let key = BuildKey(document: document, style: style)
-    #expect(key == BuildKey(document: document, style: style))
-    #expect(key != BuildKey(document: DocumentID(series: .rfc, number: 9111), style: style))
+    let key = BuildKey(document: document, style: style, boldText: false)
+    #expect(key == BuildKey(document: document, style: style, boldText: false))
+    #expect(
+      key
+        != BuildKey(document: DocumentID(series: .rfc, number: 9111), style: style, boldText: false)
+    )
     var wider = style
     wider.measure += 1
-    #expect(key != BuildKey(document: document, style: wider))
+    #expect(key != BuildKey(document: document, style: wider, boldText: false))
     var looser = style
     looser.lineHeightMultiple += 0.1
-    #expect(key != BuildKey(document: document, style: looser))
+    #expect(key != BuildKey(document: document, style: looser, boldText: false))
     var underlined = style
     underlined.underlinesLinks.toggle()
-    #expect(key != BuildKey(document: document, style: underlined))
-    #expect(key != BuildKey(document: document, style: style.scaled(by: 1.1)))
+    #expect(key != BuildKey(document: document, style: underlined, boldText: false))
+    #expect(key != BuildKey(document: document, style: style.scaled(by: 1.1), boldText: false))
     // The body scales with the text size, so it is set back to the default's to
     // tell the keys apart by the text size alone.
     let larger = ReadingStyle(textSize: .xxxLarge)
     let largerText = larger.scaled(by: style.bodySize / larger.bodySize)
     #expect(largerText.bodySize == style.bodySize)
     #expect(largerText.textSize != style.textSize)
-    #expect(key != BuildKey(document: document, style: largerText))
+    #expect(key != BuildKey(document: document, style: largerText, boldText: false))
   }
 }

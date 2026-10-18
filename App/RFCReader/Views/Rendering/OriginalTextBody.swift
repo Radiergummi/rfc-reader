@@ -17,6 +17,11 @@ import SwiftUI
 struct OriginalTextBody {
   let text: String
   let fontSize: Double
+  #if canImport(UIKit)
+    /// The window's reader state, which Find is installed in (#763): nil for a
+    /// reader the stack keeps below its top.
+    let reader: ReaderState?
+  #endif
 
   /// The monospaced face the text is set in, a little smaller than the reader's
   /// body so a 72-column page fits beside it.
@@ -114,6 +119,7 @@ struct OriginalTextBody {
     }
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
+      textView.findReader = reader
       let previous = context.coordinator.shown
       if let previous, previous == (text, fontSize) { return }
       let offset = textView.contentOffset.x
@@ -137,6 +143,16 @@ struct OriginalTextBody {
   /// on its way in, and asks again after each layout pass, since incremental layout
   /// widens what has been laid out as the text scrolls.
   final class SidewaysTextView: UITextView {
+    /// The reader state Find is installed in as this comes into a window (#763).
+    weak var findReader: ReaderState? {
+      didSet { installsFind(in: findReader) }
+    }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      installsFind(in: findReader)
+    }
+
     override var contentSize: CGSize {
       get { super.contentSize }
       set { super.contentSize = CGSize(width: laidOutWidth, height: newValue.height) }

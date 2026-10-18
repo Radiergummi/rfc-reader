@@ -73,4 +73,48 @@ struct OpenRouteTests {
       RFCLink(id: .rfc(9110), anchor: "page-12"), selected: .rfc(9110), shown: .rfc(9110))
     #expect(!route.reveals)
   }
+
+  /// Following a citation keeps the reader's list, its filter and search, when the
+  /// cited document's row is already on show (#769).
+  @Test func `a navigation to a row on show leaves the list as it is`() {
+    let route = OpenRoute.route(RFCLink(id: .rfc(8446)), selected: .rfc(9110), shown: .rfc(9110))
+    #expect(!route.reveals(selected: .rfc(9110), among: [.rfc(9110), .rfc(8446)]))
+  }
+
+  @Test func `a navigation to a row not on show reveals it`() {
+    let route = OpenRoute.route(RFCLink(id: .rfc(8446)), selected: .rfc(9110), shown: .rfc(9110))
+    #expect(route.reveals(selected: .rfc(9110), among: [.rfc(9110)]))
+  }
+
+  /// Before the list is first made there are no rows to find it among.
+  @Test func `a navigation before any list is made reveals it`() {
+    let route = OpenRoute.route(RFCLink(id: .rfc(8446)), selected: nil, shown: nil)
+    #expect(route.reveals(selected: nil, among: nil))
+  }
+
+  /// A jump stays in the document on screen, whose row is the selected one: a BCP's
+  /// row, when the BCP is what the list shows.
+  @Test func `a jump into the selected series asks for the series' row`() {
+    let route = OpenRoute.route(
+      RFCLink(id: .rfc(2119), section: "2"), selected: bcp14, shown: .rfc(2119))
+    #expect(!route.reveals(selected: bcp14, among: [bcp14]))
+    #expect(route.reveals(selected: bcp14, among: [.rfc(9110)]))
+  }
+
+  /// What the reveal clears for is the row's, not the linked RFC's: the series' row
+  /// for a jump into the RFC it shows.
+  @Test func `a jump's row is the selected one, a navigation's its entry's`() {
+    let jump = OpenRoute.route(
+      RFCLink(id: .rfc(2119), section: "2"), selected: bcp14, shown: .rfc(2119))
+    #expect(jump.row(selected: bcp14) == bcp14)
+    let navigation = OpenRoute.route(
+      RFCLink(id: .rfc(8446)), selected: .rfc(9110), shown: .rfc(9110))
+    #expect(navigation.row(selected: .rfc(9110)) == .rfc(8446))
+  }
+
+  @Test func `a jump to an anchor reveals nothing, whatever is on show`() {
+    let route = OpenRoute.route(
+      RFCLink(id: .rfc(9110), anchor: "page-12"), selected: .rfc(9110), shown: .rfc(9110))
+    #expect(!route.reveals(selected: .rfc(9110), among: []))
+  }
 }

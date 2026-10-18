@@ -1,10 +1,12 @@
+import Foundation
+
 /// The inspector's two panes, which share one slot beside the reader: the
 /// document's navigation (contents and references) and what is known about it.
 ///
 /// Each has its own toolbar button, and they behave as Pages' Format and Document
 /// buttons do: a button opens a closed inspector on its pane, swaps an open one to
 /// it, and closes the inspector when its pane is already showing.
-public enum InspectorPane: Sendable {
+public enum InspectorPane: String, Codable, Sendable {
   case navigation
   case info
 
@@ -15,6 +17,20 @@ public enum InspectorPane: Sendable {
   ) -> (isOpen: Bool, pane: InspectorPane) {
     if isOpen, showing == pressed { return (false, showing) }
     return (true, pressed)
+  }
+
+  /// What `pressed`'s menu item is called: what pressing it will do, as View ▸
+  /// Show Sidebar says (#761).
+  public static func menuTitle(
+    _ pressed: InspectorPane, isOpen: Bool, showing: InspectorPane, locale: Locale = .interface
+  ) -> String {
+    let opens = pressing(pressed, isOpen: isOpen, showing: showing).isOpen
+    return switch (pressed, opens) {
+    case (.navigation, true): String(kit: "Show Contents", locale: locale)
+    case (.navigation, false): String(kit: "Hide Contents", locale: locale)
+    case (.info, true): String(kit: "Show Info", locale: locale)
+    case (.info, false): String(kit: "Hide Info", locale: locale)
+    }
   }
 
   /// Whether `pane` has anything to show for a document `isDescribed` by the index

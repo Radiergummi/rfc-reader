@@ -67,6 +67,19 @@ struct LibraryFilterTests {
         == "No RFCs in HTTPBIS")
   }
 
+  /// A list the reader fills says how, under its empty title; a list the index
+  /// fills has nothing to say.
+  @Test func `an empty list the reader fills says how to fill it`() {
+    #expect(
+      LibraryFilter.recent.emptyDescription(locale: .english) == "RFCs you open appear here.")
+    #expect(
+      LibraryFilter.downloaded.emptyDescription(locale: .english)
+        == "Keep an RFC offline from its Info pane or its row’s menu.")
+    #expect(LibraryFilter.bookmarks.emptyDescription(locale: .english) != nil)
+    #expect(LibraryFilter.standards.emptyDescription(locale: .english) == nil)
+    #expect(LibraryFilter.workingGroup("httpbis").emptyDescription(locale: .english) == nil)
+  }
+
   @Test func `a list's search field names the list`() {
     #expect(LibraryFilter.all.searchPrompt(in: .empty, locale: .english) == "Search All RFCs")
     #expect(
