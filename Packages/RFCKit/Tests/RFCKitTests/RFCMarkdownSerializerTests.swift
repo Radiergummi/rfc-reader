@@ -316,19 +316,20 @@ enum SerializedText {
     func visit(_ block: Block) {
       switch block {
       case .paragraph(let paragraph): visit(paragraph.inlines)
-      case .list(let list): list.items.forEach { $0.blocks.forEach(visit) }
+      case .list(let list): list.items.flatMap(\.blocks).forEach(visit)
       case .definitionList(let list):
         for item in list.items {
           visit(item.term)
           item.definition.forEach(visit)
         }
       case .preformatted(let content):
-        content.text.split(separator: "\n").forEach { add(String($0)) }
+        for line in content.text.split(separator: "\n") { add(String(line)) }
       case .figure(let figure): figure.blocks.forEach(visit)
-      case .table(let table): table.rows.forEach { $0.cells.forEach(visit) }
+      case .table(let table): table.rows.flatMap(\.cells).forEach(visit)
       case .blockQuote(let blocks), .aside(let blocks): blocks.forEach(visit)
-      case .references(let list): list.entries.forEach { visit($0.annotation) }
-      case .index(let index): visit(.definitionList(IndexBlock.definitionList(index.groups.flatMap(\.entries))))
+      case .references(let list): list.entries.map(\.annotation).forEach(visit)
+      case .index(let index):
+        visit(.definitionList(IndexBlock.definitionList(index.groups.flatMap(\.entries))))
       }
     }
     func visit(_ section: Section) {

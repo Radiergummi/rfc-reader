@@ -124,8 +124,7 @@ extension RFCHTMLSerializer {
       case .figure(let figure):
         open("figure", id: figure.anchor)
         blocks(figure.blocks)
-        if let caption = ExportLinks.caption("Figure", number: figure.number, title: figure.title)
-        {
+        if let caption = ExportLinks.caption("Figure", number: figure.number, title: figure.title) {
           output += "<figcaption>\(Self.escaped(caption))</figcaption>\n"
         }
         output += "</figure>\n"
@@ -152,11 +151,14 @@ extension RFCHTMLSerializer {
       case .bullet:
         items(list.items, in: "ul", class: compact, markers: nil)
       case .bare:
-        items(list.items, in: "ul", class: ["bare", compact].compactMap { $0 }.joined(separator: " "), markers: nil)
+        items(
+          list.items, in: "ul", class: ["bare", compact].compactMap { $0 }.joined(separator: " "),
+          markers: nil)
       case .numbered(let numbering):
         let markers = list.items.indices.map { numbering.marker(at: $0) }
         items(
-          list.items, in: "ol", class: ["marked", compact].compactMap { $0 }.joined(separator: " "),
+          list.items, in: "ol",
+          class: ["marked", compact].compactMap { $0 }.joined(separator: " "),
           markers: markers)
       }
     }

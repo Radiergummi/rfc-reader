@@ -128,7 +128,8 @@ extension RFCMarkdownSerializer {
     /// A paragraph reflowed: one line, but for where the source breaks it.
     func paragraphLines(_ inlines: [Inline]) -> [String] {
       // A break that opens or closes a paragraph breaks nothing.
-      let inlines = inlines.drop { $0 == .lineBreak }.reversed().drop { $0 == .lineBreak }.reversed()
+      let inlines = inlines.drop { $0 == .lineBreak }.reversed().drop { $0 == .lineBreak }
+        .reversed()
       let text = self.inlines(Array(inlines), breaks: "\\\n")
       guard !text.isEmpty else { return [] }
       return text.split(separator: "\n", omittingEmptySubsequences: false).map {
@@ -262,7 +263,8 @@ extension RFCMarkdownSerializer {
         var parts = ["**" + Self.escaped("[\(entry.displayAnchor)]") + "**"]
         let title = entry.title.isEmpty ? (entry.rawText ?? "") : entry.title
         if let url = ExportLinks.url(of: entry), !title.isEmpty {
-          parts.append("[\(Self.escaped(Self.reflowed(title)))](\(Self.destination(url.absoluteString))).")
+          parts.append(
+            "[\(Self.escaped(Self.reflowed(title)))](\(Self.destination(url.absoluteString))).")
         } else if !title.isEmpty {
           parts.append(Self.escaped(Self.reflowed(title)) + ".")
         }
