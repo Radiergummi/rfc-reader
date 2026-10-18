@@ -28,7 +28,14 @@ public struct HighlightPlacement: Sendable, Equatable {
   public static let none = HighlightPlacement(
     marks: HighlightMarks([]), statuses: [:], relocations: [:])
 
-  init(marks: HighlightMarks, statuses: [UUID: Status], relocations: [UUID: Target]) {
+  /// Whether the build places highlights at all: a translation's does not.
+  public let isPlaced: Bool
+
+  init(
+    marks: HighlightMarks, statuses: [UUID: Status], relocations: [UUID: Target],
+    isPlaced: Bool = true
+  ) {
+    self.isPlaced = isPlaced
     self.marks = marks
     self.statuses = statuses
     self.relocations = relocations
@@ -37,12 +44,17 @@ public struct HighlightPlacement: Sendable, Equatable {
   /// `highlights` in `built`. A translation's build has no highlight drawn: its
   /// sentences are not the original's (#749).
   public init(_ highlights: [AnnotationSnapshot.HighlightEntry], in built: BuiltDocument) {
-    guard !built.isTranslation, !highlights.isEmpty else {
+    guard !built.isTranslation else {
+      self.init(marks: HighlightMarks([]), statuses: [:], relocations: [:], isPlaced: false)
+      return
+    }
+    guard !highlights.isEmpty else {
       self = .none
       return
     }
     let model = built.positions.model
     let relocator = Relocator(model)
+    let text = built.text.string as NSString
     var marks: [HighlightMark] = []
     var statuses: [UUID: Status] = [:]
     var relocations: [UUID: Target] = [:]
@@ -64,13 +76,11 @@ public struct HighlightPlacement: Sendable, Equatable {
       statuses[entry.id] = .placed(
         range, target, section: model.section(containing: range.lowerBound)?.anchor)
       if target != entry.current { relocations[entry.id] = target }
-      for drawn in built.positions.drawnRanges(forModel: range) {
+      for drawn in built.positions.drawnRanges(forModel: range, in: text) {
         marks.append(HighlightMark(range: drawn, color: entry.color, highlight: entry.id))
       }
     }
-    self.marks = HighlightMarks(marks)
-    self.statuses = statuses
-    self.relocations = relocations
+    self.init(marks: HighlightMarks(marks), statuses: statuses, relocations: relocations)
   }
 }
 
@@ -96,11 +106,22 @@ public struct HighlightMarks: Sendable, Equatable {
   }
 
   /// The marks that meet `range`, whole: where a mark starts and ends decides which of
-  /// its corners round, as a requirement band's does.
+  /// its corners round, as a requirement band's does. Two highlights may overlap, one
+  /// placed over another, so the ends are not in order: every mark that starts before
+  /// the range ends is looked at, which is few.
   public func marks(meeting range: NSRange) -> [HighlightMark] {
-    // Marks do not overlap, so the ends are in order too.
-    let first = marks.partitioningIndex { NSMaxRange($0.range) > range.location }
-    return Array(marks[first...].prefix { $0.range.location < NSMaxRange(range) })
+    marks.prefix { $0.range.location < NSMaxRange(range) }
+      .filter { NSMaxRange($0.range) > range.location }
+  }
+
+  /// The whole of a highlight as drawn, from its first mark to the end of its last:
+  /// what its popover points at and what Copy as Quote copies.
+  public func range(of highlight: UUID) -> NSRange? {
+    let own = marks.filter { $0.highlight == highlight }
+    guard let first = own.first, let end = own.map({ NSMaxRange($0.range) }).max() else {
+      return nil
+    }
+    return NSRange(location: first.range.location, length: end - first.range.location)
   }
 
   /// The highlight at storage offset `offset`, if any.

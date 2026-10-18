@@ -70,6 +70,17 @@ struct AnnotationStoreTests {
     #expect(entries.first?.color == .blue)
   }
 
+  @Test func `a highlight drawn nowhere is not merged into a new one`() throws {
+    let lost = try highlight("brown fox")
+    // Its quote is gone from where it was: detached, drawn nowhere.
+    let row = try #require(try context.fetch(FetchDescriptor<Highlight>()).first)
+    row.quoteExact = "nowhere in the text"
+    try context.save()
+    _ = try highlight("quick brown")
+    #expect(try snapshot().count == 2)
+    #expect(try snapshot().contains { $0.id == lost })
+  }
+
   @Test func `a highlight that only touches another is not merged`() throws {
     _ = try highlight("quick")
     _ = try highlight(" brown")

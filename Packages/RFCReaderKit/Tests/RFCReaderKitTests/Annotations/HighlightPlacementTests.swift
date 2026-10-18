@@ -82,8 +82,13 @@ struct HighlightPlacementTests {
     let built = DocumentTextBuilder.build(
       TranslatedDocument(document, [:]),
       style: ReadingStyle())
-    let highlight = try entry("MUST send", in: built.positions.model)
-    #expect(HighlightPlacement([highlight], in: built) == .none)
+    // Made in the original's text, which the translation's build has no map of.
+    let original = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let highlight = try entry("MUST send", in: original.positions.model)
+    let placement = HighlightPlacement([highlight], in: built)
+    #expect(built.positions.runs.isEmpty)
+    #expect(placement.marks.marks.isEmpty)
+    #expect(!placement.isPlaced)
   }
 
   /// Highlighting is drawn from the placement, never written into the build, which is
@@ -120,8 +125,20 @@ struct HighlightPlacementTests {
     let model = built.positions.model
     // From the heading's word through the first paragraph's first word.
     let target = try #require(Target(covering: 0..<5, in: model))
-    let drawn = built.positions.drawnRanges(forModel: try #require(target.range(in: model)))
+    let drawn = built.positions.drawnRanges(
+      forModel: try #require(target.range(in: model)), in: built.text.string as NSString)
     #expect(drawn.count == 1)
+  }
+
+  @Test func `a highlight over a figure's title and its artwork is two shapes`() throws {
+    let figure = Figure(
+      title: "Layout", number: 1,
+      blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))], anchor: "figure-1")
+    let built = DocumentTextBuilder.build(Fixtures.document(.figure(figure)), style: ReadingStyle())
+    let span = try #require(built.positions.model.span(of: "figure-1"))
+    let drawn = built.positions.drawnRanges(forModel: span.range, in: built.text.string as NSString)
+    let text = built.text.string as NSString
+    #expect(drawn.map { text.substring(with: $0) } == ["+--+", "Layout\n"])
   }
 
   @Test func `marks are found by the range they meet`() {
@@ -133,5 +150,19 @@ struct HighlightPlacementTests {
     #expect(marks.marks(meeting: NSRange(location: 12, length: 20)) == [first, second])
     #expect(marks.marks(meeting: NSRange(location: 15, length: 15)).isEmpty)
     #expect(marks.highlight(at: 31) == second)
+  }
+
+  @Test func `overlapping marks are all found, and a highlight's whole range`() {
+    let id = UUID()
+    let long = HighlightMark(
+      range: NSRange(location: 10, length: 90), color: .yellow, highlight: id)
+    let short = HighlightMark(
+      range: NSRange(location: 20, length: 10), color: .blue, highlight: UUID())
+    let tail = HighlightMark(
+      range: NSRange(location: 120, length: 5), color: .yellow, highlight: id)
+    let marks = HighlightMarks([short, tail, long])
+    #expect(marks.marks(meeting: NSRange(location: 40, length: 20)) == [long])
+    #expect(marks.highlight(at: 50) == long)
+    #expect(marks.range(of: id) == NSRange(location: 10, length: 115))
   }
 }

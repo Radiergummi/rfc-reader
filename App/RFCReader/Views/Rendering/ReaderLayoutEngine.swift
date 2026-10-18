@@ -20,6 +20,12 @@ import os
 /// RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   weak var textView: PlatformTextView?
+  /// The hosted header among the text view's subviews, which `redraw()` leaves alone.
+  #if canImport(UIKit)
+    weak var header: UIView?
+  #else
+    weak var header: NSView?
+  #endif
   private(set) var keeper = AnchorKeeper()
   private(set) var built: BuiltDocument?
   /// What the signposts name; see `Signposts`.
@@ -118,6 +124,20 @@ final class ReaderLayoutEngine: PinSurface {
       "Redraw", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     defer { signposter.endInterval("Redraw", interval) }
     layout.invalidateRenderingAttributes(for: layout.documentRange)
+    // The views TextKit draws the laid-out fragments in, which the text view's own
+    // display does not reach: a highlight made in view, or a band found, was drawn
+    // only once its paragraph was laid out again, as a run of the app showed (#522).
+    // Not the hosted header, which draws no text. Only those views are drawn again;
+    // nothing is laid out.
+    var views = textView.subviews.filter { $0 !== header }
+    while let view = views.popLast() {
+      #if canImport(UIKit)
+        view.setNeedsDisplay()
+      #else
+        view.needsDisplay = true
+      #endif
+      views += view.subviews
+    }
     #if canImport(UIKit)
       textView.setNeedsDisplay()
     #else

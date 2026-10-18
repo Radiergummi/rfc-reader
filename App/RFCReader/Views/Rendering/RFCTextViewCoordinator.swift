@@ -89,7 +89,9 @@ final class RFCTextViewCoordinator: NSObject {
   /// Retained deliberately: `UIHostingController().view` does not keep its
   /// controller alive, and a released controller takes trait propagation — and so
   /// Dynamic Type — with it.
-  var headerHost: PlatformHostingController<AnyView>?
+  var headerHost: PlatformHostingController<AnyView>? {
+    didSet { engine.header = headerHost?.view }
+  }
 
   /// What the hosted header currently displays; see `ReaderInputs.apply`.
   var headerIdentity: DocumentHeaderView.Identity?

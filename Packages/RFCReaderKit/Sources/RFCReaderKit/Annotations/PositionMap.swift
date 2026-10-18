@@ -32,6 +32,9 @@ public struct PositionMap: Sendable {
   /// The model text this build declares it does not show, sorted and apart.
   public let hidden: [Range<Int>]
 
+  /// A map of nothing: a translation's build's, which places no highlight.
+  static let empty = PositionMap(model: ModelText(units: [], spans: []), runs: [], hidden: [])
+
   init(model: ModelText, runs: [Run], hidden: [Range<Int>]) {
     self.model = model
     self.runs = runs.sorted { $0.storage < $1.storage }
@@ -96,16 +99,18 @@ public struct PositionMap: Sendable {
   }
 
   /// Where a model range is drawn as one shape each: `storageRanges(forModel:)`, with
-  /// two pieces joined where only the storage's own characters lie between them, such
-  /// as a chip's symbol, a list marker or a section number. A highlight across a
-  /// heading and the paragraph under it is then one fill, as it reads, and one over a
-  /// figure's title and its artwork stays two, the caption being far from the start.
-  public func drawnRanges(forModel range: Range<Int>) -> [NSRange] {
+  /// two pieces joined where only the storage's own characters lie between them on one
+  /// line, such as a chip's symbol or a list marker after a mapped line break. A
+  /// highlight over a figure's title and its artwork stays two, since what lies
+  /// between them, the artwork's last line break and the caption's label, crosses a
+  /// line. `text` is the build's.
+  public func drawnRanges(forModel range: Range<Int>, in text: NSString) -> [NSRange] {
     var joined: [NSRange] = []
     for piece in storageRanges(forModel: range) {
-      if let last = joined.last,
-        !mapsAny(in: NSRange(location: NSMaxRange(last), length: piece.location - NSMaxRange(last)))
-      {
+      let gap = joined.last.map {
+        NSRange(location: NSMaxRange($0), length: piece.location - NSMaxRange($0))
+      }
+      if let last = joined.last, let gap, !mapsAny(in: gap), !Self.breaksLine(gap, in: text) {
         joined[joined.count - 1] = NSRange(
           location: last.location, length: NSMaxRange(piece) - last.location)
       } else {
@@ -113,6 +118,13 @@ public struct PositionMap: Sendable {
       }
     }
     return joined
+  }
+
+  /// Whether `range` of `text` holds a line break or a line separator.
+  private static func breaksLine(_ range: NSRange, in text: NSString) -> Bool {
+    guard range.length > 0, NSMaxRange(range) <= text.length else { return false }
+    return text.rangeOfCharacter(from: CharacterSet(charactersIn: "\n\u{2028}"), range: range)
+      .location != NSNotFound
   }
 
   /// Whether any storage character in `range` maps to a model character.

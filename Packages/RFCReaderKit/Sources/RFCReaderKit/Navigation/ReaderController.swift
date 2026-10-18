@@ -133,8 +133,9 @@ public final class ReaderController {
   /// value, so that the same folding asked for twice reaches the scene twice.
   public private(set) var foldingRequest: Folding?
   /// What became of each highlight of the document in the build on screen (#522):
-  /// where it is, or why it is drawn nowhere. The Annotations tab lists it.
-  public private(set) var highlightStatuses: [UUID: HighlightPlacement.Status] = [:]
+  /// where it is, or why it is drawn nowhere. The Annotations tab lists it. Nil where
+  /// the build places none, as a translation's does.
+  public private(set) var highlightStatuses: [UUID: HighlightPlacement.Status]?
 
   public init() {}
 
@@ -165,7 +166,7 @@ public final class ReaderController {
   }
 
   /// Where the build on screen placed the document's highlights.
-  public func reportHighlights(_ statuses: [UUID: HighlightPlacement.Status]) {
+  public func reportHighlights(_ statuses: [UUID: HighlightPlacement.Status]?) {
     publish(.highlights(statuses))
   }
 
@@ -232,7 +233,7 @@ public final class ReaderController {
     case selection(Bool)
     case bars(Bool)
     case folding(Folding)
-    case highlights([UUID: HighlightPlacement.Status])
+    case highlights([UUID: HighlightPlacement.Status]?)
   }
 
   /// The one hop: what the coordinator reports from inside SwiftUI's update reaches

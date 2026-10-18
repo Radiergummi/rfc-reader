@@ -14,6 +14,8 @@ struct AnnotationsView: View {
   /// Where the build on screen placed each one; nil without a build, when only the
   /// stored quotes can be listed.
   let statuses: [UUID: HighlightPlacement.Status]?
+  /// Why they are not placed, when they are not.
+  let note: String?
   /// The sections the body holds, which name a row's section.
   let sections: [RFCKit.Section]
   let library: LibraryModel
@@ -30,8 +32,8 @@ struct AnnotationsView: View {
         description: Text("Select text in the document and choose Highlight."))
     } else {
       VStack(spacing: 0) {
-        if statuses == nil {
-          Text("The document is unavailable, so its highlights cannot be shown in it.")
+        if let note {
+          Text(verbatim: note)
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)

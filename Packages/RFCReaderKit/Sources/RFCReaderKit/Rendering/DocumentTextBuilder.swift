@@ -209,8 +209,7 @@ public final class DocumentTextBuilder {
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
         sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
-        positions: builder.positions?.map
-          ?? PositionMap(model: ModelText(document), runs: [], hidden: []))
+        positions: builder.positions?.map ?? .empty)
     }
   }
 
@@ -319,7 +318,11 @@ extension DocumentTextBuilder {
 
   func appendDocument(_ document: RFCDocument) {
     documentID = document.header.id
-    positions = PositionMap.Recorder(model: ModelText(document))
+    // A translation's sentences are not the original's, so it places no highlight
+    // and records no map (#749, #522).
+    if givenBacklinks == nil {
+      positions = PositionMap.Recorder(model: ModelText(document))
+    }
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })

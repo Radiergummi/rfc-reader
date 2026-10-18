@@ -57,35 +57,14 @@ extension RFCTextViewCoordinator {
     let changed = placement.marks != highlightPlacement.marks
     highlightPlacement = placement
     accessibilityHighlights = placement.marks.rotorItems()
-    controller?.reportHighlights(placement.statuses)
+    controller?.reportHighlights(placement.isPlaced ? placement.statuses : nil)
     if changed {
       foldingDelegate.highlight(placement.marks)
       // Drawn again, not laid out again: a highlight changes no line.
       engine.redraw()
-      redrawFragmentViews()
     }
     if !placement.relocations.isEmpty {
       environment?.library.recordHighlightRelocations(placement.relocations)
-    }
-  }
-
-  /// Marks the views TextKit draws the laid-out fragments in as needing display.
-  /// `ReaderLayoutEngine.redraw()` is not enough for a fragment already on screen:
-  /// the text view's own display does not reach the views its fragments are drawn
-  /// in, and invalidating the rendering attributes redisplays only what had some, so
-  /// a highlight made in view was drawn only once its paragraph was laid out again,
-  /// as a run of the app showed. Only those views are drawn again; nothing is laid out.
-  private func redrawFragmentViews() {
-    guard let textView else { return }
-    // Not the hosted header, which draws no text.
-    var views = textView.subviews.filter { $0 !== headerHost?.view }
-    while let view = views.popLast() {
-      #if canImport(UIKit)
-        view.setNeedsDisplay()
-      #else
-        view.needsDisplay = true
-      #endif
-      views += view.subviews
     }
   }
 
@@ -132,12 +111,9 @@ extension RFCTextViewCoordinator {
     return [last] + HighlightColor.allCases.filter { $0 != last }
   }
 
-  /// The whole of the highlight drawn at `offset`: from its first mark to its last.
+  /// The whole of a highlight as drawn (`HighlightMarks.range(of:)`).
   func highlightRange(of identifier: UUID) -> NSRange? {
-    let marks = highlightPlacement.marks.marks.filter { $0.highlight == identifier }
-    guard let first = marks.first, let last = marks.last else { return nil }
-    return NSRange(
-      location: first.range.location, length: NSMaxRange(last.range) - first.range.location)
+    highlightPlacement.marks.range(of: identifier)
   }
 
   /// What the popover of the highlight at `offset` shows and does.

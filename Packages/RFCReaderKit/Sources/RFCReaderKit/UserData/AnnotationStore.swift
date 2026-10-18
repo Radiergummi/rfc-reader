@@ -40,9 +40,13 @@ public enum AnnotationStore {
   ) throws -> UUID {
     let context = edit.context
     let rows = try highlights(of: document, in: context)
+    // Where each is now, as the reader draws it: one drawn nowhere, ambiguous or
+    // detached, is not merged with what overlaps its stale position, and one that
+    // moved is merged where it went.
+    let relocator = Relocator(model)
     let existing = rows.compactMap { row -> HighlightMerge.Existing? in
       guard let entry = AnnotationSnapshot.HighlightEntry(row: row),
-        let range = entry.current.range(in: model)
+        let range = relocator.relocate(entry.current).target?.range(in: model)
       else { return nil }
       return HighlightMerge.Existing(
         identifier: row.identifier, range: range, createdAt: row.createdAt)

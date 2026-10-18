@@ -123,24 +123,26 @@ struct DocumentInspector: View {
     // The highlights are the reader's, not the document's: listed by their quotes
     // whether or not the document is here to place them in.
     if tab == .annotations, content != .loading {
-      annotations(placed: content == .lists)
+      annotations()
     } else {
       selectedTab(content)
     }
   }
 
-  @ViewBuilder
-  private func annotations(placed: Bool) -> some View {
+  /// Placed where the reader's text has placed them; otherwise their stored quotes,
+  /// and why they are not placed: the document is not here, or what is shown is not
+  /// its own text but the original or a translation.
+  private func annotations() -> some View {
     let highlights = document.map { library.annotations.highlights(of: $0) } ?? []
-    if placed, highlightStatuses == nil, !highlights.isEmpty {
-      // The build places them a moment after it shows.
-      ProgressView()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      AnnotationsView(
-        highlights: highlights, statuses: placed ? highlightStatuses : nil, sections: sections,
-        library: library, select: selectSection)
-    }
+    let note: String? =
+      highlightStatuses != nil
+      ? nil
+      : hasBody && publishedOriginal == nil
+        ? String(localized: "Highlights are shown in the document's own text.")
+        : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
+    return AnnotationsView(
+      highlights: highlights, statuses: highlightStatuses, note: note, sections: sections,
+      library: library, select: selectSection)
   }
 
   @ViewBuilder
@@ -195,7 +197,7 @@ struct DocumentInspector: View {
     case .requirements:
       RequirementsView(requirements: requirements, document: document, select: selectSection)
     case .annotations:
-      annotations(placed: true)
+      annotations()
     }
   }
 

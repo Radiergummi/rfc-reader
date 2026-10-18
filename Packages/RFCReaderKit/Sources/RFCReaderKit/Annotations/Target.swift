@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Synchronization
 
 /// What an annotation is on (#522): a whole section, or a span of the model text from
 /// one position to another, possibly across blocks, with the quote it covered, which
@@ -125,11 +126,25 @@ public enum Relocation: Sendable, Hashable {
 /// guesses between candidates by nearness.
 public struct Relocator: Sendable {
   public let model: ModelText
-  private let normalized: TextNormalization
+  /// The whole text normalized, made the first time a target has to be searched for:
+  /// most are where they were, and need only their own text normalized.
+  private let lazyNormalized = LazyNormalization()
+
+  private final class LazyNormalization: Sendable {
+    let value = Mutex<TextNormalization?>(nil)
+  }
+
+  private var normalized: TextNormalization {
+    lazyNormalized.value.withLock { cached in
+      if let cached { return cached }
+      let made = TextNormalization(model.units)
+      cached = made
+      return made
+    }
+  }
 
   public init(_ model: ModelText) {
     self.model = model
-    normalized = TextNormalization(model.units)
   }
 
   /// A quote of fewer characters than this must match both its prefix and its suffix.
@@ -184,6 +199,7 @@ public struct Relocator: Sendable {
     let prefix = TextNormalization(Array(quote.prefix.utf16)).trimmed
     let suffix = TextNormalization(Array(quote.suffix.utf16)).trimmed
     let isShort = exact.count < Self.shortQuote
+    let normalized = normalized
     let units = normalized.units
     var found: [Range<Int>] = []
     // The units come in the raw text's order, so the scope is one stretch of them.
@@ -312,11 +328,15 @@ struct TextNormalization: Sendable {
 
   /// `RFC2119` for `[RFC2119]`, `RFC 2119` or `RFC2119` at `index`; nil anywhere else.
   private static func reference(in raw: [UInt16], at index: Int) -> Reference? {
+    // Most characters are neither a bracket nor an R, and are passed at once.
+    guard raw[index] == 0x5B || raw[index] == 0x52 else { return nil }
     var cursor = index
     let opens = raw[cursor] == 0x5B
     if opens { cursor += 1 }
     let letters: [UInt16] = [0x52, 0x46, 0x43]  // RFC
-    guard cursor + 3 <= raw.count, Array(raw[cursor..<cursor + 3]) == letters else { return nil }
+    guard cursor + 3 <= raw.count, raw[cursor] == letters[0], raw[cursor + 1] == letters[1],
+      raw[cursor + 2] == letters[2]
+    else { return nil }
     var units = letters
     var sources = [cursor, cursor + 1, cursor + 2]
     cursor += 3

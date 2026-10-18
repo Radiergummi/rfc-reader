@@ -874,6 +874,8 @@ struct DocumentView: View {
     // The section it is in, which reinstating cleared, and which the controller
     // publishes only as it changes.
     if let anchor = controller.section { showSection(anchor) }
+    // Where its build placed the highlights, which reinstating cleared too (#522).
+    writer.highlightStatuses = controller.highlightStatuses
     updateFolding()
   }
 
