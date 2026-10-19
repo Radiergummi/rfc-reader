@@ -28,7 +28,9 @@ struct ReaderSettingsTests {
     #expect(settings.preferOriginalText == ReaderPreferences.defaultPreferOriginalText)
     #expect(settings.drawDiagrams == ReaderPreferences.defaultDrawDiagrams)
     #expect(settings.syntaxTheme.id == ReaderPreferences.defaultSyntaxTheme)
-    #expect(settings.palette.id == ReaderPreferences.defaultPalette)
+    #expect(settings.appearance == ReaderPreferences.defaultAppearance)
+    #expect(settings.lightPalette.id == ReaderPreferences.defaultPalette)
+    #expect(settings.darkPalette.id == ReaderPreferences.defaultPalette)
     #expect(settings.vimKeys == ReaderPreferences.defaultVimKeys)
     #expect(settings.tabsThroughLinks == ReaderPreferences.defaultTabsThroughLinks)
     #expect(settings.citationStyle == .markdown)
@@ -72,6 +74,9 @@ struct ReaderSettingsTests {
       defaults.set(MeasurePreference.fullWidth.rawValue, forKey: ReaderPreferences.measureKey)
       defaults.set(true, forKey: ReaderPreferences.preferOriginalTextKey)
       defaults.set(false, forKey: ReaderPreferences.drawDiagramsKey)
+      defaults.set(AppearancePreference.dark.rawValue, forKey: ReaderPreferences.appearanceKey)
+      defaults.set(ReaderPalette.sepia.id, forKey: ReaderPreferences.lightPaletteKey)
+      defaults.set(ReaderPalette.black.id, forKey: ReaderPreferences.darkPaletteKey)
       defaults.set(true, forKey: ReaderPreferences.vimKeysKey)
       defaults.set(true, forKey: ReaderPreferences.tabsThroughLinksKey)
 
@@ -81,6 +86,9 @@ struct ReaderSettingsTests {
       #expect(settings.measure == .fullWidth)
       #expect(settings.preferOriginalText)
       #expect(!settings.drawDiagrams)
+      #expect(settings.appearance == .dark)
+      #expect(settings.lightPalette == .sepia)
+      #expect(settings.darkPalette == .black)
       #expect(settings.vimKeys)
       #expect(settings.tabsThroughLinks)
     }
@@ -94,7 +102,9 @@ struct ReaderSettingsTests {
       defaults.set("yes", forKey: ReaderPreferences.underlineLinksKey)
       defaults.set("narrow", forKey: ReaderPreferences.measureKey)
       defaults.set("solarized-2031", forKey: ReaderPreferences.syntaxThemeKey)
-      defaults.set("tartan", forKey: ReaderPreferences.paletteKey)
+      defaults.set("dusk", forKey: ReaderPreferences.appearanceKey)
+      defaults.set("tartan", forKey: ReaderPreferences.lightPaletteKey)
+      defaults.set(7, forKey: ReaderPreferences.darkPaletteKey)
 
       #expect(ReaderSettings(defaults: defaults) == ReaderSettings())
     }
@@ -119,6 +129,9 @@ struct ReaderSettingsTests {
       settings.measure = .fullWidth
       settings.preferOriginalText = true
       settings.drawDiagrams = false
+      settings.appearance = .light
+      settings.lightPalette = .gray
+      settings.darkPalette = .night
       settings.vimKeys = true
       settings.tabsThroughLinks = true
       settings.citationStyle = .bibtex
@@ -128,6 +141,41 @@ struct ReaderSettingsTests {
       settings.write(to: defaults, replacing: ReaderSettings())
       #expect(ReaderSettings(defaults: defaults) == settings)
     }
+  }
+
+  /// A theme is drawn only in an appearance it belongs to: one of the other
+  /// appearance stored for this one reads as the automatic theme (#704).
+  @Test func `a theme of the other appearance falls back to automatic`() throws {
+    try withDefaults { defaults in
+      defaults.set(ReaderPalette.black.id, forKey: ReaderPreferences.lightPaletteKey)
+      defaults.set(ReaderPalette.sepia.id, forKey: ReaderPreferences.darkPaletteKey)
+      let settings = ReaderSettings(defaults: defaults)
+      #expect(settings.lightPalette == .automatic)
+      #expect(settings.darkPalette == .automatic)
+    }
+  }
+
+  /// The appearance the app is drawn in picks the light theme or the dark one, and
+  /// High Contrast, which has both, can be either (#704).
+  @Test func `the effective appearance picks the light or the dark theme`() {
+    let settings = ReaderSettings(lightPalette: .sepia, darkPalette: .highContrast)
+    #expect(settings.palette(for: .light) == .sepia)
+    #expect(settings.palette(for: .dark) == .highContrast)
+    #expect(ReaderSettings().palette(for: .light) == .automatic)
+    #expect(ReaderSettings().palette(for: .dark) == .automatic)
+  }
+
+  /// System follows the system's appearance; Light and Dark force theirs whatever
+  /// the system's is.
+  @Test func `the appearance override decides the effective appearance`() {
+    for system in PaletteAppearance.allCases {
+      #expect(AppearancePreference.system.effective(system: system) == system)
+      #expect(AppearancePreference.light.effective(system: system) == .light)
+      #expect(AppearancePreference.dark.effective(system: system) == .dark)
+    }
+    #expect(AppearancePreference.system.forced == nil)
+    #expect(PaletteAppearance(ColorScheme.dark) == .dark)
+    #expect(PaletteAppearance(ColorScheme.light) == .light)
   }
 
   /// A setting the reader never touched stays unstored, and so follows its default
@@ -140,7 +188,9 @@ struct ReaderSettingsTests {
       #expect(defaults.object(forKey: ReaderPreferences.underlineLinksKey) != nil)
       #expect(defaults.object(forKey: ReaderPreferences.fontSizeKey) == nil)
       #expect(defaults.object(forKey: ReaderPreferences.syntaxThemeKey) == nil)
-      #expect(defaults.object(forKey: ReaderPreferences.paletteKey) == nil)
+      #expect(defaults.object(forKey: ReaderPreferences.appearanceKey) == nil)
+      #expect(defaults.object(forKey: ReaderPreferences.lightPaletteKey) == nil)
+      #expect(defaults.object(forKey: ReaderPreferences.darkPaletteKey) == nil)
     }
   }
 
@@ -162,9 +212,9 @@ struct ReaderSettingsTests {
   @Test func `the palette is not part of the style`() {
     let settings = ReaderSettings()
     var repainted = settings
-    repainted.palette = ReaderPalette(
-      id: "test", cardFill: RFCColors.label, asideFill: RFCColors.label, rule: RFCColors.label,
-      stroke: RFCColors.label, chipTint: RFCColors.label)
+    repainted.appearance = .dark
+    repainted.lightPalette = .sepia
+    repainted.darkPalette = .black
     #expect(
       settings.style(column: 500, textSize: .large)
         == repainted.style(column: 500, textSize: .large))
