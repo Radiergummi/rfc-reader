@@ -39,8 +39,16 @@ final class NavigationModel: Identifiable {
   }
   /// What is typed into search. The list follows `appliedQuery`, not this.
   var searchText = "" {
-    didSet { followSearchText(pausing: true) }
+    didSet {
+      // A search cleared, which Go to RFC's tip counts unless it was committed (#782).
+      if searches.changed(from: oldValue, to: searchText) {
+        ReaderTips.searchTyped.sendDonation()
+      }
+      followSearchText(pausing: true)
+    }
   }
+  /// The searches made, for Go to RFC's tip (#782).
+  @ObservationIgnored private var searches = ReaderTips.Searches()
   /// The search text, trimmed, once typing pauses (#124): what the list is asked to
   /// search for. Read only to make the list; views read `appliedQuery`.
   private var requestedQuery = ""
@@ -359,6 +367,13 @@ final class NavigationModel: Identifiable {
   /// rows are made.
   func applySearchWithoutPause() {
     followSearchText(pausing: false)
+  }
+
+  /// Return in the field, or a suggestion taken: the search applied at once, and
+  /// counted for Go to RFC's tip (#782).
+  func commitSearch() {
+    if searches.committed(searchText) { ReaderTips.searchTyped.sendDonation() }
+    applySearchWithoutPause()
   }
 
   /// Sets the search text and applies it before returning, searching on the main

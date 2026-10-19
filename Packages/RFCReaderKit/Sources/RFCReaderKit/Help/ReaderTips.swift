@@ -12,7 +12,8 @@ public enum ReaderTips {
   /// A citation of another RFC followed from the reader, which is when Back first
   /// has somewhere to go.
   public static let citationFollowed = Tips.Event(id: "citationFollowed")
-  /// A search typed into the library's search field (`startsSearch`).
+  /// A search made in the library's search field, counted once it is done with
+  /// (`Searches`).
   public static let searchTyped = Tips.Event(id: "searchTyped")
 
   /// The defaults key that has the tips reset at the next launch: Developer ▸ Reset
@@ -22,20 +23,42 @@ public enum ReaderTips {
 
   /// Configures TipKit, once at launch and before any tip is shown, resetting the
   /// tips first when asked to. Both throw only when TipKit is configured already,
-  /// which a second call would be, so there is nothing to recover from.
+  /// which a second call would be, so there is nothing to recover from. One tip a
+  /// day at most, so two that fall due together are not on screen at once.
   @MainActor
   public static func configure(defaults: UserDefaults = .standard) {
     if defaults.bool(forKey: resetAtLaunchKey) {
       defaults.removeObject(forKey: resetAtLaunchKey)
       try? Tips.resetDatastore()
     }
-    try? Tips.configure()
+    try? Tips.configure([.displayFrequency(.daily)])
   }
 
-  /// Whether an edit of the search field starts a search: the field had no words and
-  /// now has some. Counting every keystroke would count letters, not searches.
-  public static func startsSearch(from old: String, to new: String) -> Bool {
-    old.allSatisfy(\.isWhitespace) && !new.allSatisfy(\.isWhitespace)
+  /// Counts the searches made in the library's search field, for Go to RFC's tip:
+  /// each once it is done with, when it is committed (Return, or a suggestion
+  /// taken) or, never committed, when it is cleared. Not as it starts, which would
+  /// open the tip over the field on the first keystroke; and once, however often it
+  /// is refined and committed again before it is cleared.
+  public struct Searches: Sendable {
+    /// Whether the search in the field has been counted already.
+    private var counted = false
+
+    public init() {}
+
+    /// Whether committing `query` counts a search.
+    public mutating func committed(_ query: String) -> Bool {
+      guard !query.allSatisfy(\.isWhitespace), !counted else { return false }
+      counted = true
+      return true
+    }
+
+    /// Whether an edit of the search from `old` to `new` counts a search: one
+    /// cleared that was never committed.
+    public mutating func changed(from old: String, to new: String) -> Bool {
+      guard new.allSatisfy(\.isWhitespace) else { return false }
+      defer { counted = false }
+      return !old.allSatisfy(\.isWhitespace) && !counted
+    }
   }
 }
 

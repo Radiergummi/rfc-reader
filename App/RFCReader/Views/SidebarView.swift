@@ -86,7 +86,7 @@ struct SidebarView: View {
       // Just "Search…": the syntax is taught by the filters an empty field suggests
       // (#781).
       .filterSearchable(navigation: navigation, prompt: String(localized: "Search…"))
-      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
+      .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
