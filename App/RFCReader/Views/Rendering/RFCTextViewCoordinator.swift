@@ -40,9 +40,19 @@ final class RFCTextViewCoordinator: NSObject {
           attributes: textView?.linkTextAttributes ?? [:], caption: [.cursor: NSCursor.arrow])
       #endif
       linkAttributes.withLock { $0 = attributes }
+      #if !canImport(UIKit)
+        systemSelection = textView?.selectedTextAttributes ?? [:]
+      #endif
+      textView?.textLayoutManager?.renderingAttributesValidator = Self.recoloring(with: paletteBox)
       setUpAccessibilityRotors()
     }
   }
+
+  #if !canImport(UIKit)
+    /// The text view's own selection attributes, which a page theme's selection
+    /// color replaces the background of, and the automatic palette restores.
+    private var systemSelection: [NSAttributedString.Key: Any] = [:]
+  #endif
 
   /// The text view's own link attributes, taken when it is handed over, after it is
   /// configured. A layout manager whose delegate answers for a link's rendering
@@ -55,19 +65,69 @@ final class RFCTextViewCoordinator: NSObject {
   /// lights up. Behind a lock for the reason `linkAttributes` is.
   nonisolated let hoveredSectionNumber = Mutex<NSRange?>(nil)
 
-  /// The colors this reader's fragments draw their decoration in: the reader's
-  /// palette setting (#703). A box the fragments keep, so that `apply(palette:outlinesEveryChip:)`
-  /// recolors the ones already laid out rather than laying them out again.
+  /// The colors this reader draws its page, text and decoration in: the page theme
+  /// for the appearance it is drawn in (#703, #704). A box the fragments and the
+  /// rendering attributes' validator keep, so that `apply(palette:outlinesEveryChip:)`
+  /// recolors what is already laid out rather than laying it out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
-  /// Draws the decoration in `palette` from now on, and redraws what is on screen
-  /// if it changed. Never a layout: a palette is the draw-time half of the settings,
-  /// and costs neither a rebuild nor the reader's place. So is Increase Contrast,
-  /// which outlines every chip (#457).
+  /// Draws the page, the text and the decoration in `palette` from now on, and
+  /// redraws what is on screen if it changed. Never a layout: a palette is the
+  /// draw-time half of the settings, and costs neither a rebuild nor the reader's
+  /// place. So is Increase Contrast, which outlines every chip (#457).
   func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
-    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip) else { return }
-    // The laid-out fragments are rendered again, which reads the box.
+    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView
+    else { return }
+    // The laid-out fragments are rendered again, which reads the box, and their
+    // rendering attributes validated again, which recolors the text
+    // (`recoloring(with:)`).
     engine.redraw()
+    drawPage(palette, in: textView)
+    if let header, let environment {
+      headerHost?.rootView = hostedHeader(header, in: environment)
+    }
+  }
+
+  /// The page behind the text, and on macOS the selection, in `palette`'s colors:
+  /// none and the system's under the automatic palette, as the reader always had.
+  private func drawPage(_ palette: ReaderPalette, in textView: PlatformTextView) {
+    #if canImport(UIKit)
+      textView.backgroundColor = palette.pageBackground ?? .clear
+    #else
+      // The scroll view rather than the text view, which is only as tall as the
+      // text and stops short of a short document's end.
+      if let scroll = textView.enclosingScrollView {
+        scroll.backgroundColor = palette.pageBackground ?? .clear
+        scroll.drawsBackground = palette.pageBackground != nil
+      }
+      var selection = systemSelection
+      if let highlight = palette.selection { selection[.backgroundColor] = highlight }
+      textView.selectedTextAttributes = selection
+    #endif
+  }
+
+  /// What sets the text's rendering attributes as TextKit draws each fragment: the
+  /// runs `ReaderPalette.recoloredRuns(in:range:)` names, in the palette's colors
+  /// over the stored ones, which the builder keeps writing as the system's (#704).
+  /// Nothing under the automatic palette, but taking away what another left.
+  ///
+  /// Made here, outside the main actor, because TextKit may validate off the main
+  /// thread, as it lays out; it reads the box, the storage and the layout manager
+  /// it is handed, as the fragments do.
+  nonisolated private static func recoloring(with box: ReaderPaletteBox)
+    -> (NSTextLayoutManager, NSTextLayoutFragment) -> Void
+  {
+    { layoutManager, fragment in
+      layoutManager.removeRenderingAttribute(.foregroundColor, for: fragment.rangeInElement)
+      let palette = box.palette
+      guard !palette.drawsStoredColors, let text = layoutManager.attributedText,
+        let range = layoutManager.range(of: fragment.rangeInElement)
+      else { return }
+      for run in palette.recoloredRuns(in: text, range: range) {
+        guard let textRange = layoutManager.textRange(for: run.range) else { continue }
+        layoutManager.addRenderingAttribute(.foregroundColor, value: run.color, for: textRange)
+      }
+    }
   }
 
   /// A text view's link attributes, the same for a link on a card (#694), and what
@@ -95,6 +155,8 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// What the hosted header currently displays; see `ReaderInputs.apply`.
   var headerIdentity: DocumentHeaderView.Identity?
+  /// The header last handed over, hosted again when the palette changes.
+  var header: AnyView?
 
   /// Retained for the same reason as `headerHost`: the iOS long-press preview's
   /// hosting controller — a card's or a document's — must outlive the
@@ -235,17 +297,18 @@ final class RFCTextViewCoordinator: NSObject {
   /// (`ReaderLayout.containerReach`), which moves the column when it changes.
   var laidOutReach: CGFloat?
 
-  /// The header as hosted: given `environment`, and on iOS with a tap on its blank
-  /// space for the bars.
+  /// The header as hosted: given `environment`, in the page theme's text and link
+  /// colors (#704), and on iOS with a tap on its blank space for the bars.
   func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
+    let themed = AnyView(header.readerPalette(paletteBox.palette))
     #if canImport(UIKit)
-      AnyView(
-        header
+      return AnyView(
+        themed
           .contentShape(.rect)
           .onTapGesture { [weak self] in self?.bars.tappedHeader() }
           .readerEnvironment(environment))
     #else
-      AnyView(header.readerEnvironment(environment))
+      return AnyView(themed.readerEnvironment(environment))
     #endif
   }
 
@@ -701,11 +764,13 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
+    let onCard = textLayoutManager.drawsCard(at: location)
     return LinkRendering.attributes(
       for: link,
-      defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
+      defaults: onCard ? textView.card : textView.attributes,
       caption: textView.caption,
       sectionNumber: textLayoutManager.sectionNumberState(
-        at: location, hovered: hoveredSectionNumber.withLock { $0 }))
+        at: location, hovered: hoveredSectionNumber.withLock { $0 }),
+      palette: paletteBox.palette, onCard: onCard)
   }
 }

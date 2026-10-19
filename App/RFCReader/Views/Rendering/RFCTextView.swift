@@ -18,6 +18,8 @@ struct RFCTextView: View {
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
   @Environment(\.colorSchemeContrast) private var contrast
+  /// Which page theme is drawn: the light one or the dark one (#704).
+  @Environment(\.colorScheme) private var colorScheme
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -67,7 +69,7 @@ struct RFCTextView: View {
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
         // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
-        palette: settings.palette,
+        palette: settings.palette(for: PaletteAppearance(colorScheme)),
         outlinesEveryChip: contrast == .increased,
         // Read here, where it is observed: a highlight made or changed draws again.
         highlights: library.annotations.highlights(of: inputs.documentID),
@@ -138,6 +140,7 @@ struct ReaderInputs {
       coordinator.bars.setEnabled(hidesChrome)
     #endif
     coordinator.environment = environment
+    coordinator.header = header
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
     // this runs on every update pass — including one per section crossing while

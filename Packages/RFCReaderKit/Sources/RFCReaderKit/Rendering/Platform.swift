@@ -27,21 +27,25 @@ import CoreText
 /// Dynamic colors, stored in the attributed string unresolved so that a change of
 /// appearance or accent costs a redraw rather than a rebuild of the whole document.
 public enum RFCColors {
-  public static var label: PlatformColor {
+  /// One instance, kept, so that a text view finds the runs the builder stored it
+  /// in by identity, to draw them in a page theme's text color
+  /// (`ReaderPalette.foreground(for:)`).
+  public static let label: PlatformColor = {
     #if canImport(UIKit)
       .label
     #else
       .labelColor
     #endif
-  }
+  }()
 
-  public static var secondaryLabel: PlatformColor {
+  /// One instance, kept, for the reason `label` is.
+  public static let secondaryLabel: PlatformColor = {
     #if canImport(UIKit)
       .secondaryLabel
     #else
       .secondaryLabelColor
     #endif
-  }
+  }()
 
   public static var accent: PlatformColor {
     #if canImport(UIKit)
