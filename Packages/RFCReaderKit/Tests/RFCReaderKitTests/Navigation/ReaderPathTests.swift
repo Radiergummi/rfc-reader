@@ -22,8 +22,8 @@ struct ReaderPathTests {
     HistoryEntry(id: .rfc(number), section: section, arrival: .citation)
   }
 
-  private func documents(_ history: NavigationHistory) -> [DocumentID] {
-    ReaderPath(history).readers.map(\.id)
+  private func documents(_ history: NavigationHistory) -> [DocumentID?] {
+    ReaderPath(history).readers.map(\.document.rfc)
   }
 
   /// RFC 9110, a citation of RFC 9111 in it, and a citation of RFC 9112 in that.
@@ -39,8 +39,19 @@ struct ReaderPathTests {
 
   @Test func `each citation followed pushes a reader`() {
     let path = ReaderPath(chain())
-    #expect(path.readers.map(\.id) == [.rfc(9110), .rfc(9111), .rfc(9112)])
+    #expect(path.readers.map(\.document.rfc) == [.rfc(9110), .rfc(9111), .rfc(9112)])
     #expect(path.readers.map(\.depth) == [0, 1, 2])
+  }
+
+  /// A draft cited in an RFC is a reader of its own, pushed as an RFC's is (#728).
+  @Test func `a draft followed from a reader pushes a reader`() throws {
+    let draft = ReadableDocument.draft(try #require(DraftID(parsing: "draft-ietf-quic-http-34")))
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: HistoryEntry(document: draft, arrival: .citation))
+    let path = ReaderPath(history)
+    #expect(path.readers.map(\.document) == [.rfc(.rfc(9110)), draft])
+    #expect(path.isTop(draft, at: 1))
   }
 
   @Test func `a jump within a document pushes no reader`() {
@@ -57,7 +68,7 @@ struct ReaderPathTests {
     var history = chain()
     history.go(to: place(8446))
     let path = ReaderPath(history)
-    #expect(path.readers.map(\.id) == [.rfc(8446)])
+    #expect(path.readers.map(\.document.rfc) == [.rfc(8446)])
     #expect(path.readers.map(\.depth) == [0])
   }
 
@@ -72,7 +83,7 @@ struct ReaderPathTests {
     var history = chain()
     history.go(to: cited(9110))
     let path = ReaderPath(history)
-    #expect(path.readers.map(\.id) == [.rfc(9110), .rfc(9111), .rfc(9112), .rfc(9110)])
+    #expect(path.readers.map(\.document.rfc) == [.rfc(9110), .rfc(9111), .rfc(9112), .rfc(9110)])
     #expect(path.readers.first != path.readers.last)
   }
 
@@ -119,7 +130,7 @@ struct ReaderPathTests {
     let before = ReaderPath(history)
     history.goBack()
     let after = ReaderPath(history)
-    #expect(after.readers.map(\.id) == [.rfc(9110), .rfc(9111)])
+    #expect(after.readers.map(\.document.rfc) == [.rfc(9110), .rfc(9111)])
     #expect(before.pops(to: after))
   }
 
@@ -139,7 +150,7 @@ struct ReaderPathTests {
     let before = ReaderPath(history)
     history.goBack()
     let after = ReaderPath(history)
-    #expect(after.readers.map(\.id) == [.rfc(9110), .rfc(9111), .rfc(9112)])
+    #expect(after.readers.map(\.document.rfc) == [.rfc(9110), .rfc(9111), .rfc(9112)])
     #expect(!before.pops(to: after))
   }
 
@@ -207,19 +218,19 @@ struct ReaderPathTests {
 
   @Test func `the top reader is the one on screen`() {
     let path = ReaderPath(chain())
-    #expect(path.isTop(.rfc(9112), at: 2))
-    #expect(!path.isTop(.rfc(9111), at: 1), "below the top")
-    #expect(!path.isTop(.rfc(9111), at: 2), "another document at that depth")
-    #expect(!ReaderPath(NavigationHistory()).isTop(.rfc(9112), at: 0))
+    #expect(path.isTop(.rfc(.rfc(9112)), at: 2))
+    #expect(!path.isTop(.rfc(.rfc(9111)), at: 1), "below the top")
+    #expect(!path.isTop(.rfc(.rfc(9111)), at: 2), "another document at that depth")
+    #expect(!ReaderPath(NavigationHistory()).isTop(.rfc(.rfc(9112)), at: 0))
   }
 
   @Test func `the stack holds the readers on it, on top or below`() {
     let path = ReaderPath(chain())
-    #expect(path.holds(.rfc(9110), at: 0))
-    #expect(path.holds(.rfc(9112), at: 2))
-    #expect(!path.holds(.rfc(9110), at: 2))
-    #expect(!path.holds(.rfc(9110), at: 3), "deeper than the stack")
-    #expect(!path.holds(.rfc(9110), at: -1))
+    #expect(path.holds(.rfc(.rfc(9110)), at: 0))
+    #expect(path.holds(.rfc(.rfc(9112)), at: 2))
+    #expect(!path.holds(.rfc(.rfc(9110)), at: 2))
+    #expect(!path.holds(.rfc(.rfc(9110)), at: 3), "deeper than the stack")
+    #expect(!path.holds(.rfc(.rfc(9110)), at: -1))
   }
 
   // MARK: - How it was arrived at

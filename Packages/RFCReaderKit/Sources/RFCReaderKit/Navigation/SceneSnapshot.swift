@@ -11,7 +11,7 @@ import Foundation
 public struct SceneSnapshot: Codable, Equatable, Sendable {
   /// Raised whenever what is kept changes shape, so a snapshot an older build wrote
   /// starts the tab afresh rather than failing to make it.
-  public static let version = 2
+  public static let version = 3
   /// How many places of its history a tab keeps: the current one and those nearest it.
   public static let historyLimit = 50
 

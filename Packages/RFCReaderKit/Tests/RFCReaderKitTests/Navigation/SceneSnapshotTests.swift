@@ -29,6 +29,18 @@ struct SceneSnapshotTests {
     #expect(SceneSnapshot.decoded(from: data) == snapshot)
   }
 
+  /// A draft read in the tab comes back with it, as an RFC does (#728).
+  @Test func `a draft in the history reads back as it was written`() throws {
+    var navigation = history(through: [9110])
+    let draft = try #require(DraftID(parsing: "draft-ietf-quic-http-34"))
+    navigation.go(to: HistoryEntry(document: .draft(draft), section: "section-4"))
+    let snapshot = SceneSnapshot(history: navigation.snapshot(), filter: .all)
+    let data = try #require(snapshot.encoded())
+    let restored = try #require(SceneSnapshot.decoded(from: data))
+    #expect(restored == snapshot)
+    #expect(NavigationHistory(restored.history).current?.document == .draft(draft))
+  }
+
   /// A Mac window comes back with its panel, its pane and its columns (#762).
   @Test func `a window's layout reads back as it was written`() throws {
     let layout = WindowLayout(

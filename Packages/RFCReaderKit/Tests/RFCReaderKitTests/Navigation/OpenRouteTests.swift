@@ -117,4 +117,34 @@ struct OpenRouteTests {
       RFCLink(id: .rfc(9110), anchor: "page-12"), selected: .rfc(9110), shown: .rfc(9110))
     #expect(!route.reveals(selected: .rfc(9110), among: []))
   }
+
+  // MARK: - Drafts (#728)
+
+  private let draft = DraftID(parsing: "draft-ietf-quic-http-34")!
+
+  @Test func `a section of the draft on screen is a jump, and reveals no row`() {
+    let route = OpenRoute.route(
+      .draft(DraftLink(id: draft, section: "4.2")), selected: .draft(draft), shown: .draft(draft))
+    #expect(route == .jump(place: "4.2", reveals: false))
+  }
+
+  @Test func `a draft from an RFC is a navigation, and reveals no row`() {
+    let route = OpenRoute.route(
+      .draft(DraftLink(id: draft)), arrival: .citation, selected: .rfc(.rfc(9114)),
+      shown: .rfc(.rfc(9114)))
+    #expect(route == .navigate(HistoryEntry(document: .draft(draft), arrival: .citation)))
+    #expect(!route.reveals)
+    #expect(route.row(selected: .rfc(9114)) == nil)
+  }
+
+  /// The newest of a draft is not the revision on screen, even when it is that
+  /// revision: which it is is the store's to say, and a jump in another revision
+  /// would land in the wrong text.
+  @Test func `the newest of the draft on screen is a navigation`() {
+    let route = OpenRoute.route(
+      .draft(DraftLink(id: draft.at(revision: nil)!, section: "4.2")), selected: .draft(draft),
+      shown: .draft(draft))
+    #expect(
+      route == .navigate(HistoryEntry(document: .draft(draft.at(revision: nil)!), section: "4.2")))
+  }
 }

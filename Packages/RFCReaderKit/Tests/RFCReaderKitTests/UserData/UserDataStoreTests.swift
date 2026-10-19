@@ -259,6 +259,22 @@ struct UserDataStoreTests {
     #expect(try ReadingPositionStore.position(for: bcp, in: context)?.place?.anchor == "section-2")
   }
 
+  /// Each revision of a draft keeps its own place (#728), and none of them is listed
+  /// as an RFC read.
+  @Test func `a draft's revision keeps a place, and is no RFC read`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let draft = ReadableDocument.draft(try #require(DraftID(parsing: "draft-ietf-quic-http-34")))
+    let place = ReadingPlace(anchor: "section-4", offset: 12)
+    try ReadingPositionStore.save(place, for: draft, in: context)
+
+    #expect(try ReadingPositionStore.position(for: draft, in: context)?.place == place)
+    #expect(try ReadingPositionStore.position(for: draft, in: context)?.documentKey
+      == "draft-ietf-quic-http-34")
+    #expect(try ReadingPositionStore.recentlyRead(in: context).isEmpty)
+    #expect(try ReadingPositionStore.recentlyReadCount(in: context) == 0)
+  }
+
   @Test func `a document opened for the first time has a row and no place`() throws {
     let container = try makeContainer()
     let context = container.mainContext
