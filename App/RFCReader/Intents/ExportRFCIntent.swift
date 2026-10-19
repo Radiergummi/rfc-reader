@@ -43,6 +43,9 @@ struct ExportRFCIntent: AppIntent {
     } catch let noGrammar as ExportFormat.NoGrammar {
       // Its words name the RFC already.
       throw noGrammar
+    } catch let original as PublishedOriginalPage.NotExportable {
+      // So do these: a scan or a pointer, which the menus never export either.
+      throw original
     } catch {
       // A published file fetched offline says so as a document that did not load.
       let failure = LoadFailure(error: error)
