@@ -380,7 +380,7 @@ struct RFCListView: View {
         navigation: navigation,
         prompt: navigation.filter.searchPrompt(in: library.collections)
       )
-      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
+      .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }

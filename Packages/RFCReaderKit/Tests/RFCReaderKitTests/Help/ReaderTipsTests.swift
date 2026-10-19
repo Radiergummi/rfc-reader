@@ -72,16 +72,45 @@ struct ReaderTipsTests {
     }
   }
 
-  /// A search typed by hand counts once, when the field gains text, not on every
-  /// keystroke: five searches, not five letters.
-  @Test func `a search is counted when an empty field gains text`() {
-    #expect(ReaderTips.startsSearch(from: "", to: "h"))
-    #expect(!ReaderTips.startsSearch(from: "h", to: "ht"))
-    #expect(!ReaderTips.startsSearch(from: "http", to: ""))
-    #expect(!ReaderTips.startsSearch(from: "", to: ""))
-    // Spaces alone are no search.
-    #expect(!ReaderTips.startsSearch(from: "", to: " "))
-    #expect(ReaderTips.startsSearch(from: " ", to: " q"))
+  /// A search counts once it is done with, not as it starts: on the first keystroke,
+  /// the tip would open over the field being typed in.
+  @Test func `a search is counted when it is committed`() {
+    #expect(
+      SearchStep.counts([
+        .edit("", "h"), .edit("h", "http"), .commit("http"),
+        // Committed again, or refined and committed, it is the same search.
+        .commit("http"), .edit("http", "https"), .commit("https"),
+        // Cleared after it counted, it does not count again.
+        .edit("https", ""),
+        // The next one counts on its own commit.
+        .edit("", "tls"), .commit("tls"),
+      ]) == [false, false, true, false, false, false, false, false, true])
+  }
+
+  @Test func `a search never committed is counted when it is cleared`() {
+    #expect(SearchStep.counts([.edit("", "quic"), .edit("quic", "")]) == [false, true])
+    // Nothing to count: an empty field cleared, or spaces alone.
+    #expect(
+      SearchStep.counts([.edit("", ""), .edit("", " "), .edit(" ", ""), .commit(" ")]) == [
+        false, false, false, false,
+      ])
+  }
+}
+
+/// An edit of the search field or a commit of it, as `ReaderTips.Searches` is told.
+enum SearchStep {
+  case edit(String, String)
+  case commit(String)
+
+  /// Whether each step counted a search, from a field with none made yet.
+  static func counts(_ steps: [SearchStep]) -> [Bool] {
+    var searches = ReaderTips.Searches()
+    return steps.map { step in
+      switch step {
+      case .edit(let old, let new): searches.changed(from: old, to: new)
+      case .commit(let query): searches.committed(query)
+      }
+    }
   }
 }
 
