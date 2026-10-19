@@ -148,13 +148,14 @@ private struct HelpTipPopover<Shown: HelpTip>: ViewModifier {
   let isOffered: Bool
   @Environment(\.showHelp) private var showHelp
   #if os(macOS)
-    /// TipKit offers a tip to every window at once; it is shown in the key one.
+    /// TipKit offers a tip to every window at once; it is shown in the main one, key
+    /// or not: the tip's popover takes key when clicked.
     @Environment(\.controlActiveState) private var activeState
   #endif
 
   private var isShown: Bool {
     #if os(macOS)
-      isOffered && activeState == .key
+      isOffered && activeState != .inactive
     #else
       isOffered
     #endif

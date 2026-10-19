@@ -102,16 +102,15 @@ import TipKit
       Binding {
         SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups).text
       } set: { text in
-        // A search typed, which Go to RFC's tip counts (#782).
-        // Compared with the field's own text, without the filters' tokens.
-        let shown = SearchQuery.tokenized(
-          navigation.searchText, workingGroups: library.knownWorkingGroups
-        ).text
-        if ReaderTips.startsSearch(from: shown, to: text) {
+        let searchText = SearchQuery.replacingText(
+          in: navigation.searchText, with: text, workingGroups: library.knownWorkingGroups)
+        // A search typed, which Go to RFC's tip counts (#782): the whole query, tokens
+        // and all, as the Mac's field counts it, so a filter that becomes a token
+        // and empties the field's text does not start a second one.
+        if ReaderTips.startsSearch(from: navigation.searchText, to: searchText) {
           ReaderTips.searchTyped.sendDonation()
         }
-        navigation.searchText = SearchQuery.replacingText(
-          in: navigation.searchText, with: text, workingGroups: library.knownWorkingGroups)
+        navigation.searchText = searchText
       }
     }
 

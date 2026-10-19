@@ -538,15 +538,16 @@
       }
     }
 
-    /// Shows what is due, in the key window only, since TipKit says a tip is due to
+    /// Shows what is due, in the main window only, since TipKit says a tip is due to
     /// every window at once, and only where what it teaches can be done: Reading
     /// Mode with a document, Previews while Back has somewhere to go. Closes what no
     /// longer is. Called as a tip falls due, and as the window's key status or its
-    /// document changes.
+    /// document changes. The main window rather than the key one, which a tip's
+    /// popover becomes when clicked.
     func showDueTips() {
       for (anchor, tip) in dueTips {
         let isOffered =
-          controller.window?.isKeyWindow == true && id != nil
+          controller.window?.isMainWindow == true && id != nil
           && (anchor != .rfcBack || navigation.canGoBack)
         guard isOffered else {
           tipPopovers.removeValue(forKey: anchor)?.close()
