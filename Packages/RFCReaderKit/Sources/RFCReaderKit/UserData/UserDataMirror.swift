@@ -9,12 +9,12 @@ private let mirrorLog = Logger(
 
 /// The sets the app keeps read from the user's data (#595): the bookmarked documents,
 /// the collections, the Recently Read count, the Keep Offline marks and the followed
-/// working groups, each read
-/// again on a save of what feeds it (`UserDataMirrors`, #603), and after a failed read
-/// on the next save of any kind (#613). Each is published only when it changed, and
-/// its `on…Changed` is then called, for what the app does about it; the bookmarks'
-/// and the marks' first read is reported whatever it found, as until it their
-/// emptiness meant nothing (`knowsWantedOffline(keepsBookmarks:)`).
+/// working groups, each read again on a save of what feeds it (`UserDataMirrors`,
+/// #603), and after a failed read on the next save of any kind (#613). Each is
+/// published only when it changed, and its `on…Changed` is then called, for what the
+/// app does about it; the bookmarks' and the marks' first read is reported whatever it
+/// found, as until it their emptiness meant nothing
+/// (`knowsWantedOffline(keepsBookmarks:)`).
 ///
 /// Also where a bookmark or a collection is changed, on the container's main context,
 /// whose save the mirror then reads.
@@ -65,6 +65,8 @@ public final class UserDataMirror {
   @ObservationIgnored public var onRecentlyReadCountChanged: () -> Void = {}
   /// Called when `offlineMarks` changed, and after their first read whatever it found.
   @ObservationIgnored public var onOfflineMarksChanged: () -> Void = {}
+  /// Called when `followedGroups` changed, here or by a sync from another device.
+  @ObservationIgnored public var onFollowedGroupsChanged: () -> Void = {}
 
   /// The mirrors whose last fetch failed. The next save reads them again, whatever
   /// it changed, so a failure is mended on the next save, as it was when every save
@@ -127,6 +129,7 @@ public final class UserDataMirror {
     }
     guard groups != followedGroups else { return }
     followedGroups = groups
+    onFollowedGroupsChanged()
   }
 
   /// Reads the marks again now. A save of a mark reads them already, synchronously

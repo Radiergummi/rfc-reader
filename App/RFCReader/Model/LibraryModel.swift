@@ -209,21 +209,15 @@ final class LibraryModel {
   }
 
   /// Follows the group or stops following it. A failure is logged rather than shown,
-  /// as a bookmark's is (#125), and leaves the command as it was.
-  ///
-  /// Then compares at once, so the baseline lists a newly followed group's RFCs now:
-  /// a group followed reports nothing it published before (`BookmarkBaseline`), and
-  /// left to the next refresh of the index, what that refresh brings would count as
-  /// before.
+  /// as a bookmark's is (#125), and leaves the command as it was. The save is
+  /// mirrored, which compares at once (`init`).
   func toggleFollowed(_ group: String) {
     do {
       try FollowedGroupStore.setFollowed(group, !isFollowed(group), in: container.mainContext)
     } catch {
       libraryLog.error(
         "following a working group failed: \(String(describing: error), privacy: .public)")
-      return
     }
-    compareBookmarks()
   }
 
   /// The user's data, which `userData` reads its sets from.
@@ -242,6 +236,11 @@ final class LibraryModel {
     // A document read for the first time: what a phrase can name (#192).
     userData.onRecentlyReadCountChanged = { RFCReaderShortcuts.refreshParameters() }
     userData.onOfflineMarksChanged = { [weak self] in self?.wantedOfflineChanged() }
+    // Compared at once, so the baseline lists a newly followed group's RFCs now, a
+    // group followed on another device included: a group followed reports nothing it
+    // published before (`BookmarkBaseline`), and left to the next refresh of the
+    // index, what that refresh brings would count as before (#731).
+    userData.onFollowedGroupsChanged = { [weak self] in self?.compareBookmarks() }
     userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
@@ -852,9 +851,8 @@ final class LibraryModel {
 
   /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
   /// baseline, after every change to the index or the revisions, and posts what
-  /// changed (`BookmarkNotifications`). Runs
-  /// whether notifications are on or not, so the baseline is current when they are
-  /// turned on.
+  /// changed (`BookmarkNotifications`). Runs whether notifications are on or not, so
+  /// the baseline is current when they are turned on.
   private func compareBookmarks() {
     let previous = bookmarkComparison
     bookmarkComparison = Task(name: "Compare bookmarks") {

@@ -571,8 +571,8 @@ public enum UserData {
 
   /// Merges rows that name the same document — keeping the newest bookmark and
   /// reading position, and the earliest item in a collection, Keep Offline mark and
-  /// followed group. Without a unique
-  /// constraint — CloudKit refuses one — two devices, or a race, can leave two.
+  /// followed group. Without a unique constraint — CloudKit refuses one — two
+  /// devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
     let bookmarks = try context.fetch(

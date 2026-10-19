@@ -84,6 +84,26 @@ struct FollowedGroupTests {
     #expect(mirror.followedGroups.isEmpty)
   }
 
+  /// So the app compares as soon as a group is followed, here or on another device,
+  /// whose follow arrives as a save of a context other than the main one.
+  @Test func `a change to the followed groups is reported, from any context`() throws {
+    let mirror = UserDataMirror(container: try makeContainer())
+    var reports = 0
+    mirror.onFollowedGroupsChanged = { reports += 1 }
+    mirror.start()
+    #expect(reports == 0)
+
+    let synced = ModelContext(mirror.container)
+    synced.insert(FollowedGroup(acronym: "quic"))
+    try synced.save()
+    #expect(mirror.followedGroups == ["quic"])
+    #expect(reports == 1)
+
+    // Following it again changes nothing, and reports nothing.
+    try FollowedGroupStore.setFollowed("quic", true, in: mirror.container.mainContext)
+    #expect(reports == 1)
+  }
+
   // MARK: - Sidebar
 
   /// Ahead of the busiest groups, which then leave out the ones already shown.

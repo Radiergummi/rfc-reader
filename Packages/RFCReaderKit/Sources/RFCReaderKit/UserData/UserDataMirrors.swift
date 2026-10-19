@@ -5,11 +5,12 @@ import SwiftData
 /// changed (#603).
 ///
 /// `UserDataMirror` keeps five: the bookmarked documents, the collections, the
-/// Recently Read count, the Keep Offline marks and the followed working groups. The app used to read all of them
-/// again on every save, and most saves only record a reading position, so the
-/// bookmark and collection fetches ran for nothing — `CollectionSnapshot.fetch`
-/// reads every collection and every item. A save's notification names the rows it
-/// inserted, updated and deleted, and each row's entity says which mirror it feeds.
+/// Recently Read count, the Keep Offline marks and the followed working groups. The
+/// app used to read all of them again on every save, and most saves only record a
+/// reading position, so the bookmark and collection fetches ran for nothing —
+/// `CollectionSnapshot.fetch` reads every collection and every item. A save's
+/// notification names the rows it inserted, updated and deleted, and each row's
+/// entity says which mirror it feeds.
 struct UserDataMirrors: OptionSet, Sendable {
   let rawValue: Int
 
