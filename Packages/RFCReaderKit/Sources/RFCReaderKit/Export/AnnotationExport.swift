@@ -34,17 +34,16 @@ public enum AnnotationExport {
     }
 
     let writer = Writer(document: document, id: id, model: model)
-    var placed: [(start: Int, isSection: Bool, section: String?, text: String)] = []
+    var placed: [Placed] = []
     var unplaced: [String] = []
     for highlight in highlights {
       let notes = notesOnHighlight[highlight.id] ?? []
       switch highlightPlacement.statuses[highlight.id] {
       case .placed(let range, _, let section)?:
         placed.append(
-          (
-            range.lowerBound, false, section,
-            writer.highlight(quote: model.text(in: range), section: section, notes: notes)
-          ))
+          Placed(
+            start: range.lowerBound, isSectionNote: false, section: section,
+            text: writer.highlight(quote: model.text(in: range), section: section, notes: notes)))
       case .ambiguous?:
         if !notes.isEmpty {
           unplaced.append(
@@ -57,7 +56,10 @@ public enum AnnotationExport {
     for note in ownNotes {
       if case .placed(let range, let section)? = notePlacement.statuses[note.id] {
         let isSection = if case .section? = note.current { true } else { false }
-        placed.append((range.lowerBound, isSection, section, writer.body(of: note)))
+        placed.append(
+          Placed(
+            start: range.lowerBound, isSectionNote: isSection, section: section,
+            text: writer.body(of: note)))
       } else {
         let quote = if case .range(_, _, let quote)? = note.target { quote.exact } else { "" }
         unplaced.append(writer.highlight(quote: quote, section: nil, notes: [note]))
@@ -69,8 +71,8 @@ public enum AnnotationExport {
     // Stable, so the annotations of one place keep the order they were made in; a
     // section's own note ahead of whatever starts with it.
     for item in placed.enumerated().sorted(by: {
-      ($0.element.start, $0.element.isSection ? 0 : 1, $0.offset)
-        < ($1.element.start, $1.element.isSection ? 0 : 1, $1.offset)
+      ($0.element.start, $0.element.isSectionNote ? 0 : 1, $0.offset)
+        < ($1.element.start, $1.element.isSectionNote ? 0 : 1, $1.offset)
     }).map(\.element) {
       if section != .some(item.section) {
         section = item.section
@@ -84,6 +86,17 @@ public enum AnnotationExport {
     }
     if parts.count == 1 { parts.append("No highlights or notes.") }
     return parts.joined(separator: "\n\n") + "\n"
+  }
+
+  /// One annotation placed in the document, as it is written.
+  private struct Placed {
+    /// Where it starts in the model text.
+    let start: Int
+    /// Whether it is a note on its section, which comes ahead of what starts with it.
+    let isSectionNote: Bool
+    /// The section, or the abstract, it starts in.
+    let section: String?
+    let text: String
   }
 
   /// The number, the title and the day exported, as YAML.
