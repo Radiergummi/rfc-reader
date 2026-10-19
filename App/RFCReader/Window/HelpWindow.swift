@@ -4,7 +4,7 @@
   import SwiftUI
 
   /// RFC Reader Help's one window on macOS (#780), opened from the Help menu or a
-  /// search field's "Search syntax…", and brought forward rather than made again, as
+  /// search field's "Search Syntax…", and brought forward rather than made again, as
   /// the primer's is (`PrimerWindow`). Its hosted root reads no model, so it needs
   /// none handed to it.
   enum HelpWindow {

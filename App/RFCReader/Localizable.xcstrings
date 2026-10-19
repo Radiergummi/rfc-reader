@@ -2581,16 +2581,6 @@
         }
       }
     },
-    "Search" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suchen"
-          }
-        }
-      }
-    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -2607,6 +2597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs durchsuchen"
+          }
+        }
+      }
+    },
+    "Search Syntax…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchsyntax …"
           }
         }
       }
@@ -2637,6 +2637,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durchsucht die Bibliothek danach"
+          }
+        }
+      }
+    },
+    "Search…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen …"
           }
         }
       }
