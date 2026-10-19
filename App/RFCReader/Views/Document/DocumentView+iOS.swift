@@ -101,7 +101,6 @@
             readingPathAfterClosing: $readingPathAfterPanel
           )
           .presentationDetents([.medium, .large])
-          .presentationDragIndicator(.visible)
         }
         .fileExporter(
           isPresented: Binding(

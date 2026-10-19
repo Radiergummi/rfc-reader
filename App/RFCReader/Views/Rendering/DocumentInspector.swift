@@ -77,14 +77,20 @@ struct DocumentInspector: View {
     switch pane {
     case .navigation: navigation
     case .info:
-      InfoView(
+      let infoView = InfoView(
         info: info, document: document, library: library, open: openDocument, search: search,
-        showReadingPath: showReadingPath, sections: sections, selectSection: selectSection
-      )
-      #if !os(macOS)
-        // No tabs to title the sheet with, and an empty bar would only push the
-        // pane down.
-        .toolbarVisibility(isSheet ? .hidden : .automatic, for: .navigationBar)
+        showReadingPath: showReadingPath, sections: sections, selectSection: selectSection)
+      #if os(macOS)
+        infoView
+      #else
+        if isSheet {
+          // No tabs to title the sheet with, and an empty bar would only push the
+          // pane down. Only in the sheet: beside the reader, `.inspector` would lift
+          // the column's visibility into the reader's bar, which the reader hides itself.
+          infoView.toolbarVisibility(.hidden, for: .navigationBar)
+        } else {
+          infoView
+        }
       #endif
     }
   }
@@ -217,8 +223,9 @@ struct DocumentInspector: View {
 /// wiring is written.
 ///
 /// macOS hosts this in the window's own split item; iOS presents it with
-/// `.inspector` beside the reader, or in a sheet of its own in compact width; the six inputs are the same either way, so the next one added to
-/// `DocumentInspector` is added once.
+/// `.inspector` beside the reader, or in a sheet of its own in compact width; the
+/// six inputs are the same either way, so the next one added to `DocumentInspector`
+/// is added once.
 struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
@@ -243,23 +250,28 @@ struct PanelHost: View {
     @Binding var readingPathAfterClosing: ReadingPathRequest?
   #endif
 
-  var body: some View {
+  /// Whether the panel is a sheet, whose bar of its own the tabs take as its title
+  /// (#301): the one panel that closes after a choice.
+  private var isSheet: Bool {
     #if os(macOS)
-      panel(isSheet: false)
+      false
     #else
-      // The one panel that closes after a choice is the sheet, whose bar of its own
-      // the tabs take as its title (#301). The stack is made here, beside the flag
-      // that puts the tabs in its bar, so that neither is without the other.
-      if closesAfterChoice {
-        NavigationStack { panel(isSheet: true) }
-      } else {
-        panel(isSheet: false)
-      }
+      closesAfterChoice
     #endif
   }
 
+  var body: some View {
+    // The stack is made here, beside the flag that puts the tabs in its bar, so
+    // that neither is without the other.
+    if isSheet {
+      NavigationStack { panel }
+    } else {
+      panel
+    }
+  }
+
   @ViewBuilder
-  private func panel(isSheet: Bool) -> some View {
+  private var panel: some View {
     @Bindable var reader = reader
     // On what the index describes, not only the body: a document still loading, or
     // one that failed to or was offline, has its Info (#325).
@@ -352,8 +364,9 @@ struct PanelHost: View {
   /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
   /// divider only between two unselected labels.
   ///
-  /// macOS only, and compiled for macOS only (#258): in an iPhone's sheet the
-  /// system's own segmented control sits in the panel instead (#247).
+  /// macOS only, and compiled for macOS only (#258): on iOS the system's own
+  /// segmented control is the tabs, in the sheet's bar or the inspector column's
+  /// content (#247, #301).
   private struct InspectorTabBar: View {
     @Binding var tab: InspectorTab
 
