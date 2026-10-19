@@ -22,4 +22,4 @@ A note is made the first time it has text, and deleted when its text is gone, so
 
 A note's marker sits in the trailing gutter, level with the first line of what it is on (`FragmentGeometry.noteMarkers`). Its line comes from the layout fragment holding the target's first character, and only from one TextKit has laid out: a fragment's frame outside the laid-out range is an estimate, so a marker there waits until the layout engine reaches it (`ReaderLayoutEngine.didLayOut`) or a scroll brings it in. Notes of one line share a marker, which lists them; one that would overlap the marker above moves beneath it. The markers are buttons over the text view, as the header is, never part of the storage, and nothing they do reports back into the text's layout.
 
-`SchemaV7` adds the `Note` rows. #906 (following a working group) adds a `SchemaV6` of its own: whichever of it and this stack merges second renumbers its versions.
+The `Note` rows are `SchemaV6`'s, beside the highlights and a collection's query (#355): every schema change not yet shipped is one combined V6, migrated from V5 in one lightweight stage (decided on #196, 2026-10-19).
