@@ -111,13 +111,15 @@ import SwiftUI
 
     private var tokens: Binding<[FieldToken]> {
       Binding {
-        let scope = navigation.listOptions.scopeInForce(query: navigation.appliedQuery).tokens()
+        // The text, not the query applied, as the terms are: a token appearing once
+        // typing pauses would land in the field while it is typed in.
+        let scope = navigation.listOptions.scopeInForce(query: navigation.searchText).tokens()
         let terms = SearchQuery.tokenized(
           navigation.searchText, workingGroups: library.knownWorkingGroups
         ).terms
         return scope.map(FieldToken.scope) + terms.map(FieldToken.term)
       } set: { tokens in
-        let scope = navigation.listOptions.scopeInForce(query: navigation.appliedQuery)
+        let scope = navigation.listOptions.scopeInForce(query: navigation.searchText)
         let kept = Set(tokens.compactMap(\.scopePart))
         for token in scope.tokens() where !kept.contains(token.part) {
           navigation.listOptions.searchScope =

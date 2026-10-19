@@ -42,7 +42,14 @@ final class NavigationModel: Identifiable {
   }
   /// The search text, trimmed, once typing pauses (#124): what the list is asked to
   /// search for. Read only to make the list; views read `appliedQuery`.
-  private var requestedQuery = ""
+  private var requestedQuery = "" {
+    didSet {
+      // A scope token removed lasts until the search is cleared (#713).
+      if requestedQuery.isEmpty, !oldValue.isEmpty {
+        listOptions.searchScope = LibrarySettings(defaults: .standard).searchScope
+      }
+    }
+  }
   @ObservationIgnored private var pendingSearch: Task<Void, Never>?
 
   /// What the list shows, made off the main actor whenever one of its inputs changes
@@ -72,7 +79,20 @@ final class NavigationModel: Identifiable {
   var appliedQuery: String { listed?.list.query ?? "" }
   /// The list's view options, for this tab (#348): what Settings says a new tab
   /// starts with (#713), and changed from there by View Options for this tab only.
-  var listOptions = LibrarySettings(defaults: .standard).listOptions
+  var listOptions = LibrarySettings(defaults: .standard).listOptions {
+    didSet {
+      // What was read as of turning Hide Read on, not as of entering the filter.
+      if listOptions.hidesRead, !oldValue.hidesRead { recentOrder = library.recentlyRead() }
+    }
+  }
+
+  /// The tab's options as its list is made with them: with the library's April 1st
+  /// setting, which every tab follows as it changes (#713).
+  var listOptionsInForce: ListOptions {
+    var options = listOptions
+    options.showsAprilFirst = library.showsAprilFirst
+    return options
+  }
   var isShowingGoToSheet = false
   /// The collection sheet on show, if any: creating one — perhaps to add a document
   /// to — or editing one (#349). On the model rather than a view's state so the
@@ -278,6 +298,9 @@ final class NavigationModel: Identifiable {
       if let row, library.metadata(row)?.isObsolete == true {
         listOptions.showsObsolete = true
       }
+      if let row, listOptions.hidesRead, recentOrder.contains(row) {
+        listOptions.hidesRead = false
+      }
     } else if sidebarSelection != list.filter {
       // A collapsed sidebar pushes the list the row is on show in, and the reader.
       sidebarSelection = list.filter
@@ -369,10 +392,6 @@ final class NavigationModel: Identifiable {
       return
     case .apply(let query):
       requestedQuery = query
-      // A scope token removed lasts for that search only (#713).
-      if query.isEmpty {
-        listOptions.searchScope = LibrarySettings(defaults: .standard).searchScope
-      }
     case .search(let query, let delay):
       pendingSearch = Task(name: "Apply search") { [weak self] in
         guard await Debounce.outlasted(delay) else { return }
@@ -393,12 +412,9 @@ final class NavigationModel: Identifiable {
   /// observed (`LibraryList.reading`). Nil while there is no index.
   private func request() -> ListRequest? {
     guard library.index != nil else { return nil }
-    // Whether the April 1st RFCs are listed is the library's setting, not the tab's,
-    // and every tab follows it as it changes.
-    var options = listOptions
-    options.showsAprilFirst = library.showsAprilFirst
     return ListRequest(
-      list: LibraryList.reading(filter, query: requestedQuery, options: options, from: self),
+      list: LibraryList.reading(
+        filter, query: requestedQuery, options: listOptionsInForce, from: self),
       indexVersion: library.indexVersion)
   }
 

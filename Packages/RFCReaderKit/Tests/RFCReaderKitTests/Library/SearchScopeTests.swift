@@ -48,7 +48,8 @@ struct SearchScopeTests {
     let scope = SearchScope(currentOnly: true, stream: .ietf)
     #expect(scope.leaving(filters("http")) == scope)
     #expect(scope.leaving(filters("status:historic http")) == SearchScope(stream: .ietf))
-    #expect(scope.leaving(filters("status:current")) == SearchScope(stream: .ietf))
+    // `status:current` leaves out the obsoleted only, so it widens nothing.
+    #expect(scope.leaving(filters("status:current")) == scope)
     #expect(scope.leaving(filters("stream:irtf")) == SearchScope(currentOnly: true))
     #expect(scope.leaving(filters("status:info stream:iab")).isEverything)
   }

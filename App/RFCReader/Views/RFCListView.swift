@@ -27,7 +27,7 @@ struct RFCListView: View {
   /// the controls read the tab's.
   private var shown: LibraryList {
     navigation.listed?.list
-      ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
+      ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptionsInForce)
   }
 
   /// The full-text search for the rows on show (#37), once it has ended: the search
