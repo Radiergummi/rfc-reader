@@ -28,21 +28,9 @@ public enum NoteText {
         let text = span.text == "\n" ? "\u{2028}" : span.text
         line.append(NSAttributedString(string: text, attributes: attributes(span, font: font)))
       }
-      let style = NSMutableParagraphStyle()
-      style.textLists = lists
-      style.paragraphSpacing = paragraphSpacing
-      if !lists.isEmpty {
-        // As TextEdit indents an item: a level's width a list deep.
-        let indent = CGFloat(lists.count) * font.pointSize * 1.8
-        style.headIndent = indent
-        style.firstLineHeadIndent = indent
-        style.paragraphSpacing = 0
-      }
-      if line.length == 0 {
-        line.append(NSAttributedString(string: "", attributes: [.font: font]))
-      }
       line.addAttribute(
-        .paragraphStyle, value: style.copy(), range: NSRange(location: 0, length: line.length))
+        .paragraphStyle, value: paragraphStyle(lists: lists, font: font),
+        range: NSRange(location: 0, length: line.length))
       paragraphs.append(line)
     }
     func add(_ list: NoteBody.List, within lists: [NSTextList]) {
@@ -77,6 +65,18 @@ public enum NoteText {
       result.append(paragraph)
     }
     return result
+  }
+
+  /// A paragraph's style, nested in `lists`: an item indented a level's width a list
+  /// deep, as TextEdit indents one, and set close to the next; a paragraph apart.
+  public static func paragraphStyle(lists: [NSTextList], font: PlatformFont) -> NSParagraphStyle {
+    let style = NSMutableParagraphStyle()
+    style.textLists = lists
+    style.paragraphSpacing = lists.isEmpty ? paragraphSpacing : 0
+    let indent = CGFloat(lists.count) * font.pointSize * 1.8
+    style.headIndent = indent
+    style.firstLineHeadIndent = indent
+    return style.copy() as? NSParagraphStyle ?? style
   }
 
   private static func attributes(_ span: NoteBody.Span, font: PlatformFont)
@@ -198,6 +198,149 @@ public enum NoteText {
     case .disc, .circle, .square, .hyphen, .diamond, .box, .check: false
     default: true
     }
+  }
+
+  // MARK: - Formatting
+
+  /// Turns `style` on over `range` of `text`, or off where all of it has it already:
+  /// what the editor's bold, italic, strikethrough and code buttons do. In `font`,
+  /// the editor's, which a code span leaves for a monospaced one and returns to.
+  public static func toggle(
+    _ style: NoteBody.Style, in text: NSMutableAttributedString, range: NSRange, font: PlatformFont
+  ) {
+    guard range.length > 0 else { return }
+    let isOn = has(style, in: text, range: range)
+    text.enumerateAttributes(in: range) { attributes, run, _ in
+      var current = self.style(of: attributes)
+      if isOn { current.subtract(style) } else { current.formUnion(style) }
+      text.setAttributes(
+        restyled(attributes, as: current, font: font), range: run)
+    }
+  }
+
+  /// The typing attributes `attributes` with `style` turned on or off: a button
+  /// pressed with nothing selected styles what is typed next.
+  public static func toggling(
+    _ style: NoteBody.Style, in attributes: [NSAttributedString.Key: Any], font: PlatformFont
+  ) -> [NSAttributedString.Key: Any] {
+    var current = self.style(of: attributes)
+    if current.isSuperset(of: style) { current.subtract(style) } else { current.formUnion(style) }
+    return restyled(attributes, as: current, font: font)
+  }
+
+  /// Whether every character of `range` has `style`.
+  public static func has(_ style: NoteBody.Style, in text: NSAttributedString, range: NSRange)
+    -> Bool
+  {
+    var all = true
+    text.enumerateAttributes(in: range) { attributes, _, stop in
+      if !self.style(of: attributes).isSuperset(of: style) {
+        all = false
+        stop.pointee = true
+      }
+    }
+    return all
+  }
+
+  private static func style(of attributes: [NSAttributedString.Key: Any]) -> NoteBody.Style {
+    var style: NoteBody.Style = []
+    if let font = attributes[.font] as? PlatformFont {
+      let traits = Trait.of(font)
+      if traits.contains(.bold) { style.insert(.strong) }
+      if traits.contains(.italic) { style.insert(.emphasis) }
+      if traits.contains(.monospace) { style.insert(.code) }
+    }
+    if let strike = attributes[.strikethroughStyle] as? Int, strike != 0 {
+      style.insert(.strikethrough)
+    }
+    return style
+  }
+
+  private static func restyled(
+    _ attributes: [NSAttributedString.Key: Any], as style: NoteBody.Style, font: PlatformFont
+  ) -> [NSAttributedString.Key: Any] {
+    var result = attributes
+    let styled = self.attributes(NoteBody.Span("", style: style), font: font)
+    result[.font] = styled[.font]
+    result[.strikethroughStyle] = styled[.strikethroughStyle]
+    return result
+  }
+
+  /// Makes the paragraphs `range` touches a bulleted or a numbered list, or takes
+  /// them out of it where they are all items of such a list already. Joined to the
+  /// list just before them where it is of the same kind.
+  public static func toggleList(
+    ordered: Bool, in text: NSMutableAttributedString, range: NSRange, font: PlatformFont
+  ) {
+    let paragraphs = self.paragraphs(of: text, touching: range)
+    let lists = paragraphs.map { textLists(of: text, at: $0) }
+    let isOn = lists.allSatisfy { $0.last.map(isOrdered) == ordered }
+    let before = paragraphs.first.flatMap { first -> NSTextList? in
+      guard first.location > 0 else { return nil }
+      return textLists(of: text, at: NSRange(location: first.location - 1, length: 0)).first
+    }
+    let list = before.flatMap { isOrdered($0) == ordered ? $0 : nil } ?? newList(ordered: ordered, depth: 0)
+    for (paragraph, current) in zip(paragraphs, lists) {
+      let next: [NSTextList] =
+        isOn ? Array(current.dropLast()) : current.isEmpty ? [list] : current.dropLast() + [
+          newList(ordered: ordered, depth: current.count - 1)
+        ]
+      setLists(next, in: text, paragraph: paragraph, font: font)
+    }
+  }
+
+  /// Nests the list items `range` touches a level deeper (`by: 1`), or takes them a
+  /// level out (`by: -1`): what Tab and Shift-Tab do, for a keyboard without them.
+  public static func indent(
+    by levels: Int, in text: NSMutableAttributedString, range: NSRange, font: PlatformFont
+  ) {
+    var made: [Int: NSTextList] = [:]
+    for paragraph in paragraphs(of: text, touching: range) {
+      let current = textLists(of: text, at: paragraph)
+      guard let innermost = current.last else { continue }
+      if levels > 0 {
+        let depth = current.count
+        let deeper = made[depth] ?? newList(ordered: isOrdered(innermost), depth: depth)
+        made[depth] = deeper
+        setLists(current + [deeper], in: text, paragraph: paragraph, font: font)
+      } else {
+        setLists(Array(current.dropLast()), in: text, paragraph: paragraph, font: font)
+      }
+    }
+  }
+
+  private static func newList(ordered: Bool, depth: Int) -> NSTextList {
+    NSTextList(
+      markerFormat: ordered ? .decimal : depth.isMultiple(of: 2) ? .disc : .circle, options: 0)
+  }
+
+  private static func textLists(of text: NSAttributedString, at paragraph: NSRange) -> [NSTextList] {
+    guard text.length > 0 else { return [] }
+    let location = min(paragraph.location, text.length - 1)
+    return (text.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)?
+      .textLists ?? []
+  }
+
+  private static func setLists(
+    _ lists: [NSTextList], in text: NSMutableAttributedString, paragraph: NSRange,
+    font: PlatformFont
+  ) {
+    guard paragraph.length > 0 else { return }
+    text.addAttribute(
+      .paragraphStyle, value: paragraphStyle(lists: lists, font: font), range: paragraph)
+  }
+
+  /// The paragraphs `range` touches, each with its line end.
+  private static func paragraphs(of text: NSAttributedString, touching range: NSRange) -> [NSRange] {
+    let string = text.string as NSString
+    var result: [NSRange] = []
+    var location = range.location
+    repeat {
+      let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+      result.append(paragraph)
+      location = NSMaxRange(paragraph)
+    } while location < NSMaxRange(range) && location < string.length
+    return result
   }
 
   // MARK: - Font traits
