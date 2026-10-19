@@ -125,6 +125,18 @@ enum BookmarkNotifications {
     #endif
   }
 
+  /// At launch, once the scene is up: iOS raises an exception, which no `catch`
+  /// catches, for a request submitted before the scene's `.backgroundTask` has
+  /// registered its handler (#980). Only when none is pending, since a new request
+  /// replaces the pending one and would put it off by another day at every launch.
+  static func scheduleRefreshUnlessPending() async {
+    #if os(iOS)
+      guard isEnabled else { return }
+      let pending = await BGTaskScheduler.shared.pendingTaskRequests()
+      if !pending.contains(where: { $0.identifier == refreshIdentifier }) { scheduleRefresh() }
+    #endif
+  }
+
   /// iOS's background refresh: schedules the next, then refreshes and compares.
   static func refreshInBackground() async {
     guard isEnabled else { return }

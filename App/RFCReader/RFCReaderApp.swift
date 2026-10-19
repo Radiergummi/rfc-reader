@@ -50,13 +50,9 @@ struct RFCReaderApp: App {
       // interface at all — so this cannot carry the link for a new tab.
       WindowGroup {
         ContentView(library: library)
-          .task {
-            // Once the scene, and with it the `.backgroundTask` below, is up: a
-            // request submitted before its handler is registered raises an
-            // exception no `catch` catches (#980).
-            if BookmarkNotifications.isEnabled { BookmarkNotifications.scheduleRefresh() }
-            await library.bootstrap()
-          }
+          .task { await library.bootstrap() }
+          // Here rather than in `init`, which is before the `.backgroundTask` below.
+          .task { await BookmarkNotifications.scheduleRefreshUnlessPending() }
           .onOpenURL { url in
             // rfc://9110#section-4.2, plus rfc-editor.org and datatracker
             // links handed over via the share sheet or Universal Links later.

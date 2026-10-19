@@ -119,10 +119,18 @@ final class HandChecks: XCTestCase {
     // crashed while that came before the scene that handles it (#980).
     app.terminate()
     app.launch()
+    XCTAssertEqual(app.state, .runningForeground)
     dismissStoreWarning()
     waitForIndex()
-    XCTAssertEqual(app.state, .runningForeground)
     screenshot("4 relaunched")
+    // Still on, or the relaunch never asked iOS.
+    open("rfc://8174")
+    waitForReader("RFC 8174")
+    app.buttons["Text Size"].tap()
+    app.buttons["Reading Settings…"].tap()
+    XCTAssertTrue(row.waitForExistence(timeout: 5))
+    XCTAssertEqual(row.switches.firstMatch.value as? String, "1")
+    screenshot("5 still on")
   }
 
   // MARK: - Steps
