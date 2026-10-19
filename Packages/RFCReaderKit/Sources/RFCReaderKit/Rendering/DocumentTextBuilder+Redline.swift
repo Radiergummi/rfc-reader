@@ -49,9 +49,25 @@ extension DocumentTextBuilder {
   /// the index: they are not in the newer document, whose anchors they may share.
   private func appendRemoved(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
+    asOlder { marking(.deleted) { appendBlocks(blocks, indent: 0) } }
+  }
+
+  /// Emits what `body` emits of the older revision, and leaves the builder's count of
+  /// the newer one's as it was: its anchors out of the index, and the ordinals a
+  /// block's presentation choice and an aside's opening are keyed by, the grammar
+  /// rules defined and the abbreviations marked, which the newer blocks go by.
+  private func asOlder(_ body: () -> Void) {
     let entriesBefore = entries.count
-    marking(.deleted) { appendBlocks(blocks, indent: 0) }
+    let verbatimOrdinal = nextVerbatimOrdinal
+    let asideOrdinal = nextAsideOrdinal
+    let rules = definedRules
+    let glossed = glossedInSection
+    body()
     entries.removeSubrange(entriesBefore...)
+    nextVerbatimOrdinal = verbatimOrdinal
+    nextAsideOrdinal = asideOrdinal
+    definedRules = rules
+    glossedInSection = glossed
   }
 
   /// A paragraph whose words changed, as its runs: its words only, since the runs
@@ -60,9 +76,16 @@ extension DocumentTextBuilder {
     let authoredSteps = CGFloat(Self.authoredIndentSteps(forCharacters: paragraph.indent))
     let attributes = bodyAttributes(indent: authoredSteps * style.indentStep)
     mark(paragraph.anchor)
-    for run in runs {
+    for (index, run) in runs.enumerated() {
       let start = output.length
       append(run.text, attributes)
+      // A word struck through and its replacement would run together: a space
+      // between them, the reader's, which a copy leaves out with the deletion.
+      if case .deleted = run, index + 1 < runs.count, case .inserted = runs[index + 1],
+        run.text.last?.isWhitespace == false
+      {
+        append(" ", attributes)
+      }
       let range = NSRange(location: start, length: output.length - start)
       switch run {
       case .same: break
@@ -76,12 +99,16 @@ extension DocumentTextBuilder {
   /// Under a heading: "Added", or "Moved from section 4.2", where the redline says
   /// either of its section.
   func appendRedlineCaption(for section: String) {
-    guard let change = redline?.sections[section] else { return }
-    let caption: String
+    let change = redline?.sections[section]
+    var parts: [String] = []
     switch change {
-    case .added: caption = "Added in this revision"
-    case .moved(let number): caption = number.map { "Moved from section \($0)" } ?? "Moved"
+    case .added: parts.append("Added in this revision")
+    case .moved(let number): parts.append(number.map { "Moved from section \($0)" } ?? "Moved")
+    case nil: break
     }
+    if let old = redline?.retitled[section] { parts.append("Retitled from \u{201C}\(old)\u{201D}") }
+    guard !parts.isEmpty else { return }
+    let caption = parts.joined(separator: ". ")
     let start = output.length
     append(
       caption + "\n",
@@ -101,7 +128,6 @@ extension DocumentTextBuilder {
     guard let redline else { return }
     for removed in redline.removedSections where removed.after == anchor {
       let section = removed.section
-      let entriesBefore = entries.count
       let start = output.length
       let heading = section.numberPrefix + section.headingWords.plainText
       append(
@@ -118,8 +144,7 @@ extension DocumentTextBuilder {
         "Removed in this revision\n",
         captionAttributes(paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6))
           .merging([.rfcReaderOnly: ""]) { _, new in new })
-      marking(.deleted) { appendBlocks(section.blocks, indent: 0) }
-      entries.removeSubrange(entriesBefore...)
+      asOlder { marking(.deleted) { appendBlocks(section.blocks, indent: 0) } }
     }
   }
 

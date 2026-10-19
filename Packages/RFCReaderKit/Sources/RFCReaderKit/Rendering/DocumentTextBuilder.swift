@@ -173,10 +173,12 @@ public final class DocumentTextBuilder {
   /// said under their headings.
   public static func build(
     _ document: RFCDocument, redline diff: RevisionDiff, style: ReadingStyle,
-    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none
   ) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
     builder.redline = diff
+    builder.errata = errata
     return build(document, title: nil, translation: nil, with: builder)
   }
 
@@ -383,7 +385,11 @@ extension DocumentTextBuilder {
     // (artwork's `monospaceScale`, a table's column widths) would be measured at
     // full size and shrunk afterwards, which is a different answer.
     emitting(in: style.scaled(by: Self.abstractScale), color: RFCColors.secondaryLabel) {
-      appendBlocks(blocks, indent: 0)
+      if let redline {
+        appendRedline(blocks, of: RevisionDiff.abstractKey, in: redline)
+      } else {
+        appendBlocks(blocks, indent: 0)
+      }
     }
   }
 

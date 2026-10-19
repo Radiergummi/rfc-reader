@@ -5,9 +5,11 @@ import Foundation
 /// is said of the newer document's sections and blocks, and what went is said where it
 /// stood.
 ///
-/// Sections are paired by anchor first, which revisions of one draft mostly keep, and
-/// the rest as `SectionAlignment` pairs an RFC with its successor, by title and prose,
-/// one to one, the best first. A paired section whose place in the order changed is
+/// Sections are paired by anchor and title first: an author's anchor survives a
+/// revision, but a text draft's, or an unnamed XML section's, is its number, which
+/// an inserted section moves on, so an anchor alone pairs by position. The rest are
+/// paired as `SectionAlignment` pairs an RFC with its successor, by title and prose,
+/// one to one, the best first. A pair whose title changed is retitled. A paired section whose place in the order changed is
 /// moved; one left over in the newer document is added, in the older removed.
 ///
 /// Within a pair of sections, the top-level blocks are matched by their text, and
@@ -60,15 +62,21 @@ public struct RevisionDiff: Sendable, Equatable {
   /// before: a section's count of blocks for after its last.
   public private(set) var removedBlocks: [BlockKey: [Block]] = [:]
   public private(set) var removedSections: [RemovedSection] = []
+  /// Sections of the newer document whose heading changed, with the older heading.
+  public private(set) var retitled: [String: String] = [:]
+  /// The key the abstract's blocks are compared under, as a section's are.
+  public static let abstractKey = "abstract"
 
   /// Whether nothing changed.
   public var isEmpty: Bool {
     sections.isEmpty && blocks.isEmpty && removedBlocks.isEmpty && removedSections.isEmpty
+      && retitled.isEmpty
   }
 
   public init(from old: RFCDocument, to new: RFCDocument) {
     let oldSections = old.allSections.filter { !$0.holdsOnlyReferences }
     let newSections = new.allSections.filter { !$0.holdsOnlyReferences }
+    compare(old.header.abstract, new.header.abstract, in: Self.abstractKey)
     let pairs = Self.pair(oldSections, newSections, old: old, new: new)
     let oldByAnchor = Dictionary(
       oldSections.map { ($0.anchor, $0) }, uniquingKeysWith: { first, _ in first })
@@ -91,6 +99,11 @@ public struct RevisionDiff: Sendable, Equatable {
           sections[section.anchor] = .moved(from: number)
         }
         compare(oldSection.blocks, section.blocks, in: section.anchor)
+        if oldSection.displayTitle != section.displayTitle,
+          oldSection.titleText != section.titleText
+        {
+          retitled[section.anchor] = oldSection.displayTitle
+        }
       } else {
         sections[section.anchor] = .added
       }
@@ -113,9 +126,11 @@ public struct RevisionDiff: Sendable, Equatable {
     _ oldSections: [Section], _ newSections: [Section], old: RFCDocument, new: RFCDocument
   ) -> [String: String] {
     let oldAnchors = Set(oldSections.map(\.anchor))
+    let oldTitles = Dictionary(
+      oldSections.map { ($0.anchor, $0.titleText) }, uniquingKeysWith: { first, _ in first })
     var pairs: [String: String] = [:]
     var takenOld: Set<String> = []
-    for section in newSections where oldAnchors.contains(section.anchor) {
+    for section in newSections where oldTitles[section.anchor] == section.titleText {
       pairs[section.anchor] = section.anchor
       takenOld.insert(section.anchor)
     }

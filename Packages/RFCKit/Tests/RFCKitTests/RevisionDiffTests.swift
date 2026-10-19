@@ -118,4 +118,39 @@ struct RevisionDiffTests {
     #expect(RevisionDiff.longestIncreasing([0, 1, 2]) == [0, 1, 2])
     #expect(RevisionDiff.longestIncreasing([]).isEmpty)
   }
+
+  /// A text draft's anchors are its numbers: a section inserted before others moves
+  /// their numbers on, and they are paired by what they say, not where they stand.
+  @Test func `a section inserted before numbered ones moves no text onto another`() {
+    func section(_ number: String, _ title: String, _ text: String) -> Section {
+      Section(
+        anchor: "section-\(number)", number: number, title: title, blocks: [paragraph(text)])
+    }
+    let security = "Implementations need to authenticate every peer they accept first."
+    let old = [section("1", "Introduction", introduction), section("2", "Security", security)]
+    let new = [
+      section("1", "Introduction", introduction),
+      section("2", "Terminology", terminology), section("3", "Security", security),
+    ]
+    let diff = RevisionDiff(from: document(old), to: document(new))
+    #expect(diff.sections == ["section-2": .added])
+    #expect(diff.blocks.isEmpty)
+  }
+
+  @Test func `a heading reworded and an abstract changed are changes`() {
+    let old = RFCDocument(
+      header: DocumentHeader(title: "T", abstract: [paragraph("An old abstract of the protocol.")]),
+      sections: [Section(anchor: "sec", title: "Security", blocks: [paragraph(introduction)])],
+      source: .xml)
+    let new = RFCDocument(
+      header: DocumentHeader(title: "T", abstract: [paragraph("A new abstract of the protocol.")]),
+      sections: [
+        Section(anchor: "sec", title: "Security and Privacy", blocks: [paragraph(introduction)])
+      ],
+      source: .xml)
+    let diff = RevisionDiff(from: old, to: new)
+    #expect(diff.retitled == ["sec": "Security"])
+    let abstract = diff.blocks[RevisionDiff.BlockKey(section: RevisionDiff.abstractKey, index: 0)]
+    #expect(abstract.map { if case .reworded = $0 { true } else { false } } == true)
+  }
 }
