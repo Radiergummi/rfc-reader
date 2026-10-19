@@ -875,7 +875,8 @@ final class LibraryModel {
       groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
     } catch {
       libraryLog.error(
-        "reading bookmarks to compare failed: \(String(describing: error), privacy: .public)")
+        "reading bookmarks or followed groups to compare failed: \(String(describing: error), privacy: .public)"
+      )
       return
     }
     let previous = await store.bookmarkBaseline()

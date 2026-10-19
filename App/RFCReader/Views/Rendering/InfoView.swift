@@ -199,10 +199,14 @@ private struct ProvenanceStep: View {
           WorkingGroupCard(group: card.id, summary: card.summary)
           .padding()
           .frame(width: GlossaryCard.width)
+          // Its Follow button reads the library, which this pane takes rather than
+          // reads from the environment.
+          .environment(library)
         }
       #else
         .sheet(item: $card) { card in
           WorkingGroupSheet(group: card.id, summary: card.summary)
+          .environment(library)
         }
       #endif
     }

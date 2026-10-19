@@ -48,17 +48,14 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
   ) {
     if let index {
       var groups = Dictionary(uniqueKeysWithValues: followedGroups.map { ($0, Set<DocumentID>()) })
-      for rfc in index.rfcs {
-        guard let group = rfc.workingGroup?.lowercased(), followedGroups.contains(group) else {
-          continue
+      // The whole index only when a group is followed.
+      if !groups.isEmpty {
+        for rfc in index.rfcs {
+          guard let group = rfc.workingGroup?.lowercased() else { continue }
+          groups[group]?.insert(rfc.id)
         }
-        groups[group, default: []].insert(rfc.id)
       }
       self.groups = groups
-    } else {
-      self.groups = previous?.groups?.filter { followedGroups.contains($0.key) }
-    }
-    if let index {
       var records: [DocumentID: IndexRecord] = [:]
       for document in bookmarks {
         guard let entry = index[document] else { continue }
@@ -68,6 +65,7 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
       }
       self.index = records
     } else {
+      self.groups = previous?.groups?.filter { followedGroups.contains($0.key) }
       self.index = previous?.index?.filter { bookmarks.contains($0.key) }
     }
     if let revisions {
