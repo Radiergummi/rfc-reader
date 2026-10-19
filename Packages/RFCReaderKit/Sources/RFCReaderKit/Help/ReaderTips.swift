@@ -45,9 +45,13 @@ public enum ReaderTips {
 
     public init() {}
 
-    /// Whether committing `query` counts a search.
+    /// Whether committing `query` counts a search. Not while it ends in a filter
+    /// still waiting for its value, such as `status:` taken from the suggestions:
+    /// the tip would open as the value is typed.
     public mutating func committed(_ query: String) -> Bool {
-      guard !query.allSatisfy(\.isWhitespace), !counted else { return false }
+      guard !query.allSatisfy(\.isWhitespace), !query.hasSuffix(":"), !counted else {
+        return false
+      }
       counted = true
       return true
     }
