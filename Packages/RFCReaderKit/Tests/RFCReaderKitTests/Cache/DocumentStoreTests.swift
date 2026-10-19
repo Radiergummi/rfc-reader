@@ -927,7 +927,7 @@ struct DocumentStoreTests {
 
   /// A legacy XML pack holding RFC 2119, converted from its committed text the way
   /// corpus-build converts it, with a manifest listing it.
-  private static func legacyPack(in parent: URL) throws -> URL {
+  static func legacyPack(in parent: URL) throws -> URL {
     let converted = RFCXMLSerializer().serialize(
       LegacyTextParser.parse(try Fixtures.data("rfc2119.txt")))
     return try DataPackTests.makePack(

@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
+    # A full run fetches and converts the 8,457 legacy RFCs that have a text file; this only stops a hung one.
     timeout-minutes: 180
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     # Read-only: this job compiles and runs third-party packages. actions: read to
@@ -135,6 +135,8 @@ jobs:
           done
 
       # Also when convert failed on a regression: the report names the documents.
+      # Only what carries no legacy RFC text, at the default retention: the
+      # repository is public, so any signed-in user can download an artifact.
       - name: Upload report and pack folders as workflow artifacts
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -142,9 +144,25 @@ jobs:
           name: corpus-${{ inputs.version }}
           path: |
             corpus/report.json
-            corpus/prose.json
             corpus/manifest.json
-            packs/
+            packs/modern-xml/
+            packs/indexes/
+
+      # The legacy pack's text and prose.json, which quotes the first line of RFC
+      # blocks, wait on the IETF Trust's answer (#215, docs/DATA_PIPELINE.md). Until
+      # the repository variable LEGACY_PACK_CLEARED is 'true' they are kept for a day,
+      # long enough to review the run, and never archived or released.
+      - name: Upload the legacy pack and prose diagnostics for a day
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: corpus-${{ inputs.version }}-legacy
+          # 0 is the repository's default, once the pack may be published. Written as
+          # not-cleared first: 0 is falsy, so `cleared && 0 || 1` is always 1.
+          retention-days: ${{ vars.LEGACY_PACK_CLEARED != 'true' && 1 || 0 }}
+          path: |
+            corpus/prose.json
+            packs/legacy-xml/
 
       # The next run's baseline, on its own so that run downloads one small file:
       # only a full run's, and only a successful one's.
@@ -166,20 +184,30 @@ jobs:
       contents: read
     env:
       VERSION: ${{ inputs.version }}
+      LEGACY_PACK_CLEARED: ${{ vars.LEGACY_PACK_CLEARED == 'true' }}
     steps:
       - name: Download the pack folders
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: corpus-${{ inputs.version }}
 
+      - name: Download the legacy pack folder
+        if: ${{ vars.LEGACY_PACK_CLEARED == 'true' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: corpus-${{ inputs.version }}-legacy
+
       - name: Archive
         run: |
-          for pack in legacy-xml modern-xml indexes; do
+          packs="modern-xml indexes"
+          if [ "$LEGACY_PACK_CLEARED" = true ]; then packs="legacy-xml $packs"; fi
+          for pack in $packs; do
             aa archive -a lzfse -d "packs/$pack" -o "$pack-$VERSION.aar"
           done
           ls -la ./*.aar
 
-      # With the manifest of both, which the release carries beside them.
+      # With the manifest of both, which the release carries beside them once the
+      # legacy pack is cleared.
       - name: Upload packs as workflow artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -203,12 +231,21 @@ jobs:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      LEGACY_PACK_CLEARED: ${{ vars.LEGACY_PACK_CLEARED == 'true' }}
     steps:
+      # Tagged at the commit that built the packs, not the default branch's head: a
+      # run takes hours and can come from any ref.
       - name: Publish release
         run: |
           gh run download "$GITHUB_RUN_ID" --name "packs-$VERSION" --dir packs
-          gh release create "corpus-$VERSION" packs/legacy-xml-*.aar packs/modern-xml-*.aar \
+          # The manifest of both packs lists the legacy documents too, so it goes
+          # only with the legacy pack; each archive carries its own pack's manifest.
+          legacy=()
+          if [ "$LEGACY_PACK_CLEARED" = true ]; then
+            legacy=(packs/legacy-xml-*.aar packs/corpus/manifest.json)
+          fi
+          gh release create "corpus-$VERSION" --target "$GITHUB_SHA" \
+            "${legacy[@]}" packs/modern-xml-*.aar \
             packs/indexes-*.aar \
-            packs/corpus/manifest.json \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

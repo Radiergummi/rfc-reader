@@ -54,6 +54,24 @@ struct TextQueryTests {
     #expect(list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [.rfc(2)])
   }
 
+  /// An RFC published only as a PDF or a PostScript has no text to index, so a
+  /// narrowed search does not count it among what it could have searched. One whose
+  /// formats are not listed may have a text, and stays.
+  @Test func `an RFC with only a PDF or a PostScript is not searched`() {
+    let date = PublicationDate(year: 1975)
+    let index = RFCIndex(
+      rfcs: [
+        RFCMetadata(id: .rfc(1), title: "Text", date: date, formats: [.text]),
+        RFCMetadata(id: .rfc(2), title: "Scanned", date: date, formats: [.pdf, .postScript]),
+        RFCMetadata(id: .rfc(3), title: "Unlisted", date: date),
+      ], series: [])
+    let list = LibraryList(filter: .all, query: "congestion year:1975")
+    #expect(
+      list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [
+        .rfc(1), .rfc(3),
+      ])
+  }
+
   @Test func `the list's filter narrows the documents searched`() {
     let query = textQuery(
       LibraryList(filter: .bookmarks, query: "congestion", bookmarked: [.rfc(2), .rfc(4)]))

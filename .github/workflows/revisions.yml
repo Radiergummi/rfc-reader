@@ -34,12 +34,16 @@ env:
   BUCKET: rfc-reader
 
 jobs:
+  # Builds and runs third-party packages, so it holds no credential: what it writes
+  # leaves it only as an artifact, which the publish job uploads.
   scan:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     permissions:
       contents: read
+    outputs:
+      groups: ${{ steps.groups.outcome }}
     env:
       ALLOW_SHRINK: ${{ inputs.allow-shrink && '--allow-shrink' || '' }}
       ALLOW_GROUPS_SHRINK: ${{ inputs.allow-groups-shrink && '--allow-shrink' || '' }}
@@ -98,6 +102,27 @@ jobs:
         if: steps.groups.outcome == 'failure'
         run: rm -f out/groups.json
 
+      - name: Upload the files to publish
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: revisions
+          path: out/
+          retention-days: 1
+
+  # The only job that sees the bucket's key: it checks nothing out and builds nothing,
+  # on a runner of its own, so nothing the scan compiled or ran is there with it.
+  publish:
+    needs: scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - name: Download the files to publish
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: revisions
+          path: out
+
       # Through R2's S3 API, signed by curl itself. revisions.json goes before the scan
       # record that describes it: if the second upload fails, the next run rescans what
       # was published rather than trusting a record of what was not.
@@ -117,7 +142,7 @@ jobs:
           done
 
       - name: Fail for the groups
-        if: steps.groups.outcome == 'failure'
+        if: needs.scan.outputs.groups == 'failure'
         run: |
           echo "Describing the groups failed; the previous groups.json stays published." >&2
           exit 1

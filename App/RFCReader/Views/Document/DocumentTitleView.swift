@@ -111,6 +111,14 @@
       clipsToBounds = true
     }
 
+    /// Fixed type, as the bar's own title is, so at an accessibility size a long
+    /// press shows it large, as the bar's own title does (#760): the bar's own
+    /// interaction asks its items. Not while it has not slid in.
+    override var showsLargeContentViewer: Bool {
+      get { state.reveal > 0 }
+      set { super.showsLargeContentViewer = newValue }
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
       fatalError("init(coder:) is not used: the title is built in code")
@@ -120,6 +128,17 @@
       if self.title.text != title { self.title.text = title }
       documentTitle = subtitle
       applyText()
+    }
+
+    /// What the Large Content Viewer shows: the title, and the running heading under
+    /// it where there is one.
+    override var largeContentTitle: String? {
+      get {
+        let heading = state.runningHeading.incoming ?? documentTitle
+        return [title.text, heading].compactMap { $0 }.filter { !$0.isEmpty }
+          .joined(separator: "\n")
+      }
+      set { super.largeContentTitle = newValue }
     }
 
     /// Only what changed: while the title slides in the hand-over holds still,

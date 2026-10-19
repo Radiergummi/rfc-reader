@@ -41,6 +41,9 @@ struct ReaderScene: ViewModifier {
         .sheet(item: $navigation.glossaryTerm) { term in
           GlossarySheet(term: term)
         }
+        .sheet(item: $navigation.errataShown) { request in
+          ErrataSheet(items: request.items)
+        }
       #endif
   }
 }

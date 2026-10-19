@@ -38,6 +38,10 @@ struct TableOfContentsView: View {
     }
   }
 
+  /// How far each level of the contents is set in, grown with the text (#760).
+  @ScaledMetric(relativeTo: .body) private var levelIndent: CGFloat = 12
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   private var controls: some View {
     HStack(spacing: 8) {
       Picker("Order", selection: $order) {
@@ -58,8 +62,8 @@ struct TableOfContentsView: View {
       ForEach(rows) { row in
         button(anchor: row.anchor, isContext: row.isContext) {
           Text(row.title)
-            .lineLimit(2)
-            .padding(.leading, CGFloat(max(0, row.depth - 1)) * 12)
+            .lineLimit(dynamicTypeSize.lines(2))
+            .padding(.leading, CGFloat(max(0, row.depth - 1)) * levelIndent)
         }
       }
     }
@@ -79,7 +83,7 @@ struct TableOfContentsView: View {
               button(anchor: entry.anchor, isContext: false) {
                 HStack(alignment: .firstTextBaseline) {
                   Text(entry.title)
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.lines(2))
                   Spacer(minLength: 8)
                   if let caption = entry.caption {
                     Text(caption)

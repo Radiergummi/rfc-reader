@@ -39,7 +39,7 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 *Shipped. Items of later tiers that have shipped say so.*
 
 Browse and find
-- Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Snapshot bundled for offline first launch.
+- Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Not yet bundled with the app, so a first launch needs the network for it (#501).
 - Instant type-ahead search over number, title, keywords, authors, working group, abstract. Query grammar: `wg:httpbis` (or `wg:quic,tls`), `author:fielding`, `status:std`, `status:internet-standard`, `status:current`, `year:2020-2022`, `after:2023-06`, `before:2024`, `published:<90d`, `has:xml`, `is:bookmarked|read|offline`, `in:rfc9110`, `in:bcp14` or `in:"Some collection"`, `sort:newest|oldest|last-read`. A term this version doesn't know finds nothing rather than being searched as text (#355).
 - Sidebar: Bookmarks, Recently read, Available offline, All, Internet Standards, BCPs, streams, top working groups, "Just published" from the RFC Editor RSS feed.
 - Command-L "Go to RFC…" accepting a number, `BCP 14`, or any rfc-editor.org / datatracker URL.
@@ -68,7 +68,7 @@ Reference
 - **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
 - **Highlights and notes**, synced, exportable as Markdown with citations attached.
-- **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs; Handoff between iPhone, iPad and Mac.
+- **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs *(shipped; sections are #178)*; Handoff between iPhone, iPad and Mac.
 - **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open in RFC Reader" and "Replace with RFC Link" on selected text) *(shipped)*, Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".
 - **Coding agents.** A local MCP server, so the agent beside the code reads the same anchored, status-aware text the reader shows: search, sections, requirements with stable IDs, definitions, citations, and the reader's own library. It answers with sources, never generated text. Design: `docs/superpowers/specs/2026-10-02-mcp-server-design.md`.
@@ -77,7 +77,7 @@ Reference
 
 - **Internet-Drafts** from the Datatracker, with the same renderer, and "what changed" diffs between draft versions or between a draft and the RFC it became.
 - **On-device intelligence** via the Foundation Models framework: summarize a section, explain a term in context, "which sections of RFC 9110 replaced Section 5.1 of RFC 7231". Everything stays on device, and every answer links to the text it came from. Worth doing only if it can be honest about its sources.
-- **Translation** of a selection via the Translation framework, for non-native readers.
+- **Translation** via the Translation framework, for non-native readers: of a selection, and of the whole document on demand, which is built (#749, [the decision](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)).
 - **visionOS**: a reading room with a spec pinned next to your code is a genuinely good use of the platform.
 - **Pencil annotation** on iPad, kept as an overlay per section so it survives re-rendering.
 

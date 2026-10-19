@@ -18,6 +18,9 @@ import os
 ///
 /// Not main-actor bound: TextKit enumerates the content and draws as it lays out,
 /// which it does off the main thread too, so what it holds is behind a lock.
+/// Written from outside layout as well — the coordinator folds and bands while the
+/// text is laid out — which is what a fragment's own caches never are
+/// (`RFCTextLayoutFragment`), and why they need no lock of their own.
 nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate, Sendable {
   private struct State {
     var hidden = HiddenText()
@@ -42,6 +45,12 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
       state.disclosures = disclosures
       state.bands = drawn
     }
+  }
+
+  /// The requirement bands found after the folding: what is hidden and disclosed
+  /// stays as it is, as it does not depend on them.
+  func band(_ bands: RequirementBands) {
+    state.withLock { $0.bands = bands }
   }
 
   /// Whether the heading whose paragraph starts at `offset` has a disclosure, and if

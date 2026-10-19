@@ -247,7 +247,9 @@ struct SidebarView: View {
           Button {
             library.open(row.id, activation: .current, in: navigation)
           } label: {
-            RFCRow(row: row, isBookmarked: bookmarked.contains(row.id))
+            RFCRow(
+              row: row, isBookmarked: bookmarked.contains(row.id),
+              isAvailableOffline: library.isAvailableOffline(row.id))
           }
           .buttonStyle(.plain)
         }

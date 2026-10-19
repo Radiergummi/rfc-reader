@@ -5,7 +5,7 @@ import SwiftData
 /// The one place an `OfflineMark` is read or written (#358), on `BookmarkStore`'s
 /// terms: every failure is thrown, and the App decides what to do with it.
 ///
-/// Nobody displays the state by asking here: `LibraryModel` reads
+/// Nobody displays the state by asking here: `UserDataMirror` reads
 /// `markedDocuments(in:)` after every save of a mark, as it reads the bookmarks.
 @MainActor
 public enum OfflineMarkStore {

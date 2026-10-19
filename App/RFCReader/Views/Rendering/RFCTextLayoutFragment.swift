@@ -111,6 +111,14 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   ///
   /// The chip rects are cached at the origin, because only their position depends
   /// on where the fragment is being drawn.
+  ///
+  /// No lock, unlike `FoldingDelegate`'s state: these are the fragment's own, read
+  /// and reset only from what its layout manager calls on it — layout, its
+  /// rendering surface, drawing and `invalidateLayout()` — the way TextKit's own
+  /// per-fragment state is. The reader's text view does all of that on the main
+  /// thread, and a print (`DocumentPDF`) on the one task that owns its layout
+  /// manager, so one fragment is never on two threads at once. `FoldingDelegate`
+  /// locks because the coordinator writes what it holds while layout reads it.
   private var cachedDecorationSpan: FragmentGeometry.DecorationSpan??
   private var cachedChipRects: [FragmentGeometry.ChipRect]?
 

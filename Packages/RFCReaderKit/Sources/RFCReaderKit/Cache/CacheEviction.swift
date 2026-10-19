@@ -12,7 +12,8 @@ import RFCKit
 ///
 /// Here rather than in the store because the App target has no test bundle.
 public enum CacheEviction {
-  /// The bound the app applies: about 1,350 documents at the ~370 KB measured.
+  /// The bound the app applies. How many documents it holds depends on their size,
+  /// which the cache's `StorageUsage` reports.
   public static let defaultBound = 500 * 1024 * 1024
 
   /// How long a document read stays pinned.

@@ -312,8 +312,8 @@ public struct IndexSearch: Sendable {
 
   /// The filters with their text made into needles once per query, matched against
   /// an entry's prepared fields (#151). Lowercasing every author and working group
-  /// on every query was the whole cost of an `author:` search: 6.6 ms in release
-  /// over the full index, twice a free-text query's.
+  /// on every query was the whole cost of an `author:` search, twice a free-text
+  /// query's, when #151 measured it.
   private struct PreparedFilters {
     let filters: SearchFilters
     let groups: Set<SearchText>
@@ -426,9 +426,10 @@ public struct IndexSearch: Sendable {
 /// `String.range(of:)` was the whole cost of search. It is a Foundation call with
 /// per-call setup and Unicode-correct matching, and the scoring loop makes roughly
 /// five of them per entry — the title, each keyword, each author, and the abstract —
-/// across all 9,842 entries. Measured against the real index in release, a one-word
-/// query cost 96 ms, and a query matching *nothing* cost 93: the work was the
-/// scanning, not the hits.
+/// across every entry of the index. Measured against the real index in release, when
+/// the byte scan replaced it (51358534), a query matching *nothing* cost nearly what a
+/// one-word query did: the work was the scanning, not the hits. The "Search"
+/// benchmarks of `make benchmark` measure the scan now.
 ///
 /// What a byte scan gives up is canonical equivalence: `e` + U+0301 is not `é` spelled
 /// as U+00E9. Both sides are folded on the way in (`SearchText.folded`), which

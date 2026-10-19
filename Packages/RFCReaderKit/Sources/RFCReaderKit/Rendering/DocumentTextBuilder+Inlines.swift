@@ -185,7 +185,7 @@ extension DocumentTextBuilder {
   ///
   /// `iconAttributes` are the icon's alone, on top of the chip's.
   private func chipRun(
-    _ text: String, attributes: [NSAttributedString.Key: Any],
+    _ text: String, symbol: String = "doc.text", attributes: [NSAttributedString.Key: Any],
     iconAttributes: [NSAttributedString.Key: Any] = [:]
   ) -> NSAttributedString {
     var chip = attributes
@@ -193,7 +193,7 @@ extension DocumentTextBuilder {
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
     if let symbol = chipSymbolRun(
-      "doc.text", attributes: chip.merging(iconAttributes) { _, icon in icon })
+      symbol, attributes: chip.merging(iconAttributes) { _, icon in icon })
     {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
@@ -253,6 +253,30 @@ extension DocumentTextBuilder {
     output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
   }
 
+  /// A heading's errata chip (#387), after its title and a space: drawn as a
+  /// reference's chip is, in the backlink caption's font, saying how many errata the
+  /// section has and whether they are held, and going nowhere itself: its link names
+  /// the section, and the reader lists the section's errata. The space and the chip are `.rfcReaderOnly`, so a copied
+  /// heading is its words alone.
+  func errataChip(
+    _ anchor: String, items: [ErrataSummary.Item], base: [NSAttributedString.Key: Any]
+  ) -> NSAttributedString {
+    var attributes = base
+    attributes[.rfcReaderOnly] = ""
+    let result = NSMutableAttributedString(string: " ", attributes: attributes)
+    let words = ErrataMarks.bodyLabel(for: items)
+    attributes[.rfcSpoken] = words
+    // Chrome beside the heading, not part of it: the backlink caption's size and weight.
+    attributes[.font] = style.backlinksFont
+    if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.errataScheme) {
+      attributes.merge(linkAttributes(url)) { _, link in link }
+    }
+    // NO-BREAK SPACEs, as a reference's label has: the chip never wraps in the middle.
+    let label = words.replacingOccurrences(of: " ", with: "\u{00A0}")
+    result.append(chipRun(label, symbol: "exclamationmark.bubble", attributes: attributes))
+    return result
+  }
+
   /// A heading's backlink caption (#183, #584): a paragraph of its own under the
   /// heading, an arrow and how many sections refer to the section, in the
   /// secondary style of a caption, so it does not read as part of the heading. It
@@ -273,7 +297,7 @@ extension DocumentTextBuilder {
       .rfcReaderOnly: "",
     ]
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
-    let words = Self.backlinksCaption(count: count)
+    let words = labels.backlinksCaption(count: count)
     attributes[.rfcSpoken] = words
     if let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
@@ -294,6 +318,9 @@ extension DocumentTextBuilder {
     return result
   }
 
+  /// What the copy button is called to VoiceOver: English, as the body is.
+  public static let copyButtonLabel = "Copy Code"
+
   /// How large the copy button's symbol is against its label's font: smaller than
   /// the capitals beside it, so it does not outweigh them. The checkmark shown after
   /// a copy takes the same size.
@@ -304,27 +331,16 @@ extension DocumentTextBuilder {
   /// line with the code under it: an attachment in its own `.rfcCopyCode` run, which
   /// the attachment guard sanctions as it does a chip's. No link: a link is a web
   /// page's control, with its pointing hand, and the reader takes a click on the
-  /// button itself (`copyButtons(in:)`). Nothing for VoiceOver to say, either: it
-  /// cannot press the button, and Copy Figure is in the block's menu
-  /// (`AccessibleReading` leaves it out).
+  /// button itself (`copyButtons(in:)`). VoiceOver cannot press it, but says what
+  /// it is (#760), rather than passing over an unnamed attachment: Copy Code, which
+  /// the block's menu also offers (`ReaderTextView.menu(for:)`).
   func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     var attributes = base
     attributes[.rfcCopyCode] = ""
+    attributes[.rfcSpoken] = Self.copyButtonLabel
     return chipSymbolRun(
       "doc.on.doc", pointSize: style.codeLabelFont.pointSize * Self.copyButtonScale,
       attributes: attributes)
-  }
-
-  /// What a backlink caption says, and VoiceOver says for it: the number of
-  /// sections that refer to the section — not of references, of which one section
-  /// may make several — in words up to three.
-  public static func backlinksCaption(count: Int) -> String {
-    switch count {
-    case 1: "One Backlink"
-    case 2: "Two Backlinks"
-    case 3: "Three Backlinks"
-    default: "\(count) Backlinks"
-    }
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's

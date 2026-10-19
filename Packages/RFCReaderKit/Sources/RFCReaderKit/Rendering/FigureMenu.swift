@@ -52,15 +52,6 @@ public enum FigureMenu {
   public static func itemRange(
     of box: VerbatimBox, touching range: NSRange, in text: NSAttributedString
   ) -> NSRange? {
-    let searched = NSIntersectionRange(
-      NSRange(location: range.location, length: max(range.length, 1)),
-      NSRange(location: 0, length: text.length))
-    var location: Int?
-    text.enumerateAttribute(.rfcVerbatim, in: searched) { value, run, stop in
-      guard (value as? VerbatimBox) === box else { return }
-      location = run.location
-      stop.pointee = true
-    }
-    return location.flatMap { itemRange(at: $0, in: text) }
+    text.location(of: box, touching: range).flatMap { itemRange(at: $0, in: text) }
   }
 }
