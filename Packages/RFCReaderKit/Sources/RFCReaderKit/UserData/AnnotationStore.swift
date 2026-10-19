@@ -2,7 +2,8 @@ import Foundation
 import RFCKit
 import SwiftData
 
-/// Every change to highlights, on a context (#522), on `CollectionStore`'s terms:
+/// Every change to highlights (#522) and notes (#523), on a context, on
+/// `CollectionStore`'s terms:
 /// decided here and tested, each change saved before it returns, every failure
 /// thrown for the App to decide about. Every change the reader makes can be undone,
 /// and undoing puts back every row as it was, merged highlights included.
@@ -55,7 +56,12 @@ public enum AnnotationStore {
     guard case .range(let start, let end, let quote)? = Target(covering: plan.range, in: model)
     else { throw Failure.nothingToHighlight }
     let touched = Set([plan.survivor].compactMap { $0 } + plan.absorbed)
-    let before = rows.filter { touched.contains($0.identifier) }.map(HighlightValues.init)
+    // The notes of every highlight absorbed go to the one that survives, as several
+    // notes may share a highlight: they are not joined.
+    let absorbedNotes = try notes(onHighlights: Set(plan.absorbed), in: context)
+    let before = Rows(
+      highlights: rows.filter { touched.contains($0.identifier) }.map(HighlightValues.init),
+      notes: absorbedNotes.map(NoteValues.init))
     let row: Highlight
     if let survivor = plan.survivor, let kept = rows.first(where: { $0.identifier == survivor }) {
       row = kept
@@ -74,9 +80,12 @@ public enum AnnotationStore {
     for absorbed in rows where plan.absorbed.contains(absorbed.identifier) {
       context.delete(absorbed)
     }
+    for note in absorbedNotes { note.highlightIdentifier = row.identifier }
     try context.save()
     registerUndo(
-      replacing: [row.identifier], with: before, redo: [HighlightValues(row)],
+      replacing: Identifiers(highlights: [row.identifier], notes: absorbedNotes.map(\.identifier)),
+      with: before,
+      redo: Rows(highlights: [HighlightValues(row)], notes: absorbedNotes.map(NoteValues.init)),
       actionName: String(kit: "Highlight", locale: .interface), edit: edit)
     return row.identifier
   }
@@ -91,20 +100,23 @@ public enum AnnotationStore {
     row.modifiedAt = .now
     try context.save()
     registerUndo(
-      replacing: [identifier], with: [before], redo: [HighlightValues(row)],
+      replacing: Identifiers(highlights: [identifier]), with: Rows(highlights: [before]),
+      redo: Rows(highlights: [HighlightValues(row)]),
       actionName: String(kit: "Change Highlight Color", locale: .interface),
       edit: edit)
   }
 
-  /// Deletes a highlight.
+  /// Deletes a highlight, and the notes on it, which the reader was asked about.
   public static func delete(_ identifier: UUID, edit: Edit) throws {
     let context = edit.context
     guard let row = try highlight(identifier, in: context) else { return }
-    let before = HighlightValues(row)
+    let notes = try notes(onHighlights: [identifier], in: context)
+    let before = Rows(highlights: [HighlightValues(row)], notes: notes.map(NoteValues.init))
     context.delete(row)
+    for note in notes { context.delete(note) }
     try context.save()
     registerUndo(
-      replacing: [], with: [before], redo: [],
+      replacing: Identifiers(), with: before, redo: Rows(),
       actionName: String(kit: "Delete Highlight", locale: .interface), edit: edit)
   }
 
@@ -126,7 +138,8 @@ public enum AnnotationStore {
     row.modifiedAt = .now
     try context.save()
     registerUndo(
-      replacing: [identifier], with: [before], redo: [HighlightValues(row)],
+      replacing: Identifiers(highlights: [identifier]), with: Rows(highlights: [before]),
+      redo: Rows(highlights: [HighlightValues(row)]),
       actionName: String(kit: "Place Highlight", locale: .interface), edit: edit)
   }
 
@@ -158,12 +171,105 @@ public enum AnnotationStore {
     try context.save()
   }
 
-  /// Every document with a highlight, for eviction (`CacheEviction.pinned`). Only the
-  /// keys are fetched.
+  /// Every document with a highlight or a note, for eviction (`CacheEviction.pinned`).
+  /// Only the keys are fetched.
   public static func annotatedDocuments(in context: ModelContext) throws -> Set<DocumentID> {
-    var descriptor = FetchDescriptor<Highlight>()
-    descriptor.propertiesToFetch = [\.documentKey]
-    return Set(try context.fetch(descriptor).compactMap(\.document))
+    var highlights = FetchDescriptor<Highlight>()
+    highlights.propertiesToFetch = [\.documentKey]
+    var notes = FetchDescriptor<Note>()
+    notes.propertiesToFetch = [\.documentKey]
+    return Set(try context.fetch(highlights).compactMap(\.document))
+      .union(try context.fetch(notes).compactMap(\.document))
+  }
+
+  // MARK: - Notes
+
+  /// Saves a note's body (#523): the note `identifier`, made on `owner` the first time
+  /// it has text, and deleted when its text is gone, so a note left empty is never
+  /// kept. The editor's own undo covers its text; nothing is registered here.
+  public static func saveNote(
+    _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
+    context: ModelContext
+  ) throws {
+    let existing = try note(identifier, in: context)
+    guard !NoteBody(markdown: body).isEmpty else {
+      if let existing {
+        context.delete(existing)
+        try context.save()
+      }
+      return
+    }
+    if let existing {
+      guard existing.body != body else { return }
+      existing.body = body
+      existing.modifiedAt = .now
+    } else {
+      let row = Note(identifier: identifier, document: document, body: body)
+      switch owner {
+      case .highlight(let highlight):
+        row.highlightIdentifier = highlight
+        // Where the highlight is now, kept for finding it again should it go.
+        if let made = try self.highlight(highlight, in: context),
+          let entry = AnnotationSnapshot.HighlightEntry(row: made)
+        {
+          row.setTarget(entry.current)
+        }
+      case .target(let target):
+        row.setTarget(target)
+      }
+      context.insert(row)
+    }
+    try context.save()
+  }
+
+  /// Deletes a note.
+  public static func deleteNote(_ identifier: UUID, edit: Edit) throws {
+    let context = edit.context
+    guard let row = try note(identifier, in: context) else { return }
+    let before = NoteValues(row)
+    context.delete(row)
+    try context.save()
+    registerUndo(
+      replacing: Identifiers(), with: Rows(notes: [before]), redo: Rows(),
+      actionName: String(kit: "Delete Note", locale: .interface), edit: edit)
+  }
+
+  /// Puts a note whose highlight is gone on the highlight that covers it now
+  /// (`NotePlacement`). Not the reader's change: no undo, and `modifiedAt` stands.
+  public static func repointNote(_ identifier: UUID, to highlight: UUID, context: ModelContext)
+    throws
+  {
+    guard let row = try note(identifier, in: context), row.highlightIdentifier != highlight
+    else { return }
+    row.highlightIdentifier = highlight
+    try context.save()
+  }
+
+  /// Where relocation found a note's own range, as `recordRelocation(of:at:context:)`
+  /// records a highlight's.
+  public static func recordNoteRelocation(
+    of identifier: UUID, at target: Target, context: ModelContext
+  ) throws {
+    guard let row = try note(identifier, in: context), row.highlightIdentifier == nil,
+      case .range(let start, let end, _) = target
+    else { return }
+    let original =
+      row.startAnchor == start.anchor && row.startOffset == start.offset
+      && row.endAnchor == end.anchor && row.endOffset == end.offset
+    if original {
+      guard row.relocatedStartAnchor != nil else { return }
+      row.clearRelocation()
+    } else {
+      guard
+        row.relocatedStartAnchor != start.anchor || row.relocatedStartOffset != start.offset
+          || row.relocatedEndAnchor != end.anchor || row.relocatedEndOffset != end.offset
+      else { return }
+      row.relocatedStartAnchor = start.anchor
+      row.relocatedStartOffset = start.offset
+      row.relocatedEndAnchor = end.anchor
+      row.relocatedEndOffset = end.offset
+    }
+    try context.save()
   }
 
   // MARK: - Undo
@@ -172,8 +278,7 @@ public enum AnnotationStore {
   /// `redo` back in place of `before`'s. Each runs long after this returns, so what
   /// it throws goes to `onUndoFailure`, as `CollectionStore.remove`'s does.
   private static func registerUndo(
-    replacing after: [UUID], with before: [HighlightValues], redo: [HighlightValues],
-    actionName: String, edit: Edit
+    replacing after: Identifiers, with before: Rows, redo: Rows, actionName: String, edit: Edit
   ) {
     guard let undoManager = edit.undoManager else { return }
     undoManager.registerUndo(withTarget: edit.context) { context in
@@ -182,7 +287,7 @@ public enum AnnotationStore {
         do {
           try replace(after, with: before, in: context)
           registerUndo(
-            replacing: before.map(\.identifier), with: redo, redo: before,
+            replacing: before.identifiers, with: redo, redo: before,
             actionName: actionName, edit: edit)
         } catch {
           edit.onUndoFailure(error)
@@ -192,16 +297,20 @@ public enum AnnotationStore {
     undoManager.setActionName(actionName)
   }
 
-  /// Deletes the rows named `identifiers` that `values` does not hold, and makes every
-  /// row in `values` as it says, inserting it where it is gone.
+  /// Deletes the rows named `identifiers` that `rows` does not hold, and makes every
+  /// row in `rows` as it says, inserting it where it is gone.
   private static func replace(
-    _ identifiers: [UUID], with values: [HighlightValues], in context: ModelContext
+    _ identifiers: Identifiers, with rows: Rows, in context: ModelContext
   ) throws {
-    let kept = Set(values.map(\.identifier))
-    for identifier in identifiers where !kept.contains(identifier) {
+    let keptHighlights = Set(rows.highlights.map(\.identifier))
+    for identifier in identifiers.highlights where !keptHighlights.contains(identifier) {
       if let row = try highlight(identifier, in: context) { context.delete(row) }
     }
-    for value in values {
+    let keptNotes = Set(rows.notes.map(\.identifier))
+    for identifier in identifiers.notes where !keptNotes.contains(identifier) {
+      if let row = try note(identifier, in: context) { context.delete(row) }
+    }
+    for value in rows.highlights {
       if let row = try highlight(value.identifier, in: context) {
         value.apply(to: row)
       } else {
@@ -209,6 +318,15 @@ public enum AnnotationStore {
           document: .rfc(0), start: value.start, end: value.end, quote: value.quote,
           color: HighlightColor(name: value.colorName))
         // Its key as it was, which may name no document this version knows.
+        value.apply(to: row)
+        context.insert(row)
+      }
+    }
+    for value in rows.notes {
+      if let row = try note(value.identifier, in: context) {
+        value.apply(to: row)
+      } else {
+        let row = Note(identifier: value.identifier, document: .rfc(0), body: value.body)
         value.apply(to: row)
         context.insert(row)
       }
@@ -230,6 +348,79 @@ public enum AnnotationStore {
     try context.fetch(
       FetchDescriptor<Highlight>(predicate: #Predicate { $0.identifier == identifier })
     ).first
+  }
+
+  private static func note(_ identifier: UUID, in context: ModelContext) throws -> Note? {
+    try context.fetch(
+      FetchDescriptor<Note>(predicate: #Predicate { $0.identifier == identifier })
+    ).first
+  }
+
+  private static func notes(onHighlights highlights: Set<UUID>, in context: ModelContext) throws
+    -> [Note]
+  {
+    guard !highlights.isEmpty else { return [] }
+    // Few, and a predicate over an optional identifier is not one SwiftData can make.
+    return try context.fetch(FetchDescriptor<Note>()).filter { note in
+      note.highlightIdentifier.map(highlights.contains) ?? false
+    }
+  }
+}
+
+/// The rows an undo puts back.
+private struct Rows {
+  var highlights: [HighlightValues] = []
+  var notes: [NoteValues] = []
+
+  var identifiers: Identifiers {
+    Identifiers(highlights: highlights.map(\.identifier), notes: notes.map(\.identifier))
+  }
+}
+
+/// The rows an undo replaces.
+private struct Identifiers {
+  var highlights: [UUID] = []
+  var notes: [UUID] = []
+}
+
+/// A note row's every field, kept for an undo to put back.
+private struct NoteValues {
+  let identifier: UUID
+  let documentKey: String
+  let highlightIdentifier: UUID?
+  let target: Target?
+  let relocated: Target?
+  let body: String
+  let createdAt: Date
+  let modifiedAt: Date
+
+  @MainActor
+  init(_ row: Note) {
+    identifier = row.identifier
+    documentKey = row.documentKey
+    highlightIdentifier = row.highlightIdentifier
+    target = row.target
+    relocated = row.relocatedTarget
+    body = row.body
+    createdAt = row.createdAt
+    modifiedAt = row.modifiedAt
+  }
+
+  @MainActor
+  func apply(to row: Note) {
+    row.identifier = identifier
+    row.documentKey = documentKey
+    row.highlightIdentifier = highlightIdentifier
+    row.setTarget(target)
+    if case .range(let start, let end, _)? = relocated {
+      row.relocatedStartAnchor = start.anchor
+      row.relocatedStartOffset = start.offset
+      row.relocatedEndAnchor = end.anchor
+      row.relocatedEndOffset = end.offset
+    }
+    row.body = body
+    row.createdAt = createdAt
+    row.modifiedAt = modifiedAt
   }
 }
 
