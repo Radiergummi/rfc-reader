@@ -1,4 +1,3 @@
-import CSQLite
 import Foundation
 import RFCKit
 
@@ -21,66 +20,49 @@ import RFCKit
 /// one document, as the citation names it, and the document amending it, with the
 /// anchor of the section that says so, or null for its abstract. See `Amendment`.
 public final class IndexDatabase {
-  public struct Failure: Error, CustomStringConvertible {
-    public let description: String
-  }
+  public typealias Failure = SQLiteDatabase.Failure
 
-  private var connection: OpaquePointer?
-  private var insertCitation: OpaquePointer?
-  private var insertSuccession: OpaquePointer?
-  private var insertAmendment: OpaquePointer?
+  private let database: SQLiteDatabase
+  private let insertCitation: SQLiteDatabase.Statement
+  private let insertSuccession: SQLiteDatabase.Statement
+  private let insertAmendment: SQLiteDatabase.Statement
 
   /// Creates the database at `url`, replacing any file there.
   public init(creatingAt url: URL) throws {
     try? FileManager.default.removeItem(at: url)
-    // A failed open still hands back a connection, for its message; `deinit`
-    // closes it, as it closes any other.
-    guard sqlite3_open(url.path, &connection) == SQLITE_OK else {
-      throw Failure(description: Self.message(of: connection))
-    }
-    try execute(IndexSchema.tables + "BEGIN;")
-    insertCitation = try prepare(IndexSchema.insertCitation)
-    insertSuccession = try prepare(IndexSchema.insertSuccession)
-    insertAmendment = try prepare(IndexSchema.insertAmendment)
+    database = try SQLiteDatabase(contentsOf: url)
+    try database.execute(IndexSchema.tables + "BEGIN;")
+    insertCitation = try database.prepare(IndexSchema.insertCitation)
+    insertSuccession = try database.prepare(IndexSchema.insertSuccession)
+    insertAmendment = try database.prepare(IndexSchema.insertAmendment)
     try setMeta("schema", to: String(IndexSchema.version))
   }
 
-  deinit {
-    sqlite3_finalize(insertCitation)
-    sqlite3_finalize(insertSuccession)
-    sqlite3_finalize(insertAmendment)
-    sqlite3_close(connection)
-  }
-
   public func setMeta(_ key: String, to value: String) throws {
-    let statement = try prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
-    defer { sqlite3_finalize(statement) }
-    try bind(key, at: 1, in: statement)
-    try bind(value, at: 2, in: statement)
-    try step(statement)
+    try database.run("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", key, value)
   }
 
   /// The citations `citing` makes, as `Citations.of` lists them.
   public func insert(_ citations: [Citation], citing: DocumentID) throws {
     let statement = insertCitation
     for citation in citations {
-      try check(sqlite3_reset(statement))
-      try bind(citing.description, at: 1, in: statement)
-      try bind(citation.cited.description, at: 2, in: statement)
+      try statement.reset()
+      try statement.bind(citing.description, at: 1)
+      try statement.bind(citation.cited.description, at: 2)
       switch citation.place {
       case .abstract:
-        try bind("abstract", at: 3, in: statement)
-        try bind(nil, at: 4, in: statement)
+        try statement.bind("abstract", at: 3)
+        try statement.bind(nil, at: 4)
       case .section(let anchor):
-        try bind("section", at: 3, in: statement)
-        try bind(anchor, at: 4, in: statement)
+        try statement.bind("section", at: 3)
+        try statement.bind(anchor, at: 4)
       case .bibliography:
-        try bind("bibliography", at: 3, in: statement)
-        try bind(nil, at: 4, in: statement)
+        try statement.bind("bibliography", at: 3)
+        try statement.bind(nil, at: 4)
       }
-      try check(sqlite3_bind_int64(statement, 5, Int64(citation.count)))
-      try bind(citation.kind?.rawValue, at: 6, in: statement)
-      try step(statement)
+      try statement.bind(citation.count, at: 5)
+      try statement.bind(citation.kind?.rawValue, at: 6)
+      try statement.step()
     }
   }
 
@@ -89,13 +71,13 @@ public final class IndexDatabase {
   public func insert(_ successions: [AlignedSection]) throws {
     let statement = insertSuccession
     for succession in successions {
-      try check(sqlite3_reset(statement))
-      try bind(succession.old.description, at: 1, in: statement)
-      try bind(succession.oldSection, at: 2, in: statement)
-      try bind(succession.new.description, at: 3, in: statement)
-      try bind(succession.newSection, at: 4, in: statement)
-      try check(sqlite3_bind_double(statement, 5, succession.score))
-      try step(statement)
+      try statement.reset()
+      try statement.bind(succession.old.description, at: 1)
+      try statement.bind(succession.oldSection, at: 2)
+      try statement.bind(succession.new.description, at: 3)
+      try statement.bind(succession.newSection, at: 4)
+      try statement.bind(succession.score, at: 5)
+      try statement.step()
     }
   }
 
@@ -104,19 +86,19 @@ public final class IndexDatabase {
   public func insert(_ amendments: [Amendment]) throws {
     let statement = insertAmendment
     for amendment in amendments {
-      try check(sqlite3_reset(statement))
-      try bind(amendment.amended.description, at: 1, in: statement)
-      try bind(amendment.section, at: 2, in: statement)
-      try bind(amendment.amending.description, at: 3, in: statement)
-      try bind(amendment.amendingSection, at: 4, in: statement)
-      try step(statement)
+      try statement.reset()
+      try statement.bind(amendment.amended.description, at: 1)
+      try statement.bind(amendment.section, at: 2)
+      try statement.bind(amendment.amending.description, at: 3)
+      try statement.bind(amendment.amendingSection, at: 4)
+      try statement.step()
     }
   }
 
   /// Indexes what a reader looks up and commits: until this returns, the file holds
   /// nothing a reader should trust.
   public func close() throws {
-    try execute(
+    try database.execute(
       """
       CREATE INDEX citations_by_cited ON citations (cited);
       CREATE INDEX citations_by_citing ON citations (citing);
@@ -126,52 +108,5 @@ public final class IndexDatabase {
       COMMIT;
       VACUUM;
       """)
-  }
-
-  // MARK: - SQLite
-
-  private func execute(_ sql: String) throws {
-    guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else {
-      throw Failure(description: Self.message(of: connection))
-    }
-  }
-
-  private func prepare(_ sql: String) throws -> OpaquePointer? {
-    var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK else {
-      throw Failure(description: Self.message(of: connection))
-    }
-    return statement
-  }
-
-  private func step(_ statement: OpaquePointer?) throws {
-    guard sqlite3_step(statement) == SQLITE_DONE else {
-      throw Failure(description: Self.message(of: connection))
-    }
-  }
-
-  /// SQLite copies the text, since the Swift string it came from does not outlive
-  /// the call: `SQLITE_TRANSIENT`, which the C macro spells as a cast Swift cannot
-  /// import.
-  private func bind(_ text: String?, at index: Int32, in statement: OpaquePointer?) throws {
-    guard let text else {
-      try check(sqlite3_bind_null(statement, index))
-      return
-    }
-    try check(sqlite3_bind_text(statement, index, text, -1, Self.transient))
-  }
-
-  /// A failed bind leaves the parameter as it was, so a row would be written with the
-  /// last one's value; it has to stop the build instead.
-  private func check(_ result: Int32) throws {
-    guard result == SQLITE_OK else {
-      throw Failure(description: Self.message(of: connection))
-    }
-  }
-
-  private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-  private static func message(of connection: OpaquePointer?) -> String {
-    connection.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "SQLite failed"
   }
 }
