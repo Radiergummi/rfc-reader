@@ -70,11 +70,12 @@ struct ReaderShortcutTests {
     #expect(ReaderShortcut.nextSection.chord(on: .mac)?.symbols == "⌥⌘↓")
   }
 
-  /// The commands take these, so the menu shows what the help says.
+  /// The commands take these, so the menu shows what the help says. Shortcuts
+  /// answered on both platforms, as this runs on either.
   @Test func `the key equivalent is the chord`() {
     #expect(
-      ReaderShortcut.copyAsQuote.keyboardShortcut
-        == KeyboardShortcut("c", modifiers: [.command, .option, .shift]))
+      ReaderShortcut.findPrevious.keyboardShortcut
+        == KeyboardShortcut("g", modifiers: [.command, .shift]))
     #expect(
       ReaderShortcut.previousSection.keyboardShortcut
         == KeyboardShortcut(.upArrow, modifiers: [.command, .option]))

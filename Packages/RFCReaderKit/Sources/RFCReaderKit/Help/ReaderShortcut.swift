@@ -285,16 +285,14 @@ public enum ReaderShortcut: CaseIterable, Sendable {
       guard modifiers.intersection([.command, .shift, .option, .control]) == expected,
         let characters
       else { return false }
-      let functionKey: Int? =
-        switch key {
-        case .character: nil
-        case .upArrow: NSUpArrowFunctionKey
-        case .downArrow: NSDownArrowFunctionKey
-        case .leftArrow: NSLeftArrowFunctionKey
-        case .rightArrow: NSRightArrowFunctionKey
-        }
-      if case .character(let character) = key {
+      let functionKey: Int
+      switch key {
+      case .character(let character):
         return characters.lowercased() == String(character).lowercased()
+      case .upArrow: functionKey = NSUpArrowFunctionKey
+      case .downArrow: functionKey = NSDownArrowFunctionKey
+      case .leftArrow: functionKey = NSLeftArrowFunctionKey
+      case .rightArrow: functionKey = NSRightArrowFunctionKey
       }
       return characters.unicodeScalars.first.map { Int($0.value) } == functionKey
     }

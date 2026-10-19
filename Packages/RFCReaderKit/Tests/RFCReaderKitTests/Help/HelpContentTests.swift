@@ -73,8 +73,9 @@ struct HelpContentTests {
           section.title(locale: locale),
           HelpContent.introduction(to: section, on: platform, locale: locale),
         ]
+          // A filter's example is syntax, which is not translated; its explanation is.
           + HelpContent.entries(in: section, on: platform, locale: locale).flatMap {
-            [$0.term, $0.text]
+            section == .search ? [$0.text] : [$0.term, $0.text]
           }
       }
         + ReaderShortcut.Group.allCases.flatMap { group in
@@ -82,10 +83,10 @@ struct HelpContentTests {
             + ReaderShortcut.rows(in: group, on: platform, locale: locale).map(\.title)
         }
     }
-    // A word that is the same in both languages, or syntax, which is not translated.
+    // A word that is the same in both languages.
     let alike: Set<String> = ["Normal"]
     for (english, german) in zip(words(.english), words(.german))
-    where !alike.contains(english) && !english.contains(":") {
+    where !alike.contains(english) {
       #expect(english != german, "\(english)")
     }
   }

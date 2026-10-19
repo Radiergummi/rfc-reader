@@ -202,7 +202,8 @@ import SwiftUI
         navigation.isShowingGoToSheet = true
       }
       .focusedSceneValue(\.showHelpAction) {
-        helpTarget = HelpTarget()
+        // Not again while it is on show: a new target would dismiss and present it.
+        if helpTarget == nil { helpTarget = HelpTarget() }
       }
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
