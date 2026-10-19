@@ -37,21 +37,22 @@ public enum AnnotationExport {
     var placed: [Placed] = []
     var unplaced: [String] = []
     for highlight in highlights {
-      let notes = notesOnHighlight[highlight.id] ?? []
+      let itsNotes = notesOnHighlight[highlight.id] ?? []
       switch highlightPlacement.statuses[highlight.id] {
       case .placed(let range, _, let section)?:
         placed.append(
           Placed(
             start: range.lowerBound, isSectionNote: false, createdAt: highlight.createdAt,
             section: section,
-            text: writer.highlight(quote: model.text(in: range), section: section, notes: notes)))
+            text: writer.highlight(passage(range, in: model), section: section, notes: itsNotes)))
       case .ambiguous?:
-        if !notes.isEmpty {
+        if !itsNotes.isEmpty {
           unplaced.append(
-            writer.highlight(quote: highlight.quote.exact, section: nil, notes: notes))
+            writer.highlight(Passage(highlight.quote.exact), section: nil, notes: itsNotes))
         }
       case .detached?, nil:
-        unplaced.append(writer.highlight(quote: highlight.quote.exact, section: nil, notes: notes))
+        unplaced.append(
+          writer.highlight(Passage(highlight.quote.exact), section: nil, notes: itsNotes))
       }
     }
     for note in ownNotes {
@@ -65,14 +66,16 @@ public enum AnnotationExport {
             section: section,
             text: isSection
               ? writer.body(of: note)
-              : writer.highlight(quote: model.text(in: range), section: section, notes: [note])))
+              : writer.highlight(passage(range, in: model), section: section, notes: [note])))
       } else {
         let quote = if case .range(_, _, let quote)? = note.target { quote.exact } else { "" }
-        unplaced.append(writer.highlight(quote: quote, section: nil, notes: [note]))
+        unplaced.append(writer.highlight(Passage(quote), section: nil, notes: [note]))
       }
     }
 
     var parts = [frontMatter(document: document, id: id, exported: exported, timeZone: timeZone)]
+    // The section whose heading was written last: nil before any, and nil inside once
+    // an annotation in no section was.
     var section: String??
     // The annotations of one place in the order they were made, a section's own note
     // ahead of whatever starts with it.
@@ -93,6 +96,34 @@ public enum AnnotationExport {
     }
     if parts.count == 1 { parts.append("No highlights or notes.") }
     return parts.joined(separator: "\n\n") + "\n"
+  }
+
+  /// What a quote says, and whether it is a figure's or code's, whose lines are kept as
+  /// they are; nil where only the stored quote is known, which says so by an indented
+  /// line.
+  struct Passage {
+    let text: String
+    let isVerbatim: Bool?
+
+    init(_ text: String, isVerbatim: Bool? = nil) {
+      self.text = text
+      self.isVerbatim = isVerbatim
+    }
+  }
+
+  /// The passage at `range`: a figure's or code's from the start of its first line,
+  /// whose indentation a highlight snapped to words leaves out.
+  private static func passage(_ range: Range<Int>, in model: ModelText) -> Passage {
+    guard model.isVerbatim(range) else { return Passage(model.text(in: range), isVerbatim: false) }
+    let space: UInt16 = 0x20
+    let tab: UInt16 = 0x09
+    let newline: UInt16 = 0x0A
+    var start = range.lowerBound
+    while start > 0, model.units[start - 1] == space || model.units[start - 1] == tab {
+      start -= 1
+    }
+    if start > 0, model.units[start - 1] != newline { start = range.lowerBound }
+    return Passage(model.text(in: start..<range.upperBound), isVerbatim: true)
   }
 
   /// One annotation placed in the document, as it is written.
@@ -146,11 +177,11 @@ public enum AnnotationExport {
     }
 
     /// A quote, cited from `section` when it has a place, then `notes`' bodies.
-    func highlight(quote: String, section: String?, notes: [AnnotationSnapshot.NoteEntry])
+    func highlight(_ quote: Passage, section: String?, notes: [AnnotationSnapshot.NoteEntry])
       -> String
     {
       var parts: [String] = []
-      if !quote.isEmpty { parts.append(Self.blockQuote(quote)) }
+      if !quote.text.isEmpty { parts.append(Self.blockQuote(quote)) }
       if let section { parts.append("— " + citation(of: section)) }
       parts.append(contentsOf: notes.map(body(of:)))
       return parts.joined(separator: "\n\n")
@@ -166,36 +197,24 @@ public enum AnnotationExport {
     }
 
     /// The quote, as Copy as Quote writes one. Prose is a paragraph a line, with a
-    /// `<` as an entity, or a Markdown renderer takes `<field-name>` for a tag. A quote
-    /// with an indented line is of a figure, code or a grammar, whose columns and
-    /// lines are its meaning: fenced, with its lines as they are, so Markdown neither
-    /// reflows them nor reads them as its own.
-    static func blockQuote(_ text: String) -> String {
-      let lines = text.components(separatedBy: "\n").map(trimmingTrailingSpaces)
-      let isVerbatim = lines.contains { $0.first == " " || $0.first == "\t" }
+    /// `<` as an entity, or a Markdown renderer takes `<field-name>` for a tag. A
+    /// figure's, code's or a grammar's, whose columns and lines are its meaning, is
+    /// fenced, with its lines as they are, so Markdown neither reflows them nor reads
+    /// them as its own; a stored quote alone is taken for one by an indented line.
+    static func blockQuote(_ quote: Passage) -> String {
+      let lines = quote.text.components(separatedBy: "\n").map { $0.trimmingTrailingSpaces() }
+      let isVerbatim =
+        quote.isVerbatim ?? lines.contains { $0.first == " " || $0.first == "\t" }
       guard isVerbatim else {
         return lines.filter { !$0.isEmpty }
           .map { "> " + escaped($0) }
           .joined(separator: "\n>\n")
       }
       // Longer than any run of backticks in it, or a line of it would close the fence.
-      var longest = 0
-      for line in lines {
-        var run = 0
-        for character in line {
-          run = character == "`" ? run + 1 : 0
-          longest = max(longest, run)
-        }
-      }
-      let fence = String(repeating: "`", count: max(3, longest + 1))
+      let fence = String(
+        repeating: "`", count: max(3, QuoteCitation.longestBacktickRun(in: lines) + 1))
       return ([fence] + lines + [fence]).map { $0.isEmpty ? ">" : "> " + $0 }
         .joined(separator: "\n")
-    }
-
-    private static func trimmingTrailingSpaces(_ line: String) -> String {
-      var line = line
-      while line.last == " " || line.last == "\t" { line.removeLast() }
-      return line
     }
 
     /// Prose with its `<` an entity.
