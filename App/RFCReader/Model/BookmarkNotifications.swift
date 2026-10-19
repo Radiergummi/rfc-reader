@@ -39,10 +39,10 @@ enum BookmarkNotifications {
   }
 
   /// At launch, before a tap on a notification can be delivered: a tap that launched
-  /// the app arrives as soon as it has finished launching.
+  /// the app arrives as soon as it has finished launching. Not where iOS is asked for
+  /// the daily refresh, which waits for the scene that handles it (`RFCReaderApp`).
   static func install() {
     UNUserNotificationCenter.current().delegate = delegate
-    if isEnabled { scheduleRefresh() }
     #if os(macOS)
       Task(name: "Refresh bookmarks daily") {
         // The continuous clock, which runs on while the Mac sleeps, so a refresh
