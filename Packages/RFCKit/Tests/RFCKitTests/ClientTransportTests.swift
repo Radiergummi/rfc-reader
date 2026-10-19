@@ -157,7 +157,7 @@ struct ClientTransportTests {
       _ = try await client.fetchIndexData(unlessMatching: nil, onExpensiveNetworks: true)
     } throws: { Self.isInvalidResponse($0) }
     await #expect {
-      _ = try await client.fetchRecent()
+      _ = try await client.fetchRecentData(unlessMatching: nil, onExpensiveNetworks: true)
     } throws: { Self.isInvalidResponse($0) }
     await #expect {
       _ = try await client.fetchRegistry(.httpStatusCodes, onExpensiveNetworks: true)

@@ -52,6 +52,9 @@ notarize() {
 step "Generating the Xcode project"
 make xcodeproj
 
+step "Fetching the RFC index to bundle"
+make bundled-index
+
 step "Fetching the indexes pack to bundle"
 make indexes-pack
 

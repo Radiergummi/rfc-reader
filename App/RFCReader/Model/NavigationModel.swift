@@ -78,6 +78,36 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+
+  /// What Save as Collection… would keep (#355): the list on show as a query of the
+  /// whole library (`LibraryList.savedQuery`). Nil, and the item disabled, while the
+  /// list is not searched: there is nothing to keep that the sidebar doesn't list;
+  /// and while its search names its filter's qualifier again, which no query keeps.
+  var savedQuery: String? {
+    guard let list = listed?.list, !list.query.isUnsearchedQuery,
+      let query = list.savedQuery(in: library.collections)
+    else { return nil }
+    // Not a search for a section, which a collection's list never shows.
+    return CollectionStore.isValidQuery(query) ? query : nil
+  }
+
+  /// The query of the collection made from one that the tab lists (#355), which is
+  /// in the whole library's order rather than one of its own; nil for every other
+  /// list.
+  var collectionQuery: String? {
+    guard case .collection(let identifier) = filter else { return nil }
+    return library.collections[identifier]?.query
+  }
+
+  /// Whether the tab lists a collection made from a query (#355).
+  var listsDynamicCollection: Bool { collectionQuery != nil }
+
+  /// Save as Collection…: the editor, with the query to keep. On the Mac through
+  /// `ReaderWindowController.saveAsCollection()`, which opens the sidebar first.
+  func saveAsCollection() {
+    guard let savedQuery else { return }
+    collectionEditor = .save(query: savedQuery)
+  }
   /// The reading path sheet on show, if any (#189): asked for by a row's context
   /// menu or the Info pane, presented by `ReaderScene`, for the same reason.
   var readingPath: ReadingPathRequest?
@@ -614,7 +644,10 @@ extension NavigationModel: ListSources {
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
-      .id
+    library.collections.collection(named: name)?.id
+  }
+
+  func query(of collection: UUID) -> String? {
+    library.collections[collection]?.query
   }
 }

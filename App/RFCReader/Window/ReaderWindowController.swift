@@ -402,6 +402,14 @@
       }
     }
 
+    /// File > Save as Collection… (#355), with the sidebar opened first, as
+    /// `newCollection()` does, so the collection is in view once made.
+    func saveAsCollection() {
+      revealSidebar { [navigation] in
+        navigation.saveAsCollection()
+      }
+    }
+
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
       splitController.openSidebar()

@@ -15,6 +15,7 @@ struct RFCListView: View {
     /// Whether the notices of the code the app adapts are on show.
     @State private var showsAcknowledgements = false
     @State private var showsSettings = false
+    @State private var showsHelp = false
   #endif
 
   private var rows: [LibraryRow] {
@@ -41,9 +42,13 @@ struct RFCListView: View {
     @Environment(\.editMode) private var editMode
   #endif
 
-  /// The collection the list shows, if it shows one.
+  /// The collection the list shows, if it shows one whose members are chosen: not
+  /// one made from a query (#355), which takes nothing added and nothing removed.
   private var collection: UUID? {
-    if case .collection(let identifier) = shown.filter { identifier } else { nil }
+    guard case .collection(let identifier) = shown.filter, shown.definition == nil else {
+      return nil
+    }
+    return identifier
   }
 
   /// The working group whose card heads the list (#363): while its RFCs are listed
@@ -155,7 +160,7 @@ struct RFCListView: View {
     }
     // A collection in its own order can be rearranged and emptied (#349). Never
     // sectioned by year, so this is the branch a collection uses.
-    let allowsMoving = shown.options.allowsMoving(in: shown.filter, query: shown.query)
+    let allowsMoving = shown.allowsMoving
     let visible = Array(window)
     let unsectioned = ForEach(window) { listed in
       row(listed, true)
@@ -234,11 +239,7 @@ struct RFCListView: View {
       // under an empty search, where the overlay already says what there is to
       // say.
       if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
-        IndexStatusView()
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 8)
-          .listRowSeparator(.hidden)
-          .selectionDisabled()
+        IndexStatusRow()
       }
     }
     // Inset rather than plain: the selection is a rounded capsule with a margin
@@ -252,13 +253,24 @@ struct RFCListView: View {
       .headerProminence(.increased)
     #endif
     .overlay {
+      // Only while there is no index, when nothing below shows.
+      IndexPlaceholderView()
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
       if rows.isEmpty, navigation.listed != nil, !hasTextHits, !awaitsSections {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery
-        if isUnsearched, let collection {
+        // A query naming something unknown says which term, and why (#355).
+        if let notice = library.index.flatMap({
+          UnknownTermsNotice(shown.unknownTerms(in: $0))
+        }) {
+          ContentUnavailableView {
+            Label(notice.title, systemImage: "questionmark.circle")
+          } description: {
+            Text(verbatim: notice.description)
+          }
+        } else if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
           } description: {
@@ -372,8 +384,11 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
-        // The tab's collection rather than the rows': a control follows the tab.
-        if case .collection(let collection) = navigation.filter {
+        // The tab's collection rather than the rows': a control follows the tab. Not
+        // one made from a query, which takes nothing added (#355).
+        if case .collection(let collection) = navigation.filter,
+          !navigation.listsDynamicCollection
+        {
           ToolbarItem(placement: .primaryAction) {
             Button {
               addingTo = PickerTarget(id: collection)
@@ -389,6 +404,7 @@ struct RFCListView: View {
       .refreshable { await library.refreshIndex() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
       .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
+      .sheet(isPresented: $showsHelp) { HelpSheet() }
     #endif
   }
 
@@ -398,10 +414,22 @@ struct RFCListView: View {
       Menu {
         ListViewOptions(navigation: navigation)
         Section {
+          // The search on show, kept as a collection made from a query (#355).
+          if navigation.savedQuery != nil {
+            Button("Save as Collection…", systemImage: "folder.badge.gearshape") {
+              navigation.saveAsCollection()
+            }
+          }
+        }
+        Section {
           // iOS has no Settings scene, and the reader's settings are the app's own
           // rather than the Settings app's (#703).
           Button("Settings", systemImage: "gearshape") {
             showsSettings = true
+          }
+          // The iPhone has no menu bar to hold Help (#780).
+          Button("Help", systemImage: "questionmark.circle") {
+            showsHelp = true
           }
           Button("Acknowledgements", systemImage: "doc.text") {
             showsAcknowledgements = true
@@ -440,11 +468,12 @@ struct ListViewOptions: View {
   #endif
 
   private var canReorder: Bool {
-    ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery)
+    LibraryList.canReorder(
+      navigation.filter, definition: navigation.collectionQuery, query: navigation.appliedQuery)
   }
 
   var body: some View {
-    if case .collection = navigation.filter {
+    if case .collection = navigation.filter, !navigation.listsDynamicCollection {
       Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
         ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text(verbatim: $0.title()) }
       }
@@ -461,6 +490,65 @@ struct ListViewOptions: View {
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
       ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
+    }
+  }
+}
+
+/// `IndexStatusView` after the last row, unless the placeholder over the list says
+/// what it would (#770). A view of its own, so the download's progress, which the
+/// placeholder follows, redraws it rather than the list.
+private struct IndexStatusRow: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    if library.indexPlaceholder == nil {
+      IndexStatusView()
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .listRowSeparator(.hidden)
+        .selectionDisabled()
+    }
+  }
+}
+
+/// The first launch's download of the index, or why there is no index (#770), in
+/// place of the list's rows. A view of its own, so the download's progress redraws it
+/// rather than the list.
+private struct IndexPlaceholderView: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    switch library.indexPlaceholder {
+    case .downloading(let bytesReceived):
+      ContentUnavailableView {
+        Label("Downloading the RFC Index", systemImage: "arrow.down.circle")
+      } description: {
+        Text("The list of every RFC is downloaded once, then kept up to date.")
+      } actions: {
+        VStack {
+          ProgressView()
+          Text("\(bytesReceived.formatted(.byteCount(style: .file))) received")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+      }
+    case .failed(let kind, let message):
+      ContentUnavailableView {
+        Label("Couldn’t Load the RFC Index", systemImage: kind.symbol)
+      } description: {
+        Text(verbatim: message)
+        Text(verbatim: kind.recoverySuggestion(for: .index))
+      } actions: {
+        Button("Try Again") { library.retryIndex() }
+        #if !os(macOS)
+          if kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
+      }
+    case nil:
+      EmptyView()
     }
   }
 }

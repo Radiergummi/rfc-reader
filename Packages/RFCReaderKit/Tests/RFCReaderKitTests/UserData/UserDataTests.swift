@@ -189,6 +189,38 @@ struct UserDataTests {
     #expect(try context.fetch(FetchDescriptor<OfflineMark>()).isEmpty)
   }
 
+  /// V5 to V6 only adds a collection's query (#355): every existing row survives,
+  /// and every existing collection is a manual one.
+  @Test func `a version 5 store migrates to version 6 without losing a row`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let collection: UUID
+
+    do {
+      let previous = try ModelContainer(
+        for: Schema(versionedSchema: SchemaV5.self), configurations: ModelConfiguration(url: url))
+      let context = ModelContext(previous)
+      context.insert(SchemaV5.Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+      let made = SchemaV5.DocumentCollection(name: "HTTP", color: .blue, position: 1)
+      collection = made.identifier
+      context.insert(made)
+      context.insert(
+        SchemaV5.DocumentCollectionItem(collection: collection, document: .rfc(9110), position: 1))
+      context.insert(SchemaV5.OfflineMark(document: .rfc(9110)))
+      try context.save()
+    }
+
+    let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
+    let context = ModelContext(migrated)
+    #expect(try context.fetch(FetchDescriptor<Bookmark>()).map(\.document) == [.rfc(9110)])
+    let collections = try context.fetch(FetchDescriptor<DocumentCollection>())
+    #expect(collections.map(\.identifier) == [collection])
+    #expect(collections.map(\.query) == [nil])
+    let items = try context.fetch(FetchDescriptor<DocumentCollectionItem>())
+    #expect(items.map(\.document) == [.rfc(9110)])
+    #expect(try context.fetch(FetchDescriptor<OfflineMark>()).map(\.document) == [.rfc(9110)])
+  }
+
   /// A constant default would give every row one identifier.
   @Test func `two new collections get different identifiers`() {
     let first = DocumentCollection(name: "HTTP/3", color: .blue, position: 1)

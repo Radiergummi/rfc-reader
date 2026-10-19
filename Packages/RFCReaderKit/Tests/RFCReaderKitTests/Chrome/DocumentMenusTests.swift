@@ -113,6 +113,16 @@ struct DocumentMenusTests {
     #expect(menu[0].map(\.action) == [.toggleCollection(http), .toggleCollection(dns)])
   }
 
+  /// A collection made from a query takes nothing added to it (#355).
+  @Test func `a dynamic collection is not offered`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "HTTP", color: .blue, members: []),
+      .init(id: UUID(), name: "QUIC", color: .green, members: [], query: "wg:quic"),
+    ])
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .english)
+    #expect(titles(menu) == [["HTTP"], ["New Collection…"]])
+  }
+
   /// Each collection is shown as the sidebar shows it, as a folder in its color, so
   /// the menu and the sidebar name the same collection the same way.
   /// A collection's name is the user's own text, never a key, even when it is a

@@ -25,6 +25,10 @@ __pycache__/
 Tools/benchmarks/.benchmarkBaselines/
 Tools/benchmarks-layout/.benchmarkBaselines/
 
+# The RFC index a build bundles, which `make bundled-index` fetches (#770), and its
+# partial download
+App/Resources/rfc-index.xml*
+
 # The indexes pack a build bundles, which `make indexes-pack` fetches (#738)
 App/Resources/indexes/
 App/Resources/indexes.part/
@@ -42,3 +46,9 @@ App/SafariExtension/RFCReaderSafari.entitlements
 
 # Wrangler's local state, from deploying site/
 site/.wrangler/
+
+# Screenshots and result bundles `make hand-check` exports
+/hand-checks/
+
+# Local credentials, such as the R2 keys for publishing
+.env

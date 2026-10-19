@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -123,8 +123,9 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 # ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
-# saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
-# run on a Mac only, where the package builds: `test-corpus-app`.
+# saying so, from `CorpusText`, or in RFCReaderKit `CorpusXML`, rather than on a
+# missing file. RFCReaderKit's suites run on a Mac only, where the package builds:
+# `test-corpus-app`.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
@@ -371,6 +372,38 @@ run-sim: ios-app
 	  xcrun simctl launch --terminate-running-process '$(IOS_SIMULATOR)' \
 	    "$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$app/Info.plist")"
 
+## Run one hand check in the iOS Simulator and export its screenshots
+# The scenarios in App/HandChecks (#743) drive the app from outside with XCUITest:
+# they tap, swipe, long-press, open links and answer the system's alerts, which
+# `run-sim` cannot. Each starts from a first launch: the app is removed from the
+# simulated device first, with what it stored and the permissions it was given.
+# The screenshots its steps save land in hand-checks/<CHECK>/, named by the step,
+# with the run's result bundle beside them, whether it passed or not. No
+# diagnostics on a failure: the sysdiagnose xcodebuild collects then is slow, and
+# the screenshots say more. Not part of `check` or CI: a change
+# that needs a hand check runs the one it needs. Without CHECK, it lists them.
+#
+#   make hand-check CHECK=testReaderStackPushAndPop
+#   make hand-check CHECK=testCitationLongPress IOS_SIMULATOR='iPad Air 11-inch (M4)'
+#
+HAND_CHECKS := hand-checks
+hand-check: hand-check-check xcodeproj
+	@rm -rf '$(HAND_CHECKS)/$(CHECK)' '$(HAND_CHECKS)/$(CHECK).xcresult'
+	@xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null
+	@xcrun simctl uninstall '$(IOS_SIMULATOR)' me.mazetti.rfc-reader
+	@mkdir -p '$(HAND_CHECKS)'
+	xcodebuild test -project $(PROJECT) -scheme HandChecks \
+	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) \
+	  -only-testing:'HandChecks/HandChecks/$(CHECK)' -resultBundlePath '$(HAND_CHECKS)/$(CHECK).xcresult' \
+	  -collect-test-diagnostics never -quiet $(SIGNING); \
+	  status=$$?; \
+	  Tools/hand-checks/export.py '$(HAND_CHECKS)/$(CHECK).xcresult' '$(HAND_CHECKS)/$(CHECK)'; \
+	  exit $$status
+
+hand-check-check:
+	@sed -n 's/^ *func \(test[A-Za-z]*\)().*/\1/p' App/HandChecks/*.swift | grep -Fqx '$(CHECK)' || \
+	  { echo "set CHECK to one of these:"; sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
+
 ## Build and launch the macOS app
 # A running copy is quit first, or `open` would just bring the old build back to
 # the front.
@@ -380,6 +413,18 @@ run: build-app
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  echo "launching $$app"; \
 	  open "$$app"
+
+## Fetch the RFC index the app bundles, for a first launch offline (#770)
+# Into App/Resources, which git ignores, afresh every time: the app dates the bundled
+# index by when it was fetched, so one left from months ago would read as current.
+# project.yml's "Bundle the RFC index" phase copies it into the app; a Release build
+# fails without it, and a Debug build bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+BUNDLED_INDEX := App/Resources/rfc-index.xml
+bundled-index:
+	@mkdir -p $(dir $(BUNDLED_INDEX))
+	$(CURL) --compressed -o $(BUNDLED_INDEX).part https://www.rfc-editor.org/rfc-index.xml && \
+	  mv $(BUNDLED_INDEX).part $(BUNDLED_INDEX)
 
 ## Fetch the indexes pack the app bundles (#738)
 # The release App/indexes-pack.mk pins, into App/Resources/indexes, which git
@@ -418,7 +463,7 @@ indexes-pack:
 
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
-install: indexes-pack build-app
+install: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
@@ -456,7 +501,7 @@ publish-feed:
 TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
-trace: indexes-pack build-app
+trace: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
