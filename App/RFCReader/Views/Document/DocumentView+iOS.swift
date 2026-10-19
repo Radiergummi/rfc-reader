@@ -167,3 +167,53 @@
     }
   }
 #endif
+
+#if !os(macOS)
+  /// A draft's chrome on iOS (#728): its name in the bar, and of an RFC's toolbar
+  /// what a draft has, Contents and the text size, with the panel as a sheet in
+  /// compact width, as `IOSDocumentChrome` presents it. Not Bookmark, Share, Info or
+  /// More, whose actions are an RFC's: the index lists it, and a draft is in no index.
+  struct IOSDraftChrome: ViewModifier {
+    let library: LibraryModel
+    let navigation: NavigationModel
+    let reader: ReaderState
+    @Binding var showsInspector: Bool
+    /// Whether the window's reader state is this reader's; only the reader on top
+    /// presents the panel.
+    let isShown: Bool
+
+    @Environment(\.sceneChrome) private var chrome
+    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
+    @State private var readingPathAfterPanel: ReadingPathRequest?
+
+    func body(content: Content) -> some View {
+      content
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItemGroup(placement: .bottomBar) {
+            Button {
+              let result = InspectorPane.pressing(
+                .navigation, isOpen: showsInspector, showing: reader.pane)
+              reader.pane = result.pane
+              withAnimation(.snappy) { showsInspector = result.isOpen }
+            } label: {
+              Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            TextSizeButton(library: library)
+          }
+        }
+        .sheet(isPresented: chrome.isCollapsed && isShown ? $showsInspector : .constant(false)) {
+          guard let request = readingPathAfterPanel else { return }
+          readingPathAfterPanel = nil
+          navigation.readingPath = request
+        } content: {
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .presentationDetents([.medium, .large])
+        }
+    }
+  }
+#endif

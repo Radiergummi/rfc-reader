@@ -24,16 +24,16 @@ struct UserDataTests {
 
   @Test func `a reading position keeps the place, anchor and offset`() {
     let position = ReadingPosition(
-      document: .rfc(9110), place: ReadingPlace(anchor: "section-4.2", offset: 118))
+      key: DocumentID.rfc(9110).fileStem, place: ReadingPlace(anchor: "section-4.2", offset: 118))
     #expect(position.place == ReadingPlace(anchor: "section-4.2", offset: 118))
-    #expect(ReadingPosition(document: .rfc(9110), place: nil).place == nil)
+    #expect(ReadingPosition(key: DocumentID.rfc(9110).fileStem, place: nil).place == nil)
   }
 
   /// The first character of a document, ahead of its first anchor, is a place, not
   /// the absence of one.
   @Test func `a place ahead of the first anchor is kept`() {
     let start = ReadingPlace(anchor: nil, offset: 0)
-    #expect(ReadingPosition(document: .rfc(9110), place: start).place == start)
+    #expect(ReadingPosition(key: DocumentID.rfc(9110).fileStem, place: start).place == start)
   }
 
   // MARK: - Migration
@@ -349,10 +349,12 @@ struct UserDataTests {
     context.insert(Bookmark(document: .rfc(9110), title: "old", createdAt: older))
     context.insert(Bookmark(document: .rfc(9110), title: "new", createdAt: newer))
     context.insert(Bookmark(document: .rfc(2119), title: "other", createdAt: older))
-    context.insert(ReadingPosition(document: .rfc(9110), place: nil, updatedAt: older))
+    context.insert(
+      ReadingPosition(key: DocumentID.rfc(9110).fileStem, place: nil, updatedAt: older))
     context.insert(
       ReadingPosition(
-        document: .rfc(9110), place: ReadingPlace(anchor: "s", offset: 1), updatedAt: newer))
+        key: DocumentID.rfc(9110).fileStem, place: ReadingPlace(anchor: "s", offset: 1),
+        updatedAt: newer))
     try context.save()
 
     try UserData.deduplicate(context)

@@ -108,36 +108,22 @@ struct DraftFetchTests {
     }
   }
 
-  /// Any RFC's XML stands in for a draft's: what is pinned is which file is asked
-  /// for, and that its header names the revision.
-  @Test func `a revision is read from its XML where the archive has it`() async throws {
-    let xml = try Fixtures.data("rfc9220.xml")
-    let archive = Archive([
-      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml": xml
-    ])
-    let fetched = try await RFCEditorClient(transport: archive).fetchDraft(Self.draft)
-    #expect(fetched.format == .xml)
-    #expect(fetched.data == xml)
-    #expect(fetched.document.header.draftName == "draft-ietf-example-protocol-03")
-    #expect(
-      archive.requested == [
-        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml"
-      ])
-  }
-
-  @Test func `a revision submitted as text is read from its text`() async throws {
+  /// Any RFC's text stands in for a draft's: what is pinned is which file is asked
+  /// for, and that its header names the revision. Never the XML, which is the
+  /// author's unprepped source.
+  @Test func `a revision is read from its text`() async throws {
     let text = try Fixtures.data("rfc2119.txt")
     let archive = Archive([
-      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt": text
+      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt": text,
+      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml": Data("<rfc/>".utf8),
     ])
     let fetched = try await RFCEditorClient(transport: archive).fetchDraft(Self.draft)
     #expect(fetched.format == .text)
+    #expect(fetched.data == text)
     #expect(fetched.document.header.draftName == "draft-ietf-example-protocol-03")
-    #expect(fetched.xmlParseFailure == nil)
     #expect(
       archive.requested == [
-        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml",
-        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt",
+        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt"
       ])
   }
 

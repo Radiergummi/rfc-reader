@@ -483,11 +483,7 @@
       let link: ReadableLink
       if let rfc = DocumentReference.link(from: reference, section: section) {
         link = .rfc(rfc)
-      } else if var draft = DocumentReference.draft(from: reference) {
-        if let section, !section.isEmpty {
-          draft.section = section
-          draft.anchor = nil
-        }
+      } else if let draft = DocumentReference.draft(from: reference, section: section) {
         link = .draft(draft)
       } else {
         ScriptError.report("“\(reference)” names no RFC.", in: self)

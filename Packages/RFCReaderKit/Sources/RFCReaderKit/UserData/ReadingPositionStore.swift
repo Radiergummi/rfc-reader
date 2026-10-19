@@ -10,15 +10,9 @@ import SwiftData
 /// to do with it, and every change saves before it returns.
 @MainActor
 public enum ReadingPositionStore {
-  /// The document's row. By key, the store having no unique constraint (#152);
-  /// `UserData.deduplicate` leaves one per document.
-  public static func position(for id: DocumentID, in context: ModelContext) throws
-    -> ReadingPosition?
-  {
-    try position(for: .rfc(id), in: context)
-  }
-
-  /// The row of an RFC or a draft's revision (#728), keyed as `userDataKey` says.
+  /// The row of an RFC or a draft's revision (#728), keyed as `userDataKey` says. By
+  /// key, the store having no unique constraint (#152); `UserData.deduplicate` leaves
+  /// one per document.
   public static func position(for document: ReadableDocument, in context: ModelContext) throws
     -> ReadingPosition?
   {
@@ -31,12 +25,6 @@ public enum ReadingPositionStore {
   /// Dates the row as the document is opened, leaving its place alone: the place
   /// is restored a moment later, and writing it here would undo that.
   public static func markOpened(
-    _ id: DocumentID, at date: Date = .now, in context: ModelContext
-  ) throws {
-    try markOpened(ReadableDocument.rfc(id), at: date, in: context)
-  }
-
-  public static func markOpened(
     _ document: ReadableDocument, at date: Date = .now, in context: ModelContext
   ) throws {
     if let existing = try position(for: document, in: context) {
@@ -48,12 +36,6 @@ public enum ReadingPositionStore {
   }
 
   /// The place the reader left, dated as it is left.
-  public static func save(
-    _ place: ReadingPlace?, for id: DocumentID, at date: Date = .now, in context: ModelContext
-  ) throws {
-    try save(place, for: ReadableDocument.rfc(id), at: date, in: context)
-  }
-
   public static func save(
     _ place: ReadingPlace?, for document: ReadableDocument, at date: Date = .now,
     in context: ModelContext

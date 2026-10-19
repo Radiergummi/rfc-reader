@@ -317,52 +317,31 @@ public struct RFCEditorClient: Sendable {
     }
   }
 
-  /// One revision of a draft (#728), from the IETF's archive: its XML where it was
-  /// submitted as XML, its text otherwise, as `fetchPreferredDocument` does for an
-  /// RFC. `id` names its revision.
+  /// One revision of a draft (#728), from the IETF's archive, read from its text.
+  /// `id` names its revision.
+  ///
+  /// Not from its XML, which the archive has for a revision submitted as XML: that is
+  /// the author's source, unprepped, with no section numbers and no text for a
+  /// reference to a section, both of which the XML parser reads from what prep adds.
+  /// The text is xml2rfc's rendering of it, numbered, and every revision has one.
   @concurrent
   public func fetchDraft(_ id: DraftID) async throws -> FetchedDocument {
     precondition(id.revision != nil, "a draft is fetched at a revision")
-    var xmlParseFailure: (any Error)?
-    do {
-      let data = try await fetchDraftData(id, format: .xml)
-      do {
-        return FetchedDocument(
-          data: data, format: .xml, document: try Self.parseDraft(data, format: .xml, id: id),
-          xmlParseFailure: nil)
-      } catch {
-        xmlParseFailure = error
-      }
-    } catch ClientError.draftNotFound {
-      // Submitted as text: the text is all there is.
-    }
-    let data: Data
-    do {
-      data = try await fetchDraftData(id, format: .text)
-    } catch ClientError.draftNotFound where xmlParseFailure != nil {
-      throw xmlParseFailure ?? ClientError.draftNotFound(id)
-    }
+    let data = try await fetchDraftData(id, format: .text)
     return FetchedDocument(
-      data: data, format: .text, document: try Self.parseDraft(data, format: .text, id: id),
-      xmlParseFailure: xmlParseFailure)
+      data: data, format: .text, document: Self.parseDraft(data, id: id), xmlParseFailure: nil)
   }
 
-  /// A draft's revision, parsed from the bytes it came as, through the parser an
-  /// RFC in that format takes. Its header names it by its revision, which the text's
-  /// front page gives only beside the title.
-  public static func parseDraft(_ data: Data, format: FileFormat, id: DraftID) throws
-    -> RFCDocument
-  {
-    var document =
-      format == .xml ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+  /// A draft's revision, parsed from its text through the legacy parser. Its header
+  /// names it by its revision, which the front page gives only beside the title.
+  public static func parseDraft(_ data: Data, id: DraftID) -> RFCDocument {
+    var document = LegacyTextParser.parse(data)
     document.header.draftName = id.description
-    if format == .text {
-      // The legacy parser takes the line beside the title for part of it, and on a
-      // draft's front page that line is its name.
-      document.header.title = document.header.title
-        .replacingOccurrences(of: id.description, with: "")
-        .trimmingCharacters(in: .whitespaces)
-    }
+    // The legacy parser takes the line beside the title for part of it, and on a
+    // draft's front page that line is its name.
+    document.header.title = document.header.title
+      .replacingOccurrences(of: id.description, with: "")
+      .trimmingCharacters(in: .whitespaces)
     return document
   }
 

@@ -1584,9 +1584,15 @@ final class LibraryModel {
   }
 
   /// What Datatracker says of a draft (#728): its title, revisions and RFC, asked
-  /// again once a day, or at once when `refreshing`.
-  func draftInfo(for id: DraftID, refreshing: Bool = false) async throws -> DraftInfo {
-    try await drafts.info(for: id, refreshing: refreshing, client: client)
+  /// again once a day.
+  func draftInfo(for id: DraftID) async throws -> DraftInfo {
+    try await drafts.info(for: id, client: client)
+  }
+
+  /// The revision `id` names, or the newest Datatracker knows of; `id` itself when
+  /// neither Datatracker nor what is kept can say (#728).
+  func revision(of id: DraftID) async -> DraftID {
+    (try? await drafts.revision(of: id, client: client)) ?? id
   }
 
   /// Records an RFC opened without a load as `document(for:)` records a loaded one:

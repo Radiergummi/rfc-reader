@@ -462,11 +462,14 @@ struct DocumentView: View {
                 navigation: navigation, reader: reader, showsInspector: $showsInspector,
                 barsHidden: $barsHidden, output: output, isShown: showsReaderState))
         } else {
-          // A draft (#728): its name in the bar, and none of an RFC's actions, which
-          // bookmark, keep, export and print what the index lists.
+          // A draft (#728): none of an RFC's actions, which bookmark, keep, export
+          // and print what the index lists.
           requestingContent
             .navigationTitle(identity.displayName)
-            .navigationBarTitleDisplayMode(.inline)
+            .modifier(
+              IOSDraftChrome(
+                library: library, navigation: navigation, reader: reader,
+                showsInspector: $showsInspector, isShown: showsReaderState))
         }
       #endif
     }
