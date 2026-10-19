@@ -137,6 +137,60 @@ struct RevisionDiffTests {
     #expect(diff.blocks.isEmpty)
   }
 
+  /// A heading over its subsections has no prose to be paired by: renumbered, it is
+  /// paired by its title, and is not removed and added again.
+  @Test func `a section of only subsections renumbered keeps its pair`() {
+    let operation = "A sender opens a stream for each request it makes of the peer."
+    func operations(_ number: String) -> Section {
+      Section(
+        anchor: "section-\(number)", number: number, title: "Protocol Operation",
+        subsections: [
+          Section(
+            anchor: "section-\(number).1", number: "\(number).1", title: "Streams",
+            blocks: [paragraph(operation)])
+        ])
+    }
+    let intro = Section(
+      anchor: "section-1", number: "1", title: "Introduction", blocks: [paragraph(introduction)])
+    let terms = Section(
+      anchor: "section-2", number: "2", title: "Terminology", blocks: [paragraph(terminology)])
+    let diff = RevisionDiff(
+      from: document([intro, operations("2")]), to: document([intro, terms, operations("3")]))
+    #expect(diff.sections == ["section-2": .added])
+    #expect(diff.removedSections.isEmpty)
+    #expect(diff.blocks.isEmpty)
+  }
+
+  /// A text draft's subsection keeps its anchor and its title under another parent
+  /// once a section is inserted before it: it is paired where it went, not with the
+  /// subsection that now has its number.
+  @Test func `a subsection is paired under its own parent, not by its number`() {
+    func subsection(_ number: String, _ text: String) -> Section {
+      Section(
+        anchor: "section-\(number)", number: number, title: "Overview",
+        blocks: [paragraph(text)])
+    }
+    let framing = "Every frame starts with a type and a length that the receiver reads first."
+    let errors = "An endpoint that detects an error closes the connection with a code."
+    let old = [
+      Section(
+        anchor: "section-1", number: "1", title: "Framing",
+        subsections: [subsection("1.1", framing)])
+    ]
+    let new = [
+      Section(
+        anchor: "section-1", number: "1", title: "Errors",
+        subsections: [subsection("1.1", errors)]),
+      Section(
+        anchor: "section-2", number: "2", title: "Framing",
+        subsections: [subsection("2.1", framing)]),
+    ]
+    let diff = RevisionDiff(from: document(old), to: document(new))
+    #expect(diff.sections["section-1.1"] == .added)
+    #expect(diff.blocks[RevisionDiff.BlockKey(section: "section-2.1", index: 0)] == nil)
+    #expect(diff.blocks[RevisionDiff.BlockKey(section: "section-1.1", index: 0)] == nil)
+  }
+
   @Test func `a heading reworded and an abstract changed are changes`() {
     let old = RFCDocument(
       header: DocumentHeader(title: "T", abstract: [paragraph("An old abstract of the protocol.")]),

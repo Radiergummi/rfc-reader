@@ -128,6 +128,9 @@ public final class DocumentTextBuilder {
   var nextVerbatimOrdinal = 0
   /// The ordinal the next aside gets (`.rfcAside`).
   var nextAsideOrdinal = 0
+  /// How many verbatim blocks and asides of the older revision a redline has set
+  /// (#729), which number from `olderOrdinalBase` rather than among the newer's.
+  var olderOrdinals = (verbatim: 0, aside: 0)
 
   /// The color of a character a decorated block draws over instead of showing.
   public static let hiddenColor = PlatformColor.clear
@@ -226,7 +229,7 @@ public final class DocumentTextBuilder {
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
         sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
-        positions: builder.positions?.map ?? .empty, isRedline: builder.redline != nil)
+        positions: builder.positions?.map ?? .empty)
     }
   }
 
@@ -523,13 +526,17 @@ extension DocumentTextBuilder {
     if let redline {
       appendRedlineCaption(for: section.anchor)
       appendRedline(section.blocks, of: section.anchor, in: redline)
-      appendRemovedSections(after: section.anchor)
+      // A removed subsection here, under the heading it stood under; one removed
+      // beside this section after its subsections, which it would read as the
+      // parent of before them.
+      appendRemovedSections(after: section.anchor) { $0.depth > section.depth }
     } else {
       appendBlocks(section.blocks, indent: 0)
     }
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
+    appendRemovedSections(after: section.anchor) { $0.depth <= section.depth }
   }
 
   /// A heading's number in the gutter (#433), between the two tabs its paragraph

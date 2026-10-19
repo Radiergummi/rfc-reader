@@ -59,9 +59,6 @@ public struct BuiltDocument: @unchecked Sendable {
   /// Whether this is a translated document's build, whose sentences are not the
   /// original's (`RequirementBands`).
   public var isTranslation: Bool { translation != nil }
-  /// Whether this is a redline's build (#729), with what changed since an older
-  /// document marked in it.
-  public let isRedline: Bool
 
   /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
   /// it makes the folding index too (#723).
@@ -69,9 +66,8 @@ public struct BuiltDocument: @unchecked Sendable {
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
     sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none,
-    translation: DocumentLabels? = nil, positions: PositionMap, isRedline: Bool = false
+    translation: DocumentLabels? = nil, positions: PositionMap
   ) {
-    self.isRedline = isRedline
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext

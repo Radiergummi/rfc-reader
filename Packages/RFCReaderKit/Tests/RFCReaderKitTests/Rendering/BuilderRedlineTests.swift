@@ -50,7 +50,6 @@ struct BuilderRedlineTests {
     #expect(try attribute(.underlineStyle, at: "SHOULD", in: built) != nil)
     #expect(try attribute(.underlineStyle, at: "client", in: built) == nil)
     #expect(try attribute(.strikethroughStyle, at: "example", in: built) == nil)
-    #expect(built.isRedline)
   }
 
   /// Copy gives the newer text: what was deleted is the reader's to show.
@@ -98,6 +97,25 @@ struct BuilderRedlineTests {
     #expect(built.anchors.offset(of: "security") != nil)
   }
 
+  /// A section removed after one that now has subsections follows them: before
+  /// them, it would read as their parent.
+  @Test func `a removed section follows the subsections of the one before it`() throws {
+    let scope = Section(
+      anchor: "scope", number: "1.1", title: "Scope",
+      blocks: [paragraph("The protocol applies to every peer on the local network.")])
+    let intro = Section(
+      anchor: "intro", number: "1", title: "Introduction", blocks: [paragraph(unchanged)])
+    var introWithScope = intro
+    introWithScope.subsections = [scope]
+    let gone = Section(
+      anchor: "history", number: "2", title: "History",
+      blocks: [paragraph("Earlier versions of this protocol were never deployed widely.")])
+    let built = redline(from: [intro, gone], to: [introWithScope])
+    #expect(
+      try Fixtures.offset(of: "never deployed", in: built.text)
+        > Fixtures.offset(of: "local network", in: built.text))
+  }
+
   /// The redline is the reader's one text storage, held to its rules.
   @Test func `nothing in a redline becomes an attachment`() {
     let figure = Block.preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+"))
@@ -125,7 +143,7 @@ struct BuilderRedlineTests {
 
   /// A removed figure takes no ordinal from the newer document's, whose choices
   /// and openings are keyed by them.
-  @Test func `a removed block leaves the newer blocks' ordinals as they were`() {
+  @Test func `a removed block leaves the newer blocks' ordinals as they were`() throws {
     let figure = { (text: String) in
       Block.preformatted(Preformatted(kind: .artwork, text: text))
     }
@@ -145,5 +163,11 @@ struct BuilderRedlineTests {
       return found
     }
     #expect(ordinals(built).last == ordinals(plain).last)
+    // Nor shares one with them: a choice made in the struck figure's menu would
+    // be the newer figure's too.
+    let removed = try attribute(.rfcVerbatim, at: "| A |", in: built) as? VerbatimBox
+    let newer = try attribute(.rfcVerbatim, at: "| B |", in: built) as? VerbatimBox
+    #expect(removed != nil && newer != nil)
+    #expect(removed?.ordinal != newer?.ordinal)
   }
 }

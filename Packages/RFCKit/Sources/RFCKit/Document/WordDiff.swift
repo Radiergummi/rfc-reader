@@ -57,7 +57,43 @@ public enum WordDiff {
         newIndex += 1
       }
     }
-    return runs
+    return joiningChanges(runs)
+  }
+
+  /// `runs` with the whitespace kept between two changes taken into them: the space
+  /// two rewritten sentences share between each of their words is no common ground,
+  /// and kept, it reads as a struck word, an inserted one, and so on, word by word.
+  /// Each stretch of changes is then one deletion and one insertion.
+  private static func joiningChanges(_ runs: [Run]) -> [Run] {
+    var joined: [Run] = []
+    var deleted = ""
+    var inserted = ""
+    func endChange() {
+      // Whitespace alone is not a change: it was the same in both.
+      if deleted.contains(where: { !$0.isWhitespace }) { joined.append(.deleted(deleted)) }
+      if inserted.contains(where: { !$0.isWhitespace }) { joined.append(.inserted(inserted)) }
+      deleted = ""
+      inserted = ""
+    }
+    for (index, run) in runs.enumerated() {
+      switch run {
+      case .deleted(let text): deleted += text
+      case .inserted(let text): inserted += text
+      case .same(let text):
+        let isBetweenChanges =
+          !(deleted.isEmpty && inserted.isEmpty) && index + 1 < runs.count
+          && text.allSatisfy(\.isWhitespace)
+        if isBetweenChanges {
+          deleted += text
+          inserted += text
+        } else {
+          endChange()
+          joined.append(run)
+        }
+      }
+    }
+    endChange()
+    return joined
   }
 
   /// Whether `runs` hold any change.
