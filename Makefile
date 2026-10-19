@@ -378,8 +378,8 @@ run-sim: ios-app
 # simulated device first, with what it stored and the permissions it was given.
 # The screenshots its steps save land in hand-checks/<CHECK>/, named by the step,
 # with the run's result bundle beside them, whether it passed or not. No
-# diagnostics on a failure: the sysdiagnose xcodebuild collects then takes up to
-# ten minutes, and the screenshots say more. Not part of `check` or CI: a change
+# diagnostics on a failure: the sysdiagnose xcodebuild collects then is slow, and
+# the screenshots say more. Not part of `check` or CI: a change
 # that needs a hand check runs the one it needs. Without CHECK, it lists them.
 #
 #   make hand-check CHECK=testReaderStackPushAndPop
@@ -387,8 +387,8 @@ run-sim: ios-app
 #
 HAND_CHECKS := hand-checks
 hand-check: xcodeproj
-	@test -n '$(CHECK)' || { echo "set CHECK to one of these:"; \
-	  sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
+	@sed -n 's/^ *func \(test[A-Za-z]*\)().*/\1/p' App/HandChecks/*.swift | grep -qx '$(CHECK)' || \
+	  { echo "set CHECK to one of these:"; sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
 	@rm -rf '$(HAND_CHECKS)/$(CHECK)' '$(HAND_CHECKS)/$(CHECK).xcresult'
 	@xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null
 	@xcrun simctl uninstall '$(IOS_SIMULATOR)' me.mazetti.rfc-reader

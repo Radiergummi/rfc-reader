@@ -37,7 +37,10 @@ final class HandChecks: XCTestCase {
     followCitation("RFC 2119")
     waitForReader("RFC 2119")
     swipeFromLeadingEdge(to: 0.15)
-    XCTAssertFalse(app.navigationBars["RFC 8174"].waitForExistence(timeout: 2))
+    // Once the cancelled pop has animated back, during which both bars are there.
+    Thread.sleep(forTimeInterval: 1)
+    XCTAssertTrue(app.navigationBars["RFC 2119"].exists)
+    XCTAssertFalse(app.navigationBars["RFC 8174"].exists)
     screenshot("4 edge swipe let go early")
 
     swipeFromLeadingEdge(to: 0.9)
@@ -54,18 +57,15 @@ final class HandChecks: XCTestCase {
     waitForReader("RFC 2119")
     screenshot("1 stack of two")
 
-    // Through the system, as a link from another app comes, so the app keeps
-    // running: `app.open(_:)` would launch it again, and the stack with it.
-    XCUIDevice.shared.system.open(URL(string: "rfc://1149")!)
-    allowSystemAlert(screenshotName: "2 asks to open")
+    open("rfc://1149")
     waitForReader("RFC 1149")
-    XCTAssertEqual(app.state, .runningForeground)
-    screenshot("3 deep link")
+    screenshot("2 deep link")
 
     app.navigationBars["RFC 1149"].buttons["BackButton"].tap()
-    XCTAssertFalse(app.navigationBars["RFC 2119"].waitForExistence(timeout: 2))
+    XCTAssertTrue(app.navigationBars["All RFCs"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.navigationBars["RFC 2119"].exists)
     XCTAssertFalse(app.navigationBars["RFC 8174"].exists)
-    screenshot("4 back from the deep link")
+    screenshot("3 back from the deep link")
   }
 
   // MARK: - What a headless launch cannot do
@@ -86,8 +86,8 @@ final class HandChecks: XCTestCase {
   }
 
   /// Turning on the bookmark notifications asks the system, and allowing it keeps the
-  /// setting on. Run once on a Simulator whose answer is still to be given: after
-  /// that the system no longer asks (`xcrun simctl uninstall` forgets it).
+  /// setting on. The system asks only once per install, which `make hand-check`'s
+  /// first launch gives every run.
   func testNotificationPermission() {
     launch(opening: "rfc://8174")
     waitForReader("RFC 8174")
@@ -102,11 +102,14 @@ final class HandChecks: XCTestCase {
     XCTAssertTrue(row.waitForExistence(timeout: 5))
     let toggle = row.switches.firstMatch
     screenshot("1 settings")
-    if toggle.value as? String == "1" { toggle.tap() }
     toggle.tap()
 
     allowSystemAlert(screenshotName: "2 system asks")
-    XCTAssertEqual(toggle.value as? String, "1")
+    // The setting stays on only once the system's answer has reached the app.
+    let isOn = NSPredicate(format: "value == '1'")
+    XCTAssertEqual(
+      XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOn, object: toggle)], timeout: 5),
+      .completed)
     XCTAssertFalse(
       app.staticTexts["Notifications for RFC Reader are turned off in System Settings."].exists)
     screenshot("3 allowed")
@@ -114,16 +117,21 @@ final class HandChecks: XCTestCase {
 
   // MARK: - Steps
 
-  /// Launches the app and, unless `url` is nil, launches it again with the link, as a
-  /// cold start from a link: `open(_:)` goes to the app directly, without the "Open
-  /// in" prompt `xcrun simctl openurl` stops at, but always launches it anew.
-  private func launch(opening url: String?) {
+  /// Launches the app, waits for its index, and opens `url` in it.
+  private func launch(opening url: String) {
     app.launch()
     dismissStoreWarning()
     waitForIndex()
-    if let url {
-      app.open(URL(string: url)!)
-    }
+    open(url)
+  }
+
+  /// Opens a link through the system, as one from another app comes, in the running
+  /// app. It goes to the app without the "Open in" prompt `xcrun simctl openurl`
+  /// stops at. Not `app.open(_:)`, which launches the app anew, and loses what was
+  /// open.
+  private func open(_ url: String) {
+    XCUIDevice.shared.system.open(URL(string: url)!)
+    XCTAssertEqual(app.state, .runningForeground)
   }
 
   /// Waits for the RFC index, which the first launch downloads and reads, until the
@@ -149,12 +157,13 @@ final class HandChecks: XCTestCase {
   }
 
   /// Taps the button of a system alert that allows, such as the notification
-  /// permission's or the "Open in" prompt. The system's alerts are SpringBoard's, in the Simulator's language
+  /// permission's. The system's alerts are SpringBoard's, in the Simulator's language
   /// rather than the app's, so it is found by position: allowing is the last button.
   private func allowSystemAlert(screenshotName: String) {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     let alert = springboard.alerts.firstMatch
     guard alert.waitForExistence(timeout: 10) else { return }
+    XCTAssertTrue(alert.buttons.firstMatch.waitForExistence(timeout: 5))
     screenshot(screenshotName)
     alert.buttons.element(boundBy: alert.buttons.count - 1).tap()
   }

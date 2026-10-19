@@ -26,6 +26,9 @@ def main() -> None:
          "--path", bundle, "--output-path", destination],
         check=True, stdout=subprocess.DEVNULL)
     manifest_path = os.path.join(destination, "manifest.json")
+    if not os.path.exists(manifest_path):
+        print(f"no screenshots in {bundle}")
+        return
     with open(manifest_path) as manifest:
         tests = json.load(manifest)
     for test in tests:
