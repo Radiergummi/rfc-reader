@@ -43,7 +43,6 @@ struct LinkSiteTests {
       ),
       (LinkSite.datatracker, RFCLink(id: bcp14), "https://datatracker.ietf.org/doc/html/bcp14"),
       (LinkSite.ietf, RFCLink(id: .rfc(9110)), "https://www.ietf.org/rfc/rfc9110.txt"),
-      (LinkSite.ietf, RFCLink(id: bcp14), "https://www.ietf.org/rfc/bcp/bcp14.txt"),
       (LinkSite.app, RFCLink(id: .rfc(9110)), "rfc://9110"),
       (LinkSite.app, RFCLink(id: .rfc(9110), section: "4.2"), "rfc://9110#section-4.2"),
       (LinkSite.app, RFCLink(id: .rfc(9110), section: "A.1"), "rfc://9110#appendix-A.1"),
@@ -70,6 +69,35 @@ struct LinkSiteTests {
   func `a section on ietf.org is the document`(link: RFCLink) {
     let url = LinkSite.ietf.url(for: link)
     #expect(url.fragment == nil)
+    #expect(RFCLink(url: url) == RFCLink(id: link.id))
+  }
+
+  /// A series has no page of its own sections on the web, and ietf.org has no copy
+  /// of an STD or an FYI (curl-checked): the link is to the series' page, and the
+  /// plain text's site links to the RFC Editor's.
+  @Test(
+    arguments: [
+      (
+        LinkSite.rfcEditor, RFCLink(id: bcp14, section: "2"),
+        "https://www.rfc-editor.org/info/bcp14"
+      ),
+      (
+        LinkSite.rfcEditor, RFCLink(id: bcp14, anchor: "intro"),
+        "https://www.rfc-editor.org/info/bcp14"
+      ),
+      (
+        LinkSite.datatracker, RFCLink(id: bcp14, section: "2"),
+        "https://datatracker.ietf.org/doc/html/bcp14"
+      ),
+      (LinkSite.ietf, RFCLink(id: bcp14), "https://www.rfc-editor.org/info/bcp14"),
+      (
+        LinkSite.ietf, RFCLink(id: DocumentID(series: .std, number: 97), section: "2"),
+        "https://www.rfc-editor.org/info/std97"
+      ),
+    ])
+  func `a series on the web is the series' page`(site: LinkSite, link: RFCLink, expected: String) {
+    let url = site.url(for: link)
+    #expect(url.absoluteString == expected)
     #expect(RFCLink(url: url) == RFCLink(id: link.id))
   }
 

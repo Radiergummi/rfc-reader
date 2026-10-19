@@ -21,7 +21,12 @@ public enum LinkSite: String, CaseIterable, Sendable, Identifiable {
 
   /// The address of `link` on this site: its section, or else its anchor, as the
   /// site's fragment, where the site has fragments.
+  ///
+  /// A series has no page of its own sections on the web, the RFC Editor's
+  /// `rfc/bcp14#section-2` is no page at all, so its link is to the series. The
+  /// app opens a series at a section.
   public func url(for link: RFCLink) -> URL {
+    let link = link.id.series == .rfc || self == .app ? link : RFCLink(id: link.id)
     switch self {
     case .rfcEditor:
       guard link.section == nil, let anchor = link.anchor else {
@@ -34,9 +39,10 @@ public enum LinkSite: String, CaseIterable, Sendable, Identifiable {
       let page = RFCEditorEndpoints.datatrackerBase.appending(path: "doc/html/\(link.id.fileStem)")
       return RFCLink.url(page, fragment: fragment(of: link))
     case .ietf:
-      // A series is filed in a directory of its own, as at the RFC Editor.
-      let directory = link.id.series == .rfc ? "rfc" : "rfc/\(link.id.series.rawValue.lowercased())"
-      return Self.ietfBase.appending(path: "\(directory)/\(link.id.fileStem).txt")
+      // ietf.org has no copy of an STD or an FYI, and its BCP's redirects to the
+      // series' page at the RFC Editor: a series links there.
+      guard link.id.series == .rfc else { return RFCEditorEndpoints.infoPage(link.id) }
+      return Self.ietfBase.appending(path: "rfc/\(link.id.fileStem).txt")
     case .app:
       return link.appURL
     }

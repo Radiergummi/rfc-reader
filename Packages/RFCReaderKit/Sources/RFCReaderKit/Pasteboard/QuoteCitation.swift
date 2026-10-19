@@ -115,8 +115,7 @@ public enum QuoteCitation {
       cited ?? CitedDocument(bare: document), section: section, style: style,
       site: settings.linkSite)
     let label = CitationFormatter.shortCitation(document, section: section)
-    let url = CitationFormatter.citationURL(
-      for: document, section: section, site: settings.linkSite)
+    let url = CitationFormatter.url(for: document, section: section, site: settings.linkSite)
 
     // A figure in a fixed-pitch font, or a rich target lays it out in a proportional
     // one and its columns fall apart. Menlo rather than the system's monospaced font,
