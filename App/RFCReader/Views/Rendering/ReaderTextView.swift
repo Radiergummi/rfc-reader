@@ -609,6 +609,7 @@ import RFCReaderKit
         choice.target = self
         choice.representedObject = color
         choice.image = HighlightSwatch.image(color)
+        choice.showsImageOnMacOS27()
         colors.addItem(choice)
       }
       item.submenu = colors

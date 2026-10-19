@@ -81,6 +81,35 @@ struct AnnotationStoreTests {
     #expect(try snapshot().contains { $0.id == lost })
   }
 
+  @Test func `a highlight whose relocation no longer holds merges where it was made`() throws {
+    // Two paragraphs alike, so the quote searched for is in both, with its context.
+    let filler = "Each paragraph says the same thing here."
+    let sentence = "\(filler) The quick brown fox jumps over the lazy dog. \(filler)"
+    let model = ModelText(
+      Fixtures.document(
+        .paragraph(Paragraph(text: sentence, anchor: "p-1")),
+        .paragraph(Paragraph(text: sentence, anchor: "p-2"))))
+    let text = model.text(in: 0..<model.length) as NSString
+    func range(_ needle: String) -> Range<Int> {
+      let found = text.range(of: needle)
+      return found.location..<NSMaxRange(found)
+    }
+    let first = try AnnotationStore.highlight(
+      range("brown fox"), of: .rfc(9110), in: model, color: .yellow, edit: edit(nil))
+    // Relocated under an anchor this text no longer has: placement draws it where it
+    // was made, so a highlight over it merges with it there.
+    let row = try #require(try context.fetch(FetchDescriptor<Highlight>()).first)
+    row.relocatedStartAnchor = "gone"
+    row.relocatedStartOffset = row.startOffset
+    row.relocatedEndAnchor = "gone"
+    row.relocatedEndOffset = row.endOffset
+    try context.save()
+    let merged = try AnnotationStore.highlight(
+      range("quick brown"), of: .rfc(9110), in: model, color: .yellow, edit: edit(nil))
+    #expect(merged == first)
+    #expect(try snapshot().count == 1)
+  }
+
   @Test func `a highlight that only touches another is not merged`() throws {
     _ = try highlight("quick")
     _ = try highlight(" brown")

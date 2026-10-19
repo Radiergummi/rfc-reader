@@ -40,10 +40,6 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// The caption, a line of its own at the top of the card, small and tracked as a
-  /// code block's language is. The reader's, not the document's words: a copied
-  /// selection leaves it out, and VoiceOver says the word rather than spelling the
-  /// capitals.
   /// The model text keeps the label the caption took the place of (#522): the start
   /// of the first paragraph, or all of it, and then the join after it.
   private func skipLabel(of blocks: [Block], labeled: LabeledAside) {
@@ -61,6 +57,10 @@ extension DocumentTextBuilder {
     skipModel(length - rest.plainText.utf16.count)
   }
 
+  /// The caption, a line of its own at the top of the card, small and tracked as a
+  /// code block's language is. The reader's, not the document's words: a copied
+  /// selection leaves it out, and VoiceOver says the word rather than spelling the
+  /// capitals.
   private func appendAsideCaption(_ caption: String, indent: CGFloat) {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: style.codeLabelFont,

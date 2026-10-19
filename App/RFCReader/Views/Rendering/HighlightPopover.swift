@@ -73,9 +73,7 @@ struct HighlightSwatch: View {
   /// The fill's color at full strength, which a swatch shows better than the
   /// translucent fill.
   static func opaque(_ color: HighlightColor) -> PlatformColor {
-    let light = color.fill.light.color
-    return PlatformColor(
-      red: light.red, green: light.green, blue: light.blue, alpha: 1)
+    PlatformColor(color.fill.light.color)
   }
 
   #if canImport(UIKit)

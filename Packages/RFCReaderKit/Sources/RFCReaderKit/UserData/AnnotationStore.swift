@@ -46,7 +46,7 @@ public enum AnnotationStore {
     let relocator = Relocator(model)
     let existing = rows.compactMap { row -> HighlightMerge.Existing? in
       guard let entry = AnnotationSnapshot.HighlightEntry(row: row),
-        let range = relocator.relocate(entry.current).target?.range(in: model)
+        let range = relocator.relocate(entry).target?.range(in: model)
       else { return nil }
       return HighlightMerge.Existing(
         identifier: row.identifier, range: range, createdAt: row.createdAt)

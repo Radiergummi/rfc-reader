@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import RFCKit
 import Synchronization
 
 /// What an annotation is on (#522): a whole section, or a span of the model text from
@@ -13,10 +14,8 @@ public enum Target: Sendable, Hashable {
   /// The span `range` of `model` covers, its start and end each under the innermost
   /// anchor that holds it. Nil for an empty range, or one no anchor holds.
   public init?(covering range: Range<Int>, in model: ModelText) {
-    guard !range.isEmpty, let start = model.position(at: range.lowerBound, isEnd: false),
-      let end = model.position(at: range.upperBound, isEnd: true)
-    else { return nil }
-    self = .range(start: start, end: end, quote: Quote(covering: range, in: model))
+    guard !range.isEmpty else { return nil }
+    self.init(covering: range, in: model, quote: Quote(covering: range, in: model))
   }
 
   /// Where in `model` this target's stored positions are, without relocating it: nil
@@ -88,7 +87,7 @@ public struct Quote: Sendable, Hashable, Codable {
 
   static func digest(of units: [UInt16]) -> String {
     let data = Data(String(decoding: units, as: UTF16.self).utf8)
-    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    return Manifest.hex(SHA256.hash(data: data))
   }
 }
 
@@ -180,6 +179,14 @@ public struct Relocator: Sendable {
       }
       return .detached
     }
+  }
+
+  /// Where a stored highlight is now, as the reader draws it: from its relocated
+  /// position, and from where it was made once that no longer holds.
+  public func relocate(_ entry: AnnotationSnapshot.HighlightEntry) -> Relocation {
+    let relocation = relocate(entry.current)
+    guard entry.relocated != nil, !relocation.isExact else { return relocation }
+    return relocate(entry.target)
   }
 
   /// Whether the text at `range` is the quote's.

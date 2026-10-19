@@ -59,11 +59,7 @@ public struct HighlightPlacement: Sendable, Equatable {
     var statuses: [UUID: Status] = [:]
     var relocations: [UUID: Target] = [:]
     for entry in highlights {
-      var relocation = relocator.relocate(entry.current)
-      // A relocated position that no longer holds starts over from the original.
-      if entry.relocated != nil, !relocation.isExact {
-        relocation = relocator.relocate(entry.target)
-      }
+      let relocation = relocator.relocate(entry)
       if case .ambiguous(let ranges) = relocation {
         statuses[entry.id] = .ambiguous(
           ranges.compactMap { Target(covering: $0, in: model, quote: entry.quote) })
