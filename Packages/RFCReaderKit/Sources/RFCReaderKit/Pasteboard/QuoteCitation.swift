@@ -173,7 +173,8 @@ public enum QuoteCitation {
     var isVerbatim: Bool { box != nil }
   }
 
-  private static func longestBacktickRun(in lines: [String]) -> Int {
+  /// The longest run of backticks in `lines`, which a fence around them outruns.
+  static func longestBacktickRun(in lines: [String]) -> Int {
     var longest = 0
     for line in lines {
       var run = 0
@@ -232,7 +233,7 @@ public enum QuoteCitation {
 }
 
 extension String {
-  fileprivate func trimmingTrailingSpaces() -> String {
+  func trimmingTrailingSpaces() -> String {
     var result = self
     while result.last == " " || result.last == "\t" { result.removeLast() }
     return result
