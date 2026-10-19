@@ -191,6 +191,29 @@ struct RevisionDiffTests {
     #expect(diff.blocks[RevisionDiff.BlockKey(section: "section-1.1", index: 0)] == nil)
   }
 
+  /// A section retitled changes its subsections' title paths, not them: one with no
+  /// prose to be paired by keeps its anchor and its title, and is paired by those.
+  @Test func `a section retitled keeps the pairs of its subsections`() {
+    func protocolSection(_ title: String) -> Section {
+      let types = Section(
+        anchor: "frame-types", number: "1.1.1", title: "Frame Types",
+        blocks: [
+          paragraph("Every frame starts with a type and a length that the receiver reads first.")
+        ])
+      let framing = Section(
+        anchor: "framing", number: "1.1", title: "Framing", subsections: [types])
+      return Section(
+        anchor: "protocol", number: "1", title: title, blocks: [paragraph(introduction)],
+        subsections: [framing])
+    }
+    let diff = RevisionDiff(
+      from: document([protocolSection("Protocol")]),
+      to: document([protocolSection("Protocol Operation")]))
+    #expect(diff.sections.isEmpty)
+    #expect(diff.removedSections.isEmpty)
+    #expect(diff.retitled == ["protocol": "1. Protocol"])
+  }
+
   @Test func `a heading reworded and an abstract changed are changes`() {
     let old = RFCDocument(
       header: DocumentHeader(title: "T", abstract: [paragraph("An old abstract of the protocol.")]),

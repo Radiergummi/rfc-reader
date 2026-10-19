@@ -116,6 +116,23 @@ struct BuilderRedlineTests {
         > Fixtures.offset(of: "local network", in: built.text))
   }
 
+  /// A section removed with its subsections keeps them under it, in their order.
+  @Test func `a removed section comes before its removed subsections`() throws {
+    let intro = Section(
+      anchor: "intro", number: "1", title: "Introduction", blocks: [paragraph(unchanged)])
+    let goneDetail = Section(
+      anchor: "history-detail", number: "2.1", title: "Deployments",
+      blocks: [paragraph("Two vendors shipped the first version before it was withdrawn.")])
+    let gone = Section(
+      anchor: "history", number: "2", title: "History",
+      blocks: [paragraph("Earlier versions of this protocol were never deployed widely.")],
+      subsections: [goneDetail])
+    let built = redline(from: [intro, gone], to: [intro])
+    #expect(
+      try Fixtures.offset(of: "never deployed", in: built.text)
+        < Fixtures.offset(of: "Two vendors", in: built.text))
+  }
+
   /// The redline is the reader's one text storage, held to its rules.
   @Test func `nothing in a redline becomes an attachment`() {
     let figure = Block.preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+"))

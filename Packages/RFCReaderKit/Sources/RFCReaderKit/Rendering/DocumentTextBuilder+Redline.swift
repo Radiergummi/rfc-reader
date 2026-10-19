@@ -131,17 +131,17 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// The sections of the older revision that went, after the newer section `anchor`
-  /// names, or before the first for nil, of those `includes` takes: each its heading
-  /// and its own blocks struck through, said removed. Not its subsections, which are
-  /// listed for themselves.
-  func appendRemovedSections(
-    after anchor: String?, where includes: (Section) -> Bool = { _ in true }
-  ) {
-    guard let redline else { return }
-    for removed in redline.removedSections
-    where removed.after == anchor && includes(removed.section) {
-      let section = removed.section
+  /// The sections of the older revision that went after the newer section `anchor`
+  /// names, or before the first for nil, in the older revision's order.
+  func removedSections(after anchor: String?) -> [Section] {
+    redline?.removedSections.filter { $0.after == anchor }.map(\.section) ?? []
+  }
+
+  /// `sections` of the older revision that went: each its heading and its own blocks
+  /// struck through, said removed. Not its subsections, which are listed for
+  /// themselves.
+  func appendRemovedSections(_ sections: some Sequence<Section>) {
+    for section in sections {
       let start = output.length
       append(
         section.displayTitle + "\n",
