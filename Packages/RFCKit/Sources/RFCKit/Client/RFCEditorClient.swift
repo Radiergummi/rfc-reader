@@ -181,6 +181,9 @@ public struct RFCEditorClient: Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
+    /// A draft, or a revision of one, that Datatracker or the IETF's archive does
+    /// not have.
+    case draftNotFound(DraftID)
     /// What was being read, and why it could not be: the parser's own error, kept
     /// rather than turned into words.
     case decoding(context: String, underlying: any Error)
@@ -194,6 +197,7 @@ public struct RFCEditorClient: Sendable {
       case .httpStatus(let status, let url):
         "\(url.host() ?? "The server") answered with HTTP \(status)."
       case .notFound(let id): "\(id.displayName) is not published at the RFC Editor."
+      case .draftNotFound(let id): "\(id.displayName) is not at the IETF."
       case .decoding(let context, let underlying): "\(context): \(underlying.localizedDescription)"
       }
     }
@@ -293,6 +297,83 @@ public struct RFCEditorClient: Sendable {
     return FetchedDocument(
       data: data, format: .text, document: LegacyTextParser.parse(data, entry: entry),
       xmlParseFailure: xmlParseFailure)
+  }
+
+  /// What Datatracker says of the draft `id` names, whatever its revision (#728),
+  /// decoded, and the bytes it came as, which the caller keeps.
+  @concurrent
+  public func fetchDraftInfo(_ id: DraftID) async throws -> (info: DraftInfo, data: Data) {
+    let url = RFCEditorEndpoints.draftInfo(id.name)
+    let data: Data
+    do {
+      data = try await fetch(url, accepting: ["application/json"])
+    } catch ClientError.httpStatus(404, _) {
+      throw ClientError.draftNotFound(id)
+    }
+    do {
+      return (try DraftInfo.decode(data), data)
+    } catch {
+      throw ClientError.decoding(context: url.absoluteString, underlying: error)
+    }
+  }
+
+  /// One revision of a draft (#728), from the IETF's archive: its XML where it was
+  /// submitted as XML, its text otherwise, as `fetchPreferredDocument` does for an
+  /// RFC. `id` names its revision.
+  @concurrent
+  public func fetchDraft(_ id: DraftID) async throws -> FetchedDocument {
+    precondition(id.revision != nil, "a draft is fetched at a revision")
+    var xmlParseFailure: (any Error)?
+    do {
+      let data = try await fetchDraftData(id, format: .xml)
+      do {
+        return FetchedDocument(
+          data: data, format: .xml, document: try Self.parseDraft(data, format: .xml, id: id),
+          xmlParseFailure: nil)
+      } catch {
+        xmlParseFailure = error
+      }
+    } catch ClientError.draftNotFound {
+      // Submitted as text: the text is all there is.
+    }
+    let data: Data
+    do {
+      data = try await fetchDraftData(id, format: .text)
+    } catch ClientError.draftNotFound where xmlParseFailure != nil {
+      throw xmlParseFailure ?? ClientError.draftNotFound(id)
+    }
+    return FetchedDocument(
+      data: data, format: .text, document: try Self.parseDraft(data, format: .text, id: id),
+      xmlParseFailure: xmlParseFailure)
+  }
+
+  /// A draft's revision, parsed from the bytes it came as, through the parser an
+  /// RFC in that format takes. Its header names it by its revision, which the text's
+  /// front page gives only beside the title.
+  public static func parseDraft(_ data: Data, format: FileFormat, id: DraftID) throws
+    -> RFCDocument
+  {
+    var document =
+      format == .xml ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+    document.header.draftName = id.description
+    if format == .text {
+      // The legacy parser takes the line beside the title for part of it, and on a
+      // draft's front page that line is its name.
+      document.header.title = document.header.title
+        .replacingOccurrences(of: id.description, with: "")
+        .trimmingCharacters(in: .whitespaces)
+    }
+    return document
+  }
+
+  /// Raw bytes of a draft's revision in the given format, from the IETF's archive.
+  public func fetchDraftData(_ id: DraftID, format: FileFormat) async throws -> Data {
+    let url = RFCEditorEndpoints.draft(id, format: format)
+    do {
+      return try await fetch(url, accepting: Self.mediaTypes(of: format))
+    } catch ClientError.httpStatus(404, _) {
+      throw ClientError.draftNotFound(id)
+    }
   }
 
   /// The RFC index as bytes, so the caller can both parse and keep it, unless it
