@@ -226,15 +226,23 @@ public actor DocumentStore {
   /// Only a lookup, and nonisolated: the caller reads it, off this actor (#367).
   /// Read here, the index held the store for as long as the parse took, so a
   /// document opened during launch — an `rfc://` link — waited behind it.
-  public nonisolated func cachedIndexLocation() -> CachedIndex? {
+  ///
+  /// - Parameter bundled: The index a Release build bundles (#770), nil in a Debug
+  ///   build without one.
+  public nonisolated func cachedIndexLocation(
+    bundled: URL? = Bundle.main.url(forResource: "rfc-index", withExtension: "xml")
+  ) -> CachedIndex? {
     let url: URL
-    var updatedAt = Date.distantPast
+    let updatedAt: Date
     if FileManager.default.fileExists(atPath: indexURL.path) {
       url = indexURL
       updatedAt = indexCheck()?.checkedAt ?? Self.modificationDate(of: url) ?? .distantPast
-    } else if let bundled = Bundle.main.url(forResource: "rfc-index", withExtension: "xml") {
-      // A snapshot shipped with the app makes first launch work offline.
+    } else if let bundled {
+      // Makes a first launch work offline. As current as when it was fetched for the
+      // build, which the build keeps as its date, so the daily check replaces it once
+      // that is a day ago.
       url = bundled
+      updatedAt = Self.modificationDate(of: bundled) ?? .distantPast
     } else {
       return nil
     }
@@ -398,6 +406,32 @@ public actor DocumentStore {
   /// Records that a check sent with `kept`'s validators found the feed unchanged.
   public func recordUnchangedErrata(_ kept: IndexCheck) throws {
     _ = try Self.recordUnchanged(kept, at: errataCheckURL)
+  }
+
+  // MARK: - Recent feed
+
+  private nonisolated var recentFeedURL: URL { directory.appending(path: "rfcrss.xml") }
+  private nonisolated var recentFeedCheckURL: URL {
+    directory.appending(path: "rfcrss-check.json")
+  }
+
+  /// The Recent RFCs feed kept (#421), as the RFC Editor served it; nil when none is.
+  public func cachedRecentFeed() -> Data? {
+    try? Data(contentsOf: recentFeedURL)
+  }
+
+  /// What identified the feed kept, as `errataCheck()` is the errata's: nil when no
+  /// feed is kept for the validators to describe.
+  public nonisolated func recentFeedCheck() -> IndexCheck? {
+    Self.check(of: recentFeedURL, keptAt: recentFeedCheckURL)
+  }
+
+  /// Keeps a fetched feed and what identifies it for the next fetch.
+  public func storeRecentFeed(_ data: Data, validators: CacheValidators?) throws {
+    try data.write(to: recentFeedURL, options: .atomic)
+    try Self.store(
+      IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators),
+      at: recentFeedCheckURL)
   }
 
   // MARK: - Registries

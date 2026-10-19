@@ -2,7 +2,9 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// Creating a collection, or renaming and recoloring one (#349).
+/// Creating a collection, or renaming and recoloring one (#349), and the query of
+/// one made from a query (#355): one text field, read and written as the search
+/// field's.
 struct CollectionEditorSheet: View {
   let mode: CollectionEditorMode
 
@@ -10,13 +12,15 @@ struct CollectionEditorSheet: View {
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
   @State private var color = CollectionColor.default
+  /// The query of a collection made from one; nil for a manual collection.
+  @State private var query: String?
   @FocusState private var isNameFocused: Bool
 
   private var title: String {
-    if case .edit = mode {
-      String(localized: "Edit Collection")
-    } else {
-      String(localized: "New Collection")
+    switch mode {
+    case .edit: String(localized: "Edit Collection")
+    case .create: String(localized: "New Collection")
+    case .save: String(localized: "Save as Collection")
     }
   }
 
@@ -29,9 +33,10 @@ struct CollectionEditorSheet: View {
     if case .edit(let identifier) = mode { library.collections[identifier] == nil } else { false }
   }
 
-  /// The store refuses a name of only spaces; the button says so first.
+  /// The store refuses a name of only spaces, and an empty query; the button says
+  /// so first.
   private var canSave: Bool {
-    CollectionStore.isValidName(name)
+    CollectionStore.isValidName(name) && (query.map(CollectionStore.isValidQuery) ?? true)
   }
 
   var body: some View {
@@ -80,6 +85,19 @@ struct CollectionEditorSheet: View {
     TextField("Name", text: $name)
       .focused($isNameFocused)
       .onSubmit { if canSave { save() } }
+    if let query {
+      TextField(
+        "Query",
+        text: Binding(get: { query }, set: { self.query = $0 }),
+        prompt: Text(verbatim: "wg:quic status:std congestion"),
+        axis: .vertical
+      )
+      .lineLimit(1...4)
+      .onSubmit { if canSave { save() } }
+      Text("Lists every RFC that matches, as the search field would.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
     HStack(spacing: 10) {
       ForEach(CollectionColor.allCases) { swatch in
         Button {
@@ -103,9 +121,16 @@ struct CollectionEditorSheet: View {
   }
 
   private func load() {
-    if case .edit(let identifier) = mode, let entry = library.collections[identifier] {
+    switch mode {
+    case .edit(let identifier):
+      guard let entry = library.collections[identifier] else { break }
       name = entry.name
       color = entry.color
+      query = entry.query
+    case .save(let saved):
+      query = saved
+    case .create:
+      break
     }
     isNameFocused = true
   }
@@ -118,8 +143,11 @@ struct CollectionEditorSheet: View {
         if let document {
           try CollectionStore.add(document, to: collection.identifier, in: context)
         }
+      case .save:
+        try CollectionStore.create(named: name, color: color, query: query, in: context)
       case .edit(let identifier):
-        try CollectionStore.update(identifier, name: name, color: color, in: context)
+        try CollectionStore.update(
+          identifier, name: name, color: color, query: query, in: context)
       }
     }
     dismiss()

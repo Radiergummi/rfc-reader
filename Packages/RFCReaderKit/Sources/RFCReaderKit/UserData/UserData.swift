@@ -368,8 +368,9 @@ public enum SchemaV5: VersionedSchema {
   }
 }
 
-/// V5 and the followed working groups (#731). Its own copies of V5's models,
-/// identical to them, for the reason V4 has its own of V3's.
+/// V5, a collection's query (#355) and the followed working groups (#731). Its own
+/// copies of V5's models, identical to them but for `DocumentCollection.query`, for
+/// the reason V4 has its own of V3's.
 public enum SchemaV6: VersionedSchema {
   public static let versionIdentifier = Schema.Version(6, 0, 0)
   public static var models: [any PersistentModel.Type] {
@@ -395,7 +396,7 @@ public enum SchemaV6: VersionedSchema {
     public var document: DocumentID? { DocumentID(fileStem: documentKey) }
   }
 
-  /// V5's, `originalName` included, which V4's needs: see there.
+  /// V4's, `originalName` included, which V4's needs: see there.
   @Model
   public final class ReadingPosition {
     public var documentKey: String = ""
@@ -436,12 +437,20 @@ public enum SchemaV6: VersionedSchema {
     /// Where the collection sits in the sidebar, ascending.
     public var position: Double = 0
     public var createdAt: Date = Date.distantPast
+    /// What a dynamic collection lists, in the search field's grammar
+    /// (`IndexSearch.parseQuery`): its members are whatever matches. Nil for a
+    /// manual collection, whose members are its items.
+    public var query: String?
 
-    public init(name: String, color: CollectionColor, position: Double, createdAt: Date = .now) {
+    public init(
+      name: String, color: CollectionColor, position: Double, query: String? = nil,
+      createdAt: Date = .now
+    ) {
       self.identifier = UUID()
       self.name = name
       self.colorName = color.rawValue
       self.position = position
+      self.query = query
       self.createdAt = createdAt
     }
 
@@ -520,9 +529,7 @@ public enum SchemaV6: VersionedSchema {
 /// left alone, so running the second stage again changes nothing.
 public enum UserDataMigrationPlan: SchemaMigrationPlan {
   public static var schemas: [any VersionedSchema.Type] {
-    [
-      SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self, SchemaV5.self, SchemaV6.self,
-    ]
+    [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self, SchemaV5.self, SchemaV6.self]
   }
   public static var stages: [MigrationStage] { [v1ToV2, v2ToV3, v3ToV4, v4ToV5, v5ToV6] }
 
@@ -537,7 +544,8 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
   static let v4ToV5 = MigrationStage.lightweight(
     fromVersion: SchemaV4.self, toVersion: SchemaV5.self)
 
-  /// Adds the followed working groups' entity and changes nothing else (#731).
+  /// Adds a collection's query, nil for every collection there is, which is manual,
+  /// and the followed working groups' entity, and changes nothing else (#355, #731).
   static let v5ToV6 = MigrationStage.lightweight(
     fromVersion: SchemaV5.self, toVersion: SchemaV6.self)
 
