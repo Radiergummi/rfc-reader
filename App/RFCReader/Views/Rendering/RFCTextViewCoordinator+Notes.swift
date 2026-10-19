@@ -37,12 +37,9 @@ extension RFCTextViewCoordinator {
       guard let location = layout.location(atOffset: marker.location),
         let fragment = layout.textLayoutFragment(for: location)
       else { continue }
-      let within = marker.location - layout.offset(of: fragment.rangeInElement.location)
-      let line =
-        fragment.textLineFragments.first {
-          NSLocationInRange(within, $0.characterRange)
-        } ?? fragment.textLineFragments.first
-      guard let line else { continue }
+      guard let fragmentLines = FragmentLines(fragment, in: layout),
+        let line = FragmentGeometry.noteMarkerLine(at: marker.location, in: fragmentLines)
+      else { continue }
       lines.append(
         FragmentGeometry.NoteLine(
           note: marker.note,
@@ -69,9 +66,10 @@ extension RFCTextViewCoordinator {
   private func showNoteMarkers(_ markers: [FragmentGeometry.NoteMarker]) {
     guard let textView else { return }
     let shown = noteMarkers.map(\.notes)
-    let changedBodies = noteMarkersBodies != notes.map(\.body)
+    let bodies = notes.map(\.body)
+    let changedBodies = noteMarkersBodies != bodies
     noteMarkers = markers
-    noteMarkersBodies = notes.map(\.body)
+    noteMarkersBodies = bodies
     while noteMarkerViews.count > markers.count {
       noteMarkerViews.removeLast().removeFromSuperview()
     }
@@ -148,7 +146,7 @@ extension RFCTextViewCoordinator {
       }
     #endif
     let model = NoteEditorModel(
-      identifier: identifier, owner: owner, body: body, font: Self.noteFont,
+      body: body, font: Self.noteFont,
       save: { body in
         library.saveNote(identifier, on: owner, of: documentID, body: body)
       },
@@ -273,7 +271,9 @@ extension Array {
       _ model: NoteEditorModel, at range: NSRange?, environment: ReaderEnvironment
     ) {
       guard let textView, var presenter = textView.window?.rootViewController else { return }
-      while let presented = presenter.presentedViewController { presenter = presented }
+      while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+        presenter = presented
+      }
       let host = UIHostingController(
         rootView: NoteEditor(model: model).readerEnvironment(environment))
       host.modalPresentationStyle = .pageSheet
@@ -281,7 +281,18 @@ extension Array {
       host.sheetPresentationController?.detents = [.medium(), .large()]
       host.sheetPresentationController?.prefersGrabberVisible = true
       noteEditorHost = host
-      presenter.present(host, animated: true)
+      // UIKit presents nothing while a dismissal is under way, as the highlight's
+      // popover's or the panel's sheet is when a note is opened from it: once it is
+      // gone.
+      if let dismissing = presenter.presentedViewController,
+        let transition = dismissing.transitionCoordinator
+      {
+        transition.animate(alongsideTransition: nil) { [weak presenter] _ in
+          presenter?.present(host, animated: true)
+        }
+      } else {
+        presenter.present(host, animated: true)
+      }
     }
 
     func closeNoteEditor() {

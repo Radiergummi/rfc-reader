@@ -28,11 +28,14 @@ extension RFCTextViewCoordinator {
     highlights entries: [AnnotationSnapshot.HighlightEntry],
     notes: [AnnotationSnapshot.NoteEntry]
   ) {
+    // Called on every update of the representable: most change nothing.
+    guard entries != highlights || notes != self.notes else { return }
     // A note's text changes as it is typed; where it goes does not.
     let moved = entries != highlights || notes.map(\.placementKey) != self.notes.map(\.placementKey)
     highlights = entries
     self.notes = notes
-    if moved { placeHighlights() }
+    // A note's text alone changed: its marker's title.
+    if moved { placeHighlights() } else { layOutNoteMarkers() }
   }
 
   /// Places the highlights and notes in the installed build, off the main actor, and
@@ -52,7 +55,7 @@ extension RFCTextViewCoordinator {
       let (placement, notePlacement) = await Self.place(entries, notes: notes, in: built)
       // A later build or set of annotations has started its own.
       guard !Task.isCancelled, self.built?.text === built.text, self.highlights == entries,
-        self.notes == notes
+        self.notes.map(\.placementKey) == notes.map(\.placementKey)
       else { return }
       highlightsTask = nil
       draw(placement, notes: placement.isPlaced ? notePlacement : nil)
@@ -146,6 +149,9 @@ extension RFCTextViewCoordinator {
       let library = environment?.library, let range = highlightRange(of: mark.highlight)
     else { return nil }
     let identifier = mark.highlight
+    // A note opens beside the line clicked, as the popover does, not the whole
+    // highlight, which may run off the screen.
+    let line = NSRange(location: offset, length: 1)
     let undoManager = undoManager
     let notes = notes.filter { notePlacement.highlight(of: $0) == identifier }
       .map { AnnotationList.NoteLine(of: $0) }
@@ -167,11 +173,11 @@ extension RFCTextViewCoordinator {
       },
       addNote: { [weak self] in
         dismiss()
-        self?.openNote(.new(.highlight(identifier)), at: range)
+        self?.openNote(.new(.highlight(identifier)), at: line)
       },
       openNote: { [weak self] note in
         dismiss()
-        self?.openNote(.existing(note), at: range)
+        self?.openNote(.existing(note), at: line)
       })
   }
 }
@@ -190,6 +196,8 @@ extension RFCTextViewCoordinator {
           dismiss: { [weak host] in host?.presentingViewController?.dismiss(animated: true) })
       else { return }
       host.rootView = popover
+      // Its size follows its content: Delete asks first, in rows of its own.
+      host.sizingOptions = .preferredContentSize
       presentPopover(host, width: HighlightPopover.width, pointingAt: range)
     }
 

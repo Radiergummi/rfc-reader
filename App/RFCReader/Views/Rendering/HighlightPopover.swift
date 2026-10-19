@@ -12,7 +12,8 @@ import SwiftUI
 /// coordinator gives it, so it reads nothing from the environment, which a popover's
 /// hosted root is outside of.
 struct HighlightPopover: View {
-  /// The width it is measured at on iOS, where the popover is sized before it shows.
+  /// Its width on iOS, where the popover takes its height from it, again when the
+  /// delete confirmation adds its rows.
   static let width: CGFloat = 260
 
   let color: HighlightColor
@@ -79,6 +80,9 @@ struct HighlightPopover: View {
       }
     }
     .padding(12)
+    #if canImport(UIKit)
+      .frame(width: Self.width, alignment: .leading)
+    #endif
   }
 }
 

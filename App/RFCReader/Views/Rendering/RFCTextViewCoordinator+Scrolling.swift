@@ -21,6 +21,7 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
     guard controller?.driver === self else { return }
     controller?.driver = nil
     controller?.reportHighlights(nil)
+    controller?.reportNotes(nil)
   }
 
   var isInstalled: Bool { built != nil && textView != nil }
