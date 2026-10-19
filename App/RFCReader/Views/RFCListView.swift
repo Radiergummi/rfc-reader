@@ -233,15 +233,8 @@ struct RFCListView: View {
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      // Nor while the placeholder over the list says what it would (#770).
-      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits),
-        library.indexPlaceholder == nil
-      {
-        IndexStatusView()
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 8)
-          .listRowSeparator(.hidden)
-          .selectionDisabled()
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
+        IndexStatusRow()
       }
     }
     // Inset rather than plain: the selection is a rounded capsule with a margin
@@ -466,6 +459,23 @@ struct ListViewOptions: View {
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
       ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
+    }
+  }
+}
+
+/// `IndexStatusView` after the last row, unless the placeholder over the list says
+/// what it would (#770). A view of its own, so the download's progress, which the
+/// placeholder follows, redraws it rather than the list.
+private struct IndexStatusRow: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    if library.indexPlaceholder == nil {
+      IndexStatusView()
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .listRowSeparator(.hidden)
+        .selectionDisabled()
     }
   }
 }

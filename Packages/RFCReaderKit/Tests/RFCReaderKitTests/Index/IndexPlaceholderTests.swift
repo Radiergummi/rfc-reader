@@ -44,4 +44,12 @@ struct IndexPlaceholderTests {
     #expect(
       IndexPlaceholder(state: .ready(updatedAt: .now), hasIndex: false, bytesReceived: nil) == nil)
   }
+
+  /// The main actor hears of the download every 100 KB, not every packet.
+  @Test func `only each further 100 KB is a step`() {
+    var steps = IndexPlaceholder.ProgressSteps()
+    let received: [Int64] = [99_999, 100_000, 150_000, 230_000, 329_999, 330_000]
+    let shown = received.filter { steps.isStep($0) }
+    #expect(shown == [100_000, 230_000, 330_000])
+  }
 }

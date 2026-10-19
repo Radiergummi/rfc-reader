@@ -22,4 +22,20 @@ public enum IndexPlaceholder: Equatable, Sendable {
       return nil
     }
   }
+
+  /// Which of a download's byte counts the placeholder is told of: one each time
+  /// another 100 KB has arrived, so the main actor hears of the download in steps it
+  /// shows rather than at every packet.
+  public struct ProgressSteps: Sendable {
+    private var last: Int64 = 0
+
+    public init() {}
+
+    /// Whether `bytes` is a step past the last one, which it then is.
+    public mutating func isStep(_ bytes: Int64) -> Bool {
+      guard bytes >= last + 100_000 else { return false }
+      last = bytes
+      return true
+    }
+  }
 }

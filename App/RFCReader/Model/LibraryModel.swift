@@ -618,23 +618,20 @@ final class LibraryModel {
       let kept = index == nil ? nil : store.indexCheck()
       let validators = kept?.validators(at: .now)
       // With no index to show, the list shows the download instead (#770), until
-      // the index downloaded has been applied or has failed.
-      let isFirstDownload = index == nil
+      // the index downloaded has been applied or has failed. Not the automatic
+      // check's, which may wait for a cheap network for as long as there is none:
+      // it runs under the failure, and its Try Again, until it has the index.
+      let isFirstDownload = index == nil && onExpensiveNetworks
       var onReceived: (@Sendable (Int64) -> Void)?
       if isFirstDownload {
         indexBytesReceived = 0
         indexDownloads += 1
         let download = indexDownloads
-        // Off the main actor, every packet: only the 100 KB steps the list shows go
-        // over to it.
-        let reported = OSAllocatedUnfairLock<Int64>(initialState: 0)
+        // Off the main actor, every packet: only the steps the list shows go over
+        // to it.
+        let steps = OSAllocatedUnfairLock(initialState: IndexPlaceholder.ProgressSteps())
         onReceived = { [weak self] bytes in
-          let isStep = reported.withLock { last in
-            guard bytes >= last + 100_000 else { return false }
-            last = bytes
-            return true
-          }
-          guard isStep else { return }
+          guard steps.withLock({ $0.isStep(bytes) }) else { return }
           Task { @MainActor in
             self?.indexReceived(bytes, in: download)
           }

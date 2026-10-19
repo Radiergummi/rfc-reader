@@ -70,6 +70,9 @@ targets:
     postBuildScripts:
       - name: Bundle the RFC index
         basedOnDependencyAnalysis: false
+        # Declared, so that the signing after it seals the file as it now is.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rfc-index.xml
         script: |
           index="$SRCROOT/App/Resources/rfc-index.xml"
           bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/rfc-index.xml"
