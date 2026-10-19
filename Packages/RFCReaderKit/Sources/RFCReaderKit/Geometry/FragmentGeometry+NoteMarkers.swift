@@ -1,11 +1,28 @@
 import CoreGraphics
 import Foundation
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 // The gutter markers of notes (#523): a glyph in the trailing gutter, level with the
 // first line of what each note is on. The leading gutter is kept for hung section
 // numbers (#433). Slice 3's notes column places its cards by the same lines.
 
 extension FragmentGeometry {
+  /// Which of a fragment's lines a marker at storage offset `location` is level with:
+  /// the one that holds it, and the first where none does. Nil for a fragment with no
+  /// lines.
+  public static func noteMarkerLine(at location: Int, in fragment: FragmentLines)
+    -> NSTextLineFragment?
+  {
+    let index = fragment.elementIndex(of: location)
+    return fragment.lines.first { NSLocationInRange(index, $0.characterRange) }
+      ?? fragment.lines.first
+  }
+
   /// Where one note's target starts, as layout has it: the top of that line, in the
   /// text container's coordinates, and whether its fragment is laid out or its frame
   /// only an estimate.

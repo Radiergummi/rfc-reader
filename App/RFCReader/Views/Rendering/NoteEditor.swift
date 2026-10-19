@@ -18,8 +18,6 @@ import SwiftUI
 /// following a link do.
 @MainActor @Observable
 final class NoteEditorModel {
-  let identifier: UUID
-  let owner: NoteOwner
   /// The text it opened with.
   @ObservationIgnored let initialText: NSAttributedString
   @ObservationIgnored let font: PlatformFont
@@ -43,12 +41,10 @@ final class NoteEditorModel {
   private static let saveDelay: Duration = .seconds(1)
 
   init(
-    identifier: UUID, owner: NoteOwner, body: String, font: PlatformFont,
+    body: String, font: PlatformFont,
     save: @escaping (String) -> Void, delete: @escaping () -> Void,
     openLink: @escaping (URL) -> Void, showInAnnotations: (() -> Void)?
   ) {
-    self.identifier = identifier
-    self.owner = owner
     self.font = font
     let text = NSMutableAttributedString(
       attributedString: NoteText.attributed(NoteBody(markdown: body), font: font))
@@ -65,8 +61,7 @@ final class NoteEditorModel {
   func textChanged() {
     pendingSave?.cancel()
     pendingSave = Task { [weak self] in
-      try? await Task.sleep(for: Self.saveDelay)
-      guard !Task.isCancelled else { return }
+      guard await Debounce.outlasted(Self.saveDelay) else { return }
       self?.saveNow()
     }
   }
@@ -139,14 +134,10 @@ final class NoteEditorModel {
   /// ⌘K: the link field, with the selection's link in it if it has one.
   func beginLink() {
     guard let textView, let storage = textView.noteStorage else { return }
-    let range = textView.noteSelection
-    var existing: URL?
-    if range.length > 0 || range.location < storage.length {
-      let location = min(range.location, max(0, storage.length - 1))
-      if storage.length > 0 {
-        existing = storage.attribute(.link, at: location, effectiveRange: nil) as? URL
-      }
-    }
+    let range = Self.linkRange(textView.noteSelection, in: storage)
+    let existing =
+      range.length > 0 && range.location < storage.length
+      ? storage.attribute(.link, at: range.location, effectiveRange: nil) as? URL : nil
     linkText = existing?.absoluteString ?? ""
     linkIsInvalid = false
     showsLinkField = true
@@ -156,7 +147,7 @@ final class NoteEditorModel {
   /// nothing is selected; an empty field takes the link off the selection.
   func applyLink() {
     guard let textView, let storage = textView.noteStorage else { return }
-    let range = textView.noteSelection
+    let range = Self.linkRange(textView.noteSelection, in: storage)
     let typed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
     if typed.isEmpty {
       if range.length > 0 {
@@ -176,9 +167,25 @@ final class NoteEditorModel {
       var attributes = textView.typingAttributes
       attributes[.link] = url
       textView.insertNoteText(NSAttributedString(string: typed, attributes: attributes))
+      // What is typed after it is not part of it.
+      textView.typingAttributes[.link] = nil
     }
     textChanged()
     endLink()
+  }
+
+  /// What the link field acts on: the selection, or with only the caret, the whole of
+  /// the link the caret is in.
+  private static func linkRange(_ selection: NSRange, in storage: NSTextStorage) -> NSRange {
+    guard selection.length == 0, storage.length > 0 else { return selection }
+    let location = min(selection.location, storage.length - 1)
+    var link = NSRange()
+    guard
+      storage.attribute(
+        .link, at: location, longestEffectiveRange: &link,
+        in: NSRange(location: 0, length: storage.length)) != nil
+    else { return selection }
+    return link
   }
 
   func endLink() {
@@ -412,9 +419,11 @@ struct NoteEditor: View {
     var noteStorage: NSTextStorage? { textStorage }
     var noteSelection: NSRange { selectedRange() }
 
-    /// Through the text view's own change, so Undo takes it back.
+    /// Through the text view's own change, over the paragraphs `range` touches, as
+    /// on iOS, so Undo takes back a list or an indent made with only the caret in it.
     func editAttributes(in range: NSRange, _ change: () -> Void) {
-      guard shouldChangeText(in: range, replacementString: nil) else { return }
+      let paragraphs = (string as NSString).paragraphRange(for: range)
+      guard shouldChangeText(in: paragraphs, replacementString: nil) else { return }
       textStorage?.beginEditing()
       change()
       textStorage?.endEditing()

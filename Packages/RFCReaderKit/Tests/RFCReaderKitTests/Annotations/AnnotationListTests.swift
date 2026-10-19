@@ -33,6 +33,15 @@ struct AnnotationListTests {
     #expect(rows[3].placement == .detached)
   }
 
+  @Test func `one made since the build placed the others is listed last, not as gone`() {
+    let placed = entry("placed", age: 1)
+    let made = entry("made", age: 2)
+    let rows = AnnotationList.rows(
+      [placed, made], statuses: [placed.id: .placed(0..<6, placed.target, section: nil)])
+    #expect(rows.map(\.quote) == ["placed", "made"])
+    #expect(rows[1].placement == .unplaced)
+  }
+
   @Test func `without a build the stored quotes are listed, oldest first`() {
     let rows = AnnotationList.rows([entry("b", age: 2), entry("a", age: 1)], statuses: nil)
     #expect(rows.map(\.quote) == ["a", "b"])

@@ -4,11 +4,34 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Geometry: note markers")
 struct NoteMarkerGeometryTests {
   private let first = UUID()
   private let second = UUID()
   private let third = UUID()
+
+  @Test func `a marker is level with the line of its fragment that holds it`() {
+    // A paragraph of two lines, at storage offset 100: the lines count from its start.
+    let paragraph = NSAttributedString(string: "0123456789abcdefgh\n")
+    let lines = [
+      NSTextLineFragment(attributedString: paragraph, range: NSRange(location: 0, length: 10)),
+      NSTextLineFragment(attributedString: paragraph, range: NSRange(location: 10, length: 8)),
+    ]
+    let fragment = FragmentLines(range: NSRange(location: 100, length: 19), lines: lines)
+    #expect(FragmentGeometry.noteMarkerLine(at: 115, in: fragment) === lines[1])
+    #expect(FragmentGeometry.noteMarkerLine(at: 100, in: fragment) === lines[0])
+    // Past its lines, on the paragraph's closing newline: its first line.
+    #expect(FragmentGeometry.noteMarkerLine(at: 118, in: fragment) === lines[0])
+    #expect(
+      FragmentGeometry.noteMarkerLine(at: 100, in: FragmentLines(range: fragment.range, lines: []))
+        == nil)
+  }
 
   @Test func `a marker stands level with its line`() {
     let markers = FragmentGeometry.noteMarkers(
