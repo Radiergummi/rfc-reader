@@ -108,7 +108,7 @@ public struct CacheValidators: Codable, Sendable, Hashable {
   }
 }
 
-/// What asking for the index, or the errata, again found.
+/// What asking for the index, the errata or the Recent RFCs feed again found.
 public enum IndexFetch: Sendable, Hashable {
   /// A new file, and what identifies it for the next time.
   case changed(Data, CacheValidators?)
@@ -307,11 +307,17 @@ public struct RFCEditorClient: Sendable {
     return (try WorkingGroups.decode(data), data)
   }
 
-  @concurrent
-  public func fetchRecent() async throws -> [RecentRFC] {
-    let data = try await fetch(
-      RFCEditorEndpoints.recentFeed, accepting: Self.xmlMediaTypes.union(["application/rss+xml"]))
-    return try RecentFeedParser.parse(data)
+  /// The Recent RFCs feed as bytes (#421), unless it still matches `validators`: as
+  /// `fetchIndexData(unlessMatching:onExpensiveNetworks:)` does for the index. The
+  /// caller parses it with `RecentRFC.parseFeed(_:)`, and keeps it.
+  public func fetchRecentData(
+    unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool
+  )
+    async throws -> IndexFetch
+  {
+    try await fetchConditionally(
+      RFCEditorEndpoints.recentFeed, accepting: Self.xmlMediaTypes.union(["application/rss+xml"]),
+      unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
   }
 
   /// An IANA registry (#175), read, with the bytes it was read from for the caller

@@ -17,5 +17,6 @@ The automatic daily check nobody is waiting for goes through a second session, `
 Retry and pull to refresh use `URLSession.rfcEditor`, take any network and fail fast.
 
 The cost is the small bodies that had nothing else keeping them.
-The Just Published feed (`rfcrss.xml`) and the metadata JSON lose the free revalidation the shared cache gave them: the feed is about 4 KB compressed, measured, fetched whole at each launch.
+The Just Published feed (`rfcrss.xml`) and the metadata JSON lose the free revalidation the shared cache gave them: the feed is about 4 KB compressed, measured, and was fetched whole at each launch.
+Since #421 the feed is kept beside the index with its validators, as the errata are, and each launch asks for it with its `ETag`, through `rfcEditorOnCheapNetworks`: `RecentFeedRefresh` shows the kept feed first, and keeps showing it when the fetch fails.
 In return documents are not stored twice, and nothing stands between the index check and its `304`.
