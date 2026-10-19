@@ -23,6 +23,12 @@
       view.report = report
     }
 
+    /// A view freed with its window never moves out of it, and its monitor would
+    /// outlive it.
+    static func dismantleNSView(_ view: ReaderView, coordinator: ()) {
+      view.stopWatching()
+    }
+
     final class ReaderView: NSView {
       var report: () -> Void = {}
       private var monitor: Any?
@@ -37,10 +43,7 @@
 
       override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let monitor {
-          NSEvent.removeMonitor(monitor)
-          self.monitor = nil
-        }
+        stopWatching()
         guard window != nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(
           matching: [.leftMouseDown, .leftMouseUp, .pressure]
@@ -51,9 +54,19 @@
         }
       }
 
+      func stopWatching() {
+        if let monitor {
+          NSEvent.removeMonitor(monitor)
+          self.monitor = nil
+        }
+      }
+
       private func handle(_ event: NSEvent) {
+        // The part of the row on screen: a row scrolled out of the list is still in
+        // the window, under the panel's titlebar or past its end.
         let isInside =
-          event.window === window && bounds.contains(convert(event.locationInWindow, from: nil))
+          event.window === window
+          && visibleRect.contains(convert(event.locationInWindow, from: nil))
         switch event.type {
         case .leftMouseDown:
           isPressing = isInside
