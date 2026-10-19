@@ -484,6 +484,50 @@
     }
   }
 
+  /// `export rfc id 9110 as PDF to file "…"` (#383): the file File > Export… writes,
+  /// made by the same `DocumentExport`, without opening a window. The command waits
+  /// for it, so a script's next line finds the file written.
+  @objc(RFCExportCommand)
+  nonisolated final class RFCExportCommand: RFCScriptCommand {
+    @MainActor override func perform() {
+      let specifier = directParameter as? NSScriptObjectSpecifier
+      guard let rfc = specifier?.objectsByEvaluatingSpecifier as? ScriptableRFC else {
+        ScriptError.report("Which RFC? Name one as rfc id 9110.", in: self)
+        return
+      }
+      let code = (evaluatedArguments?["format"] as? NSNumber)?.uint32Value
+      guard let format = code.flatMap(ExportFormat.init(scriptCode:)) else {
+        ScriptError.report(
+          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML or ABNF.", in: self)
+        return
+      }
+      guard let file = evaluatedArguments?["file"] as? URL, file.isFileURL else {
+        ScriptError.report("Where to? Export to a file.", in: self)
+        return
+      }
+      let id = rfc.id
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      Task {
+        do {
+          let data = try await DocumentExport.data(
+            for: id, as: format, paperSize: NSPrintInfo.shared.paperSize,
+            library: LibraryModel.shared)
+          try data.write(to: file, options: .atomic)
+        } catch let error as CocoaError where format == .abnf && error.code == .fileWriteUnknown {
+          // What `DocumentExport` throws for a grammar the RFC does not have, which
+          // the menus never offer.
+          ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
+        } catch {
+          ScriptError.report(
+            "\(id.displayName) could not be exported as \(format.scriptName): \(error.localizedDescription)",
+            in: command)
+        }
+        command.resumeExecution(withResult: nil)
+      }
+    }
+  }
+
   /// A failure the script sees as an error, with our words rather than a generic one.
   enum ScriptError {
     /// `command` defaults to the one being executed, which is the only way a
