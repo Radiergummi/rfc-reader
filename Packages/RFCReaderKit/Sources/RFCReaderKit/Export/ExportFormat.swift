@@ -11,6 +11,8 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   case pdf
   /// The document's grammar collected into one file (#185), for a document with one.
   case abnf
+  /// The document's highlights and notes, with citations (#524).
+  case markdown
 
   /// Where the file comes from.
   public enum Source: Sendable {
@@ -27,12 +29,13 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .pdf: "PDF"
     case .abnf: String(kit: "ABNF Grammar", locale: locale)
+    case .markdown: String(kit: "Highlights and Notes", locale: locale)
     }
   }
 
   public var source: Source {
     switch self {
-    case .pdf, .abnf: .rendered
+    case .pdf, .abnf, .markdown: .rendered
     }
   }
 
@@ -42,6 +45,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     // No system type declares ABNF: plain text by the `.abnf` extension, which a save
     // panel and a file exporter keep only for a type that is the extension's.
     case .abnf: UTType(filenameExtension: "abnf", conformingTo: .plainText) ?? .plainText
+    case .markdown: UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
     }
   }
 
@@ -49,11 +53,12 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .pdf: contentType.preferredFilenameExtension ?? rawValue
     case .abnf: "abnf"
+    case .markdown: "md"
     }
   }
 
-  /// The formats `document` can be saved as: PDF always, and its grammar where it
-  /// has one.
+  /// The formats `document` can be saved as: PDF always, its grammar where it has
+  /// one, and its highlights and notes, which say so where there are none.
   public static func available(for document: RFCDocument, hints: ArtworkHints = .bundled)
     -> [ExportFormat]
   {
@@ -61,7 +66,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       ABNFPresentation.dialect(ofType: $0.content.type) == .rfc5234
         && ABNF.parse($0.content.text) != nil
     }
-    return hasGrammar ? [.pdf, .abnf] : [.pdf]
+    return hasGrammar ? [.pdf, .abnf, .markdown] : [.pdf, .markdown]
   }
 
   /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a

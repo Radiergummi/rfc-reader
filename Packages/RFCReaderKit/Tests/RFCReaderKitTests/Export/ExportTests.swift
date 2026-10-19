@@ -63,6 +63,14 @@ struct ExportFormatTests {
     #expect(ExportFormat.pdf.name(in: .english) == "PDF")
   }
 
+  @Test func `highlights and notes are a Markdown file`() {
+    #expect(ExportFormat.markdown.source == .rendered)
+    #expect(ExportFormat.markdown.contentType.conforms(to: .plainText))
+    #expect(ExportFormat.markdown.fileName(for: .rfc(9110)) == "RFC-9110.md")
+    #expect(ExportFormat.markdown.name(in: .english) == "Highlights and Notes")
+    #expect(ExportFormat.markdown.renaming("RFC-9110.pdf") == "RFC-9110.md")
+  }
+
   /// The Mac's pop-up remembers the last format by its raw value; one this build
   /// does not have, or none, falls back to the first rather than to nothing.
   @Test func `a remembered format falls back to the first`() {
