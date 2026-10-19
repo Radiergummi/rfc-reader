@@ -207,6 +207,84 @@ extension NoteBody {
   }
 
   static func normalized(_ spans: [Span]) -> [Span] {
+    spelled(tidied(spans))
+  }
+
+  /// `spans` with as few styles taken off as it takes for their Markdown to read back
+  /// as them: where styles cross, as italic over "a b" and strikethrough over "b c",
+  /// CommonMark has no spelling for both, and the text is kept rather than every style.
+  /// A run with fewer characters goes first, one style at a time; with no style left,
+  /// the text reads back as it is, escaped.
+  private static func spelled(_ spans: [Span]) -> [Span] {
+    var spans = spans
+    while !readsBack(spans) {
+      let runs = styledRuns(spans).sorted { $0.length < $1.length }
+      guard !runs.isEmpty else { return spans }
+      // The one whose removal makes it read back, or else the shortest, and on.
+      let removed =
+        runs.lazy.map { tidied(removing($0, from: spans)) }.first(where: readsBack)
+        ?? tidied(removing(runs[0], from: spans))
+      spans = removed
+    }
+    return spans
+  }
+
+  /// Whether the parser reads `spans`' Markdown back as them, a mail address's link
+  /// aside, which no escape keeps from being one.
+  private static func readsBack(_ spans: [Span]) -> Bool {
+    guard !spans.isEmpty else { return true }
+    guard let leaves = leaves(ofMarkdown: inline(spans)), leaves.count == 1,
+      leaves[0].levels.isEmpty
+    else { return false }
+    return reading(tidied(leaves[0].spans)) == reading(spans)
+  }
+
+  /// Every character with its style and link, a `mailto:` link left out.
+  private static func reading(_ spans: [Span]) -> [String] {
+    spans.flatMap { span in
+      let link = span.link?.scheme == "mailto" ? nil : span.link
+      return span.text.map { "\($0)\u{0}\(span.style.rawValue)\u{0}\(link?.absoluteString ?? "")" }
+    }
+  }
+
+  private struct StyledRun {
+    let style: Style
+    let spans: Range<Int>
+    let length: Int
+  }
+
+  /// Every maximal run of spans in one of the delimited styles, in order.
+  private static func styledRuns(_ spans: [Span]) -> [StyledRun] {
+    var runs: [StyledRun] = []
+    for style in [Style.emphasis, .strong, .strikethrough] {
+      var index = 0
+      while index < spans.count {
+        guard spans[index].text != "\n", spans[index].style.contains(style) else {
+          index += 1
+          continue
+        }
+        var end = index
+        var length = 0
+        while end < spans.count, spans[end].text != "\n", spans[end].style.contains(style) {
+          length += spans[end].text.count
+          end += 1
+        }
+        runs.append(StyledRun(style: style, spans: index..<end, length: length))
+        index = end
+      }
+    }
+    return runs
+  }
+
+  private static func removing(_ run: StyledRun, from spans: [Span]) -> [Span] {
+    var spans = spans
+    for index in run.spans { spans[index].style.remove(run.style) }
+    return spans
+  }
+
+  /// Everything of the canonical form but its spelling: what `spelled` starts from,
+  /// and what it compares the parser's reading with.
+  private static func tidied(_ spans: [Span]) -> [Span] {
     // A link's text has no code, and one style throughout: CommonMark's parse keeps
     // none inside it.
     var spans = spans.filter { !$0.text.isEmpty }
@@ -234,7 +312,7 @@ extension NoteBody {
         .enumerated()
       {
         if offset > 0 { pieces.append(Span("\n")) }
-        pieces.append(Span(String(piece), style: span.style, link: span.link))
+        if !piece.isEmpty { pieces.append(Span(String(piece), style: span.style, link: span.link)) }
       }
       return pieces
     }
@@ -349,6 +427,16 @@ extension NoteBody {
   /// Without white space at the ends of the paragraph, or on either side of a line
   /// break, and without a line break at either end.
   private static func trimmed(_ spans: [Span]) -> [Span] {
+    // Again while it takes a span away: the white space before it is then at the edge.
+    var spans = trimmedOnce(spans)
+    while true {
+      let again = trimmedOnce(spans)
+      if again == spans { return spans }
+      spans = again
+    }
+  }
+
+  private static func trimmedOnce(_ spans: [Span]) -> [Span] {
     var spans = spans
     while spans.first?.text == "\n" { spans.removeFirst() }
     while spans.last?.text == "\n" { spans.removeLast() }
