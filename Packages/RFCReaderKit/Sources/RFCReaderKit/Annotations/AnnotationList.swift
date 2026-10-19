@@ -24,6 +24,12 @@ public enum AnnotationList {
   public struct NoteLine: Sendable, Equatable, Identifiable {
     public let id: UUID
     public let firstLine: String
+
+    public init(of note: AnnotationSnapshot.NoteEntry) {
+      id = note.id
+      let text = NoteBody(markdown: note.body).plainText
+      firstLine = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
+    }
   }
 
   public struct Row: Sendable, Equatable, Identifiable {
@@ -125,8 +131,6 @@ public enum AnnotationList {
   }
 
   private static func line(of note: AnnotationSnapshot.NoteEntry) -> NoteLine {
-    let text = NoteBody(markdown: note.body).plainText
-    let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
-    return NoteLine(id: note.id, firstLine: first)
+    NoteLine(of: note)
   }
 }

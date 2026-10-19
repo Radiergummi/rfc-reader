@@ -10,7 +10,8 @@ struct NoteBlockTests {
   private let built: BuiltDocument
 
   init() throws {
-    built = DocumentTextBuilder.build(try Fixtures.document(named: "rfc9290.xml"), style: ReadingStyle())
+    built = DocumentTextBuilder.build(
+      try Fixtures.document(named: "rfc9290.xml"), style: ReadingStyle())
   }
 
   private var text: NSString { built.text.string as NSString }

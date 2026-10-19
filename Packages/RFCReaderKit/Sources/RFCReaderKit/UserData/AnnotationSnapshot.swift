@@ -86,16 +86,12 @@ public struct AnnotationSnapshot: Equatable, Sendable {
   public static let empty = AnnotationSnapshot(highlights: [])
 
   public init(highlights: [HighlightEntry], notes: [NoteEntry] = []) {
-    var byDocument: [DocumentID: [HighlightEntry]] = [:]
-    for entry in highlights.sorted(by: { Self.order(($0.createdAt, $0.id), ($1.createdAt, $1.id)) }) {
-      byDocument[entry.document, default: []].append(entry)
-    }
-    self.highlights = byDocument
-    var notesByDocument: [DocumentID: [NoteEntry]] = [:]
-    for entry in notes.sorted(by: { Self.order(($0.createdAt, $0.id), ($1.createdAt, $1.id)) }) {
-      notesByDocument[entry.document, default: []].append(entry)
-    }
-    self.notes = notesByDocument
+    self.highlights = Dictionary(
+      grouping: highlights.sorted { Self.order(($0.createdAt, $0.id), ($1.createdAt, $1.id)) },
+      by: \.document)
+    self.notes = Dictionary(
+      grouping: notes.sorted { Self.order(($0.createdAt, $0.id), ($1.createdAt, $1.id)) },
+      by: \.document)
   }
 
   /// The documents with anything annotated, which eviction keeps (`CacheEviction`).

@@ -52,20 +52,22 @@ extension FragmentGeometry {
   public static func noteMarkers(_ lines: [NoteLine], visible: ClosedRange<CGFloat>)
     -> [NoteMarker]
   {
-    var grouped: [(notes: [UUID], y: CGFloat, height: CGFloat)] = []
+    // The lines, one marker each, the notes of one line together.
+    var grouped: [NoteMarker] = []
     let real = lines.filter { $0.isLaidOut && visible.contains($0.y) }
     for line in real.sorted(by: { $0.y < $1.y }) {
       if let last = grouped.last, abs(last.y - line.y) < 1 {
-        grouped[grouped.count - 1].notes.append(line.note)
+        grouped[grouped.count - 1] = NoteMarker(
+          notes: last.notes + [line.note], y: last.y, lineHeight: last.lineHeight)
       } else {
-        grouped.append(([line.note], line.y, line.height))
+        grouped.append(NoteMarker(notes: [line.note], y: line.y, lineHeight: line.height))
       }
     }
     var markers: [NoteMarker] = []
     for group in grouped {
       let below = markers.last.map { $0.y + noteMarkerSize + noteMarkerSpacing } ?? -.infinity
       markers.append(
-        NoteMarker(notes: group.notes, y: max(group.y, below), lineHeight: group.height))
+        NoteMarker(notes: group.notes, y: max(group.y, below), lineHeight: group.lineHeight))
     }
     return markers
   }

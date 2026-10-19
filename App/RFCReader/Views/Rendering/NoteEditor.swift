@@ -1,0 +1,519 @@
+import RFCKit
+import RFCReaderKit
+import SwiftUI
+
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
+// A note's editor (#523): a TextKit 2 text view, with lists as `NSTextList` paragraphs,
+// over the note's body projected into attributed text (`NoteText`). What it saves is
+// Markdown, so nothing stored depends on this editor. A popover on the Mac, a sheet on
+// iOS; either way what the coordinator hosts reads nothing from the environment: the
+// model carries everything it does as closures.
+
+/// One note being edited: what it is on, its text view, and what saving, deleting and
+/// following a link do.
+@MainActor @Observable
+final class NoteEditorModel {
+  let identifier: UUID
+  let owner: NoteOwner
+  /// The text it opened with.
+  @ObservationIgnored let initialText: NSAttributedString
+  @ObservationIgnored let font: PlatformFont
+
+  /// The link field ⌘K opens, and what is typed in it.
+  var showsLinkField = false
+  var linkText = ""
+  /// Whether the field's text names nothing a link can go to.
+  var linkIsInvalid = false
+
+  @ObservationIgnored weak var textView: NoteTextView?
+  @ObservationIgnored private let save: (String) -> Void
+  @ObservationIgnored private let deleteNote: () -> Void
+  @ObservationIgnored let openLink: (URL) -> Void
+  /// Shows the note in the Annotations tab, on the Mac.
+  @ObservationIgnored let showInAnnotations: (() -> Void)?
+  @ObservationIgnored private var pendingSave: Task<Void, Never>?
+  @ObservationIgnored private var isClosed = false
+
+  /// How long typing waits before it is saved.
+  private static let saveDelay: Duration = .seconds(1)
+
+  init(
+    identifier: UUID, owner: NoteOwner, body: String, font: PlatformFont,
+    save: @escaping (String) -> Void, delete: @escaping () -> Void,
+    openLink: @escaping (URL) -> Void, showInAnnotations: (() -> Void)?
+  ) {
+    self.identifier = identifier
+    self.owner = owner
+    self.font = font
+    let text = NSMutableAttributedString(
+      attributedString: NoteText.attributed(NoteBody(markdown: body), font: font))
+    text.addAttribute(
+      .foregroundColor, value: RFCColors.label, range: NSRange(location: 0, length: text.length))
+    initialText = text
+    self.save = save
+    self.deleteNote = delete
+    self.openLink = openLink
+    self.showInAnnotations = showInAnnotations
+  }
+
+  /// The text changed: saved once typing pauses.
+  func textChanged() {
+    pendingSave?.cancel()
+    pendingSave = Task { [weak self] in
+      try? await Task.sleep(for: Self.saveDelay)
+      guard !Task.isCancelled else { return }
+      self?.saveNow()
+    }
+  }
+
+  private func saveNow() {
+    guard !isClosed, let storage = textView?.noteStorage else { return }
+    save(NoteText.body(of: storage).markdown)
+  }
+
+  /// The editor closes: what is typed is saved, and a note left empty is deleted.
+  func close() {
+    pendingSave?.cancel()
+    saveNow()
+    isClosed = true
+  }
+
+  func delete() {
+    pendingSave?.cancel()
+    isClosed = true
+    deleteNote()
+  }
+
+  // MARK: - Formatting
+
+  func toggle(_ style: NoteBody.Style) {
+    guard let textView, let storage = textView.noteStorage else { return }
+    let range = textView.noteSelection
+    guard range.length > 0 else {
+      textView.typingAttributes = NoteText.toggling(
+        style, in: textView.typingAttributes, font: font)
+      return
+    }
+    textView.editAttributes(in: range) {
+      NoteText.toggle(style, in: storage, range: range, font: font)
+    }
+    textChanged()
+  }
+
+  func toggleList(ordered: Bool) {
+    guard let textView, let storage = textView.noteStorage else { return }
+    let range = textView.noteSelection
+    textView.editAttributes(in: range) {
+      NoteText.toggleList(ordered: ordered, in: storage, range: range, font: font)
+    }
+    textView.carryParagraphStyleIntoTyping()
+    textChanged()
+  }
+
+  func indent(by levels: Int) {
+    guard let textView, let storage = textView.noteStorage else { return }
+    let range = textView.noteSelection
+    textView.editAttributes(in: range) {
+      NoteText.indent(by: levels, in: storage, range: range, font: font)
+    }
+    textView.carryParagraphStyleIntoTyping()
+    textChanged()
+  }
+
+  // MARK: - Links
+
+  /// ⌘K: the link field, with the selection's link in it if it has one.
+  func beginLink() {
+    guard let textView, let storage = textView.noteStorage else { return }
+    let range = textView.noteSelection
+    var existing: URL?
+    if range.length > 0 || range.location < storage.length {
+      let location = min(range.location, max(0, storage.length - 1))
+      if storage.length > 0 {
+        existing = storage.attribute(.link, at: location, effectiveRange: nil) as? URL
+      }
+    }
+    linkText = existing?.absoluteString ?? ""
+    linkIsInvalid = false
+    showsLinkField = true
+  }
+
+  /// Puts the link typed over the selection, or inserts it as its own text where
+  /// nothing is selected; an empty field takes the link off the selection.
+  func applyLink() {
+    guard let textView, let storage = textView.noteStorage else { return }
+    let range = textView.noteSelection
+    let typed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+    if typed.isEmpty {
+      if range.length > 0 {
+        textView.editAttributes(in: range) { storage.removeAttribute(.link, range: range) }
+        textChanged()
+      }
+      endLink()
+      return
+    }
+    guard let url = NoteLink.url(from: typed) else {
+      linkIsInvalid = true
+      return
+    }
+    if range.length > 0 {
+      textView.editAttributes(in: range) { storage.addAttribute(.link, value: url, range: range) }
+    } else {
+      var attributes = textView.typingAttributes
+      attributes[.link] = url
+      textView.insertNoteText(NSAttributedString(string: typed, attributes: attributes))
+    }
+    textChanged()
+    endLink()
+  }
+
+  func endLink() {
+    showsLinkField = false
+    linkIsInvalid = false
+    textView?.focus()
+  }
+}
+
+/// The editor: a formatting bar, the text, the link field when ⌘K opens it, and Delete.
+struct NoteEditor: View {
+  let model: NoteEditorModel
+
+  /// The popover's width on the Mac.
+  static let width: CGFloat = 380
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      formattingBar
+      NoteTextEditor(model: model)
+        .frame(minHeight: 140, idealHeight: 200, maxHeight: .infinity)
+      if model.showsLinkField { linkField }
+      HStack {
+        Button("Delete Note", systemImage: "trash", role: .destructive) { model.delete() }
+          .buttonStyle(.borderless)
+        Spacer()
+        if let show = model.showInAnnotations {
+          Button("Show in Annotations", action: show)
+            .buttonStyle(.borderless)
+        }
+      }
+      .font(.callout)
+    }
+    .padding(12)
+    .onDisappear { model.close() }
+  }
+
+  private var formattingBar: some View {
+    HStack(spacing: 2) {
+      button("Bold", systemImage: "bold") { model.toggle(.strong) }
+      button("Italic", systemImage: "italic") { model.toggle(.emphasis) }
+      button("Strikethrough", systemImage: "strikethrough") { model.toggle(.strikethrough) }
+      button("Code", systemImage: "chevron.left.forwardslash.chevron.right") {
+        model.toggle(.code)
+      }
+      Divider().frame(height: 16)
+      button("Bulleted List", systemImage: "list.bullet") { model.toggleList(ordered: false) }
+      button("Numbered List", systemImage: "list.number") { model.toggleList(ordered: true) }
+      button("Decrease Indent", systemImage: "decrease.indent") { model.indent(by: -1) }
+      button("Increase Indent", systemImage: "increase.indent") { model.indent(by: 1) }
+      Divider().frame(height: 16)
+      button("Link", systemImage: "link") { model.beginLink() }
+    }
+    .buttonStyle(.borderless)
+  }
+
+  private func button(
+    _ title: LocalizedStringResource, systemImage: String, action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .frame(width: 26, height: 22)
+        .contentShape(.rect)
+    }
+    .help(Text(title))
+    .accessibilityLabel(Text(title))
+  }
+
+  private var linkField: some View {
+    @Bindable var model = model
+    return VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        TextField("URL or RFC, as RFC 9110 Section 4.2", text: $model.linkText)
+          .textFieldStyle(.roundedBorder)
+          .onSubmit { model.applyLink() }
+          .onKeyPress(.escape) {
+            model.endLink()
+            return .handled
+          }
+        Button("Done") { model.applyLink() }
+      }
+      if model.linkIsInvalid {
+        Text("That is neither an address nor an RFC.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+// MARK: - The text view
+
+#if canImport(UIKit)
+  /// The note's text view on iOS: TextKit 2, ⌘K for a link, ⌘B and ⌘I, and a paste
+  /// reduced to what a note keeps.
+  final class NoteTextView: UITextView {
+    weak var model: NoteEditorModel?
+
+    var noteStorage: NSTextStorage? { textStorage }
+    var noteSelection: NSRange { selectedRange }
+
+    func editAttributes(in range: NSRange, _ change: () -> Void) {
+      textStorage.beginEditing()
+      change()
+      textStorage.endEditing()
+    }
+
+    func insertNoteText(_ text: NSAttributedString) {
+      let range = selectedRange
+      textStorage.replaceCharacters(in: range, with: text)
+      selectedRange = NSRange(location: range.location + text.length, length: 0)
+    }
+
+    /// An empty paragraph has no character to hold a list's style: what is typed
+    /// next takes it.
+    func carryParagraphStyleIntoTyping() {
+      guard textStorage.length > 0 else { return }
+      let location = min(selectedRange.location, textStorage.length - 1)
+      if let style = textStorage.attribute(.paragraphStyle, at: location, effectiveRange: nil) {
+        typingAttributes[.paragraphStyle] = style
+      }
+    }
+
+    func focus() {
+      becomeFirstResponder()
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+      let link = UIKeyCommand(
+        title: String(localized: "Link"), action: #selector(linkCommand), input: "k",
+        modifierFlags: .command)
+      // Over Go to RFC, which ⌘K is elsewhere: in a note it is the link.
+      link.wantsPriorityOverSystemBehavior = true
+      return [link] + (super.keyCommands ?? [])
+    }
+
+    @objc private func linkCommand() {
+      model?.beginLink()
+    }
+
+    override func paste(_ sender: Any?) {
+      let board = UIPasteboard.general
+      guard let font = model?.font else { return super.paste(sender) }
+      if let string = board.string, let url = NoteLink.pasted(string) {
+        var attributes = typingAttributes
+        attributes[.link] = url
+        insertNoteText(NSAttributedString(string: string, attributes: attributes))
+      } else if let data = board.data(forPasteboardType: "public.rtf")
+        ?? board.data(forPasteboardType: "public.html"),
+        let rich = try? NSAttributedString(data: data, options: [:], documentAttributes: nil)
+      {
+        let reduced = NSMutableAttributedString(
+          attributedString: NoteText.reduced(rich, font: font))
+        reduced.addAttribute(
+          .foregroundColor, value: RFCColors.label,
+          range: NSRange(location: 0, length: reduced.length))
+        insertNoteText(reduced)
+      } else {
+        return super.paste(sender)
+      }
+      delegate?.textViewDidChange?(self)
+    }
+  }
+
+  struct NoteTextEditor: UIViewRepresentable {
+    let model: NoteEditorModel
+
+    func makeUIView(context: Context) -> NoteTextView {
+      let textView = NoteTextView(usingTextLayoutManager: true)
+      textView.model = model
+      textView.allowsEditingTextAttributes = true
+      textView.adjustsFontForContentSizeCategory = true
+      textView.backgroundColor = .clear
+      textView.attributedText = model.initialText
+      textView.typingAttributes = [.font: model.font, .foregroundColor: RFCColors.label]
+      textView.delegate = context.coordinator
+      model.textView = textView
+      Task { @MainActor in textView.becomeFirstResponder() }
+      return textView
+    }
+
+    func updateUIView(_ textView: NoteTextView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+      let model: NoteEditorModel
+
+      init(model: NoteEditorModel) {
+        self.model = model
+      }
+
+      func textViewDidChange(_ textView: UITextView) {
+        model.textChanged()
+      }
+
+      func textView(
+        _ textView: UITextView, primaryActionFor textItem: UITextItem,
+        defaultAction: UIAction
+      ) -> UIAction? {
+        guard case .link(let url) = textItem.content else { return defaultAction }
+        return UIAction { [model] _ in model.openLink(url) }
+      }
+    }
+  }
+#else
+  /// The note's text view on the Mac: TextKit 2, its own find bar, ⌘K for a link, ⌘B
+  /// and ⌘I, and a paste reduced to what a note keeps.
+  final class NoteTextView: NSTextView {
+    weak var model: NoteEditorModel?
+
+    var noteStorage: NSTextStorage? { textStorage }
+    var noteSelection: NSRange { selectedRange() }
+
+    /// Through the text view's own change, so Undo takes it back.
+    func editAttributes(in range: NSRange, _ change: () -> Void) {
+      guard shouldChangeText(in: range, replacementString: nil) else { return }
+      textStorage?.beginEditing()
+      change()
+      textStorage?.endEditing()
+      didChangeText()
+    }
+
+    func insertNoteText(_ text: NSAttributedString) {
+      insertText(text, replacementRange: selectedRange())
+    }
+
+    /// An empty paragraph has no character to hold a list's style: what is typed
+    /// next takes it.
+    func carryParagraphStyleIntoTyping() {
+      guard let storage = textStorage, storage.length > 0 else { return }
+      let location = min(selectedRange().location, storage.length - 1)
+      if let style = storage.attribute(.paragraphStyle, at: location, effectiveRange: nil) {
+        typingAttributes[.paragraphStyle] = style
+      }
+    }
+
+    func focus() {
+      window?.makeFirstResponder(self)
+    }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      guard window != nil else { return }
+      Task { @MainActor [weak self] in self?.focus() }
+    }
+
+    /// ⌘K is the link field here, wherever else it is something else; ⌘B and ⌘I
+    /// bold and italic, which a popover's text has no Format menu for.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+      guard window?.firstResponder === self,
+        event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+        let key = event.charactersIgnoringModifiers?.lowercased()
+      else { return super.performKeyEquivalent(with: event) }
+      switch key {
+      case "k": model?.beginLink()
+      case "b": model?.toggle(.strong)
+      case "i": model?.toggle(.emphasis)
+      default: return super.performKeyEquivalent(with: event)
+      }
+      return true
+    }
+
+    override func paste(_ sender: Any?) {
+      let board = NSPasteboard.general
+      guard let font = model?.font else { return super.paste(sender) }
+      if let string = board.string(forType: .string), let url = NoteLink.pasted(string) {
+        var attributes = typingAttributes
+        attributes[.link] = url
+        insertNoteText(NSAttributedString(string: string, attributes: attributes))
+      } else if board.availableType(from: [.rtf, .rtfd, .html]) != nil,
+        let rich = board.readObjects(forClasses: [NSAttributedString.self])?.first
+          as? NSAttributedString
+      {
+        let reduced = NSMutableAttributedString(
+          attributedString: NoteText.reduced(rich, font: font))
+        reduced.addAttribute(
+          .foregroundColor, value: RFCColors.label,
+          range: NSRange(location: 0, length: reduced.length))
+        insertNoteText(reduced)
+      } else {
+        super.paste(sender)
+      }
+    }
+  }
+
+  struct NoteTextEditor: NSViewRepresentable {
+    let model: NoteEditorModel
+
+    func makeNSView(context: Context) -> NSScrollView {
+      let textView = NoteTextView(usingTextLayoutManager: true)
+      textView.model = model
+      textView.isRichText = true
+      textView.allowsUndo = true
+      textView.importsGraphics = false
+      textView.usesFontPanel = false
+      textView.usesFindBar = true
+      textView.isIncrementalSearchingEnabled = true
+      textView.drawsBackground = false
+      textView.isVerticallyResizable = true
+      textView.isHorizontallyResizable = false
+      textView.autoresizingMask = [.width]
+      textView.textContainer?.widthTracksTextView = true
+      textView.textStorage?.setAttributedString(model.initialText)
+      textView.typingAttributes = [.font: model.font, .foregroundColor: RFCColors.label]
+      textView.delegate = context.coordinator
+      model.textView = textView
+
+      let scroll = NSScrollView()
+      scroll.hasVerticalScroller = true
+      scroll.drawsBackground = false
+      scroll.documentView = textView
+      // The find bar's place: Edit ▸ Find searches the note while it has the focus.
+      scroll.isFindBarVisible = false
+      return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {}
+
+    /// Detached from its container, as every TextKit 2 text view here is, or what
+    /// AppKit keeps of it holds its text.
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+      (scroll.documentView as? NSTextView)?.textContainer?.textView = nil
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+      let model: NoteEditorModel
+
+      init(model: NoteEditorModel) {
+        self.model = model
+      }
+
+      func textDidChange(_ notification: Notification) {
+        model.textChanged()
+      }
+
+      func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
+        guard let url else { return false }
+        model.openLink(url)
+        return true
+      }
+    }
+  }
+#endif

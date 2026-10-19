@@ -29,6 +29,11 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
     updateToolbarTitle()
   }
 
+  /// A note's editor, asked for from the Annotations tab or the contents panel (#523).
+  func openNote(_ request: NoteRequest) {
+    openNote(request, at: nil)
+  }
+
   /// Puts the anchor's line at the top of the viewport.
   ///
   /// A jump can arrive — as a deep link, or as the reading position restored on
@@ -60,8 +65,10 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
   /// tick of the other reader's scroll.
   func reportVisibleAnchor(placed: Bool = false) {
     // Everything that reports where the viewport is comes through here — scrolls,
-    // jumps, restored places — which is every time the title's position can move.
+    // jumps, restored places — which is every time the title's position can move,
+    // and the notes' markers come into view.
     updateToolbarTitle()
+    layOutNoteMarkers()
     #if !canImport(UIKit)
       // The arrows are cursor rects over the viewport's copy buttons, and its headings
       // and captions in the outline and Implementer.
