@@ -48,7 +48,7 @@ public struct RFCHTMLSerializer: Sendable {
 
 extension RFCHTMLSerializer {
   /// One content document of a document cut into several, as an EPUB is (#408).
-  struct Chapter: Equatable {
+  struct Chapter {
     var file: String
     var title: String
     var body: String
@@ -129,7 +129,12 @@ extension RFCHTMLSerializer {
 
     mutating func header(_ document: RFCDocument) {
       let header = document.header
-      output += "<header>\n<h1>\(Self.escaped(header.title))</h1>\n"
+      // The title, or what the document is called when it has none, as the page's
+      // and a book's titles call it.
+      let title =
+        header.title.allSatisfy(\.isWhitespace)
+        ? RFCHTMLSerializer.documentTitle(of: header) : header.title
+      output += "<header>\n<h1>\(Self.escaped(title))</h1>\n"
       let byline = ExportLinks.byline(of: header)
       if !byline.isEmpty { output += "<p class=\"byline\">\(Self.escaped(byline))</p>\n" }
       output += "</header>\n"

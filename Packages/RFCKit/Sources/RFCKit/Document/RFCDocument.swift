@@ -283,7 +283,13 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// This section and every one below it, depth first: what `allSections` lists of
   /// each top-level section.
   public var withSubsections: [Section] {
-    [self] + subsections.flatMap(\.withSubsections)
+    var result: [Section] = []
+    func visit(_ section: Section) {
+      result.append(section)
+      section.subsections.forEach(visit)
+    }
+    visit(self)
+    return result
   }
 
   /// `4.2`, `Appendix A` or `Annex A`: the number as a heading names it, without the

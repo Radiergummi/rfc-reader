@@ -67,6 +67,7 @@ struct RFCEPUBWriterTests {
     let document = RFCDocument(header: DocumentHeader(title: " "), sections: [], source: .text)
     let chapters = RFCHTMLSerializer().chapters(document)
     #expect(chapters[0].title == "Untitled")
+    #expect(chapters[0].body.contains("<h1>Untitled</h1>"))
     #expect(
       RFCEPUBWriter.package(document, chapters: chapters).contains("<dc:title>Untitled</dc:title>"))
     #expect(
@@ -136,6 +137,29 @@ struct RFCEPUBWriterTests {
         #expect(anchors.contains(parts[1]), "\(fixture): \(file) links to \(href)")
       }
     }
+  }
+
+  /// A link to an anchor the book has no file for opens the front matter, without
+  /// a fragment; one the page resolves must not be one of them.
+  @Test(arguments: RFCMarkdownSerializerTests.fixtures)
+  func `every link the page resolves names its anchor in the book`(fixture: String) throws {
+    let document = try Fixtures.document(fixture)
+    let page = MarkupReader()
+    let pageParser = XMLParser(data: Data(RFCHTMLSerializer().page(document).utf8))
+    pageParser.delegate = page
+    #expect(pageParser.parse())
+    let resolved = page.hrefs.filter {
+      $0.hasPrefix("#") && page.ids.contains(String($0.dropFirst()))
+    }
+    var qualified: [String] = []
+    for chapter in RFCHTMLSerializer().chapters(document) {
+      let reader = MarkupReader()
+      let parser = XMLParser(data: Data(RFCEPUBWriter.content(chapter).utf8))
+      parser.delegate = reader
+      #expect(parser.parse())
+      qualified += reader.hrefs.filter { !$0.contains(":") && $0.contains("#") }
+    }
+    #expect(qualified.count == resolved.count, "\(fixture)")
   }
 
   @Test(arguments: RFCMarkdownSerializerTests.fixtures)
