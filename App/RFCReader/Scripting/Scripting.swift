@@ -516,6 +516,12 @@
         ScriptError.report("Where to? Export to a file.", in: self)
         return
       }
+      // A folder would fail the write with Foundation's words, not ours.
+      if (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+        ScriptError.report(
+          "Name a file, not a folder: to file \"…/\(format.fileName(for: rfc.id))\".", in: self)
+        return
+      }
       let id = rfc.id
       suspendExecution()
       nonisolated(unsafe) let command = self
