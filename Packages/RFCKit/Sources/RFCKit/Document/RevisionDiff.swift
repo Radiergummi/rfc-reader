@@ -201,8 +201,8 @@ public struct RevisionDiff: Sendable, Equatable {
     }
     if !leftOver.isEmpty {
       // Before the first of the gap's newer blocks, or the matched one after it.
-      let at = came.first ?? before
-      removedBlocks[BlockKey(section: section, index: at), default: []] += leftOver
+      let position = came.first ?? before
+      removedBlocks[BlockKey(section: section, index: position), default: []] += leftOver
     }
   }
 

@@ -746,6 +746,16 @@
         }
       }
     },
+    "Changes since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@"
+          }
+        }
+      }
+    },
     "Check for Updates…" : {
       "localizations" : {
         "de" : {
@@ -1092,6 +1102,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
+    "Couldn't load %@ to compare" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte zum Vergleich nicht geladen werden"
           }
         }
       }
@@ -1703,6 +1723,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Hide Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen ausblenden"
           }
         }
       }
@@ -3293,6 +3323,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs vom 1. April zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes Since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@ zeigen"
           }
         }
       }
