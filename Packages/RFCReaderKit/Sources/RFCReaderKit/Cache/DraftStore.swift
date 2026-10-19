@@ -1,0 +1,152 @@
+import Foundation
+import RFCKit
+
+/// What `DraftStore` asks of the network: the two fetches of `RFCEditorClient` a
+/// draft takes, so its tests can stand in for them.
+public protocol DraftFetching: Sendable {
+  /// What Datatracker says of the draft, whatever revision `id` names.
+  @concurrent
+  func fetchDraftInfo(_ id: DraftID) async throws -> (info: DraftInfo, data: Data)
+  /// One revision, in the best format the archive has it in.
+  @concurrent
+  func fetchDraft(_ id: DraftID) async throws -> RFCEditorClient.FetchedDocument
+}
+
+extension RFCEditorClient: DraftFetching {}
+
+/// The Internet-Drafts read (#728): each revision's file as the IETF's archive
+/// serves it, and what Datatracker says of each draft.
+///
+/// A revision never changes once it is submitted, so its file is kept as an RFC's
+/// body is, and read from the disk from then on. Which revision is the newest does
+/// change, and is asked of Datatracker again once what is kept is a day old
+/// (`infoLifetime`), or whenever it cannot be had from the disk at all; a failed
+/// ask falls back to what is kept, so a draft read once opens offline.
+///
+/// Apart from `DocumentStore`, whose tiers, eviction and packs are all about the
+/// RFC Editor's series: a draft is never kept offline, never in a pack, and never in
+/// the RFC index.
+public actor DraftStore {
+  /// How long what Datatracker said of a draft is taken as current (decision on #734).
+  public static let infoLifetime: TimeInterval = 24 * 60 * 60
+
+  private let directory: URL
+  private let now: @Sendable () -> Date
+
+  /// The revisions parsed last, so going back to one skips the parse.
+  private var parsed = RecentValues<DraftID, RFCDocument>(capacity: 4)
+  /// The fetches running, so a second open of the same revision joins the first.
+  private var fetches: [DraftID: Task<RFCDocument, any Error>] = [:]
+
+  /// The app's: a folder of Caches, since everything in it can be fetched again.
+  public init() {
+    let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    self.init(directory: caches.appending(path: "RFCReader/Drafts", directoryHint: .isDirectory))
+  }
+
+  /// A store keeping its files in `directory`, which is created when it does not
+  /// exist, and telling the time by `now`.
+  public init(directory: URL, now: @escaping @Sendable () -> Date = Date.init) {
+    self.directory = directory
+    self.now = now
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  }
+
+  // MARK: - What Datatracker says
+
+  /// What Datatracker says of the draft `id` names: as kept, while that is less than
+  /// a day old and `refreshing` is false, and asked again otherwise. Kept as it was
+  /// when the ask fails, which is then the error only if nothing is kept.
+  public func info(for id: DraftID, refreshing: Bool = false, client: any DraftFetching)
+    async throws -> DraftInfo
+  {
+    let kept = keptInfo(for: id)
+    if let kept, !refreshing, now().timeIntervalSince(kept.fetchedAt) < Self.infoLifetime {
+      return kept.info
+    }
+    do {
+      let fetched = try await client.fetchDraftInfo(id)
+      try? fetched.data.write(to: infoURL(for: id), options: .atomic)
+      return fetched.info
+    } catch {
+      if let kept { return kept.info }
+      throw error
+    }
+  }
+
+  /// What is kept of Datatracker's description, and when it was fetched: the file's
+  /// modification date, which writing it again moves.
+  private func keptInfo(for id: DraftID) -> (info: DraftInfo, fetchedAt: Date)? {
+    let url = infoURL(for: id)
+    guard let data = try? Data(contentsOf: url), let info = try? DraftInfo.decode(data),
+      let fetchedAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate
+    else { return nil }
+    return (info, fetchedAt)
+  }
+
+  /// The revision `id` names: its own, or the newest Datatracker knows of.
+  public func revision(of id: DraftID, client: any DraftFetching) async throws -> DraftID {
+    if id.revision != nil { return id }
+    let info = try await info(for: id, client: client)
+    guard let newest = info.newest else { throw RFCEditorClient.ClientError.draftNotFound(id) }
+    return newest
+  }
+
+  // MARK: - Revisions
+
+  /// The revision `id` names, parsed: the newest when it names none. From the disk
+  /// when it is kept there, and from the IETF's archive otherwise, which keeps it.
+  public func document(_ id: DraftID, client: any DraftFetching) async throws -> RFCDocument {
+    let revision = try await revision(of: id, client: client)
+    if let document = parsed.value(for: revision) { return document }
+    if let fetch = fetches[revision] { return try await fetch.value }
+    let fetch = Task { [directory] in
+      if let document = await Self.parseKept(revision, in: directory) { return document }
+      let fetched = try await client.fetchDraft(revision)
+      try? fetched.data.write(
+        to: Self.fileURL(revision, format: fetched.format, in: directory), options: .atomic)
+      return fetched.document
+    }
+    fetches[revision] = fetch
+    defer { fetches[revision] = nil }
+    let document = try await fetch.value
+    parsed.store(document, for: revision)
+    return document
+  }
+
+  /// Whether the revision `id` names is on the disk; false for the newest, which
+  /// may have moved on.
+  public func isKept(_ id: DraftID) -> Bool {
+    id.revision != nil
+      && Self.keptFormats.contains {
+        FileManager.default.fileExists(atPath: Self.fileURL(id, format: $0, in: directory).path)
+      }
+  }
+
+  /// The formats a revision is kept in, the one read first first.
+  private static let keptFormats: [FileFormat] = [.xml, .text]
+
+  /// The kept file of `id`, parsed off the actor; nil when none is kept, or the one
+  /// kept does not parse, which is then fetched again.
+  @concurrent
+  private static func parseKept(_ id: DraftID, in directory: URL) async -> RFCDocument? {
+    for format in keptFormats {
+      guard let data = try? Data(contentsOf: fileURL(id, format: format, in: directory)) else {
+        continue
+      }
+      if let document = try? RFCEditorClient.parseDraft(data, format: format, id: id) {
+        return document
+      }
+    }
+    return nil
+  }
+
+  private func infoURL(for id: DraftID) -> URL {
+    directory.appending(path: "\(id.name).json")
+  }
+
+  private static func fileURL(_ id: DraftID, format: FileFormat, in directory: URL) -> URL {
+    directory.appending(path: "\(id.description).\(format.pathExtension)")
+  }
+}

@@ -250,7 +250,7 @@ public struct LoadFailure {
       }
     case let error as RFCEditorClient.ClientError:
       switch error {
-      case .notFound:
+      case .notFound, .draftNotFound:
         return .notFound
       case .httpStatus(let status, _) where status == 429 || (500..<600).contains(status):
         return .server
