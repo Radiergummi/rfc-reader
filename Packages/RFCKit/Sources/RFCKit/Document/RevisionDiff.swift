@@ -42,7 +42,8 @@ public struct RevisionDiff: Sendable, Equatable {
   public enum SectionChange: Hashable, Sendable {
     /// New in this revision.
     case added
-    /// Here, and elsewhere in the older one: under its number there, if it had one.
+    /// Here, and elsewhere in the older one: under its number there, if it had one
+    /// other than its number here.
     case moved(from: String?)
   }
 
@@ -85,7 +86,9 @@ public struct RevisionDiff: Sendable, Equatable {
       if let oldAnchor = pairs[section.anchor], let oldSection = oldByAnchor[oldAnchor] {
         pairedOld.insert(oldAnchor)
         if !kept.contains(section.anchor) {
-          sections[section.anchor] = .moved(from: oldSection.number)
+          // Its number there, unless it kept it.
+          let number = oldSection.number == section.number ? nil : oldSection.number
+          sections[section.anchor] = .moved(from: number)
         }
         compare(oldSection.blocks, section.blocks, in: section.anchor)
       } else {

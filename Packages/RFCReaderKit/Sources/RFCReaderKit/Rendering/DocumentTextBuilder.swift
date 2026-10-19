@@ -224,7 +224,7 @@ public final class DocumentTextBuilder {
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
         sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
-        positions: builder.positions?.map ?? .empty)
+        positions: builder.positions?.map ?? .empty, isRedline: builder.redline != nil)
     }
   }
 
