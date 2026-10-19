@@ -6,7 +6,6 @@
   /// does not say: a context menu's preview is shown over the whole window and sized
   /// against it at the press, as the reader's own previews are
   /// (`LinkPreview.documentSize(fitting:)`, #580). Put in place with `reading(_:)`.
-  @MainActor
   final class WindowSizeReader {
     fileprivate weak var view: UIView?
 
