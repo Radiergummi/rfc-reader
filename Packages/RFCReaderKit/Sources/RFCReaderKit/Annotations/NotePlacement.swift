@@ -9,6 +9,13 @@ public enum NoteOwner: Sendable, Hashable {
   case target(Target)
 }
 
+/// A note to open the editor on (#523): one there is, or a new one on what it will
+/// be on, which is made once it has text.
+public enum NoteRequest: Sendable, Hashable {
+  case existing(UUID)
+  case new(NoteOwner)
+}
+
 /// Where a document's notes are in one build (#523), placed after its highlights
 /// (`HighlightPlacement`), since a note on a highlight is where its highlight is. What
 /// the gutter markers stand by, what the Annotations tab says of each note, and what

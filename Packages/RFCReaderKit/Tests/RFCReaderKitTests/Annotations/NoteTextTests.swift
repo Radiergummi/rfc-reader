@@ -108,4 +108,52 @@ struct NoteTextTests {
     #expect(
       NoteText.body(of: text).markdown == "-\n  - deep")
   }
+
+  // MARK: - Formatting
+
+  private func editable(_ body: NoteBody) -> NSMutableAttributedString {
+    NSMutableAttributedString(attributedString: NoteText.attributed(body, font: font))
+  }
+
+  @Test func `a style turns on over a selection, and off where all of it has it`() {
+    let text = editable(NoteBody([.paragraph([Span("one two three")])]))
+    NoteText.toggle(.strong, in: text, range: NSRange(location: 4, length: 3), font: font)
+    #expect(
+      NoteText.body(of: text).markdown == "one **two** three")
+    NoteText.toggle(.strong, in: text, range: NSRange(location: 0, length: 7), font: font)
+    #expect(NoteText.body(of: text).markdown == "**one two** three")
+    NoteText.toggle(.strong, in: text, range: NSRange(location: 0, length: 7), font: font)
+    #expect(NoteText.body(of: text).markdown == "one two three")
+    NoteText.toggle(.code, in: text, range: NSRange(location: 8, length: 5), font: font)
+    #expect(NoteText.body(of: text).markdown == "one two `three`")
+  }
+
+  @Test func `paragraphs become a list, join the one before, and leave it again`() {
+    let text = editable(
+      NoteBody([
+        .list(NoteBody.List(isOrdered: true, items: [NoteBody.Item([Span("first")])])),
+        .paragraph([Span("second")]), .paragraph([Span("third")]),
+      ]))
+    let rest = NSRange(location: 6, length: text.length - 6)
+    NoteText.toggleList(ordered: true, in: text, range: rest, font: font)
+    #expect(NoteText.body(of: text).markdown == "1. first\n2. second\n3. third")
+    NoteText.toggleList(ordered: true, in: text, range: rest, font: font)
+    #expect(NoteText.body(of: text).markdown == "1. first\n\nsecond\n\nthird")
+    NoteText.toggleList(ordered: false, in: text, range: rest, font: font)
+    #expect(NoteText.body(of: text).markdown == "1. first\n\n- second\n- third")
+  }
+
+  @Test func `items nest a level deeper and come back out`() {
+    let text = editable(
+      NoteBody([
+        .list(
+          NoteBody.List(
+            isOrdered: false,
+            items: [NoteBody.Item([Span("a")]), NoteBody.Item([Span("b")]), NoteBody.Item([Span("c")])]))
+      ]))
+    NoteText.indent(by: 1, in: text, range: NSRange(location: 2, length: 3), font: font)
+    #expect(NoteText.body(of: text).markdown == "- a\n  - b\n  - c")
+    NoteText.indent(by: -1, in: text, range: NSRange(location: 4, length: 1), font: font)
+    #expect(NoteText.body(of: text).markdown == "- a\n  - b\n- c")
+  }
 }
