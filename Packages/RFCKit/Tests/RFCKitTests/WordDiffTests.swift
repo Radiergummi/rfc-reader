@@ -51,14 +51,25 @@ struct WordDiffTests {
     #expect(WordDiff.runs(from: "", to: "").isEmpty)
   }
 
+  /// Including where words go on only one side of a kept space, which stays the
+  /// newer text's: a copy of the redline is that text.
   @Test func `the runs read back as either text`() {
-    let old = "Each field is sent once, unless the sender splits it."
-    let new = "Each field is sent at most once, unless a sender combines it."
-    let runs = WordDiff.runs(from: old, to: new)
-    #expect(WordDiff.changes(runs))
-    let newText = runs.compactMap { if case .deleted = $0 { nil } else { $0.text } }.joined()
-    let oldText = runs.compactMap { if case .inserted = $0 { nil } else { $0.text } }.joined()
-    #expect(newText == new)
-    #expect(oldText.split(separator: " ") == old.split(separator: " "))
+    let pairs = [
+      (
+        "Each field is sent once, unless the sender splits it.",
+        "Each field is sent at most once, unless a sender combines it."
+      ),
+      ("to to send to it now", "send now to"),
+      ("to it now to to it", "it it send"),
+      ("send it now", "it to to to now send"),
+    ]
+    for (old, new) in pairs {
+      let runs = WordDiff.runs(from: old, to: new)
+      #expect(WordDiff.changes(runs))
+      let newText = runs.compactMap { if case .deleted = $0 { nil } else { $0.text } }.joined()
+      let oldText = runs.compactMap { if case .inserted = $0 { nil } else { $0.text } }.joined()
+      #expect(newText == new)
+      #expect(oldText.split(separator: " ") == old.split(separator: " "))
+    }
   }
 }

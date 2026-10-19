@@ -358,7 +358,7 @@ extension DocumentTextBuilder {
       }
     }
     appendAbstract(document.header.abstract)
-    appendRemovedSections(after: nil)
+    appendRemovedSections(removedSections(after: nil))
     for section in document.sections {
       appendSection(section, depth: 1)
     }
@@ -523,20 +523,23 @@ extension DocumentTextBuilder {
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
     }
+    // The removed subsections that lead here, under the heading they stood under;
+    // from the first removed beside this section on, after its subsections, which it
+    // would read as the parent of before them, and with its own removed subsections
+    // still under it.
+    let removed = removedSections(after: section.anchor)
+    let underHeading = removed.prefix { $0.depth > section.depth }
     if let redline {
       appendRedlineCaption(for: section.anchor)
       appendRedline(section.blocks, of: section.anchor, in: redline)
-      // A removed subsection here, under the heading it stood under; one removed
-      // beside this section after its subsections, which it would read as the
-      // parent of before them.
-      appendRemovedSections(after: section.anchor) { $0.depth > section.depth }
+      appendRemovedSections(underHeading)
     } else {
       appendBlocks(section.blocks, indent: 0)
     }
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
-    appendRemovedSections(after: section.anchor) { $0.depth <= section.depth }
+    appendRemovedSections(removed.dropFirst(underHeading.count))
   }
 
   /// A heading's number in the gutter (#433), between the two tabs its paragraph

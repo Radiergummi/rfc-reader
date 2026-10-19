@@ -120,13 +120,14 @@ public struct RevisionDiff: Sendable, Equatable {
   }
 
   /// Newer section anchor to older, one to one: by anchor and title, then by
-  /// `SectionAlignment`, then by title alone.
+  /// `SectionAlignment`, then by title alone, then by anchor and its own title.
   ///
   /// A title is compared with its parents' titles, its path: a text draft's
   /// subsection keeps its number and a title such as "Overview" under the section
-  /// inserted before its own, and is not the subsection that had them. The last pass
-  /// is for a section `SectionAlignment` cannot score, having no prose of its own: a
-  /// heading over its subsections, or a section of only a figure.
+  /// inserted before its own, and is not the subsection that had them. The last two
+  /// passes are for a section `SectionAlignment` cannot score, having no prose of its
+  /// own: a heading over its subsections, or a section of only a figure. The last
+  /// keeps such a section's pair under a parent retitled, which changed its path.
   private static func pair(
     _ oldSections: [Section], _ newSections: [Section], old: RFCDocument, new: RFCDocument
   ) -> [String: String] {
@@ -155,6 +156,14 @@ public struct RevisionDiff: Sendable, Equatable {
       guard
         let index = unpairedOld.firstIndex(where: {
           oldPaths[$0.anchor] == newPaths[section.anchor]
+        })
+      else { continue }
+      pairs[section.anchor] = unpairedOld.remove(at: index).anchor
+    }
+    for section in newSections where pairs[section.anchor] == nil {
+      guard
+        let index = unpairedOld.firstIndex(where: {
+          $0.anchor == section.anchor && $0.titleText == section.titleText
         })
       else { continue }
       pairs[section.anchor] = unpairedOld.remove(at: index).anchor
