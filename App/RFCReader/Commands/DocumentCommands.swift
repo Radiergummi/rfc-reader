@@ -84,6 +84,9 @@ struct DocumentCommands: Commands {
         Button("New Collection…") { active.controller?.newCollection() }
           .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
           .disabled(navigation == nil)
+        // The search on show, kept as a collection made from a query (#355).
+        Button("Save as Collection…") { active.controller?.saveAsCollection() }
+          .disabled(navigation?.savedQuery == nil)
       #endif
     }
     // The Mac's toolbar buttons are AppKit's, so their keyboard shortcuts have to be

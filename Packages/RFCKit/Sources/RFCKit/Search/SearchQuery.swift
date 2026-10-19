@@ -461,6 +461,17 @@ public enum SearchQuery {
   /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
   /// mark, and `status:bcp` is still a filter.
   public static func words(in query: String) -> [String] {
+    scan(query).words
+  }
+
+  /// Whether `query` ends inside a quote it opened, which would take in whatever
+  /// were written after it, as the value's.
+  public static func leavesQuoteOpen(_ query: String) -> Bool {
+    scan(query).isQuoted
+  }
+
+  /// `words(in:)`, and whether a quote is still open at the end.
+  private static func scan(_ query: String) -> (words: [String], isQuoted: Bool) {
     var words: [String] = []
     var word = ""
     var quoted = false
@@ -479,7 +490,7 @@ public enum SearchQuery {
       word.append(character)
     }
     if !word.isEmpty { words.append(word) }
-    return words
+    return (words, quoted)
   }
 
   /// The last word of `query` while the reader is still typing it, or nil once
@@ -721,6 +732,9 @@ public struct UnknownSearchTerm: Sendable, Hashable {
     case workingGroup
     /// A collection `in:` names that the library doesn't hold.
     case collection
+    /// A collection `in:` names that is made from a query, which has no members to
+    /// search in.
+    case dynamicCollection
   }
 
   /// The word as written in the query.

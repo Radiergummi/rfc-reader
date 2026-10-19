@@ -314,6 +314,20 @@ final class LibraryModel {
     return entry.rfcNumbers.count(where: { index[$0] != nil })
   }
 
+  /// A collection made from a query as a tab lists it unsearched, for the sidebar's
+  /// count (#355): the same evaluation, so the list and the count cannot differ. It
+  /// reads, as a tab does, only what its query asks for.
+  func list(of entry: CollectionSnapshot.Entry) -> LibraryList {
+    LibraryList.reading(
+      .collection(entry.id), query: "", options: ListOptions(), from: LibrarySources(library: self))
+  }
+
+  /// How many documents `list` lists, made off the main actor as a tab's list is. Nil
+  /// while there is no index.
+  func count(of list: LibraryList) async -> Int? {
+    await listed(list)?.rows.count
+  }
+
   /// `UserDataMirror.editCollections`.
   @discardableResult
   func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
@@ -1684,4 +1698,26 @@ final class LibraryModel {
       return file
     }
   #endif
+}
+
+/// What a list counted in the sidebar lists from: the library's inputs as they
+/// stand, where a tab's are the ones it took on entering its filter.
+private struct LibrarySources: ListSources {
+  let library: LibraryModel
+
+  var bookmarked: Set<DocumentID> { library.bookmarkedDocuments }
+  var recentlyRead: [DocumentID] { library.recentlyRead() }
+  var downloaded: Set<Int> { library.availableOfflineNumbers }
+
+  func members(of collection: UUID) -> [Int] {
+    library.collections[collection]?.rfcNumbers ?? []
+  }
+
+  func collection(named name: String) -> UUID? {
+    library.collections.collection(named: name)?.id
+  }
+
+  func query(of collection: UUID) -> String? {
+    library.collections[collection]?.query
+  }
 }

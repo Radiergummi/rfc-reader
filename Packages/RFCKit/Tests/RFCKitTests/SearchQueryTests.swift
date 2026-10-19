@@ -256,6 +256,18 @@ struct SearchQueryTests {
     #expect(SearchQuery.words(in: query) == words)
   }
 
+  /// Only a quote that opens a value, and is not closed, leaves one open: an inch
+  /// mark inside a word opens nothing.
+  @Test(arguments: [
+    (#"by:"Fielding"#, true),
+    (#"by:"Fielding""#, false),
+    (#"3.5" floppy"#, false),
+    ("cache", false),
+  ])
+  func `a quote left open is found`(query: String, isOpen: Bool) {
+    #expect(SearchQuery.leavesQuoteOpen(query) == isOpen)
+  }
+
   @Test func `a filter after a line break is still a filter`() {
     let parsed = IndexSearch.parseQuery("key words\nstatus:bcp")
     #expect(parsed.filters.statuses == [.bestCurrentPractice])

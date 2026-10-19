@@ -13,15 +13,25 @@ public struct CollectionSnapshot: Equatable, Sendable {
     public let id: UUID
     public let name: String
     public let color: CollectionColor
-    /// In the collection's order, each document once.
+    /// In the collection's order, each document once. None for a dynamic collection.
     public let members: [DocumentID]
+    /// What a dynamic collection lists (#355); nil for a manual one.
+    public let query: String?
 
-    public init(id: UUID, name: String, color: CollectionColor, members: [DocumentID]) {
+    public init(
+      id: UUID, name: String, color: CollectionColor, members: [DocumentID],
+      query: String? = nil
+    ) {
       self.id = id
       self.name = name
       self.color = color
       self.members = members
+      self.query = query
     }
+
+    /// Whether its members are whatever `query` matches rather than chosen: it takes
+    /// no drops, and is in no Add to Collection menu.
+    public var isDynamic: Bool { query != nil }
 
     /// The members the lists can show: the lists list RFCs.
     public var rfcNumbers: [Int] {
@@ -68,7 +78,8 @@ public struct CollectionSnapshot: Equatable, Sendable {
       collections: orderedCollections.map {
         Entry(
           id: $0.identifier, name: $0.name, color: $0.color,
-          members: membersByCollection[$0.identifier] ?? [])
+          members: $0.query == nil ? membersByCollection[$0.identifier] ?? [] : [],
+          query: $0.query)
       })
   }
 
@@ -80,6 +91,12 @@ public struct CollectionSnapshot: Equatable, Sendable {
 
   public subscript(_ identifier: UUID) -> Entry? {
     collections.first { $0.id == identifier }
+  }
+
+  /// The collection a query's `in:` names, by its name in any case: the first in the
+  /// sidebar's order of that name.
+  public func collection(named name: String) -> Entry? {
+    collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
   }
 
   /// The collections `document` is in, for the Add to Collection menus' checkmarks.
@@ -94,7 +111,7 @@ public struct CollectionSnapshot: Equatable, Sendable {
   public static func fetch(in context: ModelContext) throws -> CollectionSnapshot {
     var collectionFetch = FetchDescriptor<DocumentCollection>()
     collectionFetch.propertiesToFetch = [
-      \.identifier, \.name, \.colorName, \.position, \.createdAt,
+      \.identifier, \.name, \.colorName, \.position, \.createdAt, \.query,
     ]
     var itemFetch = FetchDescriptor<DocumentCollectionItem>()
     itemFetch.propertiesToFetch = [

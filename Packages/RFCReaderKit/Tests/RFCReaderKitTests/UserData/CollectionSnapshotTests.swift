@@ -101,4 +101,15 @@ struct CollectionSnapshotTests {
       snapshot.collections(containing: .rfc(9000)) == [http.identifier, transport.identifier])
     #expect(snapshot.collections(containing: .rfc(9114)) == [http.identifier])
   }
+
+  /// What `in:` names: a collection by its name in any case, the first of that name.
+  @Test func `a collection is found by its name in any case`() {
+    let first = UUID()
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: first, name: "Key Words", color: .blue, members: []),
+      .init(id: UUID(), name: "key words", color: .green, members: []),
+    ])
+    #expect(snapshot.collection(named: "KEY WORDS")?.id == first)
+    #expect(snapshot.collection(named: "Gone") == nil)
+  }
 }
