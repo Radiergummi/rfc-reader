@@ -8,7 +8,7 @@
   ///
   /// It keeps the panel's file type and the name's extension in step with the
   /// format, keeping whatever the name was changed to, and remembers the last format
-  /// chosen for the next export. Whether the whole document or the section on
+  /// chosen for the next export (`ExportFormat.isRemembered`). Whether the whole document or the section on
   /// screen is saved (#386) is chosen before the panel opens, by File > Export… or
   /// Export Current Section…: the panel runs in a process of its own in the
   /// sandbox, and a name given to it once it is open never reaches its field, so a
@@ -51,7 +51,9 @@
 
     @objc private func choose() {
       format = offered[popUp.indexOfSelectedItem]
-      UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
+      if format.isRemembered {
+        UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
+      }
       panel.allowedContentTypes = [format.contentType]
       panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)
     }

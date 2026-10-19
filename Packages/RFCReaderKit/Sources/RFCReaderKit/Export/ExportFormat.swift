@@ -85,6 +85,11 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     }
   }
 
+  /// Whether choosing it makes it the format the next export starts on (Mac). Not
+  /// the highlights and notes: they are an export of one document's reading, and
+  /// the next document's export would otherwise start on a file of its notes.
+  public var isRemembered: Bool { self != .annotations }
+
   /// The formats every document can be saved as.
   public static let everyDocument: [ExportFormat] = [
     .pdf, .epub, .html, .markdown, .text, .xml,

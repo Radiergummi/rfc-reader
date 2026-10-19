@@ -195,8 +195,70 @@ struct AnnotationExportTests {
       model.spans.first { !$0.isSection && $0.range.lowerBound >= section.range.lowerBound })
     let target = try #require(Target(covering: block.range, in: model))
     let markdown = export([], notes: [note("About this block.", target: target)])
+    let heading = try line(try heading(longHeader), in: markdown)
+    let citation = try line(longHeaderCitation, in: markdown)
+    let note = try line("About this block.", in: markdown)
+    #expect(heading < citation)
+    #expect(citation < note)
+    #expect(markdown.contains("> "))
+  }
+
+  @Test func `annotations that start together come in the order they were made`() throws {
+    let passage = try range(of: "Version", in: longHeader)
+    let target = try #require(Target(covering: passage, in: model))
+    let markdown = export(
+      [highlight(target, minute: 2)],
+      notes: [
+        note("Made first.", target: target, minute: 1),
+        note("Made last.", target: target, minute: 3),
+      ])
+    let first = try line("Made first.", in: markdown)
+    let highlightCitation = markdown.components(separatedBy: "\n").enumerated()
+      .filter { $0.element == longHeaderCitation }.map(\.offset)
+    let last = try line("Made last.", in: markdown)
+    #expect(highlightCitation.count == 3)
+    #expect(first < highlightCitation[1])
+    #expect(highlightCitation[1] < last)
+  }
+
+  /// A figure's lines keep their indentation, fenced so that Markdown reads none of
+  /// them as its own.
+  @Test func `a highlight on a figure is fenced, its lines as they are`() throws {
+    let figure = try #require(
+      model.spans.first { span in
+        !span.isSection
+          && model.text(in: span.range).components(separatedBy: "\n").contains {
+            $0.hasPrefix("  ")
+          }
+      })
+    let text = model.text(in: figure.range)
+    let indented = try #require(text.components(separatedBy: "\n").first { $0.hasPrefix("  ") })
+    let markdown = export([highlight(try #require(Target(covering: figure.range, in: model)))])
+    let fence = try line("> ```", in: markdown)
     #expect(
-      try line(try heading(longHeader), in: markdown) < line("About this block.", in: markdown))
+      try fence
+        < line(
+          "> "
+            + indented.replacingOccurrences(
+              of: #"[ \t]+$"#, with: "", options: .regularExpression), in: markdown))
+  }
+
+  @Test func `a heading's angle bracket is an entity`() {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(999), title: "Elements"),
+      sections: [Section(anchor: "section-1", number: "1", title: "The <artwork> Element")],
+      source: .xml)
+    let markdown = AnnotationExport.markdown(
+      of: document, id: .rfc(999),
+      annotations: AnnotationSnapshot(
+        highlights: [],
+        notes: [
+          AnnotationSnapshot.NoteEntry(
+            id: UUID(), document: .rfc(999), highlight: nil, target: .section("section-1"),
+            body: "On it.", createdAt: day, modifiedAt: day)
+        ]),
+      exported: day, timeZone: .gmt)
+    #expect(markdown.contains("## 1. The &lt;artwork> Element"))
   }
 
   // MARK: What is placed nowhere
@@ -252,6 +314,13 @@ struct AnnotationExportTests {
       markdown.contains(
         "See [semantics](https://www.rfc-editor.org/rfc/rfc9110#section-4.2) and"
           + " [the site](https://example.com/page)."))
+    #expect(!markdown.contains("rfc://"))
+  }
+
+  @Test func `an rfc link that names no document becomes its text`() {
+    let markdown = export(
+      [], notes: [note("See [the draft](rfc://not-a-document).", target: .section(longHeader))])
+    #expect(markdown.contains("See the draft."))
     #expect(!markdown.contains("rfc://"))
   }
 

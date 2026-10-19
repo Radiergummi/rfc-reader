@@ -97,6 +97,13 @@ struct ExportFormatTests {
     #expect(!ExportFormat.annotations.narrows)
   }
 
+  /// The next document's export does not start on a file of this one's notes.
+  @Test func `highlights and notes are not the format an export starts on next`() {
+    #expect(!ExportFormat.annotations.isRemembered)
+    #expect(ExportFormat.pdf.isRemembered)
+    #expect(ExportFormat.abnf.isRemembered)
+  }
+
   /// The page and the Markdown are the serializers' (RFCKit pins what they write);
   /// PDF and the published files are not made from the model here.
   @Test func `the page and the Markdown are made from the document`() throws {
