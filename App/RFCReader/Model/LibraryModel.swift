@@ -433,7 +433,7 @@ final class LibraryModel {
           checkIndex()
         }
       } else {
-        await refreshIndex()
+        await refreshIndexNow()
       }
     } catch {
       indexState = .failed(error)
@@ -635,7 +635,7 @@ final class LibraryModel {
   /// false is the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
   /// and fails at once when there is none.
-  func refreshIndex(onExpensiveNetworks: Bool = true) async {
+  private func refreshIndex(onExpensiveNetworks: Bool) async {
     do {
       // Only with an index in memory: without one, a `304` would leave nothing to
       // show, so the whole index is asked for.
@@ -693,7 +693,10 @@ final class LibraryModel {
       // discarded either.
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      if index == nil {
+      // A refresh canceled, the automatic check that a person's replaced (#983) or
+      // one iOS's background task ended, leaves the failure already shown as it was
+      // rather than showing its cancellation.
+      if index == nil, !(Task.isCancelled && indexState.isFailed) {
         indexState = .failed(error)
         settleIndex()
       }
@@ -839,8 +842,9 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The refresh of the index under way, the automatic daily check's or a Retry's,
-  /// which a second one joins.
+  /// The refresh of the index under way, the automatic daily check's or a person's,
+  /// which a second one joins, except that a person's replaces the automatic check
+  /// (#983).
   @ObservationIgnored private let indexRefresh = SharedRefresh(name: "Refresh index")
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
@@ -874,13 +878,23 @@ final class LibraryModel {
   /// under way, or a new one.
   @discardableResult
   private func checkIndex() -> Task<Void, Never> {
-    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: false) }
+    indexRefresh.start(replaceable: true) {
+      await self.refreshIndex(onExpensiveNetworks: false)
+    }
   }
 
-  /// Retry, after the index failed: on any network, as a person asked for it, and
-  /// joining a refresh already under way rather than fetching the index beside it.
+  /// Retry, after the index failed: on any network, as a person asked for it. It
+  /// joins a person's refresh already under way rather than fetching the index beside
+  /// it, and replaces the automatic check, which may wait for a cheap network for as
+  /// long as there is none (#983).
   func retryIndex() {
-    indexRefresh.start { await self.refreshIndex() }
+    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: true) }
+  }
+
+  /// The index fetched now, on any network, by the rule of `retryIndex`, and waited
+  /// for: pull to refresh and the first launch (#984).
+  func refreshIndexNow() async {
+    await indexRefresh.join { await self.refreshIndex(onExpensiveNetworks: true) }
   }
 
   /// Compares the bookmarked RFCs with the last baseline, after every change to the
