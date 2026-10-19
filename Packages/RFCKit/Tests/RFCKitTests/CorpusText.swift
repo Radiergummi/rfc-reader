@@ -48,18 +48,27 @@ enum CorpusText {
 
   /// The RFCXML of the document `stem` names, such as `rfc9110`.
   static func xml(_ stem: String) throws -> Data {
-    guard let xmlDirectory else { throw CorpusTextError.notConfigured }
-    return try Data(contentsOf: xmlDirectory.appendingPathComponent("\(stem).xml"))
+    guard let xmlDirectory else { throw CorpusTextError.xmlNotConfigured }
+    let file = xmlDirectory.appendingPathComponent("\(stem).xml")
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      throw CorpusTextError.xmlNotFetched(stem)
+    }
+    return try Data(contentsOf: file)
   }
 }
 
-enum CorpusTextError: Error {
-  /// `RFC_CORPUS_TEXT`, or `RFC_CORPUS_XML`, is not set; a suite that reads the corpus
-  /// is enabled only where it is.
+enum CorpusTextError: Error, Equatable {
+  /// `RFC_CORPUS_TEXT` is not set; a suite that reads the corpus is enabled only where
+  /// it is.
   case notConfigured
   /// The document is not in the directory: `make test-corpus` fetches only the
   /// documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS`.
   case notFetched(String)
+  /// `RFC_CORPUS_XML` is not set.
+  case xmlNotConfigured
+  /// The RFCXML document is not in the directory: `make test-corpus` fetches only the
+  /// documents listed in the Makefile's `CORPUS_TEST_XML_DOCUMENTS`.
+  case xmlNotFetched(String)
 }
 
 extension CorpusTextError: CustomStringConvertible {
@@ -69,6 +78,10 @@ extension CorpusTextError: CustomStringConvertible {
       "RFC_CORPUS_TEXT is not set"
     case .notFetched(let stem):
       "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_DOCUMENTS"
+    case .xmlNotConfigured:
+      "RFC_CORPUS_XML is not set"
+    case .xmlNotFetched(let stem):
+      "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_XML_DOCUMENTS"
     }
   }
 }

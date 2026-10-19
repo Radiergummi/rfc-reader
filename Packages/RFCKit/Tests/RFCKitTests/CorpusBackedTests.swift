@@ -954,3 +954,10 @@ struct CorpusBackedGrammarTests {
     #expect(!types.contains("abnf"))
   }
 }
+
+@Suite("Corpus-backed: unlisted documents", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedUnlistedDocumentTests {
+  @Test func `an RFCXML document not fetched is refused as not fetched`() {
+    #expect(throws: CorpusTextError.xmlNotFetched("rfc0")) { try CorpusText.xml("rfc0") }
+  }
+}
