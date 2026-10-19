@@ -130,6 +130,27 @@ struct DocumentView: View {
     showsReaderState ? reader.showTranslation : session.showsTranslation
   }
 
+  /// `content`, comparing the document with what the header asked for (#729), and
+  /// asking again once the document is here. Apart from the rest of the chain, which
+  /// the type checker cannot take in one expression.
+  private func comparing(_ content: some View) -> some View {
+    content
+      .onChange(of: reader.comparedWith) {
+        if showsReaderState { keptComparison = reader.comparedWith }
+        session.compare(with: comparedWith, library: library)
+      }
+      .onChange(of: session.state.document != nil) {
+        session.compare(with: comparedWith, library: library)
+      }
+  }
+
+  /// What the reader compares the document with (#729): the window's choice while
+  /// the reader state is this reader's, and what it last was otherwise.
+  private var comparedWith: ReadableDocument? {
+    showsReaderState ? reader.comparedWith : keptComparison
+  }
+  @State private var keptComparison: ReadableDocument?
+
   /// The framework's configuration for translating the document, nil until it is
   /// first asked for; `.translationTask` runs the translation whenever it changes.
   @State private var translationConfiguration: TranslationSession.Configuration?
@@ -220,6 +241,7 @@ struct DocumentView: View {
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
       errata: errataMarks,
       translated: showsTranslation && session.translatedDocument != nil,
+      redline: comparedWith.flatMap { session.redline?.older == $0 ? $0 : nil },
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -267,7 +289,7 @@ struct DocumentView: View {
   /// The body's first half: the reader, and when the window's reader state is its.
   /// Apart from the rest, which the type checker cannot take in one expression.
   private var readerStateTracking: some View {
-    chromed
+    comparing(chromed)
       .onAppear {
         if !session.hasStartedLoading {
           startLoad()
@@ -604,6 +626,10 @@ struct DocumentView: View {
         header: document.header, metadata: metadata,
         revisions: metadata.map { library.revisionsSummary(for: $0.id) },
         draft: draftStatus(of: document),
+        comparison: comparedWith.map {
+          DocumentHeaderView.Comparison(
+            older: $0, isShown: built.isRedline, failed: session.comparisonFailed == $0)
+        },
         translation: translationMark, documentErrata: built.errata.document)
       RFCTextView(
         built: built,

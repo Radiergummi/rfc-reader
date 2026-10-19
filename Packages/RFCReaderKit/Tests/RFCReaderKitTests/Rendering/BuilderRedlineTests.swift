@@ -50,6 +50,7 @@ struct BuilderRedlineTests {
     #expect(try attribute(.underlineStyle, at: "SHOULD", in: built) != nil)
     #expect(try attribute(.underlineStyle, at: "client", in: built) == nil)
     #expect(try attribute(.strikethroughStyle, at: "example", in: built) == nil)
+    #expect(built.isRedline)
   }
 
   /// Copy gives the newer text: what was deleted is the reader's to show.
