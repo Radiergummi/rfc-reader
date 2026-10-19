@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import Synchronization
 import Testing
 
 @testable import RFCReaderKit
@@ -65,6 +66,85 @@ extension DocumentStoreTests {
 
     #expect(reopened == parsed)
     #expect(fetcher.textFetches == 0)
+  }
+
+  /// A text parsed before the index arrived is parsed again once it has an entry, as
+  /// it was before models were kept, rather than decoded without one for good.
+  @Test func `a text model made without an entry is parsed again with one`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let id = DocumentID.rfc(2119)
+    let first = sandbox.store(build: "1")
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(id, format: .text))
+    let parsed = try await first.document(id, formats: [.text], client: Self.openFetcher())
+    await first.untilModelsWritten()
+    try Self.overwriteInPlace(sandbox.file(id, format: .text))
+    let entry = RFCMetadata(
+      id: id, title: "Key Words", date: PublicationDate(year: 1997, month: 3), formats: [.text])
+
+    let reopened = try await sandbox.store(build: "1")
+      .document(id, formats: [.text], entry: entry, client: Self.openFetcher())
+
+    #expect(reopened != LegacyTextParser.applying(entry, to: parsed))
+  }
+
+  /// A body moved over another keeps its own creation date, so the model left beside
+  /// the one it replaced is not taken for its own.
+  @Test func `a body moved over another is not read from the other's model`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let id = DocumentID.rfc(8999)
+    let store = sandbox.store(build: "1")
+    _ = try await store.document(id, formats: [.xml], client: Self.openFetcher())
+    await store.untilModelsWritten()
+    #expect(try await store.keepCached(id))
+    try Data("not a document".utf8).write(to: sandbox.file(id, format: .xml), options: .atomic)
+    #expect(try await store.keepCached(id))
+
+    let fetcher = await Self.openFetcher()
+    _ = try await sandbox.store(build: "1").document(id, formats: [.xml], client: fetcher)
+
+    #expect(fetcher.documentFetches == 1)
+  }
+
+  /// A model written into the cache grows it, as a body does, so eviction looks again.
+  @Test func `a model written into the cache counts as the cache growing`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let id = DocumentID.rfc(8999)
+    try FileManager.default.createDirectory(
+      at: sandbox.file(id, format: .xml).deletingLastPathComponent(),
+      withIntermediateDirectories: true)
+    try Fixtures.data("rfc8999.xml").write(to: sandbox.file(id, format: .xml))
+    let store = sandbox.store(build: "1")
+    await store.evict(pinned: [], bound: .max)
+
+    _ = try await store.document(id, formats: [.xml], client: Self.openFetcher())
+    await store.untilModelsWritten()
+
+    #expect(FileManager.default.fileExists(atPath: sandbox.model(id).path))
+    #expect(await store.hasGrownSinceEviction)
+  }
+
+  /// A model is written only where the disk has room for it, as a body is.
+  @Test func `a model the disk has no room for is not written`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let id = DocumentID.rfc(8999)
+    let asked = Mutex(0)
+    let store = sandbox.store(
+      freeSpace: { _ in
+        let count = asked.withLock { asked in
+          asked += 1
+          return asked
+        }
+        return count == 1 ? Int.max / 2 : 0
+      }, build: "1")
+    _ = try await store.document(id, formats: [.xml], client: Self.openFetcher())
+    await store.untilModelsWritten()
+
+    #expect(sandbox.exists(id, format: .xml, in: .cache))
+    #expect(!FileManager.default.fileExists(atPath: sandbox.model(id).path))
   }
 
   @Test func `a model written under another build is parsed again`() async throws {

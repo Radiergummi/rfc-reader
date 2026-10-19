@@ -175,9 +175,7 @@ public actor DocumentStore {
   private static var appBuild: String? {
     guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
     else { return nil }
-    let built = Bundle.main.executableURL.flatMap {
-      try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-    }
+    let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
     return built.map { "\(number) \($0.timeIntervalSinceReferenceDate)" } ?? number
   }
 
@@ -701,7 +699,10 @@ public actor DocumentStore {
           .appending(path: ".\(UUID().uuidString)-\(destination.lastPathComponent)")
         try files.moveItem(at: origin, to: incoming)
         do {
-          _ = try files.replaceItemAt(destination, withItemAt: incoming)
+          // With the incoming body's own creation date, which keys its model (#606):
+          // by default the one replaced keeps its date, and so its model would match.
+          _ = try files.replaceItemAt(
+            destination, withItemAt: incoming, options: .usingNewMetadataOnly)
         } catch {
           try? files.removeItem(at: incoming)
           throw error
@@ -964,13 +965,25 @@ public actor DocumentStore {
 
   /// Written on the actor, so a removal cannot come between the check and the write:
   /// a body removed, or moved, while its model was encoded gets none, which would be
-  /// left behind it.
+  /// left behind it. Like a body, only where the disk has room for it, and a model
+  /// written into the cache grows it. Recorded in the tier's index, so the write does
+  /// not make the next question scan the folder again.
   private func write(_ data: Data, of id: DocumentID, beside body: URL, removalsBefore: Int?) {
-    guard removals[id] == removalsBefore, FileManager.default.fileExists(atPath: body.path) else {
+    guard removals[id] == removalsBefore, FileManager.default.fileExists(atPath: body.path),
+      let tier = Self.tiers.first(where: {
+        body == folder(of: $0).appending(path: body.lastPathComponent)
+      }),
+      tier.hasRoom(for: data.count, available: freeSpace(tier))
+    else {
       return
     }
+    let write = { try data.write(to: Self.modelURL(of: id, beside: body), options: .atomic) }
     do {
-      try data.write(to: Self.modelURL(of: id, beside: body), options: .atomic)
+      switch tier {
+      case .kept: try keptDocuments.update(id, by: write)
+      case .cache: try cachedDocuments.update(id, by: write)
+      }
+      if tier == .cache { hasGrown = true }
     } catch {
       storeLog.error(
         "\(id.displayName, privacy: .public): its model was not written: \(String(describing: error), privacy: .public)"
@@ -1021,7 +1034,8 @@ public actor DocumentStore {
   /// A body of either tier is decoded from its model instead where `build` made one
   /// for it (#606). Off the actor, like a fetch's parse, so the store answers other
   /// calls meanwhile -- whether a document is available offline, the next open --
-  /// instead of queueing them behind half a second of legacy text.
+  /// instead of queueing them behind a legacy text's parse ("Parse text" in
+  /// `make benchmark`).
   @concurrent
   private static func parseCached(
     _ id: DocumentID, from bodies: Bodies, entry: RFCMetadata?, build: String?,
@@ -1057,9 +1071,11 @@ public actor DocumentStore {
     }
     for url in bodies.text {
       guard let created = creationDate(of: url) else { continue }
+      // One parsed before the index arrived is parsed again once there is an entry.
       if let build,
         let parse = decodedModel(
-          of: id, beside: url, created: created, build: build, signpostID: signpostID)
+          of: id, beside: url, created: created, build: build, signpostID: signpostID),
+        entry == nil || parse.entry != nil
       {
         return Read(parse: parse, body: nil, created: nil)
       }
