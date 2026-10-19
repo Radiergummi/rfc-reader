@@ -84,6 +84,31 @@ struct DocumentMenusTests {
     #expect(titles(more)[0] == ["Original Text"])
   }
 
+  /// A draft's text has an original and a translation as an RFC's does (#728), and
+  /// none of an RFC's pages, which the RFC Editor and the index name.
+  @Test func `a draft's more has its text's toggles alone`() {
+    let more = DocumentMenus.draftMore(
+      showsOriginal: true, showsTranslation: false, offersTranslation: true, locale: .english)
+    #expect(titles(more) == [["Original Text", "Translate"]])
+    #expect(more[0][0].isOn == true)
+    #expect(more[0][1].isOn == false)
+    let english = DocumentMenus.draftMore(
+      showsOriginal: false, showsTranslation: false, offersTranslation: false, locale: .english)
+    #expect(titles(english) == [["Original Text"]])
+  }
+
+  /// With no RFC, the toggles still act on the reader; what names an RFC does nothing.
+  @Test func `without an RFC only the text's toggles have an effect`() {
+    func effect(_ action: DocumentMenus.Action) -> DocumentMenus.Effect? {
+      action.effect(for: nil, citing: nil, section: "4.2")
+    }
+    #expect(effect(.toggleOriginalText) == .toggleOriginalText)
+    #expect(effect(.toggleTranslation) == .toggleTranslation)
+    #expect(effect(.openInfoPage) == nil)
+    #expect(effect(.openDatatracker) == nil)
+    #expect(effect(.copySectionLink) == nil)
+  }
+
   @Test func `with no collections, add to collection offers only a new one`() {
     let menu = DocumentMenus.addToCollection(
       .rfc(9110), in: CollectionSnapshot(collections: []), locale: .english)

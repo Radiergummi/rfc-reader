@@ -101,12 +101,36 @@ public enum DocumentMenus {
       pages.append(
         Item(String(kit: "Preceding Draft", locale: locale), .openPrecedingDraft(precedingDraft)))
     }
+    let texts = texts(
+      showsOriginal: showsOriginal, showsTranslation: showsTranslation,
+      offersTranslation: offersTranslation, locale: locale)
+    return [texts, pages]
+  }
+
+  /// A draft's More (#728): the original text and a translation, which a draft's
+  /// text has as an RFC's does, and none of an RFC's pages, which the RFC Editor
+  /// and the index name.
+  public static func draftMore(
+    showsOriginal: Bool, showsTranslation: Bool,
+    offersTranslation: Bool = DocumentTranslation.target != nil, locale: Locale = .interface
+  ) -> Sections<Action> {
+    [
+      texts(
+        showsOriginal: showsOriginal, showsTranslation: showsTranslation,
+        offersTranslation: offersTranslation, locale: locale)
+    ]
+  }
+
+  /// Original Text, and Translate where one is offered.
+  private static func texts(
+    showsOriginal: Bool, showsTranslation: Bool, offersTranslation: Bool, locale: Locale
+  ) -> [Item<Action>] {
     let original = Item(
       String(kit: "Original Text", locale: locale), Action.toggleOriginalText, isOn: showsOriginal)
-    guard offersTranslation else { return [[original], pages] }
+    guard offersTranslation else { return [original] }
     let translation = Item(
       String(kit: "Translate", locale: locale), Action.toggleTranslation, isOn: showsTranslation)
-    return [[original, translation], pages]
+    return [original, translation]
   }
 
   /// Every collection, checked where `document` is already in it, and New
@@ -196,9 +220,10 @@ extension DocumentMenus.Action {
   /// What this does for `id`, the document on screen, read at `section`, citing
   /// `cited`, and copying as `settings` say (#712): nil for a citation without the
   /// index's entry, which there is nothing to cite from. `cited` is what the tab
-  /// opened, a series as itself rather than the RFC shown for it (#656).
+  /// opened, a series as itself rather than the RFC shown for it (#656). With no
+  /// `id`, a draft's (#728), only the text's own toggles do anything.
   public func effect(
-    for id: DocumentID, citing cited: CitedDocument?, section: String?,
+    for id: DocumentID?, citing cited: CitedDocument?, section: String?,
     settings: ReaderSettings = ReaderSettings()
   ) -> DocumentMenus.Effect? {
     func citation(_ style: CitationStyle) -> DocumentMenus.Effect? {
@@ -213,13 +238,14 @@ extension DocumentMenus.Action {
     case .copyCitation(let style): return citation(style)
     case .copyPreferredCitation: return citation(settings.citationStyle)
     case .copySectionLink:
-      return .copy(
-        DocumentActions.sectionLink(id: id, section: section, site: settings.linkSite), .link)
+      return id.map {
+        .copy(DocumentActions.sectionLink(id: $0, section: section, site: settings.linkSite), .link)
+      }
     case .toggleOriginalText: return .toggleOriginalText
     case .toggleTranslation: return .toggleTranslation
-    case .openInfoPage: return .open(RFCEditorEndpoints.infoPage(id))
+    case .openInfoPage: return id.map { .open(RFCEditorEndpoints.infoPage($0)) }
     case .openErrata(let url), .openPrecedingDraft(let url): return .open(url)
-    case .openDatatracker: return .open(RFCEditorEndpoints.datatracker(id))
+    case .openDatatracker: return id.map { .open(RFCEditorEndpoints.datatracker($0)) }
     }
   }
 }

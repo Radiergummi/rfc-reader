@@ -6,8 +6,8 @@ import RFCReaderKit
 /// `DocumentMenus.Action.effect`, and this copies, opens or toggles (#600). The
 /// Mac's toolbar opens with `NSWorkspace`, iOS's with the environment's `openURL`.
 struct DocumentActionPerformer {
-  /// The document on screen.
-  let id: DocumentID
+  /// The RFC acted on; nil for a draft (#728), whose text has only its toggles.
+  let id: DocumentID?
   /// What a citation is made from: the document the tab opened, a series as itself
   /// (#656), as `LibraryModel.citedDocument` has it.
   let cited: CitedDocument?
