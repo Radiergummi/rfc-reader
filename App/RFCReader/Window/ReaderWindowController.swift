@@ -642,16 +642,21 @@
 
     // MARK: - Lifetime
 
-    /// A tip on show goes with the key status, to the window that takes it (#782).
-    func windowDidResignKey(_ notification: Notification) {
+    /// A tip on show goes with the main window, to the one that takes it (#782). Not
+    /// the key window: a tip's own popover takes key when clicked, and closing the
+    /// tip then would take its Learn More and its close button away mid-click.
+    func windowDidResignMain(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
+
+    /// A tip due while another window was main (#782).
+    func windowDidBecomeMain(_ notification: Notification) {
       toolbar?.showDueTips()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)
       placeInitialFocus()
-      // A tip due while another window was key (#782).
-      toolbar?.showDueTips()
       // A restored window is ordered into its tab group by AppKit, not by
       // `AppDelegate.openWindow(tabbedWith:inBackground:)`, so the correction made
       // there after the ordering call is made here instead. Not when its state is

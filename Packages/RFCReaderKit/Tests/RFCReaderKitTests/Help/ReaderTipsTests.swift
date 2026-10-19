@@ -20,7 +20,7 @@ struct ReaderTipsTests {
     for _ in 1..<count {
       await tip.event.donate()
     }
-    #expect(!tip.tip.shouldDisplay)
+    #expect(await tip.staysHidden())
     await tip.event.donate()
     #expect(await tip.becomesDisplayable())
   }
@@ -117,6 +117,16 @@ enum TipCase: Sendable, CustomTestStringConvertible {
       try? await Task.sleep(for: .milliseconds(50))
     }
     return false
+  }
+
+  /// Not displayable for as long as a donation could take to settle, half a second:
+  /// checked at once, a rule that showed a donation too early would still pass.
+  func staysHidden() async -> Bool {
+    for _ in 0..<10 {
+      if tip.shouldDisplay { return false }
+      try? await Task.sleep(for: .milliseconds(50))
+    }
+    return true
   }
 }
 
