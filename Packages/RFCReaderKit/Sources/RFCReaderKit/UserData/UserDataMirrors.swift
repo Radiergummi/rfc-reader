@@ -22,7 +22,7 @@ struct UserDataMirrors: OptionSet, Sendable {
   static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
   /// `OfflineMarkStore.markedDocuments`, read from `OfflineMark` rows alone (#358).
   static let offlineMarks = UserDataMirrors(rawValue: 1 << 3)
-  /// `AnnotationSnapshot.fetch`, read from `Highlight` rows (#522).
+  /// `AnnotationSnapshot.fetch`, read from `Highlight` (#522) and `Note` rows (#523).
   static let annotations = UserDataMirrors(rawValue: 1 << 4)
 
   static let all: UserDataMirrors = [
@@ -50,6 +50,7 @@ struct UserDataMirrors: OptionSet, Sendable {
     String(describing: DocumentCollectionItem.self): .collections,
     String(describing: OfflineMark.self): .offlineMarks,
     String(describing: Highlight.self): .annotations,
+    String(describing: Note.self): .annotations,
   ]
 
   /// The entity names of the rows a `ModelContext.didSave` notification says were

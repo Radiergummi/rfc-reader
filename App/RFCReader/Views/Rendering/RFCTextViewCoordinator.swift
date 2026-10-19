@@ -26,6 +26,7 @@ final class RFCTextViewCoordinator: NSObject {
   weak var textView: PlatformTextView? {
     didSet {
       engine.textView = textView
+      engine.didLayOut = { [weak self] in self?.layOutNoteMarkers() }
       #if canImport(UIKit)
         // The reader's link color, which `makeUIView` sets in place of the system
         // tint (#317).
@@ -215,6 +216,22 @@ final class RFCTextViewCoordinator: NSObject {
   var highlights: [AnnotationSnapshot.HighlightEntry] = []
   /// Where they are in the installed build.
   var highlightPlacement = HighlightPlacement.none
+  /// The document's notes (#523), and where the installed build places them.
+  var notes: [AnnotationSnapshot.NoteEntry] = []
+  var notePlacement = NotePlacement.none
+  /// The gutter markers standing now, and their views, one each.
+  var noteMarkers: [FragmentGeometry.NoteMarker] = []
+  /// The notes' text when the markers were last titled.
+  var noteMarkersBodies: [String] = []
+  #if canImport(UIKit)
+    var noteMarkerViews: [UIView] = []
+    /// The note editor's sheet, while it is up.
+    var noteEditorHost: UIViewController?
+  #else
+    var noteMarkerViews: [NSView] = []
+    /// The note editor's popover, while it is open.
+    var notePopover: NSPopover?
+  #endif
   /// Placing them, off the main actor.
   var highlightsTask: Task<Void, Never>?
   #if !canImport(UIKit)

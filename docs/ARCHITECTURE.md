@@ -204,6 +204,7 @@ is that way, and what was measured or tried first.
 - [The Mac app is released from CI and updated by Sparkle](decisions/2026-10-17-the-mac-app-is-released-from-ci-and-updated-by-sparkle.md)
 - [A translated document is a second build of a translated model](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)
 - [Highlights are anchored to the model text and drawn from the position map](decisions/2026-10-18-highlights-are-drawn-from-the-position-map.md)
+- [A note is stored as Markdown](decisions/2026-10-19-a-note-is-stored-as-markdown.md)
 
 ## Planned engines
 

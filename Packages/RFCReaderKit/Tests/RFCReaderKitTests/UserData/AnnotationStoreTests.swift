@@ -206,3 +206,166 @@ extension AnnotationStoreTests {
     #expect(try snapshot().first.map(covered) == "brown fox")
   }
 }
+
+// MARK: - Notes (#523)
+
+extension AnnotationStoreTests {
+  private func notes() throws -> [AnnotationSnapshot.NoteEntry] {
+    try AnnotationSnapshot.fetch(in: context).notes(of: .rfc(9110))
+  }
+
+  private func note(_ body: String, on owner: NoteOwner) throws -> UUID {
+    let identifier = UUID()
+    try AnnotationStore.saveNote(
+      identifier, on: owner, of: .rfc(9110), body: body, context: context)
+    return identifier
+  }
+
+  @Test func `a note is made on its highlight with its text, and keeps where it was`() throws {
+    let highlight = try highlight("brown fox")
+    let identifier = try note("*Look* here.", on: .highlight(highlight))
+    let entry = try #require(try notes().first)
+    #expect(entry.id == identifier)
+    #expect(entry.highlight == highlight)
+    #expect(entry.body == "*Look* here.")
+    #expect(entry.target.flatMap { $0.range(in: model) }.map { model.text(in: $0) } == "brown fox")
+  }
+
+  @Test func `a note is made only once it has text, and goes when its text does`() throws {
+    let identifier = UUID()
+    try AnnotationStore.saveNote(
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "  ", context: context)
+    #expect(try notes().isEmpty)
+    try AnnotationStore.saveNote(
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Text", context: context)
+    #expect(try notes().map(\.target) == [.section("p-1")])
+    try AnnotationStore.saveNote(
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "", context: context)
+    #expect(try notes().isEmpty)
+  }
+
+  @Test func `editing a note changes its text and when it was changed`() throws {
+    let identifier = try note("First", on: .target(.section("p-1")))
+    let made = try #require(try notes().first)
+    try AnnotationStore.saveNote(
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Second", context: context)
+    let edited = try #require(try notes().first)
+    #expect(edited.body == "Second")
+    #expect(edited.createdAt == made.createdAt)
+    #expect(edited.modifiedAt >= made.modifiedAt)
+  }
+
+  @Test func `a merge puts the notes of every highlight absorbed on the survivor, undoably`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let first = try highlight("quick brown")
+    let second = try highlight("lazy dog")
+    _ = try note("on the first", on: .highlight(first))
+    let moved = try note("on the second", on: .highlight(second))
+    undoManager.beginUndoGrouping()
+    let merged = try highlight("brown fox jumps over the lazy", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    #expect(merged == first)
+    #expect(Set(try notes().map(\.highlight)) == [first])
+    #expect(try notes().count == 2)
+    undoManager.undo()
+    #expect(try notes().first { $0.id == moved }?.highlight == second)
+    undoManager.redo()
+    #expect(try notes().first { $0.id == moved }?.highlight == first)
+  }
+
+  @Test func `deleting a highlight deletes its notes, and undoing brings both back`() throws {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let highlight = try highlight("brown fox")
+    let identifier = try note("A thought.", on: .highlight(highlight))
+    let other = try note("Elsewhere.", on: .target(.section("p-1")))
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.delete(highlight, edit: edit(undoManager))
+    undoManager.endUndoGrouping()
+    #expect(try snapshot().isEmpty)
+    #expect(try notes().map(\.id) == [other])
+    undoManager.undo()
+    #expect(try snapshot().map(\.id) == [highlight])
+    #expect(Set(try notes().map(\.id)) == [identifier, other])
+    #expect(try notes().first { $0.id == identifier }?.body == "A thought.")
+  }
+
+  @Test func `undoing a highlight takes the note made on it since, and redoing brings both`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    undoManager.beginUndoGrouping()
+    let highlight = try highlight("brown fox", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    let identifier = try note("Added with it.", on: .highlight(highlight))
+    undoManager.undo()
+    #expect(try snapshot().isEmpty)
+    #expect(try notes().isEmpty)
+    undoManager.redo()
+    #expect(try snapshot().map(\.id) == [highlight])
+    #expect(try notes().map(\.id) == [identifier])
+    #expect(try notes().first?.highlight == highlight)
+  }
+
+  @Test func `a deleted note is undone`() throws {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let block = try #require(Target(covering: try range(of: "lazy dog"), in: model))
+    let identifier = try note("On the dog.", on: .target(block))
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.deleteNote(identifier, edit: edit(undoManager))
+    undoManager.endUndoGrouping()
+    #expect(try notes().isEmpty)
+    undoManager.undo()
+    #expect(try notes().first?.target == block)
+  }
+
+  @Test func `a note is put on another highlight without being edited`() throws {
+    let gone = UUID()
+    let identifier = try note("Orphaned.", on: .highlight(gone))
+    let before = try #require(try notes().first)
+    let survivor = try highlight("fox")
+    try AnnotationStore.repointNote(identifier, to: survivor, context: context)
+    let after = try #require(try notes().first)
+    #expect(after.highlight == survivor)
+    #expect(after.modifiedAt == before.modifiedAt)
+  }
+
+  @Test func `a document with only a note is annotated`() throws {
+    _ = try note("Here.", on: .target(.section("p-1")))
+    #expect(try AnnotationStore.annotatedDocuments(in: context) == [.rfc(9110)])
+    #expect(try AnnotationSnapshot.fetch(in: context).annotatedDocuments == [.rfc(9110)])
+  }
+
+  @Test func `duplicate note rows are merged, the latest edit kept`() throws {
+    let identifier = try note("Old", on: .target(.section("p-1")))
+    let copy = Note(identifier: identifier, document: .rfc(9110), body: "New")
+    copy.sectionAnchor = "p-1"
+    copy.modifiedAt = .now.addingTimeInterval(10)
+    context.insert(copy)
+    try context.save()
+    try UserData.deduplicate(context)
+    #expect(try notes().map(\.body) == ["New"])
+  }
+}
+
+extension AnnotationStoreTests {
+  @Test func `what an undo would put back does not keep its undo manager alive`() throws {
+    weak var released: UndoManager?
+    try autoreleasepool {
+      let undoManager = UndoManager()
+      undoManager.groupsByEvent = false
+      undoManager.beginUndoGrouping()
+      _ = try highlight("brown fox", undoManager: undoManager)
+      undoManager.endUndoGrouping()
+      // And what its undo registers in turn, for the redo.
+      undoManager.undo()
+      released = undoManager
+    }
+    #expect(released == nil)
+  }
+}

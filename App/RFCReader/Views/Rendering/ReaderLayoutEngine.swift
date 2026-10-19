@@ -26,6 +26,9 @@ final class ReaderLayoutEngine: PinSurface {
   #else
     weak var header: NSView?
   #endif
+  /// Told when more of the document is laid out for real, or laid out anew: what
+  /// stands by its lines, a note's marker (#523), is placed again.
+  var didLayOut: () -> Void = {}
   private(set) var keeper = AnchorKeeper()
   private(set) var built: BuiltDocument?
   /// What the signposts name; see `Signposts`.
@@ -66,11 +69,13 @@ final class ReaderLayoutEngine: PinSurface {
     if let carried { keeper.restore(carried, in: built.anchors, length: built.text.length) }
     putBack(isRebuild: true)
     startCompletion()
+    didLayOut()
   }
 
   func columnChanged() {
     putBack()
     startCompletion()
+    didLayOut()
   }
 
   /// Settles the place, or pins it on estimates during a live resize. A rebuild or a
@@ -312,6 +317,7 @@ final class ReaderLayoutEngine: PinSurface {
         while !self.planner.isComplete, clock.now - turnStart < Self.turnBudget {
           self.layOutSlice()
         }
+        self.didLayOut()
       }
       if self?.planner.isComplete == true { self?.knowsDocumentEnd = true }
       self?.endCompletionInterval()
