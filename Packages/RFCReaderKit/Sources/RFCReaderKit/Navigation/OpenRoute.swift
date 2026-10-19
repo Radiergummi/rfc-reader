@@ -18,19 +18,33 @@ public enum OpenRoute: Equatable, Sendable {
     _ link: RFCLink, arrival: HistoryEntry.Arrival = .root, selected: DocumentID?,
     shown: DocumentID?
   ) -> Self {
-    if let place = link.place, link.id == selected || link.id == shown {
-      return .jump(place: place, reveals: link.section != nil)
+    route(
+      .rfc(link), arrival: arrival, selected: selected.map(ReadableDocument.rfc),
+      shown: shown.map(ReadableDocument.rfc))
+  }
+
+  /// The route for `link`, to an RFC or a draft (#728), in a tab with `selected` and
+  /// `shown` as above: a draft is both, having no series to show a member of.
+  public static func route(
+    _ link: ReadableLink, arrival: HistoryEntry.Arrival = .root, selected: ReadableDocument?,
+    shown: ReadableDocument?
+  ) -> Self {
+    if let place = link.place, link.document == selected || link.document == shown {
+      // A section of an RFC reveals its row; a draft has none.
+      let reveals = if case .rfc(let link) = link { link.section != nil } else { false }
+      return .jump(place: place, reveals: reveals)
     }
-    return .navigate(HistoryEntry(id: link.id, section: link.place, arrival: arrival))
+    return .navigate(HistoryEntry(document: link.document, section: link.place, arrival: arrival))
   }
 
   /// Whether an open reveals the document in the list, setting the sidebar to All,
-  /// since a narrowed filter may be hiding it. Every open does, but a jump to an
-  /// anchor, which leaves the list as it is.
+  /// since a narrowed filter may be hiding it. Every open of an RFC does, but a jump
+  /// to an anchor, which leaves the list as it is; no open of a draft does, a draft
+  /// having no row (#728).
   public var reveals: Bool {
     switch self {
     case .jump(_, let reveals): reveals
-    case .navigate: true
+    case .navigate(let entry): entry.id != nil
     }
   }
 

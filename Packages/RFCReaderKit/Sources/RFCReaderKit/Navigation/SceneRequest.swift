@@ -13,15 +13,20 @@ public enum SceneRequest {
   public static let activityType = "me.mazetti.rfc-reader.open"
   static let linkKey = "link"
 
-  public static func userInfo(for link: RFCLink) -> [String: String] {
+  public static func userInfo(for link: ReadableLink) -> [String: String] {
     [linkKey: link.appURL.absoluteString]
   }
 
-  /// The link an activity carries, or nil when it carries none this app reads.
-  public static func link(from userInfo: [AnyHashable: Any]?) -> RFCLink? {
+  public static func userInfo(for link: RFCLink) -> [String: String] {
+    userInfo(for: .rfc(link))
+  }
+
+  /// The link an activity carries, to an RFC or a draft (#728), or nil when it
+  /// carries none this app reads.
+  public static func link(from userInfo: [AnyHashable: Any]?) -> ReadableLink? {
     guard let string = userInfo?[linkKey] as? String, let url = URL(string: string) else {
       return nil
     }
-    return RFCLink(url: url)
+    return ReadableLink(url: url)
   }
 }

@@ -19,7 +19,8 @@ public struct ReaderPath: Equatable, Sendable {
   /// one below it the same reader, and a document cited again is a reader of its
   /// own.
   public struct Reader: Hashable, Sendable {
-    public let id: DocumentID
+    /// An RFC, or a draft's revision (#728).
+    public let document: ReadableDocument
     /// From 0, the root.
     public let depth: Int
   }
@@ -34,7 +35,7 @@ public struct ReaderPath: Equatable, Sendable {
   public let readers: [Reader]
 
   public init(_ history: NavigationHistory) {
-    readers = history.stackedDocuments.enumerated().map { Reader(id: $1, depth: $0) }
+    readers = history.stackedDocuments.enumerated().map { Reader(document: $1, depth: $0) }
   }
 
   /// The stack's root view.
@@ -46,14 +47,14 @@ public struct ReaderPath: Equatable, Sendable {
   /// The reader on top, on screen.
   public var top: Reader? { readers.last }
 
-  /// Whether the reader of `id` at `depth` is the one on top, on screen.
-  public func isTop(_ id: DocumentID, at depth: Int) -> Bool {
-    top == Reader(id: id, depth: depth)
+  /// Whether the reader of `document` at `depth` is the one on top, on screen.
+  public func isTop(_ document: ReadableDocument, at depth: Int) -> Bool {
+    top == Reader(document: document, depth: depth)
   }
 
-  /// Whether the stack holds a reader of `id` at `depth`, on top or below it.
-  public func holds(_ id: DocumentID, at depth: Int) -> Bool {
-    readers.indices.contains(depth) && readers[depth].id == id
+  /// Whether the stack holds a reader of `document` at `depth`, on top or below it.
+  public func holds(_ document: ReadableDocument, at depth: Int) -> Bool {
+    readers.indices.contains(depth) && readers[depth].document == document
   }
 
   /// Whether `reader` keeps its view, and with it its build: the eight nearest the
