@@ -41,16 +41,21 @@ struct LocalizationTests {
   }
 
   /// A key written as a `LocalizedStringResource`, for its translator's comment, is
-  /// looked up in RFCReaderKit's catalog all the same.
-  @Test func `a German draft line is worded in German`() throws {
+  /// looked up in RFCReaderKit's catalog all the same: a current draft's line, and a
+  /// dormant one's, which dates its revision.
+  @Test(arguments: [
+    (Date.now, "draft-example, Revision 7, "),
+    (Date(timeIntervalSince1970: 1_397_482_769), "draft-example, Revision 7 vom April 2014, "),
+  ])
+  func `a German draft line is worded in German`(published: Date, wording: String) throws {
     let revision = RFCRevisions.Revision(
-      relation: .obsoletes, draft: "draft-example", revision: "07", published: .now,
+      relation: .obsoletes, draft: "draft-example", revision: "07", published: published,
       stream: "ietf", group: "example", intendedStatus: "Proposed Standard", stage: .inGroup)
     let summary = RevisionsSummary(
       RFCRevisions(generatedAt: .now, revisions: [9990: [revision]]), for: .rfc(9990), now: .now,
       locale: .german, timeZone: .gmt)
     let line = try #require(summary.bannerLines.first)
-    #expect(line.accessibilityLabel.contains("draft-example, Revision 7, "))
+    #expect(line.accessibilityLabel.contains(wording))
   }
 
   /// A collection's name is the reader's own text: never looked up, even when it is

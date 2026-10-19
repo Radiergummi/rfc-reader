@@ -20,7 +20,7 @@ extension LocalizedStringResource.BundleDescription {
   /// placeholders, is a `LocalizedStringResource` written with this bundle and the
   /// locale at the call site: the compiler records the comment of one written
   /// there, but not one passed through `String(kit:locale:)`.
-  static var kit: Self { .atURL(Bundle.module.bundleURL) }
+  static var kit: Self { .atURL(Bundle.kit.bundleURL) }
 }
 
 extension Bundle {

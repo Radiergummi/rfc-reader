@@ -88,7 +88,8 @@ struct SpotlightEntryTests {
     obsoleted.obsoletedBy = [.rfc(9999)]
     #expect(
       SpotlightEntry.clientState(for: Self.entries, now: Self.now)
-        != SpotlightEntry.clientState(for: [SpotlightEntry(obsoleted)], now: Self.now))
+        != SpotlightEntry.clientState(
+          for: [SpotlightEntry(obsoleted, locale: .english)], now: Self.now))
   }
 
   /// The status is not searched, but each item's App Intents entity shows it (#192).
