@@ -103,6 +103,10 @@ struct CollectionExportSheet: View {
     case .finished(let report):
       if report.wasCanceled {
         Text("The export was canceled.")
+        if !report.skipped.isEmpty {
+          Text("These RFCs were not exported:")
+          skipped(report.skippedLines)
+        }
       } else if report.skipped.isEmpty {
         Text("Every RFC was exported.")
       } else {
@@ -133,10 +137,16 @@ struct CollectionExportSheet: View {
     }
   }
 
+  /// While the files are made, Cancel stops the export, which then says how far it
+  /// came and can save what it made; otherwise it closes the sheet.
   private var cancelButton: some View {
     Button("Cancel", role: .cancel) {
-      export.end()
-      dismiss()
+      if export.isExporting {
+        export.cancel()
+      } else {
+        export.end()
+        dismiss()
+      }
     }
   }
 
@@ -149,7 +159,7 @@ struct CollectionExportSheet: View {
     case .exporting:
       Button("Export") {}.disabled(true)
     case .finished(let report):
-      if report.exported.isEmpty || report.wasCanceled {
+      if report.exported.isEmpty {
         Button("Done") { dismiss() }
       } else {
         Button("Save…") { isSaving = true }

@@ -118,6 +118,30 @@ struct CollectionExportTests {
     #expect(session.folder == nil)
   }
 
+  /// Cancel stops the export and says how far it came, rather than closing the
+  /// sheet on it; what it made stays until the session ends.
+  @MainActor
+  @Test func `a session canceled while exporting finishes with what it made`() async {
+    let workspace = Self.folder()
+    defer { try? FileManager.default.removeItem(at: workspace) }
+    let session = CollectionExportSession(workspace: workspace)
+    session.start(CollectionExport(Self.collection([.rfc(1), .rfc(2)]), format: .pdf)) { _ in
+      try await Task.sleep(for: .seconds(10))
+      return Data()
+    }
+    session.cancel()
+    await session.settle()
+    guard case .finished(let report) = session.phase else {
+      Issue.record("not finished")
+      return
+    }
+    #expect(report.wasCanceled)
+    #expect(report.exported.isEmpty)
+    #expect(session.folder == nil)
+    session.end()
+    #expect(!FileManager.default.fileExists(atPath: workspace.path))
+  }
+
   @MainActor
   @Test func `a session ended while exporting removes what it made`() async {
     let workspace = Self.folder()

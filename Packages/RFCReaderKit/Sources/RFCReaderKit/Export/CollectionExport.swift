@@ -126,6 +126,8 @@ public final class CollectionExportSession {
   /// The finished folder, once anything is in it: what is saved.
   public private(set) var folder: URL?
   private var task: Task<Void, Never>?
+  /// Whether the session was ended, which an export under way leaves no report for.
+  private var isEnded = false
   private let workspace: URL
 
   /// - Parameter workspace: a folder of the session's own, which it removes.
@@ -154,7 +156,7 @@ public final class CollectionExportSession {
         failed.skipped = plan.files.map { ($0.document, error.localizedDescription) }
         report = failed
       }
-      guard !Task.isCancelled else {
+      guard !isEnded else {
         removeWorkspace()
         return
       }
@@ -167,9 +169,16 @@ public final class CollectionExportSession {
     if isExporting { phase = .exporting(progress) }
   }
 
+  /// Stops the export under way before its next document; it finishes with a
+  /// report of what it made, which stays to be saved.
+  public func cancel() {
+    task?.cancel()
+  }
+
   /// Ends the session: an export under way stops and then removes what it made;
   /// a finished one's files, saved or no longer wanted, are removed now.
   public func end() {
+    isEnded = true
     task?.cancel()
     if !isExporting { removeWorkspace() }
   }
