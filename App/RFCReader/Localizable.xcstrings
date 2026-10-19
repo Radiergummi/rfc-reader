@@ -44,6 +44,16 @@
         }
       }
     },
+    "%@ has no grammar to export." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat keine Grammatik zum Exportieren."
+          }
+        }
+      }
+    },
     "%@ has no section %@." : {
       "localizations" : {
         "de" : {
@@ -426,6 +436,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ein Lesepfad wird aus dem Zitationsindex berechnet, den diese Version der App nicht enthält."
+          }
+        }
+      }
+    },
+    "ABNF Grammar" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ABNF-Grammatik"
           }
         }
       }
@@ -1191,6 +1211,16 @@
         }
       }
     },
+    "EPUB" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPUB"
+          }
+        }
+      }
+    },
     "Edit Collection" : {
       "localizations" : {
         "de" : {
@@ -1271,6 +1301,16 @@
         }
       }
     },
+    "Export ${document} as ${format}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${document} als ${format} exportieren"
+          }
+        }
+      }
+    },
     "Export Checklist" : {
       "localizations" : {
         "de" : {
@@ -1287,6 +1327,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktuellen Abschnitt exportieren …"
+          }
+        }
+      }
+    },
+    "Export RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC exportieren"
           }
         }
       }
@@ -1401,6 +1451,16 @@
         }
       }
     },
+    "Format" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format"
+          }
+        }
+      }
+    },
     "Format:" : {
       "localizations" : {
         "de" : {
@@ -1477,6 +1537,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kehrt zur Größe des Systems zurück"
+          }
+        }
+      }
+    },
+    "HTML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML"
           }
         }
       }
@@ -1847,6 +1917,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maschinell aus dem Englischen übersetzt"
+          }
+        }
+      }
+    },
+    "Markdown" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
           }
         }
       }
@@ -2381,6 +2461,16 @@
         }
       }
     },
+    "PDF" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF"
+          }
+        }
+      }
+    },
     "Page" : {
       "localizations" : {
         "de" : {
@@ -2427,6 +2517,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An Fundstelle %lld setzen"
+          }
+        }
+      }
+    },
+    "Plain Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiner Text"
           }
         }
       }
@@ -2767,6 +2867,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Sammlung gesichert"
+          }
+        }
+      }
+    },
+    "Saves an RFC as a file in a format, which a shortcut can save, share or pass on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichert ein RFC als Datei in einem Format, die ein Kurzbefehl sichern, teilen oder weitergeben kann."
           }
         }
       }
@@ -3478,6 +3588,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Groups"
+          }
+        }
+      }
+    },
+    "XML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML"
           }
         }
       }
