@@ -282,7 +282,9 @@ public enum AnnotationStore {
     replacing after: Identifiers, with before: Rows, redo: Rows, actionName: String, edit: Edit
   ) {
     guard let undoManager = edit.undoManager else { return }
-    undoManager.registerUndo(withTarget: edit.context) { context in
+    let onUndoFailure = edit.onUndoFailure
+    // The manager is held weakly, as `BookmarkStore`'s is: it holds this.
+    undoManager.registerUndo(withTarget: edit.context) { [weak undoManager] context in
       // On the main thread, which drives the Edit menu and the shake gesture.
       MainActor.assumeIsolated {
         do {
@@ -292,9 +294,10 @@ public enum AnnotationStore {
           registerUndo(
             replacing: before.identifiers,
             with: Rows(highlights: redo.highlights, notes: redo.notes + removed), redo: before,
-            actionName: actionName, edit: edit)
+            actionName: actionName,
+            edit: Edit(context, undoManager: undoManager, onUndoFailure: onUndoFailure))
         } catch {
-          edit.onUndoFailure(error)
+          onUndoFailure(error)
         }
       }
     }

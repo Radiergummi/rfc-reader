@@ -16,7 +16,8 @@ public enum AnnotationList {
     case ambiguous([Target])
     /// Its quote is nowhere in the document.
     case detached
-    /// The document is not here to place it in.
+    /// The document is not here to place it in, or it was made since the build
+    /// placed the rest.
     case unplaced
   }
 
@@ -60,22 +61,23 @@ public enum AnnotationList {
     for note in notes.sorted(by: { $0.createdAt < $1.createdAt }) {
       let highlight = noteStatuses?.highlight(of: note) ?? note.highlight
       if let highlight, known.contains(highlight) {
-        onHighlight[highlight, default: []].append(line(of: note))
+        onHighlight[highlight, default: []].append(NoteLine(of: note))
       } else {
         ownNotes.append(note)
       }
     }
     guard let statuses else {
       return highlights.sorted { $0.createdAt < $1.createdAt }.map {
-        Row(
-          id: $0.id, quote: $0.quote.exact, color: $0.color, placement: .unplaced,
-          notes: onHighlight[$0.id] ?? [])
+        row(of: $0, placement: .unplaced, notes: onHighlight[$0.id] ?? [])
       }
         + ownNotes.map { row(of: $0, placement: .unplaced) }
     }
     var placed: [(start: Int, row: Row)] = []
     var ambiguous: [Row] = []
     var detached: [Row] = []
+    // Made since the build placed the others: listed last, and not as gone, until
+    // it is placed.
+    var unplaced: [Row] = []
     for entry in highlights.sorted(by: { $0.createdAt < $1.createdAt }) {
       let notes = onHighlight[entry.id] ?? []
       switch statuses[entry.id] {
@@ -85,22 +87,14 @@ public enum AnnotationList {
         placed.append(
           (
             range.lowerBound,
-            Row(
-              id: entry.id, quote: entry.quote.exact, color: entry.color,
-              placement: .placed(anchor: anchor, section: section), notes: notes)
+            row(of: entry, placement: .placed(anchor: anchor, section: section), notes: notes)
           ))
       case .ambiguous(let places)?:
-        ambiguous.append(
-          Row(
-            id: entry.id, quote: entry.quote.exact, color: entry.color,
-            placement: .ambiguous(places), notes: notes))
-      case .detached?, nil:
-        // One not placed yet, made since the build placed the others, is listed apart
-        // until it is.
-        detached.append(
-          Row(
-            id: entry.id, quote: entry.quote.exact, color: entry.color, placement: .detached,
-            notes: notes))
+        ambiguous.append(row(of: entry, placement: .ambiguous(places), notes: notes))
+      case .detached?:
+        detached.append(row(of: entry, placement: .detached, notes: notes))
+      case nil:
+        unplaced.append(row(of: entry, placement: .unplaced, notes: notes))
       }
     }
     for note in ownNotes {
@@ -116,21 +110,28 @@ public enum AnnotationList {
           (range.lowerBound, row(of: note, placement: .placed(anchor: anchor, section: section))))
       case .ambiguous?:
         ambiguous.append(row(of: note, placement: .ambiguous([])))
-      case .detached?, .onHighlight?, nil:
+      case .detached?, .onHighlight?:
         detached.append(row(of: note, placement: .detached))
+      case nil:
+        unplaced.append(row(of: note, placement: .unplaced))
       }
     }
     return placed.enumerated().sorted {
       ($0.element.start, $0.offset) < ($1.element.start, $1.offset)
-    }.map(\.element.row) + ambiguous + detached
+    }.map(\.element.row) + ambiguous + detached + unplaced
+  }
+
+  private static func row(
+    of entry: AnnotationSnapshot.HighlightEntry, placement: Placement, notes: [NoteLine]
+  ) -> Row {
+    Row(
+      id: entry.id, quote: entry.quote.exact, color: entry.color, placement: placement,
+      notes: notes)
   }
 
   private static func row(of note: AnnotationSnapshot.NoteEntry, placement: Placement) -> Row {
     let quote = if case .range(_, _, let quote)? = note.target { quote.exact } else { "" }
-    return Row(id: note.id, quote: quote, color: nil, placement: placement, notes: [line(of: note)])
-  }
-
-  private static func line(of note: AnnotationSnapshot.NoteEntry) -> NoteLine {
-    NoteLine(of: note)
+    return Row(
+      id: note.id, quote: quote, color: nil, placement: placement, notes: [NoteLine(of: note)])
   }
 }

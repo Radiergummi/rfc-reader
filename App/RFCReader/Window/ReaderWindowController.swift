@@ -520,7 +520,9 @@
     /// in it is selected: the original text's selection is not mirrored in
     /// `ReaderState`, so the menu lets it through and this checks.
     private var selectedText: NSTextView? {
-      guard let text = FirstResponderSearch.searchableText(in: quotedReaderView),
+      // Not while a note is being edited, for Highlight's reason.
+      guard NSApp.keyWindow === window,
+        let text = FirstResponderSearch.searchableText(in: quotedReaderView),
         text.selectedRange().length > 0
       else { return nil }
       return text
@@ -531,6 +533,8 @@
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
     /// the text view, not a child.
     func copyAsQuote() {
+      // Not while a note is being edited, for Highlight's reason.
+      guard NSApp.keyWindow === window else { return }
       let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
     }

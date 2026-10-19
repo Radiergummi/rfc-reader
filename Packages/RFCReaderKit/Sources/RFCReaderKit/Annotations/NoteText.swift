@@ -34,9 +34,7 @@ public enum NoteText {
       paragraphs.append(line)
     }
     func add(_ list: NoteBody.List, within lists: [NSTextList]) {
-      let textList = NSTextList(
-        markerFormat: list.isOrdered ? .decimal : lists.count.isMultiple(of: 2) ? .disc : .circle,
-        options: 0)
+      let textList = newList(ordered: list.isOrdered, depth: lists.count)
       for item in list.items {
         add(item.spans, lists: lists + [textList])
         for nested in item.lists { add(nested, within: lists + [textList]) }
@@ -157,16 +155,7 @@ public enum NoteText {
   private static func spans(of text: NSAttributedString, in range: NSRange) -> [NoteBody.Span] {
     var spans: [NoteBody.Span] = []
     text.enumerateAttributes(in: range) { attributes, run, _ in
-      var style: NoteBody.Style = []
-      if let font = attributes[.font] as? PlatformFont {
-        let traits = Trait.of(font)
-        if traits.contains(.bold) { style.insert(.strong) }
-        if traits.contains(.italic) { style.insert(.emphasis) }
-        if traits.contains(.monospace) { style.insert(.code) }
-      }
-      if let strike = attributes[.strikethroughStyle] as? Int, strike != 0 {
-        style.insert(.strikethrough)
-      }
+      let style = self.style(of: attributes)
       let link: URL? =
         switch attributes[.link] {
         case let url as URL: url

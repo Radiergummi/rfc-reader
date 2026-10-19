@@ -352,3 +352,20 @@ extension AnnotationStoreTests {
     #expect(try notes().map(\.body) == ["New"])
   }
 }
+
+extension AnnotationStoreTests {
+  @Test func `what an undo would put back does not keep its undo manager alive`() throws {
+    weak var released: UndoManager?
+    try autoreleasepool {
+      let undoManager = UndoManager()
+      undoManager.groupsByEvent = false
+      undoManager.beginUndoGrouping()
+      _ = try highlight("brown fox", undoManager: undoManager)
+      undoManager.endUndoGrouping()
+      // And what its undo registers in turn, for the redo.
+      undoManager.undo()
+      released = undoManager
+    }
+    #expect(released == nil)
+  }
+}
