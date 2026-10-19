@@ -104,6 +104,15 @@ struct RFCReaderShortcuts: AppShortcutsProvider {
       shortTitle: "Find Requirements",
       systemImageName: "checklist"
     )
+    AppShortcut(
+      intent: ExportRFCIntent(),
+      phrases: [
+        "Export \(\.$document) with \(.applicationName)",
+        "Export an RFC with \(.applicationName)",
+      ],
+      shortTitle: "Export RFC",
+      systemImageName: "square.and.arrow.down"
+    )
   }
 
   /// Tells the system the RFCs a phrase can name have changed: once the index has

@@ -1,6 +1,29 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Export ${document} with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Exportiere ${document} mit ${applicationName}",
+              "Exportiere ein RFC mit ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Export ${document} with ${applicationName}",
+              "Export an RFC with ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
     "Find the requirements in ${document} with ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

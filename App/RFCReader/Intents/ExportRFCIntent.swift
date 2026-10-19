@@ -2,6 +2,10 @@ import AppIntents
 import RFCKit
 import RFCReaderKit
 
+#if os(macOS)
+  import AppKit
+#endif
+
 /// "Export RFC 9110 as PDF" (#384): the file File > Export… writes, made by the
 /// same `DocumentExport`, handed to the shortcut to save, share or pass on, without
 /// opening a window.
@@ -24,32 +28,33 @@ struct ExportRFCIntent: AppIntent {
   func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
     let id = document.documentID
     let format = format.format
-    // The index says which formats the document has, which decides what is fetched.
-    guard await LibraryModel.shared.settledSearch() != nil else {
-      throw IntentFailure.indexUnavailable
-    }
+    // Loaded as every intent loads a document, so a failure to load says so; the
+    // export then finds it where this left it.
+    _ = try await IntentDocuments.load(id)
     let data: Data
     do {
       data = try await DocumentExport.data(
-        for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
-        library: LibraryModel.shared)
-    } catch let error as CocoaError where format == .abnf && error.code == .fileWriteUnknown {
-      // What `DocumentExport` throws for a grammar the RFC does not have.
-      throw IntentFailure.noGrammar(id)
+        for: id, as: format, paperSize: Self.paperSize, library: LibraryModel.shared)
     } catch {
-      let failure = LoadFailure(error: error)
-      if [.offline, .cellularDenied].contains(failure.kind) {
-        throw IntentFailure.notAvailableOffline(id)
-      }
-      throw IntentFailure.notLoaded(id, reason: failure.message)
+      throw IntentFailure.notExported(id, reason: error.localizedDescription)
     }
     let file = IntentFile(
       data: data, filename: format.fileName(for: id), type: format.contentType)
     return .result(value: file)
   }
+
+  /// The paper a PDF is laid out for: Page Setup's on the Mac, as File > Export…
+  /// and a script use, and the region's on iOS.
+  private static var paperSize: CGSize {
+    #if os(macOS)
+      NSPrintInfo.shared.paperSize
+    #else
+      PrintLayout.paperSize(for: .current)
+    #endif
+  }
 }
 
-/// The formats Shortcuts offers, by the names the menus give them.
+/// The formats Shortcuts offers, by the names the menus give them (`ExportFormat.name`).
 ///
 /// An enumeration of the app's own, and its names written out rather than read from
 /// `ExportFormat.name(in:)`: the App Intents metadata step reads an `AppEnum`'s
@@ -75,6 +80,21 @@ enum IntentExportFormat: String, AppEnum {
     .xml: "XML",
     .abnf: "ABNF Grammar",
   ]
+
+  /// The other way, a switch over the export's own formats: a format added there
+  /// is a compile error here until Shortcuts offers it too.
+  init(_ format: ExportFormat) {
+    self =
+      switch format {
+      case .pdf: .pdf
+      case .epub: .epub
+      case .html: .html
+      case .markdown: .markdown
+      case .text: .text
+      case .xml: .xml
+      case .abnf: .abnf
+      }
+  }
 
   var format: ExportFormat {
     switch self {

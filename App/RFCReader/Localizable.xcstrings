@@ -18,6 +18,22 @@
         }
       }
     },
+    "%@ couldn't be exported: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ konnte nicht exportiert werden: %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ couldn't be exported: %2$@"
+          }
+        }
+      }
+    },
     "%@ didn't load: %@" : {
       "localizations" : {
         "de" : {
@@ -40,16 +56,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ sagt nicht, welche seiner Referenzen normativ sind, daher wird keine von ihnen weiterverfolgt."
-          }
-        }
-      }
-    },
-    "%@ has no grammar to export." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat keine Grammatik zum Exportieren."
           }
         }
       }
