@@ -109,8 +109,12 @@ final class RFCTextViewCoordinator: NSObject {
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
   var bibliography: [ReferenceGroup] = []
-  /// The document on screen; see `RFCTextView.documentID`.
-  var documentID: DocumentID?
+  /// The document on screen; see `RFCTextView.document`.
+  var document: ReadableDocument?
+  /// The RFC on screen: what a copied link names and a reference's preview is
+  /// resolved from. Nil for a draft (#728), whose quotes and previews are an RFC's
+  /// only.
+  var documentID: DocumentID? { document?.rfc }
   /// What a copy cites; see `ReaderInputs.citing`.
   var citing: DocumentID?
   /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
@@ -409,8 +413,8 @@ final class RFCTextViewCoordinator: NSObject {
           self?.showErrata(at: offset)
         }
       }
-      guard let url = link(at: offset), let documentID,
-        LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
+      guard let url = link(at: offset), let document,
+        LinkDestination.resolve(url, from: document, activation: .here) != .unhandled
       else { return defaultAction }
       // An action, not the link followed here and nil returned: UIKit asks for the
       // primary action as a long press begins too, so following it here navigated

@@ -269,8 +269,9 @@ struct UserDataStoreTests {
     try ReadingPositionStore.save(place, for: draft, in: context)
 
     #expect(try ReadingPositionStore.position(for: draft, in: context)?.place == place)
-    #expect(try ReadingPositionStore.position(for: draft, in: context)?.documentKey
-      == "draft-ietf-quic-http-34")
+    #expect(
+      try ReadingPositionStore.position(for: draft, in: context)?.documentKey
+        == "draft-ietf-quic-http-34")
     #expect(try ReadingPositionStore.recentlyRead(in: context).isEmpty)
     #expect(try ReadingPositionStore.recentlyReadCount(in: context) == 0)
   }

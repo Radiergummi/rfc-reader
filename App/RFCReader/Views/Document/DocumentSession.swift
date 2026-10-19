@@ -14,6 +14,11 @@ extension Logger {
   /// Something done with a document that failed, at error level, which the unified
   /// log keeps: "RFC 9110: `event`: `cause`".
   func failure(of document: DocumentID, _ event: String, _ cause: any Error) {
+    failure(of: .rfc(document), event, cause)
+  }
+
+  /// The same for an RFC or a draft's revision (#728).
+  func failure(of document: ReadableDocument, _ event: String, _ cause: any Error) {
     error(
       "\(document.displayName, privacy: .public): \(event, privacy: .public): \(String(describing: cause), privacy: .public)"
     )
@@ -85,9 +90,10 @@ struct BuildInputs: Equatable {
 /// document nobody will see. Disappearing is not going (#252).
 @Observable
 final class DocumentSession {
-  let id: DocumentID
+  /// The document read: an RFC, or a draft's revision (#728).
+  let id: ReadableDocument
   /// What the tab opened: `id`, or the series whose first member it is (#656).
-  let identity: DocumentID
+  let identity: ReadableDocument
   /// The reader's place in the tab's stack of readers on iOS (#263), nil on the Mac:
   /// what says whether the reader is the one on screen (`NavigationModel.shows`),
   /// and so whether what it loads and builds goes into the window's reader state.
@@ -132,6 +138,28 @@ final class DocumentSession {
   /// and why it could not be.
   private(set) var originalText: String?
   private(set) var originalTextFailure: LoadFailure?
+
+  /// What Datatracker says of the draft read (#728): its revisions and the RFC it
+  /// became, for the header. Nil for an RFC, and until it is here; a draft reads
+  /// without it.
+  private(set) var draftInfo: DraftInfo?
+  @ObservationIgnored private var draftInfoLoad: Task<Void, Never>?
+
+  /// Asks for `draftInfo`, for a draft, once per session: a failure leaves the
+  /// header naming only the revision on screen.
+  func startDraftInfoLoad(from library: LibraryModel) {
+    guard let draft = id.draft, draftInfoLoad == nil else { return }
+    draftInfoLoad = Task(name: "Load draft info") { [weak self] in
+      do {
+        let info = try await library.draftInfo(for: draft)
+        guard let self, !Task.isCancelled else { return }
+        draftInfo = info
+      } catch {
+        guard let self, !Task.isCancelled else { return }
+        readerLog.failure(of: id, "asking Datatracker failed", error)
+      }
+    }
+  }
 
   /// Where a translation of the document stands (#749); see `translate(with:cache:)`.
   var translationPhase = TranslationPhase.idle
@@ -180,7 +208,7 @@ final class DocumentSession {
     return marks
   }
 
-  init(id: DocumentID, identity: DocumentID, depth: Int?) {
+  init(id: ReadableDocument, identity: ReadableDocument, depth: Int?) {
     self.id = id
     self.identity = identity
     self.depth = depth
@@ -191,6 +219,7 @@ final class DocumentSession {
     load?.cancel()
     build?.cancel()
     originalTextLoad?.cancel()
+    draftInfoLoad?.cancel()
   }
 
   /// The index says the RFC is a scan, with no text to fetch (#207).

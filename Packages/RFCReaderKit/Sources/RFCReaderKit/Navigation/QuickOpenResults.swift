@@ -41,12 +41,17 @@ public struct QuickOpenResults: Equatable, Sendable {
 
   /// What ↵ asked for: a row, and how to open it.
   public struct Opening: Equatable, Sendable {
-    public let link: RFCLink
+    /// An RFC, or the draft typed (#728).
+    public let link: ReadableLink
     public let activation: LinkActivation
 
-    public init(link: RFCLink, activation: LinkActivation) {
+    public init(link: ReadableLink, activation: LinkActivation) {
       self.link = link
       self.activation = activation
+    }
+
+    public init(link: RFCLink, activation: LinkActivation) {
+      self.init(link: .rfc(link), activation: activation)
     }
   }
 
@@ -68,6 +73,10 @@ public struct QuickOpenResults: Equatable, Sendable {
 
   /// What is typed now.
   public private(set) var query = ""
+  /// The Internet-Draft what is typed names (#728): the one row while it does,
+  /// which ↵ opens. Drafts are in no index, so nothing is searched for it, and a
+  /// draft's name names no RFC.
+  public private(set) var draft: DraftLink?
   /// What is typed, resolved exactly: one row, or one per member of a series.
   private var exact: [RFCLink] = []
   /// The registry values it names, each opening the current RFC that defines it.
@@ -90,6 +99,7 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// The exact resolution first, then the registry values, then every hit the
   /// exact resolution does not already name.
   public var rows: [Row] {
+    guard draft == nil else { return [] }
     var rows = current
     for id in hits where !exact.contains(where: { $0.id == id }) {
       rows.append(Row(link: RFCLink(id: id)))
@@ -149,10 +159,11 @@ public struct QuickOpenResults: Equatable, Sendable {
   ///   - isObsolete: Whether the index says an RFC is obsoleted, so that a registry
   ///     value citing several opens the current one.
   public mutating func show(
-    query: String, exact: RFCLink?, members: [DocumentID] = [], registry: [RegistryEntry] = [],
-    isObsolete: (DocumentID) -> Bool = { _ in false }
+    query: String, exact: RFCLink?, draft: DraftLink? = nil, members: [DocumentID] = [],
+    registry: [RegistryEntry] = [], isObsolete: (DocumentID) -> Bool = { _ in false }
   ) {
     self.query = query
+    self.draft = draft
     // Typing on after ↵ is a change of mind.
     pendingActivation = nil
     if query.isEmpty {
@@ -204,6 +215,9 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// instead, the key press is kept for the search still running, and
   /// `show(hits:for:)` returns it once that search lands.
   public mutating func activate(_ activation: LinkActivation) -> Opening? {
+    if let draft {
+      return Opening(link: .draft(draft), activation: activation)
+    }
     if let openable {
       return Opening(link: openable, activation: activation)
     }

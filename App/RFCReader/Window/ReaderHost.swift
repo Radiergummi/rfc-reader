@@ -15,7 +15,7 @@
         if let selection = navigation.selection {
           // A BCP, STD or FYI shows its first member, once the index names it (#656).
           if let shown = library.documentShown(for: selection) {
-            DocumentView(id: shown, identity: selection)
+            DocumentView(id: .rfc(shown), identity: .rfc(selection))
               // Made again when the RFC shown changes for the same selection, as an
               // index arriving after one that failed changes a series' (#656).
               .id([selection, shown])
@@ -26,6 +26,11 @@
             ProgressView("Loading \(selection.displayName)…")
               .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+        } else if let draft = navigation.shownDraft {
+          // A draft has no row to select (#728).
+          DocumentView(id: .draft(draft))
+            .id(draft)
+            .transition(.opacity)
         } else {
           EmptyDetailView()
         }

@@ -327,9 +327,11 @@ extension ReaderState {
   /// reader on screen (#772). See `ScopedWriter`.
   typealias Writer = ScopedWriter<ReaderState>
 
-  /// The writer of the reader of `id`, at `depth` in the iOS stack, in `navigation`'s
-  /// tab.
-  func writer(showing id: DocumentID, at depth: Int?, in navigation: NavigationModel) -> Writer {
-    ScopedWriter(self) { navigation.shows(id, at: depth) }
+  /// The writer of the reader of `document`, at `depth` in the iOS stack, in
+  /// `navigation`'s tab.
+  func writer(
+    showing document: ReadableDocument, at depth: Int?, in navigation: NavigationModel
+  ) -> Writer {
+    ScopedWriter(self) { navigation.shows(document, at: depth) }
   }
 }

@@ -39,7 +39,7 @@
     var body: some View {
       VStack(spacing: 0) {
         field
-        if !results.rows.isEmpty {
+        if !results.rows.isEmpty || results.draft != nil {
           Divider()
           rows
         } else if controller.query.isEmpty {
@@ -107,11 +107,37 @@
     /// keyboard chose. A click opens the row it lands on.
     private var rows: some View {
       VStack(spacing: 2) {
+        if let draft = results.draft {
+          draftRow(for: draft)
+        }
         ForEach(results.rows, id: \.self) { row in
           self.row(for: row)
         }
       }
       .padding(6)
+    }
+
+    /// The draft typed (#728), the one row while it is, and selected: ↵ opens it.
+    private func draftRow(for draft: DraftLink) -> some View {
+      HStack(spacing: 12) {
+        Text(verbatim: draft.id.displayName)
+          .fontWeight(.semibold)
+          .lineLimit(1)
+          .truncationMode(.middle)
+        Spacer(minLength: 0)
+        Text("Internet-Draft")
+          .foregroundStyle(.secondary)
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 7)
+      .background {
+        RoundedRectangle(cornerRadius: 10).fill(.selection)
+      }
+      .contentShape(.rect)
+      .onTapGesture { controller.open(.draft(draft)) }
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits([.isButton, .isSelected])
+      .accessibilityAction { controller.open(.draft(draft)) }
     }
 
     private func row(for row: QuickOpenResults.Row) -> some View {

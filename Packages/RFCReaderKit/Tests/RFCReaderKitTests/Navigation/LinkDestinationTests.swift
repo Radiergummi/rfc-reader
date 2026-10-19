@@ -46,17 +46,18 @@ struct LinkDestinationTests {
 
   /// Without a section there is nothing to scroll to, so it opens as any link would.
   @Test func `this document without a section opens normally`() {
-    #expect(resolve("rfc://9110") == .document(RFCLink(id: current)))
+    #expect(resolve("rfc://9110") == .document(.rfc(RFCLink(id: current))))
   }
 
   // MARK: - Another document
 
   @Test func `another document opens in place`() {
-    #expect(resolve("rfc://8446#section-2") == .document(RFCLink(id: other, section: "2")))
+    #expect(resolve("rfc://8446#section-2") == .document(.rfc(RFCLink(id: other, section: "2"))))
   }
 
   @Test func `a web reference resolves the same way as the app scheme`() {
-    #expect(resolve("https://www.rfc-editor.org/rfc/rfc8446") == .document(RFCLink(id: other)))
+    #expect(
+      resolve("https://www.rfc-editor.org/rfc/rfc8446") == .document(.rfc(RFCLink(id: other))))
   }
 
   // MARK: - Modifiers
@@ -66,7 +67,7 @@ struct LinkDestinationTests {
   /// shortcut is for following in place only.
   @Test func `a section of this document still gets its own tab when asked`() {
     let asked = resolve("rfc://9110#section-4.2", .newTab(inBackground: true))
-    #expect(asked == .document(RFCLink(id: current, section: "4.2")))
+    #expect(asked == .document(.rfc(RFCLink(id: current, section: "4.2"))))
   }
 
   /// A link's fragment that names no section is still a place in this document
@@ -129,5 +130,24 @@ struct LinkDestinationTests {
     ])
   func `anything that is not an RFC is left to the system`(input: String) {
     #expect(resolve(input) == .unhandled)
+  }
+
+  // MARK: - Drafts (#728)
+
+  private let draft = DraftID(parsing: "draft-ietf-quic-http-34")!
+
+  @Test func `a draft linked from an RFC opens the draft`() {
+    #expect(
+      resolve("https://datatracker.ietf.org/doc/html/draft-ietf-quic-http-34#section-2")
+        == .document(.draft(DraftLink(id: draft, section: "2"))))
+  }
+
+  @Test func `a section of the draft on screen scrolls, and an RFC it cites opens`() {
+    let inDraft = { (string: String) in
+      LinkDestination.resolve(URL(string: string)!, from: .draft(self.draft), activation: .here)
+    }
+    #expect(inDraft("rfc://draft-ietf-quic-http-34#section-2") == .jump("2"))
+    #expect(inDraft("rfc://9110") == .document(.rfc(RFCLink(id: current))))
+    #expect(inDraft("\(ReaderLinkScheme.anchorScheme):section-4.2") == .jump("section-4.2"))
   }
 }

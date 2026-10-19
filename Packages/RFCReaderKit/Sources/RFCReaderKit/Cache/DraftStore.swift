@@ -10,6 +10,8 @@ public protocol DraftFetching: Sendable {
   /// One revision, in the best format the archive has it in.
   @concurrent
   func fetchDraft(_ id: DraftID) async throws -> RFCEditorClient.FetchedDocument
+  /// One revision's raw bytes in `format`: its text, for Original Text.
+  func fetchDraftData(_ id: DraftID, format: FileFormat) async throws -> Data
 }
 
 extension RFCEditorClient: DraftFetching {}
@@ -113,6 +115,22 @@ public actor DraftStore {
     let document = try await fetch.value
     parsed.store(document, for: revision)
     return document
+  }
+
+  /// The revision's plain text, without its page breaks, for Original Text: every
+  /// revision has one at the archive, whatever it was submitted as. Kept once
+  /// fetched, as the revision's file is.
+  public func originalText(_ id: DraftID, client: any DraftFetching) async throws -> String {
+    let revision = try await revision(of: id, client: client)
+    let url = Self.fileURL(revision, format: .text, in: directory)
+    let data: Data
+    if let kept = try? Data(contentsOf: url) {
+      data = kept
+    } else {
+      data = try await client.fetchDraftData(revision, format: .text)
+      try? data.write(to: url, options: .atomic)
+    }
+    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 
   /// Whether the revision `id` names is on the disk; false for the newest, which
