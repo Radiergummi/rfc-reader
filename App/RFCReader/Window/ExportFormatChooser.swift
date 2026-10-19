@@ -89,10 +89,10 @@
     }
 
     /// The whole document or the section: the name becomes the one this scope
-    /// gives, as a new export would.
+    /// gives, as a new export would, unless one was typed over it.
     @objc private func chooseScope() {
       scope = ExportScope.allCases[scopePopUp.indexOfSelectedItem]
-      giveName()
+      if panel.nameFieldStringValue == givenName { giveName() }
     }
   }
 #endif

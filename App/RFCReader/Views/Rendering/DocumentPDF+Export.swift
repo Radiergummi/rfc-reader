@@ -194,7 +194,10 @@ nonisolated struct PDFMarks {
     for (range, found) in targets {
       var target = found
       if case .anchor(let anchor) = target, destinations[anchor] == nil {
-        guard let elsewhere = PDFExport.outside(anchor, of: linking.outside) else { continue }
+        guard
+          let elsewhere = PDFExport.outside(
+            anchor, of: linking.outside, references: linking.references)
+        else { continue }
         target = elsewhere
       }
       guard let textRange = manager.textRange(for: range) else { continue }

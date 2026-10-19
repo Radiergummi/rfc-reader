@@ -58,9 +58,25 @@ struct ExportScopeTests {
   /// A link to what a section's PDF leaves out goes to the document's page.
   @Test func `a link out of the file goes to rfc-editor.org`() {
     #expect(
-      PDFExport.outside("section-1", of: .rfc(9110))
+      PDFExport.outside("section-1", of: .rfc(9110), references: [:])
         == .web(URL(string: "https://www.rfc-editor.org/rfc/rfc9110#section-1")!))
-    #expect(PDFExport.outside("section-1", of: nil) == nil)
+    #expect(PDFExport.outside("section-1", of: nil, references: [:]) == nil)
+  }
+
+  /// A section's PDF leaves the bibliography out with the rest, so a citation in it
+  /// is a link to an anchor the file lacks; it goes where the whole document's does.
+  @Test func `a citation out of the file goes where its bibliography entry does`() {
+    let references = [
+      "RFC2119": Reference(
+        anchor: "RFC2119", title: "Key words", seriesInfo: [SeriesInfo(name: "RFC", value: "2119")]),
+      "NOWHERE": Reference(anchor: "NOWHERE", title: "An Unpublished Note"),
+    ]
+    #expect(
+      PDFExport.outside("RFC2119", of: .rfc(9110), references: references)
+        == .web(RFCLink(id: .rfc(2119)).webURL))
+    #expect(
+      PDFExport.outside("NOWHERE", of: .rfc(9110), references: references)
+        == .web(RFCLink(id: .rfc(9110), anchor: "NOWHERE").webURL))
   }
 
   @Test func `printed pages stack from the top, each fitted to the paper`() {
