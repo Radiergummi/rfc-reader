@@ -28,15 +28,28 @@ struct ExportRFCIntent: AppIntent {
   func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
     let id = document.documentID
     let format = format.format
-    // Loaded as every intent loads a document, so a failure to load says so; the
-    // export then finds it where this left it.
-    _ = try await IntentDocuments.load(id)
+    // A format made of the document loads it as every intent loads one, so a
+    // failure to load says so; the export then finds it where this left it. The
+    // RFC Editor's own files are not the document, and are not parsed for it.
+    if format.source == .rendered {
+      _ = try await IntentDocuments.load(id)
+    }
     let data: Data
     do {
       data = try await DocumentExport.data(
         for: id, as: format, paperSize: Self.paperSize, library: LibraryModel.shared)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let noGrammar as ExportFormat.NoGrammar {
+      // Its words name the RFC already.
+      throw noGrammar
     } catch {
-      throw IntentFailure.notExported(id, reason: error.localizedDescription)
+      // A published file fetched offline says so as a document that did not load.
+      let failure = LoadFailure(error: error)
+      if [.offline, .cellularDenied].contains(failure.kind) {
+        throw IntentFailure.notAvailableOffline(id)
+      }
+      throw IntentFailure.notExported(id, reason: failure.message)
     }
     let file = IntentFile(
       data: data, filename: format.fileName(for: id), type: format.contentType)
