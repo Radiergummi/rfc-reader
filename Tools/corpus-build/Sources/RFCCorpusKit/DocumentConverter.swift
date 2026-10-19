@@ -131,7 +131,7 @@ public struct DocumentConverter: Sendable {
   /// the space. Writing it again gives one canonical output whatever XML library
   /// applied the patch, and guards against a patch adding what the model cannot hold,
   /// which writing would otherwise drop without a word: the text of the patched tree
-  /// and of the written XML must be the same words, and each operation must change
+  /// and of the written XML must be the same characters, and each operation must change
   /// the written XML.
   static func apply(
     _ patch: XMLPatch, to xml: Data, serializer: RFCXMLSerializer
@@ -156,7 +156,7 @@ public struct DocumentConverter: Sendable {
       }
       let writtenTree = try XMLDocument(data: written, options: .nodePreserveWhitespace)
       if let divergence = Self.divergence(
-        Self.text(of: tree.rootElement()), Self.text(of: writtenTree.rootElement()))
+        tree.rootElement()?.stringValue ?? "", writtenTree.rootElement()?.stringValue ?? "")
       {
         throw PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)")
       }
@@ -170,20 +170,17 @@ public struct DocumentConverter: Sendable {
     }
   }
 
-  /// The text of `node`, one text node from the next apart. A node's string value
-  /// joins them as they are, and on Linux a block added beside another, with no
-  /// whitespace between the two, runs its first word into the other's last.
-  static func text(of node: XMLNode?) -> String {
-    guard let node else { return "" }
-    if node.kind == .text { return node.stringValue ?? "" }
-    return (node.children ?? []).map { text(of: $0) }.joined(separator: " ")
-  }
-
-  /// Where the words of `patched` and `written` part, or nil when they are the same.
+  /// Where the words of `patched` and `written` part, or nil when they hold the same
+  /// characters. Where the whitespace falls is not compared: on Linux a block added
+  /// beside another, with no whitespace between the two, runs its first word into
+  /// the other's last in the tree's string value, and an inline element the model
+  /// does not keep can join two words' halves when written.
   static func divergence(_ patched: String, _ written: String) -> String? {
+    guard patched.filter({ !$0.isWhitespace }) != written.filter({ !$0.isWhitespace }) else {
+      return nil
+    }
     let patchedWords = patched.split(whereSeparator: \.isWhitespace)
     let writtenWords = written.split(whereSeparator: \.isWhitespace)
-    guard patchedWords != writtenWords else { return nil }
     let index = zip(patchedWords, writtenWords).prefix { $0 == $1 }.count
     func words(_ all: [Substring]) -> String {
       all[index..<min(all.count, index + 6)].joined(separator: " ")

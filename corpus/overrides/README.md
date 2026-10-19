@@ -51,7 +51,7 @@ cp corpus/xml.noindex/rfc1000.xml /tmp/rfc1000.xml   # then edit /tmp/rfc1000.xm
 make corpus-tool && Tools/corpus-build/.build/release/corpus-build patch rfc1000 --edited /tmp/rfc1000.xml
 ```
 
-It diffs the copy against `corpus/xml.noindex/rfcNNNN.xml`, or `--original`, and writes `corpus/overrides/rfcNNNN.xml`, or with `--print` standard output. The original must be the converter's own output: an overridden document's output in `corpus/xml.noindex` is already patched, and the command refuses it; convert it again without `--overrides` for one. It never writes over an existing override.
+It diffs the copy against `corpus/xml.noindex/rfcNNNN.xml`, or `--original`, and writes `corpus/overrides/rfcNNNN.xml`, or with `--print` standard output. The original must be the converter's own output: an overridden document's output in `corpus/xml.noindex` is already patched, and the command refuses it; convert it again for one, with `--index` as `make corpus-overrides-check` does and without `--overrides`. It never writes over an existing override.
 
 Each difference becomes the smallest operation that covers it: a removed element a `<remove>`, an added one an `<add>` beside a sibling, an attribute an `<add type="@name">`, `<replace>` or `<remove>`, and changed text a `<replace>` of the lowest element that holds it. Selectors follow the rules above, by anchor, then by name and first words, adding words further on where two siblings open alike; where only a position would select a node, the command stops and names it. The patch is proven before it is written: applied to the original as `convert` applies it, it must give the edited copy.
 

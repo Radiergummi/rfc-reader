@@ -60,7 +60,7 @@ struct PatchCommand: ParsableCommand {
       print(patch, terminator: "")
       return
     }
-    try Data(patch.utf8).write(to: output)
+    try Data(patch.utf8).write(to: output, options: .withoutOverwriting)
     Self.logger.info(
       "wrote patch; replace each TODO comment with the operation's reason before committing it",
       metadata: ["path": "\(output.path)"])
