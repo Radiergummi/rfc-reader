@@ -71,7 +71,7 @@ struct RFCMarkdownSerializerTests {
         id: .rfc(9999), title: "A Protocol", abstract: [.paragraph(Paragraph(text: "What."))]),
       sections: [], source: .xml)
     let markdown = RFCMarkdownSerializer().serialize(document)
-    #expect(markdown.contains("<!-- anchor: abstract -->\n## Abstract"))
+    #expect(markdown.contains("<!-- anchor: abstract --><a id=\"abstract\"></a>\n## Abstract"))
   }
 
   // MARK: Paragraphs and inlines
@@ -121,10 +121,28 @@ struct RFCMarkdownSerializerTests {
 
   // MARK: Anchors and links
 
-  @Test func `an anchored block is preceded by its anchor`() {
-    let markdown = Self.markdown([.paragraph(Paragraph(text: "Text.", anchor: "section-1-1"))])
+  /// A Markdown renderer makes no target of a comment; an `<a id>` on the comment's
+  /// line, which a comment's HTML block passes through as it is, is one, without
+  /// taking the line after it into the block, as an element on a line of its own
+  /// would.
+  @Test func `an anchored block is preceded by its anchor, an id in an export`() {
+    let blocks: [Block] = [
+      .paragraph(Paragraph(text: "Text.", anchor: "section-1-1")),
+      .preformatted(Preformatted(kind: .sourceCode, text: "x", anchor: "section-1-2")),
+    ]
+    let markdown = Self.markdown(blocks)
+    #expect(markdown.hasPrefix("<!-- anchor: section-1 --><a id=\"section-1\"></a>\n# 1. Body"))
+    #expect(markdown.contains("<!-- anchor: section-1-1 --><a id=\"section-1-1\"></a>\nText."))
+    #expect(markdown.contains("<!-- anchor: section-1-2 --><a id=\"section-1-2\"></a>\n```"))
+  }
+
+  /// Text read apart from its document links to rfc-editor.org, not to ids: the
+  /// MCP server's, by #642's spec.
+  @Test func `text read apart from its document carries its anchors as comments alone`() {
+    let markdown = Self.markdown(
+      [.paragraph(Paragraph(text: "Text.", anchor: "section-1-1"))], links: .absolute)
     #expect(markdown.contains("<!-- anchor: section-1-1 -->\nText."))
-    #expect(markdown.hasPrefix("<!-- anchor: section-1 -->\n# 1. Body"))
+    #expect(!markdown.contains("<a id="))
   }
 
   @Test func `a reference within the document links to its anchor in an export`() {
@@ -200,7 +218,8 @@ struct RFCMarkdownSerializerTests {
       ])
     #expect(
       Self.markdown([.list(list)]).contains(
-        "\n- <!-- anchor: s-1 -->\n  one\n- <!-- anchor: s-2 -->\n  two\n"))
+        "\n- <!-- anchor: s-1 --><a id=\"s-1\"></a>\n  one\n- <!-- anchor: s-2 --><a id=\"s-2\"></a>\n  two\n"
+      ))
   }
 
   /// A marker CommonMark has no list for, ahead of a fence, would stop it being one.

@@ -6,7 +6,9 @@ import Foundation
 /// Nothing is lost: every inline's text is written, in order, and every anchor once,
 /// as an HTML comment ahead of what carries it (`<!-- anchor: section-4.2-3 -->`), so
 /// a reader of the text can name a paragraph without counting. Renderers ignore
-/// the comments. The same input is written the same way every time.
+/// the comments; an export follows each with an `<a id>` on its line, which they
+/// keep, so that its in-document links land (#377). The same input is written the
+/// same way every time.
 /// `docs/superpowers/specs/2026-10-02-mcp-server-design.md`, "Slice 1", has the
 /// rules block kind by block kind.
 public struct RFCMarkdownSerializer: Sendable {
@@ -162,9 +164,23 @@ extension RFCMarkdownSerializer {
       }
     }
 
+    /// `anchor`'s comment, and in an export an `<a id>` after it on the same line, so
+    /// that a link to `#anchor` lands somewhere: a renderer makes no target of a
+    /// comment, and passes the HTML block a line opening with one starts through as
+    /// it is. On a line of its own the element would open a block that takes the
+    /// line after it in too.
     func anchor(_ anchor: String?) -> [String] {
       guard let anchor else { return [] }
-      return ["<!-- anchor: \(anchor) -->"]
+      let comment = "<!-- anchor: \(anchor) -->"
+      guard links.inDocument == .fragments else { return [comment] }
+      return [comment + "<a id=\"\(Self.attributeValue(anchor))\"></a>"]
+    }
+
+    /// `text` as an HTML attribute's value, between double quotes.
+    static func attributeValue(_ text: String) -> String {
+      text.replacingOccurrences(of: "&", with: "&amp;")
+        .replacingOccurrences(of: "\"", with: "&quot;")
+        .replacingOccurrences(of: "<", with: "&lt;")
     }
 
     /// A paragraph reflowed: one line, but for where the source breaks it.
