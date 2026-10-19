@@ -32,6 +32,7 @@
       <enumerator name="plain text" code="REfT" description="The RFC Editor’s text, pages and all."/>
       <enumerator name="XML" code="REfX" description="The RFC Editor’s RFCXML, or for an RFC never published as XML, the app’s conversion of its text."/>
       <enumerator name="ABNF" code="REfA" description="The RFC’s grammar collected into one file, for an RFC that has one."/>
+      <enumerator name="highlights and notes" code="REfN" description="Your highlights and notes in the RFC, as Markdown, with citations."/>
     </enumeration>
 
     <class name="rfc" code="RFCd" plural="rfcs" description="An RFC in the index.">

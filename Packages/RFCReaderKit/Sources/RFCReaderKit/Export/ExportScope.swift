@@ -58,11 +58,12 @@ public struct ExportedPart: Sendable {
 
 extension ExportFormat {
   /// Whether this format can take one section: a format made from the document.
-  /// A published file is the whole file, and a grammar is the whole document's.
+  /// A published file is the whole file, and a grammar and the highlights and notes
+  /// are the whole document's.
   public var narrows: Bool {
     switch self {
     case .pdf, .epub, .html, .markdown: true
-    case .text, .xml, .abnf: false
+    case .text, .xml, .abnf, .annotations: false
     }
   }
 
