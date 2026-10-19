@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -386,9 +386,7 @@ run-sim: ios-app
 #   make hand-check CHECK=testCitationLongPress IOS_SIMULATOR='iPad Air 11-inch (M4)'
 #
 HAND_CHECKS := hand-checks
-hand-check: xcodeproj
-	@sed -n 's/^ *func \(test[A-Za-z]*\)().*/\1/p' App/HandChecks/*.swift | grep -qx '$(CHECK)' || \
-	  { echo "set CHECK to one of these:"; sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
+hand-check: hand-check-check xcodeproj
 	@rm -rf '$(HAND_CHECKS)/$(CHECK)' '$(HAND_CHECKS)/$(CHECK).xcresult'
 	@xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null
 	@xcrun simctl uninstall '$(IOS_SIMULATOR)' me.mazetti.rfc-reader
@@ -400,6 +398,10 @@ hand-check: xcodeproj
 	  status=$$?; \
 	  Tools/hand-checks/export.py '$(HAND_CHECKS)/$(CHECK).xcresult' '$(HAND_CHECKS)/$(CHECK)'; \
 	  exit $$status
+
+hand-check-check:
+	@sed -n 's/^ *func \(test[A-Za-z]*\)().*/\1/p' App/HandChecks/*.swift | grep -Fqx '$(CHECK)' || \
+	  { echo "set CHECK to one of these:"; sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
 
 ## Build and launch the macOS app
 # A running copy is quit first, or `open` would just bring the old build back to

@@ -34,8 +34,11 @@ def main() -> None:
     for test in tests:
         for attachment in test["attachments"]:
             # "<name>_<index>_<UUID>.png", the name being the check's.
-            name = re.sub(r"_\d+_[0-9A-F-]{36}(?=\.\w+$)", "",
-                          attachment["suggestedHumanReadableName"])
+            original = attachment["suggestedHumanReadableName"]
+            name = re.sub(r"_\d+_[0-9A-F-]{36}(?=\.\w+$)", "", original)
+            # Two steps of one name keep their suffixes rather than overwrite.
+            if os.path.exists(os.path.join(destination, name)):
+                name = original
             os.rename(os.path.join(destination, attachment["exportedFileName"]),
                       os.path.join(destination, name))
             print(os.path.join(destination, name))

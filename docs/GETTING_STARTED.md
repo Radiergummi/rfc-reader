@@ -32,7 +32,7 @@ curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 
 `make run-sim` launches the app in the iOS Simulator, headless, but nothing can tap in it. `make hand-check CHECK=<name>` runs one of the scenarios in `App/HandChecks` instead: an XCUITest that drives the built app from outside, as a person would, in a Simulator with no window. It taps and long-presses, swipes from the edge, opens `rfc://` links while the app runs, and answers the system's alerts, such as the notification permission. Every step saves a screenshot, exported to `hand-checks/<name>/` under the step's name; an assertion says what the step should show. `make hand-check` without `CHECK` lists the scenarios, and `CODE_SIGNING_ALLOWED=NO` runs them without signing.
 
-Each check starts from a first launch: the app is removed from the simulated device first, with its data and permissions, so a check takes a few minutes. A new scenario is a test in `App/HandChecks/HandChecks.swift`. None of them runs in `make check` or CI; a change that needs one runs it.
+Each check starts from a first launch: the app is removed from the simulated device first, with its data and permissions, so a check takes a few minutes. A new scenario is a test in `App/HandChecks/HandChecks.swift`. The two checks of the reader stack skip in regular width, as on an iPad, where the reader's stack is a column beside the list: its root has no back button, and the screen's edge is the sidebar's. None of them runs in `make check` or CI; a change that needs one runs it.
 
 What the Simulator cannot stand in for stays with an iPhone (`make run-device`) or the maintainer: performance and TextKit's timing on real hardware, haptics, how a long press feels, and the camera and sensors.
 

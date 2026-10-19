@@ -21,8 +21,9 @@ final class HandChecks: XCTestCase {
 
   /// A citation pushes the cited RFC; the back button and the edge swipe pop it, and
   /// an edge swipe let go early leaves it where it is.
-  func testReaderStackPushAndPop() {
+  func testReaderStackPushAndPop() throws {
     launch(opening: "rfc://8174")
+    try skipUnlessCompact()
     waitForReader("RFC 8174")
     screenshot("1 RFC 8174")
 
@@ -38,9 +39,8 @@ final class HandChecks: XCTestCase {
     waitForReader("RFC 2119")
     swipeFromLeadingEdge(to: 0.15)
     // Once the cancelled pop has animated back, during which both bars are there.
-    Thread.sleep(forTimeInterval: 1)
+    XCTAssertTrue(app.navigationBars["RFC 8174"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(app.navigationBars["RFC 2119"].exists)
-    XCTAssertFalse(app.navigationBars["RFC 8174"].exists)
     screenshot("4 edge swipe let go early")
 
     swipeFromLeadingEdge(to: 0.9)
@@ -50,8 +50,9 @@ final class HandChecks: XCTestCase {
 
   /// A deep link while a stack is open replaces the stack: back from it leads to the
   /// list, not to the reader it replaced.
-  func testDeepLinkReplacesTheStack() {
+  func testDeepLinkReplacesTheStack() throws {
     launch(opening: "rfc://8174")
+    try skipUnlessCompact()
     waitForReader("RFC 8174")
     followCitation("RFC 2119")
     waitForReader("RFC 2119")
@@ -78,6 +79,7 @@ final class HandChecks: XCTestCase {
     let link = citation("RFC 2119")
     XCTAssertTrue(link.waitForExistence(timeout: 30))
     link.press(forDuration: 1.5)
+    XCTAssertTrue(app.buttons["Copy Link"].waitForExistence(timeout: 5), "no preview and menu")
     screenshot("1 long press")
     // Dismissed with a tap outside the preview, at the top of the screen.
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
@@ -105,13 +107,12 @@ final class HandChecks: XCTestCase {
     toggle.tap()
 
     allowSystemAlert(screenshotName: "2 system asks")
-    // The setting stays on only once the system's answer has reached the app.
-    let isOn = NSPredicate(format: "value == '1'")
-    XCTAssertEqual(
-      XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOn, object: toggle)], timeout: 5),
-      .completed)
+    // The switch turns on as it is tapped, before the system answers; refused, it
+    // turns off again and says so. So it is read once that answer had time to land.
     XCTAssertFalse(
-      app.staticTexts["Notifications for RFC Reader are turned off in System Settings."].exists)
+      app.staticTexts["Notifications for RFC Reader are turned off in System Settings."]
+        .waitForExistence(timeout: 3))
+    XCTAssertEqual(toggle.value as? String, "1")
     screenshot("3 allowed")
   }
 
@@ -162,10 +163,19 @@ final class HandChecks: XCTestCase {
   private func allowSystemAlert(screenshotName: String) {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     let alert = springboard.alerts.firstMatch
-    guard alert.waitForExistence(timeout: 10) else { return }
+    XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system never asked")
     XCTAssertTrue(alert.buttons.firstMatch.waitForExistence(timeout: 5))
     screenshot(screenshotName)
     alert.buttons.element(boundBy: alert.buttons.count - 1).tap()
+  }
+
+  /// Skips a check of the reader stack outside compact width. In regular width, as on
+  /// an iPad, the stack is the split view's detail column, beside the list: its root
+  /// has no back button, and the screen's leading edge is the sidebar's.
+  private func skipUnlessCompact() throws {
+    try XCTSkipUnless(
+      app.windows.firstMatch.horizontalSizeClass == .compact,
+      "the reader stack is compact width's; this Simulator is in regular width")
   }
 
   private func waitForReader(_ title: String, file: StaticString = #filePath, line: UInt = #line) {
