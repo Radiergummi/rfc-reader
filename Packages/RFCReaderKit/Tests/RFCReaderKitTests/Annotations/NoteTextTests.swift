@@ -13,7 +13,7 @@ import Testing
 struct NoteTextTests {
   typealias Span = NoteBody.Span
 
-  private let font = PlatformFont.systemFont(ofSize: 13)
+  private let font = PlatformFont.systemFont(ofSize: 13, weight: .regular)
 
   @Test(arguments: NoteMarkdownTests.bodies)
   func `the editor's text reads back as the body it was made from`(body: NoteBody) {
@@ -39,7 +39,7 @@ struct NoteTextTests {
 
   @Test func `a paste keeps the scope and loses fonts, sizes and colors`() {
     let pasted = NSMutableAttributedString()
-    let heading = PlatformFont.boldSystemFont(ofSize: 28)
+    let heading = PlatformFont.systemFont(ofSize: 28, weight: .bold)
     pasted.append(
       NSAttributedString(
         string: "Heading\n",
@@ -52,7 +52,7 @@ struct NoteTextTests {
     pasted.append(
       NSAttributedString(
         string: "code",
-        attributes: [.font: PlatformFont.monospacedSystemFont(ofSize: 9, weight: .regular)]))
+        attributes: [.font: PlatformFont.monospacedFont(ofSize: 9, weight: .regular)]))
     pasted.append(
       NSAttributedString(
         string: " and a link",
@@ -104,7 +104,8 @@ struct NoteTextTests {
     let inner = NSTextList(markerFormat: .circle, options: 0)
     let style = NSMutableParagraphStyle()
     style.textLists = [outer, inner]
-    let text = NSAttributedString(string: "deep", attributes: [.font: font, .paragraphStyle: style])
+    let text = NSAttributedString(
+      string: "deep", attributes: [.font: font, .paragraphStyle: style])
     #expect(
       NoteText.body(of: text).markdown == "-\n  - deep")
   }
@@ -149,7 +150,9 @@ struct NoteTextTests {
         .list(
           NoteBody.List(
             isOrdered: false,
-            items: [NoteBody.Item([Span("a")]), NoteBody.Item([Span("b")]), NoteBody.Item([Span("c")])]))
+            items: [
+              NoteBody.Item([Span("a")]), NoteBody.Item([Span("b")]), NoteBody.Item([Span("c")]),
+            ]))
       ]))
     NoteText.indent(by: 1, in: text, range: NSRange(location: 2, length: 3), font: font)
     #expect(NoteText.body(of: text).markdown == "- a\n  - b\n  - c")

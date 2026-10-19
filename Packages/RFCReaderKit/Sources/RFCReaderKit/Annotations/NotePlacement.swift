@@ -54,7 +54,8 @@ public struct NotePlacement: Sendable, Equatable {
   /// Notes whose highlight is gone, and the highlight that covers each now.
   public let repoints: [UUID: UUID]
 
-  public static let none = NotePlacement(statuses: [:], markers: [], relocations: [:], repoints: [:])
+  public static let none = NotePlacement(
+    statuses: [:], markers: [], relocations: [:], repoints: [:])
 
   init(
     statuses: [UUID: Status], markers: [Marker], relocations: [UUID: Target],
@@ -99,8 +100,9 @@ public struct NotePlacement: Sendable, Equatable {
       if var highlight = note.highlight {
         if highlights.statuses[highlight] == nil {
           // Its highlight is gone: the one that now covers where it was, if any.
-          guard let range = note.current.flatMap({ relocator.relocate($0).target })?
-            .range(in: model),
+          guard
+            let range = note.current.flatMap({ relocator.relocate($0).target })?
+              .range(in: model),
             let covering = placed.first(where: {
               $0.1.lowerBound <= range.lowerBound && $0.1.upperBound >= range.upperBound
             })

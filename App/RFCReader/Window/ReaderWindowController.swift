@@ -481,7 +481,9 @@
     /// swaps the body out it falls back to the window, so ⌘F reached no find bar.
     /// Focus moves only when Find is asked for, never when the text appears.
     func focusSearchableText() {
-      guard let window,
+      // A note's editor is a popover, its own key window: Find searches the note
+      // there, and the reader's text is not to take the focus from it (#523).
+      guard let window, NSApp.keyWindow === window,
         let text = FirstResponderSearch.searchableText(in: splitController.readerView)
       else { return }
       // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
@@ -536,6 +538,9 @@
     /// Edit ▸ Highlight (#522), handed to the reader's text as Copy as Quote is, and for
     /// its reason.
     func highlightSelection() {
+      // Not while a note is being edited, in a popover that is its own key window
+      // (#523): ⌃⌘H there is not the reader's.
+      guard NSApp.keyWindow === window else { return }
       let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.highlightSelection(nil)
     }
