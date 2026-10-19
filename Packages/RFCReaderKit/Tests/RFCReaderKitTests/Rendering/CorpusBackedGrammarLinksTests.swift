@@ -35,8 +35,8 @@ enum CorpusXML {
 enum CorpusXMLError: Error, Equatable {
   /// `RFC_CORPUS_XML` is not set; a suite that reads the corpus is enabled only where it is.
   case notConfigured
-  /// The document is not in the directory: `make test-corpus-app` fetches only the
-  /// documents listed in the Makefile's `CORPUS_TEST_XML_DOCUMENTS`.
+  /// The document is not in the directory: `make test-corpus` and `make test-corpus-app`
+  /// fetch only the documents listed in the Makefile's `CORPUS_TEST_XML_DOCUMENTS`.
   case notFetched(String)
 }
 
