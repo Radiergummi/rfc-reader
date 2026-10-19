@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ has no grammar to export." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat keine Grammatik zum Exportieren."
+          }
+        }
+      }
+    },
     "%@ is defined in %@." : {
       "localizations" : {
         "de" : {

@@ -93,3 +93,12 @@ struct ExportScopeTests {
     #expect(fitted == CGRect(x: 0, y: 100, width: 600, height: 600))
   }
 }
+
+/// A grammar asked for of a document without one says so, in words (#383).
+@Suite("Export: no grammar")
+struct NoGrammarTests {
+  @Test func `the error names the document`() {
+    #expect(
+      ExportFormat.NoGrammar(document: .rfc(9110)).localizedDescription.contains("RFC 9110"))
+  }
+}

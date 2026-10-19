@@ -53,6 +53,8 @@
       <property name="kept offline" code="RFCk" type="boolean" description="Whether the RFC is marked Keep Offline. Set it to keep the RFC for reading offline, or to stop keeping it.">
         <cocoa key="isKeptOffline"/>
       </property>
+      <!-- So that the RFC the command names receives it: `export rfc id 9110 as …`. -->
+      <responds-to command="export"><cocoa method="handleExportCommand:"/></responds-to>
     </class>
 
     <!-- The same name and code as a window's collection property, which names one

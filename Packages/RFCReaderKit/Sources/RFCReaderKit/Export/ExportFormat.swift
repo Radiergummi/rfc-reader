@@ -184,6 +184,20 @@ extension ExportFormat {
     data(of: part.document, outside: part.outside)
   }
 
+  /// The grammar asked for of a document that has none, which the menus never
+  /// offer and a script or a shortcut can ask for (#383, #384).
+  public struct NoGrammar: LocalizedError {
+    public let document: DocumentID
+
+    public init(document: DocumentID) {
+      self.document = document
+    }
+
+    public var errorDescription: String? {
+      String(kit: "\(document.displayName) has no grammar to export.", locale: .interface)
+    }
+  }
+
   /// A legacy RFC as XML, which the RFC Editor never published it as: the document
   /// as the app holds it, through the serializer the corpus is converted with, with
   /// a comment that says what it is and a link to the text it came from.

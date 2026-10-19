@@ -36,7 +36,9 @@ enum DocumentExport {
   ) async throws -> Data {
     let part = try ExportedPart(of: try await library.document(for: id), section: section)
     guard let data = await serialized(part, as: format) else {
-      throw CocoaError(.fileWriteUnknown)
+      // Only a grammar can be missing: every other rendered format is made of any
+      // document.
+      throw format == .abnf ? ExportFormat.NoGrammar(document: id) : CocoaError(.fileWriteUnknown)
     }
     return data
   }

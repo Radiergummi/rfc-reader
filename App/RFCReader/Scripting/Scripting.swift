@@ -62,6 +62,13 @@
       }
     }
 
+    /// `export` told to this RFC, its receiver: the command finds the RFC there, so
+    /// this only runs it.
+    @objc(handleExportCommand:)
+    func handleExportCommand(_ command: NSScriptCommand) -> Any? {
+      command.performDefaultImplementation()
+    }
+
     /// Where the object lives, which is how a script gets a reference it can use
     /// again: the application's `rfcs`, by number.
     nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
@@ -485,13 +492,17 @@
   }
 
   /// `export rfc id 9110 as PDF to file "…"` (#383): the file File > Export… writes,
-  /// made by the same `DocumentExport`, without opening a window. The command waits
-  /// for it, so a script's next line finds the file written.
+  /// made by the same `DocumentExport` and tagged as it tags it, without opening a
+  /// window. The command waits for it, so a script's next line finds the file
+  /// written.
   @objc(RFCExportCommand)
   nonisolated final class RFCExportCommand: RFCScriptCommand {
     @MainActor override func perform() {
-      let specifier = directParameter as? NSScriptObjectSpecifier
-      guard let rfc = specifier?.objectsByEvaluatingSpecifier as? ScriptableRFC else {
+      if evaluatedReceivers is [Any] {
+        ScriptError.report("Export one RFC at a time.", in: self)
+        return
+      }
+      guard let rfc = evaluatedReceivers as? ScriptableRFC else {
         ScriptError.report("Which RFC? Name one as rfc id 9110.", in: self)
         return
       }
@@ -513,10 +524,9 @@
           let data = try await DocumentExport.data(
             for: id, as: format, paperSize: NSPrintInfo.shared.paperSize,
             library: LibraryModel.shared)
-          try data.write(to: file, options: .atomic)
-        } catch let error as CocoaError where format == .abnf && error.code == .fileWriteUnknown {
-          // What `DocumentExport` throws for a grammar the RFC does not have, which
-          // the menus never offer.
+          try await Self.write(
+            data, to: file, tags: ExportFormat.tagNames(for: LibraryModel.shared.metadata(id)))
+        } catch is ExportFormat.NoGrammar {
           ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
         } catch {
           ScriptError.report(
@@ -525,6 +535,14 @@
         }
         command.resumeExecution(withResult: nil)
       }
+    }
+
+    /// The file, written off the main actor, with the Finder tags File > Export…
+    /// gives it.
+    @concurrent
+    private static func write(_ data: Data, to file: URL, tags: [String]) async throws {
+      try data.write(to: file, options: .atomic)
+      try (file as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
     }
   }
 
