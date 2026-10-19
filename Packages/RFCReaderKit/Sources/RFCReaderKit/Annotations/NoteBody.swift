@@ -263,6 +263,8 @@ extension NoteBody {
         edged.append(Span(trailing, style: shared(span, next), link: sharedLink(span, next)))
       }
     }
+    // A style CommonMark cannot spell there goes, its text kept.
+    edged = droppingUnspellable(edged)
     // Neighbors alike are one.
     var merged: [Span] = []
     for span in edged where !span.text.isEmpty {
@@ -277,6 +279,61 @@ extension NoteBody {
       }
     }
     return merged
+  }
+
+  /// Without the styles whose delimiters would not open or close. A delimiter next to
+  /// punctuation flanks its run only where white space or punctuation is on its other
+  /// side, so `a**(b)**c` reads back as plain text with its asterisks in it: CommonMark
+  /// has no spelling for that bold, and the text is kept rather than the style.
+  private static func droppingUnspellable(_ spans: [Span]) -> [Span] {
+    var spans = spans
+    for style in [Style.strikethrough, .strong, .emphasis] {
+      var index = 0
+      while index < spans.count {
+        guard spans[index].text != "\n", spans[index].style.contains(style) else {
+          index += 1
+          continue
+        }
+        var end = index
+        while end < spans.count, spans[end].text != "\n", spans[end].style.contains(style) {
+          end += 1
+        }
+        let before = index > 0 ? edge(of: spans[index - 1], atStart: false) : nil
+        let after = end < spans.count ? edge(of: spans[end], atStart: true) : nil
+        let opens = flanks(edge(of: spans[index], atStart: true), beside: before)
+        let closes = flanks(edge(of: spans[end - 1], atStart: false), beside: after)
+        if !opens || !closes {
+          for member in index..<end { spans[member].style.remove(style) }
+        }
+        index = end
+      }
+    }
+    return spans
+  }
+
+  /// The character a span's Markdown starts or ends with, as a delimiter beside it
+  /// sees it: a link's bracket and parenthesis, a code span's backtick. Nil for a line
+  /// break, which is white space.
+  private static func edge(of span: Span, atStart: Bool) -> Character? {
+    if span.text == "\n" { return nil }
+    if span.link != nil { return atStart ? "[" : ")" }
+    if span.style.contains(.code) { return "`" }
+    return atStart ? span.text.first : span.text.last
+  }
+
+  /// Whether a delimiter between `inner`, its run's own edge, and `outer`, the
+  /// character on its other side, opens or closes the run: always, unless `inner` is
+  /// punctuation and `outer` is neither white space nor punctuation.
+  private static func flanks(_ inner: Character?, beside outer: Character?) -> Bool {
+    guard let inner, isPunctuation(inner), let outer else { return true }
+    return outer.isWhitespace || isPunctuation(outer)
+  }
+
+  /// CommonMark's punctuation: Unicode's punctuation and symbols.
+  private static func isPunctuation(_ character: Character) -> Bool {
+    character.unicodeScalars.allSatisfy {
+      CharacterSet.punctuationCharacters.contains($0) || CharacterSet.symbols.contains($0)
+    }
   }
 
   private static func shared(_ span: Span, _ neighbor: Span?) -> Style {

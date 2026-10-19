@@ -119,6 +119,26 @@ struct NoteMarkdownTests {
     #expect(body.markdown == "a **bold** b")
   }
 
+  /// A delimiter beside punctuation opens or closes only where white space or more
+  /// punctuation is on its other side: `a**(b)**c` reads back as its asterisks.
+  @Test(arguments: [
+    [Span("a"), Span("(b)", style: .strong), Span("c")],
+    [Span("x"), Span("「語」", style: .emphasis), Span("y")],
+    [Span("so"), Span("-gone", style: .strikethrough)],
+  ])
+  func `a style CommonMark cannot spell beside a letter goes, its text kept`(spans: [Span]) {
+    let body = NoteBody([.paragraph(spans)])
+    let text = spans.map(\.text).joined()
+    #expect(body == NoteBody([.paragraph([Span(text)])]))
+    #expect(NoteBody(markdown: body.markdown) == body, "\(body.markdown)")
+  }
+
+  @Test func `a style beside punctuation that CommonMark can spell is kept`() {
+    let body = NoteBody([.paragraph([Span("a "), Span("(b)", style: .strong), Span(", c")])])
+    #expect(body.markdown == "a **(b)**, c")
+    #expect(NoteBody(markdown: body.markdown) == body)
+  }
+
   @Test func `two lists of one kind side by side are one`() {
     let item = NoteBody.Item([Span("x")])
     let body = NoteBody([
