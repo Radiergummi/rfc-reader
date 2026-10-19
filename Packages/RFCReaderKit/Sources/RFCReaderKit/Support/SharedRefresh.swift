@@ -9,6 +9,11 @@
 public final class SharedRefresh {
   private let name: String
   private var underWay: Task<Void, Never>?
+  /// Whether the refresh under way gives way to a start that is not replaceable.
+  private var isUnderWayReplaceable = false
+  /// Counts the refreshes started, so that one replaced does not, as it ends, end
+  /// the one that replaced it.
+  private var started = 0
   private var isRunningInCaller = false
 
   public init(name: String) {
@@ -19,19 +24,37 @@ public final class SharedRefresh {
 
   /// The refresh under way, or `operation` started as a new one, which is no longer
   /// under way once it ends.
+  ///
+  /// A replaceable refresh, such as the index's automatic check, which waits for a
+  /// cheap network for as long as there is none, gives way to one that is not, such
+  /// as a person's Retry, which takes any network (#983): that start cancels it and
+  /// runs once it has ended. Every other start takes the refresh under way.
   @discardableResult
-  public func start(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
-    if let underWay { return underWay }
+  public func start(
+    replaceable: Bool = false, _ operation: @escaping @MainActor () async -> Void
+  ) -> Task<Void, Never> {
+    var replaced: Task<Void, Never>?
+    if let underWay {
+      guard isUnderWayReplaceable, !replaceable else { return underWay }
+      underWay.cancel()
+      replaced = underWay
+    }
+    started += 1
+    let number = started
     let refresh = Task(name: name) {
+      await replaced?.value
       await operation()
-      underWay = nil
+      if number == started {
+        underWay = nil
+      }
     }
     underWay = refresh
+    isUnderWayReplaceable = replaceable
     return refresh
   }
 
   /// Waits for the refresh under way, or runs `operation` as a new one and waits
-  /// for it.
+  /// for it, by the same rule as `start`.
   public func join(_ operation: @escaping @MainActor () async -> Void) async {
     await start(operation).value
   }
