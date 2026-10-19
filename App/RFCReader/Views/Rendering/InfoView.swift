@@ -42,9 +42,13 @@ struct InfoView: View {
           }
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
+              // One per document, so a row's download or outcome is never shown under
+              // another's.
               SectionRows(
                 section: section, library: library, open: open, openDraft: openDraft,
-                search: search)
+                search: search
+              )
+              .id(info.number)
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
@@ -400,6 +404,9 @@ private struct SectionRows: View {
     /// exporter for the card rather than one a row, as SwiftUI presents only one of
     /// several sibling exporters reliably (#577).
     @State private var downloaded: DownloadedFile?
+    /// Whether a row's Download is fetching or its Save to Files is up, so a second
+    /// Download, from any row, does not present over the first.
+    @State private var isDownloading = false
   #endif
 
   var body: some View {
@@ -413,7 +420,8 @@ private struct SectionRows: View {
           #if os(macOS)
             LinkRow(row: row, library: library)
           #else
-            LinkRow(row: row, library: library, downloaded: $downloaded)
+            LinkRow(
+              row: row, library: library, downloaded: $downloaded, isDownloading: $isDownloading)
           #endif
         }
       }
@@ -422,9 +430,14 @@ private struct SectionRows: View {
         .fileExporter(
           isPresented: Binding(
             get: { downloaded != nil },
-            set: { if !$0 { downloaded = nil } }),
+            set: {
+              if !$0 {
+                downloaded = nil
+                isDownloading = false
+              }
+            }),
           document: downloaded,
-          contentType: downloaded?.format.contentType ?? .data,
+          contentType: (downloaded?.format ?? .pdf).contentType,
           defaultFilename: downloaded?.name
         ) { result in
           if case .failure(let error) = result {
@@ -568,14 +581,15 @@ private struct KeywordTag: View {
 private struct LinkRow: View {
   let row: DocumentInfo.Row
   let library: LibraryModel
-  /// A check for a moment after a copy or a download, a warning after a failed one.
+  /// A check for a moment after a copy or a download to the Mac's Downloads, a warning
+  /// after a failed one.
   @State private var outcome: Outcome?
   @State private var isOptionHeld = false
   #if !os(macOS)
     /// Where a Download hands the file it fetched, for the card's Save to Files.
     @Binding var downloaded: DownloadedFile?
-    /// Whether a Download is fetching, so a second one does not fetch it again.
-    @State private var isDownloading = false
+    /// The card's: whether a Download is fetching or its Save to Files is up.
+    @Binding var isDownloading: Bool
   #endif
   @Environment(\.openURL) private var openURL
 
@@ -665,14 +679,12 @@ private struct LinkRow: View {
       guard !isDownloading else { return }
       isDownloading = true
       Task {
-        defer { isDownloading = false }
         do {
           let data = try await library.publishedFile(document, format: format)
           // The RFC Editor's own name, as the Mac saves it to Downloads.
-          let name = RFCEditorEndpoints.document(document, format: format)
-            .deletingPathExtension().lastPathComponent
-          downloaded = DownloadedFile(data: data, format: format, name: name)
+          downloaded = DownloadedFile(data: data, format: format, name: document.fileStem)
         } catch {
+          isDownloading = false
           readerLog.failure(of: document, "downloading for Files failed", error)
           outcome = .failed
         }
