@@ -52,17 +52,27 @@ extension DocumentTextBuilder {
     asOlder { marking(.deleted) { appendBlocks(blocks, indent: 0) } }
   }
 
+  /// Where the older revision's ordinals start, past any the newer one's reach: a
+  /// choice made in a struck figure's menu is its own, not the newer figure's.
+  static let olderOrdinalBase = 1 << 30
+
   /// Emits what `body` emits of the older revision, and leaves the builder's count of
   /// the newer one's as it was: its anchors out of the index, and the ordinals a
   /// block's presentation choice and an aside's opening are keyed by, the grammar
-  /// rules defined and the abbreviations marked, which the newer blocks go by.
+  /// rules defined and the abbreviations marked, which the newer blocks go by. Its
+  /// own blocks number from `olderOrdinalBase`.
   private func asOlder(_ body: () -> Void) {
     let entriesBefore = entries.count
     let verbatimOrdinal = nextVerbatimOrdinal
     let asideOrdinal = nextAsideOrdinal
     let rules = definedRules
     let glossed = glossedInSection
+    nextVerbatimOrdinal = Self.olderOrdinalBase + olderOrdinals.verbatim
+    nextAsideOrdinal = Self.olderOrdinalBase + olderOrdinals.aside
     body()
+    olderOrdinals = (
+      nextVerbatimOrdinal - Self.olderOrdinalBase, nextAsideOrdinal - Self.olderOrdinalBase
+    )
     entries.removeSubrange(entriesBefore...)
     nextVerbatimOrdinal = verbatimOrdinal
     nextAsideOrdinal = asideOrdinal
@@ -122,16 +132,19 @@ extension DocumentTextBuilder {
   }
 
   /// The sections of the older revision that went, after the newer section `anchor`
-  /// names, or before the first for nil: each its heading and its own blocks struck
-  /// through, said removed. Not its subsections, which are listed for themselves.
-  func appendRemovedSections(after anchor: String?) {
+  /// names, or before the first for nil, of those `includes` takes: each its heading
+  /// and its own blocks struck through, said removed. Not its subsections, which are
+  /// listed for themselves.
+  func appendRemovedSections(
+    after anchor: String?, where includes: (Section) -> Bool = { _ in true }
+  ) {
     guard let redline else { return }
-    for removed in redline.removedSections where removed.after == anchor {
+    for removed in redline.removedSections
+    where removed.after == anchor && includes(removed.section) {
       let section = removed.section
       let start = output.length
-      let heading = section.numberPrefix + section.headingWords.plainText
       append(
-        heading + "\n",
+        section.displayTitle + "\n",
         [
           .font: style.headingFont(depth: min(section.depth, 3)),
           .foregroundColor: RFCColors.label,

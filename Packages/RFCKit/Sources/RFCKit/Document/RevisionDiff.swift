@@ -99,9 +99,7 @@ public struct RevisionDiff: Sendable, Equatable {
           sections[section.anchor] = .moved(from: number)
         }
         compare(oldSection.blocks, section.blocks, in: section.anchor)
-        if oldSection.displayTitle != section.displayTitle,
-          oldSection.titleText != section.titleText
-        {
+        if oldSection.titleText != section.titleText {
           retitled[section.anchor] = oldSection.displayTitle
         }
       } else {
@@ -121,16 +119,26 @@ public struct RevisionDiff: Sendable, Equatable {
     }
   }
 
-  /// Newer section anchor to older: by anchor, then by `SectionAlignment`, one to one.
+  /// Newer section anchor to older, one to one: by anchor and title, then by
+  /// `SectionAlignment`, then by title alone.
+  ///
+  /// A title is compared with its parents' titles, its path: a text draft's
+  /// subsection keeps its number and a title such as "Overview" under the section
+  /// inserted before its own, and is not the subsection that had them. The last pass
+  /// is for a section `SectionAlignment` cannot score, having no prose of its own: a
+  /// heading over its subsections, or a section of only a figure.
   private static func pair(
     _ oldSections: [Section], _ newSections: [Section], old: RFCDocument, new: RFCDocument
   ) -> [String: String] {
     let oldAnchors = Set(oldSections.map(\.anchor))
-    let oldTitles = Dictionary(
-      oldSections.map { ($0.anchor, $0.titleText) }, uniquingKeysWith: { first, _ in first })
+    let oldPaths = titlePaths(of: old)
+    let newPaths = titlePaths(of: new)
     var pairs: [String: String] = [:]
     var takenOld: Set<String> = []
-    for section in newSections where oldTitles[section.anchor] == section.titleText {
+    for section in newSections
+    where oldAnchors.contains(section.anchor)
+      && oldPaths[section.anchor] == newPaths[section.anchor]
+    {
       pairs[section.anchor] = section.anchor
       takenOld.insert(section.anchor)
     }
@@ -142,7 +150,28 @@ public struct RevisionDiff: Sendable, Equatable {
       pairs[candidate.newSection] = candidate.oldSection
       takenOld.insert(candidate.oldSection)
     }
+    var unpairedOld = oldSections.filter { !takenOld.contains($0.anchor) }
+    for section in newSections where pairs[section.anchor] == nil {
+      guard
+        let index = unpairedOld.firstIndex(where: {
+          oldPaths[$0.anchor] == newPaths[section.anchor]
+        })
+      else { continue }
+      pairs[section.anchor] = unpairedOld.remove(at: index).anchor
+    }
     return pairs
+  }
+
+  /// Each section's title, after its parents', by anchor.
+  private static func titlePaths(of document: RFCDocument) -> [String: [String]] {
+    var paths: [String: [String]] = [:]
+    func visit(_ section: Section, under parents: [String]) {
+      let path = parents + [section.titleText]
+      if paths[section.anchor] == nil { paths[section.anchor] = path }
+      for subsection in section.subsections { visit(subsection, under: path) }
+    }
+    for section in document.sections { visit(section, under: []) }
+    return paths
   }
 
   /// The blocks of one pair of sections, matched by their text.

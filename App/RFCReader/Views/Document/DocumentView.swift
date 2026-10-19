@@ -235,13 +235,16 @@ struct DocumentView: View {
   }
 
   private var buildInputs: BuildInputs {
-    BuildInputs(
+    let redline = comparedWith.flatMap { session.redline?.older == $0 ? $0 : nil }
+    return BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
       errata: errataMarks,
-      translated: showsTranslation && session.translatedDocument != nil,
-      redline: comparedWith.flatMap { session.redline?.older == $0 ? $0 : nil },
+      // A redline is not translated, so a translation arriving under one is no
+      // reason to build it again.
+      translated: redline == nil && showsTranslation && session.translatedDocument != nil,
+      redline: redline,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -534,9 +537,10 @@ struct DocumentView: View {
   }
 
   /// What the header says of a translation asked for, nil showing the English.
-  /// None while a redline is asked for, which is not translated.
+  /// None while a redline is asked for, which is not translated, unless the build on
+  /// screen is still the translation: the older document loading, or failing to.
   private var translationMark: TranslationMark? {
-    guard comparedWith == nil else { return nil }
+    guard comparedWith == nil || session.state.built?.isTranslation == true else { return nil }
     return TranslationMark(
       session.translationPhase, showsTranslation: showsTranslation,
       buildIsTranslation: session.state.built?.isTranslation == true)
@@ -630,7 +634,7 @@ struct DocumentView: View {
         draft: draftStatus(of: document),
         comparison: comparedWith.map {
           DocumentHeaderView.Comparison(
-            older: $0, isShown: built.isRedline && session.redline?.older == $0,
+            older: $0, isShown: session.shownRedline == $0,
             failed: session.comparisonFailed == $0)
         },
         translation: translationMark, documentErrata: built.errata.document)

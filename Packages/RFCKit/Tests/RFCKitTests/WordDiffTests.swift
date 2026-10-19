@@ -27,6 +27,17 @@ struct WordDiffTests {
         == [.same("Send the "), .inserted("new "), .same("header"), .inserted(" first")])
   }
 
+  /// The spaces two rewritten sentences share are no common ground: kept, they cut
+  /// the change into a struck word, an inserted one, and so on, word by word.
+  @Test func `a sentence rewritten is deleted whole before its replacement`() {
+    #expect(
+      WordDiff.runs(from: "A client sends one request.", to: "The server returns two answers.")
+        == [.deleted("A client sends one request."), .inserted("The server returns two answers.")])
+    #expect(
+      WordDiff.runs(from: "Send the old header now", to: "Send a new field now")
+        == [.same("Send "), .deleted("the old header"), .inserted("a new field"), .same(" now")])
+  }
+
   /// A paragraph rewrapped at another width is the same paragraph.
   @Test func `whitespace is compared as one space`() {
     let runs = WordDiff.runs(from: "one two\n   three", to: "one two three")

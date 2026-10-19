@@ -172,6 +172,9 @@ final class DocumentSession {
   @ObservationIgnored private var redlineLoad: Task<Void, Never>?
   /// The older document a comparison could not be made with: it did not load.
   private(set) var comparisonFailed: ReadableDocument?
+  /// The older document the build on screen is a redline of, nil for a build that
+  /// is none: the header's spinner goes once it is the one asked for.
+  private(set) var shownRedline: ReadableDocument?
 
   /// Compares the document with `older`, or stops comparing for nil. Waits for the
   /// document: asked before it is here, it is asked again once it is.
@@ -448,6 +451,7 @@ final class DocumentSession {
       }
       state.install(rebuilt)
       builtInputs = inputs
+      shownRedline = redline == nil ? nil : inputs.redline
       reader {
         $0.sections = rebuilt.reachableSections(of: shown)
         $0.readsTranslation = rebuilt.isTranslation
