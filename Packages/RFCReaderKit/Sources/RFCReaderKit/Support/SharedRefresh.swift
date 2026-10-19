@@ -1,5 +1,6 @@
-/// A refresh that a second call joins rather than runs beside (#595): the index's
-/// daily check and Retry, the revisions, the working groups and the errata.
+/// A refresh that a second call joins rather than runs beside (#595): the index's,
+/// the revisions, the working groups and the errata. The index's automatic check is
+/// replaceable: a person's refresh replaces it rather than joining it (#983).
 ///
 /// Each refresh is run one of two ways, never both. `start` and `join` run it as a
 /// task of its own, which a second call takes, and waits for if it joins.

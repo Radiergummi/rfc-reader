@@ -67,6 +67,30 @@ struct SharedRefreshTests {
     #expect(!refresh.isUnderWay)
   }
 
+  /// The index: pull to refresh and the first launch wait for the index fetched
+  /// now, not for the automatic check (#984).
+  @Test func `joining replaces a replaceable one under way`() async {
+    let refresh = SharedRefresh(name: "Test")
+    let log = Log()
+    let started = Latch()
+    let gate = Latch()
+    let first = refresh.start(replaceable: true) {
+      started.open()
+      await gate.wait()
+      log.events.append(Task.isCancelled ? "first canceled" : "first ended")
+    }
+    await started.wait()
+    // Immediate, so that it has replaced the first before the gate opens.
+    let joiner = Task.immediate {
+      await refresh.join { log.events.append("joined ran") }
+      log.events.append("join returned")
+    }
+    gate.open()
+    await first.value
+    await joiner.value
+    #expect(log.events == ["first canceled", "joined ran", "join returned"])
+  }
+
   /// The index: the automatic check takes a person's refresh under way, which
   /// takes any network.
   @Test func `a replaceable start is the one under way`() async {
