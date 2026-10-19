@@ -469,9 +469,17 @@ struct NoteEditor: View {
       textView.usesFindBar = true
       textView.isIncrementalSearchingEnabled = true
       textView.drawsBackground = false
+      // Sized as a scroll view's document view has to be: as wide as the popover's
+      // text, growing down with what is typed.
+      let width = NoteEditor.width - 24
+      textView.frame = CGRect(x: 0, y: 0, width: width, height: 0)
+      textView.minSize = .zero
+      textView.maxSize = CGSize(
+        width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
       textView.isVerticallyResizable = true
       textView.isHorizontallyResizable = false
       textView.autoresizingMask = [.width]
+      textView.textContainer?.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
       textView.textContainer?.widthTracksTextView = true
       textView.textStorage?.setAttributedString(model.initialText)
       textView.typingAttributes = [.font: model.font, .foregroundColor: RFCColors.label]
