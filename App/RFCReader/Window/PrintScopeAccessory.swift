@@ -10,17 +10,29 @@
   /// choice made in the panel needs a view of the app's: it lays the chosen PDF's
   /// pages out one paper each, fitted to the paper the panel has (`PrintedPages`),
   /// and the panel's preview follows the pop-up.
+  ///
+  /// The section's PDF is made the first time the pop-up picks it, which most prints
+  /// never do. Until it is here the pop-up waits, and the panel shows and prints the
+  /// whole document, as its summary says; a section that cannot be made leaves the
+  /// whole document chosen and the choice disabled.
   final class PrintScopeAccessory: NSViewController, NSPrintPanelAccessorizing {
     private let pages: PrintedPDFView
-    private let documents: [ExportScope: PDFDocument]
+    private let whole: PDFDocument
+    private var section: PDFDocument?
+    private let makeSection: @MainActor () async -> PDFDocument?
     private let popUp = NSPopUpButton()
 
-    /// What the preview depends on, for `keyPathsForValuesAffectingPreview`.
+    /// What the preview depends on, for `keyPathsForValuesAffectingPreview`: the
+    /// scope of the document the view prints.
     @objc dynamic private(set) var scopeIndex = 0
 
-    init(pages: PrintedPDFView, documents: [ExportScope: PDFDocument]) {
+    init(
+      pages: PrintedPDFView, whole: PDFDocument,
+      makeSection: @escaping @MainActor () async -> PDFDocument?
+    ) {
       self.pages = pages
-      self.documents = documents
+      self.whole = whole
+      self.makeSection = makeSection
       super.init(nibName: nil, bundle: nil)
     }
 
@@ -31,6 +43,7 @@
 
     override func loadView() {
       popUp.addItems(withTitles: ExportScope.allCases.map { $0.name() })
+      popUp.autoenablesItems = false
       popUp.target = self
       popUp.action = #selector(choose)
       let label = NSTextField(labelWithString: String(localized: "Contents:"))
@@ -41,9 +54,38 @@
     }
 
     @objc private func choose() {
-      let scope = ExportScope.allCases[popUp.indexOfSelectedItem]
-      if let document = documents[scope] { pages.document = document }
-      scopeIndex = popUp.indexOfSelectedItem
+      switch ExportScope.allCases[popUp.indexOfSelectedItem] {
+      case .wholeDocument:
+        show(whole, as: .wholeDocument)
+      case .currentSection:
+        if let section {
+          show(section, as: .currentSection)
+          return
+        }
+        popUp.isEnabled = false
+        Task {
+          let made = await makeSection()
+          popUp.isEnabled = true
+          guard let made else {
+            popUp.selectItem(at: Self.index(of: .wholeDocument))
+            popUp.item(at: Self.index(of: .currentSection))?.isEnabled = false
+            show(whole, as: .wholeDocument)
+            return
+          }
+          section = made
+          show(made, as: .currentSection)
+        }
+      }
+    }
+
+    /// `document` printed, and the preview and summary told so.
+    private func show(_ document: PDFDocument, as scope: ExportScope) {
+      pages.document = document
+      scopeIndex = Self.index(of: scope)
+    }
+
+    private static func index(of scope: ExportScope) -> Int {
+      ExportScope.allCases.firstIndex(of: scope) ?? 0
     }
 
     func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey: String]] {

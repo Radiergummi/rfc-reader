@@ -61,22 +61,25 @@
       // for the published text, whose pages are printed as they are.
       let section = original ? nil : reader.exportableSection
       isPrinting = true
+      let paperSize = printInfo.paperSize
+      // The section's PDF, made only once the panel's pop-up first picks it: most
+      // prints are of the whole document.
+      var makeSection: (@MainActor () async -> PDFDocument?)?
+      if let section {
+        makeSection = { [library] () async -> PDFDocument? in
+          let data = try? await DocumentPDF.make(
+            for: id, original: false, section: section, paperSize: paperSize, library: library)
+          return data.flatMap(PDFDocument.init(data:))
+        }
+      }
       printing = Task {
         do {
-          // The section's, beside the whole document's, and short; one that fails
-          // leaves the panel without the choice rather than the print undone.
-          let paperSize = printInfo.paperSize
-          async let sectionData: Data? = {
-            guard let section else { return nil }
-            return try? await DocumentPDF.make(
-              for: id, original: false, section: section, paperSize: paperSize, library: library)
-          }()
           let data = try await DocumentPDF.make(
             for: id, original: original, paperSize: paperSize, library: library)
-          let sectionPDF = await sectionData.flatMap(PDFDocument.init(data:))
           guard !Task.isCancelled else { return }
           guard let pdf = PDFDocument(data: data),
-            let operation = Self.printOperation(of: pdf, section: sectionPDF, printInfo: printInfo)
+            let operation = Self.printOperation(
+              of: pdf, makeSection: makeSection, printInfo: printInfo)
           else {
             isPrinting = false
             readerLog.error(
@@ -106,17 +109,17 @@
     /// PDFKit's print operation of `pdf`, or with a section to offer, one through a
     /// view of the app's, whose panel chooses between the two (`PrintScopeAccessory`).
     private static func printOperation(
-      of pdf: PDFDocument, section: PDFDocument?, printInfo: NSPrintInfo
+      of pdf: PDFDocument, makeSection: (@MainActor () async -> PDFDocument?)?,
+      printInfo: NSPrintInfo
     ) -> NSPrintOperation? {
-      guard let section else {
+      guard let makeSection else {
         return pdf.printOperation(for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
       }
       let pages = PrintedPDFView(document: pdf)
       let operation = NSPrintOperation(view: pages, printInfo: printInfo)
       operation.printPanel.options.insert(.showsPreview)
       operation.printPanel.addAccessoryController(
-        PrintScopeAccessory(
-          pages: pages, documents: [.wholeDocument: pdf, .currentSection: section]))
+        PrintScopeAccessory(pages: pages, whole: pdf, makeSection: makeSection))
       return operation
     }
 
