@@ -293,14 +293,16 @@ jobs:
           gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir corpus-artifact
           cd corpus-artifact/packs/indexes
           tag="indexes-$VERSION"
-          # A re-run after a failed upload finds its draft and uploads again.
+          # A re-run after a failed upload finds its draft and uploads again. So does
+          # another dispatch of the version, whose draft may target another commit:
+          # publishing sets the target to the commit that built these files.
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --draft --target "$GITHUB_SHA" \
               --title "Indexes pack $VERSION" \
               --notes "The corpus's index database the app bundles (#738). See docs/DATA_PIPELINE.md."
           fi
           gh release upload "$tag" indexes.sqlite manifest.json --clobber
-          gh release edit "$tag" --draft=false
+          gh release edit "$tag" --target "$GITHUB_SHA" --draft=false
           {
             echo "Pin it in App/indexes-pack.mk:"
             echo

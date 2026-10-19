@@ -1541,15 +1541,15 @@ final class LibraryModel {
 
   enum ReadingPathResult {
     case path(ReadingPath)
-    /// No `indexes` pack is installed, which the sheet says rather than computing a
-    /// partial path from the documents in the cache.
+    /// There is no `indexes` pack, bundled or installed, which the sheet says rather
+    /// than computing a partial path from the documents in the cache.
     case noIndex
     /// The pack is there and did not read: logged, and said in a sentence.
     case failed
   }
 
-  /// The reading path from `root`, `depth` citations deep, read from the installed
-  /// `indexes` pack off the main actor.
+  /// The reading path from `root`, `depth` citations deep, read from the `indexes`
+  /// pack `DocumentStore.citationIndexURL()` chooses, off the main actor.
   func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
     guard let url = await store.citationIndexURL() else { return .noIndex }
     do {
