@@ -18,6 +18,7 @@ enum DocumentExport {
     for id: DocumentID, as format: ExportFormat, section: String? = nil, paperSize: CGSize,
     library: LibraryModel
   ) async throws -> Data {
+    try await checkExportable(id, library: library)
     let section = format.narrows ? section : nil
     return switch format {
     case .pdf:
@@ -27,6 +28,20 @@ enum DocumentExport {
     case .epub, .html, .markdown, .abnf:
       try await rendered(id, as: format, section: section, library: library)
     }
+  }
+
+  /// Refuses what Print and Export do not offer (`ReaderState.offersPrintAndExport`),
+  /// so that a script, a shortcut and a collection's export refuse it too: a scan,
+  /// which has no text, and a pointer, whose text only says where the RFC is
+  /// (`PublishedOriginalPage.NotExportable`). The text is read only for an RFC the
+  /// index lists an original of beside it, as the export would read it anyway.
+  private static func checkExportable(_ id: DocumentID, library: LibraryModel) async throws {
+    let formats = library.metadata(id)?.formats
+    let text =
+      PublishedOriginalPage.exportReadsText(id, formats: formats)
+      ? try await library.document(for: id) : nil
+    try PublishedOriginalPage.checkExportable(
+      id, formats: formats, text: text, pointerInPack: library.pointersInPack.contains(id))
   }
 
   /// The book, the page, the Markdown or the collected grammar (#185); the grammar is offered

@@ -534,6 +534,9 @@
             data, to: file, tags: ExportFormat.tagNames(for: LibraryModel.shared.metadata(id)))
         } catch is ExportFormat.NoGrammar {
           ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
+        } catch let original as PublishedOriginalPage.NotExportable {
+          // In English, as a script reads whatever the interface's language.
+          ScriptError.report(original.message(in: .english), in: command)
         } catch {
           ScriptError.report(
             "\(id.displayName) could not be exported as \(format.scriptName): \(error.localizedDescription)",
