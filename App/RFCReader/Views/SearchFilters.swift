@@ -1,11 +1,13 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 #if os(macOS)
   /// The filters the search sets, named under the Mac's search field, each with a
   /// button that removes it from the query (#21). The field itself keeps the query as
   /// typed: `NSSearchField` draws no tokens, and the query stays the one source of
-  /// truth.
+  /// truth. The default search scope's parts in force come first (#713), as chips
+  /// that remove it for this search, so a document it leaves out is explained.
   ///
   /// Takes the model rather than reading it out of `SidebarView.body`, for the reason
   /// `SidebarSearchField` does: the dependency on the query reaches no further than
@@ -16,11 +18,21 @@ import SwiftUI
     var body: some View {
       // The query the list is filtered by, so a chip names a filter in force.
       let terms = SearchQuery.terms(of: IndexSearch.parseQuery(navigation.appliedQuery).filters)
-      if !terms.isEmpty {
+      let scope = navigation.listOptions.scopeInForce(query: navigation.appliedQuery).tokens()
+      if !terms.isEmpty || !scope.isEmpty {
         ScrollView(.horizontal) {
           HStack(spacing: 4) {
+            ForEach(scope) { token in
+              chip(label: token.label) {
+                navigation.listOptions.searchScope =
+                  navigation.listOptions.searchScope.removing(token.part)
+              }
+            }
             ForEach(terms) { term in
-              chip(term)
+              chip(label: term.label) {
+                navigation.searchText = SearchQuery.removing(term, from: navigation.searchText)
+                navigation.applySearchWithoutPause()
+              }
             }
           }
         }
@@ -28,13 +40,10 @@ import SwiftUI
       }
     }
 
-    private func chip(_ term: SearchQuery.Term) -> some View {
-      Button {
-        navigation.searchText = SearchQuery.removing(term, from: navigation.searchText)
-        navigation.applySearchWithoutPause()
-      } label: {
+    private func chip(label: String, remove: @escaping () -> Void) -> some View {
+      Button(action: remove) {
         HStack(spacing: 3) {
-          Text(term.label)
+          Text(verbatim: label)
           Image(systemName: "xmark")
             .imageScale(.small)
             .foregroundStyle(.secondary)
@@ -46,7 +55,7 @@ import SwiftUI
       }
       .buttonStyle(.plain)
       .help("Remove this filter")
-      .accessibilityLabel("Remove filter \(term.label)")
+      .accessibilityLabel("Remove filter \(label)")
     }
   }
 #else
@@ -61,7 +70,9 @@ import SwiftUI
   /// `.searchable(text:tokens:)` over `NavigationModel.searchText`. The tokens and the
   /// text are a view of that one string, `SearchQuery.tokenized`, and every edit of
   /// either writes it back with `replacingText` or `replacingTerms`, so the list filters on exactly
-  /// what the field shows, and the sidebar's field and the list's agree.
+  /// what the field shows, and the sidebar's field and the list's agree. The default
+  /// search scope's parts in force lead the tokens (#713); removing one removes it
+  /// from the tab's scope for this search.
   private struct FilterSearchable: ViewModifier {
     @Environment(LibraryModel.self) private var library
     let navigation: NavigationModel
@@ -69,8 +80,8 @@ import SwiftUI
 
     func body(content: Content) -> some View {
       content
-        .searchable(text: text, tokens: tokens, prompt: prompt) { term in
-          Text(term.label)
+        .searchable(text: text, tokens: tokens, prompt: prompt) { token in
+          Text(verbatim: token.label)
         }
         .searchSuggestions {
           if let index = library.index {
@@ -98,14 +109,53 @@ import SwiftUI
       }
     }
 
-    private var tokens: Binding<[SearchQuery.Term]> {
+    private var tokens: Binding<[FieldToken]> {
       Binding {
-        SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups)
-          .terms
-      } set: { terms in
+        let scope = navigation.listOptions.scopeInForce(query: navigation.appliedQuery).tokens()
+        let terms = SearchQuery.tokenized(
+          navigation.searchText, workingGroups: library.knownWorkingGroups
+        ).terms
+        return scope.map(FieldToken.scope) + terms.map(FieldToken.term)
+      } set: { tokens in
+        let scope = navigation.listOptions.scopeInForce(query: navigation.appliedQuery)
+        let kept = Set(tokens.compactMap(\.scopePart))
+        for token in scope.tokens() where !kept.contains(token.part) {
+          navigation.listOptions.searchScope =
+            navigation.listOptions.searchScope.removing(token.part)
+        }
         navigation.searchText = SearchQuery.replacingTerms(
-          in: navigation.searchText, with: terms, workingGroups: library.knownWorkingGroups)
+          in: navigation.searchText, with: tokens.compactMap(\.term),
+          workingGroups: library.knownWorkingGroups)
       }
+    }
+  }
+
+  /// A token of the iOS search field: a part of the default search scope, or a
+  /// filter of the query.
+  private enum FieldToken: Hashable, Identifiable {
+    case scope(SearchScope.Token)
+    case term(SearchQuery.Term)
+
+    var id: String {
+      switch self {
+      case .scope(let token): "scope:\(token.part)"
+      case .term(let term): term.id
+      }
+    }
+
+    var label: String {
+      switch self {
+      case .scope(let token): token.label
+      case .term(let term): term.label
+      }
+    }
+
+    var scopePart: SearchScope.Part? {
+      if case .scope(let token) = self { token.part } else { nil }
+    }
+
+    var term: SearchQuery.Term? {
+      if case .term(let term) = self { term } else { nil }
     }
   }
 #endif

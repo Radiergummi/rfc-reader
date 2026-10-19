@@ -70,8 +70,9 @@ final class NavigationModel: Identifiable {
   /// The query the list, its count and the sidebar's results are for: the one whose
   /// rows are on show.
   var appliedQuery: String { listed?.list.query ?? "" }
-  /// The iOS list's view options, for this tab (#348).
-  var listOptions = ListOptions()
+  /// The list's view options, for this tab (#348): what Settings says a new tab
+  /// starts with (#713), and changed from there by View Options for this tab only.
+  var listOptions = LibrarySettings(defaults: .standard).listOptions
   var isShowingGoToSheet = false
   /// The collection sheet on show, if any: creating one — perhaps to add a document
   /// to — or editing one (#349). On the model rather than a view's state so the
@@ -368,6 +369,10 @@ final class NavigationModel: Identifiable {
       return
     case .apply(let query):
       requestedQuery = query
+      // A scope token removed lasts for that search only (#713).
+      if query.isEmpty {
+        listOptions.searchScope = LibrarySettings(defaults: .standard).searchScope
+      }
     case .search(let query, let delay):
       pendingSearch = Task(name: "Apply search") { [weak self] in
         guard await Debounce.outlasted(delay) else { return }
@@ -388,8 +393,12 @@ final class NavigationModel: Identifiable {
   /// observed (`LibraryList.reading`). Nil while there is no index.
   private func request() -> ListRequest? {
     guard library.index != nil else { return nil }
+    // Whether the April 1st RFCs are listed is the library's setting, not the tab's,
+    // and every tab follows it as it changes.
+    var options = listOptions
+    options.showsAprilFirst = library.showsAprilFirst
     return ListRequest(
-      list: LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self),
+      list: LibraryList.reading(filter, query: requestedQuery, options: options, from: self),
       indexVersion: library.indexVersion)
   }
 

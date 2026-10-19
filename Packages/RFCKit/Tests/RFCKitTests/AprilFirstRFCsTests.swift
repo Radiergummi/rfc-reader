@@ -33,6 +33,12 @@ struct AprilFirstRFCsTests {
     }
   }
 
+  @Test func `hidden, they leave Just Published`() {
+    let recent = [9759, 9760].map { RecentRFC(id: .rfc($0), title: "Title", summary: "") }
+    #expect(AprilFirstRFCs.justPublished(recent, showsAprilFirst: true) == recent)
+    #expect(AprilFirstRFCs.justPublished(recent, showsAprilFirst: false).map(\.id) == [.rfc(9760)])
+  }
+
   @Test func `a series is never an April 1st RFC`() {
     #expect(!AprilFirstRFCs.contains(DocumentID(series: .bcp, number: 1149)))
   }

@@ -145,6 +145,22 @@ final class LibraryModel {
     (UserDefaults.standard.object(forKey: ReaderPreferences.keepBookmarksOfflineKey) as? Bool)
     ?? ReaderPreferences.defaultKeepBookmarksOffline
 
+  /// "Show April 1st RFCs", from Settings' Advanced tab (#713): every tab's list
+  /// and Just Published follow it as it changes, so it is held here, observed,
+  /// rather than read from user defaults by each.
+  private(set) var showsAprilFirst = LibrarySettings(defaults: .standard).showsAprilFirst
+
+  /// Shows or hides the April 1st RFCs in every list, search and Just Published.
+  func setShowsAprilFirst(_ isOn: Bool) {
+    UserDefaults.standard.set(isOn, forKey: LibraryPreferences.showsAprilFirstKey)
+    showsAprilFirst = isOn
+  }
+
+  /// Just Published, less the April 1st RFCs while they are hidden.
+  var justPublished: [RecentRFC] {
+    AprilFirstRFCs.justPublished(recent, showsAprilFirst: showsAprilFirst)
+  }
+
   /// What is wanted offline: the marks, and the bookmarks when they are kept too.
   private var wantedOffline: Set<DocumentID> {
     OfflineReconciler.wanted(

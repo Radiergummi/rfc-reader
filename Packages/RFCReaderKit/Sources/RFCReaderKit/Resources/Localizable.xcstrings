@@ -1005,6 +1005,16 @@
         }
       }
     },
+    "Current Only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur aktuelle"
+          }
+        }
+      }
+    },
     "Datatracker" : {
       "localizations" : {
         "de" : {

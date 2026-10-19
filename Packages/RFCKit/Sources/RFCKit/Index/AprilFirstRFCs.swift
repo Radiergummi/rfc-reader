@@ -17,4 +17,10 @@ public enum AprilFirstRFCs {
   public static func contains(_ id: DocumentID) -> Bool {
     id.series == .rfc && numbers.contains(id.number)
   }
+
+  /// Just Published as it is shown: `recent` less the April 1st RFCs, unless they
+  /// are shown.
+  public static func justPublished(_ recent: [RecentRFC], showsAprilFirst: Bool) -> [RecentRFC] {
+    showsAprilFirst ? recent : recent.filter { !contains($0.id) }
+  }
 }
