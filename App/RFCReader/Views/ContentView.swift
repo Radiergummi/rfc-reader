@@ -260,8 +260,16 @@ struct EmptyDetailView: View {
     /// paste or an iPad's keyboard brings anything else, which a binding through a
     /// filter would leave on screen when the digits did not change.
     @State private var text = ""
-    @State private var results = QuickOpenResults()
+    /// Set by the first thing that closes the sheet, so a second tap during its
+    /// dismiss animation does not open the document again.
+    @State private var isClosing = false
     @FocusState private var focused: Bool
+
+    private var results: QuickOpenResults {
+      var results = QuickOpenResults()
+      results.show(number: text)
+      return results
+    }
 
     var body: some View {
       NavigationStack {
@@ -296,7 +304,6 @@ struct EmptyDetailView: View {
         if digits != text {
           text = digits
         }
-        results.show(number: digits)
       }
       .onAppear {
         focused = true
@@ -333,11 +340,13 @@ struct EmptyDetailView: View {
     }
 
     private func open(_ link: RFCLink) {
+      guard !isClosing else { return }
       library.open(link, activation: .current, in: navigation)
       close()
     }
 
     private func close() {
+      isClosing = true
       navigation.isShowingGoToSheet = false
     }
   }
