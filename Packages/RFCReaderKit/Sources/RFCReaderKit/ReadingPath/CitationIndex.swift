@@ -2,8 +2,9 @@ import Foundation
 import RFCKit
 import SQLite3
 
-/// The citation graph of the installed `indexes` pack, read-only (#189): the first
-/// reader of the `indexes.sqlite` that corpus-build's `IndexDatabase` writes.
+/// The citation graph of the `indexes` pack, bundled or installed, read-only
+/// (#189): the first reader of the `indexes.sqlite` that corpus-build's
+/// `IndexDatabase` writes.
 ///
 /// One connection, used from one task: open it, ask, and let it go. It is not
 /// `Sendable`; `readingPath(from:depth:in:)` does all three for a caller off the

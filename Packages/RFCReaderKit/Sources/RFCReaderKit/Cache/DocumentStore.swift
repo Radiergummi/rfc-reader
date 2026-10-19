@@ -122,8 +122,6 @@ public actor DocumentStore {
   private lazy var legacyPack: InstalledPack? = Self.installedPack(
     in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
-  /// The corpus's index database (#174), which reading paths read (#189).
-  private static let indexesPackName = "indexes"
   /// One install at a time: two would unpack into one destination and race to
   /// swap it in.
   private var isInstallingPack = false
@@ -984,7 +982,7 @@ public actor DocumentStore {
   /// one. A reader opens its database afresh for each question, so nothing here
   /// holds the one it replaces.
   public func installIndexesPack(from source: URL) async throws -> InstalledPack {
-    try await installPack(source, as: Self.indexesPackName)
+    try await installPack(source, as: IndexesPack.name)
   }
 
   /// One install at a time, whichever pack.
@@ -997,16 +995,34 @@ public actor DocumentStore {
     return try await Self.install(source, as: name, in: packsDirectory)
   }
 
-  /// The installed `indexes` pack's citation database, or nil when no pack is
-  /// installed or its manifest does not list one. Read from the disk on each call:
-  /// it is asked once per reading path.
-  public func citationIndexURL() -> URL? {
-    let directory = packsDirectory.appending(
-      path: Self.indexesPackName, directoryHint: .isDirectory)
-    guard let pack = Self.installedPack(in: directory),
-      pack.manifest.files.contains(where: { $0.path == CitationIndex.fileName })
-    else { return nil }
-    return directory.appending(path: CitationIndex.fileName)
+  /// The citation database of the `indexes` pack the app reads, or nil when there is
+  /// none: the one in the app's bundle, at `bundled`, or an installed one of the
+  /// schema this build reads, which a Release build reads only when it is a later
+  /// dated build (`IndexesPack.preferred`). A Debug build may have no bundled pack
+  /// (project.yml, "Bundle the indexes pack"). Read from the disk on each call: it is
+  /// asked once per reading path.
+  public func citationIndexURL(
+    bundled: URL? = Bundle.main.url(forResource: IndexesPack.name, withExtension: nil),
+    prefersInstalled: Bool = IndexesPack.prefersInstalled
+  ) -> URL? {
+    let bundledPack = bundled.flatMap(Self.installedPack(in:))
+    let installed = Self.installedPack(
+      in: packsDirectory.appending(path: IndexesPack.name, directoryHint: .isDirectory))
+    // Opened to read its schema: a pack this build cannot read is passed over.
+    let pack = IndexesPack.preferred(
+      bundled: bundledPack, installed: installed, prefersInstalled: prefersInstalled
+    ) { pack in
+      (try? CitationIndex(contentsOf: pack.directory.appending(path: CitationIndex.fileName)))
+        != nil
+    }
+    if let pack {
+      // Which one, since an installed pack can hide the bundled one.
+      let copy = pack.directory == bundledPack?.directory ? "bundled" : "installed"
+      storeLog.info(
+        "reading the \(copy, privacy: .public) indexes pack \(pack.manifest.version, privacy: .public)"
+      )
+    }
+    return pack?.directory.appending(path: CitationIndex.fileName)
   }
 
   /// The RFCs the installed legacy pack lists as text that only points to its

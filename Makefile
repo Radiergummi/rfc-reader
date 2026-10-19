@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -426,9 +426,45 @@ bundled-index:
 	$(CURL) --compressed -o $(BUNDLED_INDEX).part https://www.rfc-editor.org/rfc-index.xml && \
 	  mv $(BUNDLED_INDEX).part $(BUNDLED_INDEX)
 
+## Fetch the indexes pack the app bundles (#738)
+# The release App/indexes-pack.mk pins, into App/Resources/indexes, which git
+# ignores: its two files are downloaded beside it and moved in only once both match
+# the pinned SHA-256, and a pack already there that matches is kept; a pack of
+# another schema than IndexSchema.version, which the app would refuse, fails it.
+# project.yml's "Bundle the indexes pack" phase copies it into the app; a Release
+# build fails without it or with files other than the pinned ones, and a Debug build
+# bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+include App/indexes-pack.mk
+INDEXES_PACK := App/Resources/indexes
+INDEX_SCHEMA := Packages/RFCKit/Sources/RFCKit/Index/IndexSchema.swift
+INDEXES_PACK_URL ?= https://github.com/Radiergummi/rfc-reader/releases/download/$(INDEXES_PACK_TAG)
+define indexes_pack_digests
+printf '%s  indexes.sqlite\n%s  manifest.json\n' \
+  '$(INDEXES_PACK_SQLITE_SHA256)' '$(INDEXES_PACK_MANIFEST_SHA256)'
+endef
+indexes-pack:
+	@test -n '$(INDEXES_PACK_TAG)' || { echo "App/indexes-pack.mk pins no indexes pack yet"; exit 1; }
+	@if [ -d $(INDEXES_PACK) ] && \
+	  (cd $(INDEXES_PACK) && $(indexes_pack_digests) | shasum -a 256 -c -s -); then \
+	  echo "$(INDEXES_PACK) is $(INDEXES_PACK_TAG)"; \
+	else \
+	  rm -rf $(INDEXES_PACK).part && mkdir -p $(INDEXES_PACK).part && \
+	  for file in indexes.sqlite manifest.json; do \
+	    $(CURL) -L -o $(INDEXES_PACK).part/$$file $(INDEXES_PACK_URL)/$$file || exit 1; \
+	  done && \
+	  (cd $(INDEXES_PACK).part && $(indexes_pack_digests) | shasum -a 256 -c -) && \
+	  rm -rf $(INDEXES_PACK) && mv $(INDEXES_PACK).part $(INDEXES_PACK); \
+	fi
+	@schema=$$(sqlite3 -readonly $(INDEXES_PACK)/indexes.sqlite "SELECT value FROM meta WHERE key = 'schema'"); \
+	  expected=$$(sed -n 's/.*static let version = \([0-9]*\).*/\1/p' $(INDEX_SCHEMA)); \
+	  test "$$schema" = "$$expected" || { \
+	    echo "$(INDEXES_PACK_TAG) has schema $$schema, and the app reads $$expected: pin a pack built by this commit"; \
+	    exit 1; }
+
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
-install: bundled-index build-app
+install: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
@@ -466,7 +502,7 @@ publish-feed:
 TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
-trace: bundled-index build-app
+trace: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \

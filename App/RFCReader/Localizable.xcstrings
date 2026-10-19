@@ -420,12 +420,12 @@
         }
       }
     },
-    "A reading path is computed from the citation index, which is a data pack of its own and isn't installed." : {
+    "A reading path is computed from the citation index, which this version of the app doesn't include." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein Lesepfad wird aus dem Zitationsindex berechnet, der ein eigenes Datenpaket ist und nicht installiert ist."
+            "value" : "Ein Lesepfad wird aus dem Zitationsindex berechnet, den diese Version der App nicht enthält."
           }
         }
       }
@@ -3031,6 +3031,16 @@
         }
       }
     },
+    "The citation index couldn't be read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Zitationsindex konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
     "The document hasn't loaded." : {
       "localizations" : {
         "de" : {
@@ -3067,16 +3077,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Index behält nur die RFCs auf diesem Gerät, und die Suche findet Text in diesen. „Alle RFCs indizieren“ lädt den Rest erneut."
-          }
-        }
-      }
-    },
-    "The installed index pack couldn't be read." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das installierte Indexpaket konnte nicht gelesen werden."
           }
         }
       }

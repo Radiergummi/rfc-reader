@@ -200,9 +200,10 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// Whether the installed indexes pack holds a citation index (#189), without which
-  /// a reading path can only say there is none: the Reading Path items are offered
-  /// only while it is true (#769), and come back once #738 delivers the pack.
+  /// Whether there is a citation index (#189), bundled with the app (#738) or
+  /// installed, without which a reading path can only say there is none: the Reading
+  /// Path items are offered only while it is true (#769), which a Debug build without
+  /// the bundled pack is not.
   private(set) var hasCitationIndex = false
 
   /// `UserDataMirror.recentlyReadCount`.
@@ -1611,15 +1612,15 @@ final class LibraryModel {
 
   enum ReadingPathResult {
     case path(ReadingPath)
-    /// No `indexes` pack is installed, which the sheet says rather than computing a
-    /// partial path from the documents in the cache.
+    /// There is no `indexes` pack, bundled or installed, which the sheet says rather
+    /// than computing a partial path from the documents in the cache.
     case noIndex
     /// The pack is there and did not read: logged, and said in a sentence.
     case failed
   }
 
-  /// The reading path from `root`, `depth` citations deep, read from the installed
-  /// `indexes` pack off the main actor.
+  /// The reading path from `root`, `depth` citations deep, read from the `indexes`
+  /// pack `DocumentStore.citationIndexURL()` chooses, off the main actor.
   func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
     guard let url = await store.citationIndexURL() else { return .noIndex }
     do {
