@@ -25,16 +25,22 @@ nonisolated struct RFCEntity: AppEntity, IndexedEntity {
   let number: Int
   let title: String
   let status: String
-  /// `Obsoleted by RFC 9110`, for an RFC that is not current.
+  /// `Obsoleted by RFC 9110`, in the interface's language, for an RFC that is not
+  /// current.
   let obsoletedBy: String?
 
   init(_ metadata: RFCMetadata) {
+    self.init(metadata, locale: .interface)
+  }
+
+  /// In `locale`, for the Spotlight indexer, which words its entries in the same one.
+  init(_ metadata: RFCMetadata, locale: Locale) {
     id = metadata.id.fileStem
     documentID = metadata.id
     number = metadata.number
     title = metadata.title
     status = metadata.currentStatus.displayName
-    obsoletedBy = metadata.obsoletionNote
+    obsoletedBy = metadata.obsoletionNote(locale: locale)
   }
 
   var displayRepresentation: DisplayRepresentation {

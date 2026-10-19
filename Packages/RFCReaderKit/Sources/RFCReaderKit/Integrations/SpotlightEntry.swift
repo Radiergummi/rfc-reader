@@ -17,7 +17,8 @@ public struct SpotlightEntry: Sendable {
   public var identifier: String
   /// `RFC 9110: HTTP Semantics`.
   public var title: String
-  /// The abstract, after "Obsoleted by RFC …." where it applies.
+  /// The abstract, after "Obsoleted by RFC …." where it applies, in the interface's
+  /// language at the time it is indexed.
   public var description: String
   /// `Proposed Standard`: not indexed as text, but shown by the RFC's App Intents
   /// entity, which each item carries (#192), so a change is indexed again.
@@ -26,12 +27,12 @@ public struct SpotlightEntry: Sendable {
   /// the authors and the index's keywords.
   public var keywords: [String]
 
-  public init(_ metadata: RFCMetadata) {
+  public init(_ metadata: RFCMetadata, locale: Locale = .interface) {
     let id = metadata.id
     identifier = id.fileStem
     title = "\(id.displayName): \(metadata.title)"
     var description = metadata.abstract ?? ""
-    if let note = metadata.obsoletionNote {
+    if let note = metadata.obsoletionNote(locale: locale) {
       description = "\(note). \(description)".trimmingCharacters(in: .whitespaces)
     }
     self.description = description
@@ -96,5 +97,15 @@ public struct SpotlightEntry: Sendable {
       let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String
     else { return nil }
     return DocumentID(fileStem: identifier)
+  }
+}
+
+extension RFCMetadata {
+  /// `Obsoleted by RFC 7230 and RFC 7231`, in `locale`'s language, or nil for an RFC
+  /// that is current: what Spotlight and Shortcuts say of an obsoleted RFC.
+  public func obsoletionNote(locale: Locale = .interface) -> String? {
+    guard isObsolete else { return nil }
+    let replacements = obsoletedBy.map(\.displayName).formatted(.list(type: .and).locale(locale))
+    return String(kit: "Obsoleted by \(replacements)", locale: locale)
   }
 }

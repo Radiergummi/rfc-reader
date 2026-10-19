@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@ %@, %@." : {
+      "comment" : "A draft's relation to the RFC, its name and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -34,6 +35,7 @@
       }
     },
     "%@ %@, revision %@ from %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision, its month and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -50,6 +52,7 @@
       }
     },
     "%@ %@, revision %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2071,6 +2074,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ersetzt durch"
+          }
+        }
+      }
+    },
+    "Obsoleted by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt durch %@"
           }
         }
       }
