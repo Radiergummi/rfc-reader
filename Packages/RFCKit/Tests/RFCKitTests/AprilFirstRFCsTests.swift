@@ -20,8 +20,8 @@ struct AprilFirstRFCsTests {
     let index = try Fixtures.sampleIndex()
     let listed = AprilFirstRFCs.numbers.compactMap { index[$0] }
 
-    // RFC 1149 and RFC 2549 are in the sample, so the check is not empty.
-    #expect(listed.count >= 2)
+    // RFC 1149 is in the sample, so the check is not empty.
+    #expect(!listed.isEmpty)
     for rfc in listed {
       #expect(Self.isAprilFirstJoke(rfc), "\(rfc.id.displayName)")
     }
@@ -38,7 +38,7 @@ struct AprilFirstRFCsTests {
   }
 }
 
-/// The whole list against the whole index, which the sample holds only two of.
+/// The whole list against the whole index, of which the sample holds one.
 @Suite("Corpus-backed: April 1st RFCs", .enabled(if: CorpusIndex.isAvailable))
 struct CorpusBackedAprilFirstRFCsTests {
   @Test func `every listed RFC was published on 1 April`() throws {
