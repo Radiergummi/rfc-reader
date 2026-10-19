@@ -25,9 +25,26 @@ enum DocumentExport {
       try await DocumentPDF.export(id, section: section, paperSize: paperSize, library: library)
     case .text: try await library.publishedFile(for: id, format: .text)
     case .xml: try await xml(of: id, library: library)
+    case .annotations: try await annotations(of: id, library: library)
     case .epub, .html, .markdown, .abnf:
       try await rendered(id, as: format, section: section, library: library)
     }
+  }
+
+  /// The document's highlights and notes (#524), as the store has them now.
+  private static func annotations(of id: DocumentID, library: LibraryModel) async throws -> Data {
+    let document = try await library.document(for: id)
+    let annotations = library.annotations
+    let text = await markdown(of: document, id: id, annotations: annotations)
+    return Data(text.utf8)
+  }
+
+  /// Off the main actor: placing the annotations reads the whole model text.
+  @concurrent
+  private static func markdown(
+    of document: RFCDocument, id: DocumentID, annotations: AnnotationSnapshot
+  ) async -> String {
+    AnnotationExport.markdown(of: document, id: id, annotations: annotations, exported: .now)
   }
 
   /// Refuses what Print and Export do not offer (`ReaderState.offersPrintAndExport`),

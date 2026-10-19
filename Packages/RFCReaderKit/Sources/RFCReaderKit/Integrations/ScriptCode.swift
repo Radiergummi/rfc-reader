@@ -95,6 +95,7 @@ extension ExportFormat {
     case .text: "plain text"
     case .xml: "XML"
     case .abnf: "ABNF"
+    case .annotations: "highlights and notes"
     }
   }
 
@@ -107,6 +108,7 @@ extension ExportFormat {
     case .text: ScriptCode.value("REfT")
     case .xml: ScriptCode.value("REfX")
     case .abnf: ScriptCode.value("REfA")
+    case .annotations: ScriptCode.value("REfN")
     }
   }
 

@@ -85,7 +85,16 @@ struct ExportFormatTests {
   @Test func `every document offers every format but the grammar`() throws {
     #expect(
       ExportFormat.available(for: try Fixtures.rfc2119())
-        == [.pdf, .epub, .html, .markdown, .text, .xml])
+        == [.pdf, .epub, .html, .markdown, .text, .xml, .annotations])
+  }
+
+  @Test func `highlights and notes are a Markdown file`() {
+    #expect(ExportFormat.annotations.source == .rendered)
+    #expect(ExportFormat.annotations.contentType == ExportFormat.markdown.contentType)
+    #expect(ExportFormat.annotations.fileName(for: .rfc(9110)) == "RFC-9110.md")
+    #expect(ExportFormat.annotations.name(in: .english) == "Highlights and Notes")
+    #expect(ExportFormat.annotations.renaming("RFC-9110.pdf") == "RFC-9110.md")
+    #expect(!ExportFormat.annotations.narrows)
   }
 
   /// The page and the Markdown are the serializers' (RFCKit pins what they write);

@@ -582,7 +582,7 @@
       let code = (evaluatedArguments?["format"] as? NSNumber)?.uint32Value
       guard let format = code.flatMap(ExportFormat.init(scriptCode:)) else {
         ScriptError.report(
-          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML or ABNF.", in: self)
+          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML, ABNF or highlights and notes.", in: self)
         return
       }
       guard let file = evaluatedArguments?["file"] as? URL, file.isFileURL else {
