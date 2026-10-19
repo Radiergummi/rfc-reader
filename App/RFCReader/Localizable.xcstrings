@@ -630,6 +630,16 @@
         }
       }
     },
+    "Books isn't available on this Mac." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bücher ist auf diesem Mac nicht verfügbar."
+          }
+        }
+      }
+    },
     "Browse" : {
       "localizations" : {
         "de" : {
@@ -2797,6 +2807,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wähle Text im Dokument aus und dann „Markieren“."
+          }
+        }
+      }
+    },
+    "Send to Books" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An Bücher senden"
           }
         }
       }

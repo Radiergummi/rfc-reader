@@ -35,13 +35,7 @@ public struct RFCDocument: Sendable, Hashable, Codable {
 
   /// Depth-first list of every section, for tables of contents and anchor lookup.
   public var allSections: [Section] {
-    var result: [Section] = []
-    func visit(_ section: Section) {
-      result.append(section)
-      section.subsections.forEach(visit)
-    }
-    sections.forEach(visit)
-    return result
+    sections.flatMap(\.withSubsections)
   }
 
   public func section(anchor: String) -> Section? {
@@ -285,6 +279,18 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   }
 
   public var titleText: String { title.plainText }
+
+  /// This section and every one below it, depth first: what `allSections` lists of
+  /// each top-level section.
+  public var withSubsections: [Section] {
+    var result: [Section] = []
+    func visit(_ section: Section) {
+      result.append(section)
+      section.subsections.forEach(visit)
+    }
+    visit(self)
+    return result
+  }
 
   /// `4.2`, `Appendix A` or `Annex A`: the number as a heading names it, without the
   /// period that sets it off from the words. Nil when the section has no number.

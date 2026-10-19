@@ -14,8 +14,7 @@ public struct RFCHTMLSerializer: Sendable {
   /// The whole page: the document's body, under a head that names it and embeds
   /// `stylesheet`.
   public func page(_ document: RFCDocument) -> String {
-    let title = [document.header.id?.displayName, document.header.title]
-      .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
+    let title = Self.documentTitle(of: document.header)
     return """
       <!DOCTYPE html>
       <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
@@ -48,6 +47,73 @@ public struct RFCHTMLSerializer: Sendable {
 }
 
 extension RFCHTMLSerializer {
+  /// One content document of a document cut into several, as an EPUB is (#408).
+  struct Chapter {
+    var file: String
+    var title: String
+    var body: String
+  }
+
+  /// `document` cut into the header and abstract, then one chapter per top-level
+  /// section, with every link to an anchor qualified by the file it is in.
+  func chapters(_ document: RFCDocument) -> [Chapter] {
+    let front = "front.xhtml"
+    let fileNames = document.sections.indices.map { "chapter-\($0 + 1).xhtml" }
+    var files: [String: String] = [:]
+    func place(_ anchors: [String], in file: String) {
+      for anchor in anchors where files[anchor] == nil { files[anchor] = file }
+    }
+    // The abstract's anchor where the header writes it: not when there is no
+    // abstract, nor when a section has the anchor (`Writer.header`).
+    if Writer.writesAbstractAnchor(document) { place([FullTextIndex.abstractAnchor], in: front) }
+    place(document.header.abstract.flattened.flatMap(\.anchors), in: front)
+    for (section, file) in zip(document.sections, fileNames) {
+      let sections = section.withSubsections
+      place(
+        sections.map(\.anchor) + sections.flatMap(\.blocks).flattened.flatMap(\.anchors), in: file)
+    }
+    var links = ExportLinks(document: document, inDocument: .fragments)
+    links.chapterFiles = ExportLinks.ChapterFiles(files: files, fallback: front)
+
+    var writer = Writer(links: links)
+    writer.header(document)
+    var chapters = [
+      Chapter(file: front, title: Self.documentTitle(of: document.header), body: writer.output)
+    ]
+    for (section, file) in zip(document.sections, fileNames) {
+      var writer = Writer(links: links)
+      writer.section(section, level: 1)
+      chapters.append(Chapter(file: file, title: Self.title(of: section), body: writer.output))
+    }
+    return chapters
+  }
+
+  /// What an exported document is called: `RFC 9110: HTTP Semantics`, the title
+  /// alone, or the number alone; `Untitled` for one with neither, since a page's,
+  /// a book's and a contents entry's title may not be empty.
+  static func documentTitle(of header: DocumentHeader) -> String {
+    let title = [
+      header.id?.displayName, header.title.trimmingCharacters(in: .whitespacesAndNewlines),
+    ]
+    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
+    return title.isEmpty ? "Untitled" : title
+  }
+
+  /// What a chapter or a contents entry calls `section`: its heading, or for one
+  /// with neither number nor words, which a legacy RFC can have, its anchor, since a
+  /// title and a link in a book's contents may not be empty.
+  static func title(of section: Section) -> String {
+    let title = section.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? section.anchor : title
+  }
+
+  /// `text` escaped for XML, as the page escapes it.
+  static func escaped(_ text: String) -> String {
+    Writer.escaped(text)
+  }
+}
+
+extension RFCHTMLSerializer {
   fileprivate struct Writer {
     let links: ExportLinks
     var output = ""
@@ -63,17 +129,29 @@ extension RFCHTMLSerializer {
 
     mutating func header(_ document: RFCDocument) {
       let header = document.header
-      output += "<header>\n<h1>\(Self.escaped(header.title))</h1>\n"
+      // The title, or what the document is called when it has none, as the page's
+      // and a book's titles call it.
+      let title =
+        header.title.allSatisfy(\.isWhitespace)
+        ? RFCHTMLSerializer.documentTitle(of: header) : header.title
+      output += "<header>\n<h1>\(Self.escaped(title))</h1>\n"
       let byline = ExportLinks.byline(of: header)
       if !byline.isEmpty { output += "<p class=\"byline\">\(Self.escaped(byline))</p>\n" }
       output += "</header>\n"
       guard !header.abstract.isEmpty else { return }
-      // The anchor the full-text index gives the abstract, unless a section has it.
-      let isTaken = document.allSections.contains { $0.anchor == FullTextIndex.abstractAnchor }
-      open("section", id: isTaken ? nil : FullTextIndex.abstractAnchor, class: "abstract")
+      open(
+        "section", id: Self.writesAbstractAnchor(document) ? FullTextIndex.abstractAnchor : nil,
+        class: "abstract")
       output += "<h2>Abstract</h2>\n"
       blocks(header.abstract)
       output += "</section>\n"
+    }
+
+    /// Whether the abstract is written with the anchor the full-text index gives
+    /// it: when there is one, and no section has the anchor.
+    static func writesAbstractAnchor(_ document: RFCDocument) -> Bool {
+      !document.header.abstract.isEmpty
+        && !document.allSections.contains { $0.anchor == FullTextIndex.abstractAnchor }
     }
 
     mutating func section(_ section: Section, level: Int) {
