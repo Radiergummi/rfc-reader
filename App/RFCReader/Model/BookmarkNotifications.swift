@@ -133,7 +133,10 @@ enum BookmarkNotifications {
     #if os(iOS)
       guard isEnabled else { return }
       let pending = await BGTaskScheduler.shared.pendingTaskRequests()
-      if !pending.contains(where: { $0.identifier == refreshIdentifier }) { scheduleRefresh() }
+      // Unless the reader turned it off while the system answered.
+      if isEnabled, !pending.contains(where: { $0.identifier == refreshIdentifier }) {
+        scheduleRefresh()
+      }
     #endif
   }
 

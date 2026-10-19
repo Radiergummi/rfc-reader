@@ -118,14 +118,10 @@ final class HandChecks: XCTestCase {
     // The next launch, with the setting on, asks iOS for the daily refresh, which
     // crashed while that came before the scene that handles it (#980).
     app.terminate()
-    app.launch()
-    XCTAssertEqual(app.state, .runningForeground)
-    dismissStoreWarning()
-    waitForIndex()
-    screenshot("4 relaunched")
-    // Still on, or the relaunch never asked iOS.
-    open("rfc://8174")
+    launch(opening: "rfc://8174")
     waitForReader("RFC 8174")
+    screenshot("4 relaunched")
+    // Still on after the relaunch. Whether it asked iOS shows only in the log.
     app.buttons["Text Size"].tap()
     app.buttons["Reading Settings…"].tap()
     XCTAssertTrue(row.waitForExistence(timeout: 5))
