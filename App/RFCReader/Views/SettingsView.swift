@@ -204,7 +204,7 @@ struct NotificationSettings: View {
 
   var body: some View {
     Toggle(isOn: toggle) {
-      Text("Notify me about bookmarked RFCs")
+      Text("Notify me about bookmarked RFCs and followed working groups")
       Text(
         """
         When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor \
