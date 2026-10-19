@@ -40,7 +40,8 @@ public struct CollectionExport: Sendable {
   /// hides it, no longer than a file system allows, and never empty.
   static func safeName(_ name: String) -> String {
     let replaced = String(name.map { $0 == "/" || $0 == ":" ? "-" : $0 })
-    var safe = String(replaced.trimmingCharacters(in: .whitespacesAndNewlines).drop { $0 == "." })
+    // Dots and spaces both, in any order: `. .notes` would be hidden too.
+    var safe = String(replaced.drop { $0 == "." || $0.isWhitespace })
       .trimmingCharacters(in: .whitespacesAndNewlines)
     while safe.utf8.count > longestName { safe.removeLast() }
     safe = safe.trimmingCharacters(in: .whitespacesAndNewlines)

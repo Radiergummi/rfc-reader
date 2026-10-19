@@ -33,6 +33,7 @@ struct CollectionExportTests {
   @Test func `a name that would make a path, hide the folder or run too long is made safe`() {
     #expect(CollectionExport.safeName("TLS/QUIC: notes") == "TLS-QUIC- notes")
     #expect(CollectionExport.safeName(". hidden") == "hidden")
+    #expect(CollectionExport.safeName(". .notes") == "notes")
     #expect(CollectionExport.safeName("  ") == "RFCs")
     let long = CollectionExport.safeName(String(repeating: "é", count: 300))
     #expect(long.utf8.count <= 255)

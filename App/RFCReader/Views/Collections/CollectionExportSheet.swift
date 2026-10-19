@@ -145,7 +145,7 @@ struct CollectionExportSheet: View {
     switch export.phase {
     case .choosing:
       Button("Export") { start() }
-        .disabled(entry == nil)
+        .disabled(entry?.rfcNumbers.isEmpty ?? true)
     case .exporting:
       Button("Export") {}.disabled(true)
     case .finished(let report):
@@ -160,7 +160,13 @@ struct CollectionExportSheet: View {
   private func start() {
     guard let entry else { return }
     let plan = CollectionExport(entry, format: format)
-    let paperSize = PrintLayout.paperSize(for: .current)
+    // The paper a single export is laid out for: Page Setup's on the Mac
+    // (`DocumentOutputController`), the region's on iOS (`DocumentOutput`).
+    #if os(macOS)
+      let paperSize = NSPrintInfo.shared.paperSize
+    #else
+      let paperSize = PrintLayout.paperSize(for: .current)
+    #endif
     let library = library
     export.start(plan) { id in
       try await DocumentExport.data(
