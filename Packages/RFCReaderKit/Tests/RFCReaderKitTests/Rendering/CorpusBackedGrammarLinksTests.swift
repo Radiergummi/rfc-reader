@@ -55,6 +55,10 @@ struct CorpusBackedGrammarLinksTests {
     #expect(unresolved.isEmpty, "\(unresolved.prefix(10))")
   }
 
+  @Test func `a document not fetched is refused as not fetched`() {
+    #expect(throws: CorpusXMLError.notFetched("rfc0")) { try CorpusXML.document("rfc0") }
+  }
+
   @Test(arguments: ["rfc9110", "rfc9112"])
   func `a linked grammar's text is unchanged`(stem: String) throws {
     let document = try CorpusXML.document(stem)
