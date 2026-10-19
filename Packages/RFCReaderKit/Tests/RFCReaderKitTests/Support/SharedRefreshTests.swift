@@ -36,6 +36,76 @@ struct SharedRefreshTests {
     #expect(log.events == ["first", "second"])
   }
 
+  /// The index: a person's Retry or pull to refresh, on any network, does not wait
+  /// for the automatic check, which may wait for a cheap network for as long as
+  /// there is none (#983). It cancels it and runs once it has ended.
+  @Test func `a start replaces a replaceable one under way`() async {
+    let refresh = SharedRefresh(name: "Test")
+    let log = Log()
+    let started = Latch()
+    let gate = Latch()
+    let secondGate = Latch()
+    let first = refresh.start(replaceable: true) {
+      started.open()
+      await gate.wait()
+      log.events.append(Task.isCancelled ? "first canceled" : "first ended")
+    }
+    await started.wait()
+    let second = refresh.start {
+      log.events.append("second ran")
+      await secondGate.wait()
+    }
+    #expect(first != second)
+    gate.open()
+    await first.value
+    // The replaced one ending leaves the one that replaced it under way.
+    #expect(refresh.isUnderWay)
+    #expect(refresh.start(replaceable: true) {} == second)
+    secondGate.open()
+    await second.value
+    #expect(log.events == ["first canceled", "second ran"])
+    #expect(!refresh.isUnderWay)
+  }
+
+  /// The index: the automatic check takes a person's refresh under way, which
+  /// takes any network.
+  @Test func `a replaceable start is the one under way`() async {
+    let refresh = SharedRefresh(name: "Test")
+    let log = Log()
+    let started = Latch()
+    let gate = Latch()
+    let first = refresh.start {
+      started.open()
+      await gate.wait()
+      log.events.append(Task.isCancelled ? "first canceled" : "first ended")
+    }
+    await started.wait()
+    let second = refresh.start(replaceable: true) { log.events.append("second ran") }
+    #expect(first == second)
+    gate.open()
+    await first.value
+    #expect(log.events == ["first ended"])
+  }
+
+  /// Two automatic checks of the index are one.
+  @Test func `a replaceable start joins a replaceable one under way`() async {
+    let refresh = SharedRefresh(name: "Test")
+    let log = Log()
+    let started = Latch()
+    let gate = Latch()
+    let first = refresh.start(replaceable: true) {
+      started.open()
+      await gate.wait()
+      log.events.append(Task.isCancelled ? "first canceled" : "first ended")
+    }
+    await started.wait()
+    let second = refresh.start(replaceable: true) { log.events.append("second ran") }
+    #expect(first == second)
+    gate.open()
+    await first.value
+    #expect(log.events == ["first ended"])
+  }
+
   /// The revisions: a background refresh that asks returns only once the file is
   /// in (#191).
   @Test func `joining waits for the one under way to end`() async {
