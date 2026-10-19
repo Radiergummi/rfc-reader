@@ -590,6 +590,7 @@ struct DocumentView: View {
       OriginalTextView(
         text: session.originalText,
         failure: session.originalTextFailure,
+        subject: id.draft == nil ? .originalText : .draft,
         fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
         isShown: showsReaderState,
         tryAgain: { session.startOriginalTextLoad(from: library) }

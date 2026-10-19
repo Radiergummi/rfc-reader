@@ -65,6 +65,12 @@ struct StatusBanner: View {
     }
   }
 
+  /// A revising draft, in this tab, as a link followed in the reader (#728).
+  private func openDraft(_ draft: DraftID) {
+    library.open(
+      .draft(DraftLink(id: draft)), activation: .current, in: navigation, arrival: .citation)
+  }
+
   /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
   /// The whole row is the link to the draft's revision, which the reader opens
   /// (#728). One `Text`, so a narrow banner wraps it as a sentence rather than
@@ -73,7 +79,7 @@ struct StatusBanner: View {
     let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
     let title = Text(line.title).foregroundStyle(Self.link)
     let detail = Text(line.detail).foregroundStyle(.secondary)
-    return RevisingDraftLink(line: line) {
+    return RevisingDraftLink(line: line, open: openDraft) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         symbol("doc.badge.clock").foregroundStyle(.secondary)
         // A key, not verbatim: only a LocalizedStringKey interpolates a styled Text;

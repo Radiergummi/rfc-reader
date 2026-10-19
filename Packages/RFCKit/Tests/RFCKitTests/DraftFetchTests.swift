@@ -87,6 +87,16 @@ struct DraftFetchTests {
     #expect(info.revisions.count == 4)
   }
 
+  @Test func `a revision dated to the microsecond keeps its date`() throws {
+    // Datatracker writes the fraction whenever the time has one.
+    let json = String(decoding: Self.info, as: UTF8.self)
+      .replacingOccurrences(
+        of: #""rev": "01", "published": "2024-09-01T10:00:00+00:00""#,
+        with: #""rev": "01", "published": "2024-09-01T10:00:00.250000+00:00""#)
+    let info = try DraftInfo.decode(Data(json.utf8))
+    #expect(info.revisions[1].published == Date(timeIntervalSince1970: 1_725_184_800.25))
+  }
+
   @Test func `the description is asked of Datatracker, by the draft's name alone`() async throws {
     let archive = Archive([
       "https://datatracker.ietf.org/doc/draft-ietf-example-protocol/doc.json": Self.info

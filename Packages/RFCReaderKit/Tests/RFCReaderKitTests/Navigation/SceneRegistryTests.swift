@@ -71,6 +71,27 @@ struct SceneRegistryTests {
     #expect(delivery.scene === tab)
   }
 
+  /// A draft's link without a revision means the draft, whichever revision a tab
+  /// opened it at: that tab takes it, not the one used last (#728).
+  @Test func `a draft's link without a revision goes to the tab reading that draft`() throws {
+    var registry = registry()
+    let reading = Tab()
+    let recent = Tab()
+    _ = registry.register(reading)
+    _ = registry.register(recent)
+    let shown = ReadableDocument.draft(try #require(DraftID(parsing: "draft-ietf-quic-http-34")))
+    let newest = ReadableLink.draft(
+      DraftLink(id: try #require(DraftID(parsing: "draft-ietf-quic-http"))))
+    guard
+      case .deliver(let delivery) = registry.route(
+        newest, showing: { $0 === reading ? shown : nil })
+    else {
+      Issue.record("the draft's link waited")
+      return
+    }
+    #expect(delivery.scene === reading)
+  }
+
   /// With no tab open, a window is opened for the link, and the tab it makes takes it,
   /// once.
   @Test func `with no tab, the link waits for the tab a new window makes`() {

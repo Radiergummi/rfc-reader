@@ -154,6 +154,16 @@ import SwiftUI
       .onChange(of: navigation.readerPath.root?.document) { _, root in
         if root?.draft != nil { compactColumn = .detail }
       }
+      // Back to the list from a draft at the root: no row's selection is cleared to
+      // hide it, as a row's is, so the reader is hidden here, and opening the draft
+      // again shows it again.
+      .onChange(of: compactColumn) { _, column in
+        if chrome.isCollapsed, column != .detail,
+          navigation.readerPath.root?.document.draft != nil
+        {
+          navigation.selection = nil
+        }
+      }
       // Side by side, the sidebar shows which filter feeds the list.
       .onChange(of: horizontalSizeClass) {
         if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {

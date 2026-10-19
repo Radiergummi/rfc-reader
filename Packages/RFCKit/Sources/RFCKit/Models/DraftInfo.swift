@@ -46,9 +46,14 @@ public struct DraftInfo: Hashable, Sendable, Codable {
   /// Decodes Datatracker's `doc.json` for a draft.
   public static func decode(_ data: Data) throws -> DraftInfo {
     let document = try JSONDecoder().decode(DraftDocumentJSON.self, from: data)
-    let published = ISO8601DateFormatter()
+    // Datatracker writes the seconds' fraction whenever the time has one, which a
+    // formatter reads only when told to, and then only when it is there.
+    let whole = ISO8601DateFormatter()
+    let fractional = ISO8601DateFormatter()
+    fractional.formatOptions.insert(.withFractionalSeconds)
+    let date = { (string: String) in whole.date(from: string) ?? fractional.date(from: string) }
     let revisions = document.revHistory.filter { $0.name == document.name }.map {
-      Revision(revision: $0.rev, published: $0.published.flatMap(published.date(from:)))
+      Revision(revision: $0.rev, published: $0.published.flatMap(date))
     }
     // The history ends with the RFC, named `rfc9110` with that as its revision too.
     let publishedAs = document.revHistory.lazy.compactMap { DocumentID(fileStem: $0.name) }
