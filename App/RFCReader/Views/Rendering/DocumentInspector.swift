@@ -548,6 +548,23 @@ struct ReferencesView: View {
   }
 }
 
+/// A References panel row's preview of its RFC (#580). A view of its own, so that what
+/// it resolves and the size it asks for are worked out when the preview shows, at the
+/// press: iOS's context menu builds its preview's view with the row, before the row
+/// is in a window to be measured against.
+private struct ReferenceRowPreview: View {
+  let entry: Reference
+  let library: LibraryModel
+  let size: () -> CGSize
+  let commit: () -> Void
+
+  var body: some View {
+    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.index) {
+      DocumentPreview(library: library, id: id, place: place, size: size(), commit: commit)
+    }
+  }
+}
+
 /// One entry, as a row rather than the four stacked indented paragraphs the body
 /// used to render: what it is, then who wrote it and when.
 struct ReferenceRow: View {
@@ -613,7 +630,10 @@ struct ReferenceRow: View {
             button.contextMenu {
               menu.items(for: id)
             } preview: {
+              // Opaque, as the reader's own previews are: the preview has no
+              // background of its own, the Mac's popover supplying one.
               documentPreview(library: menu.library) {}
+                .background(Color(uiColor: .systemBackground))
             }
           #endif
         } else {
@@ -653,13 +673,10 @@ struct ReferenceRow: View {
   }
 
   /// What a citation of the entry previews in the prose (#580): the RFC it names.
-  @ViewBuilder
   private func documentPreview(library: LibraryModel, commit: @escaping () -> Void)
     -> some View
   {
-    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.index) {
-      DocumentPreview(library: library, id: id, place: place, size: previewSize(), commit: commit)
-    }
+    ReferenceRowPreview(entry: entry, library: library, size: previewSize, commit: commit)
   }
 
   private var entryDescription: some View {
