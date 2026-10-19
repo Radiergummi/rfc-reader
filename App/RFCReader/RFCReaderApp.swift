@@ -39,6 +39,7 @@ struct RFCReaderApp: App {
         AboutCommands()
         WindowCommands()
         DocumentCommands()
+        HelpCommands()
         #if DEBUG
           DeveloperCommands()
         #endif
@@ -70,6 +71,7 @@ struct RFCReaderApp: App {
       }
       .commands {
         DocumentCommands(library: library)
+        HelpCommands()
       }
       // The daily check of the bookmarked RFCs (#191), which
       // `BookmarkNotifications` schedules while notifications are on.

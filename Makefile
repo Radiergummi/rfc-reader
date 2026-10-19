@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -123,8 +123,9 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 # ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
-# saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
-# run on a Mac only, where the package builds: `test-corpus-app`.
+# saying so, from `CorpusText`, or in RFCReaderKit `CorpusXML`, rather than on a
+# missing file. RFCReaderKit's suites run on a Mac only, where the package builds:
+# `test-corpus-app`.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
@@ -413,9 +414,21 @@ run: build-app
 	  echo "launching $$app"; \
 	  open "$$app"
 
+## Fetch the RFC index the app bundles, for a first launch offline (#770)
+# Into App/Resources, which git ignores, afresh every time: the app dates the bundled
+# index by when it was fetched, so one left from months ago would read as current.
+# project.yml's "Bundle the RFC index" phase copies it into the app; a Release build
+# fails without it, and a Debug build bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+BUNDLED_INDEX := App/Resources/rfc-index.xml
+bundled-index:
+	@mkdir -p $(dir $(BUNDLED_INDEX))
+	$(CURL) --compressed -o $(BUNDLED_INDEX).part https://www.rfc-editor.org/rfc-index.xml && \
+	  mv $(BUNDLED_INDEX).part $(BUNDLED_INDEX)
+
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
-install: build-app
+install: bundled-index build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
@@ -453,7 +466,7 @@ publish-feed:
 TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
-trace: build-app
+trace: bundled-index build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \

@@ -6,6 +6,18 @@ import Testing
 /// back out in its canonical form, and completion for the qualifier being typed.
 @Suite("Search query")
 struct SearchQueryTests {
+  // MARK: - The vocabulary
+
+  /// The help lists the filters from here, so a new one is listed without a hand edit
+  /// of the list (#780).
+  @Test func `the filter names are the grammar's, in its order`() {
+    #expect(
+      SearchQuery.filterNames == [
+        "wg", "status", "author", "stream", "year", "after", "before", "published", "has", "is",
+        "in", "section", "sort",
+      ])
+  }
+
   // MARK: - Round trip
 
   /// Everything `parseQuery` understands comes back out as a query it reads the same
@@ -449,16 +461,29 @@ struct SearchQueryTermTests {
       ])
   }
 
-  /// A list over the results at every space, after every filter taken as a token, or
-  /// on clearing the field would hide them as the reader types.
-  @Test func `a word is offered nothing until it has a letter`() throws {
+  /// A list over the results at every space, or after every filter taken as a token,
+  /// would hide them as the reader types.
+  @Test func `a word is offered nothing after a space or a filter`() throws {
     let index = try Fixtures.sampleIndex()
     #expect(SearchQuery.suggestionsWhileTyping(for: "cache ", in: index).isEmpty)
-    #expect(SearchQuery.suggestionsWhileTyping(for: "", in: index).isEmpty)
+    #expect(SearchQuery.suggestionsWhileTyping(for: "wg:tls ", in: index).isEmpty)
     #expect(
       SearchQuery.suggestionsWhileTyping(for: "cache w", in: index).map(\.completion) == [
         "cache wg:"
       ])
+  }
+
+  /// An empty field is where the syntax is taught (#781): it offers every filter, as
+  /// a word beginning with nothing would be.
+  @Test func `an empty field is offered every filter`() throws {
+    let index = try Fixtures.sampleIndex()
+    let offered = SearchQuery.suggestionsWhileTyping(for: "", in: index)
+    #expect(
+      offered.map(\.completion) == [
+        "wg:", "status:", "author:", "stream:", "year:", "after:", "before:", "published:",
+        "has:xml", "is:", "in:", "section:", "sort:",
+      ])
+    #expect(offered.allSatisfy { !$0.isUnknown })
   }
 
   /// What the suggestion list shows: the word completed, not the whole query.

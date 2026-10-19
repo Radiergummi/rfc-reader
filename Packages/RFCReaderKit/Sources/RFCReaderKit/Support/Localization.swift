@@ -8,10 +8,19 @@ extension String {
   /// and resolve German on purpose (decision "The app's chrome is localized, the
   /// reader body is not").
   init(kit key: String.LocalizationValue, locale: Locale) {
-    var resource = LocalizedStringResource(key, bundle: .atURL(Bundle.module.bundleURL))
+    var resource = LocalizedStringResource(key, bundle: .kit)
     resource.locale = locale
     self.init(localized: resource)
   }
+}
+
+extension LocalizedStringResource.BundleDescription {
+  /// RFCReaderKit's own bundle, whose catalog `String(kit:locale:)` looks keys up in.
+  /// A key that needs a comment for its translator, such as one made only of
+  /// placeholders, is a `LocalizedStringResource` written with this bundle and the
+  /// locale at the call site: the compiler records the comment of one written
+  /// there, but not one passed through `String(kit:locale:)`.
+  static var kit: Self { .atURL(Bundle.kit.bundleURL) }
 }
 
 extension Bundle {

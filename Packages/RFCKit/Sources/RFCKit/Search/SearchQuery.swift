@@ -86,6 +86,9 @@ public enum SearchQuery {
     }
   }
 
+  /// Every filter's name, in the grammar's order: what the help lists (#780).
+  public static var filterNames: [String] { Qualifier.allCases.map(\.name) }
+
   /// A `status:` value, with the long spellings it is also read by, and the statuses
   /// it stands for. `current` is not a status but the obsolete filter, and has none.
   struct StatusValue: Sendable {
@@ -633,11 +636,11 @@ public enum SearchQuery {
   }
 
   /// The completions a search field shows as the reader types: `suggestions(for:in:)`,
-  /// only once a word has been begun. A list over the results at every space, after
-  /// every filter taken as a token, or on clearing the field would hide them while
-  /// the reader types.
+  /// only once a word has been begun, or every filter while the field is empty, which
+  /// is where the syntax is taught (#781). A list over the results at every space, or
+  /// after every filter taken as a token, would hide them while the reader types.
   public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
-    guard wordBeingTyped(in: query) != nil else { return [] }
+    guard query.isEmpty || wordBeingTyped(in: query) != nil else { return [] }
     return suggestions(for: query, in: index)
   }
 
