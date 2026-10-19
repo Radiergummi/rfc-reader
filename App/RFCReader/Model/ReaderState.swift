@@ -30,6 +30,11 @@ final class ReaderState {
   /// Where the build on screen placed each of the document's highlights (#522), which
   /// the Annotations tab lists: nil until a build has, or when there is none.
   var highlightStatuses: [UUID: HighlightPlacement.Status]?
+  /// Where it placed each of the document's notes (#523): nil as for the highlights.
+  var notePlacement: NotePlacement?
+  /// A note's editor asked for from the panel (#523): the Annotations tab, or a
+  /// section's row in the contents. The reader on screen takes it to its text view.
+  var noteRequest: NoteRequest?
   /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
   var exportFormats: [ExportFormat] = ExportFormat.everyDocument
@@ -323,6 +328,11 @@ final class ReaderState {
     openPanel()
   }
 
+  /// Opens a note's editor in the reader on screen.
+  func openNote(_ request: NoteRequest) {
+    noteRequest = request
+  }
+
   func clear() {
     titleOwnership.close()
     sections = []
@@ -330,6 +340,8 @@ final class ReaderState {
     groups = []
     requirements = nil
     highlightStatuses = nil
+    notePlacement = nil
+    noteRequest = nil
     exportFormats = ExportFormat.everyDocument
     folding.expanded = []
     folding.openAsides = []

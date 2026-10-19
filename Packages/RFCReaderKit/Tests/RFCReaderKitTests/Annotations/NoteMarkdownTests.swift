@@ -102,7 +102,9 @@ struct NoteMarkdownTests {
 
   @Test func `what lies outside the scope becomes paragraphs of its text`() {
     let body = NoteBody(
-      markdown: "# A heading\n\n> quoted\n\n```\nlet x\n```\n\n| a | b |\n|---|---|\n| c | d |\n\n![alt](i.png)")
+      markdown:
+        "# A heading\n\n> quoted\n\n```\nlet x\n```\n\n| a | b |\n|---|---|\n| c | d |\n\n![alt](i.png)"
+    )
     #expect(
       body
         == NoteBody([

@@ -88,7 +88,7 @@ public enum NoteText {
     if span.style.contains(.emphasis) { traits.append(.italic) }
     let base =
       span.style.contains(.code)
-      ? PlatformFont.monospacedSystemFont(ofSize: font.pointSize, weight: .regular) : font
+      ? PlatformFont.monospacedFont(ofSize: font.pointSize, weight: .regular) : font
     attributes[.font] = withTraits(traits, of: base)
     if span.style.contains(.strikethrough) {
       attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
@@ -122,7 +122,7 @@ public enum NoteText {
         ? text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil)
           as? NSParagraphStyle : nil
       let lists = style?.textLists ?? []
-      var levels: [NoteBody.Leaf.Level] = []
+      var levels: [NoteBody.LeafLevel] = []
       for (depth, list) in lists.enumerated() {
         let isLast = depth == lists.count - 1
         if !isLast, depth < open.count, open[depth].list === list {
@@ -133,7 +133,7 @@ public enum NoteText {
           nextItem += 1
         }
         levels.append(
-          NoteBody.Leaf.Level(
+          NoteBody.LeafLevel(
             list: ObjectIdentifier(list), isOrdered: isOrdered(list), item: open[depth].item))
       }
       open.removeSubrange(min(lists.count, open.count)...)
@@ -279,12 +279,17 @@ public enum NoteText {
       guard first.location > 0 else { return nil }
       return textLists(of: text, at: NSRange(location: first.location - 1, length: 0)).first
     }
-    let list = before.flatMap { isOrdered($0) == ordered ? $0 : nil } ?? newList(ordered: ordered, depth: 0)
+    let list =
+      before.flatMap { isOrdered($0) == ordered ? $0 : nil } ?? newList(ordered: ordered, depth: 0)
     for (paragraph, current) in zip(paragraphs, lists) {
       let next: [NSTextList] =
-        isOn ? Array(current.dropLast()) : current.isEmpty ? [list] : current.dropLast() + [
-          newList(ordered: ordered, depth: current.count - 1)
-        ]
+        isOn
+        ? Array(current.dropLast())
+        : current.isEmpty
+          ? [list]
+          : current.dropLast() + [
+            newList(ordered: ordered, depth: current.count - 1)
+          ]
       setLists(next, in: text, paragraph: paragraph, font: font)
     }
   }
@@ -314,11 +319,13 @@ public enum NoteText {
       markerFormat: ordered ? .decimal : depth.isMultiple(of: 2) ? .disc : .circle, options: 0)
   }
 
-  private static func textLists(of text: NSAttributedString, at paragraph: NSRange) -> [NSTextList] {
+  private static func textLists(of text: NSAttributedString, at paragraph: NSRange)
+    -> [NSTextList]
+  {
     guard text.length > 0 else { return [] }
     let location = min(paragraph.location, text.length - 1)
-    return (text.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)?
-      .textLists ?? []
+    let style = text.attribute(.paragraphStyle, at: location, effectiveRange: nil)
+    return (style as? NSParagraphStyle)?.textLists ?? []
   }
 
   private static func setLists(
@@ -331,7 +338,9 @@ public enum NoteText {
   }
 
   /// The paragraphs `range` touches, each with its line end.
-  private static func paragraphs(of text: NSAttributedString, touching range: NSRange) -> [NSRange] {
+  private static func paragraphs(of text: NSAttributedString, touching range: NSRange)
+    -> [NSRange]
+  {
     let string = text.string as NSString
     var result: [NSRange] = []
     var location = range.location

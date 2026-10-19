@@ -97,14 +97,15 @@ extension NoteBody {
   /// outermost first, each with the item it is in. What the Markdown parser and the
   /// editor's text both reduce to, so one builder makes the tree from either.
   struct Leaf {
-    struct Level {
-      let list: AnyHashable
-      let isOrdered: Bool
-      let item: AnyHashable
-    }
-
-    var levels: [Level]
+    var levels: [LeafLevel]
     var spans: [Span]
+  }
+
+  /// A list a paragraph is nested in, and the item of it the paragraph is in.
+  struct LeafLevel {
+    let list: AnyHashable
+    let isOrdered: Bool
+    let item: AnyHashable
   }
 
   init(leaves: [Leaf]) {

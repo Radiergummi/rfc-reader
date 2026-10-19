@@ -58,8 +58,8 @@ extension NoteBody {
   }
 
   /// The lists a block is nested in, outermost first, each with its item.
-  private static func levels(_ components: [PresentationIntent.IntentType]) -> [Leaf.Level] {
-    var levels: [Leaf.Level] = []
+  private static func levels(_ components: [PresentationIntent.IntentType]) -> [LeafLevel] {
+    var levels: [LeafLevel] = []
     var item: Int?
     // Innermost first: an item comes before the list that holds it.
     for component in components {
@@ -69,7 +69,7 @@ extension NoteBody {
       case .orderedList, .unorderedList:
         let isOrdered = if case .orderedList = component.kind { true } else { false }
         levels.append(
-          Leaf.Level(
+          LeafLevel(
             list: component.identity, isOrdered: isOrdered, item: item ?? component.identity))
         item = nil
       default:
@@ -95,7 +95,9 @@ extension NoteBody {
       let marker = list.isOrdered ? "\(index + 1). " : "- "
       let inner = indent + String(repeating: " ", count: marker.count)
       let text = inline(item.spans, indent: inner)
-      lines.append(text.isEmpty ? indent + marker.trimmingCharacters(in: .whitespaces) : indent + marker + text)
+      lines.append(
+        text.isEmpty ? indent + marker.trimmingCharacters(in: .whitespaces) : indent + marker + text
+      )
       for nested in item.lists {
         lines.append(markdown(nested, indent: inner))
       }

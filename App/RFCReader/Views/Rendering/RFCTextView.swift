@@ -77,6 +77,7 @@ struct RFCTextView: View {
         // Read here, where it is observed: a highlight made or changed draws again.
         // An RFC's only: a draft has none (#728).
         highlights: inputs.document.rfc.map(library.annotations.highlights(of:)) ?? [],
+        notes: inputs.document.rfc.map(library.annotations.notes(of:)) ?? [],
         width: geometry.size.width)
     }
   }
@@ -240,8 +241,9 @@ struct ReaderInputs {
     let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
-    /// The document's highlights (#522).
+    /// The document's highlights (#522) and notes (#523).
     let highlights: [AnnotationSnapshot.HighlightEntry]
+    let notes: [AnnotationSnapshot.NoteEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -342,7 +344,7 @@ struct ReaderInputs {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(
         settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
-      context.coordinator.setHighlights(highlights)
+      context.coordinator.setAnnotations(highlights: highlights, notes: notes)
       // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
       // the reader on screen's.
       let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
@@ -374,8 +376,9 @@ struct ReaderInputs {
     let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
-    /// The document's highlights (#522).
+    /// The document's highlights (#522) and notes (#523).
     let highlights: [AnnotationSnapshot.HighlightEntry]
+    let notes: [AnnotationSnapshot.NoteEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -497,6 +500,15 @@ struct ReaderInputs {
       textView.clickedText = { [weak coordinator = context.coordinator] event in
         coordinator?.clickedText(event)
       }
+      textView.addNote = { [weak coordinator = context.coordinator] range in
+        coordinator?.addNote(onSelection: range)
+      }
+      textView.noteBlock = { [weak coordinator = context.coordinator] location in
+        coordinator?.noteBlock(at: location)
+      }
+      textView.addNoteOnBlock = { [weak coordinator = context.coordinator] block, location in
+        coordinator?.addNote(on: block, at: location)
+      }
 
       let host = NSHostingController(
         rootView: context.coordinator.hostedHeader(inputs.header, in: environment))
@@ -531,7 +543,7 @@ struct ReaderInputs {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(
         settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
-      context.coordinator.setHighlights(highlights)
+      context.coordinator.setAnnotations(highlights: highlights, notes: notes)
       // Not a preview's: the menus' section commands are the reader on screen's.
       if inputs.isShown, inputs.commitsOnClick == nil {
         environment.reader.keyboardReader = context.coordinator
