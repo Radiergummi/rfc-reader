@@ -33,7 +33,7 @@ public enum AnnotationExport {
       }
     }
 
-    let writer = Writer(document: document, id: id, model: model)
+    let writer = Writer(document: document, id: id)
     var placed: [Placed] = []
     var unplaced: [String] = []
     for highlight in highlights {
@@ -42,7 +42,8 @@ public enum AnnotationExport {
       case .placed(let range, _, let section)?:
         placed.append(
           Placed(
-            start: range.lowerBound, isSectionNote: false, section: section,
+            start: range.lowerBound, isSectionNote: false, createdAt: highlight.createdAt,
+            section: section,
             text: writer.highlight(quote: model.text(in: range), section: section, notes: notes)))
       case .ambiguous?:
         if !notes.isEmpty {
@@ -55,11 +56,16 @@ public enum AnnotationExport {
     }
     for note in ownNotes {
       if case .placed(let range, let section)? = notePlacement.statuses[note.id] {
+        // A section's note sits under its heading; a block's says which block, as a
+        // highlight does.
         let isSection = if case .section? = note.current { true } else { false }
         placed.append(
           Placed(
-            start: range.lowerBound, isSectionNote: isSection, section: section,
-            text: writer.body(of: note)))
+            start: range.lowerBound, isSectionNote: isSection, createdAt: note.createdAt,
+            section: section,
+            text: isSection
+              ? writer.body(of: note)
+              : writer.highlight(quote: model.text(in: range), section: section, notes: [note])))
       } else {
         let quote = if case .range(_, _, let quote)? = note.target { quote.exact } else { "" }
         unplaced.append(writer.highlight(quote: quote, section: nil, notes: [note]))
@@ -68,12 +74,13 @@ public enum AnnotationExport {
 
     var parts = [frontMatter(document: document, id: id, exported: exported, timeZone: timeZone)]
     var section: String??
-    // Stable, so the annotations of one place keep the order they were made in; a
-    // section's own note ahead of whatever starts with it.
-    for item in placed.enumerated().sorted(by: {
-      ($0.element.start, $0.element.isSectionNote ? 0 : 1, $0.offset)
-        < ($1.element.start, $1.element.isSectionNote ? 0 : 1, $1.offset)
-    }).map(\.element) {
+    // The annotations of one place in the order they were made, a section's own note
+    // ahead of whatever starts with it.
+    for item in placed.sorted(by: {
+      ($0.start, $0.isSectionNote ? 0 : 1, $0.createdAt) < (
+        $1.start, $1.isSectionNote ? 0 : 1, $1.createdAt
+      )
+    }) {
       if section != .some(item.section) {
         section = item.section
         if let heading = writer.heading(of: item.section) { parts.append(heading) }
@@ -94,6 +101,7 @@ public enum AnnotationExport {
     let start: Int
     /// Whether it is a note on its section, which comes ahead of what starts with it.
     let isSectionNote: Bool
+    let createdAt: Date
     /// The section, or the abstract, it starts in.
     let section: String?
     let text: String
@@ -128,14 +136,13 @@ public enum AnnotationExport {
   private struct Writer {
     let document: RFCDocument
     let id: DocumentID
-    let model: ModelText
 
     /// The heading of the section, or the abstract, whose anchor is `anchor`; nil for
     /// none.
     func heading(of anchor: String?) -> String? {
       guard let anchor else { return nil }
       if anchor == ModelText.abstractAnchor { return "## Abstract" }
-      return document.section(anchor: anchor).map { "## \($0.displayTitle)" }
+      return document.section(anchor: anchor).map { "## " + Self.escaped($0.displayTitle) }
     }
 
     /// A quote, cited from `section` when it has a place, then `notes`' bodies.
@@ -158,14 +165,42 @@ public enum AnnotationExport {
       return CitationFormatter.cite(metadata, section: place, style: .markdown)
     }
 
-    /// Each line its own paragraph of the quote. A `<` is an entity, as Copy as Quote
-    /// writes it, or a Markdown renderer takes `<field-name>` for a tag.
-    private static func blockQuote(_ text: String) -> String {
-      text.components(separatedBy: "\n")
-        .map { $0.trimmingCharacters(in: .whitespaces) }
-        .filter { !$0.isEmpty }
-        .map { "> " + $0.replacingOccurrences(of: "<", with: "&lt;") }
-        .joined(separator: "\n>\n")
+    /// The quote, as Copy as Quote writes one. Prose is a paragraph a line, with a
+    /// `<` as an entity, or a Markdown renderer takes `<field-name>` for a tag. A quote
+    /// with an indented line is of a figure, code or a grammar, whose columns and
+    /// lines are its meaning: fenced, with its lines as they are, so Markdown neither
+    /// reflows them nor reads them as its own.
+    static func blockQuote(_ text: String) -> String {
+      let lines = text.components(separatedBy: "\n").map(trimmingTrailingSpaces)
+      let isVerbatim = lines.contains { $0.first == " " || $0.first == "\t" }
+      guard isVerbatim else {
+        return lines.filter { !$0.isEmpty }
+          .map { "> " + escaped($0) }
+          .joined(separator: "\n>\n")
+      }
+      // Longer than any run of backticks in it, or a line of it would close the fence.
+      var longest = 0
+      for line in lines {
+        var run = 0
+        for character in line {
+          run = character == "`" ? run + 1 : 0
+          longest = max(longest, run)
+        }
+      }
+      let fence = String(repeating: "`", count: max(3, longest + 1))
+      return ([fence] + lines + [fence]).map { $0.isEmpty ? ">" : "> " + $0 }
+        .joined(separator: "\n")
+    }
+
+    private static func trimmingTrailingSpaces(_ line: String) -> String {
+      var line = line
+      while line.last == " " || line.last == "\t" { line.removeLast() }
+      return line
+    }
+
+    /// Prose with its `<` an entity.
+    private static func escaped(_ text: String) -> String {
+      text.replacingOccurrences(of: "<", with: "&lt;")
     }
 
     /// A note's Markdown, with its `rfc://` links made rfc-editor.org ones.
@@ -189,10 +224,11 @@ public enum AnnotationExport {
         })
     }
 
+    /// An `rfc://` link as the RFC Editor's, or as plain text when it names nothing
+    /// there, since outside the app it would lead nowhere.
     private static func webLink(_ span: NoteBody.Span) -> NoteBody.Span {
-      guard let url = span.link, url.scheme == RFCLink.scheme, let link = RFCLink(url: url)
-      else { return span }
-      return NoteBody.Span(span.text, style: span.style, link: link.webURL)
+      guard let url = span.link, url.scheme == RFCLink.scheme else { return span }
+      return NoteBody.Span(span.text, style: span.style, link: RFCLink(url: url)?.webURL)
     }
   }
 }
