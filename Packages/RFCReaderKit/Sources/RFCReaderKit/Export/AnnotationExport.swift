@@ -87,16 +87,25 @@ public enum AnnotationExport {
       if section != .some(item.section) {
         section = item.section
         if let heading = writer.heading(of: item.section) { parts.append(heading) }
+      } else {
+        parts.append(Self.entryBreak)
       }
       parts.append(item.text)
     }
     if !unplaced.isEmpty {
       parts.append("## Not placed")
-      parts.append(contentsOf: unplaced)
+      parts.append(unplaced.joined(separator: "\n\n" + Self.entryBreak + "\n\n"))
     }
-    if parts.count == 1 { parts.append("No highlights or notes.") }
+    // Not where there are only ambiguous highlights without notes, which are left out.
+    if highlights.isEmpty && notes.isEmpty { parts.append("No highlights or notes.") }
     return parts.joined(separator: "\n\n") + "\n"
   }
+
+  /// Between two entries under one heading, and two notes of one highlight, so that
+  /// a note's list does not run on into the next one's, nor a quote-less note read as
+  /// the entry before's. Parts are joined by a blank line, so it is never taken for a
+  /// heading's underline.
+  static let entryBreak = "---"
 
   /// What a quote says, and whether it is a figure's or code's, whose lines are kept as
   /// they are; nil where only the stored quote is known, which says so by an indented
@@ -183,7 +192,10 @@ public enum AnnotationExport {
       var parts: [String] = []
       if !quote.text.isEmpty { parts.append(Self.blockQuote(quote)) }
       if let section { parts.append("— " + citation(of: section)) }
-      parts.append(contentsOf: notes.map(body(of:)))
+      if !notes.isEmpty {
+        parts.append(
+          notes.map(body(of:)).joined(separator: "\n\n" + AnnotationExport.entryBreak + "\n\n"))
+      }
       return parts.joined(separator: "\n\n")
     }
 

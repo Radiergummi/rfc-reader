@@ -177,6 +177,45 @@ struct AnnotationExportTests {
     #expect(markdown.components(separatedBy: "\n").filter { $0 == heading }.count == 1)
   }
 
+  /// Where a thematic break stands among the export's lines, after the front matter's
+  /// closing one.
+  private func breaks(in markdown: String) -> [Int] {
+    let lines = markdown.components(separatedBy: "\n")
+    return lines.indices.filter { $0 > 4 && lines[$0] == "---" }
+  }
+
+  @Test func `two highlights in one section are set apart by a thematic break`() throws {
+    let markdown = export([
+      try highlight("Version", in: longHeader, minute: 0),
+      try highlight("remainder", in: longHeader, minute: 1),
+    ])
+    let lines = markdown.components(separatedBy: "\n")
+    let citations = lines.indices.filter { lines[$0] == longHeaderCitation }
+    try #require(citations.count == 2)
+    let between = breaks(in: markdown).filter { citations[0] < $0 && $0 < citations[1] }
+    #expect(between.count == 1)
+    // After a blank line, so it is no heading's underline.
+    #expect(between.allSatisfy { lines[$0 - 1].isEmpty })
+    // Nothing between a heading and what is under it.
+    let heading = try line(try heading(longHeader), in: markdown)
+    #expect(breaks(in: markdown).allSatisfy { $0 > heading + 1 })
+  }
+
+  @Test func `two notes on one highlight are set apart, so two lists stay two`() throws {
+    let highlight = try highlight("Version", in: longHeader)
+    let markdown = export(
+      [highlight],
+      notes: [
+        note("- one", on: highlight, minute: 1), note("- two", on: highlight, minute: 2),
+      ])
+    let lines = markdown.components(separatedBy: "\n")
+    let first = try line("- one", in: markdown)
+    let second = try line("- two", in: markdown)
+    let between = breaks(in: markdown).filter { first < $0 && $0 < second }
+    #expect(between.count == 1)
+    #expect(between.allSatisfy { lines[$0 - 1].isEmpty })
+  }
+
   // MARK: Notes of their own
 
   @Test func `a section note sits under its heading, ahead of the section's highlights`() throws {
@@ -319,7 +358,8 @@ struct AnnotationExportTests {
     throws
   {
     let ambiguous = highlight(lost("Connection ID"), minute: 0)
-    #expect(export([ambiguous]).contains("No highlights or notes."))
+    // There is a highlight, so the file does not say there is none.
+    #expect(!export([ambiguous]).contains("No highlights or notes."))
 
     let markdown = export([ambiguous], notes: [note("Which one?", on: ambiguous, minute: 1)])
     let notPlaced = try line("## Not placed", in: markdown)
