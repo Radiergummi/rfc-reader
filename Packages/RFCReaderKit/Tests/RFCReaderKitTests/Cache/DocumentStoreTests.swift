@@ -72,12 +72,17 @@ struct DocumentStoreTests {
 
     /// A store whose disk has `freeSpace` bytes left for each tier, or as much as
     /// the real volume has when that is nil, and which awaits `parsing` at the start
-    /// of each look at the disk for a body to parse.
+    /// of each look at the disk for a body to parse. It keeps parsed documents encoded
+    /// only when given a `build` to key them by, so no other test finds a file it did
+    /// not write (#606).
     func store(
       freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
-      parsing: (@Sendable () async -> Void)? = nil
+      parsing: (@Sendable () async -> Void)? = nil,
+      build: String? = nil
     ) -> DocumentStore {
-      DocumentStore(directory: directory, caches: caches, freeSpace: freeSpace, parsing: parsing)
+      DocumentStore(
+        directory: directory, caches: caches, freeSpace: freeSpace, parsing: parsing,
+        build: build)
     }
 
     /// Where the store keeps `id`'s body in `format`, in `tier`.
@@ -88,6 +93,12 @@ struct DocumentStoreTests {
         case .cache: caches.appending(path: "Documents", directoryHint: .isDirectory)
         }
       return folder.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
+    }
+
+    /// Where the store keeps `id`'s parsed document encoded, beside its body in `tier`.
+    func model(_ id: DocumentID, in tier: StorageTier = .cache) -> URL {
+      file(id, format: .xml, in: tier).deletingLastPathComponent()
+        .appending(path: DocumentCacheIndex.modelFileName(for: id))
     }
 
     func exists(_ id: DocumentID, format: FileFormat, in tier: StorageTier) -> Bool {

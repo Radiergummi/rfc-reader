@@ -14,7 +14,8 @@ private let signposter = OSSignposter(
   category: .pointsOfInterest
 )
 
-/// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
+/// On-disk cache of raw RFC files plus an in-memory cache of parsed documents, and
+/// each body's parse kept encoded beside it for the next launch (#606).
 ///
 /// Files are stored exactly as served by the RFC Editor, so the "original text"
 /// view and re-parsing after a parser improvement both come for free.
@@ -49,10 +50,19 @@ public actor DocumentStore {
 
   /// A document as parsed, with the index entry its parse was given: nil for one
   /// parsed before the index arrived, or read from XML, which takes none (#767).
-  private struct Parse: Sendable {
+  private struct Parse: Sendable, Codable {
     let document: RFCDocument
     let entry: RFCMetadata?
   }
+
+  /// The app's build, which keys the parses kept encoded beside their bodies (#606):
+  /// a model written by another build is parsed again, whatever in the model or a
+  /// parser changed between them. Nil keeps none, as in tests that do not ask for them.
+  /// See `appBuild`.
+  private let build: String?
+
+  /// The last model write, which the next one waits for, as snapshots do.
+  private var modelWrite: Task<Void, Never>?
 
   /// Which bodies are in each tier, scanned once on first use and kept current by
   /// every write, move and removal below, so asking does not enumerate a directory.
@@ -86,7 +96,7 @@ public actor DocumentStore {
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
   /// A pack installed meanwhile marks the parses of the documents it serves as a
   /// removal does, so none of them is kept.
-  private let parses = InFlightDownloads<Parse?>()
+  private let parses = InFlightDownloads<Read?>()
   /// How many removals each document has had, so a download started again for a
   /// reader whose joined one the path refused knows whether one came meanwhile.
   private var removals: [DocumentID: Int] = [:]
@@ -154,17 +164,31 @@ public actor DocumentStore {
   public init(
     directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)? = nil
   ) {
-    self.init(directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil)
+    self.init(
+      directory: directory, caches: caches, freeSpace: freeSpace, parsing: nil,
+      build: Self.appBuild)
+  }
+
+  /// The app's build number, `CFBundleVersion`, and when its executable was built:
+  /// every local build is build 1 (`project.yml`), and a parser changed in one must
+  /// still reach the documents an earlier one parsed.
+  private static var appBuild: String? {
+    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    else { return nil }
+    let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
+    return built.map { "\(number) \($0.timeIntervalSinceReferenceDate)" } ?? number
   }
 
   /// The store above, with `parsing` awaited at the start of each look at the disk
   /// for a body to parse, once it has chosen which files to read, whether or not one
-  /// is there: for a test to hold the parse open as it holds a fetch.
+  /// is there: for a test to hold the parse open as it holds a fetch. `build` keys the
+  /// parses kept encoded, and nil keeps none.
   init(
     directory: URL, caches: URL, freeSpace: (@Sendable (StorageTier) -> Int?)?,
-    parsing: (@Sendable () async -> Void)?
+    parsing: (@Sendable () async -> Void)?, build: String?
   ) {
     self.parsing = parsing
+    self.build = build
     (bodiesChanged, bodiesChangedContinuation) = AsyncStream.makeStream(
       bufferingPolicy: .bufferingNewest(1))
     let keptDirectory = directory.appending(path: "Offline", directoryHint: .isDirectory)
@@ -498,6 +522,13 @@ public actor DocumentStore {
     Self.tiers.map { fileURL(id, format: format, in: $0) }
   }
 
+  /// Every file the store keeps of `id` in a tier: its bodies, and the model of the
+  /// one parsed (#606), which is moved and removed with them.
+  private static func fileNames(of id: DocumentID) -> [String] {
+    DocumentCacheIndex.bodyFormats.map { DocumentCacheIndex.fileName(for: id, format: $0) }
+      + [DocumentCacheIndex.modelFileName(for: id)]
+  }
+
   /// Runs `change`, which writes, moves or deletes `id`'s bodies in `tier`, and
   /// records what that tier holds afterwards; see `DocumentCacheIndex.update`.
   private func update(_ id: DocumentID, in tier: StorageTier, by change: () throws -> Void)
@@ -582,7 +613,7 @@ public actor DocumentStore {
     parses.removed(id)
     parsed.removeAll { $0 == id }
     for tier in tiers {
-      let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0, in: tier) }
+      let urls = Self.fileNames(of: id).map { folder(of: tier).appending(path: $0) }
       update(id, in: tier) {
         for url in urls {
           try? FileManager.default.removeItem(at: url)
@@ -656,10 +687,10 @@ public actor DocumentStore {
     let files = FileManager.default
     try createFolder(of: tier)
     try update(id, in: tier) {
-      for format in DocumentCacheIndex.bodyFormats {
-        let origin = fileURL(id, format: format, in: source)
+      for name in Self.fileNames(of: id) {
+        let origin = folder(of: source).appending(path: name)
         guard files.fileExists(atPath: origin.path) else { continue }
-        let destination = fileURL(id, format: format, in: tier)
+        let destination = folder(of: tier).appending(path: name)
         guard files.fileExists(atPath: destination.path) else {
           try files.moveItem(at: origin, to: destination)
           continue
@@ -668,7 +699,10 @@ public actor DocumentStore {
           .appending(path: ".\(UUID().uuidString)-\(destination.lastPathComponent)")
         try files.moveItem(at: origin, to: incoming)
         do {
-          _ = try files.replaceItemAt(destination, withItemAt: incoming)
+          // With the incoming body's own creation date, which keys its model (#606):
+          // by default the one replaced keeps its date, and so its model would match.
+          _ = try files.replaceItemAt(
+            destination, withItemAt: incoming, options: .usingNewMetadataOnly)
         } catch {
           try? files.removeItem(at: incoming)
           throw error
@@ -682,19 +716,22 @@ public actor DocumentStore {
 
   /// Writes `data` as `id`'s body in `format`, in the tier it belongs in, when the
   /// disk has room for it there; see `StorageTier.hasRoom`. A body with no room is
-  /// not written, and the document is fetched again on its next open.
-  private func write(_ data: Data, for id: DocumentID, format: FileFormat) throws {
+  /// not written, and the document is fetched again on its next open. Answers where
+  /// it was written.
+  @discardableResult
+  private func write(_ data: Data, for id: DocumentID, format: FileFormat) throws -> URL? {
     // A body already kept stays where it is until the reconciler releases it.
     let tier = isKept(id) ? .kept : StorageTier.of(id, wanted: wanted.union(keeping))
     guard tier.hasRoom(for: data.count, available: freeSpace(tier)) else {
       storeLog.notice(
         "\(id.displayName, privacy: .public): not written, the disk is too full")
-      return
+      return nil
     }
     let url = fileURL(id, format: format, in: tier)
     try createFolder(of: tier)
     try update(id, in: tier) { try data.write(to: url, options: .atomic) }
     if tier == .cache { hasGrown = true }
+    return url
   }
 
   /// Makes `tier`'s folder again when it is gone: the system purges Caches while
@@ -758,7 +795,8 @@ public actor DocumentStore {
       xml: fileURLs(id, format: .xml), pack: legacyPack?.file(for: id),
       text: fileURLs(id, format: .text))
     return await Self.parseCached(
-      id, from: bodies, entry: nil, signpostID: signposter.makeSignpostID())?.document
+      id, from: bodies, entry: nil, build: build, signpostID: signposter.makeSignpostID()
+    )?.parse.document
   }
 
   /// `id` as the installed legacy pack holds it, parsed, for Index All RFCs (#37);
@@ -766,8 +804,8 @@ public actor DocumentStore {
   public func packDocument(_ id: DocumentID) async -> RFCDocument? {
     guard let pack = legacyPack?.file(for: id) else { return nil }
     return await Self.parseCached(
-      id, from: Bodies(xml: [], pack: pack, text: []), entry: nil,
-      signpostID: signposter.makeSignpostID())?.document
+      id, from: Bodies(xml: [], pack: pack, text: []), entry: nil, build: nil,
+      signpostID: signposter.makeSignpostID())?.parse.document
   }
 
   /// Those of `ids` the installed legacy pack holds; none when no pack is installed.
@@ -840,10 +878,13 @@ public actor DocumentStore {
     // A removal while this was in flight, or another reader of the same fetch has
     // kept it: the document is shown, and not written here (#116).
     guard isKept else { return parse }
-    try write(fetched.data, for: id, format: fetched.format)
+    let body = try write(fetched.data, for: id, format: fetched.format)
     // A pack installed while this was in flight serves the document from now on.
     if legacyPack?.file(for: id) == nil {
       parsed.store(parse, for: id)
+      if let body, let created = Self.creationDate(of: body) {
+        writeModel(of: Read(parse: parse, body: body, created: created), for: id)
+      }
     }
     return parse
   }
@@ -860,16 +901,124 @@ public actor DocumentStore {
     let textURLs = fileURLs(id, format: .text)
     let packURL = legacyPack?.file(for: id)
     let parsing = parsing
+    let build = build
     let (cached, isCachedKept) = try await parses.value(for: id) {
       Task {
         await parsing?()
         return await Self.parseCached(
           id, from: Bodies(xml: xmlURLs, pack: packURL, text: textURLs), entry: entry,
-          signpostID: signpostID)
+          build: build, signpostID: signpostID)
       }
     }
-    if let cached, isCachedKept { parsed.store(cached, for: id) }
-    return cached
+    if let cached, isCachedKept {
+      parsed.store(cached.parse, for: id)
+      writeModel(of: cached, for: id)
+    }
+    return cached?.parse
+  }
+
+  /// A parse read from the disk, with the body it was read from and that body's
+  /// creation date when it was parsed rather than decoded, for its model to be
+  /// written; nil for one decoded or read from the pack.
+  private struct Read: Sendable {
+    let parse: Parse
+    let body: URL?
+    let created: Date?
+  }
+
+  /// A parse kept encoded beside its body (#606), with what it was made under: the
+  /// app's build, and the creation date of the body it was parsed from, which a body
+  /// written again does not keep. Either differing, it is parsed again.
+  private struct Model: Codable {
+    let build: String
+    let body: Date
+    let parse: Parse
+  }
+
+  /// Writes `read`'s model beside its body, off the actor, after the last model
+  /// write: decoding it is at least twice as fast as parsing either format again
+  /// ("Decode JSON" against "Parse XML" and "Parse text" in `make benchmark`;
+  /// docs/decisions/2026-10-18-a-parsed-document-is-kept-encoded-beside-its-body.md).
+  private func writeModel(of read: Read, for id: DocumentID) {
+    guard let build, let body = read.body, let created = read.created else { return }
+    let model = Model(build: build, body: created, parse: read.parse)
+    let removalsBefore = removals[id]
+    modelWrite = Task(name: "Write document model") { [modelWrite] in
+      await modelWrite?.value
+      guard let data = await Self.encode(model) else { return }
+      write(data, of: id, beside: body, removalsBefore: removalsBefore)
+    }
+  }
+
+  @concurrent
+  private static func encode(_ model: Model) async -> Data? {
+    let interval = signposter.beginInterval("Encode document model")
+    defer { signposter.endInterval("Encode document model", interval) }
+    do {
+      return try JSONEncoder().encode(model)
+    } catch {
+      storeLog.error(
+        "encoding a document model failed: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  /// Written on the actor, so a removal cannot come between the check and the write:
+  /// a body removed, or moved, while its model was encoded gets none, which would be
+  /// left behind it. Like a body, only where the disk has room for it, and a model
+  /// written into the cache grows it. Recorded in the tier's index, so the write does
+  /// not make the next question scan the folder again.
+  private func write(_ data: Data, of id: DocumentID, beside body: URL, removalsBefore: Int?) {
+    guard removals[id] == removalsBefore, FileManager.default.fileExists(atPath: body.path),
+      let tier = Self.tiers.first(where: {
+        body == folder(of: $0).appending(path: body.lastPathComponent)
+      }),
+      tier.hasRoom(for: data.count, available: freeSpace(tier))
+    else {
+      return
+    }
+    let write = { try data.write(to: Self.modelURL(of: id, beside: body), options: .atomic) }
+    do {
+      switch tier {
+      case .kept: try keptDocuments.update(id, by: write)
+      case .cache: try cachedDocuments.update(id, by: write)
+      }
+      if tier == .cache { hasGrown = true }
+    } catch {
+      storeLog.error(
+        "\(id.displayName, privacy: .public): its model was not written: \(String(describing: error), privacy: .public)"
+      )
+    }
+  }
+
+  /// The parse kept encoded beside `body`, when this build made it from this very
+  /// file; nil when there is none, or it was made by another build or for another
+  /// body.
+  private static func decodedModel(
+    of id: DocumentID, beside body: URL, created: Date, build: String, signpostID: OSSignpostID
+  ) -> Parse? {
+    guard let data = try? Data(contentsOf: modelURL(of: id, beside: body)) else { return nil }
+    let model = signposter.withIntervalSignpost("Decode document", id: signpostID) {
+      try? JSONDecoder().decode(Model.self, from: data)
+    }
+    guard let model, model.build == build, model.body == created else { return nil }
+    return model.parse
+  }
+
+  /// Where `id`'s model is kept: beside its body.
+  private static func modelURL(of id: DocumentID, beside body: URL) -> URL {
+    body.deletingLastPathComponent().appending(path: DocumentCacheIndex.modelFileName(for: id))
+  }
+
+  private static func creationDate(of url: URL) -> Date? {
+    var url = url
+    url.removeAllCachedResourceValues()
+    return (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+  }
+
+  /// Until the model writes started so far have ended, for a test to read them.
+  func untilModelsWritten() async {
+    await modelWrite?.value
   }
 
   /// Where a document's body may be on disk: its XML and its text in either tier, and
@@ -882,36 +1031,59 @@ public actor DocumentStore {
 
   /// The body on disk, parsed: the XML of either tier if there is one, then the
   /// installed pack's, otherwise the text of either tier, or nil when none is there.
-  /// Off the actor, like a fetch's parse, so the store answers other calls meanwhile
-  /// -- whether a document is available offline, the next open -- instead of
-  /// queueing them behind half a second of legacy text.
+  /// A body of either tier is decoded from its model instead where `build` made one
+  /// for it (#606). Off the actor, like a fetch's parse, so the store answers other
+  /// calls meanwhile -- whether a document is available offline, the next open --
+  /// instead of queueing them behind a legacy text's parse ("Parse text" in
+  /// `make benchmark`).
   @concurrent
   private static func parseCached(
-    _ id: DocumentID, from bodies: Bodies, entry: RFCMetadata?, signpostID: OSSignpostID
-  ) async -> Parse? {
+    _ id: DocumentID, from bodies: Bodies, entry: RFCMetadata?, build: String?,
+    signpostID: OSSignpostID
+  ) async -> Read? {
     for url in bodies.xml {
+      // Read before the body, so a body written again meanwhile is not taken for this one.
+      guard let created = creationDate(of: url) else { continue }
+      if let build,
+        let parse = decodedModel(
+          of: id, beside: url, created: created, build: build, signpostID: signpostID)
+      {
+        return Read(parse: parse, body: nil, created: nil)
+      }
       if let data = try? Data(contentsOf: url),
         let document = try? signposter.withIntervalSignpost(
           "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
       {
-        return Parse(document: document, entry: nil)
+        return Read(parse: Parse(document: document, entry: nil), body: url, created: created)
       }
     }
     // Before a cached `.txt`: the pack is the single XML path it exists for, and a
     // `.txt` cached before it arrived still serves Original Text.
     if let pack = bodies.pack {
       do {
-        return Parse(document: try RFCXMLParser.parse(Data(contentsOf: pack)), entry: nil)
+        let document = try RFCXMLParser.parse(Data(contentsOf: pack))
+        return Read(parse: Parse(document: document, entry: nil), body: nil, created: nil)
       } catch {
         storeLog.error(
           "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
         )
       }
     }
-    guard let data = bodies.text.lazy.compactMap({ try? Data(contentsOf: $0) }).first else {
-      return nil
+    for url in bodies.text {
+      guard let created = creationDate(of: url) else { continue }
+      // One parsed before the index arrived is parsed again once there is an entry.
+      if let build,
+        let parse = decodedModel(
+          of: id, beside: url, created: created, build: build, signpostID: signpostID),
+        entry == nil || parse.entry != nil
+      {
+        return Read(parse: parse, body: nil, created: nil)
+      }
+      guard let data = try? Data(contentsOf: url) else { continue }
+      let parse = await parseText(data, entry: entry, signpostID: signpostID)
+      return Read(parse: parse, body: url, created: created)
     }
-    return await parseText(data, entry: entry, signpostID: signpostID)
+    return nil
   }
 
   @concurrent
