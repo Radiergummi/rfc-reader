@@ -127,8 +127,9 @@ struct AnnotationExportTests {
   @Test func `a highlight is a quote under its section's heading, cited from its section`()
     throws
   {
-    let passage = try range(of: "Version", in: longHeader)
-    let markdown = export([try highlight("Version", in: longHeader)])
+    // In the section's prose, not its figure's artwork.
+    let passage = try range(of: "remainder", in: longHeader)
+    let markdown = export([try highlight("remainder", in: longHeader)])
     let heading = try line(try heading(longHeader), in: markdown)
     let quote = try line("> " + model.text(in: passage), in: markdown)
     let citation = try line(longHeaderCitation, in: markdown)
@@ -241,6 +242,41 @@ struct AnnotationExportTests {
           "> "
             + indented.replacingOccurrences(
               of: #"[ \t]+$"#, with: "", options: .regularExpression), in: markdown))
+  }
+
+  /// The first line of a figure's artwork or of code that has `shape`, and where it is.
+  private func verbatimLine(where shape: (String) -> Bool) throws -> (
+    text: String, range: Range<Int>
+  ) {
+    for block in model.verbatim {
+      var start = block.lowerBound
+      for line in model.text(in: block).components(separatedBy: "\n") {
+        let length = line.utf16.count
+        if shape(line) { return (line, start..<start + length) }
+        start += length + 1
+      }
+    }
+    throw CancellationError()
+  }
+
+  @Test func `a highlight snapped to a figure's words keeps its first line's indentation`()
+    throws
+  {
+    let line = try verbatimLine { $0.hasPrefix("  ") && $0.contains { $0 != " " } }
+    let indent = line.text.prefix { $0 == " " }.utf16.count
+    let words = line.range.lowerBound + indent..<line.range.upperBound
+    let markdown = export([highlight(try #require(Target(covering: words, in: model)))])
+    _ = try self.line("> ```", in: markdown)
+    _ = try self.line(
+      "> "
+        + line.text.replacingOccurrences(of: #"[ \t]+$"#, with: "", options: .regularExpression),
+      in: markdown)
+  }
+
+  @Test func `code is fenced though no line of the highlight is indented`() throws {
+    let line = try verbatimLine { $0.first.map { $0 != " " } == true }
+    let markdown = export([highlight(try #require(Target(covering: line.range, in: model)))])
+    _ = try self.line("> ```", in: markdown)
   }
 
   @Test func `a heading's angle bracket is an entity`() {
