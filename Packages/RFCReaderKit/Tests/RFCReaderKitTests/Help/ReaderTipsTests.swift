@@ -87,6 +87,16 @@ struct ReaderTipsTests {
       ]) == [false, false, true, false, false, false, false, false, true])
   }
 
+  /// A filter taken from the suggestions, such as `status:`, still waits for its
+  /// value: the search is not done, and the tip would open as the value is typed.
+  @Test func `a filter still waiting for its value is not a search committed`() {
+    #expect(
+      SearchStep.counts([
+        .edit("", "st"), .commit("status:"), .commit("cache wg:"), .commit("status:std"),
+      ])
+        == [false, false, false, true])
+  }
+
   @Test func `a search never committed is counted when it is cleared`() {
     #expect(SearchStep.counts([.edit("", "quic"), .edit("quic", "")]) == [false, true])
     // Nothing to count: an empty field cleared, or spaces alone.
