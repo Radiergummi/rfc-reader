@@ -236,6 +236,99 @@ struct LibraryListTests {
     #expect(qualifier.unknownTerms(in: seriesIndex).map(\.reason) == [.qualifier])
   }
 
+  // MARK: - Dynamic collections (#355)
+
+  /// What its query lists in the whole library, whatever members it once had.
+  @Test func `a dynamic collection lists what its query matches`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "", bookmarked: [.rfc(2026), Self.bcp14, .rfc(9110)],
+      members: [2119], definition: "is:bookmarked")
+
+    #expect(ids(list) == [.rfc(9110), Self.bcp14, .rfc(2026)])
+  }
+
+  /// A search typed into its tab narrows what its query matches, as both were one.
+  @Test func `a search in a dynamic collection narrows what its query matches`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "uppercase",
+      bookmarked: [Self.bcp14, .rfc(9110)], definition: "is:bookmarked")
+
+    #expect(ids(list) == [Self.bcp14])
+  }
+
+  @Test func `a dynamic collection naming something unknown lists nothing and says why`() {
+    let list = LibraryList(filter: .collection(UUID()), query: "", definition: "wg:gone")
+
+    #expect(ids(list).isEmpty)
+    #expect(list.unknownTerms(in: seriesIndex).map(\.reason) == [.workingGroup])
+  }
+
+  /// In the order of publication, as the whole library is, which View Options turns
+  /// round: it has no order of its own to keep.
+  @Test func `a dynamic collection is newest first, and oldest first reverses it`() {
+    let newest = LibraryList(filter: .collection(UUID()), query: "", definition: "s")
+    let oldest = LibraryList(
+      filter: .collection(UUID()), query: "",
+      options: ListOptions(order: .oldestFirst, collectionSort: .manual), definition: "s")
+
+    #expect(ids(newest) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
+    #expect(ids(oldest) == [.rfc(2026), .rfc(2119), .rfc(8174), .rfc(9110)])
+  }
+
+  /// A collection made from a query has no members to search in, so `in:` naming one
+  /// is an unknown term rather than a list that is silently empty (answered on #355,
+  /// 2026-10-17).
+  @Test func `in a dynamic collection lists nothing and says why`() {
+    let list = LibraryList(
+      filter: .all, query: #"in:"QUIC" in:9110"#, dynamicCollections: ["quic"])
+
+    #expect(ids(list, in: seriesIndex).isEmpty)
+    #expect(
+      list.unknownTerms(in: seriesIndex) == [
+        UnknownSearchTerm(word: #"in:"QUIC""#, reason: .dynamicCollection)
+      ])
+  }
+
+  /// A query that orders the collection orders it whatever View Options says.
+  @Test func `a dynamic collection's own sort is not reversed`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "",
+      options: ListOptions(order: .oldestFirst, collectionSort: .manual),
+      definition: "s sort:newest")
+
+    #expect(ids(list) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
+  }
+
+  /// A collection's query that leaves a quote open would otherwise take the tab's
+  /// words into its last value, and the search would change the collection rather
+  /// than narrow it.
+  @Test func `a dynamic collection's open quote does not take the tab's search`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "cache", definition: #"by:"Fielding"#)
+
+    #expect(SearchQuery.words(in: list.searchedQuery) == [#"by:"Fielding""#, "cache"])
+  }
+
+  /// View Options offers the order where it turns the list round: not where the
+  /// collection's own query sorts it.
+  @Test func `a dynamic collection can be reordered unless its query sorts it`() {
+    let collection = LibraryFilter.collection(UUID())
+
+    #expect(LibraryList.canReorder(collection, definition: "s", query: ""))
+    #expect(!LibraryList.canReorder(collection, definition: "s sort:newest", query: ""))
+    #expect(!LibraryList.canReorder(collection, definition: "s", query: "uppercase"))
+    #expect(!LibraryList.canReorder(collection, definition: nil, query: ""))
+  }
+
+  /// Its rows are matched, not placed, so there is no order to drag them into.
+  @Test func `a dynamic collection's rows cannot be moved`() {
+    let manual = LibraryList(filter: .collection(UUID()), query: "", members: [2119])
+    let dynamic = LibraryList(filter: .collection(UUID()), query: "", definition: "s")
+
+    #expect(manual.allowsMoving)
+    #expect(!dynamic.allowsMoving)
+  }
+
   @Test func `a field of only spaces and newlines is unsearched`() {
     #expect(" \t\n".isUnsearchedQuery)
     #expect("".isUnsearchedQuery)
@@ -291,6 +384,7 @@ struct LibraryListDefaultsTests {
       var downloaded: Set<Int> { [] }
       func members(of collection: UUID) -> [Int] { [] }
       func collection(named name: String) -> UUID? { nil }
+      func query(of collection: UUID) -> String? { nil }
     }
     let list = LibraryList.reading(
       .all, query: "", options: ListOptions(hidesRead: true), from: Sources())

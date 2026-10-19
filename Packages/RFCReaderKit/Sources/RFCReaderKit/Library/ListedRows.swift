@@ -18,6 +18,9 @@ public struct ListedRows: Sendable {
   public let indexVersion: Int
   /// The index the rows were made over, for `librarySearch`.
   private let index: RFCIndex
+  /// The search's hits for `list.query` alone, for `librarySearch`: `hits`, but for
+  /// a dynamic collection's list, whose are its query's and the tab's together.
+  private let libraryHits: [RFCMetadata]
 
   /// `list` over `index`, the library's `indexVersion`th. `search` is the index's
   /// own; see `LibraryList.rows`. `known` are its hits for `list.query` from an
@@ -29,14 +32,18 @@ public struct ListedRows: Sendable {
     self.list = list
     self.indexVersion = indexVersion
     self.index = index
-    guard !list.query.isEmpty, let search else {
+    guard !list.searchedQuery.isEmpty, let search else {
       rows = list.rows(in: index, search: search)
       hits = []
+      libraryHits = []
       return
     }
     let hits = known ?? list.hits(from: search)
     self.hits = hits
     rows = list.rows(in: index, search: search, hits: hits)
+    libraryHits =
+      list.definition == nil || list.query.isEmpty
+      ? hits : LibraryList(filter: .all, query: list.query).hits(from: search)
   }
 
   /// Whether these are the rows `list` asks for over the index counted
@@ -47,9 +54,11 @@ public struct ListedRows: Sendable {
   }
 
   /// The hits to list `list` from without searching again: these, when it searches
-  /// for the same over the same index, as after a change of filter or options.
+  /// for the same over the same index, as after a change of filter or options. A
+  /// dynamic collection's query is searched for with the tab's (#355).
   public func hits(for list: LibraryList, indexVersion: Int) -> [RFCMetadata]? {
-    guard list.query == self.list.query, self.indexVersion == indexVersion else { return nil }
+    guard list.searchedQuery == self.list.searchedQuery, self.indexVersion == indexVersion
+    else { return nil }
     return hits
   }
 
@@ -64,13 +73,13 @@ public struct ListedRows: Sendable {
     let filters = IndexSearch.parseQuery(list.query).filters
     guard filters.asksReader || filters.sort != nil else {
       return list.options.apply(
-        to: hits.map(LibraryRow.rfc), filter: .all, query: list.query,
+        to: libraryHits.map(LibraryRow.rfc), filter: .all, query: list.query,
         read: Set(list.recentlyRead))
     }
     let library = LibraryList(
       filter: .all, query: list.query, bookmarked: list.bookmarked,
       recentlyRead: list.recentlyRead, downloaded: list.downloaded, options: list.options,
       collections: list.collections)
-    return library.rows(in: index, search: nil, hits: hits)
+    return library.rows(in: index, search: nil, hits: libraryHits)
   }
 }

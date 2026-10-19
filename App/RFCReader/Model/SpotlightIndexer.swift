@@ -25,7 +25,8 @@ enum SpotlightIndexer {
   static func update(_ rfcs: [RFCMetadata]) async {
     guard CSSearchableIndex.isIndexingAvailable() else { return }
     let index = CSSearchableIndex(name: SpotlightEntry.domain)
-    let entries = rfcs.map(SpotlightEntry.init)
+    let locale = Locale.interface
+    let entries = rfcs.map { SpotlightEntry($0, locale: locale) }
     let state = SpotlightEntry.clientState(for: entries, now: .now)
     do {
       if try await index.fetchLastClientState() == state { return }
@@ -37,7 +38,7 @@ enum SpotlightIndexer {
         let end = min(start + batchSize, entries.count)
         // The entities only here, past the check that most launches stop at.
         let items = (start..<end).map {
-          item(entries[$0], for: RFCEntity(rfcs[$0]), expiring: expiration)
+          item(entries[$0], for: RFCEntity(rfcs[$0], locale: locale), expiring: expiration)
         }
         index.beginBatch()
         add(items, to: index)

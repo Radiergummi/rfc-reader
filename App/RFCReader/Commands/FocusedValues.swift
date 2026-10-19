@@ -1,10 +1,14 @@
 import SwiftUI
 
-// Published by `ContentView` and read by `DocumentCommands`, on iOS only: on macOS
+// Published by `ContentView` and read by `DocumentCommands` and `HelpCommands`, on iOS only: on macOS
 // the menu finds its target through `ActiveReaderWindow`, because focused values do
 // not resolve out of a hosted root.
 #if !os(macOS)
   struct OpenDocumentActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+  }
+
+  struct ShowHelpActionKey: FocusedValueKey {
     typealias Value = () -> Void
   }
 
@@ -20,6 +24,12 @@ import SwiftUI
     var openDocumentAction: OpenDocumentActionKey.Value? {
       get { self[OpenDocumentActionKey.self] }
       set { self[OpenDocumentActionKey.self] = newValue }
+    }
+
+    /// Presents the help in the focused scene (#780).
+    var showHelpAction: ShowHelpActionKey.Value? {
+      get { self[ShowHelpActionKey.self] }
+      set { self[ShowHelpActionKey.self] = newValue }
     }
 
     var navigationModel: NavigationModel? {

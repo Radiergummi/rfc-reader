@@ -35,6 +35,8 @@ import SwiftUI
     @SceneStorage("scene") private var sceneSnapshot: Data?
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
+    /// The help, while Help in the menu bar has it on show (#780).
+    @State private var helpTarget: HelpTarget?
     /// The reader's own text size, which ⌘= steps (#153).
     @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
       .defaultFontSize
@@ -172,12 +174,15 @@ import SwiftUI
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet(library: library, navigation: navigation)
       }
+      .sheet(item: $helpTarget) { target in
+        HelpSheet(target: target)
+      }
       // ⌘K opens Go to RFC too, where most apps with a palette put it. The menu's
       // item holds ⌘L, and one item gets one shortcut, so this invisible button
       // carries the other, drawn transparent and kept out of VoiceOver's way.
       .background {
         Button("Go to RFC") { navigation.isShowingGoToSheet = true }
-          .keyboardShortcut("k", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.quickOpen.keyboardShortcut)
           .opacity(0)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
@@ -188,13 +193,17 @@ import SwiftUI
       // with its shortcut, measured.
       .background {
         Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-          .keyboardShortcut("=", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.biggerAlternate.keyboardShortcut)
           .opacity(0)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
       }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
+      }
+      .focusedSceneValue(\.showHelpAction) {
+        // Not again while it is on show: a new target would dismiss and present it.
+        if helpTarget == nil { helpTarget = HelpTarget() }
       }
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
@@ -222,7 +231,7 @@ struct EmptyDetailView: View {
       Text("Browse the sidebar, search, or jump straight to a number.")
     } actions: {
       Button("Go to RFC…") { navigation.isShowingGoToSheet = true }
-        .keyboardShortcut("l", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.goToRFC.keyboardShortcut)
       PrimerLink()
     }
   }

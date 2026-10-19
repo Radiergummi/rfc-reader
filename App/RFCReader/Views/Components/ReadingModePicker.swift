@@ -63,10 +63,10 @@ struct FocusSteps: View {
       // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
       // its paragraphs' ends, and leave the two together alone.
       Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
-        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+        .keyboardShortcut(ReaderShortcut.nextSection.keyboardShortcut)
         .disabled(!reader.canStepFocus(.next))
       Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
-        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+        .keyboardShortcut(ReaderShortcut.previousSection.keyboardShortcut)
         .disabled(!reader.canStepFocus(.previous))
     }
   }

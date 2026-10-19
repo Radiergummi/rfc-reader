@@ -78,12 +78,15 @@ struct DocumentCommands: Commands {
   var body: some Commands {
     CommandGroup(after: .newItem) {
       Button("Go to RFC…") { openDocument?() }
-        .keyboardShortcut("l", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.goToRFC.keyboardShortcut)
         .disabled(openDocument == nil)
       #if os(macOS)
         Button("New Collection…") { active.controller?.newCollection() }
-          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
           .disabled(navigation == nil)
+        // The search on show, kept as a collection made from a query (#355).
+        Button("Save as Collection…") { active.controller?.saveAsCollection() }
+          .disabled(navigation?.savedQuery == nil)
       #endif
     }
     // The Mac's toolbar buttons are AppKit's, so their keyboard shortcuts have to be
@@ -99,7 +102,7 @@ struct DocumentCommands: Commands {
         Button("Copy as Quote") {
           active.controller?.copyAsQuote()
         }
-        .keyboardShortcut("c", modifiers: [.command, .option, .shift])
+        .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
         .disabled(
           !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
             || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
@@ -110,7 +113,7 @@ struct DocumentCommands: Commands {
         Button(DocumentActions.bookmarkCommand(isBookmarked: isBookmarked)) {
           toggleBookmark()
         }
-        .keyboardShortcut("d", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.bookmark.keyboardShortcut)
         .disabled(navigation?.selection == nil)
         #if os(macOS)
           // The key window's undo manager, so Edit > Undo puts back a document
@@ -130,7 +133,7 @@ struct DocumentCommands: Commands {
       // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
       CommandGroup(replacing: .importExport) {
         Button("Export…") { active.controller?.output.exportDocument() }
-          .keyboardShortcut("e", modifiers: [.command, .shift])
+          .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
           .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }
@@ -147,9 +150,9 @@ struct DocumentCommands: Commands {
             MenuSections(
               sections: DocumentMenus.cite(),
               shortcuts: [
-                .copyCitation(CitationStyle.allCases[0]): KeyboardShortcut(
-                  "c", modifiers: [.command, .shift])
-              ],
+                .copyCitation(CitationStyle.allCases[0]): ReaderShortcut.copyCitation
+                  .keyboardShortcut
+              ].compactMapValues { $0 },
               perform: perform)
           }
           // A citation is made from the index's entry, as the References menu's is.
@@ -172,10 +175,10 @@ struct DocumentCommands: Commands {
       // scene (#375). Print is disabled unless a document is on screen.
       CommandGroup(replacing: .printItem) {
         Button("Page Setup…") { active.controller?.output.runPageSetup() }
-          .keyboardShortcut("p", modifiers: [.command, .shift])
+          .keyboardShortcut(ReaderShortcut.pageSetup.keyboardShortcut)
           .disabled(active.controller == nil)
         Button("Print…") { active.controller?.output.printDocument() }
-          .keyboardShortcut("p", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.print.keyboardShortcut)
           .disabled(!offersPrintAndExport)
       }
     #endif
@@ -192,13 +195,13 @@ struct DocumentCommands: Commands {
       // of the menu, shortcut and all -- measured. `ReaderWindow` answers it on the
       // Mac, an invisible button in `ContentView` on the iPad.
       Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-        .keyboardShortcut("+", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.bigger.keyboardShortcut)
         .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
       Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
-        .keyboardShortcut("-", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.smaller.keyboardShortcut)
         .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
       Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
-        .keyboardShortcut("0", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.actualSize.keyboardShortcut)
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
       #if os(macOS)
         // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
@@ -243,7 +246,7 @@ struct DocumentCommands: Commands {
         Button(active.isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
           active.controller?.toggleSidebar()
         }
-        .keyboardShortcut("s", modifiers: [.command, .control])
+        .keyboardShortcut(ReaderShortcut.toggleSidebar.keyboardShortcut)
         .disabled(active.controller == nil)
       #endif
       Section {
@@ -252,7 +255,7 @@ struct DocumentCommands: Commands {
           // which every tabbed Mac app gives to reopening the last closed tab
           // (#157).
           Button(paneTitle(.navigation)) { active.controller?.press(.navigation) }
-            .keyboardShortcut("i", modifiers: [.command, .option])
+            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
             // As the toolbar's button is: on whatever the index describes, a
             // document still loading or one that failed to included (#325), and
             // nothing else, where the panel is an empty strip. Not `showsDocument`,
@@ -261,7 +264,7 @@ struct DocumentCommands: Commands {
             .disabled(reader?.canDescribe != true)
           // ⌘I, Get Info in Finder and Preview.
           Button(paneTitle(.info)) { active.controller?.press(.info) }
-            .keyboardShortcut("i", modifiers: .command)
+            .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
             .disabled(reader?.canDescribe != true)
         #endif
         // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
@@ -269,18 +272,11 @@ struct DocumentCommands: Commands {
         // and ⌘→ are a field's line start and end. The reader window answers them
         // where no field is being edited (`HistoryArrowShortcut`). The iPad keeps
         // the arrows, which nothing else there answers.
-        #if os(macOS)
-          let back = KeyboardShortcut("[", modifiers: .command)
-          let forward = KeyboardShortcut("]", modifiers: .command)
-        #else
-          let back = KeyboardShortcut(.leftArrow, modifiers: .command)
-          let forward = KeyboardShortcut(.rightArrow, modifiers: .command)
-        #endif
         Button("Back") { navigation?.goBack() }
-          .keyboardShortcut(back)
+          .keyboardShortcut(ReaderShortcut.back.keyboardShortcut)
           .disabled(navigation?.canGoBack != true)
         Button("Forward") { navigation?.goForward() }
-          .keyboardShortcut(forward)
+          .keyboardShortcut(ReaderShortcut.forward.keyboardShortcut)
           .disabled(navigation?.canGoForward != true)
       }
     }
@@ -296,18 +292,18 @@ struct DocumentCommands: Commands {
         // action (#159).
         Section {
           Button("Find…") { FindCommand.showFindInterface.send() }
-            .keyboardShortcut("f", modifiers: .command)
+            .keyboardShortcut(ReaderShortcut.find.keyboardShortcut)
           Button("Find Next") { FindCommand.nextMatch.send() }
-            .keyboardShortcut("g", modifiers: .command)
+            .keyboardShortcut(ReaderShortcut.findNext.keyboardShortcut)
           Button("Find Previous") { FindCommand.previousMatch.send() }
-            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
           // As TextEdit's and Safari's Find menus have them (#761). Only over a
           // selection: they act on it.
           Group {
             Button("Use Selection for Find") { active.controller?.useSelectionForFind() }
-              .keyboardShortcut("e", modifiers: .command)
+              .keyboardShortcut(ReaderShortcut.useSelectionForFind.keyboardShortcut)
             Button("Jump to Selection") { active.controller?.jumpToSelection() }
-              .keyboardShortcut("j", modifiers: .command)
+              .keyboardShortcut(ReaderShortcut.jumpToSelection.keyboardShortcut)
           }
           .disabled(!hasFindableSelection)
         }
@@ -316,7 +312,7 @@ struct DocumentCommands: Commands {
         // reader window: the library is there to search with no document open.
         Section {
           Button("Search Library") { active.controller?.focusSearch() }
-            .keyboardShortcut("f", modifiers: [.command, .option])
+            .keyboardShortcut(ReaderShortcut.searchLibrary.keyboardShortcut)
             .disabled(active.controller == nil)
         }
       }
@@ -328,11 +324,11 @@ struct DocumentCommands: Commands {
       CommandGroup(replacing: .textEditing) {
         Section {
           Button("Find…") { reader?.presentFind() }
-            .keyboardShortcut("f", modifiers: .command)
+            .keyboardShortcut(ReaderShortcut.find.keyboardShortcut)
           Button("Find Next") { reader?.findInteraction?.findNext() }
-            .keyboardShortcut("g", modifiers: .command)
+            .keyboardShortcut(ReaderShortcut.findNext.keyboardShortcut)
           Button("Find Previous") { reader?.findInteraction?.findPrevious() }
-            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
         }
         .disabled(navigation?.selection == nil || reader?.hasDocument != true)
       }

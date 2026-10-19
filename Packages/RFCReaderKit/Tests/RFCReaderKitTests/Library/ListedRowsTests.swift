@@ -77,6 +77,31 @@ struct ListedRowsTests {
     #expect(again.rows.map(\.id.number) == [4, 3])
   }
 
+  /// A dynamic collection's hits are its query's and the tab's together (#355): never
+  /// another list's for the tab's words alone, nor the other way round.
+  @Test func `a dynamic collection's hits are not another list's`() {
+    let library = listed(LibraryList(filter: .all, query: "host"), indexVersion: 3)
+    let dynamic = listed(
+      LibraryList(filter: .collection(UUID()), query: "host", definition: "protocol"),
+      indexVersion: 3)
+    let unsearched = listed(
+      LibraryList(filter: .collection(UUID()), query: "", definition: "host"), indexVersion: 3)
+
+    #expect(dynamic.rows.map(\.id.number) == [2])
+    #expect(library.hits(for: dynamic.list, indexVersion: 3) == nil)
+    #expect(dynamic.hits(for: library.list, indexVersion: 3) == nil)
+    // The same words searched for are the same hits, whichever list asked.
+    #expect(unsearched.hits.map(\.number) == library.hits.map(\.number))
+    #expect(unsearched.hits(for: library.list, indexVersion: 3) != nil)
+  }
+
+  /// The iPhone sidebar's results are the whole library's, not narrowed by the
+  /// dynamic collection the tab shows.
+  @Test func `the library's results ignore a dynamic collection's query`() {
+    let list = LibraryList(filter: .collection(UUID()), query: "host", definition: "protocol")
+    #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
+  }
+
   @Test func `an unsearched listing keeps no hits`() {
     #expect(listed(LibraryList(filter: .all, query: "")).hits.isEmpty)
   }
@@ -125,7 +150,17 @@ struct LibraryListInputsTests {
     }
     func collection(named name: String) -> UUID? {
       reads.append("collection \(name)")
-      return name == "Mine" ? UUID() : nil
+      switch name {
+      case "Mine": return UUID()
+      case "Queried": return dynamic
+      default: return nil
+      }
+    }
+    /// The one dynamic collection, whose query asks for the bookmarks.
+    let dynamic = UUID()
+    func query(of collection: UUID) -> String? {
+      reads.append("query")
+      return collection == dynamic ? "is:bookmarked" : nil
     }
   }
 
@@ -142,7 +177,28 @@ struct LibraryListInputsTests {
   func `a filter reads its own input and no other`(filter: LibraryFilter, input: String) {
     let sources = Sources()
     _ = reading(filter, from: sources)
-    #expect(sources.reads == [input])
+    // A collection is asked first whether it is made from a query.
+    #expect(sources.reads == (input == "members" ? ["query", input] : [input]))
+  }
+
+  /// A dynamic collection has no members to read, and reads what its query asks
+  /// for instead (#355).
+  @Test func `a dynamic collection reads what its query asks for`() {
+    let sources = Sources()
+    let list = reading(.collection(sources.dynamic), from: sources)
+    #expect(sources.reads == ["query", "bookmarked"])
+    #expect(list.definition == "is:bookmarked")
+    #expect(list.members.isEmpty)
+  }
+
+  /// A collection made from a query that `in:` names has no members to read: it is
+  /// an unknown term.
+  @Test func `in a dynamic collection reads no members`() {
+    let sources = Sources()
+    let list = LibraryList.reading(
+      .all, query: #"in:"Queried""#, options: ListOptions(), from: sources)
+    #expect(list.dynamicCollections == ["queried"])
+    #expect(list.collections.isEmpty)
   }
 
   @Test(arguments: [LibraryFilter.all, .standards, .workingGroup("httpbis")])
@@ -159,7 +215,8 @@ struct LibraryListInputsTests {
     ("is:read", ["recentlyRead"]),
     ("sort:last-read", ["recentlyRead"]),
     ("is:offline", ["downloaded"]),
-    (#"in:"Mine""#, ["collection Mine", "members"]),
+    (#"in:"Mine""#, ["collection Mine", "query", "members"]),
+    (#"in:"Queried""#, ["collection Queried", "query"]),
     (#"in:"Gone""#, ["collection Gone"]),
     ("in:9110 status:bcp", []),
   ])

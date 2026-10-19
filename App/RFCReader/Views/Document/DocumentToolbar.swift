@@ -56,14 +56,14 @@ import SwiftUI
             Label("Contents", systemImage: "list.bullet.rectangle.portrait")
           }
           // The same chord as the Mac's (#157).
-          .keyboardShortcut("i", modifiers: [.command, .option])
+          .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
 
           Button {
             press(.info)
           } label: {
             Label("Info", systemImage: "info.circle")
           }
-          .keyboardShortcut("i", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
 
           TextSizeButton(library: library)
         }
