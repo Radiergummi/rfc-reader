@@ -243,6 +243,8 @@ final class RFCTextViewCoordinator: NSObject {
   var notePlacement = NotePlacement.none
   /// The gutter markers standing now, and their views, one each.
   var noteMarkers: [FragmentGeometry.NoteMarker] = []
+  /// The notes' text when the markers were last titled.
+  var noteMarkersBodies: [String] = []
   #if canImport(UIKit)
     var noteMarkerViews: [UIView] = []
     /// The note editor's sheet, while it is up.

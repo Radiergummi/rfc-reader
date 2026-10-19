@@ -293,6 +293,24 @@ extension AnnotationStoreTests {
     #expect(try notes().first { $0.id == identifier }?.body == "A thought.")
   }
 
+  @Test func `undoing a highlight takes the note made on it since, and redoing brings both`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    undoManager.beginUndoGrouping()
+    let highlight = try highlight("brown fox", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    let identifier = try note("Added with it.", on: .highlight(highlight))
+    undoManager.undo()
+    #expect(try snapshot().isEmpty)
+    #expect(try notes().isEmpty)
+    undoManager.redo()
+    #expect(try snapshot().map(\.id) == [highlight])
+    #expect(try notes().map(\.id) == [identifier])
+    #expect(try notes().first?.highlight == highlight)
+  }
+
   @Test func `a deleted note is undone`() throws {
     let undoManager = UndoManager()
     undoManager.groupsByEvent = false
