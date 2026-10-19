@@ -15,6 +15,7 @@ struct RFCListView: View {
     /// Whether the notices of the code the app adapts are on show.
     @State private var showsAcknowledgements = false
     @State private var showsSettings = false
+    @State private var showsHelp = false
   #endif
 
   private var rows: [LibraryRow] {
@@ -387,6 +388,7 @@ struct RFCListView: View {
       .refreshable { await library.refreshIndex() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
       .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
+      .sheet(isPresented: $showsHelp) { HelpSheet() }
     #endif
   }
 
@@ -400,6 +402,10 @@ struct RFCListView: View {
           // rather than the Settings app's (#703).
           Button("Settings", systemImage: "gearshape") {
             showsSettings = true
+          }
+          // The iPhone has no menu bar to hold Help (#780).
+          Button("Help", systemImage: "questionmark.circle") {
+            showsHelp = true
           }
           Button("Acknowledgements", systemImage: "doc.text") {
             showsAcknowledgements = true

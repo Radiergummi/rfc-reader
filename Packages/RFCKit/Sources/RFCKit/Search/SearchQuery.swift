@@ -86,6 +86,9 @@ public enum SearchQuery {
     }
   }
 
+  /// Every filter's name, in the grammar's order: what the help lists (#780).
+  public static var filterNames: [String] { Qualifier.allCases.map(\.name) }
+
   /// A `status:` value, with the long spellings it is also read by, and the statuses
   /// it stands for. `current` is not a status but the obsolete filter, and has none.
   struct StatusValue: Sendable {
