@@ -690,4 +690,10 @@ extension NavigationModel: ListSources {
   func query(of collection: UUID) -> String? {
     library.collections[collection]?.query
   }
+
+  /// The query `filter` lists, if it is a dynamic collection's (#355): what the
+  /// search field's scope tokens leave as its list does (#713).
+  func definition(of filter: LibraryFilter) -> String? {
+    if case .collection(let id) = filter { query(of: id) } else { nil }
+  }
 }

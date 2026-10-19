@@ -80,10 +80,21 @@ public struct ListOptions: Hashable, Sendable {
 
   /// The search scope in force for `query` in `filter`'s list: none while it
   /// searches for nothing, and otherwise what its own qualifiers and the list leave
-  /// of `searchScope`.
-  public func scopeInForce(query: String, filter: LibraryFilter) -> SearchScope {
+  /// of `searchScope`. `definition` is a dynamic collection's query (#355), whose
+  /// own qualifiers leave it as the query's do.
+  public func scopeInForce(
+    query: String, filter: LibraryFilter, definition: String? = nil
+  ) -> SearchScope {
     guard !query.isUnsearchedQuery else { return SearchScope() }
-    return searchScope.leaving(IndexSearch.parseQuery(query.normalizedQuery).filters, in: filter)
+    let asked = IndexSearch.parseQuery(query.normalizedQuery).filters
+    return Self.scope(searchScope.leaving(asked, in: filter), definedBy: definition)
+  }
+
+  /// `scope` less what a dynamic collection's query `definition` names itself: the
+  /// reader chose where to look, as with a stream's list.
+  private static func scope(_ scope: SearchScope, definedBy definition: String?) -> SearchScope {
+    guard let definition else { return scope }
+    return scope.leaving(IndexSearch.parseQuery(definition).filters)
   }
 
   /// Whether a list can be put oldest first: only one in order of publication, the
@@ -97,15 +108,20 @@ public struct ListOptions: Hashable, Sendable {
   /// `read` is what the reader has read, which Hide Read leaves out. `searching` is
   /// whether the rows are a search's, which by default a query that is not empty
   /// says; a list narrowing a search by its qualifiers alone says so itself.
+  /// `definition` is a dynamic collection's query (#355): its rows are the whole
+  /// library's, `filter` `.all`, yet it is the reader's own collection.
   public func apply(
     to rows: [LibraryRow], filter: LibraryFilter, query: String, read: Set<DocumentID> = [],
-    searching: Bool? = nil
+    searching: Bool? = nil, definition: String? = nil
   ) -> [LibraryRow] {
     let searching = searching ?? !query.isUnsearchedQuery
     let asked = IndexSearch.parseQuery(query.normalizedQuery).filters
-    let scope = searching ? searchScope.leaving(asked, in: filter) : SearchScope()
+    let scope =
+      searching
+      ? Self.scope(searchScope.leaving(asked, in: filter), definedBy: definition) : SearchScope()
     let hidesRead = hidesRead && filter != .recent && !asked.readerData.contains(.read)
-    let hidesAprilFirst = !showsAprilFirst && Self.listsFromIndex(filter, asked: asked)
+    let hidesAprilFirst =
+      !showsAprilFirst && definition == nil && Self.listsFromIndex(filter, asked: asked)
     let showsObsolete = showsObsolete(searching: searching)
     let hidesNothing = showsObsolete && scope.isEverything && !hidesRead && !hidesAprilFirst
     let shown =

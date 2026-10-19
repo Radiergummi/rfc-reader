@@ -242,7 +242,7 @@ public struct LibraryList: Hashable, Sendable {
     }
     return options.apply(
       to: sorted(base, by: sort), filter: listedFilter, query: query,
-      read: Set(recentlyRead), searching: isSearch)
+      read: Set(recentlyRead), searching: isSearch, definition: definition)
   }
 
   /// `rows` in the order a query's `sort:` asks for, or as they are without one.

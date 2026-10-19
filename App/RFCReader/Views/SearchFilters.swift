@@ -19,7 +19,8 @@ import SwiftUI
       // The query the list is filtered by, so a chip names a filter in force.
       let terms = SearchQuery.terms(of: IndexSearch.parseQuery(navigation.appliedQuery).filters)
       let scope = navigation.listOptions.scopeInForce(
-        query: navigation.appliedQuery, filter: navigation.filter
+        query: navigation.appliedQuery, filter: navigation.filter,
+        definition: navigation.definition(of: navigation.filter)
       ).tokens()
       if !terms.isEmpty || !scope.isEmpty {
         ScrollView(.horizontal) {
@@ -123,7 +124,8 @@ import SwiftUI
         // The text, not the query applied, as the terms are: a token appearing once
         // typing pauses would land in the field while it is typed in.
         let scope = navigation.listOptions.scopeInForce(
-          query: navigation.searchText, filter: navigation.searchedFilter
+          query: navigation.searchText, filter: navigation.searchedFilter,
+          definition: navigation.definition(of: navigation.searchedFilter)
         ).tokens()
         let terms = SearchQuery.tokenized(
           navigation.searchText, workingGroups: library.knownWorkingGroups
@@ -131,7 +133,8 @@ import SwiftUI
         return scope.map(FieldToken.scope) + terms.map(FieldToken.term)
       } set: { tokens in
         let scope = navigation.listOptions.scopeInForce(
-          query: navigation.searchText, filter: navigation.searchedFilter)
+          query: navigation.searchText, filter: navigation.searchedFilter,
+          definition: navigation.definition(of: navigation.searchedFilter))
         let kept = Set(tokens.compactMap(\.scopePart))
         for token in scope.tokens() where !kept.contains(token.part) {
           navigation.listOptions.searchScope =

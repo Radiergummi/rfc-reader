@@ -377,6 +377,51 @@ struct LibraryListDefaultsTests {
     #expect(numbers(searched) == [1149])
   }
 
+  // MARK: - Dynamic collections (#355)
+
+  private let research = RFCIndex(
+    rfcs: [
+      Fixtures.metadata(1945, title: "HTTP/1.0", currentStatus: .historic, stream: .ietf),
+      Fixtures.metadata(9000, title: "HTTP research", stream: .irtf),
+    ],
+    series: [])
+
+  private func numbers(_ list: LibraryList, in index: RFCIndex) -> [Int] {
+    list.rows(in: index, search: IndexSearch(index: index)).map(\.id.number)
+  }
+
+  /// A dynamic collection's own `stream:` is where the reader chose to look, as a
+  /// stream's list is: the default search stream would leave its search empty.
+  @Test func `a dynamic collection's stream lifts the search scope's`() {
+    let options = ListOptions(searchScope: SearchScope(stream: .ietf))
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "http", options: options, definition: "stream:irtf")
+
+    #expect(numbers(list, in: research) == [9000])
+    #expect(
+      options.scopeInForce(query: "http", filter: list.filter, definition: "stream:irtf")
+        .isEverything)
+  }
+
+  @Test func `a dynamic collection's status lifts current only`() {
+    let options = ListOptions(searchScope: SearchScope(currentOnly: true))
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "http", options: options,
+      definition: "status:historic")
+
+    #expect(numbers(list, in: research) == [1945])
+  }
+
+  /// A dynamic collection is the reader's own, as a collection of members is.
+  @Test func `a dynamic collection keeps its april 1st RFCs`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "", options: hidingJokes, definition: "avian")
+    #expect(numbers(list) == [1149])
+    let searched = LibraryList(
+      filter: .collection(UUID()), query: "carriers", options: hidingJokes, definition: "avian")
+    #expect(numbers(searched) == [1149])
+  }
+
   @Test func `hide read reads what was read, and leaves it out`() {
     struct Sources: ListSources {
       var bookmarked: Set<DocumentID> { [] }
