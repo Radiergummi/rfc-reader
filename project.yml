@@ -223,6 +223,26 @@ targets:
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
 
+  # The driver for hand checks on iOS (#743): XCUITest scenarios that launch the
+  # built app in the Simulator and tap, swipe and read it from outside, as a
+  # person would, saving screenshots as they go. Not the App's tests (it has none,
+  # CLAUDE.md), and run only by `make hand-check`, never by `make check` or CI.
+  HandChecks:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS]
+    sources:
+      - path: App/HandChecks
+    dependencies:
+      - target: RFCReader
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader.hand-checks
+        TEST_TARGET_NAME: RFCReader
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
+        SUPPORTS_MACCATALYST: NO
+
 # Declared so XcodeGen writes a shared scheme. Without one, xcodebuild makes a
 # scheme for the target on the fly and matches -destination against it before it
 # knows the target's platforms, logging "Supported platforms for the buildables in
@@ -232,3 +252,13 @@ schemes:
     build:
       targets:
         RFCReader: all
+  # The one scheme with a test action, so `xcodebuild test` builds the app and
+  # the scenarios together; the App's own scheme has none.
+  HandChecks:
+    build:
+      targets:
+        RFCReader: [test]
+        HandChecks: [test]
+    test:
+      targets:
+        - HandChecks

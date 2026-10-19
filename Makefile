@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check run install appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -370,6 +370,36 @@ run-sim: ios-app
 	  xcrun simctl install '$(IOS_SIMULATOR)' "$$app" && \
 	  xcrun simctl launch --terminate-running-process '$(IOS_SIMULATOR)' \
 	    "$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$app/Info.plist")"
+
+## Run one hand check in the iOS Simulator and export its screenshots
+# The scenarios in App/HandChecks (#743) drive the app from outside with XCUITest:
+# they tap, swipe, long-press, open links and answer the system's alerts, which
+# `run-sim` cannot. Each starts from a first launch: the app is removed from the
+# simulated device first, with what it stored and the permissions it was given.
+# The screenshots its steps save land in hand-checks/<CHECK>/, named by the step,
+# with the run's result bundle beside them, whether it passed or not. No
+# diagnostics on a failure: the sysdiagnose xcodebuild collects then takes up to
+# ten minutes, and the screenshots say more. Not part of `check` or CI: a change
+# that needs a hand check runs the one it needs. Without CHECK, it lists them.
+#
+#   make hand-check CHECK=testReaderStackPushAndPop
+#   make hand-check CHECK=testCitationLongPress IOS_SIMULATOR='iPad Air 11-inch (M4)'
+#
+HAND_CHECKS := hand-checks
+hand-check: xcodeproj
+	@test -n '$(CHECK)' || { echo "set CHECK to one of these:"; \
+	  sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
+	@rm -rf '$(HAND_CHECKS)/$(CHECK)' '$(HAND_CHECKS)/$(CHECK).xcresult'
+	@xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null
+	@xcrun simctl uninstall '$(IOS_SIMULATOR)' me.mazetti.rfc-reader
+	@mkdir -p '$(HAND_CHECKS)'
+	xcodebuild test -project $(PROJECT) -scheme HandChecks \
+	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) \
+	  -only-testing:'HandChecks/HandChecks/$(CHECK)' -resultBundlePath '$(HAND_CHECKS)/$(CHECK).xcresult' \
+	  -collect-test-diagnostics never -quiet $(SIGNING); \
+	  status=$$?; \
+	  Tools/hand-checks/export.py '$(HAND_CHECKS)/$(CHECK).xcresult' '$(HAND_CHECKS)/$(CHECK)'; \
+	  exit $$status
 
 ## Build and launch the macOS app
 # A running copy is quit first, or `open` would just bring the old build back to
