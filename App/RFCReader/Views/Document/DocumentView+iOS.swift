@@ -170,9 +170,11 @@
 
 #if !os(macOS)
   /// A draft's chrome on iOS (#728): its name in the bar, and of an RFC's toolbar
-  /// what a draft has, Contents and the text size, with the panel as a sheet in
-  /// compact width, as `IOSDocumentChrome` presents it. Not Bookmark, Share, Info or
-  /// More, whose actions are an RFC's: the index lists it, and a draft is in no index.
+  /// what a draft has, Contents, the text size and More with the text's Original
+  /// Text and Translate, with the panel as a sheet in compact width, as
+  /// `IOSDocumentChrome` presents it. Not Bookmark, Share or Info, nor More's other
+  /// items, whose actions are an RFC's: the index lists it, and a draft is in no
+  /// index.
   struct IOSDraftChrome: ViewModifier {
     let library: LibraryModel
     let navigation: NavigationModel
@@ -183,6 +185,7 @@
     let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
+    @Environment(\.openURL) private var openURL
     /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
     @State private var readingPathAfterPanel: ReadingPathRequest?
 
@@ -199,8 +202,20 @@
             } label: {
               Label("Contents", systemImage: "list.bullet.rectangle.portrait")
             }
-            .keyboardShortcut("i", modifiers: [.command, .option])
+            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
             TextSizeButton(library: library)
+            Menu {
+              MenuSections(
+                sections: DocumentMenus.draftMore(
+                  showsOriginal: reader.showOriginal, showsTranslation: reader.showTranslation),
+                perform: { action in
+                  DocumentActionPerformer(
+                    id: nil, metadata: nil, reader: reader, open: { openURL($0) }
+                  ).perform(action)
+                })
+            } label: {
+              Label("More", systemImage: "ellipsis")
+            }
           }
         }
         .sheet(isPresented: chrome.isCollapsed && isShown ? $showsInspector : .constant(false)) {

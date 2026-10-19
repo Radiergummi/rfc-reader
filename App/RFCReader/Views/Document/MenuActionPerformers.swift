@@ -6,7 +6,8 @@ import RFCReaderKit
 /// `DocumentMenus.Action.effect`, and this copies, opens or toggles (#600). The
 /// Mac's toolbar opens with `NSWorkspace`, iOS's with the environment's `openURL`.
 struct DocumentActionPerformer {
-  let id: DocumentID
+  /// The RFC acted on; nil for a draft (#728), whose text has only its toggles.
+  let id: DocumentID?
   let metadata: RFCMetadata?
   let reader: ReaderState
   let open: (URL) -> Void

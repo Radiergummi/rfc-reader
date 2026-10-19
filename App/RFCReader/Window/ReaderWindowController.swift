@@ -558,9 +558,11 @@
 
     /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
     func perform(_ action: DocumentMenus.Action) {
-      guard let id = navigation.shown else { return }
+      // An RFC, or a draft (#728), whose text has the toggles alone.
+      guard navigation.shownDocument != nil else { return }
+      let id = navigation.shown
       DocumentActionPerformer(
-        id: id, metadata: library.metadata(id), reader: reader,
+        id: id, metadata: id.flatMap(library.metadata), reader: reader,
         open: { NSWorkspace.shared.open($0) }
       ).perform(action)
     }

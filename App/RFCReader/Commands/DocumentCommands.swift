@@ -27,8 +27,8 @@ struct DocumentCommands: Commands {
     private var showsDocument: Bool {
       navigation?.shownDocument != nil && reader?.hasDocument == true
     }
-    /// An RFC on screen, what Share, Copy as Quote and the Document menu act on: a
-    /// draft has none of them (#728).
+    /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
+    /// (#728). The Document menu offers a draft its text's toggles.
     private var showsRFC: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
@@ -188,15 +188,20 @@ struct DocumentCommands: Commands {
           // Disabled rather than gone with no reader window, as the other menus'
           // items are: an empty menu in the bar says nothing.
           MenuSections(
-            sections: DocumentMenus.more(
-              showsOriginal: reader?.showOriginal == true,
-              showsTranslation: reader?.showTranslation == true,
-              errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
-                .errataURL,
-              precedingDraft: reader?.precedingDraft),
+            sections: navigation?.shownDraft != nil
+              // A draft's text has its toggles, and none of an RFC's pages (#728).
+              ? DocumentMenus.draftMore(
+                showsOriginal: reader?.showOriginal == true,
+                showsTranslation: reader?.showTranslation == true)
+              : DocumentMenus.more(
+                showsOriginal: reader?.showOriginal == true,
+                showsTranslation: reader?.showTranslation == true,
+                errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
+                  .errataURL,
+                precedingDraft: reader?.precedingDraft),
             perform: perform)
         }
-        .disabled(!showsRFC)
+        .disabled(!showsDocument)
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.

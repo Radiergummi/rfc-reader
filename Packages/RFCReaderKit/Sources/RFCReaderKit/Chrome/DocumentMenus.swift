@@ -99,12 +99,36 @@ public enum DocumentMenus {
       pages.append(
         Item(String(kit: "Preceding Draft", locale: locale), .openPrecedingDraft(precedingDraft)))
     }
+    let texts = texts(
+      showsOriginal: showsOriginal, showsTranslation: showsTranslation,
+      offersTranslation: offersTranslation, locale: locale)
+    return [texts, pages]
+  }
+
+  /// A draft's More (#728): the original text and a translation, which a draft's
+  /// text has as an RFC's does, and none of an RFC's pages, which the RFC Editor
+  /// and the index name.
+  public static func draftMore(
+    showsOriginal: Bool, showsTranslation: Bool,
+    offersTranslation: Bool = DocumentTranslation.target != nil, locale: Locale = .interface
+  ) -> Sections<Action> {
+    [
+      texts(
+        showsOriginal: showsOriginal, showsTranslation: showsTranslation,
+        offersTranslation: offersTranslation, locale: locale)
+    ]
+  }
+
+  /// Original Text, and Translate where one is offered.
+  private static func texts(
+    showsOriginal: Bool, showsTranslation: Bool, offersTranslation: Bool, locale: Locale
+  ) -> [Item<Action>] {
     let original = Item(
       String(kit: "Original Text", locale: locale), Action.toggleOriginalText, isOn: showsOriginal)
-    guard offersTranslation else { return [[original], pages] }
+    guard offersTranslation else { return [original] }
     let translation = Item(
       String(kit: "Translate", locale: locale), Action.toggleTranslation, isOn: showsTranslation)
-    return [[original, translation], pages]
+    return [original, translation]
   }
 
   /// Every collection, checked where `document` is already in it, and New
@@ -192,21 +216,23 @@ public enum DocumentMenus {
 
 extension DocumentMenus.Action {
   /// What this does for `id`, read at `section`: nil for a citation without the
-  /// document's metadata, which there is nothing to cite from.
+  /// document's metadata, which there is nothing to cite from. With no `id`, a
+  /// draft's (#728), only the text's own toggles do anything.
   public func effect(
-    for id: DocumentID, metadata: RFCMetadata?, section: String?
+    for id: DocumentID?, metadata: RFCMetadata?, section: String?
   ) -> DocumentMenus.Effect? {
     switch self {
     case .copyCitation(let style):
       metadata.map {
         .copy(DocumentActions.citation($0, section: section, style: style), .citation)
       }
-    case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section), .link)
+    case .copySectionLink:
+      id.map { .copy(DocumentActions.sectionLink(id: $0, section: section), .link) }
     case .toggleOriginalText: .toggleOriginalText
     case .toggleTranslation: .toggleTranslation
-    case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
+    case .openInfoPage: id.map { .open(RFCEditorEndpoints.infoPage($0)) }
     case .openErrata(let url), .openPrecedingDraft(let url): .open(url)
-    case .openDatatracker: .open(RFCEditorEndpoints.datatracker(id))
+    case .openDatatracker: id.map { .open(RFCEditorEndpoints.datatracker($0)) }
     }
   }
 }
