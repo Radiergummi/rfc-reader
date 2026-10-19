@@ -83,6 +83,8 @@ public final class DocumentTextBuilder {
   var givenBacklinks: [String: [Backlink]]?
   /// The errata each heading's chip lists (#387).
   var errata = ErrataMarks.none
+  /// What changed since another revision, which a redline build marks (#729).
+  var redline: RevisionDiff?
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -163,6 +165,19 @@ public final class DocumentTextBuilder {
       style: style, choices: choices, hints: hints, labels: translation ?? .english)
     builder.errata = errata
     return build(document, title: title, translation: translation, with: builder)
+  }
+
+  /// A redline (#729): `document`, the newer of two, with what `diff` says changed
+  /// since the older marked in it: inserted words tinted and underlined, deleted
+  /// ones struck through and left out of a copy, sections added, moved and removed
+  /// said under their headings.
+  public static func build(
+    _ document: RFCDocument, redline diff: RevisionDiff, style: ReadingStyle,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+  ) -> BuiltDocument {
+    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
+    builder.redline = diff
+    return build(document, title: nil, translation: nil, with: builder)
   }
 
   /// A translated document's build (#749), in its labels, with the original's
@@ -338,6 +353,7 @@ extension DocumentTextBuilder {
       }
     }
     appendAbstract(document.header.abstract)
+    appendRemovedSections(after: nil)
     for section in document.sections {
       appendSection(section, depth: 1)
     }
@@ -492,7 +508,13 @@ extension DocumentTextBuilder {
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
     }
-    appendBlocks(section.blocks, indent: 0)
+    if let redline {
+      appendRedlineCaption(for: section.anchor)
+      appendRedline(section.blocks, of: section.anchor, in: redline)
+      appendRemovedSections(after: section.anchor)
+    } else {
+      appendBlocks(section.blocks, indent: 0)
+    }
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
