@@ -35,7 +35,7 @@
               title: String(localized: "Copy Citation"),
               image: UIImage(systemName: "quote.opening")
             ) { _ in
-              reader.copyCitation()
+              reader.copyCitation(nil)
             })
         }
       }

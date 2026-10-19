@@ -116,6 +116,19 @@ struct QuoteCitationTests {
     #expect(try quote(settings: settings).markdown.hasSuffix("— RFC 9110, Section 1"))
   }
 
+  /// A BibTeX entry or an xml2rfc reference describes the whole document, in lines
+  /// of its own, and the reference's tags would be taken for HTML: the line after a
+  /// quote is Markdown's for them, which names the section.
+  @Test(arguments: [CitationStyle.bibtex, .xml2rfc])
+  func `a whole-document style quotes with the markdown line`(style: CitationStyle) throws {
+    var settings = ReaderSettings()
+    settings.citationStyle = style
+    let metadata = Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022)
+    #expect(
+      try quote(settings: settings, cited: .rfc(metadata)).markdown.hasSuffix(
+        "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
+  }
+
   @Test func `a quote leaves a heading's number out where the reader asks`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())

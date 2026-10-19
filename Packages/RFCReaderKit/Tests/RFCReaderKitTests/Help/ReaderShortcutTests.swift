@@ -63,6 +63,12 @@ struct ReaderShortcutTests {
       ])
   }
 
+  /// Edit ▸ Copy Citation (#712), which an iPad's keyboard reaches too.
+  @Test(arguments: ReaderShortcut.Platform.allCases)
+  func `copy citation is shift command C on both platforms`(platform: ReaderShortcut.Platform) {
+    #expect(ReaderShortcut.copyCitation.chord(on: platform)?.symbols == "⇧⌘C")
+  }
+
   /// Written as a menu writes it: ⌃⌥⇧⌘, then the key.
   @Test func `a chord is written in the menu's order`() {
     #expect(ReaderShortcut.copyAsQuote.chord(on: .mac)?.symbols == "⌥⇧⌘C")

@@ -22,7 +22,8 @@ import RFCKit
 /// Markdown unless it chose otherwise, so it and the Cite menu cannot disagree; it
 /// links the site Settings chose, the public rfc-editor.org page unless it chose
 /// otherwise, which works for a reader without the app. A style that needs the
-/// index's entry falls back to Markdown for a document the index doesn't list. The
+/// index's entry falls back to Markdown for a document the index doesn't list, and
+/// BibTeX and xml2rfc, which cite the whole document, always do. The
 /// rich flavors and the HTML link the short citation whatever the style: a rich
 /// target shows a link, not a BibTeX entry. The text is `SelectionText`'s, so a
 /// reference reads as its label, as Copy writes it.
@@ -108,9 +109,12 @@ public enum QuoteCitation {
     }
 
     // Only the styles that need the index's entry need `cited`; without it, the
-    // line is Markdown's, which reads the designation alone.
+    // line is Markdown's, which reads the designation alone. So it is for a style
+    // that describes the whole document in lines of its own, BibTeX's or xml2rfc's,
+    // which would lose the section and end the quote in an entry.
+    let chosen = settings.citationStyle
     let style =
-      cited == nil && settings.citationStyle.needsIndexEntry ? .markdown : settings.citationStyle
+      !chosen.citesSections || (cited == nil && chosen.needsIndexEntry) ? .markdown : chosen
     let citation = DocumentActions.citation(
       cited ?? CitedDocument(bare: document), section: section, style: style,
       site: settings.linkSite)

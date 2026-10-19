@@ -4,6 +4,8 @@ import SwiftUI
 
 #if os(macOS)
   import AppKit
+#else
+  import UIKit
 #endif
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
@@ -89,10 +91,14 @@ struct DocumentCommands: Commands {
       navigation?.selection.flatMap(library.citedDocument)
     }
 
-    /// Edit ▸ Copy Citation (#712), of the section being read: the selection's
-    /// own is the edit menu's, in the text.
+    /// Edit ▸ Copy Citation (#712): of the section the selection starts in, where the
+    /// reader's text has the focus and a selection, as on the Mac, and otherwise of
+    /// the section being read.
     private func copyCitation() {
-      guard let shown = navigation?.shown, let reader else { return }
+      let request = CopyCitationRequest()
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyCitation(_:)), to: nil, from: request, for: nil)
+      guard !request.handled, let shown = navigation?.shown, let reader else { return }
       DocumentActionPerformer(id: shown, cited: citedDocument, reader: reader, open: { _ in })
         .perform(.copyPreferredCitation)
     }

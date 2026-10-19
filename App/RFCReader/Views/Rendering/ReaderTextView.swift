@@ -5,6 +5,13 @@ import RFCReaderKit
   import UIKit
   import UniformTypeIdentifiers
 
+  /// Edit ▸ Copy Citation's request to whichever reader's text has the focus (#712):
+  /// handled once that text has cited its selection, and otherwise the command cites
+  /// the section being read.
+  final class CopyCitationRequest: NSObject {
+    var handled = false
+  }
+
   /// The reader's text view, which copies what it means rather than what it holds.
   ///
   /// See `SelectionText`: a chip's symbol lives in the storage as an
@@ -131,10 +138,13 @@ import RFCReaderKit
       copyText(nil)
     }
 
-    /// Copy Citation, offered in the edit menu beside Copy (#712).
-    func copyCitation() {
-      guard let citation = citeSelection(selectedRange) else { return }
+    /// Copy Citation, offered in the edit menu beside Copy, and Edit ▸ Copy Citation
+    /// (⇧⌘C) sent to the first responder, which marks its request handled where it
+    /// had a selection to cite (#712).
+    @objc func copyCitation(_ sender: Any?) {
+      guard selectedRange.length > 0, let citation = citeSelection(selectedRange) else { return }
       Clipboard.copy(citation, announcing: .citation)
+      (sender as? CopyCitationRequest)?.handled = true
     }
 
     /// As Settings say (#712): the selection as text, or quoted with its citation,
