@@ -978,6 +978,16 @@
         }
       }
     },
+    "Change Highlight Color" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Farbe der Markierung ändern"
+          }
+        }
+      }
+    },
     "Charter" : {
       "localizations" : {
         "de" : {
@@ -1124,6 +1134,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Datatracker"
+          }
+        }
+      }
+    },
+    "Delete Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung löschen"
           }
         }
       }
@@ -1514,6 +1534,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Info ausblenden"
+          }
+        }
+      }
+    },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markieren"
+          }
+        }
+      }
+    },
+    "Highlighted, blue" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, blau"
+          }
+        }
+      }
+    },
+    "Highlighted, green" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, grün"
+          }
+        }
+      }
+    },
+    "Highlighted, pink" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, rosa"
+          }
+        }
+      }
+    },
+    "Highlighted, purple" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, lila"
+          }
+        }
+      }
+    },
+    "Highlighted, yellow" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, gelb"
           }
         }
       }
@@ -2304,6 +2384,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pink"
+          }
+        }
+      }
+    },
+    "Place Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung setzen"
           }
         }
       }
@@ -3562,6 +3652,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In Prüfung"
+          }
+        }
+      }
+    },
+    "Underline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstreichen"
+          }
+        }
+      }
+    },
+    "Underlined" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstrichen"
           }
         }
       }

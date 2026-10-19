@@ -25,9 +25,10 @@ public enum CacheEviction {
   }
 
   /// What eviction never removes: bookmarks, a bookmark being a promise to keep the
-  /// document offline; what was read since `readCutoff`; a document marked Keep
-  /// Offline, whose cached body waits for the keeper to move it (#358); and
-  /// whatever a window has open, which includes the document just fetched. A
+  /// document offline, and so is a document with annotations, which the Annotations
+  /// tab relocates against (#522); what was read since `readCutoff`; a document
+  /// marked Keep Offline, whose cached body waits for the keeper to move it (#358);
+  /// and whatever a window has open, which includes the document just fetched. A
   /// bookmarked, read or marked series stands for its members (`withMembers`,
   /// #656); what is open is the document a window shows, already a member.
   public static func pinned(

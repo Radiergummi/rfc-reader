@@ -46,6 +46,7 @@ public enum ScriptPane: CaseIterable, Sendable {
   case contents
   case references
   case requirements
+  case annotations
   case information
 
   /// Its enumerator's name in the dictionary.
@@ -54,6 +55,7 @@ public enum ScriptPane: CaseIterable, Sendable {
     case .contents: "contents"
     case .references: "references"
     case .requirements: "requirements"
+    case .annotations: "annotations"
     case .information: "information"
     }
   }
@@ -63,6 +65,7 @@ public enum ScriptPane: CaseIterable, Sendable {
     case .contents: ScriptCode.value("RIpC")
     case .references: ScriptCode.value("RIpR")
     case .requirements: ScriptCode.value("RIpQ")
+    case .annotations: ScriptCode.value("RIpA")
     case .information: ScriptCode.value("RIpI")
     }
   }

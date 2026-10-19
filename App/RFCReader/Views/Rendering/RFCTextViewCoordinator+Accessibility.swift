@@ -49,7 +49,13 @@ extension RFCTextViewCoordinator {
         self?.accessibilityRotorResult(
           items: self?.accessibilityDiagrams ?? [], predicate: predicate)
       }
-      textView.accessibilityCustomRotors = [headings, links, diagrams]
+      // What the fragments draw of a highlight, VoiceOver cannot see (#522).
+      let highlights = UIAccessibilityCustomRotor(name: String(localized: "Highlights")) {
+        [weak self] predicate in
+        self?.accessibilityRotorResult(
+          items: self?.accessibilityHighlights ?? [], predicate: predicate)
+      }
+      textView.accessibilityCustomRotors = [headings, links, diagrams, highlights]
     }
 
     /// `UIAccessibilityCustomRotorItemResult` has no label override (unlike its
@@ -93,7 +99,10 @@ extension RFCTextViewCoordinator {
       let headings = NSAccessibilityCustomRotor(rotorType: .heading, itemSearchDelegate: self)
       let links = NSAccessibilityCustomRotor(rotorType: .link, itemSearchDelegate: self)
       let diagrams = NSAccessibilityCustomRotor(rotorType: .image, itemSearchDelegate: self)
-      textView.setAccessibilityCustomRotors([headings, links, diagrams])
+      // What the fragments draw of a highlight, VoiceOver cannot see (#522).
+      let highlights = NSAccessibilityCustomRotor(
+        label: String(localized: "Highlights"), itemSearchDelegate: self)
+      textView.setAccessibilityCustomRotors([headings, links, diagrams, highlights])
     }
   }
 
@@ -117,6 +126,7 @@ extension RFCTextViewCoordinator {
       case .heading: items = accessibilityHeadings
       case .link: items = accessibilityLinks
       case .image: items = accessibilityDiagrams
+      case .custom: items = accessibilityHighlights
       default: return nil
       }
       let currentLocation = searchParameters.currentItem?.targetRange.location

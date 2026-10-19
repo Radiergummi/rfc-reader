@@ -13,8 +13,15 @@ import os
 /// offset, anchor and reading position holds across a mode switch.
 ///
 /// It also holds what the fragments draw for the reading mode: the headings'
-/// disclosures, and Implementer's requirement bands (#700). A fragment finds it as
-/// its layout manager's content manager's delegate.
+/// disclosures, and Implementer's requirement bands (#700); and this text view's
+/// highlights (#522), which are never in the storage, since a build is shared. A
+/// fragment finds it as its layout manager's content manager's delegate.
+///
+/// Highlights are held here rather than as rendering attributes on the layout
+/// manager, which the design first chose: `invalidateRenderingAttributes(for:)`,
+/// which the reader's redraw calls over the whole document, drops every rendering
+/// attribute added to it, as a probe of `NSTextView` showed
+/// (`docs/decisions/2026-10-18-highlights-are-drawn-from-the-position-map.md`).
 ///
 /// Not main-actor bound: TextKit enumerates the content and draws as it lays out,
 /// which it does off the main thread too, so what it holds is behind a lock.
@@ -26,6 +33,7 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
     var hidden = HiddenText()
     var disclosures: [Int: Bool] = [:]
     var bands = RequirementBands()
+    var highlights = HighlightMarks([])
   }
 
   private let state = OSAllocatedUnfairLock(initialState: State())
@@ -51,6 +59,16 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
   /// stays as it is, as it does not depend on them.
   func band(_ bands: RequirementBands) {
     state.withLock { $0.bands = bands }
+  }
+
+  /// The highlights this text view draws, in place of those it drew.
+  func highlight(_ marks: HighlightMarks) {
+    state.withLock { $0.highlights = marks }
+  }
+
+  /// The highlight marks that meet the document range `range`, whole.
+  func highlights(meeting range: NSRange) -> [HighlightMark] {
+    state.withLock { $0.highlights.marks(meeting: range) }
   }
 
   /// Whether the heading whose paragraph starts at `offset` has a disclosure, and if

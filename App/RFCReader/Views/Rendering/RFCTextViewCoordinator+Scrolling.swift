@@ -15,9 +15,12 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
   }
 
   /// Stops reporting to the controller, which no longer asks this text view: it is
-  /// going away.
+  /// going away. What it placed goes with it, so the Annotations tab says why nothing
+  /// is placed while the original text is shown in its place (#522).
   func releaseController() {
-    if controller?.driver === self { controller?.driver = nil }
+    guard controller?.driver === self else { return }
+    controller?.driver = nil
+    controller?.reportHighlights(nil)
   }
 
   var isInstalled: Bool { built != nil && textView != nil }

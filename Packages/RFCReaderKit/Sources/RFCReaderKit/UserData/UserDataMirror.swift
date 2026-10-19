@@ -36,6 +36,9 @@ public final class UserDataMirror {
   /// device arrives here too.
   public private(set) var offlineMarks: Set<DocumentID> = []
 
+  /// Every highlight (#522): what the readers draw and the Annotations tab lists.
+  public private(set) var annotations = AnnotationSnapshot.empty
+
   /// Whether `offlineMarks` has been read from the store at least once. Until it
   /// has, its emptiness means nothing, and reconciling against it would move every
   /// kept body back into the cache.
@@ -60,6 +63,8 @@ public final class UserDataMirror {
   @ObservationIgnored public var onRecentlyReadCountChanged: () -> Void = {}
   /// Called when `offlineMarks` changed, and after their first read whatever it found.
   @ObservationIgnored public var onOfflineMarksChanged: () -> Void = {}
+  /// Called when `annotations` changed.
+  @ObservationIgnored public var onAnnotationsChanged: () -> Void = {}
 
   /// The mirrors whose last fetch failed. The next save reads them again, whatever
   /// it changed, so a failure is mended on the next save, as it was when every save
@@ -106,6 +111,24 @@ public final class UserDataMirror {
     if mirrors.contains(.collections) { refreshCollections() }
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
     if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
+    if mirrors.contains(.annotations) { refreshAnnotations() }
+  }
+
+  private func refreshAnnotations() {
+    let snapshot: AnnotationSnapshot
+    do {
+      snapshot = try AnnotationSnapshot.fetch(in: container.mainContext)
+    } catch {
+      // The last snapshot stands until a fetch succeeds, which the next save tries:
+      // an empty one would draw no highlight and pin no annotated document.
+      failedMirrors.insert(.annotations)
+      mirrorLog.error(
+        "reading annotations failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    guard snapshot != annotations else { return }
+    annotations = snapshot
+    onAnnotationsChanged()
   }
 
   /// Reads the marks again now. A save of a mark reads them already, synchronously
@@ -208,6 +231,27 @@ public final class UserDataMirror {
         "changing a collection failed: \(String(describing: error), privacy: .public)")
       return false
     }
+  }
+
+  /// Runs a change to annotations on the main context, logged rather than shown when
+  /// it fails, as a collection's is (#125). Answers whether it was made.
+  @discardableResult
+  public func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
+    do {
+      try change(container.mainContext)
+      return true
+    } catch {
+      mirrorLog.error(
+        "changing an annotation failed: \(String(describing: error), privacy: .public)")
+      return false
+    }
+  }
+
+  /// Logs a failed undo or redo of a change to annotations.
+  public static func logAnnotationUndoFailure(_ error: any Error) {
+    mirrorLog.error(
+      "undoing or redoing an annotation's change failed: \(String(describing: error), privacy: .public)"
+    )
   }
 
   /// Adds the bookmark or removes it, on the main context, titled `title`. A failure

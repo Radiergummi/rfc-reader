@@ -336,6 +336,9 @@ struct DocumentView: View {
       .onChange(of: controller.hasSelection) { _, hasSelection in
         writer.hasSelection = hasSelection
       }
+      .onChange(of: controller.highlightStatuses) { _, statuses in
+        writer.highlightStatuses = statuses
+      }
       // A section the text view opened or closed itself: a heading toggled, a jump
       // into folded text.
       .onChange(of: controller.foldingRequest) {
@@ -871,6 +874,8 @@ struct DocumentView: View {
     // The section it is in, which reinstating cleared, and which the controller
     // publishes only as it changes.
     if let anchor = controller.section { showSection(anchor) }
+    // Where its build placed the highlights, which reinstating cleared too (#522).
+    writer.highlightStatuses = controller.highlightStatuses
     updateFolding()
   }
 

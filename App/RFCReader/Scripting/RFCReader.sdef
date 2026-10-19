@@ -20,6 +20,7 @@
       <enumerator name="contents" code="RIpC" description="The table of contents."/>
       <enumerator name="references" code="RIpR" description="The documents the RFC cites."/>
       <enumerator name="requirements" code="RIpQ" description="The requirements the RFC states."/>
+      <enumerator name="annotations" code="RIpA" description="Your highlights in the RFC."/>
       <enumerator name="information" code="RIpI" description="What the index knows about the RFC."/>
     </enumeration>
 

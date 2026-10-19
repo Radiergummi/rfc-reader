@@ -440,6 +440,16 @@
         }
       }
     },
+    "Abstract" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusammenfassung"
+          }
+        }
+      }
+    },
     "Acknowledgements" : {
       "localizations" : {
         "de" : {
@@ -526,6 +536,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle RFCs sind indiziert."
+          }
+        }
+      }
+    },
+    "Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
           }
         }
       }
@@ -1030,6 +1050,16 @@
         }
       }
     },
+    "Delete Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung löschen"
+          }
+        }
+      }
+    },
     "Delete “%@”?" : {
       "localizations" : {
         "de" : {
@@ -1401,6 +1431,36 @@
         }
       }
     },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markieren"
+          }
+        }
+      }
+    },
+    "Highlights" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen"
+          }
+        }
+      }
+    },
+    "Highlights are shown in the document's own text." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen werden im eigenen Text des Dokuments gezeigt."
+          }
+        }
+      }
+    },
     "Identifier" : {
       "localizations" : {
         "de" : {
@@ -1417,6 +1477,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Reihe nach"
+          }
+        }
+      }
+    },
+    "In several places: choose one, or delete it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An mehreren Stellen: Wähle eine aus oder lösche sie."
           }
         }
       }
@@ -1807,6 +1877,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nächster Abschnitt"
+          }
+        }
+      }
+    },
+    "No Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Anmerkungen"
           }
         }
       }
@@ -2271,6 +2351,16 @@
         }
       }
     },
+    "Place at Occurrence %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An Fundstelle %lld setzen"
+          }
+        }
+      }
+    },
     "Preview" : {
       "localizations" : {
         "de" : {
@@ -2701,6 +2791,16 @@
         }
       }
     },
+    "Select text in the document and choose Highlight." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle Text im Dokument aus und dann „Markieren“."
+          }
+        }
+      }
+    },
     "Settings" : {
       "localizations" : {
         "de" : {
@@ -3051,6 +3151,16 @@
         }
       }
     },
+    "The document is unavailable, so its highlights cannot be shown in it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Dokument ist nicht verfügbar, daher können seine Markierungen nicht darin gezeigt werden."
+          }
+        }
+      }
+    },
     "The documents this one cites normatively, in the order to read them." : {
       "localizations" : {
         "de" : {
@@ -3107,6 +3217,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieses Dokument verwendet die Schlüsselwörter aus BCP 14 nicht."
+          }
+        }
+      }
+    },
+    "This passage no longer exists in this document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Stelle gibt es in diesem Dokument nicht mehr."
           }
         }
       }

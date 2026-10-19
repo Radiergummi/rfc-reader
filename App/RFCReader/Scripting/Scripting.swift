@@ -364,6 +364,7 @@
           case .contents: .contents
           case .references: .references
           case .requirements: .requirements
+          case .annotations: .annotations
           }
         return pane.code
       }
@@ -375,6 +376,7 @@
         case .contents: reader.tab = .contents
         case .references: reader.tab = .references
         case .requirements: reader.tab = .requirements
+        case .annotations: reader.tab = .annotations
         case .information: break
         }
       }

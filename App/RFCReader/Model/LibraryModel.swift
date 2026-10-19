@@ -148,6 +148,15 @@ final class LibraryModel {
   /// `UserDataMirror.collections`.
   var collections: CollectionSnapshot { userData.collections }
 
+  /// `UserDataMirror.annotations`: every highlight (#522).
+  var annotations: AnnotationSnapshot { userData.annotations }
+
+  /// `UserDataMirror.editAnnotations`.
+  @discardableResult
+  func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
+    userData.editAnnotations(change)
+  }
+
   /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
   /// is on, what is wanted offline, and what Available Offline lists, whether or not
   /// a body has arrived yet.
@@ -1519,8 +1528,10 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
+    // A document with annotations is kept as a bookmarked one is (#522).
+    let annotated = try AnnotationStore.annotatedDocuments(in: context)
     return CacheEviction.pinned(
-      bookmarked: bookmarked, read: read, marked: marked,
+      bookmarked: bookmarked.union(annotated), read: read, marked: marked,
       open: Set(sceneRegistry.open.compactMap(\.shown)), withMembers: withMembers(of:))
   }
 
