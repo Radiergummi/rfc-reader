@@ -91,7 +91,7 @@ public final class IndexDatabase {
       try statement.bind(amendment.section, at: 2)
       try statement.bind(amendment.amending.description, at: 3)
       try statement.bind(amendment.amendingSection, at: 4)
-      _ = try statement.step()
+      try statement.step()
     }
   }
 
