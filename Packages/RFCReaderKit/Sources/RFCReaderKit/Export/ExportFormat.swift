@@ -9,6 +9,14 @@ import UniformTypeIdentifiers
 /// it ends in. A format is added as a case here, and every surface offers it.
 public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   case pdf
+  /// One self-contained page that reads like the reader (#377).
+  case html
+  case markdown
+  /// The RFC Editor's `.txt`, pages and all.
+  case text
+  /// The RFC Editor's RFCXML; for a legacy RFC, which never was published as XML,
+  /// the app's conversion of it, which the file says it is (`convertedXML(of:)`).
+  case xml
   /// The document's grammar collected into one file (#185), for a document with one.
   case abnf
 
@@ -26,19 +34,31 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public func name(in locale: Locale = .interface) -> String {
     switch self {
     case .pdf: "PDF"
+    case .html: "HTML"
+    case .markdown: "Markdown"
+    case .text: String(kit: "Plain Text", locale: locale)
+    case .xml: "XML"
     case .abnf: String(kit: "ABNF Grammar", locale: locale)
     }
   }
 
   public var source: Source {
     switch self {
-    case .pdf, .abnf: .rendered
+    case .pdf, .html, .markdown, .abnf: .rendered
+    case .text, .xml: .published
     }
   }
 
   public var contentType: UTType {
     switch self {
     case .pdf: .pdf
+    case .html: .html
+    // Gruber's own identifier, which macOS declares; the extension where it is not.
+    case .markdown:
+      UTType("net.daringfireball.markdown")
+        ?? UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
+    case .text: .plainText
+    case .xml: .xml
     // No system type declares ABNF: plain text by the `.abnf` extension, which a save
     // panel and a file exporter keep only for a type that is the extension's.
     case .abnf: UTType(filenameExtension: "abnf", conformingTo: .plainText) ?? .plainText
@@ -48,12 +68,19 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var pathExtension: String {
     switch self {
     case .pdf: contentType.preferredFilenameExtension ?? rawValue
+    case .html: "html"
+    case .markdown: "md"
+    case .text: "txt"
+    case .xml: "xml"
     case .abnf: "abnf"
     }
   }
 
-  /// The formats `document` can be saved as: PDF always, and its grammar where it
-  /// has one.
+  /// The formats every document can be saved as.
+  public static let everyDocument: [ExportFormat] = [.pdf, .html, .markdown, .text, .xml]
+
+  /// The formats `document` can be saved as: `everyDocument`, and its grammar where
+  /// it has one.
   public static func available(for document: RFCDocument, hints: ArtworkHints = .bundled)
     -> [ExportFormat]
   {
@@ -61,7 +88,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       ABNFPresentation.dialect(ofType: $0.content.type) == .rfc5234
         && ABNF.parse($0.content.text) != nil
     }
-    return hasGrammar ? [.pdf, .abnf] : [.pdf]
+    return hasGrammar ? everyDocument + [.abnf] : everyDocument
   }
 
   /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
@@ -118,5 +145,33 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public init(remembered rawValue: String?, offered: [ExportFormat]) {
     let remembered = rawValue.flatMap(Self.init(rawValue:))
     self = remembered.flatMap { offered.contains($0) ? $0 : nil } ?? offered.first ?? .pdf
+  }
+}
+
+extension ExportFormat {
+  /// The file this format makes of `document` itself: the page, the Markdown or the
+  /// grammar. Nil for PDF, which is laid out (`PDFExport`), for the RFC Editor's own
+  /// files, and for a grammar `document` does not have. What every surface that
+  /// saves a file asks, so they save the same one.
+  public func text(of document: RFCDocument) -> String? {
+    switch self {
+    case .html: RFCHTMLSerializer().page(document)
+    case .markdown: RFCMarkdownSerializer().serialize(document)
+    case .abnf: GrammarExport.text(for: document)
+    case .pdf, .text, .xml: nil
+    }
+  }
+
+  /// A legacy RFC as XML, which the RFC Editor never published it as: the document
+  /// as the app holds it, through the serializer the corpus is converted with, with
+  /// a comment that says what it is and a link to the text it came from.
+  public static func convertedXML(of document: RFCDocument) -> String {
+    let source = document.header.id.map { RFCEditorEndpoints.document($0, format: .text) }
+    let serializer = RFCXMLSerializer(
+      options: .init(
+        generatorComment:
+          "Converted by RFC Reader from the plain-text RFC, which was never published as XML. Structure recovered heuristically; the text itself is unchanged.",
+        sourceURL: source))
+    return serializer.serialize(document)
   }
 }

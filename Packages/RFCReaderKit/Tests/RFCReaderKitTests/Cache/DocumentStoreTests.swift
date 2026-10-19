@@ -420,6 +420,39 @@ struct DocumentStoreTests {
     #expect(!sandbox.exists(id, format: .text, in: .cache))
   }
 
+  /// An export of the text saves the RFC Editor's file as it is, pages and all,
+  /// where Original Text strips them (#377).
+  @Test func `the published text is the file as fetched`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(2119)
+
+    let text = try await store.publishedFile(id, format: .text, client: fetcher)
+
+    #expect(text == (try Fixtures.data("rfc2119.txt")))
+    #expect(sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  /// The XML the reader fetched is the RFC Editor's, and an export saves it from
+  /// the disk without a second download.
+  @Test func `the published XML is the file on disk`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    let xml = try await store.publishedFile(id, format: .xml, client: fetcher)
+
+    #expect(xml == (try Fixtures.data("rfc8999.xml")))
+    #expect(fetcher.textFetches == 0)
+  }
+
   @Test func `eviction never removes a kept body`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }

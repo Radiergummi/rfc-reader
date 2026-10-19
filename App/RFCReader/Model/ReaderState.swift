@@ -30,9 +30,9 @@ final class ReaderState {
   /// Where the build on screen placed each of the document's highlights (#522), which
   /// the Annotations tab lists: nil until a build has, or when there is none.
   var highlightStatuses: [UUID: HighlightPlacement.Status]?
-  /// What the open RFC can be saved as: PDF, and its grammar where it has one
+  /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
-  var exportFormats: [ExportFormat] = [.pdf]
+  var exportFormats: [ExportFormat] = ExportFormat.everyDocument
   /// The window's reading mode and the sections it has expanded in place (#698). The
   /// mode stays from one document to the next; what was expanded does not.
   var folding = Folding() {
@@ -284,7 +284,7 @@ final class ReaderState {
     groups = []
     requirements = nil
     highlightStatuses = nil
-    exportFormats = [.pdf]
+    exportFormats = ExportFormat.everyDocument
     folding.expanded = []
     folding.openAsides = []
     folding.focused = nil

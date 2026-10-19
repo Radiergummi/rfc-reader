@@ -1294,6 +1294,22 @@ public actor DocumentStore {
     return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, as an export
+  /// saves it (#377): the one on disk, or downloaded. The `.txt` is downloaded as
+  /// Original Text downloads it, and kept with it; any other format is fetched and
+  /// not kept, since the reader never reads it.
+  public func publishedFile(_ id: DocumentID, format: FileFormat, client: any DocumentFetching)
+    async throws -> Data
+  {
+    if let data = fileURLs(id, format: format).lazy.compactMap({ try? Data(contentsOf: $0) })
+      .first
+    {
+      return data
+    }
+    if format == .text { return try await text(id, client: client) }
+    return try await client.fetchDocumentData(id, format: format)
+  }
+
   /// The `.txt`, downloaded once for every reader that wants it at the same time,
   /// and written by the one told to keep it, with no suspension between, so a
   /// removal cannot slip in before the write, and the others find it on disk once

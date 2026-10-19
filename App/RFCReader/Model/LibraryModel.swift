@@ -1494,6 +1494,14 @@ final class LibraryModel {
     return pack
   }
 
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, for an export of
+  /// it (#377).
+  func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
+    let data = try await store.publishedFile(id, format: format, client: client)
+    await evictIfGrown()
+    return data
+  }
+
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
     await evictIfGrown()
