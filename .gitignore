@@ -43,5 +43,8 @@ App/SafariExtension/RFCReaderSafari.entitlements
 # Wrangler's local state, from deploying site/
 site/.wrangler/
 
+# Screenshots and result bundles `make hand-check` exports
+/hand-checks/
+
 # Local credentials, such as the R2 keys for publishing
 .env
