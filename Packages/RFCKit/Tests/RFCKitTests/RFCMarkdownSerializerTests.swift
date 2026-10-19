@@ -65,6 +65,15 @@ struct RFCMarkdownSerializerTests {
     #expect(lines.contains("## 1. Introduction"))
   }
 
+  @Test func `the abstract carries the anchor the reader gives it`() {
+    let document = RFCDocument(
+      header: DocumentHeader(
+        id: .rfc(9999), title: "A Protocol", abstract: [.paragraph(Paragraph(text: "What."))]),
+      sections: [], source: .xml)
+    let markdown = RFCMarkdownSerializer().serialize(document)
+    #expect(markdown.contains("<!-- anchor: abstract -->\n## Abstract"))
+  }
+
   // MARK: Paragraphs and inlines
 
   @Test func `a paragraph is reflowed onto one line`() {
@@ -203,10 +212,29 @@ struct RFCMarkdownSerializerTests {
     #expect(Self.markdown([.list(list)]).contains("\n- (a)\n\n  ```\n  x = 1\n  ```\n"))
   }
 
+  @Test func `a marker ahead of an empty paragraph and a fence stands on its own line`() {
+    let item = ListItem(blocks: [
+      .paragraph(Paragraph(text: "")),
+      .preformatted(Preformatted(kind: .sourceCode, text: "x = 1")),
+    ])
+    let list = ListBlock(
+      style: .numbered(ListNumbering(counter: .lowerAlpha, prefix: "(", suffix: ")")),
+      items: [item])
+    #expect(Self.markdown([.list(list)]).contains("\n- (a)\n\n  ```\n  x = 1\n  ```\n"))
+  }
+
   @Test func `two lists in a row are kept apart`() {
     let first = ListBlock(style: .bullet, items: [ListItem(text: "one")])
     let second = ListBlock(style: .bullet, items: [ListItem(text: "two")])
     #expect(Self.markdown([.list(first), .list(second)]).contains("- one\n\n<!-- -->\n\n- two"))
+  }
+
+  @Test func `a list after a block that ends with a list is kept apart from it`() {
+    let first = ListBlock(style: .bullet, items: [ListItem(text: "one")])
+    let second = ListBlock(style: .bullet, items: [ListItem(text: "two")])
+    let figure = Figure(title: nil, blocks: [.paragraph(Paragraph(text: "Fig.")), .list(first)])
+    #expect(
+      Self.markdown([.figure(figure), .list(second)]).contains("- one\n\n<!-- -->\n\n- two"))
   }
 
   @Test func `emphasis that opens or closes with punctuation is an element`() {
@@ -259,6 +287,22 @@ struct RFCMarkdownSerializerTests {
       rows: [Table.Row(cells: [[.text("1")], [.text("one"), .lineBreak, .text("two")]])])
     let markdown = Self.markdown([.table(table)])
     #expect(markdown.contains("- **Code**: 1\\\n  **Meaning**: one\\\n  two\n"))
+  }
+
+  @Test func `a stacked cell's closing break breaks nothing`() {
+    let table = Table(
+      title: nil,
+      header: [Table.Row(cells: [[.text("Code")], [.text("Meaning")]])],
+      rows: [Table.Row(cells: [[.text("1")], [.text("one"), .lineBreak]])])
+    #expect(Self.markdown([.table(table)]).contains("- **Code**: 1\\\n  **Meaning**: one\n"))
+  }
+
+  @Test func `an empty cell with no header adds no line to a stacked row`() {
+    let table = Table(
+      title: nil,
+      header: [Table.Row(cells: [[.text("Code")]])],
+      rows: [Table.Row(cells: [[.text("1")], [], [.text("a"), .lineBreak, .text("b")]])])
+    #expect(Self.markdown([.table(table)]).contains("- **Code**: 1\\\n  a\\\n  b\n"))
   }
 
   // MARK: Verbatim, figures, asides

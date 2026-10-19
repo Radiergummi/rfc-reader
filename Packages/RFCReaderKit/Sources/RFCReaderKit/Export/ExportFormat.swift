@@ -15,7 +15,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   /// The RFC Editor's `.txt`, pages and all.
   case text
   /// The RFC Editor's RFCXML; for a legacy RFC, which never was published as XML,
-  /// the app's conversion of it, which the file says it is (`DocumentConversion`).
+  /// the app's conversion of it, which the file says it is (`convertedXML(of:)`).
   case xml
   /// The document's grammar collected into one file (#185), for a document with one.
   case abnf

@@ -26,7 +26,11 @@ public struct RFCMarkdownSerializer: Sendable {
     let byline = ExportLinks.byline(of: document.header)
     if !byline.isEmpty { parts.append([Writer.escapingLineStart(Writer.escaped(byline))]) }
     if !document.header.abstract.isEmpty {
-      parts.append(["## Abstract"])
+      // The anchor the full-text index gives the abstract, unless a section has it,
+      // as in the page (`RFCHTMLSerializer`).
+      let isTaken = document.allSections.contains { $0.anchor == FullTextIndex.abstractAnchor }
+      parts.append(
+        (isTaken ? [] : writer.anchor(FullTextIndex.abstractAnchor)) + ["## Abstract"])
       parts.append(writer.blocks(document.header.abstract))
     }
     for section in document.sections {
@@ -91,12 +95,13 @@ extension RFCMarkdownSerializer {
 
     // MARK: Blocks
 
-    /// Blocks, separated by blank lines. Two lists in a row are kept apart by an
-    /// empty comment, which CommonMark would otherwise read as one list.
+    /// Blocks, separated by blank lines. A list after a block that ends with a list
+    /// is kept apart from it by an empty comment, which CommonMark would otherwise
+    /// read as one list.
     func blocks(_ blocks: [Block]) -> [String] {
       var parts: [[String]] = []
       for part in blocks.map(block) where !part.isEmpty {
-        if let previous = parts.last, Self.isList(previous), Self.isList(part) {
+        if let previous = parts.last, Self.endsWithList(previous), Self.isList(part) {
           parts.append(["<!-- -->"])
         }
         parts.append(part)
@@ -111,6 +116,14 @@ extension RFCMarkdownSerializer {
       let digits = first.prefix { $0.isASCII && $0.isNumber }
       let rest = first.dropFirst(digits.count)
       return !digits.isEmpty && (rest.hasPrefix(". ") || rest.hasPrefix(") "))
+    }
+
+    /// Whether `lines` end with a list: whether the last of them not indented under
+    /// something else, past the anchors, is a list item.
+    static func endsWithList(_ lines: [String]) -> Bool {
+      guard let last = lines.last(where: { !$0.isEmpty && !$0.hasPrefix(" ") && !isAnchor($0) })
+      else { return false }
+      return isList([last])
     }
 
     static func isAnchor(_ line: String) -> Bool {
@@ -156,8 +169,16 @@ extension RFCMarkdownSerializer {
 
     /// A paragraph reflowed: one line, but for where the source breaks it.
     func paragraphLines(_ inlines: [Inline]) -> [String] {
-      // A break that opens or closes a paragraph breaks nothing, nor does one with
-      // only spaces between it and either end.
+      let text = self.inlines(Self.trimmingBreaks(inlines), breaks: "\\\n")
+      guard !text.isEmpty else { return [] }
+      return text.split(separator: "\n", omittingEmptySubsequences: false).map {
+        Self.escapingLineStart(String($0))
+      }
+    }
+
+    /// `inlines` without the breaks they open or close with, which break nothing,
+    /// nor do those with only spaces between them and either end.
+    static func trimmingBreaks(_ inlines: [Inline]) -> [Inline] {
       func isBlank(_ inline: Inline) -> Bool {
         switch inline {
         case .lineBreak: true
@@ -165,12 +186,7 @@ extension RFCMarkdownSerializer {
         default: false
         }
       }
-      let inlines = inlines.drop(while: isBlank).reversed().drop(while: isBlank).reversed()
-      let text = self.inlines(Array(inlines), breaks: "\\\n")
-      guard !text.isEmpty else { return [] }
-      return text.split(separator: "\n", omittingEmptySubsequences: false).map {
-        Self.escapingLineStart(String($0))
-      }
+      return Array(inlines.drop(while: isBlank).reversed().drop(while: isBlank).reversed())
     }
 
     /// `lines` as the content of a list item marked `marker`: the first line after
@@ -198,8 +214,9 @@ extension RFCMarkdownSerializer {
           let content = anchor(item.anchor) + blocks(item.blocks)
           if isCommonMark { return Self.item(marker, content) }
           // The marker opens the item's first paragraph; ahead of anything else, a
-          // fence or a table, it would stop it being one, so it stands alone.
-          guard case .paragraph = item.blocks.first else {
+          // fence or a table, it would stop it being one, so it stands alone. A
+          // paragraph with nothing to write is not the first.
+          guard case .paragraph = item.blocks.first(where: { !block($0).isEmpty }) else {
             return Self.item("-", [Self.escaped(marker), ""] + content)
           }
           return Self.item("-", Self.prefixing(Self.escaped(marker), to: content))
@@ -289,10 +306,11 @@ extension RFCMarkdownSerializer {
       let names = table.header.last?.cells.map { inlines($0, breaks: " ") } ?? []
       let rows = (table.header.count > 1 ? Array(table.header.dropLast()) : []) + table.rows
       return rows.flatMap { row -> [String] in
-        let pairs = row.cells.enumerated().map { column, cell -> String in
-          let value = inlines(cell, breaks: "\\\n")
+        let pairs = row.cells.enumerated().compactMap { column, cell -> String? in
+          let value = inlines(Self.trimmingBreaks(cell), breaks: "\\\n")
           let name = column < names.count ? names[column] : ""
-          return name.isEmpty ? value : "**\(name)**: \(value)"
+          guard !name.isEmpty else { return value.isEmpty ? nil : value }
+          return "**\(name)**: \(value)"
         }
         let lines = pairs.joined(separator: "\\\n").split(separator: "\n").map {
           Self.escapingLineStart(String($0))
