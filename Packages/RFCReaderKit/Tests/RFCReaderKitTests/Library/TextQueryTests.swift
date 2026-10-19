@@ -50,7 +50,29 @@ struct TextQueryTests {
     let index = RFCIndex(
       rfcs: [Fixtures.metadata(1, obsoletedBy: [.rfc(2)]), Fixtures.metadata(2)], series: [])
     let list = LibraryList(
-      filter: .all, query: "congestion", options: ListOptions(showsObsolete: false))
+      filter: .all, query: "congestion", options: ListOptions(showsObsoleteInSearch: false))
+    #expect(list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [.rfc(2)])
+  }
+
+  /// The default search scope narrows the sections searched as it narrows the rows
+  /// (#713), though the narrowing's own query, its qualifiers alone, is empty.
+  @Test func `the search scope narrows the documents searched`() {
+    let index = RFCIndex(
+      rfcs: [
+        Fixtures.metadata(1, obsoletedBy: [.rfc(2)]),
+        Fixtures.metadata(2),
+        Fixtures.metadata(3, currentStatus: .historic),
+      ], series: [])
+    let list = LibraryList(
+      filter: .all, query: "congestion",
+      options: ListOptions(searchScope: SearchScope(currentOnly: true)))
+    #expect(list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [.rfc(2)])
+  }
+
+  @Test func `hidden april 1st RFCs are not searched`() {
+    let index = RFCIndex(rfcs: [Fixtures.metadata(1149), Fixtures.metadata(2)], series: [])
+    let list = LibraryList(
+      filter: .all, query: "congestion", options: ListOptions(showsAprilFirst: false))
     #expect(list.textQuery(in: index, search: IndexSearch(index: index))?.documents == [.rfc(2)])
   }
 

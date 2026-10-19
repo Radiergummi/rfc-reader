@@ -115,7 +115,7 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
-# RFC_CORPUS_TEXT and RFC_CORPUS_XML, and corpus-build's the RFC index as
+# RFC_CORPUS_TEXT and RFC_CORPUS_XML, and the RFC index as
 # RFC_CORPUS_INDEX; they are skipped wherever these are unset, as in
 # `make test`; CI runs them on pull requests that touch them and weekly
 # (.github/workflows/corpus-tests.yml). Filtered by their type names, all
@@ -128,6 +128,7 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
+	  RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
