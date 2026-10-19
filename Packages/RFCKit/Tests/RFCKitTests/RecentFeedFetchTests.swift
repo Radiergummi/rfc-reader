@@ -3,6 +3,10 @@ import Testing
 
 @testable import RFCKit
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Just Published's feed asked for only when it changed, and only on a cheap network
 /// (#421), as the index is.
 @Suite("Recent feed fetch")
@@ -31,7 +35,7 @@ struct RecentFeedFetchTests {
       .fetchRecentData(unlessMatching: validators, onExpensiveNetworks: false)
     #expect(
       fetched == .changed(body, CacheValidators(entityTag: #"W/"feed-2""#, lastModified: nil)))
-    #expect(try RecentRFC.parseFeed(body) == RecentFeedParser.parse(body))
+    #expect(try RecentRFC.parseFeed(body).first?.id == .rfc(10050))
   }
 
   @Test func `a page that is not a feed is refused`() {
