@@ -159,4 +159,50 @@ struct NoteTextTests {
     NoteText.indent(by: -1, in: text, range: NSRange(location: 4, length: 1), font: font)
     #expect(NoteText.body(of: text).markdown == "- a\n  - b\n- c")
   }
+
+  @Test func `a list that changes kind stays one list`() {
+    let text = editable(
+      NoteBody([
+        .list(
+          NoteBody.List(
+            isOrdered: false,
+            items: [
+              NoteBody.Item([Span("a")]), NoteBody.Item([Span("b")]), NoteBody.Item([Span("c")]),
+            ]))
+      ]))
+    NoteText.toggleList(
+      ordered: true, in: text, range: NSRange(location: 0, length: text.length), font: font)
+    let lists = (0..<3).compactMap { index in
+      (text.attribute(.paragraphStyle, at: index * 2, effectiveRange: nil) as? NSParagraphStyle)?
+        .textLists.last
+    }
+    #expect(lists.count == 3)
+    #expect(lists.allSatisfy { $0 === lists[0] })
+    #expect(NoteText.body(of: text).markdown == "1. a\n2. b\n3. c")
+  }
+
+  @Test func `an item indented under one with a nested list joins it`() {
+    let text = editable(
+      NoteBody([
+        .list(
+          NoteBody.List(
+            isOrdered: false,
+            items: [
+              NoteBody.Item(
+                [Span("a")],
+                lists: [NoteBody.List(isOrdered: true, items: [NoteBody.Item([Span("x")])])]),
+              NoteBody.Item([Span("b")]),
+            ]))
+      ]))
+    // "b" is the third paragraph: a, x, b.
+    NoteText.indent(by: 1, in: text, range: NSRange(location: 4, length: 1), font: font)
+    #expect(NoteText.body(of: text).markdown == "- a\n  1. x\n  2. b")
+  }
+
+  @Test func `the list buttons on an empty paragraph style what is typed next`() {
+    let style = NoteText.toggledTypingStyle(ordered: false, current: nil, font: font)
+    #expect(style.textLists.count == 1)
+    let off = NoteText.toggledTypingStyle(ordered: false, current: style, font: font)
+    #expect(off.textLists.isEmpty)
+  }
 }

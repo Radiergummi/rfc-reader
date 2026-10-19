@@ -30,10 +30,8 @@ public enum NoteBlock: Sendable, Equatable {
     }
     var storage = NSRange(location: 0, length: 0)
     var make: (Target) -> NoteBlock = NoteBlock.paragraph
-    if text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) != nil {
-      _ = text.attribute(
-        .rfcVerbatim, at: location, longestEffectiveRange: &storage,
-        in: NSRange(location: 0, length: text.length))
+    if let figure = text.extent(ofBox: .rfcVerbatim, at: location) {
+      storage = figure
       make = NoteBlock.figure
     } else if let run = text.decorationRun(at: location), run.decoration == .table {
       storage = run.range

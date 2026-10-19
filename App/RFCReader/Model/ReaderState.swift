@@ -34,7 +34,7 @@ final class ReaderState {
   var notePlacement: NotePlacement?
   /// A note's editor asked for from the panel (#523): the Annotations tab, or a
   /// section's row in the contents. The reader on screen takes it to its text view.
-  var noteRequest: NoteRequest?
+  var noteRequest: PanelNoteRequest?
   /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
   var exportFormats: [ExportFormat] = ExportFormat.everyDocument
@@ -330,7 +330,7 @@ final class ReaderState {
 
   /// Opens a note's editor in the reader on screen.
   func openNote(_ request: NoteRequest) {
-    noteRequest = request
+    noteRequest = PanelNoteRequest(request: request)
   }
 
   func clear() {
@@ -376,4 +376,11 @@ extension ReaderState {
   ) -> Writer {
     ScopedWriter(self) { navigation.shows(document, at: depth) }
   }
+}
+
+/// A note's editor asked for from the panel: each a request of its own, so asking for
+/// the same note again is a change the reader sees (#523).
+struct PanelNoteRequest: Equatable {
+  let id = UUID()
+  let request: NoteRequest
 }

@@ -68,7 +68,10 @@ extension RFCTextViewCoordinator {
   /// The marker views, one a marker, reused as the markers move.
   private func showNoteMarkers(_ markers: [FragmentGeometry.NoteMarker]) {
     guard let textView else { return }
+    let shown = noteMarkers.map(\.notes)
+    let changedBodies = noteMarkersBodies != notes.map(\.body)
     noteMarkers = markers
+    noteMarkersBodies = notes.map(\.body)
     while noteMarkerViews.count > markers.count {
       noteMarkerViews.removeLast().removeFromSuperview()
     }
@@ -84,7 +87,11 @@ extension RFCTextViewCoordinator {
     for (index, (view, marker)) in zip(views, markers).enumerated() {
       view.frame = FragmentGeometry.noteMarkerFrame(
         marker, containerOrigin: origin, columnWidth: column, viewWidth: textView.bounds.width)
-      configure(view, index: index, count: marker.notes.count)
+      // Only a marker that stands for other notes now, or whose notes' text changed:
+      // this runs on every scroll tick, and its title reads the notes' Markdown.
+      if changedBodies || index >= shown.count || shown[index] != marker.notes {
+        configure(view, index: index, count: marker.notes.count)
+      }
     }
   }
 
@@ -221,6 +228,9 @@ extension Array {
 
 #if canImport(UIKit)
   extension RFCTextViewCoordinator {
+    /// A marker's one action, replaced as the button is reused.
+    private static let markerAction = UIAction.Identifier("noteMarker")
+
     private func makeMarkerView() -> UIView {
       let button = UIButton(type: .system)
       button.setImage(
@@ -237,7 +247,7 @@ extension Array {
       guard let button = view as? UIButton else { return }
       button.accessibilityLabel =
         count == 1 ? String(localized: "Note") : String(localized: "\(count) Notes")
-      button.removeTarget(nil, action: nil, for: .allEvents)
+      button.removeAction(identifiedBy: Self.markerAction, for: .primaryActionTriggered)
       let notes = notes(ofMarker: index)
       let range = markerRange(index)
       if notes.count > 1 {
@@ -252,7 +262,9 @@ extension Array {
         button.showsMenuAsPrimaryAction = false
         button.menu = nil
         button.addAction(
-          UIAction { [weak self] _ in self?.openNote(.existing(note.id), at: range) },
+          UIAction(identifier: Self.markerAction) { [weak self] _ in
+            self?.openNote(.existing(note.id), at: range)
+          },
           for: .primaryActionTriggered)
       }
     }
