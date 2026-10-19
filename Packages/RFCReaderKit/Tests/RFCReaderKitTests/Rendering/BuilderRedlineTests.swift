@@ -112,4 +112,38 @@ struct BuilderRedlineTests {
     }
     #expect(attachments == 0)
   }
+
+  /// A word struck through and its replacement are set apart, by a space a copy
+  /// leaves out.
+  @Test func `a deletion and its replacement do not run together`() {
+    let built = redline(
+      from: [section("intro", [paragraph("The server closes the connection.")])],
+      to: [section("intro", [paragraph("The server closes it.")])])
+    #expect(built.text.string.contains("the connection. it."))
+    #expect(SelectionText.plainText(of: built.text).contains("The server closes it."))
+  }
+
+  /// A removed figure takes no ordinal from the newer document's, whose choices
+  /// and openings are keyed by them.
+  @Test func `a removed block leaves the newer blocks' ordinals as they were`() {
+    let figure = { (text: String) in
+      Block.preformatted(Preformatted(kind: .artwork, text: text))
+    }
+    let kept = figure("+---+\n| B |\n+---+")
+    let plain = DocumentTextBuilder.build(
+      document([section("intro", [paragraph(unchanged), kept])]), style: ReadingStyle())
+    let built = redline(
+      from: [section("intro", [figure("+---+\n| A |\n+---+"), paragraph(unchanged), kept])],
+      to: [section("intro", [paragraph(unchanged), kept])])
+    func ordinals(_ built: BuiltDocument) -> [Int] {
+      var found: [Int] = []
+      built.text.enumerateAttribute(
+        .rfcVerbatim, in: NSRange(location: 0, length: built.text.length)
+      ) { value, _, _ in
+        if let box = value as? VerbatimBox, found.last != box.ordinal { found.append(box.ordinal) }
+      }
+      return found
+    }
+    #expect(ordinals(built).last == ordinals(plain).last)
+  }
 }

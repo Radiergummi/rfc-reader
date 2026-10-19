@@ -534,8 +534,10 @@ struct DocumentView: View {
   }
 
   /// What the header says of a translation asked for, nil showing the English.
+  /// None while a redline is asked for, which is not translated.
   private var translationMark: TranslationMark? {
-    TranslationMark(
+    guard comparedWith == nil else { return nil }
+    return TranslationMark(
       session.translationPhase, showsTranslation: showsTranslation,
       buildIsTranslation: session.state.built?.isTranslation == true)
   }
@@ -628,7 +630,8 @@ struct DocumentView: View {
         draft: draftStatus(of: document),
         comparison: comparedWith.map {
           DocumentHeaderView.Comparison(
-            older: $0, isShown: built.isRedline, failed: session.comparisonFailed == $0)
+            older: $0, isShown: built.isRedline && session.redline?.older == $0,
+            failed: session.comparisonFailed == $0)
         },
         translation: translationMark, documentErrata: built.errata.document)
       RFCTextView(
@@ -926,6 +929,8 @@ struct DocumentView: View {
     guard !ownsReader, isShown, session.hasStartedLoading else { return }
     session.reinstate(
       into: writer, library: library, showsOriginal: keptOriginal, folding: keptFolding)
+    // The comparison, which reinstating cleared, is the window's while it is on top.
+    writer { $0.comparedWith = keptComparison }
     ownsReader = true
     // The section it is in, which reinstating cleared, and which the controller
     // publishes only as it changes.

@@ -427,7 +427,9 @@ final class DocumentSession {
       let shown = translation?.document ?? document
       let rebuilt =
         if let redline {
-          await Self.built(document, redline: redline, style: style, choices: inputs.choices)
+          await Self.built(
+            document, redline: redline, style: style, choices: inputs.choices,
+            errata: inputs.errata)
         } else {
           await Self.built(
             document, style: style, choices: inputs.choices, errata: inputs.errata,

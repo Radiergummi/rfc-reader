@@ -207,10 +207,11 @@ extension DocumentSession {
   @concurrent
   static func built(
     _ document: RFCDocument, redline: RevisionDiff, style: ReadingStyle,
-    choices: PresentationChoices
+    choices: PresentationChoices, errata: ErrataMarks
   ) async -> BuiltDocument {
     signposter.withIntervalSignpost("Build redline", id: signposter.makeSignpostID()) {
-      DocumentTextBuilder.build(document, redline: redline, style: style, choices: choices)
+      DocumentTextBuilder.build(
+        document, redline: redline, style: style, choices: choices, errata: errata)
     }
   }
 
