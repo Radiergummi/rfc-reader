@@ -16,7 +16,24 @@ enum DocumentExport {
     switch format {
     case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
     case .abnf: try await grammar(of: id, library: library)
+    case .annotations: try await annotations(of: id, library: library)
     }
+  }
+
+  /// The document's highlights and notes (#524), as the store has them now.
+  private static func annotations(of id: DocumentID, library: LibraryModel) async throws -> Data {
+    let document = try await library.document(for: id)
+    let annotations = library.annotations
+    let text = await markdown(of: document, id: id, annotations: annotations)
+    return Data(text.utf8)
+  }
+
+  /// Off the main actor: placing the annotations reads the whole model text.
+  @concurrent
+  private static func markdown(
+    of document: RFCDocument, id: DocumentID, annotations: AnnotationSnapshot
+  ) async -> String {
+    AnnotationExport.markdown(of: document, id: id, annotations: annotations, exported: .now)
   }
 
   /// The document's collected grammar (#185), offered only for a document that has

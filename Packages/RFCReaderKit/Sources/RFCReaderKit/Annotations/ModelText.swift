@@ -35,6 +35,9 @@ public struct ModelText: Sendable {
   /// Every anchor's span, by where it starts, an outer span ahead of an inner one that
   /// starts with it.
   public let spans: [Span]
+  /// The text of every figure's artwork and every piece of code, in order: lines whose
+  /// columns are their meaning (#524).
+  public let verbatim: [Range<Int>]
   private let spanIndex: [String: Int]
 
   /// The abstract's anchor, as the builder marks it.
@@ -43,12 +46,13 @@ public struct ModelText: Sendable {
   public init(_ document: RFCDocument) {
     var writer = Writer()
     writer.write(document)
-    self.init(units: writer.units, spans: writer.spans)
+    self.init(units: writer.units, spans: writer.spans, verbatim: writer.verbatim)
   }
 
-  init(units: [UInt16], spans: [Span]) {
+  init(units: [UInt16], spans: [Span], verbatim: [Range<Int>] = []) {
     self.units = units
     self.spans = spans
+    self.verbatim = verbatim
     var index: [String: Int] = [:]
     for (offset, span) in spans.enumerated() where index[span.anchor] == nil {
       index[span.anchor] = offset
@@ -57,6 +61,12 @@ public struct ModelText: Sendable {
   }
 
   public var length: Int { units.count }
+
+  /// Whether `range` holds any of a figure's artwork or a piece of code.
+  public func isVerbatim(_ range: Range<Int>) -> Bool {
+    let index = verbatim.partitioningIndex { $0.upperBound > range.lowerBound }
+    return index < verbatim.count && verbatim[index].overlaps(range)
+  }
 
   /// The text in `range`.
   public func text(in range: Range<Int>) -> String {
@@ -164,6 +174,7 @@ extension ModelText {
   struct Writer {
     var units: [UInt16] = []
     var spans: [Span] = []
+    var verbatim: [Range<Int>] = []
     /// The spans being written, innermost last, as indexes into `spans`.
     private var open: [Int] = []
     /// Whether anything has been written at the top level, so the next section is
@@ -229,7 +240,11 @@ extension ModelText {
           }
         }
       case .preformatted(let content):
-        anchored(content.anchor) { $0.text(content.text) }
+        anchored(content.anchor) { writer in
+          let start = writer.units.count
+          writer.text(content.text)
+          writer.verbatim.append(start..<writer.units.count)
+        }
       case .figure(let figure):
         anchored(figure.anchor) { writer in
           if let title = figure.title {

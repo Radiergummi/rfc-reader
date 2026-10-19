@@ -63,6 +63,21 @@ struct ExportFormatTests {
     #expect(ExportFormat.pdf.name(in: .english) == "PDF")
   }
 
+  @Test func `highlights and notes are a Markdown file`() {
+    #expect(ExportFormat.annotations.source == .rendered)
+    #expect(ExportFormat.annotations.contentType.conforms(to: .plainText))
+    #expect(ExportFormat.annotations.fileName(for: .rfc(9110)) == "RFC-9110.md")
+    #expect(ExportFormat.annotations.name(in: .english) == "Highlights and Notes")
+    #expect(ExportFormat.annotations.renaming("RFC-9110.pdf") == "RFC-9110.md")
+  }
+
+  /// The next document's export does not start on a file of this one's notes.
+  @Test func `highlights and notes are not the format an export starts on next`() {
+    #expect(!ExportFormat.annotations.isRemembered)
+    #expect(ExportFormat.pdf.isRemembered)
+    #expect(ExportFormat.abnf.isRemembered)
+  }
+
   /// The Mac's pop-up remembers the last format by its raw value; one this build
   /// does not have, or none, falls back to the first rather than to nothing.
   @Test func `a remembered format falls back to the first`() {

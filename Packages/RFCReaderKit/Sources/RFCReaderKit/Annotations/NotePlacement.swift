@@ -73,13 +73,35 @@ public struct NotePlacement: Sendable, Equatable {
     _ notes: [AnnotationSnapshot.NoteEntry], highlights: HighlightPlacement,
     in built: BuiltDocument
   ) {
-    guard highlights.isPlaced, !built.isTranslation, !notes.isEmpty else {
+    guard !built.isTranslation else {
       self = .none
       return
     }
-    let model = built.positions.model
-    let relocator = Relocator(model)
     let text = built.text.string as NSString
+    self.init(notes, highlights: highlights, in: built.positions.model) { range in
+      built.positions.drawnRanges(forModel: range, in: text).first?.location
+    }
+  }
+
+  /// `notes` in the model text alone, with no marker: where they are in the document,
+  /// without a build to show them, as an export places them (#524).
+  public init(
+    _ notes: [AnnotationSnapshot.NoteEntry], highlights: HighlightPlacement, in model: ModelText
+  ) {
+    self.init(notes, highlights: highlights, in: model) { _ in nil }
+  }
+
+  /// - Parameter markerLocation: the storage offset a marker for a note at a range of
+  ///   the model text stands at, or nil for none.
+  private init(
+    _ notes: [AnnotationSnapshot.NoteEntry], highlights: HighlightPlacement,
+    in model: ModelText, markerLocation: (Range<Int>) -> Int?
+  ) {
+    guard highlights.isPlaced, !notes.isEmpty else {
+      self = .none
+      return
+    }
+    let relocator = Relocator(model)
     var statuses: [UUID: Status] = [:]
     var markers: [Marker] = []
     var relocations: [UUID: Target] = [:]
@@ -91,8 +113,8 @@ public struct NotePlacement: Sendable, Equatable {
     .sorted { ($0.1.lowerBound, $0.0.uuidString) < ($1.1.lowerBound, $1.0.uuidString) }
 
     func marker(_ note: UUID, at range: Range<Int>) {
-      if let first = built.positions.drawnRanges(forModel: range, in: text).first {
-        markers.append(Marker(note: note, location: first.location))
+      if let location = markerLocation(range) {
+        markers.append(Marker(note: note, location: location))
       }
     }
 
