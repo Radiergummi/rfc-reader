@@ -258,7 +258,7 @@ final class NavigationModel: Identifiable {
       #if os(macOS)
         selection
       #else
-        readerPath.root?.id
+        readerPath.root?.document.rfc
       #endif
     }
     set { selection = newValue }
@@ -267,7 +267,14 @@ final class NavigationModel: Identifiable {
   /// The document the history holds, shown or not. A collapsed split view that has
   /// gone back to its list hides the document and still holds it, so a link to it
   /// belongs in this tab: routing reads this, not `selection` (#256).
-  var heldDocument: DocumentID? { history.current?.id }
+  var heldDocument: ReadableDocument? { history.current?.document }
+
+  /// What the reader shows: the RFC selected, or a draft's revision (#728), which
+  /// has no row in the list, and so is never `selection`.
+  var shownDocument: ReadableDocument? { history.shown?.document }
+
+  /// The draft on screen, if the reader shows one (#728).
+  var shownDraft: DraftID? { shownDocument?.draft }
 
   /// The RFC whose text the tab's reader shows (#656): `selection`, or the first
   /// member of the BCP, STD or FYI selected; nil while a series waits for the index.
@@ -327,7 +334,15 @@ final class NavigationModel: Identifiable {
   /// A BCP, STD or FYI is opened as itself, so it is bookmarked and recorded as the
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
-    let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    open(.rfc(link), arrival: arrival)
+  }
+
+  /// `open(_:arrival:)` for a link to an RFC or a draft (#728). A draft has no row, so
+  /// opening one leaves the list as it is.
+  func open(_ link: ReadableLink, arrival: HistoryEntry.Arrival = .root) {
+    let route = OpenRoute.route(
+      link, arrival: arrival, selected: shownDocument,
+      shown: shown.map(ReadableDocument.rfc) ?? shownDocument)
     guard route.reveals else {
       follow(route)
       return
@@ -553,8 +568,8 @@ final class NavigationModel: Identifiable {
   ) {
     // With no document on screen this jump's wait ends at once; with one, the jump
     // it replaces is the one whose wait ends, unmade.
-    updateRequests(outcome: selection != nil ? .interrupted : .notShown) {
-      $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done)
+    updateRequests(outcome: shownDocument != nil ? .interrupted : .notShown) {
+      $0.jump(to: section, inDocumentOnScreen: shownDocument != nil, waiter: done)
     }
   }
 
@@ -569,8 +584,10 @@ final class NavigationModel: Identifiable {
   /// it, unless the reader is already there. Compared in `places`' spelling, so a
   /// section's number and its anchor are one place (#482).
   func recordJump(to section: String, in places: DocumentPlaces) {
-    guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places, ending: .landed)
+    guard let document = shownDocument else { return }
+    go(
+      to: HistoryEntry(document: document, section: section, arrival: .citation), in: places,
+      ending: .landed)
   }
 
   func goBack() {
@@ -630,19 +647,19 @@ final class NavigationModel: Identifiable {
   /// `shows(_:at:)`.
   private(set) var readerPath = ReaderPath(NavigationHistory())
 
-  /// Whether the reader of `id` at `depth` in the stack is the one on screen, whose
-  /// the window's reader state is. `depth` is nil for a reader that is not stacked,
-  /// the Mac's, which is on screen while its document is selected.
-  func shows(_ id: DocumentID, at depth: Int?) -> Bool {
-    guard let depth else { return selection == id }
-    return readerPath.isTop(id, at: depth)
+  /// Whether the reader of `document` at `depth` in the stack is the one on screen,
+  /// whose the window's reader state is. `depth` is nil for a reader that is not
+  /// stacked, the Mac's, which is on screen while its document is.
+  func shows(_ document: ReadableDocument, at depth: Int?) -> Bool {
+    guard let depth else { return shownDocument == document }
+    return readerPath.isTop(document, at: depth)
   }
 
-  /// Whether the tab still holds the reader of `id` at `depth`, on screen or, on
-  /// iOS, kept below the top of the stack.
-  func holds(_ id: DocumentID, at depth: Int?) -> Bool {
-    guard let depth else { return selection == id }
-    return readerPath.holds(id, at: depth)
+  /// Whether the tab still holds the reader of `document` at `depth`, on screen or,
+  /// on iOS, kept below the top of the stack.
+  func holds(_ document: ReadableDocument, at depth: Int?) -> Bool {
+    guard let depth else { return shownDocument == document }
+    return readerPath.holds(document, at: depth)
   }
 
   /// The stack's own back, the system back button or a swipe from the edge, which

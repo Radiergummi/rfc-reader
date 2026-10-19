@@ -33,7 +33,7 @@ nonisolated extension DocumentPDF {
     return await renderExport(
       part.document, metadata: library.metadata(id),
       choices: library.presentationChoices(
-        for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
+        for: .rfc(id), drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
       paperSize: paperSize,
       linking: PDFLinking(references: PDFExport.references(in: whole), outside: part.outside))
   }

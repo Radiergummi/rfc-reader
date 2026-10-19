@@ -65,7 +65,7 @@ struct DraftFetchTests {
     }
     """.utf8)
 
-  @Test func `Datatracker's description lists the draft's own revisions and its RFC`() throws {
+  @Test func `the description lists the draft's own revisions and its RFC`() throws {
     let info = try DraftInfo.decode(Self.info)
     #expect(info.name == "draft-ietf-example-protocol")
     #expect(info.title == "An Example Protocol")
@@ -119,9 +119,10 @@ struct DraftFetchTests {
     #expect(fetched.format == .xml)
     #expect(fetched.data == xml)
     #expect(fetched.document.header.draftName == "draft-ietf-example-protocol-03")
-    #expect(archive.requested == [
-      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml"
-    ])
+    #expect(
+      archive.requested == [
+        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml"
+      ])
   }
 
   @Test func `a revision submitted as text is read from its text`() async throws {
@@ -133,10 +134,11 @@ struct DraftFetchTests {
     #expect(fetched.format == .text)
     #expect(fetched.document.header.draftName == "draft-ietf-example-protocol-03")
     #expect(fetched.xmlParseFailure == nil)
-    #expect(archive.requested == [
-      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml",
-      "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt",
-    ])
+    #expect(
+      archive.requested == [
+        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.xml",
+        "https://www.ietf.org/archive/id/draft-ietf-example-protocol-03.txt",
+      ])
   }
 
   @Test func `a revision the archive does not have is not found`() async throws {

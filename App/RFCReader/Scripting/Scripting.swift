@@ -479,7 +479,17 @@
       let reference =
         (directParameter as? String) ?? (directParameter as? NSNumber)?.stringValue ?? ""
       let section = evaluatedArguments?["section"] as? String
-      guard let link = DocumentReference.link(from: reference, section: section) else {
+      // An RFC, or an Internet-Draft by its name or a link to it (#728).
+      let link: ReadableLink
+      if let rfc = DocumentReference.link(from: reference, section: section) {
+        link = .rfc(rfc)
+      } else if var draft = DocumentReference.draft(from: reference) {
+        if let section, !section.isEmpty {
+          draft.section = section
+          draft.anchor = nil
+        }
+        link = .draft(draft)
+      } else {
         ScriptError.report("“\(reference)” names no RFC.", in: self)
         return
       }
@@ -520,7 +530,7 @@
         ScriptError.report("Which section?", in: self)
         return
       }
-      guard let window = targetWindow, window.navigation.selection != nil else {
+      guard let window = targetWindow, window.navigation.shownDocument != nil else {
         ScriptError.report("There is no RFC to jump in.", in: self)
         return
       }

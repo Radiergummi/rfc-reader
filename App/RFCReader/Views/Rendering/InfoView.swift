@@ -428,7 +428,7 @@ private struct SectionRows: View {
       VStack(alignment: .leading, spacing: 4) {
         caption(row.label, term: row.term)
         ForEach(lines) { line in
-          DraftLink(line: line) {
+          RevisingDraftLink(line: line) {
             VStack(alignment: .leading, spacing: 1) {
               Text(line.title).foregroundStyle(.tint)
               Text(line.detail)

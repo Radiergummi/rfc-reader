@@ -29,7 +29,7 @@ import SwiftUI
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()
     /// The link this window was asked to open (#158), held until it has appeared.
-    @State private var requestedLink: RFCLink?
+    @State private var requestedLink: ReadableLink?
     @State private var hasAppeared = false
     /// This scene's `SceneSnapshot`, kept by the system with the scene (#155).
     @SceneStorage("scene") private var sceneSnapshot: Data?
@@ -43,7 +43,7 @@ import SwiftUI
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
-      navigation.selection?.displayName ?? library.title(for: navigation.filter)
+      navigation.shownDocument?.displayName ?? library.title(for: navigation.filter)
     }
 
     /// The scene's chrome, worked out here once and read by every view inside it
@@ -274,7 +274,25 @@ struct EmptyDetailView: View {
             .onSubmit(controller.openSelection)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
-          if results.rows.isEmpty {
+          if let draft = results.draft {
+            // The draft typed (#728), which Open and ↵ open.
+            Section {
+              Button {
+                controller.open(.draft(draft))
+              } label: {
+                HStack(spacing: 12) {
+                  Text(verbatim: draft.id.displayName)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                  Spacer(minLength: 0)
+                  Text("Internet-Draft")
+                    .foregroundStyle(.secondary)
+                }
+              }
+              .tint(.primary)
+            }
+          } else if results.rows.isEmpty {
             status
           } else {
             Section {
@@ -291,7 +309,7 @@ struct EmptyDetailView: View {
           }
           ToolbarItem(placement: .confirmationAction) {
             Button("Open", action: controller.openSelection)
-              .disabled(results.openable == nil && !results.isSearching)
+              .disabled(results.openable == nil && !results.isSearching && results.draft == nil)
           }
         }
       }

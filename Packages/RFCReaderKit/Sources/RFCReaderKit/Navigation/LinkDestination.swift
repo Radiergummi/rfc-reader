@@ -15,16 +15,23 @@ public enum LinkDestination: Equatable, Sendable {
   /// Show this entry of the document's bibliography, which the body leaves out;
   /// see `ReaderLinkScheme.referenceScheme`.
   case reference(String)
-  /// Show the linked document. How — here or in a tab of its own — is the
-  /// activation the caller already holds; `LibraryModel.open(_:activation:in:)` is
-  /// the one place that turns it into an effect, so a Command-click means the same
-  /// thing here as on a button elsewhere.
-  case document(RFCLink)
+  /// Show the linked document, an RFC or a draft (#728). How — here or in a tab of
+  /// its own — is the activation the caller already holds;
+  /// `LibraryModel.open(_:activation:in:)` is the one place that turns it into an
+  /// effect, so a Command-click means the same thing here as on a button elsewhere.
+  case document(ReadableLink)
   /// Not a link the reader understands, so the system should have it.
   case unhandled
 
   public static func resolve(
     _ url: URL, from currentDocument: DocumentID, activation: LinkActivation
+  ) -> LinkDestination {
+    resolve(url, from: .rfc(currentDocument), activation: activation)
+  }
+
+  /// `resolve(_:from:activation:)` in an RFC or a draft's revision (#728).
+  public static func resolve(
+    _ url: URL, from currentDocument: ReadableDocument, activation: LinkActivation
   ) -> LinkDestination {
     // An anchor is a position in the document already on screen, so it has nowhere
     // else to go: a tab of its own showing the same document scrolled elsewhere is
@@ -35,12 +42,12 @@ public enum LinkDestination: Equatable, Sendable {
     if let entry = ReaderLinkScheme.reference(from: url) {
       return .reference(entry)
     }
-    guard let link = RFCLink(url: url) else { return .unhandled }
+    guard let link = ReadableLink(url: url) else { return .unhandled }
 
     // A section of the document already on screen scrolls rather than re-opening
     // what is already open. Only when following in place: asked for a tab, a
     // section reference names something openable, unlike an anchor.
-    if activation == .here, link.id == currentDocument, let section = link.place {
+    if activation == .here, link.document == currentDocument, let section = link.place {
       return .jump(section)
     }
     return .document(link)

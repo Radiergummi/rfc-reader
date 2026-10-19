@@ -8,7 +8,8 @@ import os
 /// back (#599). A failure is logged and otherwise dropped: the reader then opens at
 /// the top, as it does for a document never read.
 struct ReadingPositionKeeper {
-  let id: DocumentID
+  /// An RFC, or a draft's revision (#728).
+  let id: ReadableDocument
   let context: ModelContext
 
   func markOpened() {

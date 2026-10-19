@@ -45,7 +45,7 @@ public struct DraftInfo: Hashable, Sendable, Codable {
 
   /// Decodes Datatracker's `doc.json` for a draft.
   public static func decode(_ data: Data) throws -> DraftInfo {
-    let document = try JSONDecoder().decode(DocumentJSON.self, from: data)
+    let document = try JSONDecoder().decode(DraftDocumentJSON.self, from: data)
     let published = ISO8601DateFormatter()
     let revisions = document.revHistory.filter { $0.name == document.name }.map {
       Revision(revision: $0.rev, published: $0.published.flatMap(published.date(from:)))
@@ -57,24 +57,26 @@ public struct DraftInfo: Hashable, Sendable, Codable {
       name: document.name, title: document.title, newestRevision: document.rev,
       state: document.state, revisions: revisions, publishedAs: publishedAs)
   }
+}
 
-  /// The parts of `doc.json` read here.
-  private struct DocumentJSON: Decodable {
-    struct Entry: Decodable {
-      let name: String
-      let rev: String
-      let published: String?
-    }
-
+/// The parts of Datatracker's `doc.json` that `DraftInfo` reads.
+private struct DraftDocumentJSON: Decodable {
+  /// One entry of the history: a revision of this draft, of one it replaced, or
+  /// the RFC it became.
+  struct Entry: Decodable {
     let name: String
     let rev: String
-    let title: String
-    let state: String?
-    let revHistory: [Entry]
+    let published: String?
+  }
 
-    enum CodingKeys: String, CodingKey {
-      case name, rev, title, state
-      case revHistory = "rev_history"
-    }
+  let name: String
+  let rev: String
+  let title: String
+  let state: String?
+  let revHistory: [Entry]
+
+  enum CodingKeys: String, CodingKey {
+    case name, rev, title, state
+    case revHistory = "rev_history"
   }
 }

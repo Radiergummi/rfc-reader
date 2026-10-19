@@ -40,6 +40,14 @@ struct DraftStoreTests {
       return (try DraftInfo.decode(data), data)
     }
 
+    func fetchDraftData(_ id: DraftID, format: FileFormat) async throws -> Data {
+      try lock.withLock {
+        if isDown { throw URLError(.notConnectedToInternet) }
+        revisionAsks.append(id)
+      }
+      return try Fixtures.data("rfc2119.txt")
+    }
+
     func fetchDraft(_ id: DraftID) async throws -> RFCEditorClient.FetchedDocument {
       try lock.withLock {
         if isDown { throw URLError(.notConnectedToInternet) }
@@ -138,5 +146,15 @@ struct DraftStoreTests {
     await #expect(throws: URLError.self) {
       try await DraftStore(directory: directory()).document(Self.name, client: network)
     }
+  }
+
+  /// Every revision has a text at the archive, which Original Text shows (#728).
+  @Test func `a revision's original text is fetched once, then kept`() async throws {
+    let network = Network(newest: "04")
+    let store = DraftStore(directory: directory())
+    let text = try await store.originalText(Self.revision("04"), client: network)
+    #expect(!text.isEmpty)
+    #expect(try await store.originalText(Self.revision("04"), client: network) == text)
+    #expect(network.askedRevisions == [Self.revision("04")])
   }
 }

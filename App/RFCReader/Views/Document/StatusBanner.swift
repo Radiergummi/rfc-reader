@@ -66,13 +66,14 @@ struct StatusBanner: View {
   }
 
   /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
-  /// The whole row is the link to the draft's datatracker page. One `Text`, so a
-  /// narrow banner wraps it as a sentence rather than squeezing three columns.
+  /// The whole row is the link to the draft's revision, which the reader opens
+  /// (#728). One `Text`, so a narrow banner wraps it as a sentence rather than
+  /// squeezing three columns.
   private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
     let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
     let title = Text(line.title).foregroundStyle(Self.link)
     let detail = Text(line.detail).foregroundStyle(.secondary)
-    return DraftLink(line: line) {
+    return RevisingDraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         symbol("doc.badge.clock").foregroundStyle(.secondary)
         // A key, not verbatim: only a LocalizedStringKey interpolates a styled Text;

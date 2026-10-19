@@ -7,21 +7,28 @@ import Testing
 struct DraftIDTests {
   @Test(
     arguments: [
-      ("draft-ietf-httpbis-semantics-19", "draft-ietf-httpbis-semantics", "19"),
-      ("draft-ietf-httpbis-semantics", "draft-ietf-httpbis-semantics", nil),
-      ("  Draft-IETF-HTTPbis-Semantics-00 ", "draft-ietf-httpbis-semantics", "00"),
-      ("draft-ietf-httpbis-rfc6265bis-22", "draft-ietf-httpbis-rfc6265bis", "22"),
-      ("draft-ietf-quic-http-34", "draft-ietf-quic-http", "34"),
-      ("draft-west-cookies", "draft-west-cookies", nil),
+      ("draft-ietf-httpbis-semantics-19", "draft-ietf-httpbis-semantics-19"),
+      ("draft-ietf-httpbis-semantics", "draft-ietf-httpbis-semantics"),
+      ("  Draft-IETF-HTTPbis-Semantics-00 ", "draft-ietf-httpbis-semantics-00"),
+      ("draft-ietf-httpbis-rfc6265bis-22", "draft-ietf-httpbis-rfc6265bis-22"),
+      ("draft-ietf-quic-http-34", "draft-ietf-quic-http-34"),
+      ("draft-west-cookies", "draft-west-cookies"),
       // A three-digit last part is a part of the name, never a revision.
-      ("draft-ietf-sidr-rfc6485bis-100", "draft-ietf-sidr-rfc6485bis-100", nil),
-    ] as [(String, String, String?)])
-  func `parses a draft's name, with its revision or without`(
-    input: String, name: String, revision: String?
-  ) throws {
+      ("draft-ietf-sidr-rfc6485bis-100", "draft-ietf-sidr-rfc6485bis-100"),
+    ])
+  func `parses a draft's name, with its revision or without`(input: String, expected: String)
+    throws
+  {
     let id = try #require(DraftID(parsing: input))
-    #expect(id.name == name)
-    #expect(id.revision == revision)
+    #expect(id.description == expected)
+  }
+
+  @Test func `the last two digits are the revision, and the rest the name`() throws {
+    let revision = try #require(DraftID(parsing: "draft-ietf-httpbis-rfc6265bis-22"))
+    #expect(revision.name == "draft-ietf-httpbis-rfc6265bis")
+    #expect(revision.revision == "22")
+    #expect(try #require(DraftID(parsing: "draft-ietf-sidr-rfc6485bis-100")).revision == nil)
+    #expect(try #require(DraftID(parsing: "draft-west-cookies")).revision == nil)
   }
 
   @Test(

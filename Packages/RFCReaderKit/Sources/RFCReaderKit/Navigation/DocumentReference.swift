@@ -24,4 +24,14 @@ public enum DocumentReference {
     }
     return link
   }
+
+  /// The Internet-Draft `reference` names (#728): its name, with a revision or
+  /// without (`draft-ietf-quic-http-34`), or a link to it the app opens. Nil for
+  /// anything an RFC's reference reads.
+  public static func draft(from reference: String) -> DraftLink? {
+    let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let id = DraftID(parsing: trimmed) { return DraftLink(id: id) }
+    guard let url = URL(string: trimmed), url.scheme != nil else { return nil }
+    return DraftLink(url: url)
+  }
 }

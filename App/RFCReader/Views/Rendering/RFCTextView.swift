@@ -28,7 +28,7 @@ struct RFCTextView: View {
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
     measure: MeasurePreference,
-    documentID: DocumentID,
+    document: ReadableDocument,
     commitsOnClick: (() -> Void)? = nil,
     controller: ReaderController,
     onLink: @escaping (URL, LinkActivation) -> Bool,
@@ -48,7 +48,7 @@ struct RFCTextView: View {
       requirements: requirements,
       bibliography: bibliography,
       measure: measure,
-      documentID: documentID,
+      document: document,
       commitsOnClick: commitsOnClick,
       controller: controller,
       onLink: onLink,
@@ -98,8 +98,9 @@ struct ReaderInputs {
   /// The same preference `DocumentView` derives the build's column from, so the
   /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
-  /// The document on screen, which a force click on an anchor previews (#29).
-  let documentID: DocumentID
+  /// The document on screen, which a force click on an anchor previews (#29): an
+  /// RFC, or a draft's revision (#728).
+  let document: ReadableDocument
   /// Set only for the reader inside a link preview (#29): a click anywhere in it
   /// commits the preview rather than selecting, and it previews nothing itself.
   let commitsOnClick: (() -> Void)?
@@ -131,7 +132,7 @@ struct ReaderInputs {
     coordinator.drive(controller)
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
-    coordinator.documentID = documentID
+    coordinator.document = document
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onChoosePresentation = onChoosePresentation
     #if canImport(UIKit)

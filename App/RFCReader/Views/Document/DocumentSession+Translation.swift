@@ -74,14 +74,14 @@ extension DocumentSession {
 
   @concurrent
   private static func kept(
-    by cache: TranslationCache, of id: DocumentID, into language: String
+    by cache: TranslationCache, of id: ReadableDocument, into language: String
   ) async -> [String: String] {
     cache.translations(of: id, into: language)
   }
 
   @concurrent
   private static func keep(
-    _ translations: [String: String], in cache: TranslationCache, of id: DocumentID,
+    _ translations: [String: String], in cache: TranslationCache, of id: ReadableDocument,
     into language: String
   ) async {
     cache.keep(translations, of: id, into: language)

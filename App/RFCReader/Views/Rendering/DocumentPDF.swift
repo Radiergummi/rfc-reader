@@ -60,7 +60,7 @@ nonisolated enum DocumentPDF {
         Printed(
           document: document,
           choices: library.presentationChoices(
-            for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
+            for: .rfc(id), drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
         PrintFurniture(header: document.header, metadata: library.metadata(id)))
     }
     // A print whose window closed while the document was fetched builds nothing.

@@ -1837,6 +1837,16 @@
         }
       }
     },
+    "Internet-Draft" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft"
+          }
+        }
+      }
+    },
     "It holds ^[%lld document](inflect: true). Only the collection is removed; the documents stay in the library." : {
       "localizations" : {
         "de" : {
@@ -2417,6 +2427,16 @@
         }
       }
     },
+    "Open on Datatracker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Datatracker öffnen"
+          }
+        }
+      }
+    },
     "Open on rfc-editor.org" : {
       "localizations" : {
         "de" : {
@@ -2913,6 +2933,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Revision" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision"
           }
         }
       }
