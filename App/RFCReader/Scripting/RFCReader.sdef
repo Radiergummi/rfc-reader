@@ -44,8 +44,22 @@
       </property>
     </class>
 
+    <!-- The same name and code as a window's collection property, which names one
+         of these or a built-in list: one term, as a window's document is. -->
+    <class name="collection" code="RWco" plural="collections" description="A collection you made: its RFCs chosen one by one, or made from a query, whose RFCs are whatever the query matches.">
+      <cocoa class="ScriptableCollection"/>
+      <property name="id" code="ID  " type="text" access="r" description="The collection's unique identifier.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" description="The collection's name, as the sidebar shows it."/>
+      <property name="query" code="RCqy" type="text" description="What a collection made from a query lists, in the search field's grammar, such as “wg:quic status:std congestion”; missing value for a collection whose RFCs are chosen. Set it to change what the collection lists, or give it when making a collection to make one from a query: make new collection with properties {name:“QUIC”, query:“wg:quic”}. Qualifiers are in English whatever the interface's language."/>
+    </class>
+
     <class-extension extends="application" description="RFC Reader's top-level scripting object.">
       <element type="rfc" access="r" description="Every RFC in the index; ask for one by its number, as in rfc id 9110."/>
+      <element type="collection" description="Every collection you made, in the sidebar's order; ask for one by name, as in collection “HTTP”.">
+        <cocoa key="scriptCollections"/>
+      </element>
     </class-extension>
 
     <class-extension extends="window" description="A reader window or tab.">

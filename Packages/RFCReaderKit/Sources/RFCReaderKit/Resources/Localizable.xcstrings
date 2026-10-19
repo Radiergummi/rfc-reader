@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@ %@, %@." : {
+      "comment" : "A draft's relation to the RFC, its name and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -34,6 +35,7 @@
       }
     },
     "%@ %@, revision %@ from %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision, its month and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -50,6 +52,7 @@
       }
     },
     "%@ %@, revision %@, %@" : {
+      "comment" : "A draft's relation to the RFC, its name, its revision and its stage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -435,6 +438,16 @@
         }
       }
     },
+    "A heading that other sections of the document refer to has a caption under it, such as \"Three Backlinks\". Choose the caption to list the sections that refer to the heading, and choose one of them to go there." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Überschrift, auf die andere Abschnitte des Dokuments verweisen, hat eine Beschriftung darunter, etwa „Three Backlinks“. Wähle die Beschriftung, um die verweisenden Abschnitte aufzulisten, und wähle einen davon, um dorthin zu gehen."
+          }
+        }
+      }
+    },
     "A later RFC replaces it; Relationships names which." : {
       "localizations" : {
         "de" : {
@@ -481,6 +494,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eine Nummer für einen Internet Standard, die gleich bleibt, wenn die RFCs dahinter ersetzt werden."
+          }
+        }
+      }
+    },
+    "A reading mode changes what the reader shows, never the document itself. Choose one in View ▸ Reading Mode." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Lesemodus ändert, was der Reader zeigt, nie das Dokument selbst. Wähle ihn unter Darstellung ▸ Lesemodus."
+          }
+        }
+      }
+    },
+    "A reading mode changes what the reader shows, never the document itself. Choose one in the reader's More menu." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Lesemodus ändert, was der Reader zeigt, nie das Dokument selbst. Wähle ihn im Menü „Mehr“ des Readers."
           }
         }
       }
@@ -571,6 +604,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktiv"
+          }
+        }
+      }
+    },
+    "Actual Size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Originalgröße"
+          }
+        }
+      }
+    },
+    "Add or Remove Bookmark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesezeichen hinzufügen oder entfernen"
           }
         }
       }
@@ -785,6 +838,16 @@
         }
       }
     },
+    "Backlinks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rückverweise"
+          }
+        }
+      }
+    },
     "Being replaced by" : {
       "localizations" : {
         "de" : {
@@ -811,6 +874,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Best Current Practices"
+          }
+        }
+      }
+    },
+    "Bigger Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Größere Schrift"
           }
         }
       }
@@ -945,12 +1018,32 @@
         }
       }
     },
+    "Clicks and Gestures" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicks und Gesten"
+          }
+        }
+      }
+    },
     "Code copied" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Code kopiert"
+          }
+        }
+      }
+    },
+    "Command-Click" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Befehlstaste-Klick"
           }
         }
       }
@@ -975,12 +1068,32 @@
         }
       }
     },
+    "Copy Citation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitierung kopieren"
+          }
+        }
+      }
+    },
     "Copy Link to Current Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link zum aktuellen Abschnitt kopieren"
+          }
+        }
+      }
+    },
+    "Copy as Quote" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Zitat kopieren"
           }
         }
       }
@@ -1031,6 +1144,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Directorate"
+          }
+        }
+      }
+    },
+    "Documents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente"
           }
         }
       }
@@ -1175,6 +1298,16 @@
         }
       }
     },
+    "Export" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportieren"
+          }
+        }
+      }
+    },
     "FYI Series" : {
       "localizations" : {
         "de" : {
@@ -1195,6 +1328,46 @@
         }
       }
     },
+    "Find" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen"
+          }
+        }
+      }
+    },
+    "Find Next" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitersuchen"
+          }
+        }
+      }
+    },
+    "Find Previous" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rückwärts suchen"
+          }
+        }
+      }
+    },
+    "Find in Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Dokument suchen"
+          }
+        }
+      }
+    },
     "Focus" : {
       "localizations" : {
         "de" : {
@@ -1205,12 +1378,42 @@
         }
       }
     },
+    "Force Click" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kräftiger Klick"
+          }
+        }
+      }
+    },
+    "Force-click a reference to read the RFC it names at the place it names, without leaving the page. Click the preview to go there." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicke kräftig auf einen Verweis, um den genannten RFC an der genannten Stelle zu lesen, ohne die Seite zu verlassen. Klicke auf die Vorschau, um dorthin zu gehen."
+          }
+        }
+      }
+    },
     "Formats" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Formate"
+          }
+        }
+      }
+    },
+    "Forward" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorwärts"
           }
         }
       }
@@ -1241,6 +1444,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zur Langform"
+          }
+        }
+      }
+    },
+    "Go to RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu RFC"
           }
         }
       }
@@ -1301,6 +1514,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Info ausblenden"
+          }
+        }
+      }
+    },
+    "Hover" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigen"
           }
         }
       }
@@ -1505,6 +1728,16 @@
         }
       }
     },
+    "Jump to Selection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur Auswahl springen"
+          }
+        }
+      }
+    },
     "Keep Offline" : {
       "localizations" : {
         "de" : {
@@ -1521,6 +1754,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Behalte einen RFC über seine Info oder das Menü seiner Zeile offline."
+          }
+        }
+      }
+    },
+    "Keyboard Shortcuts" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tastaturkurzbefehle"
           }
         }
       }
@@ -1561,6 +1804,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Links"
+          }
+        }
+      }
+    },
+    "Links in an RFC do more than open what they name." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links in einem RFC können mehr, als nur zu öffnen, was sie nennen."
           }
         }
       }
@@ -1615,6 +1868,16 @@
         }
       }
     },
+    "New Collection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Sammlung"
+          }
+        }
+      }
+    },
     "New Collection…" : {
       "localizations" : {
         "de" : {
@@ -1625,12 +1888,42 @@
         }
       }
     },
+    "New Tab" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuer Tab"
+          }
+        }
+      }
+    },
+    "New Window" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neues Fenster"
+          }
+        }
+      }
+    },
     "Newest First" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Neueste zuerst"
+          }
+        }
+      }
+    },
+    "Next Section, in Focus" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nächster Abschnitt, im Fokus"
           }
         }
       }
@@ -1681,6 +1974,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keine RFCs in %@"
+          }
+        }
+      }
+    },
+    "No collection is named by “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Sammlung heißt so, wie „%@“ sie nennt."
+          }
+        }
+      }
+    },
+    "No working group in the index is named by “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Arbeitsgruppe im Index heißt so, wie „%@“ sie nennt."
           }
         }
       }
@@ -1785,6 +2098,16 @@
         }
       }
     },
+    "Obsoleted by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzt durch %@"
+          }
+        }
+      }
+    },
     "Obsoleted by %@." : {
       "localizations" : {
         "de" : {
@@ -1845,12 +2168,62 @@
         }
       }
     },
+    "One section and its subsections. Next Section and Previous Section move to the sections beside it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Abschnitt mit seinen Unterabschnitten. „Nächster Abschnitt“ und „Vorheriger Abschnitt“ wechseln zu den Abschnitten daneben."
+          }
+        }
+      }
+    },
+    "Only the headings. A heading's chevron opens its section in place, and closes it again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur die Überschriften. Der Pfeil einer Überschrift öffnet ihren Abschnitt an Ort und Stelle und schließt ihn wieder."
+          }
+        }
+      }
+    },
+    "Open a link in a new tab behind this one; with Shift as well, in front of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet einen Link in einem neuen Tab hinter diesem, mit zusätzlich gedrückter Umschalttaste davor."
+          }
+        }
+      }
+    },
     "Open on rfc-editor.org" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Auf rfc-editor.org öffnen"
+          }
+        }
+      }
+    },
+    "Option-Click" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wahltaste-Klick"
+          }
+        }
+      }
+    },
+    "Option-click a section's number to copy a link to the section, and a format in Info to download it rather than open it in the browser." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicke mit gedrückter Wahltaste auf die Nummer eines Abschnitts, um einen Link darauf zu kopieren, und auf ein Format in der Info, um es zu laden, statt es im Browser zu öffnen."
           }
         }
       }
@@ -1891,6 +2264,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gliederung"
+          }
+        }
+      }
+    },
+    "Page Setup" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papierformat"
           }
         }
       }
@@ -1941,6 +2324,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorheriger Draft"
+          }
+        }
+      }
+    },
+    "Previous Section, in Focus" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorheriger Abschnitt, im Fokus"
+          }
+        }
+      }
+    },
+    "Print" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drucken"
           }
         }
       }
@@ -2065,6 +2468,16 @@
         }
       }
     },
+    "RFC Reader Help" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC Reader-Hilfe"
+          }
+        }
+      }
+    },
     "RFC Series" : {
       "localizations" : {
         "de" : {
@@ -2085,12 +2498,112 @@
         }
       }
     },
+    "RFCs from a stream: ietf, irtf, iab, independent, editorial or legacy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs aus einem Stream: ietf, irtf, iab, independent, editorial oder legacy."
+          }
+        }
+      }
+    },
+    "RFCs from a working group, such as wg:quic,tls for either. Also group:." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs einer Arbeitsgruppe, etwa wg:quic,tls für eine der beiden. Auch group:."
+          }
+        }
+      }
+    },
+    "RFCs published after a year or a month." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die nach einem Jahr oder Monat erschienen sind."
+          }
+        }
+      }
+    },
+    "RFCs published before a year or a month." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die vor einem Jahr oder Monat erschienen sind."
+          }
+        }
+      }
+    },
+    "RFCs published in RFCXML, the format of most RFCs since 2019." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die in RFCXML erschienen sind, dem Format der meisten RFCs seit 2019."
+          }
+        }
+      }
+    },
+    "RFCs published in a year, or in a range of years." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die in einem Jahr oder einem Zeitraum von Jahren erschienen sind."
+          }
+        }
+      }
+    },
+    "RFCs published within that many days." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs, die innerhalb so vieler Tage erschienen sind."
+          }
+        }
+      }
+    },
+    "RFCs with a status: std, internet-standard, bcp, info, exp or historic; current leaves out the obsoleted ones." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs mit einem Status: std, internet-standard, bcp, info, exp oder historic; current lässt die abgelösten weg."
+          }
+        }
+      }
+    },
+    "RFCs with an author of that name. Also by:." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs mit einem Autor dieses Namens. Auch by:."
+          }
+        }
+      }
+    },
     "RFCs you open appear here." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs, die du öffnest, erscheinen hier."
+          }
+        }
+      }
+    },
+    "Reading Modes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesemodi"
           }
         }
       }
@@ -2205,6 +2718,16 @@
         }
       }
     },
+    "Rest the pointer on a reference to an RFC to see its title, status and abstract." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lass den Zeiger auf einem Verweis auf einen RFC ruhen, um seinen Titel, Status und seine Zusammenfassung zu sehen."
+          }
+        }
+      }
+    },
     "Retry" : {
       "localizations" : {
         "de" : {
@@ -2295,6 +2818,16 @@
         }
       }
     },
+    "Search Library" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bibliothek durchsuchen"
+          }
+        }
+      }
+    },
     "Search Recently Read" : {
       "localizations" : {
         "de" : {
@@ -2365,6 +2898,16 @@
         }
       }
     },
+    "Searching" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen in der Bibliothek"
+          }
+        }
+      }
+    },
     "Section %@" : {
       "localizations" : {
         "de" : {
@@ -2381,6 +2924,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abschnitte %@"
+          }
+        }
+      }
+    },
+    "Sections whose heading matches, in the RFCs the app holds, or in every RFC once Index All RFCs has run." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnitte, deren Überschrift passt, in den RFCs, die die App hat, oder in allen RFCs, sobald „Alle RFCs indizieren“ gelaufen ist."
           }
         }
       }
@@ -2431,6 +2984,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Text zeigen"
+          }
+        }
+      }
+    },
+    "Show or Hide Contents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt ein- oder ausblenden"
+          }
+        }
+      }
+    },
+    "Show or Hide Info" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info ein- oder ausblenden"
+          }
+        }
+      }
+    },
+    "Show or Hide Sidebar" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seitenleiste ein- oder ausblenden"
+          }
+        }
+      }
+    },
+    "Smaller Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kleinere Schrift"
           }
         }
       }
@@ -2681,12 +3274,42 @@
         }
       }
     },
+    "The library's search field finds RFCs by number, title, keyword, author, working group and abstract. Filters narrow what it finds: a filter's name, a colon and a value, with a comma between values that any one of may match. Words and filters can be mixed in any order." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Suchfeld der Bibliothek findet RFCs nach Nummer, Titel, Schlagwort, Autor, Arbeitsgruppe und Zusammenfassung. Filter grenzen die Treffer ein: der Name eines Filters, ein Doppelpunkt und ein Wert, mit einem Komma zwischen Werten, von denen einer passen muss. Wörter und Filter lassen sich in beliebiger Reihenfolge mischen."
+          }
+        }
+      }
+    },
+    "The menus list every command that has a shortcut, beside its name." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Menüs zeigen jeden Befehl mit Kurzbefehl neben seinem Namen."
+          }
+        }
+      }
+    },
     "The older RFC stays published, unchanged, but the newer one is the one to implement and cite." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der ältere RFC bleibt unverändert veröffentlicht, doch der neuere ist der, den man implementiert und zitiert."
+          }
+        }
+      }
+    },
+    "The order of the results: newest, oldest or last-read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Reihenfolge der Treffer: newest, oldest oder last-read."
           }
         }
       }
@@ -2743,6 +3366,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dann hat die ganze IETF einige Wochen Zeit für Kommentare, und die Area Directors der IESG prüfen das Dokument. Sie genehmigen es, verlangen Änderungen oder lehnen es ab und legen seinen Status fest, etwa Proposed Standard, Best Current Practice oder Informational."
+          }
+        }
+      }
+    },
+    "The whole document, each requirement with a MUST, SHOULD or MAY marked by a band, and its asides folded under their captions." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ganze Dokument, jede Anforderung mit MUST, SHOULD oder MAY durch ein Band hervorgehoben und seine Einschübe unter ihren Beschriftungen eingeklappt."
+          }
+        }
+      }
+    },
+    "The whole document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ganze Dokument."
           }
         }
       }
@@ -2863,12 +3506,42 @@
         }
       }
     },
+    "This version doesn’t know “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Version kennt „%@“ nicht."
+          }
+        }
+      }
+    },
     "Today every RFC starts as an Internet-Draft, which anyone can write and submit. A draft is work in progress, not a standard: it expires after six months unless it is revised, and many are never published." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Heute beginnt jeder RFC als Internet-Draft, den jeder schreiben und einreichen kann. Ein Draft ist ein Zwischenstand, kein Standard: Er verfällt nach sechs Monaten, wenn er nicht überarbeitet wird, und viele werden nie veröffentlicht."
+          }
+        }
+      }
+    },
+    "Touch and Hold" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berühren und halten"
+          }
+        }
+      }
+    },
+    "Touch and hold a reference to read the RFC it names at the place it names, without leaving the page. Tap the preview to go there." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berühre einen Verweis und halte ihn, um den genannten RFC an der genannten Stelle zu lesen, ohne die Seite zu verlassen. Tippe auf die Vorschau, um dorthin zu gehen."
           }
         }
       }
@@ -2923,6 +3596,26 @@
         }
       }
     },
+    "Unknown Search Term" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbekannter Suchbegriff"
+          }
+        }
+      }
+    },
+    "Unknown Search Terms" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbekannte Suchbegriffe"
+          }
+        }
+      }
+    },
     "Updated by" : {
       "localizations" : {
         "de" : {
@@ -2963,12 +3656,32 @@
         }
       }
     },
+    "Use Selection for Find" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl für Suche verwenden"
+          }
+        }
+      }
+    },
     "Verified" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bestätigt"
+          }
+        }
+      }
+    },
+    "View" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung"
           }
         }
       }
@@ -3043,6 +3756,26 @@
         }
       }
     },
+    "Windows and Help" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fenster und Hilfe"
+          }
+        }
+      }
+    },
+    "Within one RFC, such as in:rfc9110 or in:bcp14, or a collection, such as in:\"My Collection\"." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In einem RFC, etwa in:rfc9110 oder in:bcp14, oder einer Sammlung, etwa in:\"Meine Sammlung\"."
+          }
+        }
+      }
+    },
     "Working Group" : {
       "localizations" : {
         "de" : {
@@ -3089,6 +3822,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gelb"
+          }
+        }
+      }
+    },
+    "Your own RFCs: bookmarked, read or offline." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine eigenen RFCs: bookmarked, read oder offline."
           }
         }
       }
@@ -3239,6 +3982,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "xml2rfc-Referenz"
+          }
+        }
+      }
+    },
+    "“%@” isn’t a value this version knows." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ ist kein Wert, den diese Version kennt."
+          }
+        }
+      }
+    },
+    "“%@” names a collection made from a query, which has no documents of its own to search in." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ nennt eine Sammlung aus einer Abfrage, die keine eigenen Dokumente zum Durchsuchen hat."
           }
         }
       }

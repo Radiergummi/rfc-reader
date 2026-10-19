@@ -88,6 +88,15 @@ struct PatchedConversionTests {
     #expect(failure.contains("vanishing"), "\(failure)")
   }
 
+  /// Text nodes meet without a space where an inline element splits a word, or, on
+  /// Linux, where a block was added beside another; written, the same characters may
+  /// part or join differently. Only characters dropped are lost text.
+  @Test func `lost text is characters dropped, not words parted or joined`() {
+    #expect(DocumentConverter.divergence("the overview.An added", "the overview. An added") == nil)
+    #expect(DocumentConverter.divergence("Foo bar", "Foobar") == nil)
+    #expect(DocumentConverter.divergence("Kept vanishing words", "Kept") != nil)
+  }
+
   /// An operation writing undoes is measured against the document written again,
   /// not against the converter's bytes: where those are not a fixed point of parsing
   /// and writing, they differ from any written XML, and the undone operation would

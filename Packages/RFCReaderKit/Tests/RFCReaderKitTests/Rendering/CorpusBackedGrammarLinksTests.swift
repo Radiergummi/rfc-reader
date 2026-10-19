@@ -23,8 +23,31 @@ enum CorpusXML {
   static var isAvailable: Bool { directory != nil }
 
   static func document(_ stem: String) throws -> RFCDocument {
-    let file = try #require(directory).appendingPathComponent("\(stem).xml")
+    guard let directory else { throw CorpusXMLError.notConfigured }
+    let file = directory.appendingPathComponent("\(stem).xml")
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      throw CorpusXMLError.notFetched(stem)
+    }
     return try RFCXMLParser.parse(try Data(contentsOf: file))
+  }
+}
+
+enum CorpusXMLError: Error, Equatable {
+  /// `RFC_CORPUS_XML` is not set; a suite that reads the corpus is enabled only where it is.
+  case notConfigured
+  /// The document is not in the directory: `make test-corpus` and `make test-corpus-app`
+  /// fetch only the documents listed in the Makefile's `CORPUS_TEST_XML_DOCUMENTS`.
+  case notFetched(String)
+}
+
+extension CorpusXMLError: CustomStringConvertible {
+  var description: String {
+    switch self {
+    case .notConfigured:
+      "RFC_CORPUS_XML is not set"
+    case .notFetched(let stem):
+      "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_XML_DOCUMENTS"
+    }
   }
 }
 
@@ -53,6 +76,10 @@ struct CorpusBackedGrammarLinksTests {
     }
     #expect(links > 50, "\(stem) has \(links) rule links")
     #expect(unresolved.isEmpty, "\(unresolved.prefix(10))")
+  }
+
+  @Test func `a document not fetched is refused as not fetched`() {
+    #expect(throws: CorpusXMLError.notFetched("rfc0")) { try CorpusXML.document("rfc0") }
   }
 
   @Test(arguments: ["rfc9110", "rfc9112"])
