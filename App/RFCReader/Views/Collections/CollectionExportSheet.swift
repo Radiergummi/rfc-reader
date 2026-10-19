@@ -18,19 +18,40 @@ struct CollectionExportSheet: View {
   @Environment(LibraryModel.self) private var library
   @Environment(\.dismiss) private var dismiss
   @State private var format = ExportFormat.pdf
-  @State private var export = CollectionExportModel()
+  @State private var export = CollectionExportSession(
+    workspace: FileManager.default.temporaryDirectory
+      .appending(path: "Collection Export", directoryHint: .isDirectory)
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory))
   @State private var isSaving = false
+  @State private var saveError: String?
 
   private var entry: CollectionSnapshot.Entry? { library.collections[request.collection] }
 
   var body: some View {
     content
-      .onDisappear { export.cancel() }
+      // A swipe would end an export under way without a word.
+      .interactiveDismissDisabled(export.isExporting)
+      .onDisappear { export.end() }
       .fileExporter(
-        isPresented: $isSaving, document: export.folder, contentType: .folder,
-        defaultFilename: export.folder?.name
-      ) { _ in
-        dismiss()
+        isPresented: $isSaving,
+        document: export.folder.map { ExportedFolder(url: $0) },
+        contentType: .folder,
+        defaultFilename: export.folder?.lastPathComponent
+      ) { result in
+        switch result {
+        case .success: dismiss()
+        // Canceled or failed, the finished export stays, to be saved again.
+        case .failure(let error as CocoaError) where error.code == .userCancelled: break
+        case .failure(let error): saveError = error.localizedDescription
+        }
+      }
+      .alert(
+        "Couldn't save the folder",
+        isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })
+      ) {
+        Button("OK") { saveError = nil }
+      } message: {
+        Text(verbatim: saveError ?? "")
       }
   }
 
@@ -42,7 +63,8 @@ struct CollectionExportSheet: View {
         fields
         HStack {
           Spacer()
-          buttons
+          cancelButton.keyboardShortcut(.cancelAction)
+          confirmButton.keyboardShortcut(.defaultAction)
         }
       }
       .padding(20)
@@ -57,7 +79,7 @@ struct CollectionExportSheet: View {
             ToolbarItem(placement: .confirmationAction) { confirmButton }
           }
       }
-      .presentationDetents([.medium])
+      .presentationDetents([.medium, .large])
     #endif
   }
 
@@ -79,30 +101,41 @@ struct CollectionExportSheet: View {
         Text("Exporting…")
       }
     case .finished(let report):
-      if report.wasCancelled {
-        Text("The export was cancelled.")
+      if report.wasCanceled {
+        Text("The export was canceled.")
       } else if report.skipped.isEmpty {
         Text("Every RFC was exported.")
       } else {
         Text("These RFCs were not exported:")
-        ForEach(report.skippedLines, id: \.self) { line in
-          Text(verbatim: line).font(.callout).foregroundStyle(.secondary)
-        }
+        skipped(report.skippedLines)
       }
     }
   }
 
-  #if os(macOS)
-    @ViewBuilder
-    private var buttons: some View {
-      cancelButton.keyboardShortcut(.cancelAction)
-      confirmButton.keyboardShortcut(.defaultAction)
+  /// What could not be exported, which a collection exported offline can make
+  /// long: scrolled, so the buttons stay in reach.
+  @ViewBuilder
+  private func skipped(_ lines: [String]) -> some View {
+    #if os(macOS)
+      ScrollView {
+        VStack(alignment: .leading, spacing: 4) { skippedLines(lines) }
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .frame(maxHeight: 200)
+    #else
+      skippedLines(lines)
+    #endif
+  }
+
+  private func skippedLines(_ lines: [String]) -> some View {
+    ForEach(lines, id: \.self) { line in
+      Text(verbatim: line).font(.callout).foregroundStyle(.secondary)
     }
-  #endif
+  }
 
   private var cancelButton: some View {
     Button("Cancel", role: .cancel) {
-      export.cancel()
+      export.end()
       dismiss()
     }
   }
@@ -116,7 +149,7 @@ struct CollectionExportSheet: View {
     case .exporting:
       Button("Export") {}.disabled(true)
     case .finished(let report):
-      if report.exported.isEmpty {
+      if report.exported.isEmpty || report.wasCanceled {
         Button("Done") { dismiss() }
       } else {
         Button("Save…") { isSaving = true }
@@ -126,71 +159,13 @@ struct CollectionExportSheet: View {
 
   private func start() {
     guard let entry else { return }
-    let plan = CollectionExport(collection: entry.name, members: entry.members, format: format)
+    let plan = CollectionExport(entry, format: format)
     let paperSize = PrintLayout.paperSize(for: .current)
     let library = library
     export.start(plan) { id in
       try await DocumentExport.data(
         for: id, as: plan.format, paperSize: paperSize, library: library)
     }
-  }
-}
-
-/// A collection export under way: its phase, and the task making its files, in a
-/// folder of the temporary directory until it is saved.
-@Observable
-final class CollectionExportModel {
-  enum Phase {
-    case choosing
-    case exporting(CollectionExport.Progress)
-    case finished(CollectionExport.Report)
-  }
-
-  private(set) var phase = Phase.choosing
-  /// The finished folder, for Save to Files and the Mac's save panel.
-  private(set) var folder: ExportedFolder?
-  private var task: Task<Void, Never>?
-  private var workspace: URL?
-
-  func start(
-    _ plan: CollectionExport, make: @escaping @Sendable (DocumentID) async throws -> Data
-  ) {
-    let workspace = FileManager.default.temporaryDirectory
-      .appending(path: "Collection Export", directoryHint: .isDirectory)
-      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-    self.workspace = workspace
-    let folderURL = workspace.appending(path: plan.folderName, directoryHint: .isDirectory)
-    phase = .exporting(CollectionExport.Progress(done: 0, total: plan.files.count))
-    task = Task {
-      let report: CollectionExport.Report
-      do {
-        report = try await plan.run(into: folderURL) { progress in
-          await MainActor.run { self.phase = .exporting(progress) }
-        } make: { id in
-          try await make(id)
-        }
-      } catch {
-        var failed = CollectionExport.Report()
-        failed.skipped = plan.files.map { ($0.document, error.localizedDescription) }
-        report = failed
-      }
-      if Task.isCancelled {
-        try? FileManager.default.removeItem(at: workspace)
-        return
-      }
-      if !report.exported.isEmpty {
-        folder = ExportedFolder(url: folderURL, name: plan.folderName)
-      }
-      phase = .finished(report)
-    }
-  }
-
-  /// Stops an export under way, which then removes what it made, or removes what
-  /// a finished one made, which has been saved or is no longer wanted.
-  func cancel() {
-    task?.cancel()
-    if case .exporting = phase { return }
-    if let workspace { try? FileManager.default.removeItem(at: workspace) }
   }
 }
 
@@ -201,11 +176,9 @@ nonisolated struct ExportedFolder: FileDocument {
   static var writableContentTypes: [UTType] { [.folder] }
 
   let url: URL
-  let name: String
 
-  init(url: URL, name: String) {
+  init(url: URL) {
     self.url = url
-    self.name = name
   }
 
   init(configuration: ReadConfiguration) throws {

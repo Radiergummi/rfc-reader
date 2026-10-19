@@ -980,6 +980,16 @@
         }
       }
     },
+    "Couldn't save the folder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner konnte nicht gesichert werden"
+          }
+        }
+      }
+    },
     "Couldn't translate this document" : {
       "localizations" : {
         "de" : {
@@ -3261,7 +3271,7 @@
         }
       }
     },
-    "The export was cancelled." : {
+    "The export was canceled." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
