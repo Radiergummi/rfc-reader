@@ -16,7 +16,7 @@ enum DocumentExport {
     switch format {
     case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
     case .abnf: try await grammar(of: id, library: library)
-    case .markdown: try await annotations(of: id, library: library)
+    case .annotations: try await annotations(of: id, library: library)
     }
   }
 

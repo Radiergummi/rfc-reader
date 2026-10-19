@@ -8,7 +8,7 @@
   ///
   /// It keeps the panel's file type and the name's extension in step with the
   /// format, keeping whatever the name was changed to, and remembers the last format
-  /// chosen for the next export.
+  /// chosen for the next export (`ExportFormat.isRemembered`).
   final class ExportFormatChooser: NSObject {
     static let rememberedKey = "exportFormat"
 
@@ -42,7 +42,9 @@
 
     @objc private func choose() {
       format = offered[popUp.indexOfSelectedItem]
-      UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
+      if format.isRemembered {
+        UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
+      }
       panel.allowedContentTypes = [format.contentType]
       panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)
     }

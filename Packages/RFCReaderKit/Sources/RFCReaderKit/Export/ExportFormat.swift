@@ -12,7 +12,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   /// The document's grammar collected into one file (#185), for a document with one.
   case abnf
   /// The document's highlights and notes, with citations (#524).
-  case markdown
+  case annotations
 
   /// Where the file comes from.
   public enum Source: Sendable {
@@ -29,13 +29,13 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .pdf: "PDF"
     case .abnf: String(kit: "ABNF Grammar", locale: locale)
-    case .markdown: String(kit: "Highlights and Notes", locale: locale)
+    case .annotations: String(kit: "Highlights and Notes", locale: locale)
     }
   }
 
   public var source: Source {
     switch self {
-    case .pdf, .abnf, .markdown: .rendered
+    case .pdf, .abnf, .annotations: .rendered
     }
   }
 
@@ -45,7 +45,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     // No system type declares ABNF: plain text by the `.abnf` extension, which a save
     // panel and a file exporter keep only for a type that is the extension's.
     case .abnf: UTType(filenameExtension: "abnf", conformingTo: .plainText) ?? .plainText
-    case .markdown: UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
+    case .annotations: UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
     }
   }
 
@@ -53,9 +53,14 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .pdf: contentType.preferredFilenameExtension ?? rawValue
     case .abnf: "abnf"
-    case .markdown: "md"
+    case .annotations: "md"
     }
   }
+
+  /// Whether choosing it makes it the format the next export starts on (Mac). Not
+  /// the highlights and notes: they are an export of one document's reading, and
+  /// the next document's export would otherwise start on a file of its notes.
+  public var isRemembered: Bool { self != .annotations }
 
   /// The formats `document` can be saved as: PDF always, its grammar where it has
   /// one, and its highlights and notes, which say so where there are none.
@@ -66,7 +71,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       ABNFPresentation.dialect(ofType: $0.content.type) == .rfc5234
         && ABNF.parse($0.content.text) != nil
     }
-    return hasGrammar ? [.pdf, .abnf, .markdown] : [.pdf, .markdown]
+    return hasGrammar ? [.pdf, .abnf, .annotations] : [.pdf, .annotations]
   }
 
   /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
