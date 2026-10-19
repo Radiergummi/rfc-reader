@@ -996,21 +996,31 @@ public actor DocumentStore {
   }
 
   /// The citation database of the `indexes` pack the app reads, or nil when there is
-  /// none: the one in the app's bundle, at `bundled`, or an installed one that is a
-  /// later build of the schema this build reads (`IndexesPack.preferred`). A Debug
-  /// build may have no bundled pack (project.yml, "Bundle the indexes pack"). Read
-  /// from the disk on each call: it is asked once per reading path.
+  /// none: the one in the app's bundle, at `bundled`, or an installed one of the
+  /// schema this build reads, which a Release build reads only when it is a later
+  /// dated build (`IndexesPack.preferred`). A Debug build may have no bundled pack
+  /// (project.yml, "Bundle the indexes pack"). Read from the disk on each call: it is
+  /// asked once per reading path.
   public func citationIndexURL(
-    bundled: URL? = Bundle.main.url(forResource: IndexesPack.name, withExtension: nil)
+    bundled: URL? = Bundle.main.url(forResource: IndexesPack.name, withExtension: nil),
+    prefersInstalled: Bool = IndexesPack.prefersInstalled
   ) -> URL? {
+    let bundledPack = bundled.flatMap(Self.installedPack(in:))
     let installed = Self.installedPack(
       in: packsDirectory.appending(path: IndexesPack.name, directoryHint: .isDirectory))
     // Opened to read its schema: a pack this build cannot read is passed over.
     let pack = IndexesPack.preferred(
-      bundled: bundled.flatMap(Self.installedPack(in:)), installed: installed
+      bundled: bundledPack, installed: installed, prefersInstalled: prefersInstalled
     ) { pack in
       (try? CitationIndex(contentsOf: pack.directory.appending(path: CitationIndex.fileName)))
         != nil
+    }
+    if let pack {
+      // Which one, since an installed pack can hide the bundled one.
+      let copy = pack.directory == bundledPack?.directory ? "bundled" : "installed"
+      storeLog.info(
+        "reading the \(copy, privacy: .public) indexes pack \(pack.manifest.version, privacy: .public)"
+      )
     }
     return pack?.directory.appending(path: CitationIndex.fileName)
   }

@@ -432,7 +432,8 @@ bundled-index:
 # the pinned SHA-256, and a pack already there that matches is kept; a pack of
 # another schema than IndexSchema.version, which the app would refuse, fails it.
 # project.yml's "Bundle the indexes pack" phase copies it into the app; a Release
-# build fails without it, and a Debug build bundles it only when it is there.
+# build fails without it or with files other than the pinned ones, and a Debug build
+# bundles it only when it is there.
 # `install`, `trace` and the release script fetch it first.
 include App/indexes-pack.mk
 INDEXES_PACK := App/Resources/indexes

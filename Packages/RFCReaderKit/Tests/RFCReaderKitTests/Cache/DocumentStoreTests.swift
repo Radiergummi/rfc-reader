@@ -932,19 +932,24 @@ struct DocumentStoreTests {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()
-    #expect(await store.citationIndexURL(bundled: nil) == nil)
+    #expect(await store.citationIndexURL(bundled: nil, prefersInstalled: false) == nil)
 
     let bundled = try Self.indexesPack(in: sandbox.root.appending(path: "Bundle"), "2026.10.1")
-    #expect(await store.citationIndexURL(bundled: bundled) == Self.database(in: bundled))
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: bundled))
 
     let earlier = try Self.indexesPack(in: sandbox.root.appending(path: "Earlier"), "2026.09")
     _ = try await store.installIndexesPack(from: earlier)
-    #expect(await store.citationIndexURL(bundled: bundled) == Self.database(in: bundled))
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: bundled))
 
     let later = try Self.indexesPack(in: sandbox.root.appending(path: "Later"), "2026.10.2")
     let installed = try await store.installIndexesPack(from: later)
     #expect(
-      await store.citationIndexURL(bundled: bundled) == Self.database(in: installed.directory))
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: installed.directory))
   }
 
   /// A pack installed before an app update changed the schema is not read, however
@@ -959,8 +964,11 @@ struct DocumentStoreTests {
     let stale = try Self.indexesPack(
       in: sandbox.root.appending(path: "Stale"), "dev", schema: "1")
     _ = try await store.installIndexesPack(from: stale)
-    #expect(await store.citationIndexURL(bundled: bundled) == Self.database(in: bundled))
-    #expect(await store.citationIndexURL(bundled: nil) == nil)
+    // As a Debug build, which reads an installed pack whatever its version.
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: true)
+        == Self.database(in: bundled))
+    #expect(await store.citationIndexURL(bundled: nil, prefersInstalled: true) == nil)
   }
 
   /// An `indexes` pack in `parent`: an empty database of `schema` and a manifest of

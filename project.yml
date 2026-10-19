@@ -88,14 +88,34 @@ targets:
       # The indexes pack (#738), the corpus's citations, successions and amendments:
       # `make indexes-pack` fetches the release App/indexes-pack.mk pins into
       # App/Resources, which git ignores, and `DocumentStore.citationIndexURL()` reads
-      # it in place unless a later one is installed. A phase for the same reasons as
-      # the RFC index's.
+      # it in place. A phase for the same reasons as the RFC index's. A Release build
+      # checks both files against the pin, since an Xcode archive does not go through
+      # make: a copy left from an earlier pin would ship a pack the app may refuse.
       - name: Bundle the indexes pack
         basedOnDependencyAnalysis: false
+        # Declared, so that the signing after it seals the files as they now are.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/indexes.sqlite
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/manifest.json
         script: |
           pack="$SRCROOT/App/Resources/indexes"
           bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/indexes"
           if [ -f "$pack/indexes.sqlite" ] && [ -f "$pack/manifest.json" ]; then
+            if [ "$CONFIGURATION" = Release ]; then
+              pins="$SRCROOT/App/indexes-pack.mk"
+              for file in indexes.sqlite manifest.json; do
+                case $file in
+                  indexes.sqlite) key=INDEXES_PACK_SQLITE_SHA256 ;;
+                  manifest.json) key=INDEXES_PACK_MANIFEST_SHA256 ;;
+                esac
+                pinned=$(sed -n "s/^$key := //p" "$pins")
+                actual=$(shasum -a 256 "$pack/$file" | cut -d' ' -f1)
+                if [ "$actual" != "$pinned" ]; then
+                  echo "error: $pack/$file is not the pack App/indexes-pack.mk pins: run make indexes-pack."
+                  exit 1
+                fi
+              done
+            fi
             # Copied only when it changed: it is tens of megabytes, and every build
             # runs this.
             if ! cmp -s "$pack/manifest.json" "$bundled/manifest.json" \
