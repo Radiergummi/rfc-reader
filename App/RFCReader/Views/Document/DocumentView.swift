@@ -961,7 +961,7 @@ struct DocumentView: View {
 /// view's chain stays one the compiler can check.
 private struct NoteReports: ViewModifier {
   let placement: NotePlacement?
-  let request: NoteRequest?
+  let request: PanelNoteRequest?
   let report: (NotePlacement?) -> Void
   let open: (NoteRequest) -> Void
 
@@ -969,7 +969,7 @@ private struct NoteReports: ViewModifier {
     content
       .onChange(of: placement) { _, placement in report(placement) }
       .onChange(of: request) { _, request in
-        if let request { open(request) }
+        if let request { open(request.request) }
       }
   }
 }

@@ -268,7 +268,8 @@ public enum NoteText {
 
   /// Makes the paragraphs `range` touches a bulleted or a numbered list, or takes
   /// them out of it where they are all items of such a list already. Joined to the
-  /// list just before them where it is of the same kind.
+  /// list just before them where it is of the same kind; the items of one list stay
+  /// one list when it changes kind.
   public static func toggleList(
     ordered: Bool, in text: NSMutableAttributedString, range: NSRange, font: PlatformFont
   ) {
@@ -279,33 +280,63 @@ public enum NoteText {
       guard first.location > 0 else { return nil }
       return textLists(of: text, at: NSRange(location: first.location - 1, length: 0)).first
     }
-    let list =
+    // One new list for each list replaced, and one for paragraphs in none.
+    var replaced: [ObjectIdentifier: NSTextList] = [:]
+    let fresh =
       before.flatMap { isOrdered($0) == ordered ? $0 : nil } ?? newList(ordered: ordered, depth: 0)
     for (paragraph, current) in zip(paragraphs, lists) {
-      let next: [NSTextList] =
-        isOn
-        ? Array(current.dropLast())
-        : current.isEmpty
-          ? [list]
-          : current.dropLast() + [
-            newList(ordered: ordered, depth: current.count - 1)
-          ]
+      let next: [NSTextList]
+      if isOn {
+        next = Array(current.dropLast())
+      } else if let innermost = current.last {
+        let list =
+          replaced[ObjectIdentifier(innermost)]
+          ?? newList(ordered: ordered, depth: current.count - 1)
+        replaced[ObjectIdentifier(innermost)] = list
+        next = current.dropLast() + [list]
+      } else {
+        next = [fresh]
+      }
       setLists(next, in: text, paragraph: paragraph, font: font)
     }
   }
 
+  /// What an empty paragraph's style becomes when the list buttons are pressed on
+  /// it, which has no character to carry it: for what is typed next.
+  public static func toggledTypingStyle(
+    ordered: Bool, current: NSParagraphStyle?, font: PlatformFont
+  ) -> NSParagraphStyle {
+    let lists = current?.textLists ?? []
+    if let innermost = lists.last, isOrdered(innermost) == ordered {
+      return paragraphStyle(lists: Array(lists.dropLast()), font: font)
+    }
+    return paragraphStyle(
+      lists: lists.dropLast() + [newList(ordered: ordered, depth: max(0, lists.count - 1))],
+      font: font)
+  }
+
   /// Nests the list items `range` touches a level deeper (`by: 1`), or takes them a
-  /// level out (`by: -1`): what Tab and Shift-Tab do, for a keyboard without them.
+  /// level out (`by: -1`): what Tab and Shift-Tab do, for a keyboard without them. An
+  /// item nested under one that has a nested list already joins it.
   public static func indent(
     by levels: Int, in text: NSMutableAttributedString, range: NSRange, font: PlatformFont
   ) {
     var made: [Int: NSTextList] = [:]
-    for paragraph in paragraphs(of: text, touching: range) {
+    let paragraphs = self.paragraphs(of: text, touching: range)
+    let above =
+      paragraphs.first.map { first in
+        first.location > 0
+          ? textLists(of: text, at: NSRange(location: first.location - 1, length: 0)) : []
+      } ?? []
+    for paragraph in paragraphs {
       let current = textLists(of: text, at: paragraph)
       guard let innermost = current.last else { continue }
       if levels > 0 {
         let depth = current.count
-        let deeper = made[depth] ?? newList(ordered: isOrdered(innermost), depth: depth)
+        // The list the item above has at that depth, when it is in the same lists.
+        let joined =
+          above.count > depth && zip(above, current).allSatisfy { $0 === $1 } ? above[depth] : nil
+        let deeper = made[depth] ?? joined ?? newList(ordered: isOrdered(innermost), depth: depth)
         made[depth] = deeper
         setLists(current + [deeper], in: text, paragraph: paragraph, font: font)
       } else {

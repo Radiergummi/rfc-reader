@@ -58,7 +58,7 @@ public enum AnnotationStore {
     let touched = Set([plan.survivor].compactMap { $0 } + plan.absorbed)
     // The notes of every highlight absorbed go to the one that survives, as several
     // notes may share a highlight: they are not joined.
-    let absorbedNotes = try notes(onHighlights: Set(plan.absorbed), in: context)
+    let absorbedNotes = try notes(onHighlights: Set(plan.absorbed), of: document, in: context)
     let before = Rows(
       highlights: rows.filter { touched.contains($0.identifier) }.map(HighlightValues.init),
       notes: absorbedNotes.map(NoteValues.init))
@@ -110,7 +110,8 @@ public enum AnnotationStore {
   public static func delete(_ identifier: UUID, edit: Edit) throws {
     let context = edit.context
     guard let row = try highlight(identifier, in: context) else { return }
-    let notes = try notes(onHighlights: [identifier], in: context)
+    let notes = try notes(
+      onHighlights: [identifier], ofKey: row.documentKey, in: context)
     let before = Rows(highlights: [HighlightValues(row)], notes: notes.map(NoteValues.init))
     context.delete(row)
     for note in notes { context.delete(note) }
@@ -285,9 +286,12 @@ public enum AnnotationStore {
       // On the main thread, which drives the Edit menu and the shake gesture.
       MainActor.assumeIsolated {
         do {
-          try replace(after, with: before, in: context)
+          // A highlight taken away takes its notes, made since, with it; the redo
+          // brings them back with it.
+          let removed = try replace(after, with: before, in: context)
           registerUndo(
-            replacing: before.identifiers, with: redo, redo: before,
+            replacing: before.identifiers,
+            with: Rows(highlights: redo.highlights, notes: redo.notes + removed), redo: before,
             actionName: actionName, edit: edit)
         } catch {
           edit.onUndoFailure(error)
@@ -298,15 +302,24 @@ public enum AnnotationStore {
   }
 
   /// Deletes the rows named `identifiers` that `rows` does not hold, and makes every
-  /// row in `rows` as it says, inserting it where it is gone.
+  /// row in `rows` as it says, inserting it where it is gone. A highlight deleted
+  /// takes the notes on it that `rows` does not hold; answers them, as they were.
+  @discardableResult
   private static func replace(
     _ identifiers: Identifiers, with rows: Rows, in context: ModelContext
-  ) throws {
+  ) throws -> [NoteValues] {
     let keptHighlights = Set(rows.highlights.map(\.identifier))
-    for identifier in identifiers.highlights where !keptHighlights.contains(identifier) {
-      if let row = try highlight(identifier, in: context) { context.delete(row) }
-    }
     let keptNotes = Set(rows.notes.map(\.identifier))
+    var removed: [NoteValues] = []
+    for identifier in identifiers.highlights where !keptHighlights.contains(identifier) {
+      guard let row = try highlight(identifier, in: context) else { continue }
+      for note in try notes(onHighlights: [identifier], ofKey: row.documentKey, in: context)
+      where !keptNotes.contains(note.identifier) && !identifiers.notes.contains(note.identifier) {
+        removed.append(NoteValues(note))
+        context.delete(note)
+      }
+      context.delete(row)
+    }
     for identifier in identifiers.notes where !keptNotes.contains(identifier) {
       if let row = try note(identifier, in: context) { context.delete(row) }
     }
@@ -332,6 +345,7 @@ public enum AnnotationStore {
       }
     }
     try context.save()
+    return removed
   }
 
   // MARK: - Fetching
@@ -356,12 +370,22 @@ public enum AnnotationStore {
     ).first
   }
 
-  private static func notes(onHighlights highlights: Set<UUID>, in context: ModelContext) throws
-    -> [Note]
-  {
+  private static func notes(
+    onHighlights highlights: Set<UUID>, of document: DocumentID, in context: ModelContext
+  ) throws -> [Note] {
+    try notes(onHighlights: highlights, ofKey: document.fileStem, in: context)
+  }
+
+  /// The notes of one document on these highlights: fetched by the document, the
+  /// highlights then picked out, a predicate over an optional identifier being none
+  /// SwiftData can make.
+  private static func notes(
+    onHighlights highlights: Set<UUID>, ofKey key: String, in context: ModelContext
+  ) throws -> [Note] {
     guard !highlights.isEmpty else { return [] }
-    // Few, and a predicate over an optional identifier is not one SwiftData can make.
-    return try context.fetch(FetchDescriptor<Note>()).filter { note in
+    return try context.fetch(
+      FetchDescriptor<Note>(predicate: #Predicate { $0.documentKey == key })
+    ).filter { note in
       note.highlightIdentifier.map(highlights.contains) ?? false
     }
   }

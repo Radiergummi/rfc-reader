@@ -108,6 +108,15 @@ final class NoteEditorModel {
   func toggleList(ordered: Bool) {
     guard let textView, let storage = textView.noteStorage else { return }
     let range = textView.noteSelection
+    let paragraph = (storage.string as NSString).paragraphRange(for: range)
+    guard paragraph.length > 0 else {
+      // An empty last paragraph has no character to hold the list: what is typed
+      // next does.
+      textView.typingAttributes[.paragraphStyle] = NoteText.toggledTypingStyle(
+        ordered: ordered,
+        current: textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle, font: font)
+      return
+    }
     textView.editAttributes(in: range) {
       NoteText.toggleList(ordered: ordered, in: storage, range: range, font: font)
     }
@@ -271,16 +280,35 @@ struct NoteEditor: View {
     var noteStorage: NSTextStorage? { textStorage }
     var noteSelection: NSRange { selectedRange }
 
+    /// The change, over the paragraphs `range` touches, which Undo takes back: a
+    /// text view's storage changed directly registers nothing.
     func editAttributes(in range: NSRange, _ change: () -> Void) {
+      let paragraphs = (textStorage.string as NSString).paragraphRange(for: range)
+      let before = textStorage.attributedSubstring(from: paragraphs)
       textStorage.beginEditing()
       change()
       textStorage.endEditing()
+      registerUndo(
+        of: NSRange(location: paragraphs.location, length: paragraphs.length), was: before)
     }
 
     func insertNoteText(_ text: NSAttributedString) {
       let range = selectedRange
+      let before = textStorage.attributedSubstring(from: range)
       textStorage.replaceCharacters(in: range, with: text)
       selectedRange = NSRange(location: range.location + text.length, length: 0)
+      registerUndo(of: NSRange(location: range.location, length: text.length), was: before)
+    }
+
+    /// Undo puts `before` back over `range`, and registers putting it back again.
+    private func registerUndo(of range: NSRange, was before: NSAttributedString) {
+      undoManager?.registerUndo(withTarget: self) { textView in
+        let now = textView.textStorage.attributedSubstring(from: range)
+        textView.textStorage.replaceCharacters(in: range, with: before)
+        textView.registerUndo(
+          of: NSRange(location: range.location, length: before.length), was: now)
+        textView.delegate?.textViewDidChange?(textView)
+      }
     }
 
     /// An empty paragraph has no character to hold a list's style: what is typed
