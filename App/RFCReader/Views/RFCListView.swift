@@ -234,11 +234,7 @@ struct RFCListView: View {
       // under an empty search, where the overlay already says what there is to
       // say.
       if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil && !hasTextHits) {
-        IndexStatusView()
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 8)
-          .listRowSeparator(.hidden)
-          .selectionDisabled()
+        IndexStatusRow()
       }
     }
     // Inset rather than plain: the selection is a rounded capsule with a margin
@@ -252,6 +248,8 @@ struct RFCListView: View {
       .headerProminence(.increased)
     #endif
     .overlay {
+      // Only while there is no index, when nothing below shows.
+      IndexPlaceholderView()
       // Once the list is made: before, "No Documents" was a claim about a list
       // that had not arrived.
       if rows.isEmpty, navigation.listed != nil, !hasTextHits, !awaitsSections {
@@ -461,6 +459,65 @@ struct ListViewOptions: View {
   private var orderPicker: some View {
     Picker(sortTitle, selection: $navigation.listOptions.order) {
       ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
+    }
+  }
+}
+
+/// `IndexStatusView` after the last row, unless the placeholder over the list says
+/// what it would (#770). A view of its own, so the download's progress, which the
+/// placeholder follows, redraws it rather than the list.
+private struct IndexStatusRow: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    if library.indexPlaceholder == nil {
+      IndexStatusView()
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .listRowSeparator(.hidden)
+        .selectionDisabled()
+    }
+  }
+}
+
+/// The first launch's download of the index, or why there is no index (#770), in
+/// place of the list's rows. A view of its own, so the download's progress redraws it
+/// rather than the list.
+private struct IndexPlaceholderView: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    switch library.indexPlaceholder {
+    case .downloading(let bytesReceived):
+      ContentUnavailableView {
+        Label("Downloading the RFC Index", systemImage: "arrow.down.circle")
+      } description: {
+        Text("The list of every RFC is downloaded once, then kept up to date.")
+      } actions: {
+        VStack {
+          ProgressView()
+          Text("\(bytesReceived.formatted(.byteCount(style: .file))) received")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+      }
+    case .failed(let kind, let message):
+      ContentUnavailableView {
+        Label("Couldn’t Load the RFC Index", systemImage: kind.symbol)
+      } description: {
+        Text(verbatim: message)
+        Text(verbatim: kind.recoverySuggestion(for: .index))
+      } actions: {
+        Button("Try Again") { library.retryIndex() }
+        #if !os(macOS)
+          if kind == .cellularDenied {
+            Button("Open Settings", action: CellularSettings.open)
+          }
+        #endif
+      }
+    case nil:
+      EmptyView()
     }
   }
 }

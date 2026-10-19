@@ -75,6 +75,17 @@ final class LibraryModel {
       indexLoaded.open()
     }
   }
+  /// The bytes the index's download has received, while one is under way with no
+  /// index to show (#770); nil otherwise.
+  private(set) var indexBytesReceived: Int64?
+  /// Counts the index's downloads, so the bytes a download reports after it has ended
+  /// are not taken for the next one's.
+  @ObservationIgnored private var indexDownloads = 0
+  /// What the list shows in place of its rows while there is no index (#770).
+  var indexPlaceholder: IndexPlaceholder? {
+    IndexPlaceholder(
+      state: indexState, hasIndex: index != nil, bytesReceived: indexBytesReceived)
+  }
   /// Open once the index is ready or has failed, for a background refresh that
   /// arrived while launch was still loading it (#191).
   @ObservationIgnored private let indexLoaded = Latch()
@@ -606,13 +617,40 @@ final class LibraryModel {
       // show, so the whole index is asked for.
       let kept = index == nil ? nil : store.indexCheck()
       let validators = kept?.validators(at: .now)
+      // With no index to show, the list shows the download instead (#770), until
+      // the index downloaded has been applied or has failed. Not the automatic
+      // check's, which may wait for a cheap network for as long as there is none:
+      // it runs under the failure, and its Try Again, until it has the index.
+      let isFirstDownload = index == nil && onExpensiveNetworks
+      var onReceived: (@Sendable (Int64) -> Void)?
+      if isFirstDownload {
+        indexBytesReceived = 0
+        indexDownloads += 1
+        let download = indexDownloads
+        // Off the main actor, every packet: only the steps the list shows go over
+        // to it.
+        let steps = OSAllocatedUnfairLock(initialState: IndexPlaceholder.ProgressSteps())
+        onReceived = { [weak self] bytes in
+          guard steps.withLock({ $0.isStep(bytes) }) else { return }
+          Task { @MainActor in
+            self?.indexReceived(bytes, in: download)
+          }
+        }
+      }
+      defer {
+        if isFirstDownload {
+          indexBytesReceived = nil
+        }
+      }
       let interval = signposter.beginInterval("Fetch index")
       let fetched: IndexFetch
       do {
         // Ended on a throw too, so an offline refresh does not leave it open.
         defer { signposter.endInterval("Fetch index", interval) }
         fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
-          .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
+          .fetchIndexData(
+            unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks,
+            onReceived: onReceived)
       }
       switch IndexRefreshOutcome(fetched, kept: kept) {
       case .recordUnchanged(let kept):
@@ -636,6 +674,14 @@ final class LibraryModel {
         settleIndex()
       }
     }
+  }
+
+  /// Records the bytes `download` has received; ignored once it has ended.
+  private func indexReceived(_ bytes: Int64, in download: Int) {
+    guard download == indexDownloads, let shown = indexBytesReceived, bytes > shown else {
+      return
+    }
+    indexBytesReceived = bytes
   }
 
   /// Only assigns: everything in `prepared` was built off the main actor.

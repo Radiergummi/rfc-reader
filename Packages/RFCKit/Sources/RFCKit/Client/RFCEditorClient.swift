@@ -7,6 +7,21 @@ import Foundation
 /// Abstraction over `URLSession` so the client can be tested without a network.
 public protocol HTTPTransport: Sendable {
   func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
+
+  /// `response(for:)`, telling `onReceived` how many bytes of the body have arrived as
+  /// they do (#770). A transport that cannot tell answers as `response(for:)` does, and
+  /// never calls it.
+  func response(
+    for request: URLRequest, onReceived: @escaping @Sendable (Int64) -> Void
+  ) async throws -> (Data, HTTPURLResponse)
+}
+
+extension HTTPTransport {
+  public func response(
+    for request: URLRequest, onReceived: @escaping @Sendable (Int64) -> Void
+  ) async throws -> (Data, HTTPURLResponse) {
+    try await response(for: request)
+  }
 }
 
 /// The transport the client uses unless handed another: a `URLSession`, by default
@@ -26,15 +41,54 @@ public struct URLSessionTransport: HTTPTransport {
   }
 
   public func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    try await response(for: request, delegate: nil)
+  }
+
+  #if !canImport(FoundationNetworking)
+    public func response(
+      for request: URLRequest, onReceived: @escaping @Sendable (Int64) -> Void
+    ) async throws -> (Data, HTTPURLResponse) {
+      try await response(for: request, delegate: ReceivedBytesObserver(onReceived: onReceived))
+    }
+  #endif
+
+  private func response(
+    for request: URLRequest, delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (Data, HTTPURLResponse) {
     var request = request
     if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await session.data(for: request, delegate: delegate)
     guard let http = response as? HTTPURLResponse else {
       throw RFCEditorClient.ClientError.invalidResponse(request.url ?? RFCEditorEndpoints.base)
     }
     return (data, http)
   }
 }
+
+#if !canImport(FoundationNetworking)
+  /// Tells `onReceived` the bytes a task has received, as they arrive. Not the task's
+  /// `progress`: the RFC Editor sends the index without a `Content-Length`, so that
+  /// has no total, and jumps to nearly done as the response starts.
+  private final class ReceivedBytesObserver: NSObject, URLSessionTaskDelegate,
+    @unchecked Sendable
+  {
+    private let onReceived: @Sendable (Int64) -> Void
+    private let lock = NSLock()
+    /// Kept for as long as the task keeps this delegate, which is until it ends.
+    private var observation: NSKeyValueObservation?
+
+    init(onReceived: @escaping @Sendable (Int64) -> Void) {
+      self.onReceived = onReceived
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+      let observation = task.observe(\.countOfBytesReceived) { [onReceived] task, _ in
+        onReceived(task.countOfBytesReceived)
+      }
+      lock.withLock { self.observation = observation }
+    }
+  }
+#endif
 
 extension URLSession {
   /// The session the client uses unless handed another: the default configuration,
@@ -248,12 +302,16 @@ public struct RFCEditorClient: Sendable {
   /// daily refresh: it does not run on a cellular, hotspot or Low Data Mode path.
   /// It fails there, unless the transport waits for a path it may use, as
   /// `URLSession.rfcEditorOnCheapNetworks` does. A person's Retry passes true.
-  public func fetchIndexData(unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool)
-    async throws -> IndexFetch
-  {
+  ///
+  /// `onReceived` is told the bytes received as they arrive, by a transport that can
+  /// tell (#770).
+  public func fetchIndexData(
+    unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool,
+    onReceived: (@Sendable (Int64) -> Void)? = nil
+  ) async throws -> IndexFetch {
     try await fetchConditionally(
       RFCEditorEndpoints.index, accepting: Self.xmlMediaTypes, unlessMatching: validators,
-      onExpensiveNetworks: onExpensiveNetworks)
+      onExpensiveNetworks: onExpensiveNetworks, onReceived: onReceived)
   }
 
   /// The errata feed as bytes (#387), unless it still matches `validators`: as
@@ -270,7 +328,7 @@ public struct RFCEditorClient: Sendable {
 
   private func fetchConditionally(
     _ url: URL, accepting mediaTypes: Set<String>, unlessMatching validators: CacheValidators?,
-    onExpensiveNetworks: Bool
+    onExpensiveNetworks: Bool, onReceived: (@Sendable (Int64) -> Void)? = nil
   ) async throws -> IndexFetch {
     var request = Self.request(url)
     validators?.condition(&request)
@@ -278,7 +336,12 @@ public struct RFCEditorClient: Sendable {
       request.allowsExpensiveNetworkAccess = onExpensiveNetworks
       request.allowsConstrainedNetworkAccess = onExpensiveNetworks
     #endif
-    let (data, response) = try await transport.response(for: request)
+    let (data, response) =
+      if let onReceived {
+        try await transport.response(for: request, onReceived: onReceived)
+      } else {
+        try await transport.response(for: request)
+      }
     switch response.statusCode {
     case 304:
       return .unchanged
