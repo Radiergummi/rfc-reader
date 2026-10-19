@@ -145,10 +145,11 @@ final class DocumentSession {
   private(set) var draftInfo: DraftInfo?
   @ObservationIgnored private var draftInfoLoad: Task<Void, Never>?
 
-  /// Asks for `draftInfo`, for a draft, once per session: a failure leaves the
-  /// header naming only the revision on screen.
+  /// Asks for `draftInfo`, for a draft, once per session, and again on Try Again
+  /// after it failed: a failure leaves the header naming only the revision on screen.
   func startDraftInfoLoad(from library: LibraryModel) {
-    guard let draft = id.draft, draftInfoLoad == nil else { return }
+    guard let draft = id.draft, draftInfoLoad == nil || draftInfo == nil else { return }
+    draftInfoLoad?.cancel()
     draftInfoLoad = Task(name: "Load draft info") { [weak self] in
       do {
         let info = try await library.draftInfo(for: draft)

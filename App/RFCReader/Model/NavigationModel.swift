@@ -339,7 +339,24 @@ final class NavigationModel: Identifiable {
 
   /// `open(_:arrival:)` for a link to an RFC or a draft (#728). A draft has no row, so
   /// opening one leaves the list as it is.
+  ///
+  /// A draft named without a revision opens at its newest, asked first, so that the
+  /// history, the reading position and the translation name the revision read
+  /// rather than whichever is the newest when they are next looked at. Where nobody
+  /// can say which that is, offline with nothing kept, it opens by its name, and
+  /// fails to load as it would have.
   func open(_ link: ReadableLink, arrival: HistoryEntry.Arrival = .root) {
+    guard case .draft(var draft) = link, draft.id.revision == nil else {
+      follow(link, arrival: arrival)
+      return
+    }
+    Task { [weak self, library] in
+      draft.id = await library.revision(of: draft.id)
+      self?.follow(.draft(draft), arrival: arrival)
+    }
+  }
+
+  private func follow(_ link: ReadableLink, arrival: HistoryEntry.Arrival) {
     let route = OpenRoute.route(
       link, arrival: arrival, selected: shownDocument,
       shown: shown.map(ReadableDocument.rfc) ?? shownDocument)

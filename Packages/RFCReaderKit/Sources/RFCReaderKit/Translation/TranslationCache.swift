@@ -21,11 +21,6 @@ public struct TranslationCache: Sendable {
 
   /// What `document` has been translated as into `language`, by source; empty when
   /// nothing is kept, or what is kept cannot be read.
-  public func translations(of document: DocumentID, into language: String) -> [String: String] {
-    translations(of: .rfc(document), into: language)
-  }
-
-  /// The same for an RFC or a draft's revision (#728).
   public func translations(of document: ReadableDocument, into language: String)
     -> [String: String]
   {
@@ -37,12 +32,6 @@ public struct TranslationCache: Sendable {
 
   /// Adds `translations` to what is kept for `document` in `language`. A failure
   /// to write costs only a translation done again, so it is not reported.
-  public func keep(
-    _ translations: [String: String], of document: DocumentID, into language: String
-  ) {
-    keep(translations, of: .rfc(document), into: language)
-  }
-
   public func keep(
     _ translations: [String: String], of document: ReadableDocument, into language: String
   ) {

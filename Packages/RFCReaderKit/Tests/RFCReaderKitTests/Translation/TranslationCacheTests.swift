@@ -21,23 +21,23 @@ final class TranslationCacheTests {
   }
 
   @Test func `nothing is kept for a document never translated`() {
-    #expect(cache.translations(of: .rfc(9110), into: "de").isEmpty)
+    #expect(cache.translations(of: .rfc(.rfc(9110)), into: "de").isEmpty)
   }
 
   @Test func `what is kept is found again, by document and language`() {
-    cache.keep(["Abstract": "Zusammenfassung"], of: .rfc(9110), into: "de")
-    #expect(cache.translations(of: .rfc(9110), into: "de") == ["Abstract": "Zusammenfassung"])
-    #expect(cache.translations(of: .rfc(9110), into: "fr").isEmpty)
-    #expect(cache.translations(of: .rfc(9111), into: "de").isEmpty)
+    cache.keep(["Abstract": "Zusammenfassung"], of: .rfc(.rfc(9110)), into: "de")
+    #expect(cache.translations(of: .rfc(.rfc(9110)), into: "de") == ["Abstract": "Zusammenfassung"])
+    #expect(cache.translations(of: .rfc(.rfc(9110)), into: "fr").isEmpty)
+    #expect(cache.translations(of: .rfc(.rfc(9111)), into: "de").isEmpty)
   }
 
   /// A source already kept stays kept, so a revised document translates only what
   /// is new in it.
   @Test func `keeping more adds to what is kept`() {
-    cache.keep(["Abstract": "Zusammenfassung"], of: .rfc(9110), into: "de")
-    cache.keep(["Note": "Hinweis"], of: .rfc(9110), into: "de")
+    cache.keep(["Abstract": "Zusammenfassung"], of: .rfc(.rfc(9110)), into: "de")
+    cache.keep(["Note": "Hinweis"], of: .rfc(.rfc(9110)), into: "de")
     #expect(
-      cache.translations(of: .rfc(9110), into: "de")
+      cache.translations(of: .rfc(.rfc(9110)), into: "de")
         == ["Abstract": "Zusammenfassung", "Note": "Hinweis"])
   }
 }

@@ -15,6 +15,10 @@ import SwiftUI
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// The column a collapsed split view shows. A row selected in the list pushes
+    /// the reader by itself; a draft has no row (#728), so a draft opened at the root
+    /// of the stack asks for the reader here.
+    @State private var compactColumn = NavigationSplitViewColumn.sidebar
     /// The reader's panel, the tab's rather than each reader's, so that an open panel
     /// stays open from one reader in the stack to the next (#263).
     @State private var showsInspector = false
@@ -54,7 +58,9 @@ import SwiftUI
 
     var body: some View {
       @Bindable var navigation = navigation
-      NavigationSplitView(columnVisibility: $columnVisibility) {
+      NavigationSplitView(
+        columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn
+      ) {
         SidebarView()
           .navigationSplitViewColumnWidth(min: 200, ideal: 240)
       } content: {
@@ -144,6 +150,9 @@ import SwiftUI
           requestedLink = nil
           navigation.open(link)
         }
+      }
+      .onChange(of: navigation.readerPath.root?.document) { _, root in
+        if root?.draft != nil { compactColumn = .detail }
       }
       // Side by side, the sidebar shows which filter feeds the list.
       .onChange(of: horizontalSizeClass) {

@@ -7,7 +7,7 @@ public protocol DraftFetching: Sendable {
   /// What Datatracker says of the draft, whatever revision `id` names.
   @concurrent
   func fetchDraftInfo(_ id: DraftID) async throws -> (info: DraftInfo, data: Data)
-  /// One revision, in the best format the archive has it in.
+  /// One revision, read from its text.
   @concurrent
   func fetchDraft(_ id: DraftID) async throws -> RFCEditorClient.FetchedDocument
   /// One revision's raw bytes in `format`: its text, for Original Text.
@@ -16,11 +16,12 @@ public protocol DraftFetching: Sendable {
 
 extension RFCEditorClient: DraftFetching {}
 
-/// The Internet-Drafts read (#728): each revision's file as the IETF's archive
+/// The Internet-Drafts read (#728): each revision's text as the IETF's archive
 /// serves it, and what Datatracker says of each draft.
 ///
-/// A revision never changes once it is submitted, so its file is kept as an RFC's
-/// body is, and read from the disk from then on. Which revision is the newest does
+/// A revision never changes once it is submitted, so its text is kept as an RFC's
+/// body is, and read from the disk from then on, by the reader and Original Text
+/// alike. Which revision is the newest does
 /// change, and is asked of Datatracker again once what is kept is a day old
 /// (`infoLifetime`), or whenever it cannot be had from the disk at all; a failed
 /// ask falls back to what is kept, so a draft read once opens offline.
@@ -39,6 +40,9 @@ public actor DraftStore {
   private var parsed = RecentValues<DraftID, RFCDocument>(capacity: 4)
   /// The fetches running, so a second open of the same revision joins the first.
   private var fetches: [DraftID: Task<RFCDocument, any Error>] = [:]
+  /// The asks of Datatracker running, by draft name, which a second joins: a draft
+  /// opened without a revision asks for its header and for its revision at once.
+  private var infoFetches: [String: Task<DraftInfo, any Error>] = [:]
 
   /// The app's: a folder of Caches, since everything in it can be fetched again.
   public init() {
@@ -57,23 +61,28 @@ public actor DraftStore {
   // MARK: - What Datatracker says
 
   /// What Datatracker says of the draft `id` names: as kept, while that is less than
-  /// a day old and `refreshing` is false, and asked again otherwise. Kept as it was
-  /// when the ask fails, which is then the error only if nothing is kept.
-  public func info(for id: DraftID, refreshing: Bool = false, client: any DraftFetching)
-    async throws -> DraftInfo
-  {
+  /// a day old, and asked again otherwise. Kept as it was when the ask fails, which
+  /// is then the error only if nothing is kept.
+  public func info(for id: DraftID, client: any DraftFetching) async throws -> DraftInfo {
     let kept = keptInfo(for: id)
-    if let kept, !refreshing, now().timeIntervalSince(kept.fetchedAt) < Self.infoLifetime {
+    if let kept, now().timeIntervalSince(kept.fetchedAt) < Self.infoLifetime {
       return kept.info
     }
-    do {
-      let fetched = try await client.fetchDraftInfo(id)
-      try? fetched.data.write(to: infoURL(for: id), options: .atomic)
-      return fetched.info
-    } catch {
-      if let kept { return kept.info }
-      throw error
+    if let fetch = infoFetches[id.name] { return try await fetch.value }
+    let url = infoURL(for: id)
+    let fetch = Task {
+      do {
+        let fetched = try await client.fetchDraftInfo(id)
+        try? fetched.data.write(to: url, options: .atomic)
+        return fetched.info
+      } catch {
+        if let kept { return kept.info }
+        throw error
+      }
     }
+    infoFetches[id.name] = fetch
+    defer { infoFetches[id.name] = nil }
+    return try await fetch.value
   }
 
   /// What is kept of Datatracker's description, and when it was fetched: the file's
@@ -106,8 +115,7 @@ public actor DraftStore {
     let fetch = Task { [directory] in
       if let document = await Self.parseKept(revision, in: directory) { return document }
       let fetched = try await client.fetchDraft(revision)
-      try? fetched.data.write(
-        to: Self.fileURL(revision, format: fetched.format, in: directory), options: .atomic)
+      try? fetched.data.write(to: Self.fileURL(revision, in: directory), options: .atomic)
       return fetched.document
     }
     fetches[revision] = fetch
@@ -122,7 +130,7 @@ public actor DraftStore {
   /// fetched, as the revision's file is.
   public func originalText(_ id: DraftID, client: any DraftFetching) async throws -> String {
     let revision = try await revision(of: id, client: client)
-    let url = Self.fileURL(revision, format: .text, in: directory)
+    let url = Self.fileURL(revision, in: directory)
     let data: Data
     if let kept = try? Data(contentsOf: url) {
       data = kept
@@ -133,38 +141,18 @@ public actor DraftStore {
     return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 
-  /// Whether the revision `id` names is on the disk; false for the newest, which
-  /// may have moved on.
-  public func isKept(_ id: DraftID) -> Bool {
-    id.revision != nil
-      && Self.keptFormats.contains {
-        FileManager.default.fileExists(atPath: Self.fileURL(id, format: $0, in: directory).path)
-      }
-  }
-
-  /// The formats a revision is kept in, the one read first first.
-  private static let keptFormats: [FileFormat] = [.xml, .text]
-
-  /// The kept file of `id`, parsed off the actor; nil when none is kept, or the one
-  /// kept does not parse, which is then fetched again.
+  /// The kept text of `id`, parsed off the actor; nil when none is kept.
   @concurrent
   private static func parseKept(_ id: DraftID, in directory: URL) async -> RFCDocument? {
-    for format in keptFormats {
-      guard let data = try? Data(contentsOf: fileURL(id, format: format, in: directory)) else {
-        continue
-      }
-      if let document = try? RFCEditorClient.parseDraft(data, format: format, id: id) {
-        return document
-      }
-    }
-    return nil
+    guard let data = try? Data(contentsOf: fileURL(id, in: directory)) else { return nil }
+    return RFCEditorClient.parseDraft(data, id: id)
   }
 
   private func infoURL(for id: DraftID) -> URL {
     directory.appending(path: "\(id.name).json")
   }
 
-  private static func fileURL(_ id: DraftID, format: FileFormat, in directory: URL) -> URL {
-    directory.appending(path: "\(id.description).\(format.pathExtension)")
+  private static func fileURL(_ id: DraftID, in directory: URL) -> URL {
+    directory.appending(path: "\(id.description).txt")
   }
 }

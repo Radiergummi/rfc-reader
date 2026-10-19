@@ -53,11 +53,10 @@ struct DraftStoreTests {
         if isDown { throw URLError(.notConnectedToInternet) }
         revisionAsks.append(id)
       }
-      // Any RFC's XML stands in for a draft's.
-      let data = try Fixtures.data("rfc8999.xml")
+      // Any RFC's text stands in for a draft's.
+      let data = try Fixtures.data("rfc2119.txt")
       return RFCEditorClient.FetchedDocument(
-        data: data, format: .xml,
-        document: try RFCEditorClient.parseDraft(data, format: .xml, id: id),
+        data: data, format: .text, document: RFCEditorClient.parseDraft(data, id: id),
         xmlParseFailure: nil)
     }
   }
@@ -86,8 +85,6 @@ struct DraftStoreTests {
     #expect(document.header.draftName == "draft-ietf-example-protocol-04")
     #expect(network.askedInfo == 1)
     #expect(network.askedRevisions == [Self.revision("04")])
-    #expect(await store.isKept(Self.revision("04")))
-    #expect(!(await store.isKept(Self.name)))
 
     // Another store over the same folder, as on the next launch: from the disk.
     let next = DraftStore(directory: folder)
@@ -118,13 +115,24 @@ struct DraftStoreTests {
     #expect(network.askedInfo == 2)
   }
 
-  @Test func `asked to refresh, the store asks even within the day`() async throws {
+  /// A draft opened without a revision asks for its header and its revision at once.
+  @Test func `two asks of Datatracker at once are one`() async throws {
     let network = Network(newest: "04")
     let store = DraftStore(directory: directory())
-    _ = try await store.info(for: Self.name, client: network)
-    network.publish("05")
-    let info = try await store.info(for: Self.name, refreshing: true, client: network)
-    #expect(info.newestRevision == "05")
+    async let first = store.info(for: Self.name, client: network)
+    async let second = store.info(for: Self.name, client: network)
+    _ = try await (first, second)
+    #expect(network.askedInfo == 1)
+  }
+
+  /// The reader and Original Text read one download.
+  @Test func `the original text is the text the revision was read from`() async throws {
+    let network = Network(newest: "04")
+    let store = DraftStore(directory: directory())
+    _ = try await store.document(Self.revision("04"), client: network)
+    let text = try await store.originalText(Self.revision("04"), client: network)
+    #expect(!text.isEmpty)
+    #expect(network.askedRevisions == [Self.revision("04")])
   }
 
   @Test func `offline, a draft read before opens as it was kept`() async throws {

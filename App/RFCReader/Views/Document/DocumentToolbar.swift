@@ -191,7 +191,7 @@ import SwiftUI
   /// platform's own menu rather than a popover: a compact control group is the
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
   /// `DocumentCommands`'. #708 replaces it with a quick panel.
-  private struct TextSizeButton: View {
+  struct TextSizeButton: View {
     let library: LibraryModel
     @ReaderSettingsValue private var settings
     @State private var showsSettings = false

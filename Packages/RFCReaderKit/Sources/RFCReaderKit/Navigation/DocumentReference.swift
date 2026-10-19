@@ -27,11 +27,21 @@ public enum DocumentReference {
 
   /// The Internet-Draft `reference` names (#728): its name, with a revision or
   /// without (`draft-ietf-quic-http-34`), or a link to it the app opens. Nil for
-  /// anything an RFC's reference reads.
-  public static func draft(from reference: String) -> DraftLink? {
+  /// anything an RFC's reference reads. A `section` wins as it does for an RFC.
+  public static func draft(from reference: String, section: String? = nil) -> DraftLink? {
     let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let id = DraftID(parsing: trimmed) { return DraftLink(id: id) }
-    guard let url = URL(string: trimmed), url.scheme != nil else { return nil }
-    return DraftLink(url: url)
+    var link: DraftLink
+    if let id = DraftID(parsing: trimmed) {
+      link = DraftLink(id: id)
+    } else if let url = URL(string: trimmed), url.scheme != nil, let parsed = DraftLink(url: url) {
+      link = parsed
+    } else {
+      return nil
+    }
+    if let section, !section.isEmpty {
+      link.section = section
+      link.anchor = nil
+    }
+    return link
   }
 }
