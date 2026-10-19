@@ -78,11 +78,12 @@ public struct ListOptions: Hashable, Sendable {
     if searching { showsObsoleteInSearch = shows } else { showsObsolete = shows }
   }
 
-  /// The search scope in force for `query`: none while it searches for nothing, and
-  /// otherwise what its own qualifiers leave of `searchScope`.
-  public func scopeInForce(query: String) -> SearchScope {
+  /// The search scope in force for `query` in `filter`'s list: none while it
+  /// searches for nothing, and otherwise what its own qualifiers and the list leave
+  /// of `searchScope`.
+  public func scopeInForce(query: String, filter: LibraryFilter) -> SearchScope {
     guard !query.isUnsearchedQuery else { return SearchScope() }
-    return searchScope.leaving(IndexSearch.parseQuery(query.normalizedQuery).filters)
+    return searchScope.leaving(IndexSearch.parseQuery(query.normalizedQuery).filters, in: filter)
   }
 
   /// Whether a list can be put oldest first: only one in order of publication, the
@@ -102,7 +103,7 @@ public struct ListOptions: Hashable, Sendable {
   ) -> [LibraryRow] {
     let searching = searching ?? !query.isUnsearchedQuery
     let asked = IndexSearch.parseQuery(query.normalizedQuery).filters
-    let scope = searching ? searchScope.leaving(asked) : SearchScope()
+    let scope = searching ? searchScope.leaving(asked, in: filter) : SearchScope()
     let hidesRead = hidesRead && filter != .recent && !asked.readerData.contains(.read)
     let hidesAprilFirst = !showsAprilFirst && Self.listsFromIndex(filter, asked: asked)
     let showsObsolete = showsObsolete(searching: searching)
@@ -137,7 +138,7 @@ public struct ListOptions: Hashable, Sendable {
   /// list shows (`LibraryList.textQuery`).
   func narrowsSearch(query: String) -> Bool {
     !showsObsoleteInSearch || hidesRead || !showsAprilFirst
-      || !scopeInForce(query: query).isEverything
+      || !scopeInForce(query: query, filter: .all).isEverything
   }
 
   /// Whether rows can be dragged into a new order: only in a collection, in its own

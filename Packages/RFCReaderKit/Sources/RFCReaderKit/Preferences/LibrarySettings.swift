@@ -33,14 +33,14 @@ public enum LibraryPreferences {
 }
 
 /// The library's settings, decoded from user defaults into one value (#713): the
-/// defaults a new tab's list starts with, and the two that hold for every list.
+/// defaults a new tab's list starts with, and the April 1st setting, which holds for
+/// every list. The status badges are read by the rows themselves.
 public struct LibrarySettings: Hashable, Sendable {
   public var showsObsoleteInLists: Bool
   public var showsObsoleteInSearch: Bool
   public var order: ListOptions.Order
   public var searchScope: SearchScope
   public var showsAprilFirst: Bool
-  public var showsStatusBadges: Bool
 
   public init(
     showsObsoleteInLists: Bool = LibraryPreferences.defaultShowsObsolete,
@@ -48,15 +48,13 @@ public struct LibrarySettings: Hashable, Sendable {
     order: ListOptions.Order = LibraryPreferences.defaultOrder,
     searchScope: SearchScope = SearchScope(
       currentOnly: LibraryPreferences.defaultSearchesCurrentOnly),
-    showsAprilFirst: Bool = LibraryPreferences.defaultShowsAprilFirst,
-    showsStatusBadges: Bool = LibraryPreferences.defaultShowsStatusBadges
+    showsAprilFirst: Bool = LibraryPreferences.defaultShowsAprilFirst
   ) {
     self.showsObsoleteInLists = showsObsoleteInLists
     self.showsObsoleteInSearch = showsObsoleteInSearch
     self.order = order
     self.searchScope = searchScope
     self.showsAprilFirst = showsAprilFirst
-    self.showsStatusBadges = showsStatusBadges
   }
 
   /// What `defaults` holds, each setting falling back to its default where nothing
@@ -74,8 +72,7 @@ public struct LibrarySettings: Hashable, Sendable {
       searchScope: SearchScope(
         currentOnly: flag(Keys.searchesCurrentOnlyKey, Keys.defaultSearchesCurrentOnly),
         stream: defaults.string(forKey: Keys.searchStreamKey).flatMap(PublicationStream.init)),
-      showsAprilFirst: flag(Keys.showsAprilFirstKey, Keys.defaultShowsAprilFirst),
-      showsStatusBadges: flag(Keys.showsStatusBadgesKey, Keys.defaultShowsStatusBadges)
+      showsAprilFirst: flag(Keys.showsAprilFirstKey, Keys.defaultShowsAprilFirst)
     )
   }
 

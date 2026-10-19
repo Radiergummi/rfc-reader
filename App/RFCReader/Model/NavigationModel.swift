@@ -38,18 +38,18 @@ final class NavigationModel: Identifiable {
   }
   /// What is typed into search. The list follows `appliedQuery`, not this.
   var searchText = "" {
-    didSet { followSearchText(pausing: true) }
+    didSet {
+      // A scope token removed lasts until the search is cleared (#713). The text,
+      // not the query applied: the iOS field shows the tokens as it is typed in.
+      if searchText.isUnsearchedQuery, !oldValue.isUnsearchedQuery {
+        listOptions.searchScope = seededSearchScope
+      }
+      followSearchText(pausing: true)
+    }
   }
   /// The search text, trimmed, once typing pauses (#124): what the list is asked to
   /// search for. Read only to make the list; views read `appliedQuery`.
-  private var requestedQuery = "" {
-    didSet {
-      // A scope token removed lasts until the search is cleared (#713).
-      if requestedQuery.isEmpty, !oldValue.isEmpty {
-        listOptions.searchScope = LibrarySettings(defaults: .standard).searchScope
-      }
-    }
-  }
+  private var requestedQuery = ""
   @ObservationIgnored private var pendingSearch: Task<Void, Never>?
 
   /// What the list shows, made off the main actor whenever one of its inputs changes
@@ -79,12 +79,19 @@ final class NavigationModel: Identifiable {
   var appliedQuery: String { listed?.list.query ?? "" }
   /// The list's view options, for this tab (#348): what Settings says a new tab
   /// starts with (#713), and changed from there by View Options for this tab only.
-  var listOptions = LibrarySettings(defaults: .standard).listOptions {
+  var listOptions: ListOptions {
     didSet {
-      // What was read as of turning Hide Read on, not as of entering the filter.
-      if listOptions.hidesRead, !oldValue.hidesRead { recentOrder = library.recentlyRead() }
+      // What was read as of turning Hide Read on, not as of entering the filter;
+      // never in Recently Read, which Hide Read leaves alone and whose order is
+      // taken on entering it.
+      if listOptions.hidesRead, !oldValue.hidesRead, filter != .recent {
+        recentOrder = library.recentlyRead()
+      }
     }
   }
+  /// The search scope the tab started with, which clearing a search restores: a
+  /// changed setting reaches only the tabs opened after it.
+  @ObservationIgnored private let seededSearchScope: SearchScope
 
   /// The tab's options as its list is made with them: with the library's April 1st
   /// setting, which every tab follows as it changes (#713).
@@ -117,6 +124,9 @@ final class NavigationModel: Identifiable {
   /// compared document (#187), which would otherwise list the library for nothing.
   init(library: LibraryModel, listsDocuments: Bool = true) {
     self.library = library
+    let settings = LibrarySettings(defaults: .standard)
+    listOptions = settings.listOptions
+    seededSearchScope = settings.searchScope
     if listsDocuments {
       followListInputs()
       followTextSearch()

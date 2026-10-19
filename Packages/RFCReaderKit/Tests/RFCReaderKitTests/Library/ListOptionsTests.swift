@@ -139,9 +139,26 @@ struct ListOptionsTests {
   @Test func `the scope in force is the one a query leaves`() {
     let options = ListOptions(searchScope: SearchScope(currentOnly: true, stream: .ietf))
 
-    #expect(options.scopeInForce(query: "").isEverything)
-    #expect(options.scopeInForce(query: "http") == SearchScope(currentOnly: true, stream: .ietf))
-    #expect(options.scopeInForce(query: "http stream:irtf") == SearchScope(currentOnly: true))
+    #expect(options.scopeInForce(query: "", filter: .all).isEverything)
+    #expect(
+      options.scopeInForce(query: "http", filter: .all)
+        == SearchScope(currentOnly: true, stream: .ietf))
+    #expect(
+      options.scopeInForce(query: "http stream:irtf", filter: .all)
+        == SearchScope(currentOnly: true))
+  }
+
+  /// A list of one stream, or of one group, is where the reader chose to look: the
+  /// scope's stream would leave a search there with nothing.
+  @Test func `the search scope's stream gives way to a list of one stream or group`() {
+    let options = ListOptions(searchScope: SearchScope(stream: .ietf))
+    let research = [LibraryRow.rfc(Fixtures.metadata(9000, stream: .irtf, workingGroup: "cfrg"))]
+
+    #expect(options.apply(to: research, filter: .all, query: "x").isEmpty)
+    #expect(options.apply(to: research, filter: .stream(.irtf), query: "x").count == 1)
+    #expect(options.apply(to: research, filter: .workingGroup("cfrg"), query: "x").count == 1)
+    #expect(options.scopeInForce(query: "x", filter: .stream(.irtf)).isEverything)
+    #expect(options.scopeInForce(query: "x", filter: .all) == SearchScope(stream: .ietf))
   }
 
   @Test func `the order applies only where it can`() {

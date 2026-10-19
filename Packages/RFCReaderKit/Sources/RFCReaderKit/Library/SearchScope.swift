@@ -25,13 +25,21 @@ public struct SearchScope: Hashable, Sendable {
     !currentOnly && stream == nil
   }
 
-  /// What of it is still in force under a query's `filters`: a `status:` naming
-  /// statuses replaces "current only", and a `stream:` the stream. `status:current`
-  /// names none, and leaves out only what "current only" already does.
-  public func leaving(_ filters: SearchFilters) -> SearchScope {
+  /// What of it is still in force under a query's `filters`, searched in `filter`'s
+  /// list: a `status:` naming statuses replaces "current only", and a `stream:` the
+  /// stream. `status:current` names none, and leaves out only what "current only"
+  /// already does. A list of one stream or one group replaces the stream too: the
+  /// reader chose where to look, and the scope's stream would leave it empty.
+  public func leaving(_ filters: SearchFilters, in filter: LibraryFilter = .all) -> SearchScope {
     var scope = self
     if !filters.statuses.isEmpty { scope.currentOnly = false }
     if !filters.streams.isEmpty { scope.stream = nil }
+    switch filter {
+    case .stream, .workingGroup: scope.stream = nil
+    case .all, .standards, .bestCurrentPractice, .recent, .bookmarks, .downloaded, .series,
+      .collection:
+      break
+    }
     return scope
   }
 

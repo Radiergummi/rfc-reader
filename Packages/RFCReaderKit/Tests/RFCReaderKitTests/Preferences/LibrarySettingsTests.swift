@@ -24,7 +24,6 @@ struct LibrarySettingsTests {
   @Test func `the defaults seed the options a tab has always started with`() {
     #expect(LibrarySettings().listOptions == ListOptions())
     #expect(LibrarySettings().showsAprilFirst)
-    #expect(LibrarySettings().showsStatusBadges)
   }
 
   @Test func `every stored key decodes`() throws {
@@ -35,7 +34,6 @@ struct LibrarySettingsTests {
       defaults.set(true, forKey: LibraryPreferences.searchesCurrentOnlyKey)
       defaults.set(PublicationStream.ietf.rawValue, forKey: LibraryPreferences.searchStreamKey)
       defaults.set(false, forKey: LibraryPreferences.showsAprilFirstKey)
-      defaults.set(false, forKey: LibraryPreferences.showsStatusBadgesKey)
 
       let settings = LibrarySettings(defaults: defaults)
       #expect(!settings.showsObsoleteInLists)
@@ -43,7 +41,6 @@ struct LibrarySettingsTests {
       #expect(settings.order == .oldestFirst)
       #expect(settings.searchScope == SearchScope(currentOnly: true, stream: .ietf))
       #expect(!settings.showsAprilFirst)
-      #expect(!settings.showsStatusBadges)
     }
   }
 
