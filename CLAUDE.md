@@ -23,6 +23,7 @@ Everything goes through the `Makefile`:
 | `make run` | build and launch the macOS app (quits a running copy first) |
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
 | `make run-sim` | build, install and launch in the iOS Simulator, headless (`IOS_SIMULATOR=` for another device than the iPhone 18 Pro); `xcrun simctl io booted screenshot x.png` to see it |
+| `make hand-check CHECK=<name>` | run one hand-check scenario of `App/HandChecks` in the iOS Simulator from a first launch: XCUITest taps, swipes, long-presses, opens links and answers system alerts, and each step's screenshot lands in `hand-checks/<name>/`; without `CHECK` it lists them; not part of `make check` or CI (`docs/GETTING_STARTED.md`, "Hand checks on iOS") |
 | `make install` | build Release and copy it into `/Applications` |
 | `make appcast VERSION=x.y.z` / `make publish-feed` | after the release workflow's draft for `vx.y.z` is published: verify its disk image's attestation and sign the Sparkle feed into `site/public/appcast.xml`, with the `rfc-reader` key in the maintainer's keychain / check every download it offers and deploy `site/` to `rfc-reader.mazetti.me` with wrangler (#911) |
 | `make trace` | build Release, record a Time Profiler trace of a scripted session into `traces/`, and print the app's signpost intervals; `TRACE_SCENARIO='wait 6; open 9110; wait 5'` for another session |

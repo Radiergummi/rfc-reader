@@ -28,6 +28,14 @@ curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 - Select `RFC 9110 §8.3` in any app and choose *Services ▸ Replace with RFC Link*.
 - Ask Siri "Open an RFC in RFC Reader"; it asks which number. (App Shortcuts need one launch to register. Siri cannot hear the number in the phrase itself until there is an `RFCEntity`, #192.)
 
+## Hand checks on iOS
+
+`make run-sim` launches the app in the iOS Simulator, headless, but nothing can tap in it. `make hand-check CHECK=<name>` runs one of the scenarios in `App/HandChecks` instead: an XCUITest that drives the built app from outside, as a person would, in a Simulator with no window. It taps and long-presses, swipes from the edge, opens `rfc://` links while the app runs, and answers the system's alerts, such as the notification permission. Every step saves a screenshot, exported to `hand-checks/<name>/` under the step's name; an assertion says what the step should show. `make hand-check` without `CHECK` lists the scenarios, and `CODE_SIGNING_ALLOWED=NO` runs them without signing.
+
+Each check starts from a first launch: the app is removed from the simulated device first, with its data and permissions, so a check takes a few minutes. A new scenario is a test in `App/HandChecks/HandChecks.swift`. None of them runs in `make check` or CI; a change that needs one runs it.
+
+What the Simulator cannot stand in for stays with an iPhone (`make run-device`) or the maintainer: performance and TextKit's timing on real hardware, haptics, how a long press feels, and the camera and sensors.
+
 ## Where to go next
 
 `docs/VISION.md` has the feature tiers and the principles the UI is held to; `docs/ARCHITECTURE.md` describes the document model, the two parsers and the reader, and `docs/decisions/` has the dated decisions behind them; `docs/DATA_PIPELINE.md` covers the corpus packs. `CLAUDE.md` lists the standing constraints that are easy to break by accident, and how to work on the legacy text heuristics. Work in progress is tracked in the GitHub issues.
