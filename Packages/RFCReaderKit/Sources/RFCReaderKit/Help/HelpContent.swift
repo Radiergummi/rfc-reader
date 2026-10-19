@@ -2,7 +2,7 @@ import Foundation
 import RFCKit
 
 /// The help's sections, in its order (#780). Each is a place the help can be opened
-/// at, as a search field's "Search syntax…" opens it at the search.
+/// at, as a search field's "Search Syntax…" opens it at the search.
 public enum HelpSection: String, CaseIterable, Identifiable, Sendable {
   case search
   case shortcuts

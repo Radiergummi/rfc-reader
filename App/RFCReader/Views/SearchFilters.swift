@@ -88,8 +88,8 @@ import SwiftUI
     }
 
     /// Every filter while the field is empty, which is where the syntax is taught
-    /// (#781), but not while it is empty only because a filter just became a token:
-    /// the list would cover the results after every one.
+    /// (#781), but not while it holds tokens and no text: the list would cover the
+    /// results after every filter that becomes one.
     private func suggestions(in index: RFCIndex) -> [SearchQuery.Suggestion] {
       let typed = text.wrappedValue
       guard !typed.isEmpty || navigation.searchText.isEmpty else { return [] }

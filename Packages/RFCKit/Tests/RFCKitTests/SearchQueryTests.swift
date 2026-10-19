@@ -463,7 +463,7 @@ struct SearchQueryTermTests {
 
   /// A list over the results at every space, or after every filter taken as a token,
   /// would hide them as the reader types.
-  @Test func `a word is offered nothing until it has a letter`() throws {
+  @Test func `a word is offered nothing after a space or a filter`() throws {
     let index = try Fixtures.sampleIndex()
     #expect(SearchQuery.suggestionsWhileTyping(for: "cache ", in: index).isEmpty)
     #expect(SearchQuery.suggestionsWhileTyping(for: "wg:tls ", in: index).isEmpty)
