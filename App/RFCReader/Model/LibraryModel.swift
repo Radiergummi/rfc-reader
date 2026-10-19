@@ -1232,7 +1232,7 @@ final class LibraryModel {
     return await Self.suggestions(in: search, for: query, limit: limit)
   }
 
-  /// What the Go to RFC palette and sheet list under what was typed, once the reader
+  /// What the Mac's Go to RFC palette lists under what was typed, once the reader
   /// has paused: run per change of the query and canceled by the next (`Debounce`).
   ///
   /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,

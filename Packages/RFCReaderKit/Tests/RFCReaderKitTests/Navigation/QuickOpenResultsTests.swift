@@ -442,6 +442,24 @@ struct QuickOpenNumberTests {
     #expect(QuickOpenResults.digits(in: "½") == "")
   }
 
+  /// Only decimal digits: a footnote's superscript or a circled number is not one.
+  @Test func `a number that is not a decimal digit is dropped`() {
+    #expect(QuickOpenResults.digits(in: "9110²") == "9110")
+    #expect(QuickOpenResults.digits(in: "④") == "")
+  }
+
+  /// A pasted link is the RFC it names, not every digit in it run together.
+  @Test func `a pasted link keeps the number of its RFC`() {
+    #expect(
+      QuickOpenResults.digits(in: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1")
+        == "9110")
+  }
+
+  /// `BCP 14` is not RFC 14.
+  @Test func `a pasted series names no RFC`() {
+    #expect(QuickOpenResults.digits(in: "BCP 14") == "")
+  }
+
   /// A region whose number pad types Eastern Arabic digits types an RFC number all
   /// the same.
   @Test func `another script's digits are kept as ASCII`() {

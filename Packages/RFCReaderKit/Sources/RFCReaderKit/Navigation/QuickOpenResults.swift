@@ -28,14 +28,26 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// The digits of what was typed into iOS's field, which is all it takes (#579):
   /// the number pad types nothing else, but a paste or an iPad's keyboard can. As
   /// ASCII, whatever digits the number pad types in the reader's region.
+  ///
+  /// A paste that names a document is the number of the RFC it names, the way the
+  /// Mac's palette reads it: a link's section is not part of the number, and a BCP
+  /// or an STD names no RFC by its own number, so it keeps nothing. Anything else,
+  /// such as a letter typed on an iPad's keyboard, is dropped.
   public static func digits(in text: String) -> String {
-    String(
-      text.compactMap { character in
-        guard character.isNumber, let digit = character.wholeNumberValue, digit < 10 else {
-          return nil
-        }
-        return Character(String(digit))
-      })
+    let digits = text.compactMap(asciiDigit)
+    guard digits.count < text.count, let link = DocumentReference.link(from: text) else {
+      return String(digits)
+    }
+    return link.id.series == .rfc ? String(link.id.number) : ""
+  }
+
+  /// A decimal digit, of any script, as ASCII: not a superscript, a circled number
+  /// or a numeral that is not a digit, which `Character.isNumber` takes too.
+  private static func asciiDigit(_ character: Character) -> Character? {
+    guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+      scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue
+    else { return nil }
+    return Character(String(digit))
   }
 
   /// One of each of the four, shown under the field while it is empty. Not
