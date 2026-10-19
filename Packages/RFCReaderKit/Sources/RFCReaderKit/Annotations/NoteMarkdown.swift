@@ -10,13 +10,20 @@ extension NoteBody {
   /// paragraph a row, an image its text. Markdown that does not parse is kept as one
   /// paragraph of its text.
   public init(markdown: String) {
-    guard
-      let parsed = try? AttributedString(
-        markdown: markdown, options: .init(interpretedSyntax: .full))
-    else {
+    guard let leaves = Self.leaves(ofMarkdown: markdown) else {
       self.init([.paragraph([Span(markdown)])])
       return
     }
+    self.init(leaves: leaves)
+  }
+
+  /// The paragraphs of `markdown`, as the parser reads them, not yet canonical; nil
+  /// for Markdown that does not parse.
+  static func leaves(ofMarkdown markdown: String) -> [Leaf]? {
+    guard
+      let parsed = try? AttributedString(
+        markdown: markdown, options: .init(interpretedSyntax: .full))
+    else { return nil }
     var leaves: [Leaf] = []
     var leafIdentity: Int?
     var cell: Int?
@@ -54,7 +61,7 @@ extension NoteBody {
       leafIdentity = identity
       cell = thisCell
     }
-    self.init(leaves: leaves)
+    return leaves
   }
 
   /// The lists a block is nested in, outermost first, each with its item.
@@ -108,7 +115,12 @@ extension NoteBody {
   // MARK: - Inline
 
   /// A paragraph's spans, its line breaks continued at `indent`.
-  private static func inline(_ spans: [Span], indent: String) -> String {
+  ///
+  /// The styles open and close as a stack: one still wanted stays open, the rest above
+  /// it close, and of those that open, the one that runs on longest opens outermost,
+  /// so a struck word in an italic sentence is `*some ~~gone~~ text*`. What crosses
+  /// still has no spelling, which the canonical form takes care of (`spelled`).
+  static func inline(_ spans: [Span], indent: String = "") -> String {
     var output = ""
     var open: [Style] = []
     var atLineStart = true
@@ -128,12 +140,21 @@ extension NoteBody {
       if let link = span.link {
         while end < spans.count, spans[end].link == link, spans[end].text != "\n" { end += 1 }
       }
-      let wanted = order.filter { span.style.contains($0) }
       // Keep what is open and still wanted, from the outside in; close the rest.
       var keep = 0
-      while keep < open.count, keep < wanted.count, open[keep] == wanted[keep] { keep += 1 }
+      while keep < open.count, span.style.contains(open[keep]) { keep += 1 }
       while open.count > keep { output += delimiter(open.removeLast()) }
-      for style in wanted.dropFirst(keep) {
+      let opening = order.filter { span.style.contains($0) && !open.contains($0) }
+        .enumerated()
+        .sorted { lhs, rhs in
+          let (left, right) = (
+            runLength(of: lhs.element, from: index, in: spans),
+            runLength(of: rhs.element, from: index, in: spans)
+          )
+          return left != right ? left > right : lhs.offset < rhs.offset
+        }
+        .map(\.element)
+      for style in opening {
         output += delimiter(style)
         open.append(style)
       }
@@ -150,6 +171,18 @@ extension NoteBody {
     }
     closeAll(&open, into: &output)
     return output
+  }
+
+  /// How many characters `style` runs on for from the span at `index`, to the next
+  /// span without it or the next line break.
+  private static func runLength(of style: Style, from index: Int, in spans: [Span]) -> Int {
+    var length = 0
+    var index = index
+    while index < spans.count, spans[index].text != "\n", spans[index].style.contains(style) {
+      length += spans[index].text.count
+      index += 1
+    }
+    return length
   }
 
   private static func closeAll(_ open: inout [Style], into output: inout String) {
