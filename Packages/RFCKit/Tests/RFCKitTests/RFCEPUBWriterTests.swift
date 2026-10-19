@@ -49,6 +49,9 @@ struct RFCEPUBWriterTests {
     #expect(package.contains("<dc:creator>R. Fielding</dc:creator>"))
     #expect(package.contains("<dc:date>2022-06</dc:date>"))
     #expect(package.contains("<meta property=\"dcterms:modified\">2022-06-01T00:00:00Z</meta>"))
+    // A reading app shows a subject as the book's genre: the number, one genre per
+    // RFC, would say nothing.
+    #expect(!package.contains("<dc:subject>"))
   }
 
   /// A legacy RFC can have a section with neither number nor words; a book's

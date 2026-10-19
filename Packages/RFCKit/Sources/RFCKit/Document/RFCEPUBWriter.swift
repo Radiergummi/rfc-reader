@@ -59,7 +59,6 @@ public struct RFCEPUBWriter: Sendable {
       "<dc:language>en</dc:language>",
     ]
     metadata += header.authors.map { "<dc:creator>\(escaped($0.name))</dc:creator>" }
-    if let id = header.id { metadata.append("<dc:subject>\(escaped(id.displayName))</dc:subject>") }
     if let date = header.date {
       metadata.append("<dc:date>\(w3cDate(date))</dc:date>")
     }
