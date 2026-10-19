@@ -40,13 +40,19 @@ final class SQLiteDatabaseTests {
     #expect(try select.step() == false)
   }
 
+  @Test func `text with a NUL in it is read back whole`() throws {
+    let database = try database()
+    try database.run("INSERT INTO rows (name) VALUES (?)", "a\u{0}b")
+    #expect(try database.strings("SELECT name FROM rows") == ["a\u{0}b"])
+  }
+
   @Test func `a statement reset is bound and run again`() throws {
     let database = try database()
     let insert = try database.prepare("INSERT INTO rows (name) VALUES (?)")
     for name in ["a", "b"] {
       try insert.reset()
       try insert.bind(name, at: 1)
-      _ = try insert.step()
+      try insert.step()
     }
     #expect(try database.strings("SELECT name FROM rows ORDER BY name") == ["a", "b"])
   }

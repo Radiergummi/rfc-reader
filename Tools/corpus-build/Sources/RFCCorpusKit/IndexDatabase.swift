@@ -62,7 +62,7 @@ public final class IndexDatabase {
       }
       try statement.bind(citation.count, at: 5)
       try statement.bind(citation.kind?.rawValue, at: 6)
-      _ = try statement.step()
+      try statement.step()
     }
   }
 
@@ -77,7 +77,7 @@ public final class IndexDatabase {
       try statement.bind(succession.new.description, at: 3)
       try statement.bind(succession.newSection, at: 4)
       try statement.bind(succession.score, at: 5)
-      _ = try statement.step()
+      try statement.step()
     }
   }
 

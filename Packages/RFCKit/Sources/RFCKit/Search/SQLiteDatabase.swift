@@ -60,7 +60,7 @@ import Foundation
     for (offset, value) in values.enumerated() {
       try statement.bind(value, at: Int32(offset + 1))
     }
-    _ = try statement.step()
+    try statement.step()
   }
 
   /// The first column of every row `sql` returns, with `values` bound in order, a NULL
@@ -101,7 +101,8 @@ import Foundation
 
   /// A prepared statement, finalized when it is released. It keeps its database open
   /// until then. Parameters and columns are numbered as SQLite numbers them:
-  /// parameters from 1, columns from 0.
+  /// parameters from 1, columns from 0. A column is read only while `step()` has
+  /// answered true, and SQLite leaves what it reads otherwise undefined.
   @safe public final class Statement {
     private let statement: OpaquePointer?
     private let database: SQLiteDatabase
@@ -138,6 +139,7 @@ import Foundation
 
     /// Runs the statement to its next row: true while a row comes, false once it is
     /// done.
+    @discardableResult
     public func step() throws -> Bool {
       switch unsafe sqlite3_step(statement) {
       case SQLITE_ROW: true
@@ -152,9 +154,12 @@ import Foundation
       try database.check(unsafe sqlite3_reset(statement))
     }
 
-    /// The current row's column as text, nil when it is NULL.
+    /// The current row's column as text, nil when it is NULL. Its length in bytes,
+    /// rather than up to a NUL, as it was bound.
     public func text(at column: Int32) -> String? {
-      unsafe sqlite3_column_text(statement, column).map { unsafe String(cString: $0) }
+      guard let text = unsafe sqlite3_column_text(statement, column) else { return nil }
+      let length = Int(unsafe sqlite3_column_bytes(statement, column))
+      return unsafe String(decoding: UnsafeBufferPointer(start: text, count: length), as: UTF8.self)
     }
 
     public func double(at column: Int32) -> Double {

@@ -149,16 +149,16 @@ public final class FullTextIndex {
         try insert.bind(row.number, at: 3)
         try insert.bind(row.heading, at: 4)
         try insert.bind(row.body, at: 5)
-        _ = try insert.step()
+        try insert.step()
         try record.reset()
-        _ = try record.step()
+        try record.step()
       }
       let recordDocument = try database.prepare(
         "INSERT INTO documents (document, written, retained) VALUES (?, ?, ?)")
       try recordDocument.bind(id.fileStem, at: 1)
       try recordDocument.bind(written.timeIntervalSinceReferenceDate, at: 2)
       try recordDocument.bind(retained || wasRetained ? 1 : 0, at: 3)
-      _ = try recordDocument.step()
+      try recordDocument.step()
     }
   }
 
