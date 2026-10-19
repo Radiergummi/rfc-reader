@@ -117,7 +117,7 @@ struct DocumentCommands: Commands {
         Button("Highlight") {
           active.controller?.highlightSelection()
         }
-        .keyboardShortcut("h", modifiers: [.command, .control])
+        .keyboardShortcut(ReaderShortcut.highlight.keyboardShortcut)
         .disabled(!hasQuotableSelection)
       #endif
       Section {

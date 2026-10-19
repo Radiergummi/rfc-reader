@@ -499,7 +499,6 @@ public enum SchemaV6: VersionedSchema {
     public var document: DocumentID? { DocumentID(fileStem: documentKey) }
   }
 
-
   /// Color over a passage of a document (#522), from one position of its model text
   /// to another (`Target`), with the quote it covered. A row of its own, keyed on the
   /// document's `fileStem`, in CloudKit's shape: nothing unique, every attribute
@@ -641,6 +640,10 @@ public enum UserData {
     let marks = try context.fetch(
       FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
     removeDuplicates(marks, keyedBy: \.documentKey, in: context)
+    // One row per highlight, the latest edit kept.
+    let highlights = try context.fetch(
+      FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
+    removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
     if context.hasChanges { try context.save() }
   }
 

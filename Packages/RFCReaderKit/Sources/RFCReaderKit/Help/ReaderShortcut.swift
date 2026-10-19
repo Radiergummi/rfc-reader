@@ -25,6 +25,8 @@ public enum ReaderShortcut: CaseIterable, Sendable {
   case bookmark
   case newCollection
   case copyAsQuote
+  /// Edit ▸ Highlight (#522), Books' chord.
+  case highlight
   case copyCitation
   case export
   case pageSetup
@@ -147,6 +149,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .bookmark: Chord("d")
     case .newCollection: mac ? Chord("n", [.command, .shift]) : nil
     case .copyAsQuote: mac ? Chord("c", [.command, .option, .shift]) : nil
+    case .highlight: mac ? Chord("h", [.command, .control]) : nil
     case .copyCitation: mac ? Chord("c", [.command, .shift]) : nil
     case .export: mac ? Chord("e", [.command, .shift]) : nil
     case .pageSetup: mac ? Chord("p", [.command, .shift]) : nil
@@ -186,6 +189,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .bookmark: String(kit: "Add or Remove Bookmark", locale: locale)
     case .newCollection: String(kit: "New Collection", locale: locale)
     case .copyAsQuote: String(kit: "Copy as Quote", locale: locale)
+    case .highlight: String(kit: "Highlight", locale: locale)
     case .copyCitation: String(kit: "Copy Citation", locale: locale)
     case .export: String(kit: "Export", locale: locale)
     case .pageSetup: String(kit: "Page Setup", locale: locale)
@@ -213,7 +217,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
   public var group: Group {
     switch self {
     case .goToRFC, .quickOpen, .back, .forward, .backArrow, .forwardArrow, .bookmark,
-      .newCollection, .copyAsQuote, .copyCitation, .export, .pageSetup, .print:
+      .newCollection, .copyAsQuote, .highlight, .copyCitation, .export, .pageSetup, .print:
       .documents
     case .bigger, .biggerAlternate, .smaller, .actualSize, .toggleSidebar, .contents, .info,
       .nextSection, .previousSection:
