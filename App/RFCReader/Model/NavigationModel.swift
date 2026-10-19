@@ -161,6 +161,11 @@ final class NavigationModel: Identifiable {
   /// shows it as selected.
   var filter: LibraryFilter { filterChoice.value }
 
+  /// The list a search in this tab is shown in: All RFCs while a collapsed sidebar
+  /// is on screen in its place and searches the library (#345), as `listOnShow`
+  /// lists it, and otherwise the filter's.
+  var searchedFilter: LibraryFilter { sidebarSelection == nil ? .all : filter }
+
   /// The sidebar's `List(selection:)`, bound to directly.
   ///
   /// Nil when a collapsed split view has gone back to the sidebar. A Mac refuses

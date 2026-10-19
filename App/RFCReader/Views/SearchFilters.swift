@@ -116,7 +116,7 @@ import SwiftUI
         // The text, not the query applied, as the terms are: a token appearing once
         // typing pauses would land in the field while it is typed in.
         let scope = navigation.listOptions.scopeInForce(
-          query: navigation.searchText, filter: navigation.filter
+          query: navigation.searchText, filter: navigation.searchedFilter
         ).tokens()
         let terms = SearchQuery.tokenized(
           navigation.searchText, workingGroups: library.knownWorkingGroups
@@ -124,7 +124,7 @@ import SwiftUI
         return scope.map(FieldToken.scope) + terms.map(FieldToken.term)
       } set: { tokens in
         let scope = navigation.listOptions.scopeInForce(
-          query: navigation.searchText, filter: navigation.filter)
+          query: navigation.searchText, filter: navigation.searchedFilter)
         let kept = Set(tokens.compactMap(\.scopePart))
         for token in scope.tokens() where !kept.contains(token.part) {
           navigation.listOptions.searchScope =
