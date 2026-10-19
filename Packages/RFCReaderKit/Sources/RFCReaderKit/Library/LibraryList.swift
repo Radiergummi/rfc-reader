@@ -440,8 +440,9 @@ extension LibraryList {
     case .workingGroup(let group): qualifier = Self.formatted { $0.workingGroups = [group] }
     case .series(let id): qualifier = Self.formatted { $0.scopes = [.document(id)] }
     case .collection(let identifier):
-      if let definition {
-        qualifier = definition
+      // The tab searches its query and the search as one, a quote left open closed.
+      if definition != nil {
+        return searchedQuery
       } else if let name = collections[identifier]?.name {
         qualifier = Self.formatted { $0.scopes = [.collection(name)] }
       } else {

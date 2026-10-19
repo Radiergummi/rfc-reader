@@ -39,6 +39,14 @@ struct SavedQueryTests {
     #expect(list.savedQuery(in: CollectionSnapshot(collections: [])) == "wg:quic congestion")
   }
 
+  /// Kept as the tab searches it: the quote its query leaves open closed before the
+  /// search, or the search's words would become the last value's.
+  @Test func `a dynamic collection's open quote is closed before the search it keeps`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "cache", definition: #"by:"Fielding"#)
+    #expect(list.savedQuery(in: CollectionSnapshot(collections: [])) == #"by:"Fielding" cache"#)
+  }
+
   /// The tab narrows its filter by the search, where one qualifier's values in a
   /// query are a union: kept, Bookmarks searched for `is:offline` would list every
   /// bookmark and every offline RFC.
