@@ -73,10 +73,10 @@ public struct DraftStatus: Equatable, Sendable {
         ]
       } ?? []
     }
+    var style = Date.FormatStyle.dateTime.day().month(.wide).year()
+    style.locale = locale
     return revisions.reversed().compactMap { revision in
       guard let draft = shown.at(revision: revision.revision) else { return nil }
-      var style = Date.FormatStyle.dateTime.day().month(.wide).year()
-      style.locale = locale
       return Choice(
         draft: draft, label: Self.revisionLabel(revision.revision, locale: locale),
         date: revision.published?.formatted(style), isShown: draft == shown)

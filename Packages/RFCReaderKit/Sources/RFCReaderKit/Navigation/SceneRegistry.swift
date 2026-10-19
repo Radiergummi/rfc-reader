@@ -136,9 +136,17 @@ public struct SceneRegistry<Scene: AnyObject> {
     preferring isPreferred: (Scene) -> Bool = { _ in false }
   ) -> Decision {
     scenes.removeAll { $0.scene == nil }
+    // A draft named without a revision is the draft, at whichever revision a tab
+    // opened it: a tab holds the revision it resolved to (#728).
+    let namesNewest = if case .draft(let draft) = link { draft.id.revision == nil } else { false }
     guard
       let target = LinkRouting.target(
-        for: link.document, in: open, showing: showing, preferring: isPreferred)
+        for: link.document, in: open,
+        showing: { scene in
+          let held = showing(scene)
+          guard namesNewest, case .draft(let draft) = held else { return held }
+          return draft.at(revision: nil).map(ReadableDocument.draft)
+        }, preferring: isPreferred)
     else {
       routed = Routed(link: link, target: .nextScene)
       return .openWindow

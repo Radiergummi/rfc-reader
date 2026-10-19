@@ -346,15 +346,25 @@ final class NavigationModel: Identifiable {
   /// can say which that is, offline with nothing kept, it opens by its name, and
   /// fails to load as it would have.
   func open(_ link: ReadableLink, arrival: HistoryEntry.Arrival = .root) {
+    newestRevisionLookup?.cancel()
+    newestRevisionLookup = nil
     guard case .draft(var draft) = link, draft.id.revision == nil else {
       follow(link, arrival: arrival)
       return
     }
-    Task { [weak self, library] in
+    // Anything the tab went to while Datatracker was asked, a row, a link or Back,
+    // is later than this open, and stays.
+    let held = history.current
+    newestRevisionLookup = Task { [weak self, library] in
       draft.id = await library.revision(of: draft.id)
-      self?.follow(.draft(draft), arrival: arrival)
+      guard let self, !Task.isCancelled, history.current == held else { return }
+      follow(.draft(draft), arrival: arrival)
     }
   }
+
+  /// The newest revision of a draft opened without one, being asked for (#728); a
+  /// later open replaces it.
+  @ObservationIgnored private var newestRevisionLookup: Task<Void, Never>?
 
   private func follow(_ link: ReadableLink, arrival: HistoryEntry.Arrival) {
     let route = OpenRoute.route(
