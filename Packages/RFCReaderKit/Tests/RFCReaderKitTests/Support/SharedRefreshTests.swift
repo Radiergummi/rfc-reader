@@ -3,8 +3,8 @@ import Testing
 @testable import RFCReaderKit
 
 /// How a refresh asked for while one is under way joins it rather than running
-/// beside it (#595): the index's check and Retry, the revisions, the working
-/// groups and the errata.
+/// beside it (#595): the index's, the revisions, the working groups and the
+/// errata; and how a person's refresh replaces the index's automatic check (#983).
 @MainActor
 @Suite("Shared refresh", .timeLimit(.minutes(1)))
 struct SharedRefreshTests {

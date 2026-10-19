@@ -858,7 +858,7 @@ final class LibraryModel {
   /// The revisions come first because the index check waits for a network that is
   /// neither expensive nor constrained (#314), which on a phone network can outlast
   /// iOS's background task. Canceling this, as iOS does when that task expires,
-  /// cancels the check.
+  /// cancels the check, or the person's refresh it joined.
   func refreshForBookmarks() async {
     await bootstrap()
     await indexLoaded.wait()

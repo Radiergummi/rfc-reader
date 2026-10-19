@@ -9,9 +9,9 @@
 @MainActor
 public final class SharedRefresh {
   private let name: String
-  private var underWay: Task<Void, Never>?
-  /// Whether the refresh under way gives way to a start that is not replaceable.
-  private var isUnderWayReplaceable = false
+  /// The refresh under way, and whether it gives way to a start that is not
+  /// replaceable.
+  private var underWay: (task: Task<Void, Never>, isReplaceable: Bool)?
   /// Counts the refreshes started, so that one replaced does not, as it ends, end
   /// the one that replaced it.
   private var started = 0
@@ -36,9 +36,9 @@ public final class SharedRefresh {
   ) -> Task<Void, Never> {
     var replaced: Task<Void, Never>?
     if let underWay {
-      guard isUnderWayReplaceable, !replaceable else { return underWay }
-      underWay.cancel()
-      replaced = underWay
+      guard underWay.isReplaceable, !replaceable else { return underWay.task }
+      underWay.task.cancel()
+      replaced = underWay.task
     }
     started += 1
     let number = started
@@ -49,8 +49,7 @@ public final class SharedRefresh {
         underWay = nil
       }
     }
-    underWay = refresh
-    isUnderWayReplaceable = replaceable
+    underWay = (refresh, replaceable)
     return refresh
   }
 
