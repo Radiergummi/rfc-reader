@@ -299,6 +299,27 @@ struct LibraryListTests {
     #expect(ids(list) == [.rfc(9110), .rfc(8174), .rfc(2119), .rfc(2026)])
   }
 
+  /// A collection's query that leaves a quote open would otherwise take the tab's
+  /// words into its last value, and the search would change the collection rather
+  /// than narrow it.
+  @Test func `a dynamic collection's open quote does not take the tab's search`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "cache", definition: #"by:"Fielding"#)
+
+    #expect(SearchQuery.words(in: list.searchedQuery) == [#"by:"Fielding""#, "cache"])
+  }
+
+  /// View Options offers the order where it turns the list round: not where the
+  /// collection's own query sorts it.
+  @Test func `a dynamic collection can be reordered unless its query sorts it`() {
+    let collection = LibraryFilter.collection(UUID())
+
+    #expect(LibraryList.canReorder(collection, definition: "s", query: ""))
+    #expect(!LibraryList.canReorder(collection, definition: "s sort:newest", query: ""))
+    #expect(!LibraryList.canReorder(collection, definition: "s", query: "uppercase"))
+    #expect(!LibraryList.canReorder(collection, definition: nil, query: ""))
+  }
+
   /// Its rows are matched, not placed, so there is no order to drag them into.
   @Test func `a dynamic collection's rows cannot be moved`() {
     let manual = LibraryList(filter: .collection(UUID()), query: "", members: [2119])

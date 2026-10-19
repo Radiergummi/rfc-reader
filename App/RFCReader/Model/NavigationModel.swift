@@ -81,20 +81,26 @@ final class NavigationModel: Identifiable {
 
   /// What Save as Collection… would keep (#355): the list on show as a query of the
   /// whole library (`LibraryList.savedQuery`). Nil, and the item disabled, while the
-  /// list is not searched: there is nothing to keep that the sidebar doesn't list.
+  /// list is not searched: there is nothing to keep that the sidebar doesn't list;
+  /// and while its search names its filter's qualifier again, which no query keeps.
   var savedQuery: String? {
-    guard let list = listed?.list, !list.query.isUnsearchedQuery else { return nil }
+    guard let list = listed?.list, !list.query.isUnsearchedQuery,
+      let query = list.savedQuery(in: library.collections)
+    else { return nil }
     // Not a search for a section, which a collection's list never shows.
-    let query = list.savedQuery(in: library.collections)
     return CollectionStore.isValidQuery(query) ? query : nil
   }
 
-  /// Whether the tab lists a collection made from a query (#355), which is in the
-  /// whole library's order rather than one of its own.
-  var listsDynamicCollection: Bool {
-    guard case .collection(let identifier) = filter else { return false }
-    return library.collections[identifier]?.isDynamic ?? false
+  /// The query of the collection made from one that the tab lists (#355), which is
+  /// in the whole library's order rather than one of its own; nil for every other
+  /// list.
+  var collectionQuery: String? {
+    guard case .collection(let identifier) = filter else { return nil }
+    return library.collections[identifier]?.query
   }
+
+  /// Whether the tab lists a collection made from a query (#355).
+  var listsDynamicCollection: Bool { collectionQuery != nil }
 
   /// Save as Collection…: the editor, with the query to keep. On the Mac through
   /// `ReaderWindowController.saveAsCollection()`, which opens the sidebar first.

@@ -87,15 +87,30 @@ public struct LibraryList: Hashable, Sendable {
   private var listedFilter: LibraryFilter { isDynamic ? .all : filter }
 
   /// What the list is searched for: a dynamic collection's query and the tab's, as one.
+  /// A quote the collection's query leaves open is closed first, or it would take the
+  /// tab's words into its last value.
   var searchedQuery: String {
     guard let definition else { return query }
-    return query.isEmpty ? definition : "\(definition) \(query)"
+    guard !query.isEmpty else { return definition }
+    let closed = SearchQuery.leavesQuoteOpen(definition) ? "\(definition)\"" : definition
+    return "\(closed) \(query)"
   }
 
   /// Whether rows can be dragged into a new order (`ListOptions.allowsMoving`): never
   /// in a dynamic collection, whose rows are matched rather than placed.
   public var allowsMoving: Bool {
     !isDynamic && options.allowsMoving(in: filter, query: query)
+  }
+
+  /// Whether View Options' order turns the list round (`ListOptions.canReorder`): a
+  /// dynamic collection's, its query `definition`, as the whole library's, unless that
+  /// query sorts it, as `rows` keeps its own sort.
+  public static func canReorder(
+    _ filter: LibraryFilter, definition: String?, query: String
+  ) -> Bool {
+    guard let definition else { return ListOptions.canReorder(filter, query: query) }
+    return ListOptions.canReorder(.all, query: query)
+      && IndexSearch.parseQuery(definition).filters.sort == nil
   }
 
   /// The list `filter` shows, reading from `sources` only the inputs it and `query`
@@ -105,11 +120,8 @@ public struct LibraryList: Hashable, Sendable {
   public static func reading(
     _ filter: LibraryFilter, query: String, options: ListOptions, from sources: some ListSources
   ) -> LibraryList {
-    var definition: String? {
-      guard case .collection(let identifier) = filter else { return nil }
-      return sources.query(of: identifier)
-    }
-    let defined = definition
+    var defined: String?
+    if case .collection(let identifier) = filter { defined = sources.query(of: identifier) }
     let asked = IndexSearch.parseQuery(
       LibraryList(filter: filter, query: query, definition: defined).searchedQuery
     ).filters
@@ -410,7 +422,12 @@ extension LibraryList {
   /// qualifier that lists the same, as the built-ins' table on #355 has them, and
   /// what the tab searches for follows it. A dynamic collection's own query stands
   /// for its filter.
-  public func savedQuery(in collections: CollectionSnapshot) -> String {
+  ///
+  /// Nil when the search names its filter's qualifier again, as `is:offline` does in
+  /// Bookmarks: the tab narrows its filter by it, where the values of one qualifier
+  /// in a query are a union, so no query lists what the tab lists.
+  public func savedQuery(in collections: CollectionSnapshot) -> String? {
+    guard !searchRepeatsFilter else { return nil }
     let qualifier: String
     switch filter {
     case .all: qualifier = ""
@@ -432,6 +449,21 @@ extension LibraryList {
       }
     }
     return "\(qualifier) \(query)".normalizedQuery
+  }
+
+  /// Whether the search names the qualifier `savedQuery` keeps the filter as.
+  private var searchRepeatsFilter: Bool {
+    let asked = IndexSearch.parseQuery(query).filters
+    switch filter {
+    case .all: return false
+    case .bookmarks, .recent, .downloaded: return !asked.readerData.isEmpty
+    case .standards, .bestCurrentPractice: return !asked.statuses.isEmpty
+    case .stream: return !asked.streams.isEmpty
+    case .workingGroup: return !asked.workingGroups.isEmpty
+    case .series: return !asked.scopes.isEmpty
+    // A dynamic collection's tab lists its query and the search as one already.
+    case .collection: return definition == nil && !asked.scopes.isEmpty
+    }
   }
 
   /// The qualifiers of filters set by `set`, as the search field writes them.

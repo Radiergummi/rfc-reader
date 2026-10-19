@@ -336,7 +336,11 @@ struct SidebarView: View {
       collectionRowActions(label, entry: entry)
         .task(id: CountRequest(library: library, entry: entry)) {
           // Read here rather than in the body: Recently Read is a fetch.
-          dynamicCounts[entry.id] = await library.count(of: library.list(of: entry))
+          let count = await library.count(of: library.list(of: entry))
+          // A count overtaken by a change of its inputs is not kept: the count for
+          // the change may have arrived first.
+          guard !Task.isCancelled else { return }
+          dynamicCounts[entry.id] = count
         }
     } else {
       collectionRowActions(droppingInto(label, entry: entry), entry: entry)

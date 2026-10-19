@@ -463,11 +463,9 @@ struct ListViewOptions: View {
     private let sortTitle: LocalizedStringKey = "Sort"
   #endif
 
-  /// A collection made from a query lists in the whole library's order (#355).
   private var canReorder: Bool {
-    ListOptions.canReorder(
-      navigation.listsDynamicCollection ? .all : navigation.filter,
-      query: navigation.appliedQuery)
+    LibraryList.canReorder(
+      navigation.filter, definition: navigation.collectionQuery, query: navigation.appliedQuery)
   }
 
   var body: some View {
