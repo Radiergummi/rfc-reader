@@ -88,8 +88,8 @@ final class HandChecks: XCTestCase {
   }
 
   /// Turning on the bookmark notifications asks the system, and allowing it keeps the
-  /// setting on. The system asks only once per install, which `make hand-check`'s
-  /// first launch gives every run.
+  /// setting on, and the app still launches with it on. The system asks only once per
+  /// install, which `make hand-check`'s first launch gives every run.
   func testNotificationPermission() {
     launch(opening: "rfc://8174")
     waitForReader("RFC 8174")
@@ -114,6 +114,19 @@ final class HandChecks: XCTestCase {
         .waitForExistence(timeout: 3))
     XCTAssertEqual(toggle.value as? String, "1")
     screenshot("3 allowed")
+
+    // The next launch, with the setting on, asks iOS for the daily refresh, which
+    // crashed while that came before the scene that handles it (#980).
+    app.terminate()
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    screenshot("4 relaunched")
+    // Still on after the relaunch. Whether it asked iOS shows only in the log.
+    app.buttons["Text Size"].tap()
+    app.buttons["Reading Settings…"].tap()
+    XCTAssertTrue(row.waitForExistence(timeout: 5))
+    XCTAssertEqual(row.switches.firstMatch.value as? String, "1")
+    screenshot("5 still on")
   }
 
   // MARK: - Steps

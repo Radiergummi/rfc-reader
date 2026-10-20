@@ -51,6 +51,8 @@ struct RFCReaderApp: App {
       WindowGroup {
         ContentView(library: library)
           .task { await library.bootstrap() }
+          // Here rather than in `init`, which is before the `.backgroundTask` below.
+          .task { await BookmarkNotifications.scheduleRefreshUnlessPending() }
           .onOpenURL { url in
             // rfc://9110#section-4.2, plus rfc-editor.org and datatracker
             // links handed over via the share sheet or Universal Links later.
