@@ -33,4 +33,10 @@ struct IndexStateTests {
     #expect(!IndexState.loading.isReady)
     #expect(!IndexState.failed(.offline, message: "offline").isReady)
   }
+
+  @Test func `only a failure has failed`() {
+    #expect(IndexState.failed(.offline, message: "offline").isFailed)
+    #expect(!IndexState.loading.isFailed)
+    #expect(!IndexState.ready(updatedAt: now).isFailed)
+  }
 }
