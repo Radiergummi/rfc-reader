@@ -74,7 +74,7 @@
             let pdf = PDFDocument(data: data),
             let part = try? ExportedPart(of: await library.document(for: id), section: section)
           else { return nil }
-          return (pdf, PrintFurniture.documentTitle(id: id, title: part.document.header.title))
+          return (pdf, PrintFurniture.jobTitle(id: id, title: part.document.header.title))
         }
       }
       printing = Task {
@@ -84,7 +84,7 @@
           guard !Task.isCancelled else { return }
           // The one field of the Save as PDF sheet a print can fill: its Author,
           // Subject and Keywords have no public setting (#375).
-          let title = PrintFurniture.documentTitle(
+          let title = PrintFurniture.jobTitle(
             id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
           guard let pdf = PDFDocument(data: data),
             let operation = Self.printOperation(

@@ -92,7 +92,7 @@
           return
         }
         let info = UIPrintInfo.printInfo()
-        info.jobName = PrintFurniture.documentTitle(id: id, title: title)
+        info.jobName = PrintFurniture.jobTitle(id: id, title: title)
         info.outputType = .general
         let controller = UIPrintInteractionController.shared
         controller.printInfo = info
