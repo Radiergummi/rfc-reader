@@ -1271,6 +1271,16 @@
         }
       }
     },
+    "Export Current Section…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuellen Abschnitt exportieren …"
+          }
+        }
+      }
+    },
     "Export…" : {
       "localizations" : {
         "de" : {

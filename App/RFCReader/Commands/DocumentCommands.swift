@@ -148,6 +148,11 @@ struct DocumentCommands: Commands {
         Button("Export…") { active.controller?.output.exportDocument() }
           .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
           .disabled(!offersPrintAndExport)
+        // Chosen here, not in the save panel, which cannot rename the file (#386).
+        Button("Export Current Section…") {
+          active.controller?.output.exportCurrentSection()
+        }
+        .disabled(!offersPrintAndExport || reader?.exportableSection == nil)
         // The document as an EPUB, opened with Books, which imports it (#408).
         Button("Send to Books") { active.controller?.output.sendToBooks() }
           .disabled(!offersPrintAndExport)

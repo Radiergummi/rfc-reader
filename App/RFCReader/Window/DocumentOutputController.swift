@@ -135,14 +135,25 @@
     /// picks (#376), as a sheet on this window. A paged format is laid out for the
     /// paper Page Setup has chosen, as a print is.
     func exportDocument() {
+      export(section: nil)
+    }
+
+    /// File > Export Current Section…: the section on screen alone, with its
+    /// subsections, in a format that takes one (#386).
+    func exportCurrentSection() {
+      guard let section = reader.exportableSection else { return }
+      export(section: section)
+    }
+
+    private func export(section: String?) {
       guard !isExporting, let id = navigation.shown, reader.offersPrintAndExport, let window
       else {
         return
       }
       let panel = NSSavePanel()
+      let offered = section == nil ? reader.exportFormats : reader.exportFormats.filter(\.narrows)
       let chooser = ExportFormatChooser(
-        panel: panel, document: id, offered: reader.exportFormats,
-        currentSection: reader.exportableSection)
+        panel: panel, document: id, offered: offered, section: section)
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true
@@ -156,7 +167,6 @@
         // Read here, not captured earlier: the chooser is what the panel's pop-up
         // changed, and holding it in this closure is what keeps it alive.
         let format = chooser.format
-        let section = chooser.section
         let tags = panel.tagNames ?? []
         Task {
           do {
