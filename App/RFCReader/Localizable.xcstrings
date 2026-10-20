@@ -970,22 +970,22 @@
         }
       }
     },
+    "Couldn't open the folder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner konnte nicht geöffnet werden"
+          }
+        }
+      }
+    },
     "Couldn't print %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht gedruckt werden"
-          }
-        }
-      }
-    },
-    "Couldn't save the folder" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Ordner konnte nicht gesichert werden"
           }
         }
       }
@@ -1221,16 +1221,6 @@
         }
       }
     },
-    "Every RFC was exported." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alle RFCs wurden exportiert."
-          }
-        }
-      }
-    },
     "Expand Aside" : {
       "localizations" : {
         "de" : {
@@ -1307,6 +1297,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "„%@“ exportieren"
+          }
+        }
+      }
+    },
+    "Exported to “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach „%@“ exportiert."
           }
         }
       }
@@ -2771,16 +2771,6 @@
         }
       }
     },
-    "Save…" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sichern …"
-          }
-        }
-      }
-    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -3007,6 +2997,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontaktdaten zeigen"
+          }
+        }
+      }
+    },
+    "Show in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Finder anzeigen"
           }
         }
       }

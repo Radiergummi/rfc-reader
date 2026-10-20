@@ -86,13 +86,26 @@ struct CollectionExportTests {
     #expect(!report.wasCanceled)
   }
 
+  @Test func `a folder already there is never written into`() throws {
+    let parent = Self.folder()
+    defer { try? FileManager.default.removeItem(at: parent) }
+    let export = CollectionExport(Self.collection([.rfc(1)]), format: .pdf)
+    #expect(export.unusedFolder(in: parent).lastPathComponent == "C")
+    try FileManager.default.createDirectory(
+      at: parent.appending(path: "C"), withIntermediateDirectories: true)
+    #expect(export.unusedFolder(in: parent).lastPathComponent == "C 2")
+    try FileManager.default.createDirectory(
+      at: parent.appending(path: "C 2"), withIntermediateDirectories: true)
+    #expect(export.unusedFolder(in: parent).lastPathComponent == "C 3")
+  }
+
   @MainActor
-  @Test func `a session finishes with the folder of what it made`() async throws {
-    let workspace = Self.folder()
-    defer { try? FileManager.default.removeItem(at: workspace) }
-    let session = CollectionExportSession(workspace: workspace)
-    session.start(CollectionExport(Self.collection([.rfc(1)]), format: .markdown)) { _ in
-      Data("x".utf8)
+  @Test func `a session writes into a folder of its own in the one chosen`() async throws {
+    let parent = Self.folder()
+    defer { try? FileManager.default.removeItem(at: parent) }
+    let session = CollectionExportSession()
+    session.start(CollectionExport(Self.collection([.rfc(1)]), format: .markdown), in: parent) {
+      _ in Data("x".utf8)
     }
     #expect(session.isExporting)
     await session.settle()
@@ -101,32 +114,36 @@ struct CollectionExportTests {
       return
     }
     #expect(report.exported == [.rfc(1)])
-    #expect(session.folder == workspace.appending(path: "C", directoryHint: .isDirectory))
-    session.end()
-    #expect(!FileManager.default.fileExists(atPath: workspace.path))
+    let folder = parent.appending(path: "C", directoryHint: .isDirectory)
+    #expect(session.folder == folder)
+    let file = folder.appending(path: ExportFormat.markdown.fileName(for: .rfc(1)))
+    #expect(FileManager.default.fileExists(atPath: file.path))
   }
 
   @MainActor
-  @Test func `a session that exported nothing has no folder to save`() async {
-    let workspace = Self.folder()
-    defer { try? FileManager.default.removeItem(at: workspace) }
-    let session = CollectionExportSession(workspace: workspace)
-    session.start(CollectionExport(Self.collection([.rfc(1)]), format: .pdf)) { _ in
+  @Test func `a session that exported nothing leaves no folder`() async throws {
+    let parent = Self.folder()
+    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: parent) }
+    let session = CollectionExportSession()
+    session.start(CollectionExport(Self.collection([.rfc(1)]), format: .pdf), in: parent) { _ in
       throw Unreachable()
     }
     await session.settle()
     #expect(session.folder == nil)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: parent.path).isEmpty)
   }
 
-  /// Cancel stops the export and says how far it came, rather than closing the
-  /// sheet on it; what it made stays until the session ends.
+  /// Cancel stops the export and says how far it came; what it wrote stays where
+  /// it was written.
   @MainActor
-  @Test func `a session canceled while exporting finishes with what it made`() async throws {
-    let workspace = Self.folder()
-    defer { try? FileManager.default.removeItem(at: workspace) }
-    let session = CollectionExportSession(workspace: workspace)
+  @Test func `a session canceled while exporting keeps what it wrote`() async throws {
+    let parent = Self.folder()
+    defer { try? FileManager.default.removeItem(at: parent) }
+    let session = CollectionExportSession()
     // Canceled while the first is made: it is kept, and the second never made.
-    session.start(CollectionExport(Self.collection([.rfc(1), .rfc(2)]), format: .pdf)) { id in
+    let plan = CollectionExport(Self.collection([.rfc(1), .rfc(2)]), format: .pdf)
+    session.start(plan, in: parent) { id in
       #expect(id == .rfc(1))
       await session.cancel()
       return Data("x".utf8)
@@ -141,20 +158,5 @@ struct CollectionExportTests {
     #expect(report.skipped.isEmpty)
     let file = try #require(session.folder).appending(path: ExportFormat.pdf.fileName(for: .rfc(1)))
     #expect(FileManager.default.fileExists(atPath: file.path))
-    session.end()
-    #expect(!FileManager.default.fileExists(atPath: workspace.path))
-  }
-
-  @MainActor
-  @Test func `a session ended while exporting removes what it made`() async {
-    let workspace = Self.folder()
-    let session = CollectionExportSession(workspace: workspace)
-    session.start(CollectionExport(Self.collection([.rfc(1), .rfc(2)]), format: .pdf)) { _ in
-      try await Task.sleep(for: .milliseconds(50))
-      return Data()
-    }
-    session.end()
-    await session.settle()
-    #expect(!FileManager.default.fileExists(atPath: workspace.path))
   }
 }

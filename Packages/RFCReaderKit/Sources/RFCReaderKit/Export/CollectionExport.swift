@@ -48,6 +48,19 @@ public struct CollectionExport: Sendable {
     return safe.isEmpty ? "RFCs" : safe
   }
 
+  /// The folder in `parent` the export makes: named after the collection, or
+  /// `HTTP 2`, `HTTP 3` and on, as the Finder names a copy, when that is there, so
+  /// an earlier export's files are never written over.
+  public func unusedFolder(in parent: URL) -> URL {
+    var number = 1
+    while true {
+      let name = number == 1 ? folderName : "\(folderName) \(number)"
+      let folder = parent.appending(path: name, directoryHint: .isDirectory)
+      if !FileManager.default.fileExists(atPath: folder.path) { return folder }
+      number += 1
+    }
+  }
+
   /// How far an export has come: what the progress shows.
   public struct Progress: Sendable, Equatable {
     public var done: Int
@@ -112,7 +125,8 @@ public struct CollectionExport: Sendable {
 }
 
 /// A collection export under way, for the sheet that shows it (#385): its phase,
-/// and the task making its files in a folder of `workspace` until they are saved.
+/// and the task writing its files straight into the folder the reader chose, so
+/// that what is exported is where they asked for it, with nothing left to save.
 @MainActor
 @Observable
 public final class CollectionExportSession {
@@ -123,30 +137,29 @@ public final class CollectionExportSession {
   }
 
   public private(set) var phase = Phase.choosing
-  /// The finished folder, once anything is in it: what is saved.
+  /// The folder the export made, once anything is in it: what the sheet names.
   public private(set) var folder: URL?
   private var task: Task<Void, Never>?
-  /// Whether the session was ended, which an export under way leaves no report for.
-  private var isEnded = false
-  private let workspace: URL
 
-  /// - Parameter workspace: a folder of the session's own, which it removes.
-  public init(workspace: URL) {
-    self.workspace = workspace
-  }
+  public init() {}
 
   public var isExporting: Bool {
     if case .exporting = phase { true } else { false }
   }
 
-  /// Makes `plan`'s files with `make`. A failure to start, such as a folder that
-  /// cannot be made, is every document skipped for it.
+  /// Makes `plan`'s files with `make`, in a folder of their own in `parent`, which
+  /// the reader picked and may be outside the sandbox. A failure to start, such as
+  /// a folder that cannot be made, is every document skipped for it; a folder
+  /// nothing was written into is removed.
   public func start(
-    _ plan: CollectionExport, make: @escaping @Sendable (DocumentID) async throws -> Data
+    _ plan: CollectionExport, in parent: URL,
+    make: @escaping @Sendable (DocumentID) async throws -> Data
   ) {
-    let folderURL = workspace.appending(path: plan.folderName, directoryHint: .isDirectory)
+    let folderURL = plan.unusedFolder(in: parent)
     phase = .exporting(CollectionExport.Progress(done: 0, total: plan.files.count))
     task = Task {
+      let isAccessing = parent.startAccessingSecurityScopedResource()
+      defer { if isAccessing { parent.stopAccessingSecurityScopedResource() } }
       let report: CollectionExport.Report
       do {
         report = try await plan.run(
@@ -156,11 +169,12 @@ public final class CollectionExportSession {
         failed.skipped = plan.files.map { ($0.document, error.localizedDescription) }
         report = failed
       }
-      guard !isEnded else {
-        removeWorkspace()
-        return
+      if report.exported.isEmpty {
+        // Made by this export a moment ago, and empty: nothing of the reader's.
+        try? FileManager.default.removeItem(at: folderURL)
+      } else {
+        folder = folderURL
       }
-      if !report.exported.isEmpty { folder = folderURL }
       phase = .finished(report)
     }
   }
@@ -170,25 +184,13 @@ public final class CollectionExportSession {
   }
 
   /// Stops the export under way before its next document; it finishes with a
-  /// report of what it made, which stays to be saved.
+  /// report of what it wrote, which stays where it was written.
   public func cancel() {
     task?.cancel()
-  }
-
-  /// Ends the session: an export under way stops and then removes what it made;
-  /// a finished one's files, saved or no longer wanted, are removed now.
-  public func end() {
-    isEnded = true
-    task?.cancel()
-    if !isExporting { removeWorkspace() }
   }
 
   /// Waits for the export under way, for a test.
   func settle() async {
     await task?.value
-  }
-
-  private func removeWorkspace() {
-    try? FileManager.default.removeItem(at: workspace)
   }
 }

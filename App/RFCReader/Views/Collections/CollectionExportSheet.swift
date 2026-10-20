@@ -10,20 +10,19 @@ struct CollectionExportRequest: Identifiable, Hashable {
 }
 
 /// Every RFC of a collection exported into a folder named after it (#385): the
-/// format chosen, the files made with one progress that can be cancelled, what
-/// could not be exported named, then the folder saved where the reader picks.
+/// format chosen, then where, then the files written straight there with one
+/// progress that can be canceled, and what could not be exported named. Where is
+/// asked first, so that once the sheet says the RFCs are exported they are where
+/// the reader asked for them.
 struct CollectionExportSheet: View {
   let request: CollectionExportRequest
 
   @Environment(LibraryModel.self) private var library
   @Environment(\.dismiss) private var dismiss
   @State private var format = ExportFormat.pdf
-  @State private var export = CollectionExportSession(
-    workspace: FileManager.default.temporaryDirectory
-      .appending(path: "Collection Export", directoryHint: .isDirectory)
-      .appending(path: UUID().uuidString, directoryHint: .isDirectory))
-  @State private var isSaving = false
-  @State private var saveError: String?
+  @State private var export = CollectionExportSession()
+  @State private var isChoosingFolder = false
+  @State private var folderError: String?
 
   private var entry: CollectionSnapshot.Entry? { library.collections[request.collection] }
 
@@ -31,27 +30,22 @@ struct CollectionExportSheet: View {
     content
       // A swipe would end an export under way without a word.
       .interactiveDismissDisabled(export.isExporting)
-      .onDisappear { export.end() }
-      .fileExporter(
-        isPresented: $isSaving,
-        document: export.folder.map { ExportedFolder(url: $0) },
-        contentType: .folder,
-        defaultFilename: export.folder?.lastPathComponent
-      ) { result in
+      .onDisappear { export.cancel() }
+      .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
         switch result {
-        case .success: dismiss()
-        // Canceled or failed, the finished export stays, to be saved again.
+        case .success(let parent): start(in: parent)
         case .failure(let error as CocoaError) where error.code == .userCancelled: break
-        case .failure(let error): saveError = error.localizedDescription
+        case .failure(let error): folderError = error.localizedDescription
         }
       }
+      .fileDialogConfirmationLabel(Text("Export"))
       .alert(
-        "Couldn't save the folder",
-        isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })
+        "Couldn't open the folder",
+        isPresented: Binding(get: { folderError != nil }, set: { if !$0 { folderError = nil } })
       ) {
-        Button("OK") { saveError = nil }
+        Button("OK") { folderError = nil }
       } message: {
-        Text(verbatim: saveError ?? "")
+        Text(verbatim: folderError ?? "")
       }
   }
 
@@ -62,8 +56,9 @@ struct CollectionExportSheet: View {
         Text(title).font(.headline)
         fields
         HStack {
+          showInFinderButton
           Spacer()
-          cancelButton.keyboardShortcut(.cancelAction)
+          if !isFinished { cancelButton.keyboardShortcut(.cancelAction) }
           confirmButton.keyboardShortcut(.defaultAction)
         }
       }
@@ -75,12 +70,18 @@ struct CollectionExportSheet: View {
           .navigationTitle(title)
           .navigationBarTitleDisplayMode(.inline)
           .toolbar {
-            ToolbarItem(placement: .cancellationAction) { cancelButton }
+            if !isFinished {
+              ToolbarItem(placement: .cancellationAction) { cancelButton }
+            }
             ToolbarItem(placement: .confirmationAction) { confirmButton }
           }
       }
       .presentationDetents([.medium, .large])
     #endif
+  }
+
+  private var isFinished: Bool {
+    if case .finished = export.phase { true } else { false }
   }
 
   private var title: String {
@@ -103,13 +104,11 @@ struct CollectionExportSheet: View {
     case .finished(let report):
       if report.wasCanceled {
         Text("The export was canceled.")
-        if !report.skipped.isEmpty {
-          Text("These RFCs were not exported:")
-          skipped(report.skippedLines)
-        }
-      } else if report.skipped.isEmpty {
-        Text("Every RFC was exported.")
-      } else {
+      }
+      if let folder = export.folder {
+        Text("Exported to “\(folder.lastPathComponent)”.")
+      }
+      if !report.skipped.isEmpty {
         Text("These RFCs were not exported:")
         skipped(report.skippedLines)
       }
@@ -137,37 +136,44 @@ struct CollectionExportSheet: View {
     }
   }
 
-  /// While the files are made, Cancel stops the export, which then says how far it
-  /// came and can save what it made; otherwise it closes the sheet.
+  /// While the files are written, Cancel stops the export, which then says how far
+  /// it came; before, it closes the sheet.
   private var cancelButton: some View {
     Button("Cancel", role: .cancel) {
       if export.isExporting {
         export.cancel()
       } else {
-        export.end()
         dismiss()
       }
     }
   }
 
+  #if os(macOS)
+    /// The folder the export made, selected in a Finder window.
+    @ViewBuilder
+    private var showInFinderButton: some View {
+      if let folder = export.folder, isFinished {
+        Button("Show in Finder") {
+          NSWorkspace.shared.activateFileViewerSelecting([folder])
+        }
+      }
+    }
+  #endif
+
   @ViewBuilder
   private var confirmButton: some View {
     switch export.phase {
     case .choosing:
-      Button("Export") { start() }
+      Button("Export…") { isChoosingFolder = true }
         .disabled(entry?.rfcNumbers.isEmpty ?? true)
     case .exporting:
-      Button("Export") {}.disabled(true)
-    case .finished(let report):
-      if report.exported.isEmpty {
-        Button("Done") { dismiss() }
-      } else {
-        Button("Save…") { isSaving = true }
-      }
+      Button("Export…") {}.disabled(true)
+    case .finished:
+      Button("Done") { dismiss() }
     }
   }
 
-  private func start() {
+  private func start(in parent: URL) {
     guard let entry else { return }
     let plan = CollectionExport(entry, format: format)
     // The paper a single export is laid out for: Page Setup's on the Mac
@@ -178,30 +184,9 @@ struct CollectionExportSheet: View {
       let paperSize = PrintLayout.paperSize(for: .current)
     #endif
     let library = library
-    export.start(plan) { id in
+    export.start(plan, in: parent) { id in
       try await DocumentExport.data(
         for: id, as: plan.format, paperSize: paperSize, library: library)
     }
-  }
-}
-
-/// A folder of exported files, for SwiftUI's `fileExporter`, which saves it under
-/// the name it is given. Written only, and read from the disk as it is saved.
-nonisolated struct ExportedFolder: FileDocument {
-  static var readableContentTypes: [UTType] { [] }
-  static var writableContentTypes: [UTType] { [.folder] }
-
-  let url: URL
-
-  init(url: URL) {
-    self.url = url
-  }
-
-  init(configuration: ReadConfiguration) throws {
-    throw CocoaError(.fileReadUnsupportedScheme)
-  }
-
-  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-    try FileWrapper(url: url)
   }
 }
