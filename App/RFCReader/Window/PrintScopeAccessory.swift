@@ -15,20 +15,28 @@
   /// never do. Until it is here the pop-up waits, and the panel shows and prints the
   /// whole document, as its summary says; a section that cannot be made leaves the
   /// whole document chosen and the choice disabled.
+  ///
+  /// The operation's job title follows the pop-up too: it is the name Save as PDF
+  /// offers, which should say a section was printed when one was.
   final class PrintScopeAccessory: NSViewController, NSPrintPanelAccessorizing {
+    /// A PDF to print and the job title it is printed under.
+    typealias Printable = (document: PDFDocument, title: String)
+
     private let pages: PrintedPDFView
-    private let whole: PDFDocument
-    private var section: PDFDocument?
-    private let makeSection: @MainActor () async -> PDFDocument?
+    private let whole: Printable
+    private var section: Printable?
+    private let makeSection: @MainActor () async -> Printable?
     private let popUp = NSPopUpButton()
+    /// The operation the panel runs, whose job title the pop-up sets.
+    weak var operation: NSPrintOperation?
 
     /// What the preview depends on, for `keyPathsForValuesAffectingPreview`: the
     /// scope of the document the view prints.
     @objc dynamic private(set) var scopeIndex = 0
 
     init(
-      pages: PrintedPDFView, whole: PDFDocument,
-      makeSection: @escaping @MainActor () async -> PDFDocument?
+      pages: PrintedPDFView, whole: Printable,
+      makeSection: @escaping @MainActor () async -> Printable?
     ) {
       self.pages = pages
       self.whole = whole
@@ -78,9 +86,10 @@
       }
     }
 
-    /// `document` printed, and the preview and summary told so.
-    private func show(_ document: PDFDocument, as scope: ExportScope) {
-      pages.document = document
+    /// `printable` printed under its title, and the preview and summary told so.
+    private func show(_ printable: Printable, as scope: ExportScope) {
+      pages.document = printable.document
+      operation?.jobTitle = printable.title
       scopeIndex = Self.index(of: scope)
     }
 

@@ -64,12 +64,17 @@
       let paperSize = printInfo.paperSize
       // The section's PDF, made only once the panel's pop-up first picks it: most
       // prints are of the whole document.
-      var makeSection: (@MainActor () async -> PDFDocument?)?
+      var makeSection: (@MainActor () async -> PrintScopeAccessory.Printable?)?
       if let section {
-        makeSection = { [library] () async -> PDFDocument? in
-          let data = try? await DocumentPDF.make(
-            for: id, original: false, section: section, paperSize: paperSize, library: library)
-          return data.flatMap(PDFDocument.init(data:))
+        makeSection = { [library] () async -> PrintScopeAccessory.Printable? in
+          guard
+            let data = try? await DocumentPDF.make(
+              for: id, original: false, section: section, paperSize: paperSize,
+              library: library),
+            let pdf = PDFDocument(data: data),
+            let part = try? ExportedPart(of: await library.document(for: id), section: section)
+          else { return nil }
+          return (pdf, PrintFurniture.documentTitle(id: id, title: part.document.header.title))
         }
       }
       printing = Task {
@@ -77,9 +82,13 @@
           let data = try await DocumentPDF.make(
             for: id, original: original, paperSize: paperSize, library: library)
           guard !Task.isCancelled else { return }
+          // The one field of the Save as PDF sheet a print can fill: its Author,
+          // Subject and Keywords have no public setting (#375).
+          let title = PrintFurniture.documentTitle(
+            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
           guard let pdf = PDFDocument(data: data),
             let operation = Self.printOperation(
-              of: pdf, makeSection: makeSection, printInfo: printInfo)
+              of: (pdf, title), makeSection: makeSection, printInfo: printInfo)
           else {
             isPrinting = false
             readerLog.error(
@@ -90,10 +99,7 @@
             alert.beginSheetModal(for: window, completionHandler: nil)
             return
           }
-          // The one field of the Save as PDF sheet a print can fill: its Author,
-          // Subject and Keywords have no public setting (#375).
-          operation.jobTitle = PrintFurniture.documentTitle(
-            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+          operation.jobTitle = title
           operation.runModal(
             for: window, delegate: self,
             didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
@@ -109,17 +115,20 @@
     /// PDFKit's print operation of `pdf`, or with a section to offer, one through a
     /// view of the app's, whose panel chooses between the two (`PrintScopeAccessory`).
     private static func printOperation(
-      of pdf: PDFDocument, makeSection: (@MainActor () async -> PDFDocument?)?,
+      of whole: PrintScopeAccessory.Printable,
+      makeSection: (@MainActor () async -> PrintScopeAccessory.Printable?)?,
       printInfo: NSPrintInfo
     ) -> NSPrintOperation? {
       guard let makeSection else {
-        return pdf.printOperation(for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+        return whole.document.printOperation(
+          for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
       }
-      let pages = PrintedPDFView(document: pdf)
+      let pages = PrintedPDFView(document: whole.document)
       let operation = NSPrintOperation(view: pages, printInfo: printInfo)
       operation.printPanel.options.insert(.showsPreview)
-      operation.printPanel.addAccessoryController(
-        PrintScopeAccessory(pages: pages, whole: pdf, makeSection: makeSection))
+      let accessory = PrintScopeAccessory(pages: pages, whole: whole, makeSection: makeSection)
+      accessory.operation = operation
+      operation.printPanel.addAccessoryController(accessory)
       return operation
     }
 
