@@ -66,6 +66,21 @@ struct RFCEPUBWriterTests {
       RFCEPUBWriter.navigation(document, chapters: chapters).contains("#section-0\">section-0</a>"))
   }
 
+  /// A library keys a book on its identifier: a section's must not be the whole
+  /// document's, or one could stand for the other.
+  @Test func `a section's book is identified by the section's place`() throws {
+    let whole = RFCDocument(
+      header: DocumentHeader(id: .rfc(9110), title: "HTTP Semantics"),
+      sections: [Section(anchor: "section-4", number: "4", title: "Identifiers")], source: .xml)
+    let part = try #require(whole.narrowed(toSection: "section-4"))
+    let chapters = RFCHTMLSerializer(outside: .rfc(9110)).chapters(part)
+    #expect(
+      RFCEPUBWriter.package(part, chapters: chapters, outside: .rfc(9110)).contains(
+        "<dc:identifier id=\"book-id\">https://www.rfc-editor.org/rfc/rfc9110#section-4</dc:identifier>"
+      ))
+    #expect(RFCEPUBWriter.identifier(of: whole) == "urn:doi:10.17487/RFC9110")
+  }
+
   @Test func `a document with no title or number is called Untitled`() {
     let document = RFCDocument(header: DocumentHeader(title: " "), sections: [], source: .text)
     let chapters = RFCHTMLSerializer().chapters(document)

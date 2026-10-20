@@ -18,6 +18,22 @@
         }
       }
     },
+    "%@ couldn't be exported: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ konnte nicht exportiert werden: %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ couldn't be exported: %2$@"
+          }
+        }
+      }
+    },
     "%@ didn't load: %@" : {
       "localizations" : {
         "de" : {
@@ -430,6 +446,16 @@
         }
       }
     },
+    "ABNF Grammar" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ABNF-Grammatik"
+          }
+        }
+      }
+    },
     "About RFC Reader" : {
       "localizations" : {
         "de" : {
@@ -830,6 +856,16 @@
         }
       }
     },
+    "Contents:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt:"
+          }
+        }
+      }
+    },
     "Continue" : {
       "localizations" : {
         "de" : {
@@ -956,6 +992,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
+    "Couldn't open the folder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner konnte nicht geöffnet werden"
           }
         }
       }
@@ -1171,6 +1217,16 @@
         }
       }
     },
+    "EPUB" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPUB"
+          }
+        }
+      }
+    },
     "Edit Collection" : {
       "localizations" : {
         "de" : {
@@ -1251,12 +1307,72 @@
         }
       }
     },
+    "Export ${document} as ${format}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${document} als ${format} exportieren"
+          }
+        }
+      }
+    },
     "Export Checklist" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste exportieren"
+          }
+        }
+      }
+    },
+    "Export Current Section…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuellen Abschnitt exportieren …"
+          }
+        }
+      }
+    },
+    "Export RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC exportieren"
+          }
+        }
+      }
+    },
+    "Export “%@”" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ exportieren"
+          }
+        }
+      }
+    },
+    "Exported to “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach „%@“ exportiert."
+          }
+        }
+      }
+    },
+    "Exporting…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird exportiert …"
           }
         }
       }
@@ -1341,6 +1457,16 @@
         }
       }
     },
+    "Format" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format"
+          }
+        }
+      }
+    },
     "Format:" : {
       "localizations" : {
         "de" : {
@@ -1417,6 +1543,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kehrt zur Größe des Systems zurück"
+          }
+        }
+      }
+    },
+    "HTML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML"
           }
         }
       }
@@ -1787,6 +1923,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maschinell aus dem Englischen übersetzt"
+          }
+        }
+      }
+    },
+    "Markdown" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
           }
         }
       }
@@ -2321,6 +2467,16 @@
         }
       }
     },
+    "PDF" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF"
+          }
+        }
+      }
+    },
     "Page" : {
       "localizations" : {
         "de" : {
@@ -2367,6 +2523,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An Fundstelle %lld setzen"
+          }
+        }
+      }
+    },
+    "Plain Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiner Text"
           }
         }
       }
@@ -2711,6 +2877,16 @@
         }
       }
     },
+    "Saves an RFC as a file in a format, which a shortcut can save, share or pass on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichert ein RFC als Datei in einem Format, die ein Kurzbefehl sichern, teilen oder weitergeben kann."
+          }
+        }
+      }
+    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -2937,6 +3113,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontaktdaten zeigen"
+          }
+        }
+      }
+    },
+    "Show in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Finder anzeigen"
           }
         }
       }
@@ -3201,6 +3387,16 @@
         }
       }
     },
+    "The export was canceled." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Export wurde abgebrochen."
+          }
+        }
+      }
+    },
     "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again." : {
       "localizations" : {
         "de" : {
@@ -3217,6 +3413,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Liste aller RFCs wird einmal geladen und danach aktuell gehalten."
+          }
+        }
+      }
+    },
+    "These RFCs were not exported:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese RFCs wurden nicht exportiert:"
           }
         }
       }
@@ -3388,6 +3594,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Groups"
+          }
+        }
+      }
+    },
+    "XML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML"
           }
         }
       }

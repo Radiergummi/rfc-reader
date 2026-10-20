@@ -24,6 +24,16 @@
       <enumerator name="information" code="RIpI" description="What the index knows about the RFC."/>
     </enumeration>
 
+    <enumeration name="export format" code="REfm">
+      <enumerator name="PDF" code="REfP" description="Laid out for paper, with links and an outline."/>
+      <enumerator name="EPUB" code="REfE" description="A book, for Books and other reading apps."/>
+      <enumerator name="HTML" code="REfH" description="One page that reads like the reader."/>
+      <enumerator name="Markdown" code="REfM" description="CommonMark with GitHub tables."/>
+      <enumerator name="plain text" code="REfT" description="The RFC Editor’s text, pages and all."/>
+      <enumerator name="XML" code="REfX" description="The RFC Editor’s RFCXML, or for an RFC never published as XML, the app’s conversion of its text."/>
+      <enumerator name="ABNF" code="REfA" description="The RFC’s grammar collected into one file, for an RFC that has one."/>
+    </enumeration>
+
     <class name="rfc" code="RFCd" plural="rfcs" description="An RFC in the index.">
       <cocoa class="ScriptableRFC"/>
       <property name="id" code="ID  " type="integer" access="r" description="The RFC's number.">
@@ -43,6 +53,8 @@
       <property name="kept offline" code="RFCk" type="boolean" description="Whether the RFC is marked Keep Offline. Set it to keep the RFC for reading offline, or to stop keeping it.">
         <cocoa key="isKeptOffline"/>
       </property>
+      <!-- So that the RFC the command names receives it: `export rfc id 9110 as …`. -->
+      <responds-to command="export"><cocoa method="handleExportCommand:"/></responds-to>
     </class>
 
     <!-- The same name and code as a window's collection property, which names one
@@ -102,6 +114,17 @@
         <cocoa key="section"/>
       </parameter>
       <parameter name="placement" code="RFpl" type="placement" optional="yes" description="Where to open it; the front tab if omitted."/>
+    </command>
+
+    <command name="export" code="RFCrExpt" description="Save an RFC as a file, as File &gt; Export… does.">
+      <cocoa class="RFCExportCommand"/>
+      <direct-parameter type="rfc" description="The RFC, such as rfc id 9110."/>
+      <parameter name="as" code="RFef" type="export format" description="The format to save it in.">
+        <cocoa key="format"/>
+      </parameter>
+      <parameter name="to" code="kfil" type="file" description="The file to write; replaced if it is there.">
+        <cocoa key="file"/>
+      </parameter>
     </command>
 
     <command name="go back" code="RFCrGoBk" description="Go back to where the window was before.">

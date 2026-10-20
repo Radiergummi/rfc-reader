@@ -8,7 +8,13 @@ import Foundation
 /// The archive stores every entry uncompressed (`StoredZip`), and the same document
 /// makes the same bytes.
 public struct RFCEPUBWriter: Sendable {
-  public init() {}
+  /// The document what is written is a part of (#386); see
+  /// `RFCMarkdownSerializer.outside`.
+  public var outside: DocumentID?
+
+  public init(outside: DocumentID? = nil) {
+    self.outside = outside
+  }
 
   public func epub(_ document: RFCDocument) -> Data {
     StoredZip.archive(entries(document))
@@ -16,12 +22,13 @@ public struct RFCEPUBWriter: Sendable {
 
   /// The book's files, in archive order: `mimetype` first, as EPUB asks.
   func entries(_ document: RFCDocument) -> [StoredZip.Entry] {
-    let chapters = RFCHTMLSerializer().chapters(document)
+    let chapters = RFCHTMLSerializer(outside: outside).chapters(document)
     var entries = [
       StoredZip.Entry(path: "mimetype", data: Data("application/epub+zip".utf8)),
       StoredZip.Entry(path: "META-INF/container.xml", data: Data(Self.container.utf8)),
       StoredZip.Entry(
-        path: "OEBPS/content.opf", data: Data(Self.package(document, chapters: chapters).utf8)),
+        path: "OEBPS/content.opf",
+        data: Data(Self.package(document, chapters: chapters, outside: outside).utf8)),
       StoredZip.Entry(
         path: "OEBPS/nav.xhtml", data: Data(Self.navigation(document, chapters: chapters).utf8)),
       StoredZip.Entry(path: "OEBPS/style.css", data: Data(Self.stylesheet.utf8)),
@@ -44,17 +51,23 @@ public struct RFCEPUBWriter: Sendable {
     """
 
   /// The book's identifier: an RFC's DOI, `10.17487/RFC9110`, and for a document of
-  /// another series its page on rfc-editor.org.
-  static func identifier(of header: DocumentHeader) -> String {
-    guard let id = header.id else { return "urn:rfc-reader:untitled" }
+  /// another series its page on rfc-editor.org. A section narrowed out of `outside`
+  /// is its place there, so that no library takes it for the whole document.
+  static func identifier(of document: RFCDocument, outside: DocumentID? = nil) -> String {
+    if let outside, let section = document.sections.first {
+      return RFCLink(id: outside, anchor: section.anchor).webURL.absoluteString
+    }
+    guard let id = document.header.id else { return "urn:rfc-reader:untitled" }
     if id.series == .rfc { return "urn:doi:10.17487/RFC\(id.number)" }
     return CitationFormatter.url(for: id).absoluteString
   }
 
-  static func package(_ document: RFCDocument, chapters: [RFCHTMLSerializer.Chapter]) -> String {
+  static func package(
+    _ document: RFCDocument, chapters: [RFCHTMLSerializer.Chapter], outside: DocumentID? = nil
+  ) -> String {
     let header = document.header
     var metadata = [
-      "<dc:identifier id=\"book-id\">\(escaped(identifier(of: header)))</dc:identifier>",
+      "<dc:identifier id=\"book-id\">\(escaped(identifier(of: document, outside: outside)))</dc:identifier>",
       "<dc:title>\(escaped(RFCHTMLSerializer.documentTitle(of: header)))</dc:title>",
       "<dc:language>en</dc:language>",
     ]

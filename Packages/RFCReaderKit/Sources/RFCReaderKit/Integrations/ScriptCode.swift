@@ -81,3 +81,49 @@ public enum ScriptPane: CaseIterable, Sendable {
     self == .information ? .info : .navigation
   }
 }
+
+/// The dictionary's `export format`: what `export` saves an RFC as (#383). Named in
+/// English whatever the interface's language, as everything a script names is.
+extension ExportFormat {
+  /// Its enumerator's name in the dictionary.
+  public var scriptName: String {
+    switch self {
+    case .pdf: "PDF"
+    case .epub: "EPUB"
+    case .html: "HTML"
+    case .markdown: "Markdown"
+    case .text: "plain text"
+    case .xml: "XML"
+    case .abnf: "ABNF"
+    }
+  }
+
+  public var scriptCode: FourCharCode {
+    switch self {
+    case .pdf: ScriptCode.value("REfP")
+    case .epub: ScriptCode.value("REfE")
+    case .html: ScriptCode.value("REfH")
+    case .markdown: ScriptCode.value("REfM")
+    case .text: ScriptCode.value("REfT")
+    case .xml: ScriptCode.value("REfX")
+    case .abnf: ScriptCode.value("REfA")
+    }
+  }
+
+  /// The format a script names, without regard to case; nil for none.
+  public init?(scriptName: String) {
+    let name = scriptName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard
+      let format = Self.allCases.first(where: {
+        $0.scriptName.caseInsensitiveCompare(name) == .orderedSame
+      })
+    else { return nil }
+    self = format
+  }
+
+  /// The format `code` names; nil for none.
+  public init?(scriptCode code: FourCharCode) {
+    guard let format = Self.allCases.first(where: { $0.scriptCode == code }) else { return nil }
+    self = format
+  }
+}

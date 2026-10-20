@@ -10,26 +10,50 @@ import UniformTypeIdentifiers
 /// format makes of the document itself is `ExportFormat.data(of:)`'s; here is only
 /// where the document and the published files come from.
 enum DocumentExport {
-  /// - Parameter paperSize: the page a rendered, paged format is laid out for.
+  /// - Parameters:
+  ///   - section: the anchor of the one section to export, with its subsections
+  ///     (#386), for a format that `narrows`; nil for the whole document.
+  ///   - paperSize: the page a rendered, paged format is laid out for.
   static func data(
-    for id: DocumentID, as format: ExportFormat, paperSize: CGSize, library: LibraryModel
+    for id: DocumentID, as format: ExportFormat, section: String? = nil, paperSize: CGSize,
+    library: LibraryModel
   ) async throws -> Data {
-    switch format {
-    case .pdf: try await DocumentPDF.export(id, paperSize: paperSize, library: library)
+    try await checkExportable(id, library: library)
+    let section = format.narrows ? section : nil
+    return switch format {
+    case .pdf:
+      try await DocumentPDF.export(id, section: section, paperSize: paperSize, library: library)
     case .text: try await library.publishedFile(for: id, format: .text)
     case .xml: try await xml(of: id, library: library)
-    case .epub, .html, .markdown, .abnf: try await rendered(id, as: format, library: library)
+    case .epub, .html, .markdown, .abnf:
+      try await rendered(id, as: format, section: section, library: library)
     }
+  }
+
+  /// Refuses what Print and Export do not offer (`ReaderState.offersPrintAndExport`),
+  /// so that a script, a shortcut and a collection's export refuse it too: a scan,
+  /// which has no text, and a pointer, whose text only says where the RFC is
+  /// (`PublishedOriginalPage.NotExportable`). The text is read only for an RFC the
+  /// index lists an original of beside it, as the export would read it anyway.
+  private static func checkExportable(_ id: DocumentID, library: LibraryModel) async throws {
+    let formats = library.metadata(id)?.formats
+    let text =
+      PublishedOriginalPage.exportReadsText(id, formats: formats)
+      ? try await library.document(for: id) : nil
+    try PublishedOriginalPage.checkExportable(
+      id, formats: formats, text: text, pointerInPack: library.pointersInPack.contains(id))
   }
 
   /// The book, the page, the Markdown or the collected grammar (#185); the grammar is offered
   /// only for a document that has one (`ReaderState.exportFormats`).
-  private static func rendered(_ id: DocumentID, as format: ExportFormat, library: LibraryModel)
-    async throws -> Data
-  {
-    let document = try await library.document(for: id)
-    guard let data = await serialized(document, as: format) else {
-      throw CocoaError(.fileWriteUnknown)
+  private static func rendered(
+    _ id: DocumentID, as format: ExportFormat, section: String?, library: LibraryModel
+  ) async throws -> Data {
+    let part = try ExportedPart(of: try await library.document(for: id), section: section)
+    guard let data = await serialized(part, as: format) else {
+      // Only a grammar can be missing: every other rendered format is made of any
+      // document.
+      throw format == .abnf ? ExportFormat.NoGrammar(document: id) : CocoaError(.fileWriteUnknown)
     }
     return data
   }
@@ -37,8 +61,8 @@ enum DocumentExport {
   /// `format.data(of:)`, off the main actor: a large RFC's book is two passes over
   /// the whole document and a checksum over every byte of it.
   @concurrent
-  private static func serialized(_ document: RFCDocument, as format: ExportFormat) async -> Data? {
-    format.data(of: document)
+  private static func serialized(_ part: ExportedPart, as format: ExportFormat) async -> Data? {
+    format.data(of: part)
   }
 
   /// The RFC Editor's XML where it published one, and the app's conversion of the
@@ -71,10 +95,13 @@ enum DocumentExport {
 
     let data: Data
     let format: ExportFormat
+    /// What Save to Files names it, without the extension it adds.
+    let fileStem: String
 
-    init(data: Data, format: ExportFormat) {
+    init(data: Data, format: ExportFormat, fileStem: String) {
       self.data = data
       self.format = format
+      self.fileStem = fileStem
     }
 
     init(configuration: ReadConfiguration) throws {

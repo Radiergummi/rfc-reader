@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ has no grammar to export." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat keine Grammatik zum Exportieren."
+          }
+        }
+      }
+    },
     "%@ is defined in %@." : {
       "localizations" : {
         "de" : {
@@ -1124,6 +1134,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laden fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "Current Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktueller Abschnitt"
           }
         }
       }
@@ -3374,6 +3394,16 @@
         }
       }
     },
+    "The section is no longer in the document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Abschnitt ist nicht mehr im Dokument."
+          }
+        }
+      }
+    },
     "The stream was created in 2022, by RFC 9280: its documents are written in the RFC Series Working Group and approved by the RFC Series Approval Board." : {
       "localizations" : {
         "de" : {
@@ -3822,6 +3852,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wenn die Gruppe das Dokument für fertig hält, bitten ihre Chairs die ganze Gruppe um letzte Kommentare. Gibt es Rough Consensus, bittet die Gruppe die IESG, es zu veröffentlichen."
+          }
+        }
+      }
+    },
+    "Whole Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganzes Dokument"
           }
         }
       }
