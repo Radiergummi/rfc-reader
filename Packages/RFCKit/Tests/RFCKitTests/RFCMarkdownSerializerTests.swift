@@ -180,6 +180,15 @@ struct RFCMarkdownSerializerTests {
     #expect(markdown.contains("[\(reference.display.text)](\(url))"))
   }
 
+  /// As every export's link does (`RFCLink.webURL`), so the app reads it back to the
+  /// section; a citation's link to a series is the series' page (#712).
+  @Test func `a reference to a series' section keeps the section`() {
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let reference = CrossReference(target: .document(bcp14, section: "2"))
+    let markdown = Self.markdown([.paragraph(Paragraph([.crossReference(reference)]))])
+    #expect(markdown.contains("(https://www.rfc-editor.org/rfc/bcp14#section-2)"))
+  }
+
   // MARK: Lists
 
   @Test func `a bulleted list is a list of dashes`() {
