@@ -8,11 +8,11 @@
   ///
   /// It keeps the panel's file type and the name's extension in step with the
   /// format, keeping whatever the name was changed to, and remembers the last format
-  /// chosen for the next export (`ExportFormat.isRemembered`). Whether the whole document or the section on
-  /// screen is saved (#386) is chosen before the panel opens, by File > Export… or
-  /// Export Current Section…: the panel runs in a process of its own in the
-  /// sandbox, and a name given to it once it is open never reaches its field, so a
-  /// scope chosen in it could not name the file.
+  /// chosen for the next export (`ExportFormat.isRemembered`). Whether the whole
+  /// document or the section on screen is saved (#386) is chosen before the panel
+  /// opens, by File > Export… or Export Current Section…: the panel runs in a
+  /// process of its own in the sandbox, and a name given to it once it is open
+  /// never reaches its field, so a scope chosen in it could not name the file.
   final class ExportFormatChooser: NSObject {
     static let rememberedKey = "exportFormat"
 
