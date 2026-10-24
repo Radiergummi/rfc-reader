@@ -253,15 +253,26 @@ final class NavigationModel: Identifiable {
   /// view that saw its list's selection change took it for a new row tapped and
   /// emptied the stack's path as it pushed, so the cited RFC never slid in and Back
   /// went to the list (measured, #679).
-  var listSelection: DocumentID? {
+  ///
+  /// On iOS a draft at the root is selected too, though no row is it (#728): a
+  /// collapsed split view shows its reader while the selection is anything but nil,
+  /// so a draft opened from the list pushes the reader as a row does, and a draft
+  /// over an RFC is a change of selection rather than one cleared. Cleared, the
+  /// split view popped the reader, and pushing it back while it went drew the
+  /// draft's bottom bar twice.
+  var listSelection: ReadableDocument? {
     get {
       #if os(macOS)
-        selection
+        selection.map(ReadableDocument.rfc)
       #else
-        readerPath.root?.document.rfc
+        readerPath.root?.document
       #endif
     }
-    set { selection = newValue }
+    set {
+      // The list sets a row or nil, never a draft, which has no row.
+      guard newValue?.draft == nil else { return }
+      selection = newValue?.rfc
+    }
   }
 
   /// The document the history holds, shown or not. A collapsed split view that has
@@ -376,9 +387,9 @@ final class NavigationModel: Identifiable {
     }
     // The list's own selected row: on iOS the root of the stack of readers, which a
     // jump in a reader a citation pushed leaves where it is (#263).
-    let row = route.row(selected: listSelection)
+    let row = route.row(selected: listSelection?.rfc)
     let list = listOnShow
-    let reveals = route.reveals(selected: listSelection, among: list.rows)
+    let reveals = route.reveals(selected: listSelection?.rfc, among: list.rows)
     follow(route)
     if reveals {
       sidebarSelection = .all

@@ -1674,25 +1674,31 @@ final class LibraryModel {
   /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
   /// fetch still running is counted when it lands. Nothing is clearable when what
   /// `sparedFromClearing` spares cannot be told, as Clear Cache then removes nothing.
-  /// The drafts read are counted with the cache, and are all clearable (#728).
+  /// The drafts read are counted with the cache, and are clearable but for those
+  /// open (#728).
   func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
     let spared = sparedFromClearing()
-    let draftUsage = await drafts.storageUsage()
+    let draftUsage = await drafts.storageUsage(sparing: openDrafts)
     var report = await store.storageUsage(sparing: spared ?? [])
-    report.cache = report.cache.adding(draftUsage)
+    report.cache = report.cache.adding(draftUsage.cache)
     report.clearable =
-      spared == nil ? StorageUsage(documents: 0, bytes: 0) : report.clearable.adding(draftUsage)
+      spared == nil
+      ? StorageUsage(documents: 0, bytes: 0) : report.clearable.adding(draftUsage.clearable)
     return report
   }
 
   /// Empties the reading cache, but for what `sparedFromClearing` spares, and the
-  /// drafts read; when what to spare cannot be told, nothing is removed.
+  /// drafts read, but for those open; when what to spare cannot be told, nothing is
+  /// removed.
   func clearCache() async {
     guard let spared = sparedFromClearing() else { return }
     forgetPreviews(of: await store.clearCache(sparing: spared))
-    await drafts.clear()
+    await drafts.clear(sparing: openDrafts)
   }
+
+  /// The drafts open, which Clear Cache spares as it spares the RFCs open (#728).
+  private var openDrafts: Set<DraftID> { Set(sceneRegistry.open.compactMap(\.shownDraft)) }
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper
