@@ -167,6 +167,7 @@ extension RFCTextViewCoordinator {
         self?.closeNoteEditor()
       },
       openLink: { [weak self] url in
+        self?.closeNoteEditor()
         _ = self?.onLink(url, .current)
       },
       showInAnnotations: showInAnnotations)
