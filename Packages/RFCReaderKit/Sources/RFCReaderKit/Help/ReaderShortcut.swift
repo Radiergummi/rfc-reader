@@ -41,6 +41,8 @@ public enum ReaderShortcut: CaseIterable, Sendable {
   case info
   case nextSection
   case previousSection
+  /// View ▸ Go to Section… (#711).
+  case goToSection
   case find
   case findNext
   case findPrevious
@@ -166,6 +168,8 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     // paragraphs' ends, and leave the two together alone.
     case .nextSection: Chord(.downArrow, [.command, .option])
     case .previousSection: Chord(.upArrow, [.command, .option])
+    // ⌥⌘G, free on both platforms: ⌘L, Xcode's Go to Line, is Go to RFC here.
+    case .goToSection: Chord("g", [.command, .option])
     case .find: Chord("f")
     case .findNext: Chord("g")
     case .findPrevious: Chord("g", [.command, .shift])
@@ -200,8 +204,9 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .toggleSidebar: String(kit: "Show or Hide Sidebar", locale: locale)
     case .contents: String(kit: "Show or Hide Contents", locale: locale)
     case .info: String(kit: "Show or Hide Info", locale: locale)
-    case .nextSection: String(kit: "Next Section, in Focus", locale: locale)
-    case .previousSection: String(kit: "Previous Section, in Focus", locale: locale)
+    case .nextSection: String(kit: "Next Section", locale: locale)
+    case .previousSection: String(kit: "Previous Section", locale: locale)
+    case .goToSection: String(kit: "Go to Section", locale: locale)
     case .find: String(kit: "Find in Document", locale: locale)
     case .findNext: String(kit: "Find Next", locale: locale)
     case .findPrevious: String(kit: "Find Previous", locale: locale)
@@ -220,7 +225,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
       .newCollection, .copyAsQuote, .highlight, .copyCitation, .export, .pageSetup, .print:
       .documents
     case .bigger, .biggerAlternate, .smaller, .actualSize, .toggleSidebar, .contents, .info,
-      .nextSection, .previousSection:
+      .nextSection, .previousSection, .goToSection:
       .view
     case .find, .findNext, .findPrevious, .useSelectionForFind, .jumpToSelection, .searchLibrary:
       .find

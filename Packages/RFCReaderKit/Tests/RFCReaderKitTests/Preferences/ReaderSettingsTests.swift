@@ -29,6 +29,14 @@ struct ReaderSettingsTests {
     #expect(settings.drawDiagrams == ReaderPreferences.defaultDrawDiagrams)
     #expect(settings.syntaxTheme.id == ReaderPreferences.defaultSyntaxTheme)
     #expect(settings.palette.id == ReaderPreferences.defaultPalette)
+    #expect(settings.vimKeys == ReaderPreferences.defaultVimKeys)
+    #expect(settings.tabsThroughLinks == ReaderPreferences.defaultTabsThroughLinks)
+  }
+
+  /// The maintainer's answer on #711: Tab moves through links unless turned off, and
+  /// the vim keys are off until turned on.
+  @Test func `tab through links is on and the vim keys are off by default`() {
+    #expect(ReaderSettings().keys == ReaderKeys.Options(vimKeys: false, tabsThroughLinks: true))
   }
 
   /// Every key user defaults hold reads into the one value.
@@ -39,6 +47,8 @@ struct ReaderSettingsTests {
       defaults.set(MeasurePreference.fullWidth.rawValue, forKey: ReaderPreferences.measureKey)
       defaults.set(true, forKey: ReaderPreferences.preferOriginalTextKey)
       defaults.set(false, forKey: ReaderPreferences.drawDiagramsKey)
+      defaults.set(true, forKey: ReaderPreferences.vimKeysKey)
+      defaults.set(false, forKey: ReaderPreferences.tabsThroughLinksKey)
 
       let settings = ReaderSettings(defaults: defaults)
       #expect(settings.fontSize == 21)
@@ -46,6 +56,8 @@ struct ReaderSettingsTests {
       #expect(settings.measure == .fullWidth)
       #expect(settings.preferOriginalText)
       #expect(!settings.drawDiagrams)
+      #expect(settings.vimKeys)
+      #expect(!settings.tabsThroughLinks)
     }
   }
 
@@ -82,6 +94,8 @@ struct ReaderSettingsTests {
       settings.measure = .fullWidth
       settings.preferOriginalText = true
       settings.drawDiagrams = false
+      settings.vimKeys = true
+      settings.tabsThroughLinks = false
       settings.write(to: defaults, replacing: ReaderSettings())
       #expect(ReaderSettings(defaults: defaults) == settings)
     }

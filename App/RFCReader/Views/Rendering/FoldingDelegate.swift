@@ -14,7 +14,8 @@ import os
 ///
 /// It also holds what the fragments draw for the reading mode: the headings'
 /// disclosures, and Implementer's requirement bands (#700); and this text view's
-/// highlights (#522), which are never in the storage, since a build is shared. A
+/// highlights (#522), and the link the keyboard's focus is on (#711), which are never
+/// in the storage, since a build is shared. A
 /// fragment finds it as its layout manager's content manager's delegate.
 ///
 /// Highlights are held here rather than as rendering attributes on the layout
@@ -34,6 +35,7 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
     var disclosures: [Int: Bool] = [:]
     var bands = RequirementBands()
     var highlights = HighlightMarks([])
+    var focusedLink: NSRange?
   }
 
   private let state = OSAllocatedUnfairLock(initialState: State())
@@ -69,6 +71,24 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
   /// The highlight marks that meet the document range `range`, whole.
   func highlights(meeting range: NSRange) -> [HighlightMark] {
     state.withLock { $0.highlights.marks(meeting: range) }
+  }
+
+  /// The link the keyboard's focus is on, which the fragments ring (#711), in place of
+  /// the one they ringed; nil for none.
+  func focus(link: NSRange?) {
+    state.withLock { $0.focusedLink = link }
+  }
+
+  /// The link the keyboard's focus is on.
+  var focusedLink: NSRange? {
+    state.withLock { $0.focusedLink }
+  }
+
+  /// The focused link, where it meets the document range `range`.
+  func focusedLink(meeting range: NSRange) -> NSRange? {
+    state.withLock { state in
+      state.focusedLink.flatMap { $0.intersection(range) == nil ? nil : $0 }
+    }
   }
 
   /// Whether the heading whose paragraph starts at `offset` has a disclosure, and if

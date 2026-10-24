@@ -1518,6 +1518,16 @@
         }
       }
     },
+    "Go to Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu Abschnitt"
+          }
+        }
+      }
+    },
     "Gray" : {
       "localizations" : {
         "de" : {
@@ -2038,12 +2048,12 @@
         }
       }
     },
-    "Next Section, in Focus" : {
+    "Next Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nächster Abschnitt, im Fokus"
+            "value" : "Nächster Abschnitt"
           }
         }
       }
@@ -2458,12 +2468,12 @@
         }
       }
     },
-    "Previous Section, in Focus" : {
+    "Previous Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vorheriger Abschnitt, im Fokus"
+            "value" : "Vorheriger Abschnitt"
           }
         }
       }

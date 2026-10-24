@@ -80,9 +80,35 @@ import RFCReaderKit
     /// a side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Told of a key pressed without ⌘, ⌃ or ⌥ (#711): Space, Tab, Return and the
+    /// vim-style keys are the coordinator's, which answers whether it took the key.
+    var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
       willHandleKey()
+      if presses.count == 1, let press = presses.first, let key = press.key,
+        let readerKey = ReaderKeys.Key(
+          keyCode: key.keyCode, characters: key.characters, modifiers: key.modifierFlags),
+        handleKey(readerKey)
+      {
+        handledPresses.insert(ObjectIdentifier(press))
+        return
+      }
       super.pressesBegan(presses, with: event)
+    }
+
+    /// The presses `handleKey` took, whose end UIKit is not to see either: a press
+    /// whose begin it never saw (UIKit's own rule for overriding these).
+    private var handledPresses: Set<ObjectIdentifier> = []
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesEnded(unhandled, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesCancelled(unhandled, with: event) }
     }
 
     /// The quote for a range of the text, from the coordinator (#186).
@@ -236,8 +262,19 @@ import RFCReaderKit
     /// side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Told of a key pressed without ⌘, ⌃ or ⌥ (#711): Space, Tab, Return and the
+    /// vim-style keys are the coordinator's, which answers whether it took the key.
+    /// Only while this is first responder: a text field, the find bar's included,
+    /// takes its own keys.
+    var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
+
     override func keyDown(with event: NSEvent) {
       willHandleKey()
+      if let key = ReaderKeys.Key(characters: event.characters, modifiers: event.modifierFlags),
+        handleKey(key)
+      {
+        return
+      }
       super.keyDown(with: event)
     }
 

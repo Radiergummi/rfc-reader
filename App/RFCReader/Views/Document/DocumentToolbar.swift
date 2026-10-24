@@ -131,7 +131,7 @@ import SwiftUI
           perform: perform)
         Divider()
         ReadingModePicker(reader: reader)
-        FocusSteps(reader: reader)
+        SectionSteps(reader: reader)
         // On an iPad, as its menu bar would hold them; an iPhone's VoiceOver and
         // Voice Control reach them as the reader's own actions (#760).
         if horizontalSizeClass == .regular {

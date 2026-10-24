@@ -240,7 +240,7 @@ struct DocumentCommands: Commands {
         if let reader {
           ReadingModePicker(reader: reader)
             .disabled(!showsDocument)
-          FocusSteps(reader: reader)
+          SectionSteps(reader: reader)
             .disabled(!showsDocument)
           OutlineSectionItems(reader: reader)
             .disabled(!showsDocument)
@@ -250,6 +250,15 @@ struct DocumentCommands: Commands {
           let document = controller.navigation.shown, showsDocument
         {
           CompareItems(id: document, library: controller.library, reader: reader)
+        }
+      #else
+        // Next and Previous Section and Go to Section (#711), in the menu bar and the
+        // hold-⌘ overlay of an iPad's keyboard.
+        if let reader {
+          Section {
+            SectionSteps(reader: reader)
+          }
+          .disabled(navigation?.selection == nil || !reader.hasDocument)
         }
       #endif
     }
