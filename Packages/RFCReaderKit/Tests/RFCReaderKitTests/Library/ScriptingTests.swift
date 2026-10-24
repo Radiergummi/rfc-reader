@@ -81,3 +81,45 @@ struct LibraryFilterScriptNameTests {
     #expect(filter("") == nil)
   }
 }
+
+/// What `collection "…"` names, for `delete` and every other command on the
+/// application's collections (#987): only collections the reader made are elements,
+/// so a built-in list's name is told apart, to be refused in words.
+@Suite("Scripting: a collection element's name")
+struct ScriptCollectionNameTests {
+  private let groups: Set<String> = ["httpbis"]
+  private let http3 = CollectionSnapshot.Entry(
+    id: UUID(), name: "HTTP/3", color: .blue, members: [])
+  private let secondHTTP3 = CollectionSnapshot.Entry(
+    id: UUID(), name: "HTTP/3", color: .green, members: [])
+  private let shadowing = CollectionSnapshot.Entry(
+    id: UUID(), name: "Bookmarks", color: .red, members: [], query: "wg:quic")
+
+  private func target(_ name: String) -> ScriptCollectionName? {
+    ScriptCollectionName(
+      name, collections: CollectionSnapshot(collections: [http3, secondHTTP3, shadowing]),
+      workingGroups: groups)
+  }
+
+  @Test func `a collection is the first of its name in the sidebar, in any case`() {
+    #expect(target("http/3") == .collection(http3.id))
+  }
+
+  /// Only the reader's collections are elements, so here a collection of a built-in
+  /// list's name is the one named, where a window's collection would be the list.
+  @Test func `a collection named like a built-in list is the collection`() {
+    #expect(target("bookmarks") == .collection(shadowing.id))
+  }
+
+  @Test func `a built-in list, a stream, a series or a working group is built in`() {
+    #expect(target("Recently Read") == .builtIn(.recent))
+    #expect(target("IETF") == .builtIn(.stream(.ietf)))
+    #expect(target("BCP 14") == .builtIn(.series(DocumentID(series: .bcp, number: 14))))
+    #expect(target("HTTPBIS") == .builtIn(.workingGroup("httpbis")))
+  }
+
+  @Test func `anything else names nothing`() {
+    #expect(target("QUIC") == nil)
+    #expect(target("") == nil)
+  }
+}
