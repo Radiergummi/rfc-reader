@@ -20,11 +20,6 @@ public enum AppearancePreference: String, CaseIterable, Sendable {
     case .dark: .dark
     }
   }
-
-  /// The appearance the app is drawn in while the system's is `system`.
-  public func effective(system: PaletteAppearance) -> PaletteAppearance {
-    forced ?? system
-  }
 }
 
 extension PaletteAppearance {

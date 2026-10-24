@@ -17,9 +17,10 @@ import SwiftUI
 struct OriginalTextBody {
   let text: String
   let fontSize: Double
-  /// The page theme it is drawn in (#704): its page, and its text through
-  /// `ReaderPalette.themedText`, which a change only redraws.
-  let palette: ReaderPalette
+  /// The page themes chosen (#704), and which of them is drawn: its page, and its
+  /// text through `ReaderPalette.themedText`, which a change only redraws.
+  let settings: ReaderSettings
+  let appearance: PaletteAppearance
   #if canImport(UIKit)
     /// The window's reader state, which Find is installed in (#763): nil for a
     /// reader the stack keeps below its top.
@@ -43,6 +44,16 @@ struct OriginalTextBody {
     var shown: (text: String, fontSize: Double)?
     /// The page theme last drawn, so only a change of it redraws.
     var palette = ReaderPalette.automatic
+  }
+
+  /// The theme drawn, once the themes chosen are the text's
+  /// (`ReaderPalette.choose(light:dark:)`), or nil if it is the one last drawn.
+  fileprivate func changedPalette(_ coordinator: Coordinator) -> ReaderPalette? {
+    ReaderPalette.choose(light: settings.lightPalette, dark: settings.darkPalette)
+    let palette = settings.palette(for: appearance)
+    guard coordinator.palette != palette else { return nil }
+    coordinator.palette = palette
+    return palette
   }
 
   func makeCoordinator() -> Coordinator { Coordinator() }
@@ -79,8 +90,7 @@ struct OriginalTextBody {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
       guard let textView = scrollView.documentView as? NSTextView else { return }
-      if context.coordinator.palette != palette {
-        context.coordinator.palette = palette
+      if let palette = changedPalette(context.coordinator) {
         scrollView.backgroundColor = palette.pageBackground ?? .clear
         scrollView.drawsBackground = palette.pageBackground != nil
         textView.redrawLaidOutText()
@@ -132,8 +142,7 @@ struct OriginalTextBody {
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
       textView.findReader = reader
-      if context.coordinator.palette != palette {
-        context.coordinator.palette = palette
+      if let palette = changedPalette(context.coordinator) {
         textView.backgroundColor = palette.pageBackground ?? .clear
         textView.redrawLaidOutText()
       }

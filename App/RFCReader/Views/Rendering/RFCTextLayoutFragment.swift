@@ -445,7 +445,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       open: disclosure.open, firstLine: disclosure.firstLine, text: disclosure.text)
     guard let first = chevron.first else { return }
     context.saveGState()
-    context.setStrokeColor(RFCColors.secondaryLabel.cgColor)
+    context.setStrokeColor(ReaderPalette.themedSecondaryText.cgColor)
     context.setLineWidth(1.5)
     context.setLineCap(.round)
     context.setLineJoin(.round)

@@ -167,13 +167,10 @@ struct ReaderSettingsTests {
 
   /// System follows the system's appearance; Light and Dark force theirs whatever
   /// the system's is.
-  @Test func `the appearance override decides the effective appearance`() {
-    for system in PaletteAppearance.allCases {
-      #expect(AppearancePreference.system.effective(system: system) == system)
-      #expect(AppearancePreference.light.effective(system: system) == .light)
-      #expect(AppearancePreference.dark.effective(system: system) == .dark)
-    }
+  @Test func `the appearance override forces light or dark, or nothing`() {
     #expect(AppearancePreference.system.forced == nil)
+    #expect(AppearancePreference.light.forced == .light)
+    #expect(AppearancePreference.dark.forced == .dark)
     #expect(PaletteAppearance(ColorScheme.dark) == .dark)
     #expect(PaletteAppearance(ColorScheme.light) == .light)
   }

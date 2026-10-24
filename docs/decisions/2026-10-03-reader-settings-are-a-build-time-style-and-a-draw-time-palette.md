@@ -36,7 +36,8 @@ The plan was rendering attributes, set by an `NSTextLayoutManager` validator as 
 A probe on #704's branch (2026-10-19, on #702) showed they do not survive the reader's redraw: the validator runs once per fragment, and after `invalidateRenderingAttributes` (`ReaderLayoutEngine.redraw`, #747) the text drew in the stored colors again, while re-applying them over every fragment after each redraw cost about 0.35 s over RFC 9110 in a debug build, against 1.31 s for a rebuild.
 
 What was built instead, the maintainer's choice of 2026-10-19: the builder stores, in place of `RFCColors.label` and `.secondaryLabel`, `ReaderPalette.themedText` and `.themedSecondaryText`, dynamic colors whose provider returns the color of the theme chosen for the appearance they are resolved in.
-The light and the dark theme chosen are process-wide, behind a lock (`ReaderPalette.choose(light:dark:)`), kept to user defaults as each change is written (`ReaderPalette.follow()`), so a theme switch costs what a switch to dark mode costs: a redraw, with no per-fragment work, and any later redraw keeps it.
+The light and the dark theme chosen are process-wide, behind a lock (`ReaderPalette.choose(light:dark:)`), which each reader sets from its settings before it redraws, so a theme switch costs what a switch to dark mode costs: a redraw, with no per-fragment work, and any later redraw keeps it.
+A rich copy maps them back to the system's label colors (`SelectionText.richCopy`), since the theme is the reader's, not the document's.
 Links keep the layout manager delegate's path (`LinkRendering`), which the same probe found holds at draw time; the page is the scroll view's background, and on macOS the selection is the text view's selected-text attributes.
 A print and an exported PDF build with the system's label colors (`ReadingStyle.followsPageTheme` off), so paper keeps the paper palette whatever the screen's theme.
 The syntax colors (#707) are to take the same path.
