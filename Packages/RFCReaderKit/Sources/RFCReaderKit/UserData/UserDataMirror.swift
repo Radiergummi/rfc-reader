@@ -274,6 +274,21 @@ public final class UserDataMirror {
     }
   }
 
+  /// Removes every Keep Offline mark, on every device, since marks are synced, as
+  /// Settings' Remove All Offline Documents does (#358), and reports the marks once.
+  /// `first` runs before the removal, so what it changes is what that one report sees.
+  /// The removal is made in a context of its own, discarded with it when the save
+  /// fails, since rolling back the main context would discard whatever else waits
+  /// there to be saved, such as a bookmark whose save failed. A failure is thrown,
+  /// after `first` ran, and nothing is reported.
+  public func removeAllOfflineMarks(first: () -> Void) throws {
+    try OfflineMarkStore.removeAll(in: ModelContext(container))
+    first()
+    let marks = offlineMarks
+    refreshOfflineMarks()
+    if offlineMarks == marks { onOfflineMarksChanged() }
+  }
+
   /// The documents the reader has opened, most recent first, a BCP, STD or FYI
   /// among them as itself (#321).
   ///
