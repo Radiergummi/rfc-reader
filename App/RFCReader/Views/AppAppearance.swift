@@ -22,8 +22,11 @@ import SwiftUI
     }
 
     private static func apply() {
+      // The one key, not the whole settings: this runs on every write to defaults.
+      let stored = UserDefaults.standard.string(forKey: ReaderPreferences.appearanceKey)
+      let forced = stored.flatMap(AppearancePreference.init)?.forced
       let appearance: NSAppearance? =
-        switch ReaderSettings(defaults: .standard).appearance.forced {
+        switch forced {
         case nil: nil
         case .light: NSAppearance(named: .aqua)
         case .dark: NSAppearance(named: .darkAqua)

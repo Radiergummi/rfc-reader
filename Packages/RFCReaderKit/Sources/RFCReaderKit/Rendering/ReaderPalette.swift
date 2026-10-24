@@ -232,9 +232,10 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
 
   // MARK: - Text
 
-  /// The light and the dark theme chosen, process-wide, which `text` and
-  /// `secondaryText` below draw in. A setting, as the themes are: every reader
-  /// draws the same ones (`follow()`).
+  /// The light and the dark theme chosen, process-wide, which `themedText` and
+  /// `themedSecondaryText` below draw in. A setting, as the themes are: every
+  /// reader draws the same ones, and each sets them from the settings before it
+  /// redraws.
   private static let chosen = Mutex((light: ReaderPalette.automatic, dark: ReaderPalette.automatic))
 
   /// The theme chosen for `appearance`.
@@ -243,32 +244,9 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   }
 
   /// Makes `light` and `dark` the themes the text is drawn in, from the next
-  /// redraw, and says whether either changed.
-  @discardableResult
-  public static func choose(light: ReaderPalette, dark: ReaderPalette) -> Bool {
-    chosen.withLock { chosen in
-      guard chosen.light != light || chosen.dark != dark else { return false }
-      chosen = (light, dark)
-      return true
-    }
-  }
-
-  /// Keeps the chosen themes to what the standard user defaults hold from now on,
-  /// as each change is written, before any view is told of it: so a reader that
-  /// redraws for a new theme draws its text in it.
-  public static func follow() {
-    chooseFromDefaults()
-    // No queue: on the thread that wrote, as the write happens.
-    NotificationCenter.default.addObserver(
-      forName: UserDefaults.didChangeNotification, object: UserDefaults.standard, queue: nil
-    ) { _ in
-      chooseFromDefaults()
-    }
-  }
-
-  private static func chooseFromDefaults() {
-    let settings = ReaderSettings(defaults: .standard)
-    choose(light: settings.lightPalette, dark: settings.darkPalette)
+  /// redraw.
+  public static func choose(light: ReaderPalette, dark: ReaderPalette) {
+    chosen.withLock { $0 = (light, dark) }
   }
 
   /// Body text, as the theme chosen for the appearance it is drawn in has it: what

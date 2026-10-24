@@ -142,13 +142,15 @@ public final class DocumentTextBuilder {
     self.choices = choices
     self.hints = hints
     self.labels = labels
-    bodyColor = style.followsPageTheme ? ReaderPalette.themedText : RFCColors.label
+    bodyColor = Self.labelColor(in: style)
   }
 
   /// Body text's color: the page theme's on screen, the system's on paper
   /// (`ReadingStyle.followsPageTheme`). The builder's every label-colored run is
   /// this, never `RFCColors.label` directly.
-  var labelColor: PlatformColor {
+  var labelColor: PlatformColor { Self.labelColor(in: style) }
+
+  private static func labelColor(in style: ReadingStyle) -> PlatformColor {
     style.followsPageTheme ? ReaderPalette.themedText : RFCColors.label
   }
 
