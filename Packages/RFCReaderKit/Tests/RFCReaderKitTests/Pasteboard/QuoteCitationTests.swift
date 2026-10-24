@@ -129,6 +129,20 @@ struct QuoteCitationTests {
         "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
   }
 
+  /// The Full style cites a series in lines of their own, its members': the line
+  /// after a quote is Markdown's for it, as for BibTeX.
+  @Test func `a series quoted in the full style ends in the markdown line`() {
+    var settings = ReaderSettings()
+    settings.citationStyle = .full
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let member = Fixtures.metadata(2119, title: "Key words", year: 1997)
+    let quoted = QuoteCitation.quote(
+      of: NSAttributedString(string: "Quoted."), document: bcp14, section: "2",
+      cited: .series(bcp14, members: [member]), settings: settings)
+    #expect(
+      quoted.markdown.hasSuffix("— [BCP 14, Section 2](https://www.rfc-editor.org/info/bcp14)"))
+  }
+
   @Test func `a quote leaves a heading's number out where the reader asks`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())

@@ -631,9 +631,10 @@ import RFCReaderKit
         result.insertItem(item, at: 0)
       }
       if quotes {
-        // The format Copy does not copy, and the citation (#712).
+        // The format Copy does not copy, and the citation (#712). Copy copies a
+        // selection of several ranges as text whatever it is set to.
         let other =
-          ReaderSettings(defaults: .standard).copyFormat == .quote
+          ReaderSettings(defaults: .standard).copyFormat == .quote && selectedRanges.count == 1
           ? NSMenuItem(
             title: String(localized: "Copy as Text"), action: #selector(copyAsText(_:)),
             keyEquivalent: "")

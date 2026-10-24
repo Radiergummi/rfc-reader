@@ -63,10 +63,11 @@ public struct RFCLink: Hashable, Sendable {
     return components.url ?? url
   }
 
-  /// The link at the RFC Editor (`LinkSite.rfcEditor`), whatever site Settings
-  /// chose: what an export writes, and what a link anyone can open is by default.
+  /// The link at the RFC Editor, whatever site Settings chose: what an export
+  /// writes. Unlike `LinkSite.rfcEditor`'s, a series' section stays in it, so the
+  /// app reads an exported link back to the section.
   public var webURL: URL {
-    LinkSite.rfcEditor.url(for: self)
+    LinkSite.rfcEditorURL(for: self)
   }
 
   /// The link `url` makes, where a citation can say all of it: an RFC itself, or one

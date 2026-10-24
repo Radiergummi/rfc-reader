@@ -110,4 +110,12 @@ struct LinkSiteTests {
       #expect(link.webURL == LinkSite.rfcEditor.url(for: link))
     }
   }
+
+  /// An export, and the legacy pack's XML, keep a series' section in its link, as
+  /// they did before the sites (#712): the app reads the link back to the section.
+  @Test func `a web URL keeps a series' section`() {
+    let link = RFCLink(id: Self.bcp14, section: "2")
+    #expect(link.webURL.absoluteString == "https://www.rfc-editor.org/rfc/bcp14#section-2")
+    #expect(RFCLink(url: link.webURL) == link)
+  }
 }

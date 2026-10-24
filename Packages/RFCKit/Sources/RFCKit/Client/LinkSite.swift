@@ -29,12 +29,7 @@ public enum LinkSite: String, CaseIterable, Sendable, Identifiable {
     let link = link.id.series == .rfc || self == .app ? link : RFCLink(id: link.id)
     switch self {
     case .rfcEditor:
-      guard link.section == nil, let anchor = link.anchor else {
-        guard let section = link.section else { return RFCEditorEndpoints.infoPage(link.id) }
-        return RFCLink.url(Self.rfcEditorDocument(link.id), section: section)
-      }
-      // The document's page, which defines the anchor, rather than its info page.
-      return RFCLink.url(Self.rfcEditorDocument(link.id), fragment: anchor)
+      return Self.rfcEditorURL(for: link)
     case .datatracker:
       let page = RFCEditorEndpoints.datatrackerBase.appending(path: "doc/html/\(link.id.fileStem)")
       return RFCLink.url(page, fragment: fragment(of: link))
@@ -51,6 +46,17 @@ public enum LinkSite: String, CaseIterable, Sendable, Identifiable {
   /// `section-4.2` for a section, an anchor as it is.
   private func fragment(of link: RFCLink) -> String? {
     link.section.map(SectionAnchor.anchor(forSectionNumber:)) ?? link.anchor
+  }
+
+  /// `link` at the RFC Editor as it is, a series' section too: what `RFCLink.webURL`
+  /// writes into an export, which the app reads back to the section.
+  static func rfcEditorURL(for link: RFCLink) -> URL {
+    guard link.section == nil, let anchor = link.anchor else {
+      guard let section = link.section else { return RFCEditorEndpoints.infoPage(link.id) }
+      return RFCLink.url(rfcEditorDocument(link.id), section: section)
+    }
+    // The document's page, which defines the anchor, rather than its info page.
+    return RFCLink.url(rfcEditorDocument(link.id), fragment: anchor)
   }
 
   private static func rfcEditorDocument(_ id: DocumentID) -> URL {
