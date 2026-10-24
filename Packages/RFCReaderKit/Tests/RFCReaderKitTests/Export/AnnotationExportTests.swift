@@ -317,7 +317,9 @@ struct AnnotationExportTests {
   @Test func `a highlight from prose into a figure fences only the figure`() throws {
     // Some words of prose, then the figure's or code's lines.
     let found = model.verbatim.first { block in
-      block.lowerBound >= 40 && !model.isVerbatim(block.lowerBound - 40..<block.lowerBound)
+      block.lowerBound >= 40
+        && !model.verbatim.contains(where: { $0.overlaps(block.lowerBound - 40..<block.lowerBound) }
+        )
         && model.text(in: block.lowerBound - 40..<block.lowerBound).contains { $0.isLetter }
     }
     let block = try #require(found, "no figure after prose")

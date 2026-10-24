@@ -62,12 +62,6 @@ public struct ModelText: Sendable {
 
   public var length: Int { units.count }
 
-  /// Whether `range` holds any of a figure's artwork or a piece of code.
-  public func isVerbatim(_ range: Range<Int>) -> Bool {
-    let index = verbatim.partitioningIndex { $0.upperBound > range.lowerBound }
-    return index < verbatim.count && verbatim[index].overlaps(range)
-  }
-
   /// The text in `range`.
   public func text(in range: Range<Int>) -> String {
     let clamped = range.clamped(to: 0..<units.count)
