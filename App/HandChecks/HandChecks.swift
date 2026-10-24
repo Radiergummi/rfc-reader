@@ -259,6 +259,39 @@ final class HandChecks: XCTestCase {
     }
   }
 
+  // MARK: - Go to RFC (#579)
+
+  /// The library's # opens Go to RFC on the number pad; a number lists its RFC alone,
+  /// and Open opens it.
+  func testGoToRFCNumber() {
+    app.launch()
+    dismissStoreWarning()
+    waitForIndex()
+    // The bar's button, at the foot of the screen: the keyboard command of the same
+    // name is listed too, at the screen's middle.
+    let goTo = app.buttons.matching(identifier: "Go to RFC").allElementsBoundByIndex
+      .max { $0.frame.minY < $1.frame.minY }
+    goTo?.tap()
+
+    let field = app.textFields["RFC number"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "no Go to RFC sheet")
+    // The number pad: digits, and no letters.
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard")
+    XCTAssertTrue(app.keyboards.keys["1"].exists)
+    XCTAssertFalse(app.keyboards.keys["q"].exists)
+    screenshot("1 number pad")
+
+    field.typeText("8174")
+    XCTAssertTrue(
+      app.buttons["RFC 8174"].waitForExistence(timeout: 5)
+        || app.staticTexts["RFC 8174"].waitForExistence(timeout: 1), "RFC 8174 not listed")
+    screenshot("2 typed 8174")
+
+    app.buttons["Open"].tap()
+    waitForReader("RFC 8174")
+    screenshot("3 opened")
+  }
+
   // MARK: - Steps
 
   /// Launches the app, waits for its index, and opens `url` in it.

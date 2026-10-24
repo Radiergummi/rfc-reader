@@ -277,6 +277,9 @@ struct EmptyDetailView: View {
           TextField(QuickOpenResults.numberPlaceholder(), text: $text)
             .focused($focused)
             .keyboardType(.numberPad)
+            // An iPad's number pad is the full keyboard, whose corrections would
+            // rewrite a number before the digits are kept.
+            .autocorrectionDisabled()
             // A hardware keyboard's Return; the number pad has none, and Open is
             // in the bar.
             .onSubmit(openSelection)
