@@ -214,7 +214,7 @@ extension DocumentTextBuilder {
       paragraphStyle(indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25))
     var labelAttributes = attributes
     labelAttributes[.font] = style.boldBodyFont
-    labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
+    labelAttributes[.foregroundColor] = secondaryLabelColor
     let separatorAttributes = bodyAttributes(indent: indent)
 
     // The header has no row of its own here: it labels every cell instead. A link

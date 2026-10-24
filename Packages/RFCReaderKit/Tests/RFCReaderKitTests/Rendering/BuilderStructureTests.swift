@@ -303,10 +303,10 @@ struct BuilderStructureTests {
     let abstractColor =
       built.text.attribute(.foregroundColor, at: abstractOffset, effectiveRange: nil)
       as? PlatformColor
-    #expect(abstractColor == RFCColors.secondaryLabel)
+    #expect(abstractColor == ReaderPalette.themedSecondaryText)
     #expect(
       built.text.attribute(.foregroundColor, at: bodyOffset, effectiveRange: nil) as? PlatformColor
-        == RFCColors.label)
+        == ReaderPalette.themedText)
   }
 
   /// The heading stays a heading: full size, anchored, and in the rotor.
@@ -318,7 +318,7 @@ struct BuilderStructureTests {
         == style.headingFont(depth: 1))
     #expect(
       built.text.attribute(.foregroundColor, at: offset, effectiveRange: nil) as? PlatformColor
-        == RFCColors.label)
+        == ReaderPalette.themedText)
   }
 
   /// The bibliography leaves the body entirely — heading and all, so no empty
