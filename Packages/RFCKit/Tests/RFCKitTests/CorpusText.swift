@@ -61,6 +61,8 @@ enum CorpusTextError: Error, Equatable {
   /// `RFC_CORPUS_TEXT` is not set; a suite that reads the corpus is enabled only where
   /// it is.
   case notConfigured
+  /// `RFC_CORPUS_INDEX` is not set.
+  case indexNotConfigured
   /// The document is not in the directory: `make test-corpus` fetches only the
   /// documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS`.
   case notFetched(String)
@@ -76,6 +78,8 @@ extension CorpusTextError: CustomStringConvertible {
     switch self {
     case .notConfigured:
       "RFC_CORPUS_TEXT is not set"
+    case .indexNotConfigured:
+      "RFC_CORPUS_INDEX is not set"
     case .notFetched(let stem):
       "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_DOCUMENTS"
     case .xmlNotConfigured:
@@ -84,4 +88,23 @@ extension CorpusTextError: CustomStringConvertible {
       "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_XML_DOCUMENTS"
     }
   }
+}
+
+/// The RFC index, from `RFC_CORPUS_INDEX`, for a suite that checks something against
+/// every RFC's metadata. `make test-corpus` fetches it.
+enum CorpusIndex {
+  static var isAvailable: Bool { parsed != nil }
+
+  static func index() throws -> RFCIndex {
+    guard let parsed else { throw CorpusTextError.indexNotConfigured }
+    return try parsed.get()
+  }
+
+  /// Parsed once: it is several megabytes. The parse's error is kept, so an index that
+  /// is set but unreadable says why rather than that it is not set.
+  private static let parsed: Result<RFCIndex, any Error>? = {
+    guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_INDEX"], !path.isEmpty
+    else { return nil }
+    return Result { try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path)) }
+  }()
 }

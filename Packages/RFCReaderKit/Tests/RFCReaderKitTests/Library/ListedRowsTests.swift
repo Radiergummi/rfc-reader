@@ -34,6 +34,20 @@ struct ListedRowsTests {
     #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
   }
 
+  /// The iPhone sidebar's results are a search too, so the tab's search options
+  /// narrow them as they narrow the list's (#713).
+  @Test func `the library's results follow the tab's search options`() {
+    let index = RFCIndex(
+      rfcs: [
+        Fixtures.metadata(1, title: "Host Software", obsoletedBy: [.rfc(2)]),
+        Fixtures.metadata(2, title: "Host Software Protocol"),
+      ], series: [])
+    let list = LibraryList(
+      filter: .bookmarks, query: "host", options: ListOptions(showsObsoleteInSearch: false))
+    let listed = ListedRows(list, in: index, indexVersion: 1, search: IndexSearch(index: index))
+    #expect(listed.librarySearch.map(\.id.number) == [2])
+  }
+
   /// The iPhone sidebar's results for a query asking for the reader's data are
   /// narrowed by it too, not every document the index holds (#355).
   @Test func `the library's results narrow by the reader's data`() {

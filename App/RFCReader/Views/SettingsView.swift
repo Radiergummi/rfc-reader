@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The app's settings, tabbed the way a Mac app's are. A tab joins as a feature
 /// arrives that has something worth configuring, rather than ahead of it: Advanced
-/// arrived with the first setting that belongs there (#712).
+/// arrived with the April 1st RFCs and the status badges (#713).
 ///
 /// Reading and Appearance hold the standard settings, the ones a reader expects of
 /// Apple Books; Advanced holds the rest, and never the quick panel (#702). The
@@ -27,6 +27,7 @@ struct SettingsView: View {
       Tab("General", systemImage: "gearshape") {
         Form {
           GeneralSettings()
+          Section("Library") { LibrarySettingsSection() }
           Section("Sharing") { SharingSettings() }
         }
         .formStyle(.grouped)
@@ -42,7 +43,7 @@ struct SettingsView: View {
           .formStyle(.grouped)
       }
       Tab("Advanced", systemImage: "gearshape.2") {
-        Form { AdvancedSettings() }
+        Form { AdvancedSettings(library: library) }
           .formStyle(.grouped)
       }
     }
@@ -72,8 +73,9 @@ struct SettingsScreen: View {
         Section("General") { GeneralSettings() }
         Section("Sharing") { SharingSettings() }
         Section("Notifications") { NotificationSettings() }
+        Section("Library") { LibrarySettingsSection() }
         Section("Storage") { StorageSettings(library: library) }
-        Section("Advanced") { AdvancedSettings() }
+        Section("Advanced") { AdvancedSettings(library: library) }
       }
       .navigationTitle("Settings")
       #if !os(macOS)
@@ -192,11 +194,66 @@ private struct SharingSettings: View {
   }
 }
 
-/// What few readers change (#702): how a copy treats a heading's number (#712).
-private struct AdvancedSettings: View {
-  @ReaderSettingsValue private var settings
+/// What a new tab's lists and searches start with (#713). A tab's View Options
+/// change its own from there, and a changed setting reaches the tabs opened after it.
+private struct LibrarySettingsSection: View {
+  @AppStorage(LibraryPreferences.showsObsoleteInListsKey) private var showsObsoleteInLists =
+    LibraryPreferences.defaultShowsObsolete
+  @AppStorage(LibraryPreferences.showsObsoleteInSearchKey) private var showsObsoleteInSearch =
+    LibraryPreferences.defaultShowsObsolete
+  @AppStorage(LibraryPreferences.orderKey) private var order = LibraryPreferences.defaultOrder
+  @AppStorage(LibraryPreferences.searchesCurrentOnlyKey) private var searchesCurrentOnly =
+    LibraryPreferences.defaultSearchesCurrentOnly
+  @AppStorage(LibraryPreferences.searchStreamKey) private var searchStream =
+    LibraryPreferences.defaultSearchStream
 
   var body: some View {
+    Toggle("Show obsoleted documents in lists", isOn: $showsObsoleteInLists)
+    Toggle("Show obsoleted documents in search results", isOn: $showsObsoleteInSearch)
+    Picker("Sort lists", selection: $order) {
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
+    }
+    Picker(selection: $searchesCurrentOnly) {
+      Text("All documents").tag(false)
+      Text("Current documents only").tag(true)
+    } label: {
+      Text("Search")
+      Text(
+        "Current documents are neither obsoleted nor Historic. The search field shows the scope, and removing it there searches everything."
+      )
+    }
+    Picker("Search stream", selection: $searchStream) {
+      Text("All streams").tag("")
+      ForEach(PublicationStream.allCases, id: \.self) { stream in
+        Text(verbatim: stream.displayName).tag(stream.rawValue)
+      }
+    }
+  }
+}
+
+/// Settings few readers change (#705, #713), and how a copy treats a heading's
+/// number (#712).
+private struct AdvancedSettings: View {
+  let library: LibraryModel
+  @ReaderSettingsValue private var settings
+  @AppStorage(LibraryPreferences.showsStatusBadgesKey) private var showsStatusBadges =
+    LibraryPreferences.defaultShowsStatusBadges
+
+  private var showsAprilFirst: Binding<Bool> {
+    Binding(get: { library.showsAprilFirst }, set: { library.setShowsAprilFirst($0) })
+  }
+
+  var body: some View {
+    Toggle(isOn: showsAprilFirst) {
+      Text("Show April 1st RFCs")
+      Text(
+        "Otherwise the April Fools' Day RFCs are left out of lists, search and Just Published. A bookmark, a collection or a link still shows them."
+      )
+    }
+    Toggle(isOn: $showsStatusBadges) {
+      Text("Show status badges in lists")
+      Text("Otherwise lists are denser, and the status is still read by VoiceOver.")
+    }
     Toggle(isOn: $settings.copiesSectionNumbers) {
       Text("Copy section numbers")
       Text("A copied heading keeps its number, as in “4.2. Overview”.")

@@ -173,6 +173,44 @@
     }
   }
 
+  extension NSApplication {
+    /// `collection "HTTP"`: the first of that name in the sidebar, in any case.
+    /// Evaluated here rather than by a `valueInScriptCollectionsWithName:` on the
+    /// delegate, which `delete` never asks: it wants an index, and only the
+    /// container is asked for one (#987). Deleting or renaming a built-in list's
+    /// name is refused in words; anything else Cocoa evaluates as it would without
+    /// this, and finds no such collection.
+    public nonisolated override func indicesOfObjects(
+      byEvaluatingObjectSpecifier specifier: NSScriptObjectSpecifier
+    ) -> [NSNumber]? {
+      guard specifier.key == "scriptCollections", let specifier = specifier as? NSNameSpecifier
+      else {
+        return nil
+      }
+      let name = specifier.name
+      // Indices, as NSNumber is not Sendable to Xcode 26's SDK.
+      let indices: [Int]? = MainActor.assumeIsolated {
+        let collections = LibraryModel.shared.collections
+        let named = ScriptCollectionName(
+          name, collections: collections,
+          workingGroups: Set(AppDelegate.settledIndex?.rfcs.compactMap(\.workingGroup) ?? []))
+        let command = NSScriptCommand.current()
+        switch named {
+        case .collection(let identifier):
+          return collections.collections.firstIndex { $0.id == identifier }.map { [$0] }
+        case .builtIn where command is NSDeleteCommand || command is NSSetCommand:
+          ScriptError.report(
+            "“\(name)” is a list RFC Reader keeps, not a collection you made, so it can't be changed or deleted."
+          )
+          return []
+        case .builtIn, nil:
+          return nil
+        }
+      }
+      return indices?.map { NSNumber(value: $0) }
+    }
+  }
+
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
@@ -221,6 +259,22 @@
     @objc(insertObject:inScriptCollectionsAtIndex:)
     func insert(_ collection: ScriptableCollection, inScriptCollectionsAt index: Int) {
       insertInScriptCollections(collection)
+    }
+
+    /// `delete collection "HTTP"`, as the sidebar's Delete Collection does: the
+    /// collection goes, and its RFCs stay in the library (#987).
+    @objc(removeFromScriptCollectionsAtIndex:)
+    func removeFromScriptCollections(at index: Int) {
+      if AppData.isStoredInMemory {
+        ScriptError.report(AppData.storeWarning.message)
+      }
+      let collections = LibraryModel.shared.collections.collections
+      guard collections.indices.contains(index) else { return }
+      let entry = collections[index]
+      let saved = LibraryModel.shared.editCollections {
+        try CollectionStore.delete(entry.id, in: $0)
+      }
+      if !saved { ScriptError.report("“\(entry.name)” could not be deleted.") }
     }
 
     /// The application's `windows`, less any reader window that has closed but is
