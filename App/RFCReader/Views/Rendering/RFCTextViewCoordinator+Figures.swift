@@ -3,9 +3,10 @@
   import UIKit
 
   extension RFCTextViewCoordinator {
-    /// The edit menu of a selection, after the standard actions: "Copy as Quote" and
-    /// Highlight's colors for any selection (#186, #522), and "Copy Figure" where it
-    /// holds one figure (issue #15).
+    /// The edit menu of a selection, after the standard actions: "Copy as Quote" for
+    /// any selection (#186), or "Copy as Text" where Copy copies a quote, "Copy
+    /// Citation" (#712) and Highlight's colors (#522); and "Copy Figure" where it holds
+    /// one figure (issue #15).
     /// Nil keeps the standard menu where there is neither. Which figure and what it
     /// copies are `FigureCopy`'s, and the quote is `QuoteCitation`'s; macOS offers the
     /// same items from `ReaderTextView.menu(for:)`.
@@ -14,12 +15,30 @@
     ) -> UIMenu? {
       var extra: [UIMenuElement] = []
       if range.length > 0, let reader = textView as? ReaderTextView, !reader.isTranslation() {
-        extra.append(
-          UIAction(
-            title: String(localized: "Copy as Quote"), image: UIImage(systemName: "text.quote")
-          ) { _ in
-            reader.copyAsQuote()
-          })
+        if ReaderSettings(defaults: .standard).copyFormat == .quote {
+          extra.append(
+            UIAction(
+              title: String(localized: "Copy as Text"), image: UIImage(systemName: "doc.on.doc")
+            ) { _ in
+              reader.copyAsText()
+            })
+        } else {
+          extra.append(
+            UIAction(
+              title: String(localized: "Copy as Quote"), image: UIImage(systemName: "text.quote")
+            ) { _ in
+              reader.copyAsQuote()
+            })
+        }
+        if reader.citeSelection(range) != nil {
+          extra.append(
+            UIAction(
+              title: String(localized: "Copy Citation"),
+              image: UIImage(systemName: "quote.opening")
+            ) { _ in
+              reader.copyCitation(nil)
+            })
+        }
         extra.append(highlightMenu(for: range))
       }
       if let box = FigureCopy.box(in: range, of: textView.textStorage) {

@@ -667,7 +667,8 @@ struct ReferenceMenu {
   private func perform(_ action: DocumentMenus.Action, for id: DocumentID) {
     guard
       case .copy(let text, let feedback) = action.effect(
-        for: id, metadata: library.metadata(id), section: nil)
+        for: id, citing: library.citedDocument(id), section: nil,
+        settings: ReaderSettings(defaults: .standard))
     else { return }
     Clipboard.copy(text, announcing: feedback)
   }

@@ -1,6 +1,7 @@
 import Foundation
 import RFCKit
 import Testing
+import UniformTypeIdentifiers
 
 @testable import RFCReaderKit
 
@@ -178,6 +179,32 @@ struct SectionNumberHangTests {
     }
   }
 
+  /// Without section numbers, a setting (#712), a heading copies as its title,
+  /// whether its number hung or was set inline, in every flavor.
+  @Test(arguments: [true, false])
+  func `a heading copies without its number where the reader asks`(hangs: Bool) throws {
+    let built = DocumentTextBuilder.build(document, style: hangs ? hanging : ReadingStyle())
+    let heading = hangs ? "\t1.1\tRequirements Notation\n" : "1.1. Requirements Notation\n"
+    let start = try Fixtures.offset(of: heading, in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: heading.utf16.count))
+    #expect(
+      SelectionText.plainText(of: selection, keepingSectionNumbers: false)
+        == "Requirements Notation\n")
+    #expect(SelectionText.plainText(of: selection) == "1.1. Requirements Notation\n")
+    let content = PasteboardContent.selection(
+      selection, publicURL: { $0 }, keepingSectionNumbers: false)
+    #expect(content.value(for: .utf8PlainText) == .text("Requirements Notation\n"))
+    guard case .text(let html)? = content.value(for: .html) else {
+      Issue.record("no HTML")
+      return
+    }
+    #expect(!html.contains("1.1"))
+    let rich = SelectionText.richCopy(
+      of: selection, publicURL: { $0 }, keepingSectionNumbers: false)
+    #expect(rich.string == "Requirements Notation\n")
+  }
+
   @Test func `a copy ending inside the number gets the heading's prefix, not the number's link`()
     throws
   {
@@ -334,5 +361,24 @@ struct SectionNumberHangTests {
         LinkCopy.forLink(url, from: .rfc(9110), in: nil, bibliography: []))
       #expect(copy.url.absoluteString == "https://www.rfc-editor.org/rfc/rfc9110#\(fragment)")
     }
+  }
+
+  /// On the site Settings chose (#712), which has the same anchors, or none.
+  @Test func `the copied link is on the chosen site`() throws {
+    let url = try #require(
+      ReaderLinkScheme.url("section-1.1", scheme: ReaderLinkScheme.anchorScheme))
+    for (site, expected) in [
+      (LinkSite.datatracker, "https://datatracker.ietf.org/doc/html/rfc9110#section-1.1"),
+      (.ietf, "https://www.ietf.org/rfc/rfc9110.txt"), (.app, "rfc://9110#section-1.1"),
+    ] {
+      let copy = try #require(
+        LinkCopy.forLink(url, from: .rfc(9110), in: nil, bibliography: [], site: site))
+      #expect(copy.url.absoluteString == expected)
+    }
+    let reference = try #require(URL(string: "rfc://9111#section-2"))
+    #expect(
+      LinkCopy.publicURL(
+        for: reference, from: .rfc(9110), in: nil, bibliography: [], site: .datatracker)?
+        .absoluteString == "https://datatracker.ietf.org/doc/html/rfc9111#section-2")
   }
 }

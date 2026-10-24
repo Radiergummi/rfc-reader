@@ -436,6 +436,16 @@
         }
       }
     },
+    "A copied heading keeps its number, as in “4.2. Overview”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine kopierte Überschrift behält ihre Nummer, wie in „4.2. Overview“."
+          }
+        }
+      }
+    },
     "A reading path is computed from the citation index, which this version of the app doesn't include." : {
       "localizations" : {
         "de" : {
@@ -546,6 +556,16 @@
         }
       }
     },
+    "Advanced" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
+          }
+        }
+      }
+    },
     "All Key Words" : {
       "localizations" : {
         "de" : {
@@ -562,6 +582,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle RFCs sind indiziert."
+          }
+        }
+      }
+    },
+    "All documents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Dokumente"
+          }
+        }
+      }
+    },
+    "All streams" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Streams"
           }
         }
       }
@@ -736,6 +776,16 @@
         }
       }
     },
+    "Citation Style" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitierstil"
+          }
+        }
+      }
+    },
     "Cite" : {
       "localizations" : {
         "de" : {
@@ -896,6 +946,16 @@
         }
       }
     },
+    "Copy As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopieren als"
+          }
+        }
+      }
+    },
     "Copy Checklist as CSV" : {
       "localizations" : {
         "de" : {
@@ -912,6 +972,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste als Markdown kopieren"
+          }
+        }
+      }
+    },
+    "Copy Citation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellenangabe kopieren"
           }
         }
       }
@@ -946,12 +1016,42 @@
         }
       }
     },
+    "Copy Selection As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl kopieren als"
+          }
+        }
+      }
+    },
     "Copy as Quote" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Zitat kopieren"
+          }
+        }
+      }
+    },
+    "Copy as Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Text kopieren"
+          }
+        }
+      }
+    },
+    "Copy section numbers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnittsnummern kopieren"
           }
         }
       }
@@ -1072,6 +1172,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erstellen"
+          }
+        }
+      }
+    },
+    "Current documents are neither obsoleted nor Historic. The search field shows the scope, and removing it there searches everything." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuelle Dokumente sind weder veraltet noch historisch. Das Suchfeld zeigt den Bereich, und wer ihn dort entfernt, durchsucht alles."
+          }
+        }
+      }
+    },
+    "Current documents only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur aktuelle Dokumente"
           }
         }
       }
@@ -1457,6 +1577,26 @@
         }
       }
     },
+    "For Copy Citation, and the line after a quote." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für „Quellenangabe kopieren“ und die Zeile nach einem Zitat."
+          }
+        }
+      }
+    },
+    "For Share, Copy Link and citations." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für Teilen, „Link kopieren“ und Quellenangaben."
+          }
+        }
+      }
+    },
     "Format" : {
       "localizations" : {
         "de" : {
@@ -1573,6 +1713,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Hide Read" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelesene ausblenden"
           }
         }
       }
@@ -1863,6 +2013,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bibliothek"
+          }
+        }
+      }
+    },
+    "Links Point To" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links führen zu"
           }
         }
       }
@@ -2487,6 +2647,26 @@
         }
       }
     },
+    "Otherwise lists are denser, and the status is still read by VoiceOver." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonst sind Listen dichter, und VoiceOver liest den Status weiterhin vor."
+          }
+        }
+      }
+    },
+    "Otherwise the April Fools' Day RFCs are left out of lists, search and Just Published. A bookmark, a collection or a link still shows them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonst fehlen die Aprilscherz-RFCs in Listen, in der Suche und unter „Gerade veröffentlicht“. Ein Lesezeichen, eine Sammlung oder ein Link zeigt sie weiterhin."
+          }
+        }
+      }
+    },
     "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it." : {
       "localizations" : {
         "de" : {
@@ -2917,6 +3097,16 @@
         }
       }
     },
+    "Search" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen"
+          }
+        }
+      }
+    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -2943,6 +3133,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suchsyntax …"
+          }
+        }
+      }
+    },
+    "Search stream" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stream der Suche"
           }
         }
       }
@@ -3077,6 +3277,16 @@
         }
       }
     },
+    "Sharing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilen"
+          }
+        }
+      }
+    },
     "Shift-Tab goes back. Return follows the link, and Space previews it." : {
       "localizations" : {
         "de" : {
@@ -3093,6 +3303,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle %@ Ergebnisse zeigen"
+          }
+        }
+      }
+    },
+    "Show April 1st RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs vom 1. April zeigen"
           }
         }
       }
@@ -3187,6 +3407,36 @@
         }
       }
     },
+    "Show obsoleted documents in lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veraltete Dokumente in Listen zeigen"
+          }
+        }
+      }
+    },
+    "Show obsoleted documents in search results" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veraltete Dokumente in Suchergebnissen zeigen"
+          }
+        }
+      }
+    },
+    "Show status badges in lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statusmarken in Listen zeigen"
+          }
+        }
+      }
+    },
     "Show the original text rendering by default" : {
       "localizations" : {
         "de" : {
@@ -3243,6 +3493,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sortieren nach"
+          }
+        }
+      }
+    },
+    "Sort lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listen sortieren"
           }
         }
       }

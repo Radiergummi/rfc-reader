@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import SwiftUI
 
 /// Every reader setting, decoded once from user defaults into one value (#703).
@@ -30,6 +31,14 @@ public struct ReaderSettings: Sendable, Hashable {
   public var vimKeys: Bool
   /// Tab and Shift-Tab through the reader's links (#711).
   public var tabsThroughLinks: Bool
+  /// What a copy cites in, and where its links point (#712). Neither builds nor
+  /// draws anything: read when something is copied or shared.
+  public var citationStyle: CitationStyle
+  public var linkSite: LinkSite
+  /// What Copy puts on the pasteboard (#712).
+  public var copyFormat: CopyFormat
+  /// Whether a copied heading keeps its number as a prefix (#712).
+  public var copiesSectionNumbers: Bool
 
   /// Which of the reader's keys are on.
   public var keys: ReaderKeys.Options {
@@ -45,7 +54,11 @@ public struct ReaderSettings: Sendable, Hashable {
     syntaxTheme: SyntaxTheme = .standard,
     palette: ReaderPalette = .automatic,
     vimKeys: Bool = ReaderPreferences.defaultVimKeys,
-    tabsThroughLinks: Bool = ReaderPreferences.defaultTabsThroughLinks
+    tabsThroughLinks: Bool = ReaderPreferences.defaultTabsThroughLinks,
+    citationStyle: CitationStyle = ReaderPreferences.defaultCitationStyle,
+    linkSite: LinkSite = ReaderPreferences.defaultLinkSite,
+    copyFormat: CopyFormat = ReaderPreferences.defaultCopyFormat,
+    copiesSectionNumbers: Bool = ReaderPreferences.defaultCopiesSectionNumbers
   ) {
     self.fontSize = ReaderPreferences.clamped(fontSize)
     self.underlineLinks = underlineLinks
@@ -56,6 +69,10 @@ public struct ReaderSettings: Sendable, Hashable {
     self.palette = palette
     self.vimKeys = vimKeys
     self.tabsThroughLinks = tabsThroughLinks
+    self.citationStyle = citationStyle
+    self.linkSite = linkSite
+    self.copyFormat = copyFormat
+    self.copiesSectionNumbers = copiesSectionNumbers
   }
 
   /// What `defaults` holds, each setting falling back to its default where nothing
@@ -77,7 +94,15 @@ public struct ReaderSettings: Sendable, Hashable {
       palette: .named(defaults.string(forKey: Keys.paletteKey)),
       vimKeys: defaults.object(forKey: Keys.vimKeysKey) as? Bool ?? Keys.defaultVimKeys,
       tabsThroughLinks: defaults.object(forKey: Keys.tabsThroughLinksKey) as? Bool
-        ?? Keys.defaultTabsThroughLinks
+        ?? Keys.defaultTabsThroughLinks,
+      citationStyle: defaults.string(forKey: Keys.citationStyleKey).flatMap(CitationStyle.init)
+        ?? Keys.defaultCitationStyle,
+      linkSite: defaults.string(forKey: Keys.linkSiteKey).flatMap(LinkSite.init)
+        ?? Keys.defaultLinkSite,
+      copyFormat: defaults.string(forKey: Keys.copyFormatKey).flatMap(CopyFormat.init)
+        ?? Keys.defaultCopyFormat,
+      copiesSectionNumbers: defaults.object(forKey: Keys.copiesSectionNumbersKey) as? Bool
+        ?? Keys.defaultCopiesSectionNumbers
     )
   }
 
@@ -104,6 +129,16 @@ public struct ReaderSettings: Sendable, Hashable {
     if vimKeys != old.vimKeys { defaults.set(vimKeys, forKey: Keys.vimKeysKey) }
     if tabsThroughLinks != old.tabsThroughLinks {
       defaults.set(tabsThroughLinks, forKey: Keys.tabsThroughLinksKey)
+    }
+    if citationStyle != old.citationStyle {
+      defaults.set(citationStyle.rawValue, forKey: Keys.citationStyleKey)
+    }
+    if linkSite != old.linkSite { defaults.set(linkSite.rawValue, forKey: Keys.linkSiteKey) }
+    if copyFormat != old.copyFormat {
+      defaults.set(copyFormat.rawValue, forKey: Keys.copyFormatKey)
+    }
+    if copiesSectionNumbers != old.copiesSectionNumbers {
+      defaults.set(copiesSectionNumbers, forKey: Keys.copiesSectionNumbersKey)
     }
   }
 
@@ -143,6 +178,10 @@ public struct ReaderSettingsValue: DynamicProperty {
   @AppStorage private var palette: String
   @AppStorage private var vimKeys: Bool
   @AppStorage private var tabsThroughLinks: Bool
+  @AppStorage private var citationStyle: CitationStyle
+  @AppStorage private var linkSite: LinkSite
+  @AppStorage private var copyFormat: CopyFormat
+  @AppStorage private var copiesSectionNumbers: Bool
   private let defaults: UserDefaults
 
   public init(store defaults: UserDefaults = .standard) {
@@ -163,6 +202,14 @@ public struct ReaderSettingsValue: DynamicProperty {
     _vimKeys = AppStorage(wrappedValue: Keys.defaultVimKeys, Keys.vimKeysKey, store: defaults)
     _tabsThroughLinks = AppStorage(
       wrappedValue: Keys.defaultTabsThroughLinks, Keys.tabsThroughLinksKey, store: defaults)
+    _citationStyle = AppStorage(
+      wrappedValue: Keys.defaultCitationStyle, Keys.citationStyleKey, store: defaults)
+    _linkSite = AppStorage(wrappedValue: Keys.defaultLinkSite, Keys.linkSiteKey, store: defaults)
+    _copyFormat = AppStorage(
+      wrappedValue: Keys.defaultCopyFormat, Keys.copyFormatKey, store: defaults)
+    _copiesSectionNumbers = AppStorage(
+      wrappedValue: Keys.defaultCopiesSectionNumbers, Keys.copiesSectionNumbersKey,
+      store: defaults)
   }
 
   /// The settings. Setting them writes what changed to user defaults.
@@ -172,7 +219,8 @@ public struct ReaderSettingsValue: DynamicProperty {
         fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
         preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
         syntaxTheme: .named(syntaxTheme), palette: .named(palette), vimKeys: vimKeys,
-        tabsThroughLinks: tabsThroughLinks)
+        tabsThroughLinks: tabsThroughLinks, citationStyle: citationStyle, linkSite: linkSite,
+        copyFormat: copyFormat, copiesSectionNumbers: copiesSectionNumbers)
     }
     nonmutating set {
       newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))

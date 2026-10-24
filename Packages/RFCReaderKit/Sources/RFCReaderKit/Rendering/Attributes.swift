@@ -38,10 +38,11 @@ extension NSAttributedString.Key {
   /// Set on a numbered heading's number where it hangs in the gutter (#433): the
   /// anchor of the heading it links to. A `String`, so the number's runs merge.
   public static let rfcSectionNumber = NSAttributedString.Key("rfcSectionNumber")
-  /// What a run copies as, where the reader sets it otherwise (`SelectionText`): a
-  /// hung number and the tabs either side of it, which copy as the heading's own
-  /// `4.2. ` or `Appendix A. ` (#433). A `String`, on every character of the run;
-  /// a selection of any part of it copies all of it, as a chip's label does.
+  /// What a heading's number copies as (`SelectionText`): a hung number and the tabs
+  /// either side of it, which copy as the heading's own `4.2. ` or `Appendix A. `
+  /// (#433), and the same prefix set inline, as itself. A `String`, on every
+  /// character of the run; a selection of any part of it copies all of it, as a
+  /// chip's label does, and a copy without section numbers none of it (#712).
   public static let rfcCopiedAs = NSAttributedString.Key("rfcCopiedAs")
   /// Set on every character of an aside, its "Note" caption first (#700): the
   /// aside's ordinal among the document's asides, which Implementer folds its body

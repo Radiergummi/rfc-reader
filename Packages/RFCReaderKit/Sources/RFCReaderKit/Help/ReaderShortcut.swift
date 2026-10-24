@@ -152,7 +152,8 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .newCollection: mac ? Chord("n", [.command, .shift]) : nil
     case .copyAsQuote: mac ? Chord("c", [.command, .option, .shift]) : nil
     case .highlight: mac ? Chord("h", [.command, .control]) : nil
-    case .copyCitation: mac ? Chord("c", [.command, .shift]) : nil
+    // Edit ▸ Copy Citation (#712), on an iPad's keyboard too.
+    case .copyCitation: Chord("c", [.command, .shift])
     case .export: mac ? Chord("e", [.command, .shift]) : nil
     case .pageSetup: mac ? Chord("p", [.command, .shift]) : nil
     case .print: mac ? Chord("p") : nil

@@ -66,17 +66,19 @@ public struct ListedRows: Sendable {
   /// iPhone sidebar shows while it is searched (#345). Made from `hits` when read,
   /// since only that sidebar reads it, twice a body: a query that asks for neither
   /// the reader's data nor a sort is its hits as they are, and only one that does
-  /// is narrowed and sorted by what `list` holds.
+  /// is narrowed and sorted by what `list` holds. Its options are the tab's, so a
+  /// search here leaves out what a search in the list does (#713).
   public var librarySearch: [LibraryRow] {
     guard !list.query.isEmpty else { return [] }
     let filters = IndexSearch.parseQuery(list.query).filters
     guard filters.asksReader || filters.sort != nil else {
-      return ListOptions().apply(
-        to: libraryHits.map(LibraryRow.rfc), filter: .all, query: list.query)
+      return list.options.apply(
+        to: libraryHits.map(LibraryRow.rfc), filter: .all, query: list.query,
+        read: Set(list.recentlyRead))
     }
     let library = LibraryList(
       filter: .all, query: list.query, bookmarked: list.bookmarked,
-      recentlyRead: list.recentlyRead, downloaded: list.downloaded,
+      recentlyRead: list.recentlyRead, downloaded: list.downloaded, options: list.options,
       collections: list.collections)
     return library.rows(in: index, search: nil, hits: libraryHits)
   }

@@ -468,9 +468,14 @@
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {
+    /// The document the tab opened, a series as itself (#656), on the site Settings
+    /// chose (#712).
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
-      guard let id else { return [] }
-      return [RFCEditorEndpoints.infoPage(id)]
+      guard let opened = navigation.selection, id != nil else { return [] }
+      return [
+        DocumentActions.shareLink(
+          id: opened, site: ReaderSettings(defaults: .standard).linkSite)
+      ]
     }
   }
 #endif

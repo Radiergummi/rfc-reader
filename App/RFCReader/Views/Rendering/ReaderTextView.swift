@@ -5,6 +5,13 @@ import RFCReaderKit
   import UIKit
   import UniformTypeIdentifiers
 
+  /// Edit ▸ Copy Citation's request to whichever reader's text has the focus (#712):
+  /// handled once that text has cited its selection, and otherwise the command cites
+  /// the section being read.
+  final class CopyCitationRequest: NSObject {
+    var handled = false
+  }
+
   /// The reader's text view, which copies what it means rather than what it holds.
   ///
   /// See `SelectionText`: a chip's symbol lives in the storage as an
@@ -116,9 +123,12 @@ import RFCReaderKit
     /// Whether the text is a translation (#749), which offers no quote: asked
     /// rather than `quoteSelection`, which makes the whole quote.
     var isTranslation: () -> Bool = { false }
-    /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
-    /// coordinator, which knows the document (#778).
-    var publicURL: (URL) -> URL? = { _ in nil }
+    /// Copy Citation's citation for a range of the text, from the coordinator, in the
+    /// style Settings chose (#712); nil where the index has no entry to cite from.
+    var citeSelection: (NSRange) -> String? = { _ in nil }
+    /// The URL a copy links a link of the text to on a site (`LinkCopy.publicURL`),
+    /// from the coordinator, which knows the document (#778, #712).
+    var publicURL: (URL, LinkSite) -> URL? = { _, _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
     /// What opens or closes the outline's section, or Implementer's aside, the cursor
@@ -149,9 +159,35 @@ import RFCReaderKit
       Clipboard.write(.quote(quote), announcing: .quote)
     }
 
+    /// Copy as Text, offered in the edit menu where Copy copies a quote (#712).
+    func copyAsText() {
+      copyText(nil)
+    }
+
+    /// Copy Citation, offered in the edit menu beside Copy, and Edit ▸ Copy Citation
+    /// (⇧⌘C) sent to the first responder, which marks its request handled where it
+    /// had a selection to cite (#712).
+    @objc func copyCitation(_ sender: Any?) {
+      guard selectedRange.length > 0, let citation = citeSelection(selectedRange) else { return }
+      Clipboard.copy(citation, announcing: .citation)
+      (sender as? CopyCitationRequest)?.handled = true
+    }
+
+    /// As Settings say (#712): the selection as text, or quoted with its citation,
+    /// which a translation does not offer.
+    override func copy(_ sender: Any?) {
+      if ReaderSettings(defaults: .standard).copyFormat == .quote,
+        let quote = quoteSelection(selectedRange)
+      {
+        Clipboard.write(.quote(quote), announcing: .quote)
+      } else {
+        copyText(sender)
+      }
+    }
+
     /// The selection as the Mac copies it (#778): rich text and HTML as well as plain
     /// text, with a reference's link one that opens outside the reader.
-    override func copy(_ sender: Any?) {
+    private func copyText(_ sender: Any?) {
       guard let attributed = attributedText, let range = selectedTextRange, !range.isEmpty else {
         super.copy(sender)
         return
@@ -164,10 +200,12 @@ import RFCReaderKit
         super.copy(sender)
         return
       }
+      let settings = ReaderSettings(defaults: .standard)
       Clipboard.write(
         .selection(
-          attributed.attributedSubstring(from: selection), publicURL: publicURL,
-          hang: sectionNumberHang()))
+          attributed.attributedSubstring(from: selection),
+          publicURL: { [publicURL] in publicURL($0, settings.linkSite) },
+          hang: sectionNumberHang(), keepingSectionNumbers: settings.copiesSectionNumbers))
     }
   }
 
@@ -283,9 +321,12 @@ import RFCReaderKit
     /// Whether the text is a translation (#749), which offers no quote: asked
     /// rather than `quoteSelection`, which makes the whole quote.
     var isTranslation: () -> Bool = { false }
-    /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
-    /// coordinator, which knows the document (#778).
-    var publicURL: (URL) -> URL? = { _ in nil }
+    /// Copy Citation's citation for a range of the text, from the coordinator, in the
+    /// style Settings chose (#712); nil where the index has no entry to cite from.
+    var citeSelection: (NSRange) -> String? = { _ in nil }
+    /// The URL a copy links a link of the text to on a site (`LinkCopy.publicURL`),
+    /// from the coordinator, which knows the document (#778, #712).
+    var publicURL: (URL, LinkSite) -> URL? = { _, _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
     /// What opens or closes the outline's section, or Implementer's aside, the cursor
@@ -300,10 +341,22 @@ import RFCReaderKit
       nil
     }
 
-    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's (#186).
+    /// Edit ▸ Copy As ▸ Quote with Citation (⌥⇧⌘C), and the context menu's (#186).
     @objc func copyAsQuote(_ sender: Any?) {
       guard let quote = quoteSelection(selectedRange()) else { return }
       Clipboard.write(.quote(quote), announcing: .quote)
+    }
+
+    /// Edit ▸ Copy As ▸ Text, and the context menu's where Copy copies a quote
+    /// (#712).
+    @objc func copyAsText(_ sender: Any?) {
+      copyText(sender)
+    }
+
+    /// Edit ▸ Copy Citation (⇧⌘C) for a selection, and the context menu's (#712).
+    @objc func copyCitation(_ sender: Any?) {
+      guard let citation = citeSelection(selectedRange()) else { return }
+      Clipboard.copy(citation, announcing: .citation)
     }
 
     /// Highlights a range of the text in a color, or in the one last used (#522),
@@ -513,15 +566,33 @@ import RFCReaderKit
     /// How far, in points, a press on a reference moves before it is a drag.
     private static let dragThreshold: CGFloat = 3
 
-    /// Copy writes the selection as `PasteboardContent` has it, in one go, as iOS
-    /// does (#778). A selection of several ranges stays AppKit's to join.
+    /// As Settings say (#712): the selection as text, or quoted with its citation,
+    /// which a translation, or a selection of several ranges, does not offer.
     override func copy(_ sender: Any?) {
+      if ReaderSettings(defaults: .standard).copyFormat == .quote, selectedRanges.count == 1,
+        let quote = quoteSelection(selectedRange())
+      {
+        Clipboard.write(.quote(quote), announcing: .quote)
+      } else {
+        copyText(sender)
+      }
+    }
+
+    /// Writes the selection as `PasteboardContent` has it, in one go, as iOS does
+    /// (#778). A selection of several ranges stays AppKit's to join.
+    private func copyText(_ sender: Any?) {
       guard selectedRanges.count == 1, selectedRange().length > 0 else {
         super.copy(sender)
         return
       }
-      Clipboard.write(
-        .selection(selectedSubstring, publicURL: publicURL, hang: sectionNumberHang()))
+      Clipboard.write(selectionContent(ReaderSettings(defaults: .standard)))
+    }
+
+    /// The selection's `PasteboardContent`, linking and numbering as `settings` say.
+    private func selectionContent(_ settings: ReaderSettings) -> PasteboardContent {
+      PasteboardContent.selection(
+        selectedSubstring, publicURL: { [publicURL] in publicURL($0, settings.linkSite) },
+        hang: sectionNumberHang(), keepingSectionNumbers: settings.copiesSectionNumbers)
     }
 
     /// A drag and a service get the HTML a copy carries too.
@@ -542,19 +613,22 @@ import RFCReaderKit
       guard let flavor = SelectionText.flavor(of: type) else {
         return super.writeSelection(to: pboard, type: type)
       }
+      let settings = ReaderSettings(defaults: .standard)
       if flavor == .plain {
         // Every range, as AppKit joins them: a line apart.
         let text = attributedString()
         let ranges = selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
-        let plain = ranges.map { SelectionText.plainText(of: text.attributedSubstring(from: $0)) }
+        let plain = ranges.map {
+          SelectionText.plainText(
+            of: text.attributedSubstring(from: $0),
+            keepingSectionNumbers: settings.copiesSectionNumbers)
+        }
         return pboard.setString(plain.joined(separator: "\n"), forType: type)
       }
       guard selectedRanges.count == 1 else {
         return super.writeSelection(to: pboard, type: type)
       }
-      let content = PasteboardContent.selection(
-        selectedSubstring, publicURL: publicURL, hang: sectionNumberHang())
-      switch content.value(for: flavor.type) {
+      switch selectionContent(settings).value(for: flavor.type) {
       case .text(let text)?: return pboard.setString(text, forType: type)
       case .data(let data)?: return pboard.setData(data, forType: type)
       case nil: return false
@@ -594,14 +668,32 @@ import RFCReaderKit
         result.insertItem(item, at: 0)
       }
       if quotes {
-        let quote = NSMenuItem(
-          title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
-          keyEquivalent: "")
-        quote.target = self
+        // The format Copy does not copy, and the citation (#712). Copy copies a
+        // selection of several ranges as text whatever it is set to.
+        let other =
+          ReaderSettings(defaults: .standard).copyFormat == .quote && selectedRanges.count == 1
+          ? NSMenuItem(
+            title: String(localized: "Copy as Text"), action: #selector(copyAsText(_:)),
+            keyEquivalent: "")
+          : NSMenuItem(
+            title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
+            keyEquivalent: "")
+        var items = [other]
+        if citeSelection(selectedRange()) != nil {
+          items.append(
+            NSMenuItem(
+              title: String(localized: "Copy Citation"), action: #selector(copyCitation(_:)),
+              keyEquivalent: ""))
+        }
         let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
-        result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
+        var index = copyIndex.map { $0 + 1 } ?? result.items.count
+        for item in items {
+          item.target = self
+          result.insertItem(item, at: index)
+          index += 1
+        }
         // A highlight is made from a selection, as a quote is copied from one (#522).
-        result.insertItem(highlightMenuItem(), at: copyIndex.map { $0 + 2 } ?? result.items.count)
+        result.insertItem(highlightMenuItem(), at: index)
       }
       if let box, figure != nil {
         let item = NSMenuItem(

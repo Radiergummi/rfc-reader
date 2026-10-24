@@ -4,6 +4,8 @@ import SwiftUI
 
 #if os(macOS)
   import AppKit
+#else
+  import UIKit
 #endif
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
@@ -64,6 +66,16 @@ struct DocumentCommands: Commands {
     private func perform(_ action: DocumentMenus.Action) {
       active.controller?.perform(action)
     }
+
+    private var citedDocument: CitedDocument? { active.controller?.citedDocument }
+
+    private func copyCitation() { active.controller?.copyCitation() }
+
+    /// Whether Copy As has a selection to copy: the reader's, or the one beside a
+    /// compared document's.
+    private var hasSelection: Bool {
+      reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true
+    }
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
@@ -80,6 +92,23 @@ struct DocumentCommands: Commands {
     private func toggleBookmark() {
       guard let id = navigation?.selection else { return }
       library.toggleBookmark(id, documentTitle: reader?.documentTitle)
+    }
+
+    /// The document the tab opened, cited as itself, a series too (#656).
+    private var citedDocument: CitedDocument? {
+      navigation?.selection.flatMap(library.citedDocument)
+    }
+
+    /// Edit ▸ Copy Citation (#712): of the section the selection starts in, where the
+    /// reader's text has the focus and a selection, as on the Mac, and otherwise of
+    /// the section being read.
+    private func copyCitation() {
+      let request = CopyCitationRequest()
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyCitation(_:)), to: nil, from: request, for: nil)
+      guard !request.handled, let shown = navigation?.shown, let reader else { return }
+      DocumentActionPerformer(id: shown, cited: citedDocument, reader: reader, open: { _ in })
+        .perform(.copyPreferredCitation)
     }
   #endif
 
@@ -103,15 +132,21 @@ struct DocumentCommands: Commands {
     // and the hold-⌘ overlay can follow the action as the Mac's does (#278).
     CommandGroup(after: .pasteboard) {
       #if os(macOS)
-        // Handed to the reader's text view (#186); see
-        // `ReaderWindowController.copyAsQuote()`. Grayed out without a selection, as
-        // Copy is; the original text is not the reader's, and has no quote to copy,
-        // and a translation's words are not the RFC's (#749).
-        Button("Copy as Quote") {
-          active.controller?.copyAsQuote()
+        // Every format, whichever Copy copies (#712). Handed to the reader's text view
+        // (#186); see `ReaderWindowController.copyAsQuote()`. Grayed out without a
+        // selection, as Copy is; the original text is not the reader's, and has no
+        // quote to copy, and a translation's words are not the RFC's (#749).
+        Menu("Copy As") {
+          Button(CopyFormat.text.title()) {
+            active.controller?.copyAsText()
+          }
+          .disabled(!showsDocument || reader?.showOriginal == true || !hasSelection)
+          Button(CopyFormat.quote.title()) {
+            active.controller?.copyAsQuote()
+          }
+          .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
+          .disabled(!hasQuotableSelection)
         }
-        .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
-        .disabled(!hasQuotableSelection)
         // The selection, in the color last used (#522): Books' shortcut, and grayed out
         // where Copy as Quote is, for the same reasons.
         Button("Highlight") {
@@ -120,6 +155,11 @@ struct DocumentCommands: Commands {
         .keyboardShortcut(ReaderShortcut.highlight.keyboardShortcut)
         .disabled(!hasQuotableSelection)
       #endif
+      // ⇧⌘C (#712): of the selection's section, or else the one being read, in the
+      // style Settings chose. A citation is made from the index's entry.
+      Button("Copy Citation") { copyCitation() }
+        .keyboardShortcut(ReaderShortcut.copyCitation.keyboardShortcut)
+        .disabled(citedDocument == nil || navigation?.shown == nil)
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the
         // library's set of bookmarked documents, which the menu observes.
@@ -167,17 +207,11 @@ struct DocumentCommands: Commands {
       CommandMenu("Document") {
         Group {
           Menu("Cite") {
-            // ⌘⇧C, the citation people copy most, in the menu's first style.
-            MenuSections(
-              sections: DocumentMenus.cite(),
-              shortcuts: [
-                .copyCitation(CitationStyle.allCases[0]): ReaderShortcut.copyCitation
-                  .keyboardShortcut
-              ].compactMapValues { $0 },
-              perform: perform)
+            // ⇧⌘C is Edit ▸ Copy Citation's, in the style Settings chose (#712).
+            MenuSections(sections: DocumentMenus.cite(), perform: perform)
           }
           // A citation is made from the index's entry, as the References menu's is.
-          .disabled(navigation?.shown.flatMap { active.controller?.library.metadata($0) } == nil)
+          .disabled(citedDocument == nil)
           Divider()
           // Disabled rather than gone with no reader window, as the other menus'
           // items are: an empty menu in the bar says nothing.

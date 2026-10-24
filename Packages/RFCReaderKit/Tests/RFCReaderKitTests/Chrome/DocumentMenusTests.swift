@@ -72,7 +72,7 @@ struct DocumentMenusTests {
       locale: .english)
     #expect(hidden[0][1].isOn == false)
     #expect(
-      DocumentMenus.Action.toggleTranslation.effect(for: .rfc(9110), metadata: nil, section: nil)
+      DocumentMenus.Action.toggleTranslation.effect(for: .rfc(9110), citing: nil, section: nil)
         == .toggleTranslation)
   }
 
@@ -138,7 +138,7 @@ struct DocumentMenusTests {
   @Test func `cite names each style`() {
     #expect(
       titles(DocumentMenus.cite(locale: .english))[0]
-        == ["Short", "Full Citation", "Markdown Link", "BibTeX", "URL"])
+        == ["Short", "Full Citation", "Markdown Link", "BibTeX", "URL", "xml2rfc Reference"])
   }
 
   @Test func `a collection's item is its folder in its color`() {
@@ -162,20 +162,49 @@ struct DocumentMenuEffectsTests {
     string: "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics-19")!
 
   private func effect(_ action: DocumentMenus.Action) -> DocumentMenus.Effect? {
-    action.effect(for: .rfc(9110), metadata: metadata, section: "4.2")
+    action.effect(for: .rfc(9110), citing: .rfc(metadata), section: "4.2")
   }
 
   @Test(arguments: CitationStyle.allCases)
   func `a citation copies the citation of the section being read`(style: CitationStyle) {
     #expect(
       effect(.copyCitation(style))
-        == .copy(DocumentActions.citation(metadata, section: "4.2", style: style), .citation))
+        == .copy(DocumentActions.citation(.rfc(metadata), section: "4.2", style: style), .citation))
+  }
+
+  /// Copy Citation is in the style Settings chose, linking the site it chose (#712).
+  @Test func `copy citation is in the chosen style, on the chosen site`() {
+    var settings = ReaderSettings()
+    settings.citationStyle = .url
+    settings.linkSite = .datatracker
+    #expect(
+      DocumentMenus.Action.copyPreferredCitation.effect(
+        for: .rfc(9110), citing: .rfc(metadata), section: "4.2", settings: settings)
+        == .copy("https://datatracker.ietf.org/doc/html/rfc9110#section-4.2", .citation))
+    #expect(
+      DocumentMenus.Action.copyPreferredCitation.effect(
+        for: .rfc(9110), citing: .rfc(metadata), section: "4.2")
+        == effect(.copyCitation(.markdown)))
+  }
+
+  /// A BCP is cited as the BCP, though the reader shows its first RFC's text: the
+  /// section link is to the text shown (#656, #712).
+  @Test func `a series is cited as itself and linked as the RFC shown`() {
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let keywords = Fixtures.metadata(2119, title: "Key words", year: 1997)
+    let cited = CitedDocument.series(bcp14, members: [keywords])
+    #expect(
+      DocumentMenus.Action.copyCitation(.short).effect(
+        for: .rfc(2119), citing: cited, section: "2") == .copy("BCP 14, Section 2", .citation))
+    #expect(
+      DocumentMenus.Action.copySectionLink.effect(for: .rfc(2119), citing: cited, section: "2")
+        == .copy("https://www.rfc-editor.org/rfc/rfc2119#section-2", .link))
   }
 
   @Test func `a citation without the document's metadata does nothing`() {
     #expect(
       DocumentMenus.Action.copyCitation(.short)
-        .effect(for: .rfc(9110), metadata: nil, section: nil) == nil)
+        .effect(for: .rfc(9110), citing: nil, section: nil) == nil)
   }
 
   @Test func `the section link copies the link to where the reader is`() {
@@ -195,7 +224,7 @@ struct DocumentMenuEffectsTests {
     DocumentMenus.Action.copySectionLink, .toggleOriginalText, .openInfoPage, .openDatatracker,
   ])
   func `only a citation needs the document's metadata`(action: DocumentMenus.Action) {
-    #expect(action.effect(for: .rfc(9110), metadata: nil, section: nil) != nil)
+    #expect(action.effect(for: .rfc(9110), citing: nil, section: nil) != nil)
   }
 
   @Test func `original text toggles`() {

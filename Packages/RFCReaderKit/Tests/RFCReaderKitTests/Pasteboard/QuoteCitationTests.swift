@@ -75,6 +75,89 @@ struct QuoteCitationTests {
         == nil)
   }
 
+  // MARK: The settings (#712)
+
+  private func quote(settings: ReaderSettings, cited: CitedDocument? = nil) throws
+    -> QuoteCitation.Quote
+  {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Quoted", in: built.text)
+    return try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: 7), in: built, document: .rfc(9110), cited: cited,
+        settings: settings))
+  }
+
+  /// The line after the quote is in the style Settings chose, linking the site it
+  /// chose; the rich flavors link the short citation there.
+  @Test func `the citation line is in the chosen style, on the chosen site`() throws {
+    var settings = ReaderSettings()
+    settings.citationStyle = .full
+    settings.linkSite = .datatracker
+    let metadata = Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022)
+    let quoted = try quote(settings: settings, cited: .rfc(metadata))
+    #expect(
+      quoted.markdown.hasSuffix(
+        "— \(CitationFormatter.cite(metadata, section: "1", style: .full, site: .datatracker))"))
+    #expect(quoted.html.contains("https://datatracker.ietf.org/doc/html/rfc9110#section-1"))
+    #expect(quoted.html.contains(">RFC 9110, Section 1</a>"))
+  }
+
+  /// A style made from the index's entry falls back to Markdown for a document the
+  /// index doesn't list, which the designation alone can cite.
+  @Test func `a style that needs the index falls back to markdown without it`() throws {
+    var settings = ReaderSettings()
+    settings.citationStyle = .bibtex
+    #expect(
+      try quote(settings: settings).markdown.hasSuffix(
+        "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
+    settings.citationStyle = .short
+    #expect(try quote(settings: settings).markdown.hasSuffix("— RFC 9110, Section 1"))
+  }
+
+  /// A BibTeX entry or an xml2rfc reference describes the whole document, in lines
+  /// of its own, and the reference's tags would be taken for HTML: the line after a
+  /// quote is Markdown's for them, which names the section.
+  @Test(arguments: [CitationStyle.bibtex, .xml2rfc])
+  func `a whole-document style quotes with the markdown line`(style: CitationStyle) throws {
+    var settings = ReaderSettings()
+    settings.citationStyle = style
+    let metadata = Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022)
+    #expect(
+      try quote(settings: settings, cited: .rfc(metadata)).markdown.hasSuffix(
+        "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
+  }
+
+  /// The Full style cites a series in lines of their own, its members': the line
+  /// after a quote is Markdown's for it, as for BibTeX.
+  @Test func `a series quoted in the full style ends in the markdown line`() {
+    var settings = ReaderSettings()
+    settings.citationStyle = .full
+    let bcp14 = DocumentID(series: .bcp, number: 14)
+    let member = Fixtures.metadata(2119, title: "Key words", year: 1997)
+    let quoted = QuoteCitation.quote(
+      of: NSAttributedString(string: "Quoted."), document: bcp14, section: "2",
+      cited: .series(bcp14, members: [member]), settings: settings)
+    #expect(
+      quoted.markdown.hasSuffix("— [BCP 14, Section 2](https://www.rfc-editor.org/info/bcp14)"))
+  }
+
+  @Test func `a quote leaves a heading's number out where the reader asks`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "1. ", in: built.text)
+    let range = NSRange(location: start, length: built.text.length - start)
+    var settings = ReaderSettings()
+    let kept = try #require(
+      QuoteCitation.quote(of: range, in: built, document: .rfc(9110), settings: settings))
+    settings.copiesSectionNumbers = false
+    let left = try #require(
+      QuoteCitation.quote(of: range, in: built, document: .rfc(9110), settings: settings))
+    #expect(kept.markdown.hasPrefix("> 1. "))
+    #expect(!left.markdown.hasPrefix("> 1. "))
+  }
+
   // MARK: What goes on the pasteboard
 
   @Test func `the markdown quotes the selection and cites the section`() {

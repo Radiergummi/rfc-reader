@@ -41,9 +41,10 @@ public enum LinkMenu {
     public var opensInNewTab: Bool { document != nil }
   }
 
+  /// `site` is where a copied link points (#712).
   public static func items(
     for link: URL, from currentDocument: DocumentID, in index: RFCIndex?,
-    bibliography: [ReferenceGroup]
+    bibliography: [ReferenceGroup], site: LinkSite = .rfcEditor
   ) -> Items {
     let destination = LinkDestination.resolve(
       link, from: currentDocument, activation: .newTab(inBackground: false))
@@ -51,7 +52,7 @@ public enum LinkMenu {
     if !LinkCopy.isReaders(link) {
       copyLink = .system
     } else if let shared = LinkCopy.forLink(
-      link, from: currentDocument, in: index, bibliography: bibliography)
+      link, from: currentDocument, in: index, bibliography: bibliography, site: site)
     {
       copyLink = .publicLink(shared)
     } else {

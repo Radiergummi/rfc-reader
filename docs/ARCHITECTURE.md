@@ -10,8 +10,8 @@ rfc-reader/
 │   │   ├── Index/            RFCIndexParser (streaming SAX)
 │   │   ├── XML/              XMLDriver (the one front end every XML parser reads through), XMLTree (the small DOM the document parser, the feed and the IANA registries are read into)
 │   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text), RFCXMLSerializer, SectionAlignment (a section's successor)
-│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), RecentFeed (the Recent RFCs feed)
-│   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
+│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), LinkSite (where a shared link points, #712), RecentFeed (the Recent RFCs feed)
+│   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL, xml2rfc; an RFC or a series as itself)
 │   │   ├── Registry/         IANARegistry and RegistryLookup: the IANA registries the app looks values up in (#175)
 │   │   ├── Corpus/           Manifest: a data pack's files, sizes and hashes, which corpus-build writes and the app verifies
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)

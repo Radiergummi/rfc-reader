@@ -16,6 +16,9 @@ import SwiftUI
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     @Environment(\.undoManager) private var undoManager
+    /// Where Share links to (#712).
+    @AppStorage(ReaderPreferences.linkSiteKey) private var linkSite =
+      ReaderPreferences.defaultLinkSite
     /// The Add to Collection sheet a swipe opens, which cannot open a menu (#349).
     @State private var isChoosingCollection = false
     /// New Collection was chosen on that sheet: asked for once the sheet is gone.
@@ -88,7 +91,7 @@ import SwiftUI
         KeepOfflineButton(document: row.id, library: library)
       case .share:
         ShareLink(
-          item: RFCEditorEndpoints.infoPage(row.id),
+          item: DocumentActions.shareLink(id: row.id, site: linkSite),
           subject: Text(verbatim: "\(row.id.displayName): \(row.title)"))
       // iOS opens no tabs, and its lists are not a collection's to remove from here.
       case .openInNewTab, .removeFromCollection:

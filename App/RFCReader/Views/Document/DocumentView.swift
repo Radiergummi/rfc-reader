@@ -617,6 +617,7 @@ struct DocumentView: View {
         bibliography: reader.groups,
         measure: settings.measure,
         documentID: id,
+        citing: identity,
         controller: controller,
         onLink: openInApp,
         onChoosePresentation: { library.choose($1, for: $0, in: id) },

@@ -46,7 +46,7 @@ struct ExportLinks {
     case .anchor(let place):
       return href(forAnchor: document.anchor(forPlace: place))
     case .document(let id, let section, _):
-      return CitationFormatter.url(for: id, section: section).absoluteString
+      return RFCLink(id: id, section: section).webURL.absoluteString
     case .entrySection(let entry, _, _, let url):
       return url?.absoluteString ?? href(forAnchor: entry)
     }

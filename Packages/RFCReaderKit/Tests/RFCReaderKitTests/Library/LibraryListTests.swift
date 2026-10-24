@@ -336,3 +336,112 @@ struct LibraryListTests {
     #expect(" host \n".normalizedQuery == "host")
   }
 }
+
+/// The library's defaults (#713) through a whole list.
+@Suite("Library list: defaults")
+struct LibraryListDefaultsTests {
+  private let index = RFCIndex(
+    rfcs: [
+      Fixtures.metadata(1149, title: "Avian Carriers", year: 1990),
+      Fixtures.metadata(2616, title: "HTTP/1.1", year: 1999, obsoletedBy: [.rfc(9110)]),
+      Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022),
+    ],
+    series: [])
+
+  private func numbers(_ list: LibraryList) -> [Int] {
+    list.rows(in: index, search: IndexSearch(index: index)).map(\.id.number)
+  }
+
+  private let hidingJokes = ListOptions(showsAprilFirst: false)
+
+  @Test func `a hidden april 1st RFC leaves the library and its search`() {
+    #expect(numbers(LibraryList(filter: .all, query: "", options: hidingJokes)) == [9110, 2616])
+    #expect(numbers(LibraryList(filter: .all, query: "avian", options: hidingJokes)).isEmpty)
+  }
+
+  @Test func `a bookmarked april 1st RFC stays listed`() {
+    let list = LibraryList(
+      filter: .bookmarks, query: "", bookmarked: [.rfc(1149)], options: hidingJokes)
+    #expect(numbers(list) == [1149])
+    let searched = LibraryList(
+      filter: .all, query: "is:bookmarked", bookmarked: [.rfc(1149)], options: hidingJokes)
+    #expect(numbers(searched) == [1149])
+  }
+
+  @Test func `a collected april 1st RFC stays listed`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "", options: hidingJokes, members: [1149, 9110])
+    #expect(numbers(list) == [1149, 9110])
+    let searched = LibraryList(
+      filter: .all, query: "in:jokes", options: hidingJokes, collections: ["jokes": [1149]])
+    #expect(numbers(searched) == [1149])
+  }
+
+  // MARK: - Dynamic collections (#355)
+
+  private let research = RFCIndex(
+    rfcs: [
+      Fixtures.metadata(1945, title: "HTTP/1.0", currentStatus: .historic, stream: .ietf),
+      Fixtures.metadata(9000, title: "HTTP research", stream: .irtf),
+    ],
+    series: [])
+
+  private func numbers(_ list: LibraryList, in index: RFCIndex) -> [Int] {
+    list.rows(in: index, search: IndexSearch(index: index)).map(\.id.number)
+  }
+
+  /// A dynamic collection's own `stream:` is where the reader chose to look, as a
+  /// stream's list is: the default search stream would leave its search empty.
+  @Test func `a dynamic collection's stream lifts the search scope's`() {
+    let options = ListOptions(searchScope: SearchScope(stream: .ietf))
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "http", options: options, definition: "stream:irtf")
+
+    #expect(numbers(list, in: research) == [9000])
+    #expect(
+      options.scopeInForce(query: "http", filter: list.filter, definition: "stream:irtf")
+        .isEverything)
+  }
+
+  @Test func `a dynamic collection's status lifts current only`() {
+    let options = ListOptions(searchScope: SearchScope(currentOnly: true))
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "http", options: options,
+      definition: "status:historic")
+
+    #expect(numbers(list, in: research) == [1945])
+  }
+
+  /// A dynamic collection is the reader's own, as a collection of members is.
+  @Test func `a dynamic collection keeps its april 1st RFCs`() {
+    let list = LibraryList(
+      filter: .collection(UUID()), query: "", options: hidingJokes, definition: "avian")
+    #expect(numbers(list) == [1149])
+    let searched = LibraryList(
+      filter: .collection(UUID()), query: "carriers", options: hidingJokes, definition: "avian")
+    #expect(numbers(searched) == [1149])
+  }
+
+  @Test func `hide read reads what was read, and leaves it out`() {
+    struct Sources: ListSources {
+      var bookmarked: Set<DocumentID> { [] }
+      var recentlyRead: [DocumentID] { [.rfc(9110)] }
+      var downloaded: Set<Int> { [] }
+      func members(of collection: UUID) -> [Int] { [] }
+      func collection(named name: String) -> UUID? { nil }
+      func query(of collection: UUID) -> String? { nil }
+    }
+    let list = LibraryList.reading(
+      .all, query: "", options: ListOptions(hidesRead: true), from: Sources())
+    #expect(numbers(list) == [2616, 1149])
+    // Without the option, the read documents are not read at all.
+    let unhidden = LibraryList.reading(.all, query: "", options: ListOptions(), from: Sources())
+    #expect(unhidden.recentlyRead.isEmpty)
+  }
+
+  @Test func `current only hides the obsoleted from a search, not from the list`() {
+    let options = ListOptions(searchScope: SearchScope(currentOnly: true))
+    #expect(numbers(LibraryList(filter: .all, query: "http", options: options)) == [9110])
+    #expect(numbers(LibraryList(filter: .all, query: "", options: options)) == [9110, 2616, 1149])
+  }
+}
