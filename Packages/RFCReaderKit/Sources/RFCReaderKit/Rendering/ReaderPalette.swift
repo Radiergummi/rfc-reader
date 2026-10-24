@@ -11,11 +11,10 @@ import Synchronization
 ///
 /// A change here redraws and never rebuilds, so it never costs the reader's place.
 /// `RFCTextLayoutFragment` draws cards, rules, strokes and chips from it, through a
-/// `ReaderPaletteBox` each layout manager of built text is given, and the text
-/// views draw the page and the text in it: the builder keeps storing the system's
-/// dynamic label colors, and a text view maps them to the palette's as each
-/// fragment comes into view (`recoloredRuns(in:range:)`), and its links through
-/// `LinkRendering`. See
+/// `ReaderPaletteBox` each layout manager of built text is given; the text views
+/// draw the page behind the text in it, and its links through `LinkRendering`. The
+/// text itself is stored in `themedText` and `themedSecondaryText`, dynamic colors
+/// that resolve to the theme chosen as they are drawn. See
 /// `docs/decisions/2026-10-03-reader-settings-are-a-build-time-style-and-a-draw-time-palette.md`.
 ///
 /// A page theme (#704) belongs to one appearance, or to both: the light theme a
@@ -33,18 +32,17 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   /// The appearances it is offered in: the light theme is one that has `.light`,
   /// the dark theme one that has `.dark`.
   public let appearances: Set<PaletteAppearance>
-  /// Whether the text is drawn in the colors the builder stored, and the links in
-  /// the text view's own: the automatic palette, whose text roles are those
-  /// colors, so that a text view sets no rendering attributes for it and the
-  /// default draws exactly as the reader always has.
-  public let drawsStoredColors: Bool
+  /// Whether it draws the system's own colors: the automatic palette, under which
+  /// a text view keeps its own link and selection colors and draws no page, so
+  /// that the default draws exactly as the reader always has.
+  public let drawsSystemColors: Bool
   /// Behind the text, or nil to draw none and let the window's background show, as
   /// the automatic palette does.
   public var pageBackground: PlatformColor?
-  /// Body text, in place of the stored `RFCColors.label`.
+  /// Body text, which `themedText` resolves to.
   public var text: PlatformColor
-  /// Quieter text, in place of the stored `RFCColors.secondaryLabel`: list markers,
-  /// section numbers, captions, the abstract.
+  /// Quieter text, which `themedSecondaryText` resolves to: list markers, section
+  /// numbers, captions, the abstract.
   public var secondaryText: PlatformColor
   /// A link on the page.
   public var link: PlatformColor
@@ -70,7 +68,7 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
 
   public init(
     id: String, appearances: Set<PaletteAppearance> = [.light, .dark],
-    drawsStoredColors: Bool = false, pageBackground: PlatformColor? = nil,
+    drawsSystemColors: Bool = false, pageBackground: PlatformColor? = nil,
     text: PlatformColor = RFCColors.label, secondaryText: PlatformColor = RFCColors.secondaryLabel,
     link: PlatformColor = RFCColors.readerLink,
     cardLink: PlatformColor = RFCColors.cardLink(over: RFCColors.readerLink),
@@ -80,7 +78,7 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   ) {
     self.id = id
     self.appearances = appearances
-    self.drawsStoredColors = drawsStoredColors
+    self.drawsSystemColors = drawsSystemColors
     self.pageBackground = pageBackground
     self.text = text
     self.secondaryText = secondaryText
@@ -143,7 +141,7 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   /// were page themes: no page background, and the text and links as stored.
   public static let automatic = ReaderPalette(
     id: "automatic",
-    drawsStoredColors: true,
+    drawsSystemColors: true,
     cardFill: RFCColors.cardFill,
     asideFill: RFCColors.asideFill,
     rule: RFCColors.rule,
@@ -234,46 +232,70 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
 
   // MARK: - Text
 
-  /// The color a run whose stored foreground is `stored` is drawn in: the palette's
-  /// text and secondary text in place of the system's label colors, and its text
-  /// where nothing is stored. Nil to draw what is stored as it is: any other color,
-  /// such as a syntax color (#707) or a hidden border's, and every color under a
-  /// palette that `drawsStoredColors`.
-  public func foreground(for stored: PlatformColor?) -> PlatformColor? {
-    guard !drawsStoredColors else { return nil }
-    guard let stored else { return text }
-    if Self.isSame(stored, RFCColors.label) { return text }
-    if Self.isSame(stored, RFCColors.secondaryLabel) { return secondaryText }
-    return nil
+  /// The light and the dark theme chosen, process-wide, which `text` and
+  /// `secondaryText` below draw in. A setting, as the themes are: every reader
+  /// draws the same ones (`follow()`).
+  private static let chosen = Mutex((light: ReaderPalette.automatic, dark: ReaderPalette.automatic))
+
+  /// The theme chosen for `appearance`.
+  public static func chosen(for appearance: PaletteAppearance) -> ReaderPalette {
+    chosen.withLock { appearance == .dark ? $0.dark : $0.light }
   }
 
-  /// The same color: the one instance `RFCColors` keeps, which the builder stores,
-  /// or an equal one.
-  private static func isSame(_ color: PlatformColor, _ other: PlatformColor) -> Bool {
-    color === other || color == other
-  }
-
-  /// The runs of `range` of `text` a text view draws in another color than the
-  /// one stored, each with that color, neighbors of one color joined: what it sets
-  /// as rendering attributes as a fragment comes into view. A link is left out: a
-  /// text view colors its links itself (`LinkRendering`). Empty for a palette that
-  /// `drawsStoredColors`, so the default costs a text view nothing.
-  public func recoloredRuns(in text: NSAttributedString, range: NSRange)
-    -> [(range: NSRange, color: PlatformColor)]
-  {
-    guard !drawsStoredColors, range.length > 0 else { return [] }
-    var runs: [(range: NSRange, color: PlatformColor)] = []
-    text.enumerateAttributes(in: range) { attributes, run, _ in
-      guard attributes[.link] == nil,
-        let color = foreground(for: attributes[.foregroundColor] as? PlatformColor)
-      else { return }
-      if let last = runs.last, NSMaxRange(last.range) == run.location, last.color === color {
-        runs[runs.count - 1].range.length += run.length
-      } else {
-        runs.append((run, color))
-      }
+  /// Makes `light` and `dark` the themes the text is drawn in, from the next
+  /// redraw, and says whether either changed.
+  @discardableResult
+  public static func choose(light: ReaderPalette, dark: ReaderPalette) -> Bool {
+    chosen.withLock { chosen in
+      guard chosen.light != light || chosen.dark != dark else { return false }
+      chosen = (light, dark)
+      return true
     }
-    return runs
+  }
+
+  /// Keeps the chosen themes to what the standard user defaults hold from now on,
+  /// as each change is written, before any view is told of it: so a reader that
+  /// redraws for a new theme draws its text in it.
+  public static func follow() {
+    chooseFromDefaults()
+    // No queue: on the thread that wrote, as the write happens.
+    NotificationCenter.default.addObserver(
+      forName: UserDefaults.didChangeNotification, object: UserDefaults.standard, queue: nil
+    ) { _ in
+      chooseFromDefaults()
+    }
+  }
+
+  private static func chooseFromDefaults() {
+    let settings = ReaderSettings(defaults: .standard)
+    choose(light: settings.lightPalette, dark: settings.darkPalette)
+  }
+
+  /// Body text, as the theme chosen for the appearance it is drawn in has it: what
+  /// the builder stores for the reader's text rather than `RFCColors.label` (#704).
+  /// Dynamic, resolved as it is drawn, so a theme switch is a redraw, as a switch
+  /// to dark mode is; under the automatic theme, the system's label color.
+  public static let themedText = themed(\.text) { chosen(for: $0) }
+  /// Quieter text, as `themedText` is body text: list markers, section numbers,
+  /// captions, the abstract.
+  public static let themedSecondaryText = themed(\.secondaryText) { chosen(for: $0) }
+
+  /// `role` of the theme `chosen` gives for the appearance it is resolved in.
+  static func themed(
+    _ role: @escaping @Sendable (ReaderPalette) -> PlatformColor,
+    from chosen: @escaping @Sendable (PaletteAppearance) -> ReaderPalette
+  ) -> PlatformColor {
+    #if canImport(UIKit)
+      UIColor { traits in
+        let palette = chosen(traits.userInterfaceStyle == .dark ? .dark : .light)
+        return role(palette).resolvedColor(with: traits)
+      }
+    #else
+      NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return role(chosen(isDark ? .dark : .light))
+      }
+    #endif
   }
 }
 

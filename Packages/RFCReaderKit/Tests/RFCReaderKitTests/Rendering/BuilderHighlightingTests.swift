@@ -90,7 +90,7 @@ struct BuilderHighlightingTests {
     let message = Preformatted(
       kind: .sourceCode, text: "HTTP/1.1 200 OK\n\nhello", type: "http-message",
       anchor: "listing")
-    #expect(try color(of: "hello", in: build(message)) == RFCColors.label)
+    #expect(try color(of: "hello", in: build(message)) == ReaderPalette.themedText)
   }
 
   @Test func `a highlighted block is not a figure`() throws {
