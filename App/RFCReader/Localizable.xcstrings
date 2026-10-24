@@ -18,6 +18,22 @@
         }
       }
     },
+    "%@ couldn't be exported: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ konnte nicht exportiert werden: %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ couldn't be exported: %2$@"
+          }
+        }
+      }
+    },
     "%@ didn't load: %@" : {
       "localizations" : {
         "de" : {
@@ -420,12 +436,22 @@
         }
       }
     },
-    "A reading path is computed from the citation index, which is a data pack of its own and isn't installed." : {
+    "A reading path is computed from the citation index, which this version of the app doesn't include." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein Lesepfad wird aus dem Zitationsindex berechnet, der ein eigenes Datenpaket ist und nicht installiert ist."
+            "value" : "Ein Lesepfad wird aus dem Zitationsindex berechnet, den diese Version der App nicht enthält."
+          }
+        }
+      }
+    },
+    "ABNF Grammar" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ABNF-Grammatik"
           }
         }
       }
@@ -436,6 +462,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Über RFC Reader"
+          }
+        }
+      }
+    },
+    "Abstract" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusammenfassung"
           }
         }
       }
@@ -560,6 +596,16 @@
         }
       }
     },
+    "Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmerkungen"
+          }
+        }
+      }
+    },
     "Appearance" : {
       "localizations" : {
         "de" : {
@@ -636,6 +682,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lesezeichen"
+          }
+        }
+      }
+    },
+    "Books isn't available on this Mac." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bücher ist auf diesem Mac nicht verfügbar."
           }
         }
       }
@@ -830,6 +886,16 @@
         }
       }
     },
+    "Contents:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inhalt:"
+          }
+        }
+      }
+    },
     "Continue" : {
       "localizations" : {
         "de" : {
@@ -960,6 +1026,16 @@
         }
       }
     },
+    "Couldn't open the folder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner konnte nicht geöffnet werden"
+          }
+        }
+      }
+    },
     "Couldn't print %@" : {
       "localizations" : {
         "de" : {
@@ -1080,6 +1156,16 @@
         }
       }
     },
+    "Delete Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung löschen"
+          }
+        }
+      }
+    },
     "Delete “%@”?" : {
       "localizations" : {
         "de" : {
@@ -1181,6 +1267,16 @@
         }
       }
     },
+    "EPUB" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPUB"
+          }
+        }
+      }
+    },
     "Edit Collection" : {
       "localizations" : {
         "de" : {
@@ -1261,12 +1357,72 @@
         }
       }
     },
+    "Export ${document} as ${format}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${document} als ${format} exportieren"
+          }
+        }
+      }
+    },
     "Export Checklist" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste exportieren"
+          }
+        }
+      }
+    },
+    "Export Current Section…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuellen Abschnitt exportieren …"
+          }
+        }
+      }
+    },
+    "Export RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC exportieren"
+          }
+        }
+      }
+    },
+    "Export “%@”" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ exportieren"
+          }
+        }
+      }
+    },
+    "Exported to “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach „%@“ exportiert."
+          }
+        }
+      }
+    },
+    "Exporting…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird exportiert …"
           }
         }
       }
@@ -1351,6 +1507,16 @@
         }
       }
     },
+    "Format" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format"
+          }
+        }
+      }
+    },
     "Format:" : {
       "localizations" : {
         "de" : {
@@ -1431,6 +1597,16 @@
         }
       }
     },
+    "HTML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML"
+          }
+        }
+      }
+    },
     "Help" : {
       "localizations" : {
         "de" : {
@@ -1461,6 +1637,36 @@
         }
       }
     },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markieren"
+          }
+        }
+      }
+    },
+    "Highlights" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen"
+          }
+        }
+      }
+    },
+    "Highlights are shown in the document's own text." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen werden im eigenen Text des Dokuments gezeigt."
+          }
+        }
+      }
+    },
     "Identifier" : {
       "localizations" : {
         "de" : {
@@ -1477,6 +1683,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Reihe nach"
+          }
+        }
+      }
+    },
+    "In several places: choose one, or delete it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An mehreren Stellen: Wähle eine aus oder lösche sie."
           }
         }
       }
@@ -1771,6 +1987,16 @@
         }
       }
     },
+    "Markdown" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
+          }
+        }
+      }
+    },
     "More" : {
       "localizations" : {
         "de" : {
@@ -1867,6 +2093,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nächster Abschnitt"
+          }
+        }
+      }
+    },
+    "No Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Anmerkungen"
           }
         }
       }
@@ -2011,12 +2247,12 @@
         }
       }
     },
-    "Notify me about bookmarked RFCs" : {
+    "Notify me about bookmarked RFCs and followed working groups" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Über RFCs mit Lesezeichen benachrichtigen"
+            "value" : "Über RFCs mit Lesezeichen und gefolgte Working Groups benachrichtigen"
           }
         }
       }
@@ -2311,6 +2547,16 @@
         }
       }
     },
+    "PDF" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF"
+          }
+        }
+      }
+    },
     "Page" : {
       "localizations" : {
         "de" : {
@@ -2347,6 +2593,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wähle einen RFC"
+          }
+        }
+      }
+    },
+    "Place at Occurrence %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An Fundstelle %lld setzen"
+          }
+        }
+      }
+    },
+    "Plain Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiner Text"
           }
         }
       }
@@ -2691,6 +2957,16 @@
         }
       }
     },
+    "Saves an RFC as a file in a format, which a shortcut can save, share or pass on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichert ein RFC als Datei in einem Format, die ein Kurzbefehl sichern, teilen oder weitergeben kann."
+          }
+        }
+      }
+    },
     "Search" : {
       "localizations" : {
         "de" : {
@@ -2797,6 +3073,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Siehe auch"
+          }
+        }
+      }
+    },
+    "Select text in the document and choose Highlight." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle Text im Dokument aus und dann „Markieren“."
+          }
+        }
+      }
+    },
+    "Send to Books" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An Bücher senden"
           }
         }
       }
@@ -2927,6 +3223,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontaktdaten zeigen"
+          }
+        }
+      }
+    },
+    "Show in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Finder anzeigen"
           }
         }
       }
@@ -3181,12 +3487,32 @@
         }
       }
     },
+    "The citation index couldn't be read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Zitationsindex konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
     "The document hasn't loaded." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das Dokument wurde noch nicht geladen."
+          }
+        }
+      }
+    },
+    "The document is unavailable, so its highlights cannot be shown in it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Dokument ist nicht verfügbar, daher können seine Markierungen nicht darin gezeigt werden."
           }
         }
       }
@@ -3211,6 +3537,16 @@
         }
       }
     },
+    "The export was canceled." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Export wurde abgebrochen."
+          }
+        }
+      }
+    },
     "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again." : {
       "localizations" : {
         "de" : {
@@ -3221,22 +3557,22 @@
         }
       }
     },
-    "The installed index pack couldn't be read." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das installierte Indexpaket konnte nicht gelesen werden."
-          }
-        }
-      }
-    },
     "The list of every RFC is downloaded once, then kept up to date." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Liste aller RFCs wird einmal geladen und danach aktuell gehalten."
+          }
+        }
+      }
+    },
+    "These RFCs were not exported:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese RFCs wurden nicht exportiert:"
           }
         }
       }
@@ -3257,6 +3593,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieses Dokument verwendet die Schlüsselwörter aus BCP 14 nicht."
+          }
+        }
+      }
+    },
+    "This passage no longer exists in this document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Stelle gibt es in diesem Dokument nicht mehr."
           }
         }
       }
@@ -3382,12 +3728,12 @@
         }
       }
     },
-    "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it." : {
+    "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it; and when a working group you follow publishes an RFC." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn einer ersetzt oder aktualisiert wird, ein Draft beginnt, ihn zu überarbeiten, oder die Warteschlange des RFC Editor erreicht, oder Errata für ihn aufgeführt werden."
+            "value" : "Wenn einer ersetzt oder aktualisiert wird, ein Draft beginnt, ihn zu überarbeiten, oder die Warteschlange des RFC Editor erreicht, oder Errata für ihn aufgeführt werden; und wenn eine Working Group, der du folgst, einen RFC veröffentlicht."
           }
         }
       }
@@ -3398,6 +3744,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working Groups"
+          }
+        }
+      }
+    },
+    "XML" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML"
           }
         }
       }

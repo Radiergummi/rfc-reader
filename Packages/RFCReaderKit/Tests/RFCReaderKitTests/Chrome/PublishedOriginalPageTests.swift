@@ -96,6 +96,36 @@ struct PublishedOriginalActionsTests {
         == .pointer)
   }
 
+  /// A script, a shortcut or a collection's export is refused what Print and Export
+  /// do not offer (#383): a scan, and a pointer, in the words the panel says it with.
+  @Test func `an RFC read as its original is not exported`() {
+    #expect(throws: PublishedOriginalPage.NotExportable.self) {
+      try PublishedOriginalPage.checkExportable(.rfc(8), formats: [.pdf], text: nil)
+    }
+    #expect(throws: PublishedOriginalPage.NotExportable.self) {
+      try PublishedOriginalPage.checkExportable(
+        .rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)
+    }
+    #expect(throws: Never.self) {
+      try PublishedOriginalPage.checkExportable(.rfc(9110), formats: [.text, .xml], text: nil)
+      // An index that has not named the RFC yet says nothing either way.
+      try PublishedOriginalPage.checkExportable(.rfc(8), formats: nil, text: nil)
+    }
+    let status = PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)
+    #expect(
+      status.map { PublishedOriginalPage.NotExportable(status: $0).message(in: .english) }
+        == "RFC 8 is published only as PDF.")
+  }
+
+  /// Whether an export reads the text to find out: only for an RFC whose index lists
+  /// an original beside the text, which the text alone can say it points to.
+  @Test func `only an RFC that may point to its original is read to find out`() {
+    #expect(PublishedOriginalPage.exportReadsText(.rfc(1119), formats: [.text, .postScript, .pdf]))
+    #expect(!PublishedOriginalPage.exportReadsText(.rfc(9110), formats: [.text, .xml]))
+    #expect(!PublishedOriginalPage.exportReadsText(.rfc(8), formats: [.pdf]))
+    #expect(!PublishedOriginalPage.exportReadsText(.rfc(8), formats: nil))
+  }
+
   /// What the panel says in place of its lists: why there are none, not that the
   /// RFC failed to load.
   @Test func `the panel says the RFC is its original`() {

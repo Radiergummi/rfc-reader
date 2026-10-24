@@ -180,7 +180,7 @@ struct RFCListView: View {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
       if let acronym = workingGroupCardAcronym {
-        WorkingGroupCard(summary: library.workingGroupSummary(acronym))
+        WorkingGroupCard(group: acronym, summary: library.workingGroupSummary(acronym))
           .listRowSeparator(.hidden)
           .selectionDisabled()
       }
@@ -401,7 +401,7 @@ struct RFCListView: View {
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
-      .refreshable { await library.refreshIndex() }
+      .refreshable { await library.refreshIndexNow() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
       .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
       .sheet(isPresented: $showsHelp) { HelpSheet() }

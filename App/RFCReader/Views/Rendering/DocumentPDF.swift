@@ -40,15 +40,22 @@ nonisolated enum DocumentPDF {
   /// `ReaderState` deliberately carries strings out of the document, not the
   /// document itself. With Original Text showing, only the published text is
   /// fetched: its pages have their own header and footer.
+  ///
+  /// - Parameter section: the anchor of the one section to print, with its
+  ///   subsections (#386); nil for the whole document. The published text is
+  ///   printed whole.
   @MainActor
   static func make(
-    for id: DocumentID, original: Bool, paperSize: CGSize, library: LibraryModel
+    for id: DocumentID, original: Bool, section: String? = nil, paperSize: CGSize,
+    library: LibraryModel
   ) async throws -> Data {
     let content: Content
     if original {
       content = .original(try await library.originalText(for: id))
     } else {
-      let document = try await library.document(for: id)
+      let document = try ExportedPart(
+        of: try await library.document(for: id), section: section
+      ).document
       content = .document(
         Printed(
           document: document,
@@ -184,7 +191,13 @@ nonisolated enum DocumentPDF {
   // MARK: - Drawing
 
   /// Draws `laidOut` a page at a time, with the running header and footer.
-  static func pdf(_ laidOut: LaidOut, layout: PrintLayout, furniture: PrintFurniture) -> Data {
+  ///
+  /// - Parameter finish: what is added to the file once its pages are drawn,
+  ///   before it closes: an export's outline.
+  static func pdf(
+    _ laidOut: LaidOut, layout: PrintLayout, furniture: PrintFurniture,
+    finish: (CGContext) -> Void = { _ in }
+  ) -> Data {
     let data = NSMutableData()
     var mediaBox = CGRect(origin: .zero, size: layout.paperSize)
     guard let consumer = CGDataConsumer(data: data as CFMutableData),
@@ -208,6 +221,7 @@ nonisolated enum DocumentPDF {
         context.endPDFPage()
       }
     }
+    finish(context)
     context.closePDF()
     return data as Data
   }

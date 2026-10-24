@@ -8,7 +8,7 @@ import RFCReaderKit
 
 /// Draws what attributed text cannot express: the card behind artwork and tables,
 /// the rule beside a block quote, the tint behind an aside, Implementer's band behind
-/// a requirement, and the reference chip.
+/// a requirement, a highlight's fill or underline (#522), and the reference chip.
 ///
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
@@ -81,6 +81,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
     for band in bandRects {
       bounds = bounds.union(band.rect)
+    }
+    for highlight in highlightRects {
+      bounds = bounds.union(highlight.rect)
     }
     if let disclosure {
       bounds = bounds.union(
@@ -186,6 +189,20 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       bands, in: text, lines: textLineFragments, fragment: range, origin: .zero)
   }
 
+  /// Where this text view's highlights go on this fragment's lines (#522), read at
+  /// draw time and never cached, as the bands are: adding or removing one changes
+  /// them without changing the fragment's text.
+  private var highlightRects: [FragmentGeometry.HighlightRect] {
+    guard let range = documentRange,
+      let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
+      let text = textLayoutManager?.attributedText
+    else { return [] }
+    let marks = folding.highlights(meeting: range)
+    guard !marks.isEmpty else { return [] }
+    return FragmentGeometry.highlightRects(
+      marks, in: text, lines: textLineFragments, fragment: range, origin: .zero)
+  }
+
   /// Where this fragment sits in the column, for whatever is drawn around it.
   private func placement(at point: CGPoint, span: FragmentGeometry.DecorationSpan)
     -> FragmentGeometry.Placement
@@ -222,6 +239,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       }
       context.restoreGState()
     }
+    // Over a card, which the translucent fill blends with, and under everything
+    // else, the text above all, so a selection inside a fill still shows.
+    drawHighlights(at: point, in: context)
     let banded = drawBands(at: point, in: context)
     drawChips(at: point, palette: palette, on: card, banded: banded, in: context)
     drawStrokes(at: point, color: palette.stroke, in: context)
@@ -258,6 +278,28 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
             CGPoint(x: end.x + across.dx * side, y: end.y + across.dy * side),
           ])
         }
+      }
+    }
+    context.restoreGState()
+  }
+
+  /// This text view's highlights on this fragment (#522): a fill shaped as a band is,
+  /// or an underline's rule.
+  private func drawHighlights(at point: CGPoint, in context: CGContext) {
+    let highlights = highlightRects
+    guard !highlights.isEmpty else { return }
+    context.saveGState()
+    for highlight in highlights {
+      // Per draw, so a change of appearance is picked up.
+      let color = RFCColors.highlight(highlight.color).cgColor
+      let rect = highlight.rect.offsetBy(dx: point.x, dy: point.y)
+      if highlight.color.isUnderline {
+        context.setFillColor(color)
+        context.fill(rect)
+      } else {
+        fill(
+          rect, radius: FragmentGeometry.chipRadius, corners: highlight.corners, color: color,
+          in: context)
       }
     }
     context.restoreGState()

@@ -35,6 +35,8 @@ extension RFCTextViewCoordinator {
     foldingEcho.forget()
     forgetBands()
     foldingDelegate.fold(built.foldingIndex, by: folding, bands: RequirementBands())
+    // The marks are ranges of the build being replaced.
+    forgetHighlights()
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
@@ -46,6 +48,7 @@ extension RFCTextViewCoordinator {
     engine.installed(built, document: documentID)
     reportVisibleAnchor()
     findBands()
+    placeHighlights()
   }
 
   // MARK: - Reading modes

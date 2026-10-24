@@ -273,7 +273,18 @@ extension DocumentTextBuilder {
     }
     // NO-BREAK SPACEs, as a reference's label has: the chip never wraps in the middle.
     let label = words.replacingOccurrences(of: " ", with: "\u{00A0}")
-    result.append(chipRun(label, symbol: "exclamationmark.bubble", attributes: attributes))
+    var iconAttributes: [NSAttributedString.Key: Any] = [:]
+    #if canImport(UIKit)
+      // Said as its words on iOS, as its label is on macOS (#872): a `UITextView`
+      // reads no `.rfcSpoken`, so the icon is pronounced as nothing, as an
+      // informative chip's is pronounced as its kind. Only a build for the reader
+      // is given errata, so only a build that VoiceOver reads.
+      iconAttributes[.accessibilitySpeechIPANotation] = AccessibleReading.silence
+    #endif
+    result.append(
+      chipRun(
+        label, symbol: "exclamationmark.bubble", attributes: attributes,
+        iconAttributes: iconAttributes))
     return result
   }
 
@@ -303,11 +314,18 @@ extension DocumentTextBuilder {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
     let result = NSMutableAttributedString()
+    var arrowAttributes = attributes
+    #if canImport(UIKit)
+      // Said as its words on iOS, as its label is on macOS (#872): a `UITextView`
+      // reads no `.rfcSpoken`, so the arrow is pronounced as nothing. Only the
+      // reader has backlink captions, so only a build that VoiceOver reads.
+      arrowAttributes[.accessibilitySpeechIPANotation] = AccessibleReading.silence
+    #endif
     // A few points under the words' size: a diagonal arrow fills its whole square,
     // and at the words' size it outweighs them.
     if let symbol = chipSymbolRun(
       "arrow.down.backward", color: RFCColors.secondaryLabel,
-      pointSize: style.backlinksFont.pointSize - 4, attributes: attributes)
+      pointSize: style.backlinksFont.pointSize - 4, attributes: arrowAttributes)
     {
       result.append(symbol)
       // NO-BREAK SPACE: the arrow never wraps away from the words it introduces.

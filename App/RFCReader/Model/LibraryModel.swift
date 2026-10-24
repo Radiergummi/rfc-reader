@@ -148,6 +148,15 @@ final class LibraryModel {
   /// `UserDataMirror.collections`.
   var collections: CollectionSnapshot { userData.collections }
 
+  /// `UserDataMirror.annotations`: every highlight (#522).
+  var annotations: AnnotationSnapshot { userData.annotations }
+
+  /// `UserDataMirror.editAnnotations`.
+  @discardableResult
+  func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
+    userData.editAnnotations(change)
+  }
+
   /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
   /// is on, what is wanted offline, and what Available Offline lists, whether or not
   /// a body has arrived yet.
@@ -216,13 +225,40 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// Whether the installed indexes pack holds a citation index (#189), without which
-  /// a reading path can only say there is none: the Reading Path items are offered
-  /// only while it is true (#769), and come back once #738 delivers the pack.
+  /// Whether there is a citation index (#189), bundled with the app (#738) or
+  /// installed, without which a reading path can only say there is none: the Reading
+  /// Path items are offered only while it is true (#769), which a Debug build without
+  /// the bundled pack is not.
   private(set) var hasCitationIndex = false
 
   /// `UserDataMirror.recentlyReadCount`.
   var recentlyReadCount: Int { userData.recentlyReadCount }
+
+  /// `UserDataMirror.followedGroups`: the working groups the reader follows (#731),
+  /// by acronym in lower case.
+  var followedGroups: Set<String> { userData.followedGroups }
+
+  /// The Working Groups section of the sidebar: the followed groups, then the
+  /// busiest of the rest.
+  var sidebarWorkingGroups: [String] {
+    WorkingGroupFollowing.sidebarGroups(followed: followedGroups, top: topWorkingGroups)
+  }
+
+  func isFollowed(_ group: String) -> Bool {
+    followedGroups.contains(group.lowercased())
+  }
+
+  /// Follows the group or stops following it. A failure is logged rather than shown,
+  /// as a bookmark's is (#125), and leaves the command as it was. The save is
+  /// mirrored, which compares at once (`init`).
+  func toggleFollowed(_ group: String) {
+    do {
+      try FollowedGroupStore.setFollowed(group, !isFollowed(group), in: container.mainContext)
+    } catch {
+      libraryLog.error(
+        "following a working group failed: \(String(describing: error), privacy: .public)")
+    }
+  }
 
   /// The user's data, which `userData` reads its sets from.
   var container: ModelContainer { userData.container }
@@ -240,6 +276,11 @@ final class LibraryModel {
     // A document read for the first time: what a phrase can name (#192).
     userData.onRecentlyReadCountChanged = { RFCReaderShortcuts.refreshParameters() }
     userData.onOfflineMarksChanged = { [weak self] in self?.wantedOfflineChanged() }
+    // Compared at once, so the baseline lists a newly followed group's RFCs now, a
+    // group followed on another device included: a group followed reports nothing it
+    // published before (`BookmarkBaseline`), and left to the next refresh of the
+    // index, what that refresh brings would count as before (#731).
+    userData.onFollowedGroupsChanged = { [weak self] in self?.compareBookmarks() }
     userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
@@ -439,7 +480,7 @@ final class LibraryModel {
           checkIndex()
         }
       } else {
-        await refreshIndex()
+        await refreshIndexNow()
       }
     } catch {
       indexState = .failed(error)
@@ -641,7 +682,7 @@ final class LibraryModel {
   /// false is the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
   /// and fails at once when there is none.
-  func refreshIndex(onExpensiveNetworks: Bool = true) async {
+  private func refreshIndex(onExpensiveNetworks: Bool) async {
     do {
       // Only with an index in memory: without one, a `304` would leave nothing to
       // show, so the whole index is asked for.
@@ -699,7 +740,10 @@ final class LibraryModel {
       // discarded either.
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      if index == nil {
+      // A refresh canceled, the automatic check that a person's replaced (#983) or
+      // one iOS's background task ended, leaves the failure already shown as it was
+      // rather than showing its cancellation.
+      if index == nil, !(Task.isCancelled && indexState.isFailed) {
         indexState = .failed(error)
         settleIndex()
       }
@@ -845,8 +889,9 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The refresh of the index under way, the automatic daily check's or a Retry's,
-  /// which a second one joins.
+  /// The refresh of the index under way, the automatic daily check's or a person's,
+  /// which a second one joins, except that a person's replaces the automatic check
+  /// (#983).
   @ObservationIgnored private let indexRefresh = SharedRefresh(name: "Refresh index")
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
@@ -860,7 +905,7 @@ final class LibraryModel {
   /// The revisions come first because the index check waits for a network that is
   /// neither expensive nor constrained (#314), which on a phone network can outlast
   /// iOS's background task. Canceling this, as iOS does when that task expires,
-  /// cancels the check.
+  /// cancels the check, or the person's refresh it joined.
   func refreshForBookmarks() async {
     await bootstrap()
     await indexLoaded.wait()
@@ -880,19 +925,29 @@ final class LibraryModel {
   /// under way, or a new one.
   @discardableResult
   private func checkIndex() -> Task<Void, Never> {
-    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: false) }
+    indexRefresh.start(replaceable: true) {
+      await self.refreshIndex(onExpensiveNetworks: false)
+    }
   }
 
-  /// Retry, after the index failed: on any network, as a person asked for it, and
-  /// joining a refresh already under way rather than fetching the index beside it.
+  /// Retry, after the index failed: on any network, as a person asked for it. It
+  /// joins a person's refresh already under way rather than fetching the index beside
+  /// it, and replaces the automatic check, which may wait for a cheap network for as
+  /// long as there is none (#983).
   func retryIndex() {
-    indexRefresh.start { await self.refreshIndex() }
+    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: true) }
   }
 
-  /// Compares the bookmarked RFCs with the last baseline, after every change to the
-  /// index or the revisions, and posts what changed (`BookmarkNotifications`). Runs
-  /// whether notifications are on or not, so the baseline is current when they are
-  /// turned on.
+  /// The index fetched now, on any network, by the rule of `retryIndex`, and waited
+  /// for: pull to refresh and the first launch (#984).
+  func refreshIndexNow() async {
+    await indexRefresh.join { await self.refreshIndex(onExpensiveNetworks: true) }
+  }
+
+  /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
+  /// baseline, after every change to the index or the revisions, and posts what
+  /// changed (`BookmarkNotifications`). Runs whether notifications are on or not, so
+  /// the baseline is current when they are turned on.
   private func compareBookmarks() {
     let previous = bookmarkComparison
     bookmarkComparison = Task(name: "Compare bookmarks") {
@@ -906,18 +961,23 @@ final class LibraryModel {
     // start every one afresh at the next launch that opens the real one.
     guard !AppData.isStoredInMemory else { return }
     let bookmarks: Set<DocumentID>
+    let groups: Set<String>
     do {
-      // Read here rather than taken from `bookmarkedDocuments`, which a failed read
-      // leaves empty: a baseline of no bookmarks would start every one afresh.
+      // Read here rather than taken from `bookmarkedDocuments` and `followedGroups`,
+      // which a failed read leaves empty: a baseline of none would start every one
+      // afresh.
       bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
+      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
     } catch {
       libraryLog.error(
-        "reading bookmarks to compare failed: \(String(describing: error), privacy: .public)")
+        "reading bookmarks or followed groups to compare failed: \(String(describing: error), privacy: .public)"
+      )
       return
     }
     let previous = await store.bookmarkBaseline()
     let baseline = BookmarkBaseline(
-      bookmarks: bookmarks, index: index, revisions: revisions, carryingOver: previous)
+      bookmarks: bookmarks, followedGroups: groups, index: index, revisions: revisions,
+      carryingOver: previous)
     guard baseline != previous else { return }
     do {
       // Kept before anything is posted: a baseline that cannot be kept would report
@@ -1500,6 +1560,14 @@ final class LibraryModel {
     return pack
   }
 
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, for an export of
+  /// it (#377).
+  func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
+    let data = try await store.publishedFile(id, format: format, client: client)
+    await evictIfGrown()
+    return data
+  }
+
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
     await evictIfGrown()
@@ -1534,8 +1602,10 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
+    // A document with annotations is kept as a bookmarked one is (#522).
+    let annotated = try AnnotationStore.annotatedDocuments(in: context)
     return CacheEviction.pinned(
-      bookmarked: bookmarked, read: read, marked: marked,
+      bookmarked: bookmarked.union(annotated), read: read, marked: marked,
       open: Set(sceneRegistry.open.compactMap(\.shown)), withMembers: withMembers(of:))
   }
 
@@ -1587,23 +1657,19 @@ final class LibraryModel {
   /// Keeps nothing offline any more: removes every mark, on every device, since marks
   /// are synced, and turns off keeping this device's bookmarks. The bodies go back
   /// into the reading cache, as an unmarked one does, where eviction or Clear Cache
-  /// removes them. A removal that could not be saved is logged and changes nothing:
-  /// it is made in a context of its own, discarded with it, since rolling back the
-  /// app's context would discard whatever else waits there to be saved, such as a
-  /// bookmark whose save failed.
+  /// removes them. A removal that could not be saved is logged and changes nothing
+  /// (`UserDataMirror.removeAllOfflineMarks(first:)`).
   func removeAllOffline() {
+    let keptBookmarks = keepsBookmarksOffline
     do {
-      try OfflineMarkStore.removeAll(in: ModelContext(container))
+      // One reconciliation for both, without the bookmarks: the marks' report runs it.
+      try userData.removeAllOfflineMarks(first: { storeKeepsBookmarksOffline(false) })
     } catch {
+      // Nothing was reconciled, so restoring the setting is all there is to undo.
+      storeKeepsBookmarksOffline(keptBookmarks)
       libraryLog.error(
         "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
-      return
     }
-    storeKeepsBookmarksOffline(false)
-    // One reconciliation for both: the marks' refresh runs it when they changed.
-    let marks = offlineMarks
-    userData.refreshOfflineMarks()
-    if offlineMarks == marks { wantedOfflineChanged() }
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
@@ -1627,15 +1693,15 @@ final class LibraryModel {
 
   enum ReadingPathResult {
     case path(ReadingPath)
-    /// No `indexes` pack is installed, which the sheet says rather than computing a
-    /// partial path from the documents in the cache.
+    /// There is no `indexes` pack, bundled or installed, which the sheet says rather
+    /// than computing a partial path from the documents in the cache.
     case noIndex
     /// The pack is there and did not read: logged, and said in a sentence.
     case failed
   }
 
-  /// The reading path from `root`, `depth` citations deep, read from the installed
-  /// `indexes` pack off the main actor.
+  /// The reading path from `root`, `depth` citations deep, read from the `indexes`
+  /// pack `DocumentStore.citationIndexURL()` chooses, off the main actor.
   func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
     guard let url = await store.citationIndexURL() else { return .noIndex }
     do {

@@ -1,5 +1,6 @@
-/// A refresh that a second call joins rather than runs beside (#595): the index's
-/// daily check and Retry, the revisions, the working groups and the errata.
+/// A refresh that a second call joins rather than runs beside (#595): the index's,
+/// the revisions, the working groups and the errata. The index's automatic check is
+/// replaceable: a person's refresh replaces it rather than joining it (#983).
 ///
 /// Each refresh is run one of two ways, never both. `start` and `join` run it as a
 /// task of its own, which a second call takes, and waits for if it joins.
@@ -8,7 +9,12 @@
 @MainActor
 public final class SharedRefresh {
   private let name: String
-  private var underWay: Task<Void, Never>?
+  /// The refresh under way, and whether it gives way to a start that is not
+  /// replaceable.
+  private var underWay: (task: Task<Void, Never>, isReplaceable: Bool)?
+  /// Counts the refreshes started, so that one replaced does not, as it ends, end
+  /// the one that replaced it.
+  private var started = 0
   private var isRunningInCaller = false
 
   public init(name: String) {
@@ -19,19 +25,36 @@ public final class SharedRefresh {
 
   /// The refresh under way, or `operation` started as a new one, which is no longer
   /// under way once it ends.
+  ///
+  /// A replaceable refresh, such as the index's automatic check, which waits for a
+  /// cheap network for as long as there is none, gives way to one that is not, such
+  /// as a person's Retry, which takes any network (#983): that start cancels it and
+  /// runs once it has ended. Every other start takes the refresh under way.
   @discardableResult
-  public func start(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
-    if let underWay { return underWay }
-    let refresh = Task(name: name) {
-      await operation()
-      underWay = nil
+  public func start(
+    replaceable: Bool = false, _ operation: @escaping @MainActor () async -> Void
+  ) -> Task<Void, Never> {
+    var replaced: Task<Void, Never>?
+    if let underWay {
+      guard underWay.isReplaceable, !replaceable else { return underWay.task }
+      underWay.task.cancel()
+      replaced = underWay.task
     }
-    underWay = refresh
+    started += 1
+    let number = started
+    let refresh = Task(name: name) {
+      await replaced?.value
+      await operation()
+      if number == started {
+        underWay = nil
+      }
+    }
+    underWay = (refresh, replaceable)
     return refresh
   }
 
   /// Waits for the refresh under way, or runs `operation` as a new one and waits
-  /// for it.
+  /// for it, by the same rule as `start`.
   public func join(_ operation: @escaping @MainActor () async -> Void) async {
     await start(operation).value
   }

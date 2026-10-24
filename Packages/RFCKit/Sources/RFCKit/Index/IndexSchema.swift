@@ -6,7 +6,7 @@
 public enum IndexSchema {
   /// Raised when the tables change shape, so a reader can refuse a database it does
   /// not know. Written to `meta` under `schema`.
-  public static let version = 2
+  public static let version = 3
 
   /// The tables, created empty.
   public static let tables = """
@@ -26,6 +26,12 @@ public enum IndexSchema {
       new_section TEXT NOT NULL,
       score REAL NOT NULL
     );
+    CREATE TABLE amendments (
+      amended TEXT NOT NULL,
+      section TEXT NOT NULL,
+      amending TEXT NOT NULL,
+      amending_section TEXT
+    );
 
     """
 
@@ -36,4 +42,8 @@ public enum IndexSchema {
   /// One succession, its five values bound in order.
   public static let insertSuccession =
     "INSERT INTO successions (old, old_section, new, new_section, score) VALUES (?, ?, ?, ?, ?)"
+
+  /// One amendment, its four values bound in order.
+  public static let insertAmendment =
+    "INSERT INTO amendments (amended, section, amending, amending_section) VALUES (?, ?, ?, ?)"
 }

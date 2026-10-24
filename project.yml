@@ -85,6 +85,51 @@ targets:
             # Not one an earlier build left behind.
             rm -f "$bundled"
           fi
+      # The indexes pack (#738), the corpus's citations, successions and amendments:
+      # `make indexes-pack` fetches the release App/indexes-pack.mk pins into
+      # App/Resources, which git ignores, and `DocumentStore.citationIndexURL()` reads
+      # it in place. A phase for the same reasons as the RFC index's. A Release build
+      # checks both files against the pin, since an Xcode archive does not go through
+      # make: a copy left from an earlier pin would ship a pack the app may refuse.
+      - name: Bundle the indexes pack
+        basedOnDependencyAnalysis: false
+        # Declared, so that the signing after it seals the files as they now are.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/indexes.sqlite
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/manifest.json
+        script: |
+          pack="$SRCROOT/App/Resources/indexes"
+          bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/indexes"
+          if [ -f "$pack/indexes.sqlite" ] && [ -f "$pack/manifest.json" ]; then
+            if [ "$CONFIGURATION" = Release ]; then
+              pins="$SRCROOT/App/indexes-pack.mk"
+              for file in indexes.sqlite manifest.json; do
+                case $file in
+                  indexes.sqlite) key=INDEXES_PACK_SQLITE_SHA256 ;;
+                  manifest.json) key=INDEXES_PACK_MANIFEST_SHA256 ;;
+                esac
+                pinned=$(sed -n "s/^$key := //p" "$pins")
+                actual=$(shasum -a 256 "$pack/$file" | cut -d' ' -f1)
+                if [ "$actual" != "$pinned" ]; then
+                  echo "error: $pack/$file is not the pack App/indexes-pack.mk pins: run make indexes-pack."
+                  exit 1
+                fi
+              done
+            fi
+            # Copied only when it changed: it is tens of megabytes, and every build
+            # runs this.
+            if ! cmp -s "$pack/manifest.json" "$bundled/manifest.json" \
+              || ! cmp -s "$pack/indexes.sqlite" "$bundled/indexes.sqlite"; then
+              rm -rf "$bundled" && mkdir -p "$bundled"
+              cp "$pack/indexes.sqlite" "$pack/manifest.json" "$bundled/"
+            fi
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: A Release build bundles the indexes pack: run make indexes-pack first."
+            exit 1
+          else
+            # Never one an earlier build left behind.
+            rm -rf "$bundled"
+          fi
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit
@@ -104,6 +149,9 @@ targets:
         CFBundleVersion: &build $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.reference
         # The contact card an author chip opens can add the author to Contacts (#19).
+        # The card is drawn by a system process with Contacts access of its own, on
+        # both platforms, so the entitlements below have no address book one (#993;
+        # decision "An author's contact details are data, shown as a contact card").
         NSContactsUsageDescription: RFC Reader adds an RFC author to your contacts when you ask it to.
         # Read by macOS only; see App/RFCReader/Scripting.
         NSAppleScriptEnabled: true
@@ -197,8 +245,9 @@ targets:
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
-        # "Bundle the RFC index" reads App/Resources, which it declares no input for:
-        # the file may be missing, which a declared input may not be.
+        # "Bundle the RFC index" and "Bundle the indexes pack" read App/Resources,
+        # which they declare no input for: the files may be missing, which a declared
+        # input may not be.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.

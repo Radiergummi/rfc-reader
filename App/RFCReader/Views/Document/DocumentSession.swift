@@ -98,6 +98,9 @@ final class DocumentSession {
   /// `DocumentView.showSection(_:)` for why it is not asked of the
   /// document each time.
   private(set) var sectionPlaces: [String: String] = [:]
+  /// Every section's anchor, numbered or not: what Export and Print can take alone
+  /// (#386).
+  private(set) var sectionAnchors: Set<String> = []
 
   /// How far the document's heading numbers hang in a style (#433), measured once
   /// per set of fonts: asked on every update pass, for whether they fit the gutter.
@@ -273,6 +276,7 @@ final class DocumentSession {
           },
           uniquingKeysWith: { first, _ in first }
         )
+        sectionAnchors = Set(document.allSections.map(\.anchor))
         measuredHang = nil
         state.finish(document)
         loaded(document)

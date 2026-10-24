@@ -45,4 +45,24 @@ struct ScriptCodeTests {
       #expect(ScriptPane(code: pane.code) == pane)
     }
   }
+
+  @Test func `every export format is the dictionary's, by name and code`() throws {
+    let declared = try Self.enumerators("export format")
+    #expect(declared.count == ExportFormat.allCases.count)
+    for format in ExportFormat.allCases {
+      let code = try #require(declared[format.scriptName])
+      #expect(ScriptCode.value(code) == format.scriptCode)
+      #expect(ExportFormat(scriptCode: format.scriptCode) == format)
+    }
+  }
+
+  /// A format's script name reads back as the format, in any case, and a name of
+  /// none is none.
+  @Test func `an export format's script name round-trips`() {
+    for format in ExportFormat.allCases {
+      #expect(ExportFormat(scriptName: format.scriptName) == format)
+      #expect(ExportFormat(scriptName: format.scriptName.uppercased()) == format)
+    }
+    #expect(ExportFormat(scriptName: "Word") == nil)
+  }
 }

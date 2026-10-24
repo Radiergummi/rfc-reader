@@ -8,6 +8,8 @@ enum InspectorTab: String, CaseIterable {
   case references
   /// Every BCP 14 requirement the document states (#180).
   case requirements
+  /// The reader's highlights in the document (#522).
+  case annotations
 
   /// Named once, for both platforms' tab bars (#258).
   var title: String {
@@ -15,6 +17,7 @@ enum InspectorTab: String, CaseIterable {
     case .contents: String(localized: "Contents")
     case .references: String(localized: "References")
     case .requirements: String(localized: "Requirements")
+    case .annotations: String(localized: "Annotations")
     }
   }
 
@@ -24,6 +27,7 @@ enum InspectorTab: String, CaseIterable {
     case .contents: String(localized: "No Contents")
     case .references: String(localized: "No References")
     case .requirements: String(localized: "No Requirements")
+    case .annotations: String(localized: "No Annotations")
     }
   }
 }
@@ -42,6 +46,8 @@ struct DocumentInspector: View {
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
+  /// Where the build on screen placed each highlight (#522).
+  let highlightStatuses: [UUID: HighlightPlacement.Status]?
   let info: DocumentInfo?
   /// Whether the body is here. Without it, a document the index describes still has
   /// its Info, and the navigation pane's lists say why they are empty (#325).
@@ -58,6 +64,10 @@ struct DocumentInspector: View {
   /// The window's tab, beside which a reference opens in a new one (#761).
   @Environment(NavigationModel.self) private var scene
   let pane: InspectorPane
+  /// Whether the panel is a sheet of its own, in a `NavigationStack` whose bar the
+  /// tabs take as its title (#301), rather than a column beside the reader. Never
+  /// on macOS, where the panel is a split item.
+  let isSheet: Bool
   @Binding var tab: InspectorTab
   let current: String?
   /// The bibliography entry a citation asked to see, if any.
@@ -73,47 +83,105 @@ struct DocumentInspector: View {
     switch pane {
     case .navigation: navigation
     case .info:
-      InfoView(
+      let infoView = InfoView(
         info: info, document: document, library: library, open: openDocument, search: search,
         showReadingPath: showReadingPath, sections: sections, selectSection: selectSection)
+      #if os(macOS)
+        infoView
+      #else
+        if isSheet {
+          // No tabs to title the sheet with, and an empty bar would only push the
+          // pane down. Only in the sheet: beside the reader, `.inspector` lifts the
+          // column's toolbar into the reader's bar (#247), so a visibility set there
+          // could reach the reader's bar too (not measured on an iPad).
+          infoView.toolbarVisibility(.hidden, for: .navigationBar)
+        } else {
+          infoView
+        }
+      #endif
     }
   }
 
+  @ViewBuilder
   private var navigation: some View {
-    VStack(spacing: 0) {
-      #if os(macOS)
+    #if os(macOS)
+      VStack(spacing: 0) {
         InspectorTabBar(tab: $tab)
           .padding(.horizontal, 10)
           .padding(.vertical, 8)
-      #else
-        // The system's segmented control, inside the panel it switches (#247).
-        //
-        // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
-        // reader's own bar, even through a `NavigationStack` of the panel's own, so
-        // the tabs ended up above the reader, apart from the sheet they switch and
-        // in the place of the reader's title. The insets are the sheet's rather
-        // than the inspector column's: 10 and 8 left the control against the
-        // sheet's top edge, its capsule ends inside the sheet's rounded corners.
-        Picker("Panel", selection: $tab) {
-          ForEach(InspectorTab.allCases, id: \.self) { tab in
-            Text(tab.title).tag(tab)
+        selectedTab
+      }
+    #else
+      if isSheet {
+        // The tabs as the sheet's title, under its grabber, as a sheet of the
+        // system's own has its title (#301): the bar gives them the system's top
+        // margin, where 20 pt of inset of our own still read as cramped.
+        selectedTab
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+            ToolbarItem(placement: .principal) { tabPicker }
           }
+      } else {
+        // Not in a toolbar beside the reader: `.inspector` lifts its content's
+        // toolbar items into the reader's own bar, even through a `NavigationStack`
+        // of the panel's own, so the tabs ended up above the reader, apart from the
+        // panel they switch and in the place of the reader's title. The insets
+        // are those the sheet had before the tabs went into its bar (#247).
+        VStack(spacing: 0) {
+          tabPicker
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 8)
+          selectedTab
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 8)
-      #endif
-
-      selectedTab
-    }
+      }
+    #endif
   }
+
+  #if !os(macOS)
+    /// The system's segmented control, in the panel it switches (#247).
+    private var tabPicker: some View {
+      Picker("Panel", selection: $tab) {
+        ForEach(InspectorTab.allCases, id: \.self) { tab in
+          Text(tab.title).tag(tab)
+        }
+      }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+    }
+  #endif
 
   @ViewBuilder
   private var selectedTab: some View {
     let content = InspectorPane.navigationContent(
       hasBody: hasBody, isLoading: isLoading, readsAsOriginal: publishedOriginal != nil)
+    // The highlights are the reader's, not the document's: listed by their quotes
+    // whether or not the document is here to place them in.
+    if tab == .annotations, content != .loading {
+      annotations()
+    } else {
+      selectedTab(content)
+    }
+  }
+
+  /// Placed where the reader's text has placed them; otherwise their stored quotes,
+  /// and why they are not placed: the document is not here, or what is shown is not
+  /// its own text but the original or a translation.
+  private func annotations() -> some View {
+    let highlights = document.map { library.annotations.highlights(of: $0) } ?? []
+    let note: String? =
+      highlightStatuses != nil
+      ? nil
+      : hasBody && publishedOriginal == nil
+        ? String(localized: "Highlights are shown in the document's own text.")
+        : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
+    return AnnotationsView(
+      highlights: highlights, statuses: highlightStatuses, note: note, sections: sections,
+      library: library, select: selectSection)
+  }
+
+  @ViewBuilder
+  private func selectedTab(_ content: InspectorPane.NavigationContent) -> some View {
     switch content {
     case .lists:
       loadedTab
@@ -163,6 +231,8 @@ struct DocumentInspector: View {
         groups: groups, revealed: revealed, open: openDocument, menu: referenceMenu)
     case .requirements:
       RequirementsView(requirements: requirements, document: document, select: selectSection)
+    case .annotations:
+      annotations()
     }
   }
 
@@ -188,9 +258,10 @@ struct DocumentInspector: View {
 /// `DocumentInspector` wired to the window's `ReaderState`, and the one place that
 /// wiring is written.
 ///
-/// macOS hosts this in the window's own split item and iOS presents it with
-/// `.inspector`; the six inputs are the same either way, so the next one added to
-/// `DocumentInspector` is added once.
+/// macOS hosts this in the window's own split item; iOS presents it with
+/// `.inspector` beside the reader, or in a sheet of its own in compact width; the
+/// six inputs are the same either way, so the next one added to `DocumentInspector`
+/// is added once.
 struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
@@ -215,7 +286,28 @@ struct PanelHost: View {
     @Binding var readingPathAfterClosing: ReadingPathRequest?
   #endif
 
+  /// Whether the panel is a sheet, whose bar of its own the tabs take as its title
+  /// (#301): the one panel that closes after a choice.
+  private var isSheet: Bool {
+    #if os(macOS)
+      false
+    #else
+      closesAfterChoice
+    #endif
+  }
+
   var body: some View {
+    // The stack is made here, beside the flag that puts the tabs in its bar, so
+    // that neither is without the other.
+    if isSheet {
+      NavigationStack { panel }
+    } else {
+      panel
+    }
+  }
+
+  @ViewBuilder
+  private var panel: some View {
     @Bindable var reader = reader
     // On what the index describes, not only the body: a document still loading, or
     // one that failed to or was offline, has its Info (#325).
@@ -227,6 +319,7 @@ struct PanelHost: View {
         groups: FocusCitations.shown(
           reader.focusGroups, revealing: reader.revealedReference?.anchor) ?? reader.groups,
         requirements: reader.requirements,
+        highlightStatuses: reader.highlightStatuses,
         info: reader.info,
         hasBody: reader.hasDocument,
         isLoading: reader.isLoading,
@@ -234,6 +327,7 @@ struct PanelHost: View {
         document: navigation.shown,
         library: library,
         pane: reader.pane,
+        isSheet: isSheet,
         tab: $reader.tab,
         // Read only while the navigation pane shows: it changes on every section
         // crossing, and read under the Info pane it re-rendered that pane each time.
@@ -307,8 +401,9 @@ struct PanelHost: View {
   /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
   /// divider only between two unselected labels.
   ///
-  /// macOS only, and compiled for macOS only (#258): in an iPhone's sheet the
-  /// system's own segmented control sits in the panel instead (#247).
+  /// macOS only, and compiled for macOS only (#258): on iOS the system's own
+  /// segmented control is the tabs, in the sheet's bar or the inspector column's
+  /// content (#247, #301).
   private struct InspectorTabBar: View {
     @Binding var tab: InspectorTab
 

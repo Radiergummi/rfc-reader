@@ -27,9 +27,12 @@ final class ReaderState {
   /// Every BCP 14 requirement the document states, extracted once per document by
   /// `DocumentView` (#180): nil until it has been, which is after the body shows.
   var requirements: [Requirement]?
-  /// What the open RFC can be saved as: PDF, and its grammar where it has one
+  /// Where the build on screen placed each of the document's highlights (#522), which
+  /// the Annotations tab lists: nil until a build has, or when there is none.
+  var highlightStatuses: [UUID: HighlightPlacement.Status]?
+  /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
-  var exportFormats: [ExportFormat] = [.pdf]
+  var exportFormats: [ExportFormat] = ExportFormat.everyDocument
   /// The window's reading mode and the sections it has expanded in place (#698). The
   /// mode stays from one document to the next; what was expanded does not.
   var folding = Folding() {
@@ -93,10 +96,17 @@ final class ReaderState {
   /// Resolved by `DocumentView`, which has the document — rather than handing the
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?
+  /// The anchor of the section the reader is in, when the reader is in one: what
+  /// Export and Print offer to take alone (#386). Nil above the first section.
+  var exportableSection: String?
 
   /// Whether the document's body is here: what the toolbar title, printing and
   /// export need. The panel asks `canDescribe` instead.
   var hasDocument = false
+  /// Whether the original text has loaded, so Original Text shows it rather than
+  /// progress or an error: what Find needs on iOS (#943). Written by `DocumentView`,
+  /// from `DocumentSession.originalText`.
+  var hasOriginalText = false
   /// Whether the body is still on its way, from `DocumentSession`'s load state:
   /// without it, the navigation pane shows progress while this holds and says the
   /// document has not loaded once it does not (#325).
@@ -251,6 +261,16 @@ final class ReaderState {
       return findTextView.findInteraction
     }
 
+    /// Whether a text view shows for Find to open over (#943): not a published
+    /// original's page, nor Original Text while it loads or after it failed to. From
+    /// what the reader shows, which the menus observe, rather than from
+    /// `findTextView`, which text views set as they update.
+    var offersFind: Bool {
+      ReaderFind.isAvailable(
+        hasDocument: hasDocument, publishedOriginal: publishedOriginal?.kind,
+        showsOriginal: showOriginal, hasOriginalText: hasOriginalText)
+    }
+
     func presentFind() {
       findInteraction?.presentFindNavigator(showingReplace: false)
     }
@@ -280,7 +300,8 @@ final class ReaderState {
     readsTranslation = false
     groups = []
     requirements = nil
-    exportFormats = [.pdf]
+    highlightStatuses = nil
+    exportFormats = ExportFormat.everyDocument
     folding.expanded = []
     folding.openAsides = []
     folding.focused = nil
@@ -290,7 +311,9 @@ final class ReaderState {
     revealedReference = nil
     currentAnchor = nil
     currentSection = nil
+    exportableSection = nil
     hasDocument = false
+    hasOriginalText = false
     publishedOriginal = nil
     isLoading = false
     hasSelection = false
