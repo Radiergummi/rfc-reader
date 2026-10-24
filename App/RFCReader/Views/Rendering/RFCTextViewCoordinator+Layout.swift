@@ -28,13 +28,15 @@ extension RFCTextViewCoordinator {
     self.built = built
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
+    // It holds the build it was worked out for, which is no longer on screen.
+    spokenStatesKept = nil
     // Before the text, so the first layout skips what the reading mode folds.
-    let foldingIndex = FoldingIndex(built)
-    self.foldingIndex = foldingIndex
     self.folding = folding
     foldingEcho.forget()
     forgetBands()
-    foldingDelegate.fold(foldingIndex, by: folding, bands: RequirementBands())
+    foldingDelegate.fold(built.foldingIndex, by: folding, bands: RequirementBands())
+    // The marks are ranges of the build being replaced.
+    forgetHighlights()
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
@@ -46,6 +48,7 @@ extension RFCTextViewCoordinator {
     engine.installed(built, document: documentID)
     reportVisibleAnchor()
     findBands()
+    placeHighlights()
   }
 
   // MARK: - Reading modes
@@ -104,15 +107,31 @@ extension RFCTextViewCoordinator {
       let built, !requirements.isEmpty
     else { return }
     let requirements = requirements
+    // From the install, the requirements' arrival or a switch into a mode that bands
+    // them, until the bands are drawn (#747).
+    let interval = signposter.beginInterval(
+      "Find bands", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     bandsTask = Task {
       let bands = await Self.bands(of: requirements, in: built)
       // A later build or requirements have forgotten this task and started their own.
-      guard self.built?.text === built.text, self.requirements == requirements else { return }
+      guard !Task.isCancelled, self.built?.text === built.text, self.requirements == requirements
+      else {
+        signposter.endInterval("Find bands", interval, "superseded")
+        return
+      }
       bandsTask = nil
       requirementBands = bands
-      guard folding.mode.bandsRequirements, let foldingIndex else { return }
-      foldingDelegate.fold(foldingIndex, by: folding, bands: bands)
-      engine.refold(foldingDelegate.hidden)
+      guard folding.mode.bandsRequirements else {
+        signposter.endInterval("Find bands", interval, "not drawn")
+        return
+      }
+      // The bands change only what the fragments draw, not what the folding hides:
+      // they are drawn again, not laid out again, which a refold does for the whole
+      // document on the main actor (the "Refold" and "Redraw" signposts, #747).
+      foldingDelegate.band(bands)
+      engine.redraw()
+      signposter.endInterval("Find bands", interval)
     }
   }
 
@@ -145,6 +164,50 @@ extension RFCTextViewCoordinator {
     apply(toggled)
     askScene(from: before)
     return true
+  }
+
+  /// The outline's section the text's cursor is in, or in Implementer its aside, and
+  /// what opens or closes it: the text view's Expand Section or Collapse Section, or
+  /// Expand Aside or Collapse Aside, to an assistive technology (#760). The cursor,
+  /// not the reader's line: VoiceOver moves it heading by heading, and the action
+  /// belongs to the heading it has just said. The reader's line where the cursor is
+  /// in folded text.
+  func disclosureAction() -> (name: String, toggle: () -> Void)? {
+    guard let foldingIndex, let textView else { return nil }
+    #if canImport(UIKit)
+      let cursor = textView.selectedRange.location
+    #else
+      let cursor = textView.selectedRange().location
+    #endif
+    let line =
+      foldingDelegate.hidden.contains(cursor) ? (engine.placeOffset ?? 0) : cursor
+    let name: String
+    let heading: Int
+    if let section = folding.outlineSection(atLine: line, in: foldingIndex) {
+      name =
+        section.isExpanded
+        ? String(localized: "Collapse Section") : String(localized: "Expand Section")
+      heading = section.heading
+    } else if let aside = folding.aside(atLine: line, in: foldingIndex) {
+      name =
+        aside.isExpanded ? String(localized: "Collapse Aside") : String(localized: "Expand Aside")
+      heading = aside.heading
+    } else {
+      return nil
+    }
+    return (name, { [weak self] in _ = self?.toggleSection(atHeading: heading) })
+  }
+
+  /// What VoiceOver says after each heading the reading mode discloses (#760), worked
+  /// out once per folding: VoiceOver asks on every line it reads.
+  func spokenStates() -> [Int: String] {
+    guard let foldingIndex, let built else { return [:] }
+    if let kept = spokenStatesKept, kept.folding == folding, kept.text === built.text {
+      return kept.said
+    }
+    let said = folding.spokenStates(in: foldingIndex)
+    spokenStatesKept = KeptSpokenStates(folding: folding, text: built.text, said: said)
+    return said
   }
 
   /// A jump to `offset`, which the reading mode may have folded away: its section is

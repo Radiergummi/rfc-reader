@@ -10,6 +10,10 @@ private let indexerLog = Logger(
 /// is removed, evicted or purged is dropped. The index follows the store rather than being told of each body, so a
 /// body is never indexed that is not on disk, whichever path wrote or removed it.
 ///
+/// Index All RFCs (`indexAll`) is the exception: it indexes documents whose bodies it
+/// does not keep, and the index marks them retained, so they stay whatever the store
+/// holds until `releaseRetained`.
+///
 /// The one place the index is written and searched, from this actor's executor:
 /// `FullTextIndex` is one connection, used from one task.
 public actor TextIndexer {
@@ -21,6 +25,9 @@ public actor TextIndexer {
   /// them.
   private var indexed: [DocumentID: Date]?
 
+  /// The documents indexed by Index All RFCs, read and kept as `indexed` is.
+  private var retained: Set<DocumentID> = []
+
   /// The stored bodies that could not be read or indexed, with when they were written,
   /// which a reconcile does not try again while they stay as they are: each change to
   /// the store would parse them again. A body removed or written again is tried again.
@@ -29,6 +36,11 @@ public actor TextIndexer {
   /// How many documents a long reconcile indexes between the calls of its `changed`,
   /// so a search on show fills in while the first pass works through every body.
   private static let progressInterval = 25
+
+  /// How many documents Index All RFCs downloads at once.
+  private static let concurrentDownloads = 4
+
+  private let url: URL
 
   /// What the app's index is kept in: Application Support, in a folder excluded from
   /// backups, since it is made again from the bodies.
@@ -48,6 +60,7 @@ public actor TextIndexer {
   /// An indexer keeping the index at `url`, made when there is none, to `store`.
   public init(contentsOf url: URL, store: DocumentStore) throws {
     self.store = store
+    self.url = url
     self.index = try FullTextIndex(contentsOf: url)
   }
 
@@ -80,7 +93,7 @@ public actor TextIndexer {
     unindexable = unindexable.filter { stored[$0.key] == $0.value }
     guard let before = indexedDocuments() else { return }
     var unannounced = 0
-    for id in before.keys where stored[id] == nil {
+    for id in before.keys where stored[id] == nil && !retained.contains(id) {
       do {
         try index.remove(id)
         indexed?[id] = nil
@@ -121,16 +134,199 @@ public actor TextIndexer {
     if unannounced > 0 { await changed() }
   }
 
-  /// `indexed`, read from the index the first time; nil when it cannot be read.
+  /// `indexed`, read from the index the first time, with `retained`; nil when it
+  /// cannot be read.
   private func indexedDocuments() -> [DocumentID: Date]? {
     if let indexed { return indexed }
     do {
+      retained = try index.retained()
       indexed = try index.indexed()
     } catch {
       indexerLog.error(
         "reading what is indexed failed: \(String(describing: error), privacy: .public)")
     }
     return indexed
+  }
+
+  // MARK: - Index All RFCs
+
+  /// How far Index All RFCs has got: of the `total` documents it was given, how many
+  /// are indexed, and how many it could not download or parse.
+  public struct CorpusProgress: Sendable, Equatable {
+    public var indexed: Int
+    public var total: Int
+    public var failed: Int
+
+    public init(indexed: Int, total: Int, failed: Int) {
+      self.indexed = indexed
+      self.total = total
+      self.failed = failed
+    }
+  }
+
+  /// Index All RFCs: indexes every one of `ids`, retained, so it stays when the store
+  /// holds no body of it, downloading with `fetch` each that is not indexed yet and
+  /// keeping no body. A document indexed already is retained as it is, so a run
+  /// stopped or cancelled is resumed by the next, which downloads only the rest, and
+  /// tries again those that failed. A document the installed legacy pack holds is
+  /// read from the pack instead, as the reader reads it, so a hit's anchor is one the
+  /// reader has.
+  ///
+  /// `progress` is called after each document, beginning with what was indexed
+  /// already; `changed` as `run(changed:)` says. Cancelled, the run ends with what it
+  /// has indexed, and counts nothing it left as failed.
+  public func indexAll(
+    _ ids: [DocumentID],
+    fetch: @escaping @Sendable (DocumentID) async throws -> RFCDocument,
+    progress: @Sendable (CorpusProgress) async -> Void = { _ in },
+    changed: @Sendable () async -> Void = {}
+  ) async -> CorpusProgress {
+    let before = indexedDocuments() ?? [:]
+    let present = ids.filter { before[$0] != nil }
+    let unretained = present.filter { !retained.contains($0) }
+    if !unretained.isEmpty {
+      do {
+        try index.retain(unretained)
+        retained.formUnion(unretained)
+        await changed()
+      } catch {
+        indexerLog.error(
+          "retaining what is indexed failed: \(String(describing: error), privacy: .public)")
+      }
+    }
+    let store = store
+    var counted = CorpusProgress(indexed: present.count, total: ids.count, failed: 0)
+    await progress(counted)
+    var missing = ids.filter { before[$0] == nil }.makeIterator()
+    var unannounced = 0
+    await withTaskGroup(of: (DocumentID, Result<RFCDocument, any Error>).self) { group in
+      func download(_ id: DocumentID) {
+        group.addTask {
+          if let document = await store.packDocument(id) {
+            return (id, .success(document))
+          }
+          do {
+            return (id, .success(try await fetch(id)))
+          } catch {
+            return (id, .failure(error))
+          }
+        }
+      }
+      for _ in 0..<Self.concurrentDownloads {
+        guard let id = missing.next() else { break }
+        download(id)
+      }
+      for await (id, fetched) in group {
+        if Task.isCancelled {
+          group.cancelAll()
+          continue
+        }
+        switch fetched {
+        case .success(var document):
+          document.header.id = id
+          do {
+            // A reconcile may have indexed it from a body stored meanwhile, as it was
+            // written; indexed again here, the next reconcile would parse it again.
+            if indexed?[id] != nil {
+              try index.retain([id])
+            } else {
+              try index.add(document, retained: true)
+              indexed?[id] = .distantPast
+            }
+            retained.insert(id)
+            counted.indexed += 1
+            unannounced += 1
+          } catch {
+            counted.failed += 1
+            indexerLog.error(
+              "\(id.displayName, privacy: .public): not indexed: \(String(describing: error), privacy: .public)"
+            )
+          }
+        case .failure(let error):
+          counted.failed += 1
+          indexerLog.error(
+            "\(id.displayName, privacy: .public): not downloaded to index: \(String(describing: error), privacy: .public)"
+          )
+        }
+        await progress(counted)
+        if unannounced >= Self.progressInterval {
+          unannounced = 0
+          await changed()
+        }
+        if let next = missing.next() {
+          download(next)
+        }
+      }
+    }
+    if unannounced > 0 { await changed() }
+    return counted
+  }
+
+  /// Remove Full-Text Index: the index goes back to the bodies the store holds, and
+  /// gives back the disk the rest took. It is emptied and the stored bodies indexed
+  /// again (`FullTextIndex.removeAll`), which is far fewer documents than it drops.
+  public func releaseRetained(changed: @Sendable () async -> Void = {}) async {
+    do {
+      try index.removeAll()
+    } catch {
+      indexerLog.error(
+        "emptying the index failed: \(String(describing: error), privacy: .public)")
+    }
+    // Read again from the index, whether or not giving back the disk failed after the
+    // tables were made again.
+    indexed = nil
+    retained = []
+    await changed()
+    await reconcile(changed: changed)
+  }
+
+  /// The legacy pack was installed: the indexed RFCs the reader now shows from the
+  /// pack are dropped, since their anchors are those of what was read before -- a
+  /// stored text, or what Index All RFCs downloaded -- not of the pack. One with a
+  /// stored body is indexed again now, by the reconcile, from the pack, though the
+  /// body's date is as it was; a retained one is read from the pack by the next run.
+  public func legacyPackInstalled(changed: @Sendable () async -> Void = {}) async {
+    guard let before = indexedDocuments() else { return }
+    var dropped = 0
+    for id in await store.readFromLegacyPack(Set(before.keys)) {
+      do {
+        try index.remove(id)
+        indexed?[id] = nil
+        retained.remove(id)
+        dropped += 1
+      } catch {
+        indexerLog.error(
+          "\(id.displayName, privacy: .public): not removed from the index: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    if dropped > 0 { await changed() }
+    await reconcile(changed: changed)
+  }
+
+  /// How many of `ids` are not indexed yet: what Index All RFCs would download.
+  public func unindexed(_ ids: [DocumentID]) -> Int {
+    let indexed = indexedDocuments() ?? [:]
+    return ids.count { indexed[$0] == nil }
+  }
+
+  /// What the index holds, for Settings.
+  public struct Usage: Sendable, Equatable {
+    /// How many documents are indexed, and how much of the disk the index takes,
+    /// its journal included.
+    public var usage: StorageUsage
+    /// How many of them Index All RFCs indexed.
+    public var retained: Int
+  }
+
+  public func usage() -> Usage {
+    let bytes = ["", "-wal"].reduce(0) { total, suffix in
+      let file = URL(filePath: url.path + suffix)
+      return total + ((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+    }
+    let documents = indexedDocuments()?.count ?? 0
+    return Usage(
+      usage: StorageUsage(documents: documents, bytes: bytes), retained: retained.count)
   }
 
   /// What a search found, and how many documents it searched.

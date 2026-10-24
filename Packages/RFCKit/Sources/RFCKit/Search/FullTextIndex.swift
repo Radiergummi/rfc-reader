@@ -1,4 +1,3 @@
-internal import CSQLite
 import Foundation
 
 /// A section found by `FullTextIndex.search`: where it is, what it is called, and the
@@ -38,35 +37,36 @@ public struct Snippet: Sendable, Hashable {
 /// back-of-book index are left out: each is a list, of titles or of terms, which
 /// answers no question and outranks the sections that do.
 ///
-/// One connection, used from one task, as `CitationIndex` is: not `Sendable`. The
-/// connection is the one unsafe thing it holds, and nothing outside sees it, so it
-/// is `@safe` to use.
+/// One connection, used from one task, as `CitationIndex` is: not `Sendable`.
 ///
 /// The schema:
 ///
 ///     meta (key, value)             -- `version`
-///     documents (document, written) -- every document indexed, `rfc8999`, and when
-///                                      its body was written
+///     documents (document, written, retained)
+///                                   -- every document indexed, `rfc8999`, when its
+///                                      body was written, and whether Index All RFCs
+///                                      indexed it
 ///     sections (document, anchor, number, heading, body)   -- FTS5
 ///     section_rows (row, document)  -- which document each row of `sections` is
 ///
 /// `section_rows` is what a document's rows are found by: `sections` cannot index
 /// its `document` column, so deleting by it scanned every row of every document.
-@safe public final class FullTextIndex {
+public final class FullTextIndex {
   /// Raised whenever the tables or what a section's text is change: an index made
   /// under another version is emptied when it is opened. The app then indexes its
   /// stored bodies again; a document indexed by Index All RFCs, whose body was not
   /// kept, is only back once that run is made again.
-  public static let version = 2
+  public static let version = 3
 
   /// The anchor the reader gives the abstract, which a hit in it opens.
   public static let abstractAnchor = "abstract"
 
+  /// The index's own refusals. What SQLite refuses is an `SQLiteDatabase.Failure`.
   public struct Failure: Error, CustomStringConvertible {
     public let description: String
   }
 
-  private var connection: OpaquePointer?
+  private let database: SQLiteDatabase
 
   /// Opens the index at `url`, making it if there is none.
   public convenience init(contentsOf url: URL) throws {
@@ -75,52 +75,48 @@ public struct Snippet: Sendable, Hashable {
 
   /// `version` is the one the index is held to, for a test to open it under another.
   init(contentsOf url: URL, version: Int) throws {
-    // A failed open still hands back a connection, for its message; `deinit` closes it.
-    guard unsafe sqlite3_open(url.path, &connection) == SQLITE_OK else {
-      throw Failure(description: message)
-    }
-    // A second connection writing, as the app's indexing may be while a search
-    // reads, is waited for rather than failing at once.
-    try check(unsafe sqlite3_busy_timeout(connection, 5_000))
+    database = try SQLiteDatabase(contentsOf: url)
     // A search reads while indexing writes, and each document indexed is a commit of
     // its own.
-    try execute("PRAGMA journal_mode = WAL")
+    try database.execute("PRAGMA journal_mode = WAL")
     // An index of this version is opened without the write lock, so a search is not
     // kept waiting behind indexing.
     guard try storedVersion() != String(version) else { return }
     // In one transaction, so a second connection opening the index at the same time
     // finds the version once this one has rebuilt the tables, and does not rebuild them
     // under it.
-    try transaction {
-      try execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    try database.transaction {
+      try database.execute(
+        "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
       guard try storedVersion() != String(version) else { return }
-      try execute(
-        """
-        DROP TABLE IF EXISTS documents;
-        DROP TABLE IF EXISTS sections;
-        DROP TABLE IF EXISTS section_rows;
-        CREATE TABLE documents (document TEXT PRIMARY KEY, written REAL NOT NULL);
-        CREATE VIRTUAL TABLE sections USING fts5(
-          document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
-          tokenize = 'unicode61 remove_diacritics 2'
-        );
-        CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
-        CREATE INDEX section_rows_by_document ON section_rows (document);
-        """)
-      try run("INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(version))
+      try database.execute(Self.emptyTables)
+      try database.run(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(version))
     }
   }
 
-  deinit {
-    unsafe sqlite3_close(connection)
-  }
+  /// The tables, made empty: those of an earlier version, or of the index, dropped.
+  private static let emptyTables = """
+    DROP TABLE IF EXISTS documents;
+    DROP TABLE IF EXISTS sections;
+    DROP TABLE IF EXISTS section_rows;
+    CREATE TABLE documents (
+      document TEXT PRIMARY KEY, written REAL NOT NULL, retained INTEGER NOT NULL
+    );
+    CREATE VIRTUAL TABLE sections USING fts5(
+      document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
+      tokenize = 'unicode61 remove_diacritics 2'
+    );
+    CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
+    CREATE INDEX section_rows_by_document ON section_rows (document);
+    """
 
   /// The version the index was made under, nil for a new file.
   private func storedVersion() throws -> String? {
-    guard try !strings("SELECT name FROM sqlite_master WHERE name = 'meta'").isEmpty else {
+    guard try !database.strings("SELECT name FROM sqlite_master WHERE name = 'meta'").isEmpty else {
       return nil
     }
-    return try strings("SELECT value FROM meta WHERE key = 'version'").first
+    return try database.strings("SELECT value FROM meta WHERE key = 'version'").first
   }
 
   // MARK: - Writing
@@ -128,74 +124,101 @@ public struct Snippet: Sendable, Hashable {
   /// Indexes `document`, replacing what was indexed of it before. One that does not
   /// say which RFC it is is refused: its hits could open nothing. `written` is when
   /// its body was written, which `indexed()` hands back, for a body written again to
-  /// be indexed again.
-  public func add(_ document: RFCDocument, written: Date = .distantPast) throws {
+  /// be indexed again. `retained` marks it as Index All RFCs indexes a document, whose
+  /// body is not kept (`retained()`); a document retained before stays retained.
+  public func add(_ document: RFCDocument, written: Date = .distantPast, retained: Bool = false)
+    throws
+  {
     guard let id = document.header.id else {
       throw Failure(description: "the document names no number")
     }
-    try transaction {
+    try database.transaction {
+      let wasRetained = try !database.strings(
+        "SELECT document FROM documents WHERE document = ? AND retained = 1", id.fileStem
+      ).isEmpty
       try deleteRows(of: id)
-      let insert = try unsafe prepare(
+      let insert = try database.prepare(
         "INSERT INTO sections (document, anchor, number, heading, body) VALUES (?, ?, ?, ?, ?)")
-      defer { unsafe sqlite3_finalize(insert) }
-      let record = try unsafe prepare(
+      let record = try database.prepare(
         "INSERT INTO section_rows (row, document) VALUES (last_insert_rowid(), ?)")
-      defer { unsafe sqlite3_finalize(record) }
-      try unsafe bind(id.fileStem, at: 1, in: record)
+      try record.bind(id.fileStem, at: 1)
       for row in Self.rows(of: document) {
-        try check(unsafe sqlite3_reset(insert))
-        try unsafe bind(id.fileStem, at: 1, in: insert)
-        try unsafe bind(row.anchor, at: 2, in: insert)
-        try unsafe bind(row.number, at: 3, in: insert)
-        try unsafe bind(row.heading, at: 4, in: insert)
-        try unsafe bind(row.body, at: 5, in: insert)
-        try unsafe step(insert)
-        try check(unsafe sqlite3_reset(record))
-        try unsafe step(record)
+        try insert.reset()
+        try insert.bind(id.fileStem, at: 1)
+        try insert.bind(row.anchor, at: 2)
+        try insert.bind(row.number, at: 3)
+        try insert.bind(row.heading, at: 4)
+        try insert.bind(row.body, at: 5)
+        try insert.step()
+        try record.reset()
+        try record.step()
       }
-      let recordDocument = try unsafe prepare(
-        "INSERT INTO documents (document, written) VALUES (?, ?)")
-      defer { unsafe sqlite3_finalize(recordDocument) }
-      try unsafe bind(id.fileStem, at: 1, in: recordDocument)
-      try check(
-        unsafe sqlite3_bind_double(recordDocument, 2, written.timeIntervalSinceReferenceDate))
-      try unsafe step(recordDocument)
+      let recordDocument = try database.prepare(
+        "INSERT INTO documents (document, written, retained) VALUES (?, ?, ?)")
+      try recordDocument.bind(id.fileStem, at: 1)
+      try recordDocument.bind(written.timeIntervalSinceReferenceDate, at: 2)
+      try recordDocument.bind(retained || wasRetained ? 1 : 0, at: 3)
+      try recordDocument.step()
     }
   }
 
   public func remove(_ id: DocumentID) throws {
-    try transaction { try deleteRows(of: id) }
+    try database.transaction { try deleteRows(of: id) }
+  }
+
+  /// Removes every document, as Remove Full-Text Index does before the app indexes
+  /// its stored bodies again, and gives the disk back. The tables are made again
+  /// rather than emptied row by row: FTS5 removes a row by writing a deletion over
+  /// its postings, which leaves them in the file until segments merge.
+  public func removeAll() throws {
+    try database.transaction { try database.execute(Self.emptyTables) }
+    // SQLite keeps freed pages for rows to come, and the journal at its largest.
+    try database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    try database.execute("VACUUM")
+    try database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+  }
+
+  /// Marks those of `ids` that are indexed as retained, as Index All RFCs does with
+  /// what is indexed already rather than indexing it again.
+  public func retain(_ ids: some Sequence<DocumentID>) throws {
+    try database.transaction {
+      for id in ids {
+        try database.run("UPDATE documents SET retained = 1 WHERE document = ?", id.fileStem)
+      }
+    }
+  }
+
+  /// The documents indexed by Index All RFCs, or by `retain`: those indexed whether or
+  /// not the app keeps their bodies.
+  public func retained() throws -> Set<DocumentID> {
+    Set(
+      try database.strings("SELECT document FROM documents WHERE retained = 1")
+        .compactMap(DocumentID.init(fileStem:)))
   }
 
   /// Every document indexed, with when its body was written, as `add` was told.
   /// A failure throws rather than ending the rows early, which would index them again.
   public func indexed() throws -> [DocumentID: Date] {
-    let statement = try unsafe prepare("SELECT document, written FROM documents")
-    defer { unsafe sqlite3_finalize(statement) }
+    let statement = try database.prepare("SELECT document, written FROM documents")
     var documents: [DocumentID: Date] = [:]
-    while true {
-      let result = unsafe sqlite3_step(statement)
-      guard result == SQLITE_ROW else {
-        guard result == SQLITE_DONE else { throw Failure(description: message) }
-        return documents
-      }
-      guard let id = unsafe column(0, of: statement).flatMap(DocumentID.init(fileStem:)) else {
-        continue
-      }
-      documents[id] = Date(
-        timeIntervalSinceReferenceDate: unsafe sqlite3_column_double(statement, 1))
+    while try statement.step() {
+      guard let id = statement.text(at: 0).flatMap(DocumentID.init(fileStem:)) else { continue }
+      documents[id] = Date(timeIntervalSinceReferenceDate: statement.double(at: 1))
     }
+    return documents
   }
 
   /// A document never indexed has no rows, and costs one lookup.
   private func deleteRows(of id: DocumentID) throws {
-    guard try !strings("SELECT document FROM documents WHERE document = ?", id.fileStem).isEmpty
+    guard
+      try !database.strings("SELECT document FROM documents WHERE document = ?", id.fileStem)
+        .isEmpty
     else { return }
-    try run(
+    try database.run(
       "DELETE FROM sections WHERE rowid IN (SELECT row FROM section_rows WHERE document = ?)",
       id.fileStem)
-    try run("DELETE FROM section_rows WHERE document = ?", id.fileStem)
-    try run("DELETE FROM documents WHERE document = ?", id.fileStem)
+    try database.run("DELETE FROM section_rows WHERE document = ?", id.fileStem)
+    try database.run("DELETE FROM documents WHERE document = ?", id.fileStem)
   }
 
   /// One row of `sections`, before it is written.
@@ -280,7 +303,7 @@ public struct Snippet: Sendable, Hashable {
     // it would be made for every row the predicate refuses too. It needs the match in
     // its own statement. The snippet is the body's (column 4): left to choose, FTS5
     // takes a heading that matches as often, which the result shows already.
-    let statement = try unsafe prepare(
+    let statement = try database.prepare(
       match == nil
         ? """
         SELECT rowid, document, anchor, number, heading, substr(body, 1, \(Self.openingLength + 1))
@@ -291,32 +314,27 @@ public struct Snippet: Sendable, Hashable {
           snippet(sections, 4, char(57344), char(57345), '…', 16)
         FROM sections WHERE sections MATCH ? AND rowid IN (\(placeholders))
         """)
-    defer { unsafe sqlite3_finalize(statement) }
     var position: Int32 = 1
     if let match {
-      try unsafe bind(match, at: position, in: statement)
+      try statement.bind(match, at: position)
       position += 1
     }
     for row in rows {
-      try check(unsafe sqlite3_bind_int64(statement, position, row))
+      try statement.bind(row, at: position)
       position += 1
     }
-    var hits: [Int64: SectionHit] = [:]
-    while true {
-      let result = unsafe sqlite3_step(statement)
-      guard result == SQLITE_ROW else {
-        guard result == SQLITE_DONE else { throw Failure(description: message) }
-        return rows.compactMap { hits[$0] }
-      }
-      guard let id = unsafe column(1, of: statement).flatMap(DocumentID.init(fileStem:)),
-        let anchor = unsafe column(2, of: statement)
+    var hits: [Int: SectionHit] = [:]
+    while try statement.step() {
+      guard let id = statement.text(at: 1).flatMap(DocumentID.init(fileStem:)),
+        let anchor = statement.text(at: 2)
       else { continue }
-      let text = unsafe column(5, of: statement) ?? ""
-      hits[unsafe sqlite3_column_int64(statement, 0)] = SectionHit(
-        document: id, anchor: anchor, number: unsafe column(3, of: statement),
-        heading: unsafe column(4, of: statement) ?? "",
+      let text = statement.text(at: 5) ?? ""
+      hits[statement.integer(at: 0)] = SectionHit(
+        document: id, anchor: anchor, number: statement.text(at: 3),
+        heading: statement.text(at: 4) ?? "",
         snippet: match == nil ? Self.opening(of: text) : Self.snippet(marked: text))
     }
+    return rows.compactMap { hits[$0] }
   }
 
   /// The rows of up to `limit` sections matching `match` and `section` that `includes`
@@ -327,7 +345,7 @@ public struct Snippet: Sendable, Hashable {
   private func rankedRows(
     matching match: String?, section: String?, limit: Int,
     where includes: ((DocumentID) -> Bool)?
-  ) throws -> [Int64] {
+  ) throws -> [Int] {
     var conditions: [String] = []
     var values: [String] = []
     if let match {
@@ -339,32 +357,26 @@ public struct Snippet: Sendable, Hashable {
       conditions.append(condition.sql)
       values += condition.values
     }
-    let statement = try unsafe prepare(
+    let statement = try database.prepare(
       "SELECT rowid, document FROM sections WHERE \(conditions.joined(separator: " AND ")) "
         + (match == nil
           ? "ORDER BY CAST(ltrim(document, 'abcdefghijklmnopqrstuvwxyz') AS INTEGER) DESC, rowid"
           : "ORDER BY rank"))
-    defer { unsafe sqlite3_finalize(statement) }
     for (offset, value) in values.enumerated() {
-      try unsafe bind(value, at: Int32(offset + 1), in: statement)
+      try statement.bind(value, at: Int32(offset + 1))
     }
-    var rows: [Int64] = []
+    var rows: [Int] = []
     // Each document asked about once, however many of its sections match.
     var allowed: [String: Bool] = [:]
-    while rows.count < limit {
-      let result = unsafe sqlite3_step(statement)
-      guard result == SQLITE_ROW else {
-        guard result == SQLITE_DONE else { throw Failure(description: message) }
-        break
-      }
+    while rows.count < limit, try statement.step() {
       if let includes {
-        guard let stem = unsafe column(1, of: statement) else { continue }
+        guard let stem = statement.text(at: 1) else { continue }
         if allowed[stem] == nil {
           allowed[stem] = DocumentID(fileStem: stem).map(includes) ?? false
         }
         guard allowed[stem] == true else { continue }
       }
-      rows.append(unsafe sqlite3_column_int64(statement, 0))
+      rows.append(statement.integer(at: 0))
     }
     return rows
   }
@@ -464,102 +476,6 @@ public struct Snippet: Sendable, Hashable {
     }
     return Snippet(text: text, matches: matches)
   }
-
-  // MARK: - SQLite
-
-  private var message: String {
-    unsafe connection.flatMap { unsafe sqlite3_errmsg($0) }.map { unsafe String(cString: $0) }
-      ?? "SQLite failed"
-  }
-
-  /// Takes the write lock at once: a transaction that reads first and then writes is
-  /// refused at its first write while another connection writes, without waiting
-  /// the busy timeout.
-  private func transaction(_ body: () throws -> Void) throws {
-    try execute("BEGIN IMMEDIATE")
-    do {
-      try body()
-      try execute("COMMIT")
-    } catch {
-      try? execute("ROLLBACK")
-      throw error
-    }
-  }
-
-  private func execute(_ sql: String) throws {
-    guard unsafe sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else {
-      throw Failure(description: message)
-    }
-  }
-
-  private func prepare(_ sql: String) throws -> OpaquePointer? {
-    var statement: OpaquePointer?
-    guard unsafe sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK else {
-      throw Failure(description: message)
-    }
-    return unsafe statement
-  }
-
-  /// Runs a statement that returns no rows, with `values` bound in order.
-  private func run(_ sql: String, _ values: String...) throws {
-    let statement = try unsafe prepare(sql)
-    defer { unsafe sqlite3_finalize(statement) }
-    for (offset, value) in values.enumerated() {
-      try unsafe bind(value, at: Int32(offset + 1), in: statement)
-    }
-    try unsafe step(statement)
-  }
-
-  /// The first column of every row `sql` returns, with `values` bound in order. A
-  /// failure throws rather than ending the rows early: an empty answer to the
-  /// version check would empty the index.
-  private func strings(_ sql: String, _ values: String...) throws -> [String] {
-    let statement = try unsafe prepare(sql)
-    defer { unsafe sqlite3_finalize(statement) }
-    for (offset, value) in values.enumerated() {
-      try unsafe bind(value, at: Int32(offset + 1), in: statement)
-    }
-    var rows: [String] = []
-    while true {
-      let result = unsafe sqlite3_step(statement)
-      guard result == SQLITE_ROW else {
-        guard result == SQLITE_DONE else { throw Failure(description: message) }
-        return rows
-      }
-      if let value = unsafe column(0, of: statement) { rows.append(value) }
-    }
-  }
-
-  private func step(_ statement: OpaquePointer?) throws {
-    guard unsafe sqlite3_step(statement) == SQLITE_DONE else {
-      throw Failure(description: message)
-    }
-  }
-
-  /// SQLite copies the text, since the Swift string it came from does not outlive
-  /// the call: `SQLITE_TRANSIENT`, which the C macro spells as a cast Swift cannot
-  /// import.
-  private func bind(_ text: String?, at index: Int32, in statement: OpaquePointer?) throws {
-    guard let text else {
-      try check(unsafe sqlite3_bind_null(statement, index))
-      return
-    }
-    // Its length in bytes, rather than up to a NUL, so a NUL does not cut the text short.
-    let length = Int32(text.utf8.count)
-    try check(unsafe sqlite3_bind_text(statement, index, text, length, Self.transient))
-  }
-
-  private func column(_ index: Int32, of statement: OpaquePointer?) -> String? {
-    unsafe sqlite3_column_text(statement, index).map { unsafe String(cString: $0) }
-  }
-
-  /// A failed bind leaves the parameter as it was, so a row would be written with the
-  /// last one's value.
-  private func check(_ result: Int32) throws {
-    guard result == SQLITE_OK else { throw Failure(description: message) }
-  }
-
-  private static let transient = unsafe unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 }
 
 extension Section {

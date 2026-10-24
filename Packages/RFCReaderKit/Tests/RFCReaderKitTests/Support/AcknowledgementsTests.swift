@@ -20,9 +20,10 @@ struct AcknowledgementsTests {
     #expect(Acknowledgements.text == file.trimmingCharacters(in: .newlines))
   }
 
-  @Test func `they carry both licenses`() {
+  @Test func `they carry every license`() {
     #expect(Acknowledgements.text.contains("Chroma"))
     #expect(Acknowledgements.text.contains("Pygments"))
+    #expect(Acknowledgements.text.contains("Sparkle"))
     #expect(Acknowledgements.text.contains("Permission is hereby granted"))
     #expect(Acknowledgements.text.contains("Redistribution and use in source and binary forms"))
   }

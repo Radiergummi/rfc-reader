@@ -27,12 +27,24 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: "YES"
     LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
     DEVELOPMENT_TEAM: TH593VRB6W
+    # The build number, 1 for every local build; the release workflow passes its
+    # run number (#911).
+    CURRENT_PROJECT_VERSION: "1"
+    # Notarization requires the hardened runtime; it applies to macOS only.
+    ENABLE_HARDENED_RUNTIME: "YES"
 
 packages:
   RFCKit:
     path: Packages/RFCKit
   RFCReaderKit:
     path: Packages/RFCReaderKit
+  # Updates for the Mac app outside the App Store (#911); see Window/Updater.swift.
+  # The commit of 2.10.0, not the tag: Package.resolved is inside the generated,
+  # ignored project, so a range, or a tag moved upstream, would let a release build
+  # resolve a Sparkle nobody reviewed.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    revision: eef1a539a373c1f1a320624b1130fc5de7b2e100
 
 targets:
   RFCReader:
@@ -48,9 +60,81 @@ targets:
         buildPhase: resources
       # One app icon per Xcode version; the settings below pick which is built.
       - path: App/icons
+    # The RFC index, for a first launch to list every RFC offline (#770):
+    # `make bundled-index` fetches it into App/Resources, which git ignores, and
+    # `DocumentStore.cachedIndexLocation()` reads it until the app has one of its own.
+    # A phase rather than a resource, because a resource that is missing fails every
+    # build, and a Debug build bundles it only when it is there. Copied with its
+    # date, which is when it was fetched, and which the app shows as when it was
+    # current.
+    postBuildScripts:
+      - name: Bundle the RFC index
+        basedOnDependencyAnalysis: false
+        # Declared, so that the signing after it seals the file as it now is.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rfc-index.xml
+        script: |
+          index="$SRCROOT/App/Resources/rfc-index.xml"
+          bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/rfc-index.xml"
+          if [ -f "$index" ]; then
+            cp -p "$index" "$bundled"
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: A Release build bundles the RFC index: run make bundled-index first."
+            exit 1
+          else
+            # Not one an earlier build left behind.
+            rm -f "$bundled"
+          fi
+      # The indexes pack (#738), the corpus's citations, successions and amendments:
+      # `make indexes-pack` fetches the release App/indexes-pack.mk pins into
+      # App/Resources, which git ignores, and `DocumentStore.citationIndexURL()` reads
+      # it in place. A phase for the same reasons as the RFC index's. A Release build
+      # checks both files against the pin, since an Xcode archive does not go through
+      # make: a copy left from an earlier pin would ship a pack the app may refuse.
+      - name: Bundle the indexes pack
+        basedOnDependencyAnalysis: false
+        # Declared, so that the signing after it seals the files as they now are.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/indexes.sqlite
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/indexes/manifest.json
+        script: |
+          pack="$SRCROOT/App/Resources/indexes"
+          bundled="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/indexes"
+          if [ -f "$pack/indexes.sqlite" ] && [ -f "$pack/manifest.json" ]; then
+            if [ "$CONFIGURATION" = Release ]; then
+              pins="$SRCROOT/App/indexes-pack.mk"
+              for file in indexes.sqlite manifest.json; do
+                case $file in
+                  indexes.sqlite) key=INDEXES_PACK_SQLITE_SHA256 ;;
+                  manifest.json) key=INDEXES_PACK_MANIFEST_SHA256 ;;
+                esac
+                pinned=$(sed -n "s/^$key := //p" "$pins")
+                actual=$(shasum -a 256 "$pack/$file" | cut -d' ' -f1)
+                if [ "$actual" != "$pinned" ]; then
+                  echo "error: $pack/$file is not the pack App/indexes-pack.mk pins: run make indexes-pack."
+                  exit 1
+                fi
+              done
+            fi
+            # Copied only when it changed: it is tens of megabytes, and every build
+            # runs this.
+            if ! cmp -s "$pack/manifest.json" "$bundled/manifest.json" \
+              || ! cmp -s "$pack/indexes.sqlite" "$bundled/indexes.sqlite"; then
+              rm -rf "$bundled" && mkdir -p "$bundled"
+              cp "$pack/indexes.sqlite" "$pack/manifest.json" "$bundled/"
+            fi
+          elif [ "$CONFIGURATION" = Release ]; then
+            echo "error: A Release build bundles the indexes pack: run make indexes-pack first."
+            exit 1
+          else
+            # Never one an earlier build left behind.
+            rm -rf "$bundled"
+          fi
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit
+      - package: Sparkle
+        destinationFilters: [macOS]
       # The Safari extension, embedded on both platforms (#194).
       - target: RFCReaderSafari
     info:
@@ -58,11 +142,16 @@ targets:
       properties:
         CFBundleDisplayName: RFC Reader
         # The version, set here only: XcodeGen writes these into Info.plist as they
-        # are, so a MARKETING_VERSION build setting beside them was never read.
+        # are, so a MARKETING_VERSION build setting beside them was never read. The
+        # build number is the one build setting, CURRENT_PROJECT_VERSION, so that the
+        # release workflow can set it per release: Sparkle orders updates by it (#911).
         CFBundleShortVersionString: &version "0.1.0"
-        CFBundleVersion: &build "1"
+        CFBundleVersion: &build $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.reference
         # The contact card an author chip opens can add the author to Contacts (#19).
+        # The card is drawn by a system process with Contacts access of its own, on
+        # both platforms, so the entitlements below have no address book one (#993;
+        # decision "An author's contact details are data, shown as a contact card").
         NSContactsUsageDescription: RFC Reader adds an RFC author to your contacts when you ask it to.
         # Read by macOS only; see App/RFCReader/Scripting.
         NSAppleScriptEnabled: true
@@ -89,6 +178,18 @@ targets:
             NSSendTypes: [public.utf8-plain-text]
             NSRequiredContext: {}
         UILaunchScreen: {}
+        # Sparkle's update feed and the public half of the EdDSA key its updates are
+        # signed with (#911); read by macOS only. The private half is in the
+        # maintainer's keychain, and losing it means no installed copy can be updated
+        # again.
+        SUFeedURL: https://rfc-reader.mazetti.me/appcast.xml
+        SUPublicEDKey: qif0+j8cimHQhgje/uAIcGSO/O7lfnSGey8PlVS0jU0=
+        # Checks on its own without asking first; Settings turns it off. Only a release
+        # build starts the updater (Window/Updater.swift).
+        SUEnableAutomaticChecks: true
+        # The app is sandboxed, so Sparkle installs through its launcher service,
+        # which the mach-lookup exceptions in the entitlements let it reach.
+        SUEnableInstallerLauncherService: true
         # The daily check of the bookmarked RFCs on iOS (#191), a `BGAppRefreshTask`
         # (`BookmarkNotifications.refreshIdentifier`). macOS reads neither key.
         UIBackgroundModes: [fetch]
@@ -123,9 +224,17 @@ targets:
         # File > Print… (#375). Without it the sandbox refuses the print panel with
         # "This application does not support printing"; Page Setup works either way.
         com.apple.security.print: true
+        # Sparkle's installer services, reached by name from the sandbox (#911).
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader
+        # Where a Mac app's embedded frameworks are, Sparkle's among them (#911). The
+        # target's default is iOS's flat bundle, @executable_path/Frameworks, which
+        # nothing needed until a framework was embedded, and dyld then stops at launch.
+        LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]: $(inherited) @executable_path/../Frameworks
         # The app is UI throughout, so its code is main-actor unless it says
         # otherwise. On this target, not the project: the packages keep nonisolated
         # defaults, as `DocumentTextBuilder` requires, and so would any other target.
@@ -136,6 +245,10 @@ targets:
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
+        # "Bundle the RFC index" and "Bundle the indexes pack" read App/Resources,
+        # which they declare no input for: the files may be missing, which a declared
+        # input may not be.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.
         ASSETCATALOG_COMPILER_APPICON_NAME: $(APP_ICON_$(XCODE_VERSION_MAJOR))
@@ -187,6 +300,26 @@ targets:
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         SUPPORTS_MACCATALYST: NO
 
+  # The driver for hand checks on iOS (#743): XCUITest scenarios that launch the
+  # built app in the Simulator and tap, swipe and read it from outside, as a
+  # person would, saving screenshots as they go. Not the App's tests (it has none,
+  # CLAUDE.md), and run only by `make hand-check`, never by `make check` or CI.
+  HandChecks:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS]
+    sources:
+      - path: App/HandChecks
+    dependencies:
+      - target: RFCReader
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader.hand-checks
+        TEST_TARGET_NAME: RFCReader
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
+        SUPPORTS_MACCATALYST: NO
+
 # Declared so XcodeGen writes a shared scheme. Without one, xcodebuild makes a
 # scheme for the target on the fly and matches -destination against it before it
 # knows the target's platforms, logging "Supported platforms for the buildables in
@@ -196,3 +329,13 @@ schemes:
     build:
       targets:
         RFCReader: all
+  # The one scheme with a test action, so `xcodebuild test` builds the app and
+  # the scenarios together; the App's own scheme has none.
+  HandChecks:
+    build:
+      targets:
+        RFCReader: [test]
+        HandChecks: [test]
+    test:
+      targets:
+        - HandChecks

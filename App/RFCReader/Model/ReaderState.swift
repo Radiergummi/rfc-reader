@@ -3,6 +3,10 @@ import Observation
 import RFCKit
 import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 /// What this window's reader is showing, for the parts of the window that are not
 /// inside it.
 ///
@@ -23,9 +27,12 @@ final class ReaderState {
   /// Every BCP 14 requirement the document states, extracted once per document by
   /// `DocumentView` (#180): nil until it has been, which is after the body shows.
   var requirements: [Requirement]?
-  /// What the open RFC can be saved as: PDF, and its grammar where it has one
+  /// Where the build on screen placed each of the document's highlights (#522), which
+  /// the Annotations tab lists: nil until a build has, or when there is none.
+  var highlightStatuses: [UUID: HighlightPlacement.Status]?
+  /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
-  var exportFormats: [ExportFormat] = [.pdf]
+  var exportFormats: [ExportFormat] = ExportFormat.everyDocument
   /// The window's reading mode and the sections it has expanded in place (#698). The
   /// mode stays from one document to the next; what was expanded does not.
   var folding = Folding() {
@@ -35,7 +42,8 @@ final class ReaderState {
       if folding.focused != oldValue.focused { revealedReference = nil }
     }
   }
-  /// What folding needs of the document on screen, for Next and Previous Section.
+  /// What folding needs of the document on screen, for Next and Previous Section in
+  /// Focus and Expand and Collapse Section in the outline.
   var foldingIndex: FoldingIndex?
   /// In Focus, the References tab's groups with only what the focused section cites
   /// (#699); nil out of Focus, and for a section that cites nothing.
@@ -46,6 +54,22 @@ final class ReaderState {
   func stepFocus(_ step: Folding.FocusStep) {
     guard let foldingIndex, let stepped = folding.focusing(step, in: foldingIndex) else { return }
     folding = stepped
+  }
+
+  /// The outline's section the reader's line is in: what Expand Section and Collapse
+  /// Section act on (#760), so a section opens and closes without a pointer.
+  var outlineSection: Folding.OutlineSection? {
+    guard let foldingIndex else { return nil }
+    return folding.outlineSection(currentAnchor, in: foldingIndex)
+  }
+
+  /// Expand Section or Collapse Section: opens the outline's section at the reader's
+  /// line, or closes it, and leaves one already so as it is.
+  func setOutlineSection(expanded: Bool) {
+    guard let foldingIndex, let section = outlineSection, section.isExpanded != expanded,
+      let toggled = folding.toggling(heading: section.heading, in: foldingIndex)
+    else { return }
+    folding = toggled
   }
 
   /// Whether Next or Previous Section has somewhere to go.
@@ -72,10 +96,17 @@ final class ReaderState {
   /// Resolved by `DocumentView`, which has the document — rather than handing the
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?
+  /// The anchor of the section the reader is in, when the reader is in one: what
+  /// Export and Print offer to take alone (#386). Nil above the first section.
+  var exportableSection: String?
 
   /// Whether the document's body is here: what the toolbar title, printing and
   /// export need. The panel asks `canDescribe` instead.
   var hasDocument = false
+  /// Whether the original text has loaded, so Original Text shows it rather than
+  /// progress or an error: what Find needs on iOS (#943). Written by `DocumentView`,
+  /// from `DocumentSession.originalText`.
+  var hasOriginalText = false
   /// Whether the body is still on its way, from `DocumentSession`'s load state:
   /// without it, the navigation pane shows progress while this holds and says the
   /// document has not loaded once it does not (#325).
@@ -134,6 +165,13 @@ final class ReaderState {
   var showOriginal = false {
     didSet { titleOwnership.showsOriginal = showOriginal }
   }
+
+  /// The document translated into the reader's language (#749) instead of the
+  /// English. Toolbar state, read by the reader, which translates it the first time.
+  var showTranslation = false
+  /// Whether the build on screen is the translation, which has no quote to copy:
+  /// not until it is made, though `showTranslation` is on.
+  var readsTranslation = false
 
   /// Why the RFC is read as its PDF or PostScript original, if it is (#207). Set by
   /// the reader as the load starts and ends, and again when the index arrives. A
@@ -208,6 +246,36 @@ final class ReaderState {
   /// installs `updateToolbarTitle`.
   @ObservationIgnored var openPanel: () -> Void = {}
 
+  #if canImport(UIKit)
+    /// The text view Find opens over (#763): the More menu's Find in Document and
+    /// ⌘F. Whichever text view shows, the reader's or the original's, installs
+    /// itself as it is updated and comes into a window, and leaves as it goes
+    /// (`UITextView.installsFind(in:)`). Without it an iPhone had no way into Find
+    /// at all: ⌘F reached it only with a keyboard, and only once the text view was
+    /// first responder.
+    @ObservationIgnored weak var findTextView: UITextView?
+
+    /// Find over the text on screen, and nothing over a text view that is not.
+    var findInteraction: UIFindInteraction? {
+      guard let findTextView, findTextView.window != nil else { return nil }
+      return findTextView.findInteraction
+    }
+
+    /// Whether a text view shows for Find to open over (#943): not a published
+    /// original's page, nor Original Text while it loads or after it failed to. From
+    /// what the reader shows, which the menus observe, rather than from
+    /// `findTextView`, which text views set as they update.
+    var offersFind: Bool {
+      ReaderFind.isAvailable(
+        hasDocument: hasDocument, publishedOriginal: publishedOriginal?.kind,
+        showsOriginal: showOriginal, hasOriginalText: hasOriginalText)
+    }
+
+    func presentFind() {
+      findInteraction?.presentFindNavigator(showingReplace: false)
+    }
+  #endif
+
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
   /// (`ReaderLinkScheme.referenceScheme`). The reader beside a compared document
   /// has no panel, and `BesideReader` shows the entry in a popover instead (#187).
@@ -229,9 +297,11 @@ final class ReaderState {
   func clear() {
     titleOwnership.close()
     sections = []
+    readsTranslation = false
     groups = []
     requirements = nil
-    exportFormats = [.pdf]
+    highlightStatuses = nil
+    exportFormats = ExportFormat.everyDocument
     folding.expanded = []
     folding.openAsides = []
     folding.focused = nil
@@ -241,7 +311,9 @@ final class ReaderState {
     revealedReference = nil
     currentAnchor = nil
     currentSection = nil
+    exportableSection = nil
     hasDocument = false
+    hasOriginalText = false
     publishedOriginal = nil
     isLoading = false
     hasSelection = false

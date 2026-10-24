@@ -35,6 +35,8 @@ import SwiftUI
     @SceneStorage("scene") private var sceneSnapshot: Data?
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
+    /// The help, while Help in the menu bar has it on show (#780).
+    @State private var helpTarget: HelpTarget?
     /// The reader's own text size, which ⌘= steps (#153).
     @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
       .defaultFontSize
@@ -170,14 +172,17 @@ import SwiftUI
       }
       .readerScene(library: library, navigation: navigation, reader: reader)
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
-        GoToDocumentSheet()
+        GoToDocumentSheet(library: library, navigation: navigation)
+      }
+      .sheet(item: $helpTarget) { target in
+        HelpSheet(target: target)
       }
       // ⌘K opens Go to RFC too, where most apps with a palette put it. The menu's
       // item holds ⌘L, and one item gets one shortcut, so this invisible button
       // carries the other, drawn transparent and kept out of VoiceOver's way.
       .background {
         Button("Go to RFC") { navigation.isShowingGoToSheet = true }
-          .keyboardShortcut("k", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.quickOpen.keyboardShortcut)
           .opacity(0)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
@@ -188,13 +193,17 @@ import SwiftUI
       // with its shortcut, measured.
       .background {
         Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-          .keyboardShortcut("=", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.biggerAlternate.keyboardShortcut)
           .opacity(0)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
       }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
+      }
+      .focusedSceneValue(\.showHelpAction) {
+        // Not again while it is on show: a new target would dismiss and present it.
+        if helpTarget == nil { helpTarget = HelpTarget() }
       }
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
@@ -222,7 +231,7 @@ struct EmptyDetailView: View {
       Text("Browse the sidebar, search, or jump straight to a number.")
     } actions: {
       Button("Go to RFC…") { navigation.isShowingGoToSheet = true }
-        .keyboardShortcut("l", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.goToRFC.keyboardShortcut)
       PrimerLink()
     }
   }
@@ -235,39 +244,34 @@ struct EmptyDetailView: View {
   /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
   /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
   struct GoToDocumentSheet: View {
-    @Environment(LibraryModel.self) private var library
-    @Environment(NavigationModel.self) private var navigation
-    @Environment(\.dismiss) private var dismiss
-    @State private var input = ""
-    @State private var results = QuickOpenResults()
-    /// Set by the first thing that closes the sheet. The search goes on through the
-    /// dismiss animation, and a ↵ it was holding must not open a second document
-    /// after Cancel or a tapped row.
-    @State private var isClosing = false
+    let library: LibraryModel
+    @State private var controller: QuickOpenController
     @FocusState private var focused: Bool
 
-    /// What is typed, less the spaces around it, which change nothing it finds.
-    private var query: String {
-      input.normalizedQuery
+    init(library: LibraryModel, navigation: NavigationModel) {
+      self.library = library
+      _controller = State(
+        initialValue: QuickOpenController(
+          library: library, navigation: navigation,
+          dismiss: { navigation.isShowingGoToSheet = false }))
     }
 
-    /// Resolves on the keystroke, as the Mac's palette does, so the exact row never
-    /// waits for the search.
+    private var results: QuickOpenResults { controller.results }
+
     private var text: Binding<String> {
       Binding {
-        input
-      } set: { text in
-        input = text
-        resolve(text.normalizedQuery)
+        controller.input
+      } set: {
+        controller.type($0)
       }
     }
 
     var body: some View {
       NavigationStack {
         Form {
-          TextField("RFC number, title words, or link", text: text)
+          TextField(QuickOpenResults.placeholder(), text: text)
             .focused($focused)
-            .onSubmit(openSelection)
+            .onSubmit(controller.openSelection)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
           if results.rows.isEmpty {
@@ -282,24 +286,23 @@ struct EmptyDetailView: View {
         }
         .navigationTitle("Go to RFC")
         .toolbar {
-          ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: close) }
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", action: controller.close)
+          }
           ToolbarItem(placement: .confirmationAction) {
-            Button("Open", action: openSelection)
+            Button("Open", action: controller.openSelection)
               .disabled(results.openable == nil && !results.isSearching)
           }
         }
       }
-      .onAppear { focused = true }
+      .onAppear {
+        focused = true
+        // The check at launch alone goes stale in an app left open for weeks.
+        library.refreshRegistriesIfDue()
+      }
       // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { resolve(query) }
-      .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
-    }
-
-    /// What a search depends on. The index is part of it so that a sheet opened
-    /// before the index loaded searches again once it has.
-    private struct SearchKey: Equatable {
-      var query: String
-      var hasIndex: Bool
+      .onChange(of: library.index != nil) { controller.resolve() }
+      .task(id: controller.searchKey) { await controller.search() }
     }
 
     /// Said while nothing is listed: what the field takes, or why nothing matches,
@@ -308,20 +311,15 @@ struct EmptyDetailView: View {
     /// running, so it does not flash on every keystroke.
     @ViewBuilder
     private var status: some View {
-      if query.isEmpty {
-        Text("A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link.")
-      } else if !results.isSearching {
-        // Not `library.index == nil`, for the reason the Mac's palette gives.
-        switch library.indexState {
-        case .idle, .loading:
-          Text("The RFC index is still loading.")
-        case .failed:
-          HStack {
-            Text("The RFC index couldn't be loaded. A number still opens.")
+      if controller.query.isEmpty {
+        // The same as the Mac's palette (#761).
+        Text(verbatim: QuickOpenResults.example)
+      } else if let message = controller.message {
+        HStack {
+          Text(verbatim: message)
+          if case .failed = library.indexState {
             Button("Retry") { library.retryIndex() }
           }
-        case .ready:
-          Text("Nothing in the index matches “\(query)”.")
         }
       }
     }
@@ -330,17 +328,38 @@ struct EmptyDetailView: View {
       let title = QuickOpenResults.title(
         library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
       return Button {
-        open(row.link)
+        controller.open(row.link)
       } label: {
         HStack(spacing: 12) {
-          Text(row.link.id.displayName)
-            .fontWeight(.semibold)
-            .monospacedDigit()
-          Text(title)
-            .lineLimit(1)
-            .foregroundStyle(.secondary)
-          if let section = row.link.section {
+          if let entry = row.entry {
+            // What was looked up, then where it is defined, as the Mac's palette
+            // lists it: "HTTP status 425 · Too Early", RFC 8470.
+            Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
+              .fontWeight(.semibold)
+              .monospacedDigit()
+              .lineLimit(1)
+            if let name = entry.name {
+              Text(name)
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
+            Text(row.link.id.displayName)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          } else {
+            Text(row.link.id.displayName)
+              .fontWeight(.semibold)
+              .monospacedDigit()
+            Text(title)
+              .lineLimit(1)
+              .foregroundStyle(.secondary)
+          }
+          if let section = row.link.section {
+            // A registry row already ends at the far edge.
+            if row.entry == nil {
+              Spacer(minLength: 0)
+            }
             Text(PlaceName.abbreviated(section))
               .foregroundStyle(.secondary)
               .monospacedDigit()
@@ -348,43 +367,6 @@ struct EmptyDetailView: View {
         }
       }
       .tint(.primary)
-    }
-
-    /// What was typed, resolved exactly.
-    private func resolve(_ query: String) {
-      let exact = DocumentReference.link(from: query)
-      let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
-      results.show(query: query, exact: exact, members: members)
-    }
-
-    private func search(_ query: String) async {
-      if let hits = await library.quickOpenHits(for: query) {
-        finish(with: hits, for: query)
-      }
-    }
-
-    private func finish(with hits: [DocumentID], for query: String) {
-      if let opening = results.show(hits: hits, for: query) {
-        open(opening.link)
-      }
-    }
-
-    /// Return and Open: the top row, or the one the search still running selects.
-    private func openSelection() {
-      if let opening = results.activate(.current) {
-        open(opening.link)
-      }
-    }
-
-    private func open(_ link: RFCLink) {
-      guard !isClosing else { return }
-      library.open(link, activation: .current, in: navigation)
-      close()
-    }
-
-    private func close() {
-      isClosing = true
-      dismiss()
     }
   }
 #endif

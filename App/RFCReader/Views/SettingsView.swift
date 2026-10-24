@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 import SwiftUI
 
@@ -97,7 +98,7 @@ private struct ReadingSettings: View {
       value: $settings.fontSize, in: ReaderPreferences.fontSizes,
       step: ReaderPreferences.fontSizeStep
     ) {
-      Text("Reading font size: \(Int(settings.fontSize))")
+      Text("Text Size: \(Int(settings.fontSize))")
     } minimumValueLabel: {
       Image(systemName: "textformat.size.smaller")
     } maximumValueLabel: {
@@ -110,7 +111,7 @@ private struct ReadingSettings: View {
     }
     Toggle("Underline links", isOn: $settings.underlineLinks)
     Toggle(isOn: $settings.drawDiagrams) {
-      Text("Draw diagrams")
+      Text("Show Diagrams as Figures")
       Text(
         "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it."
       )
@@ -144,6 +145,12 @@ private struct GeneralSettings: View {
   var body: some View {
     Toggle(
       "Show the original text rendering by default", isOn: $settings.preferOriginalText)
+    #if os(macOS)
+      @Bindable var updater = Updater.shared
+      Toggle("Check for updates automatically", isOn: $updater.automaticallyChecksForUpdates)
+        // Every build shares the release's defaults, so only a release changes them.
+        .disabled(!Updater.starts)
+    #endif
   }
 }
 
@@ -197,9 +204,12 @@ struct NotificationSettings: View {
 
   var body: some View {
     Toggle(isOn: toggle) {
-      Text("Notify me about bookmarked RFCs")
+      Text("Notify me about bookmarked RFCs and followed working groups")
       Text(
-        "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it."
+        """
+        When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor \
+        queue, or errata are listed for it; and when a working group you follow publishes an RFC.
+        """
       )
     }
     if wasRefused {
@@ -211,7 +221,8 @@ struct NotificationSettings: View {
 
 /// Where documents are kept (#358): what the kept tier and the reading cache each
 /// hold, keeping the bookmarks offline as well as the marked documents, and emptying
-/// either. On the Mac a tab of its own, on iOS a section of `SettingsScreen`.
+/// either; and the full-text index (#37), Index All RFCs and its removal. On the Mac
+/// a tab of its own, on iOS a section of `SettingsScreen`.
 struct StorageSettings: View {
   let library: LibraryModel
 
@@ -220,6 +231,11 @@ struct StorageSettings: View {
   /// window counts from the next time the tab shows.
   @State private var usage: StorageReport?
   @State private var confirmsRemoval = false
+  /// Read as `usage` is, and again whenever the index changes.
+  @State private var textIndex: TextIndexer.Usage?
+  /// How many RFCs Index All RFCs would index, read with `textIndex`.
+  @State private var unindexed: Int?
+  @State private var confirmsIndexRemoval = false
 
   private var keepsBookmarks: Binding<Bool> {
     Binding(
@@ -237,7 +253,7 @@ struct StorageSettings: View {
         Text("Keep bookmarked documents offline")
         Text("Downloaded when the network is not metered, and kept while bookmarked.")
       }
-      LabeledContent("Kept Offline") { UsageValue(usage: usage?.kept) }
+      LabeledContent("Available Offline") { UsageValue(usage: usage?.kept) }
       Button("Remove All Offline Documents…", role: .destructive) {
         confirmsRemoval = true
       }
@@ -271,12 +287,48 @@ struct StorageSettings: View {
         .font(.caption)
         .foregroundStyle(.secondary)
       }
+      LabeledContent("Full-Text Index") { UsageValue(usage: textIndex?.usage) }
+      if unindexed == 0, library.index != nil, !library.indexAllRun.isRunning {
+        Text("All RFCs are indexed.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        IndexAllRFCsControl(library: library)
+      }
+      Button("Remove Full-Text Index…", role: .destructive) {
+        confirmsIndexRemoval = true
+      }
+      .disabled(
+        library.indexAllRun.isRemoving
+          || (textIndex?.retained ?? 0) == 0 && !library.indexAllRun.isRunning
+      )
+      .confirmationDialog(
+        "Remove the full-text index?", isPresented: $confirmsIndexRemoval,
+        titleVisibility: .visible
+      ) {
+        Button("Remove", role: .destructive) {
+          Task {
+            await library.removeIndexOfAllRFCs()
+            await refreshTextIndex()
+          }
+        }
+      } message: {
+        Text(
+          "The index keeps only the RFCs on this device, and search finds text in those. Index All RFCs downloads the rest again."
+        )
+      }
     }
     .task { await refresh() }
+    .task(id: [library.textIndexVersion, library.indexVersion]) { await refreshTextIndex() }
   }
 
   private func refresh() async {
     usage = await library.storageUsage()
+  }
+
+  private func refreshTextIndex() async {
+    textIndex = await library.textIndexUsage()
+    unindexed = await library.unindexedRFCCount()
   }
 }
 

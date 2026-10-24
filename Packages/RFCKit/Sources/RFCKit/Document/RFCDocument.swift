@@ -10,8 +10,9 @@ public enum DocumentSource: String, Sendable, Codable {
 
 /// A parsed RFC, independent of the source format.
 ///
-/// The renderer works exclusively against this model, so the same SwiftUI code
-/// handles a 1990 text-only RFC and a 2026 RFCXML document.
+/// The reader works exclusively against this model, so the same builder
+/// (`DocumentTextBuilder`, in RFCReaderKit) sets a 1990 text-only RFC and a 2026
+/// RFCXML document.
 public struct RFCDocument: Sendable, Hashable, Codable {
   public var header: DocumentHeader
   /// Sections of the body (`<middle>` in RFCXML) and back matter (references, appendices).
@@ -34,13 +35,7 @@ public struct RFCDocument: Sendable, Hashable, Codable {
 
   /// Depth-first list of every section, for tables of contents and anchor lookup.
   public var allSections: [Section] {
-    var result: [Section] = []
-    func visit(_ section: Section) {
-      result.append(section)
-      section.subsections.forEach(visit)
-    }
-    sections.forEach(visit)
-    return result
+    sections.flatMap(\.withSubsections)
   }
 
   public func section(anchor: String) -> Section? {
@@ -285,6 +280,18 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   public var titleText: String { title.plainText }
 
+  /// This section and every one below it, depth first: what `allSections` lists of
+  /// each top-level section.
+  public var withSubsections: [Section] {
+    var result: [Section] = []
+    func visit(_ section: Section) {
+      result.append(section)
+      section.subsections.forEach(visit)
+    }
+    visit(self)
+    return result
+  }
+
   /// `4.2`, `Appendix A` or `Annex A`: the number as a heading names it, without the
   /// period that sets it off from the words. Nil when the section has no number.
   public var numberLabel: String? {
@@ -513,14 +520,31 @@ public struct Table: Sendable, Hashable, Codable {
   }
 }
 
+/// What a figure or a table is captioned with, wherever it is set: the reader, the
+/// PDF and the exports.
+public enum BlockCaption {
+  /// `Figure 3: Packet layout`; `Figure 3` when the block has no title, as xml2rfc's
+  /// text and HTML writers caption every numbered figure and table, so the prose's
+  /// "see Figure 3" has something to find; just the title when it is unnumbered.
+  public static func text(_ kind: String, number: Int?, title: String?) -> String? {
+    guard let number else { return title }
+    return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
+  }
+}
+
 extension Reference {
   /// `BCP 14 · March 1997` — where a reference sits in the series and when it was
   /// published, as one short line. The DOI is dropped: it names the same document
   /// again, in the one form nobody reads. A short form of what `CitationFormatter`
   /// spells out in full.
   public var provenance: String {
+    provenance(separator: " · ")
+  }
+
+  /// `provenance`, its parts joined by `separator`.
+  public func provenance(separator: String) -> String {
     let series = seriesInfo.filter { $0.name != "DOI" }.map { "\($0.name) \($0.value)" }
-    return (series + [date?.formatted].compactMap { $0 }).joined(separator: " · ")
+    return (series + [date?.formatted].compactMap { $0 }).joined(separator: separator)
   }
 }
 

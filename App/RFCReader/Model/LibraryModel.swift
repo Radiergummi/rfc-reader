@@ -20,7 +20,7 @@ nonisolated private let libraryLog = Logger(
   /// `LibraryModel.windows`. The library says what it needs, and never reaches for
   /// the delegate itself.
   protocol WindowOpening: AnyObject {
-    /// A window of its own, in front.
+    /// A window of its own, in front, whatever the user's "Prefer tabs" setting.
     func openWindow()
     /// A tab of the window the user is looking at.
     func openTab(inBackground: Bool)
@@ -38,8 +38,8 @@ nonisolated private let libraryLog = Logger(
 ///
 /// Navigation is each tab's own (`NavigationModel`), and what the reader shows is
 /// each window's (`ReaderState`). The user's own data — bookmarks, reading
-/// positions, collections — is SwiftData's; this holds the sets read from it that
-/// every tab shows.
+/// positions, collections — is SwiftData's; `userData` holds the sets read from it
+/// that every tab shows, and this answers for them.
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
@@ -55,8 +55,13 @@ final class LibraryModel {
     didSet {
       groupRFCs = [:]
       indexVersion += 1
+      indexableRFCs = index.map { IndexAllRun.indexable($0.rfcs) } ?? []
     }
   }
+
+  /// The RFCs Index All RFCs can index (`IndexAllRun.indexable`), worked out once per
+  /// index: the footer and Settings count them as they draw.
+  @ObservationIgnored private(set) var indexableRFCs: [RFCMetadata] = []
   /// Which index is installed, counted: what a tab compares to tell whether the
   /// rows and hits it has were made over the index there is now (#597), where
   /// comparing two indexes would compare 9,842 entries.
@@ -70,10 +75,24 @@ final class LibraryModel {
       indexLoaded.open()
     }
   }
+  /// The bytes the index's download has received, while one is under way with no
+  /// index to show (#770); nil otherwise.
+  private(set) var indexBytesReceived: Int64?
+  /// Counts the index's downloads, so the bytes a download reports after it has ended
+  /// are not taken for the next one's.
+  @ObservationIgnored private var indexDownloads = 0
+  /// What the list shows in place of its rows while there is no index (#770).
+  var indexPlaceholder: IndexPlaceholder? {
+    IndexPlaceholder(
+      state: indexState, hasIndex: index != nil, bytesReceived: indexBytesReceived)
+  }
   /// Open once the index is ready or has failed, for a background refresh that
   /// arrived while launch was still loading it (#191).
   @ObservationIgnored private let indexLoaded = Latch()
   private(set) var recent: [RecentRFC] = []
+  /// Just Published's refresh at launch (#421), held rather than left to run
+  /// unowned.
+  @ObservationIgnored private let recentRefresh = SharedRefresh(name: "Refresh recent RFCs")
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
   /// until the cached copy or a fetch has arrived.
@@ -101,10 +120,12 @@ final class LibraryModel {
     name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
-  /// Every bookmarked document, fetched again on every save of a bookmark: one set
-  /// for the toolbars, scripts and lists alike, so BCP 14 is not answered for by
-  /// RFC 14 (#152), and is listed as itself (#321).
-  private(set) var bookmarkedDocuments: Set<DocumentID> = []
+  /// The sets read from the user's data, and where a bookmark or a collection is
+  /// changed (#595).
+  @ObservationIgnored private let userData: UserDataMirror
+
+  /// `UserDataMirror.bookmarkedDocuments`.
+  var bookmarkedDocuments: Set<DocumentID> { userData.bookmarkedDocuments }
 
   /// The presentation the reader chose from a block's menu, per document, for the
   /// app's session. Here rather than in `DocumentSession`, which goes when the
@@ -124,19 +145,22 @@ final class LibraryModel {
     chosenPresentations[id, default: [:]][key] = presentation
   }
 
-  /// Every collection and its members, fetched again on every save of a collection or
-  /// an item (#603), and after a failed fetch on the next save of any kind
-  /// (`failedMirrors`, #613), and published only when it changed (#349). The sidebar, a
-  /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts
-  /// all read it.
-  private(set) var collections = CollectionSnapshot.empty
-  @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
+  /// `UserDataMirror.collections`.
+  var collections: CollectionSnapshot { userData.collections }
 
-  /// Every document marked Keep Offline, fetched again on every save of a mark
-  /// (#358), and synced, so a mark made on another device arrives here too. With the
-  /// bookmarks when `keepsBookmarksOffline` is on, what is wanted offline, and what
-  /// Available Offline lists, whether or not a body has arrived yet.
-  private(set) var offlineMarks: Set<DocumentID> = []
+  /// `UserDataMirror.annotations`: every highlight (#522).
+  var annotations: AnnotationSnapshot { userData.annotations }
+
+  /// `UserDataMirror.editAnnotations`.
+  @discardableResult
+  func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
+    userData.editAnnotations(change)
+  }
+
+  /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
+  /// is on, what is wanted offline, and what Available Offline lists, whether or not
+  /// a body has arrived yet.
+  var offlineMarks: Set<DocumentID> { userData.offlineMarks }
 
   /// "Keep bookmarked documents offline", from Settings' Storage tab (#358). Per
   /// device, as storage is, so a default rather than synced user data.
@@ -156,11 +180,6 @@ final class LibraryModel {
   private func withMembers(of documents: Set<DocumentID>) -> Set<DocumentID> {
     index?.withMembers(of: documents) ?? documents
   }
-
-  /// Whether `offlineMarks` has been read from the store at least once. Until it
-  /// has, its emptiness means nothing, and reconciling against it would move every
-  /// kept body back into the cache.
-  @ObservationIgnored private var hasReadOfflineMarks = false
 
   /// The RFCs wanted offline, which is what the library lists, kept beside the marks
   /// rather than worked out on every read: the sidebar counts it as it draws.
@@ -190,34 +209,63 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// How many documents Recently Read lists, for the sidebar's count (#344): the
-  /// length of `recentlyRead()`, kept current on every save of a reading position
-  /// rather than by a live query of every reading position in the view.
-  private(set) var recentlyReadCount = 0
+  /// Whether there is a citation index (#189), bundled with the app (#738) or
+  /// installed, without which a reading path can only say there is none: the Reading
+  /// Path items are offered only while it is true (#769), which a Debug build without
+  /// the bundled pack is not.
+  private(set) var hasCitationIndex = false
 
-  /// The mirrors whose last fetch failed. The next save reads them again, whatever
-  /// it changed, so a failure is mended on the next save, as it was when every save
-  /// read every mirror, rather than on the next save of the same entity (#603).
-  @ObservationIgnored private var failedMirrors: UserDataMirrors = []
+  /// `UserDataMirror.recentlyReadCount`.
+  var recentlyReadCount: Int { userData.recentlyReadCount }
 
-  /// The user's data: what the sets above are read from, and where a bookmark or a
-  /// collection is changed.
-  @ObservationIgnored let container: ModelContainer
+  /// `UserDataMirror.followedGroups`: the working groups the reader follows (#731),
+  /// by acronym in lower case.
+  var followedGroups: Set<String> { userData.followedGroups }
+
+  /// The Working Groups section of the sidebar: the followed groups, then the
+  /// busiest of the rest.
+  var sidebarWorkingGroups: [String] {
+    WorkingGroupFollowing.sidebarGroups(followed: followedGroups, top: topWorkingGroups)
+  }
+
+  func isFollowed(_ group: String) -> Bool {
+    followedGroups.contains(group.lowercased())
+  }
+
+  /// Follows the group or stops following it. A failure is logged rather than shown,
+  /// as a bookmark's is (#125), and leaves the command as it was. The save is
+  /// mirrored, which compares at once (`init`).
+  func toggleFollowed(_ group: String) {
+    do {
+      try FollowedGroupStore.setFollowed(group, !isFollowed(group), in: container.mainContext)
+    } catch {
+      libraryLog.error(
+        "following a working group failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// The user's data, which `userData` reads its sets from.
+  var container: ModelContainer { userData.container }
 
   private init(container: ModelContainer) {
-    self.container = container
-    refresh(.all)
-    storeSaves = NotificationCenter.default.addObserver(
-      forName: ModelContext.didSave, object: nil, queue: .main
-    ) { [weak self] notification in
-      // Only the mirrors fed by what the save changed: most saves record a reading
-      // position, and the collections are every row of two entities (#603). Read
-      // before the hop, as the notification is not `Sendable` and the names are.
-      let changed = UserDataMirrors.changedEntityNames(in: notification.userInfo)
-      MainActor.assumeIsolated {
-        self?.refresh(UserDataMirrors.changed(byEntities: changed))
+    userData = UserDataMirror(container: container)
+    userData.onBookmarksChanged = { [weak self] in self?.bookmarksChanged() }
+    userData.onCollectionsChanged = { [weak self] snapshot in
+      // A collection deleted in another tab, or on another device, is not left on
+      // screen with no name and nothing in it.
+      for scene in self?.sceneRegistry.open ?? [] {
+        scene.keepFilter(in: snapshot)
       }
     }
+    // A document read for the first time: what a phrase can name (#192).
+    userData.onRecentlyReadCountChanged = { RFCReaderShortcuts.refreshParameters() }
+    userData.onOfflineMarksChanged = { [weak self] in self?.wantedOfflineChanged() }
+    // Compared at once, so the baseline lists a newly followed group's RFCs now, a
+    // group followed on another device included: a group followed reports nothing it
+    // published before (`BookmarkBaseline`), and left to the next refresh of the
+    // index, what that refresh brings would count as before (#731).
+    userData.onFollowedGroupsChanged = { [weak self] in self?.compareBookmarks() }
+    userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
     #if os(macOS)
@@ -244,32 +292,10 @@ final class LibraryModel {
       powerChanged: { [weak self] in self?.reconcileOffline() })
   }
 
-  private func refresh(_ changed: UserDataMirrors) {
-    let mirrors = changed.union(failedMirrors)
-    failedMirrors = []
-    if mirrors.contains(.bookmarks) { refreshBookmarks() }
-    if mirrors.contains(.collections) { refreshCollections() }
-    if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
-    if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
-  }
-
-  private func refreshOfflineMarks() {
-    let marks: Set<DocumentID>
-    do {
-      marks = try OfflineMarkStore.markedDocuments(in: container.mainContext)
-    } catch {
-      // The last set read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.offlineMarks)
-      libraryLog.error(
-        "reading Keep Offline marks failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // The first read reconciles even when it finds what a failed one left: no set.
-    let isFirstRead = !hasReadOfflineMarks
-    hasReadOfflineMarks = true
-    guard isFirstRead || marks != offlineMarks else { return }
-    offlineMarks = marks
-    wantedOfflineChanged()
+  /// Whether Available Offline lists `id`: what a library row marks as offline
+  /// (#769). Only an RFC: the list holds the RFCs a series names, not the series.
+  func isAvailableOffline(_ id: DocumentID) -> Bool {
+    id.series == .rfc && availableOfflineNumbers.contains(id.number)
   }
 
   /// Lists what is wanted offline, and brings the disk in line with it.
@@ -295,15 +321,16 @@ final class LibraryModel {
 
   /// Brings the disk in line with `wantedOffline`, after any reconciliation already
   /// running. Not before the index has loaded, since a fetch needs the formats it
-  /// lists, and applying the index runs this; nor before the marks have been read.
+  /// lists, and applying the index runs this; nor before the marks have been read,
+  /// nor the bookmarks when they are kept offline.
   /// Nor on a store that fell back to memory (#152), whose marks are not the ones
   /// saved: reconciling against them would move every kept body into the cache.
   /// Nor before the network path is known, which decides whether the fetches it
   /// owes start now: every one of them is a mark nobody on this device is waiting
   /// for, since a tapped one is fetched at once.
   private func reconcileOffline(forgettingFailures: Bool = false) {
-    guard index != nil, hasReadOfflineMarks, !AppData.isStoredInMemory,
-      let policy = network.decision(for: .syncedMark)
+    guard index != nil, userData.knowsWantedOffline(keepsBookmarks: keepsBookmarksOffline),
+      !AppData.isStoredInMemory, let policy = network.decision(for: .syncedMark)
     else { return }
     offlineKeeper.reconcile(
       wanted: wantedOffline, policy: policy, forgettingFailures: forgettingFailures)
@@ -313,45 +340,6 @@ final class LibraryModel {
   /// its row's Download Now or Retry. The keeper logs a failure, and its row says it.
   func downloadNow(_ id: DocumentID) {
     Task(name: "Download now") { try? await offlineKeeper.fetchNow(id) }
-  }
-
-  private func refreshRecentlyReadCount() {
-    let count: Int
-    do {
-      count = try ReadingPositionStore.recentlyReadCount(in: container.mainContext)
-    } catch {
-      // The last count read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.recentlyReadCount)
-      libraryLog.error(
-        "counting the recently read failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    guard count != recentlyReadCount else { return }
-    recentlyReadCount = count
-    // A document read for the first time: what a phrase can name (#192).
-    RFCReaderShortcuts.refreshParameters()
-  }
-
-  private func refreshCollections() {
-    let snapshot: CollectionSnapshot
-    do {
-      snapshot = try CollectionSnapshot.fetch(in: container.mainContext)
-    } catch {
-      // The last snapshot stands until a fetch succeeds, which the next save tries:
-      // an empty one would close every filter on a collection (#613).
-      failedMirrors.insert(.collections)
-      libraryLog.error(
-        "reading collections failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
-    guard snapshot != collections else { return }
-    collections = snapshot
-    // A collection deleted in another tab, or on another device, is not left on
-    // screen with no name and nothing in it.
-    for scene in sceneRegistry.open {
-      scene.keepFilter(in: snapshot)
-    }
   }
 
   /// What a filter is called, wherever it is shown, against the collections as they
@@ -367,20 +355,24 @@ final class LibraryModel {
     return entry.rfcNumbers.count(where: { index[$0] != nil })
   }
 
-  /// Runs a change to collections on the app's context. A failure is logged rather
-  /// than shown (#125): every change the interface offers is one the store accepts,
-  /// and an empty name is refused before it gets here. Answers whether it was made,
-  /// for a view that says it was.
+  /// A collection made from a query as a tab lists it unsearched, for the sidebar's
+  /// count (#355): the same evaluation, so the list and the count cannot differ. It
+  /// reads, as a tab does, only what its query asks for.
+  func list(of entry: CollectionSnapshot.Entry) -> LibraryList {
+    LibraryList.reading(
+      .collection(entry.id), query: "", options: ListOptions(), from: LibrarySources(library: self))
+  }
+
+  /// How many documents `list` lists, made off the main actor as a tab's list is. Nil
+  /// while there is no index.
+  func count(of list: LibraryList) async -> Int? {
+    await listed(list)?.rows.count
+  }
+
+  /// `UserDataMirror.editCollections`.
   @discardableResult
   func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
-    do {
-      try change(container.mainContext)
-      return true
-    } catch {
-      libraryLog.error(
-        "changing a collection failed: \(String(describing: error), privacy: .public)")
-      return false
-    }
+    userData.editCollections(change)
   }
 
   /// What an undone or redone removal from a collection does with its failure:
@@ -391,35 +383,19 @@ final class LibraryModel {
     )
   }
 
-  /// Adds the bookmark or removes it, on the app's context, titled from the index
-  /// or else `documentTitle`, what an open reader has parsed. A failure is logged
-  /// rather than shown, as a collection's is (#125). A failed lookup changes
-  /// nothing; a failed save leaves the change pending in the context, saved with
-  /// the next save that succeeds.
-  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+  /// Adds the bookmark or removes it (`UserDataMirror.toggleBookmark`), titled from
+  /// the index or else `documentTitle`, what an open reader has parsed. A removal
+  /// registers its undo with `undoManager` (#769).
+  func toggleBookmark(
+    _ id: DocumentID, documentTitle: String? = nil, undoManager: UndoManager? = nil
+  ) {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
-    do {
-      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
-    }
+    userData.toggleBookmark(id, title: title, undoManager: undoManager)
   }
 
-  private func refreshBookmarks() {
-    let documents: Set<DocumentID>
-    do {
-      documents = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
-    } catch {
-      // The last set read stands until a fetch succeeds, which the next save tries.
-      failedMirrors.insert(.bookmarks)
-      libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
-    guard documents != bookmarkedDocuments else { return }
-    bookmarkedDocuments = documents
+  /// What a change to the bookmarks means beyond the set itself.
+  private func bookmarksChanged() {
     if keepsBookmarksOffline { wantedOfflineChanged() }
     // So that the baseline holds a new bookmark from now on, and reports a change to
     // it from the next refresh rather than taking it for one from before (#191).
@@ -430,6 +406,12 @@ final class LibraryModel {
     let pointers = await store.pointersInPack()
     guard pointers != pointersInPack else { return }
     pointersInPack = pointers
+  }
+
+  private func refreshCitationIndex() async {
+    let hasIndex = await store.citationIndexURL() != nil
+    guard hasIndex != hasCitationIndex else { return }
+    hasCitationIndex = hasIndex
   }
 
   private let client = RFCEditorClient()
@@ -449,6 +431,12 @@ final class LibraryModel {
   /// a document is added to it or removed.
   private(set) var textIndexVersion = 0
 
+  /// Index All RFCs (#37), which Settings and the search's footer start and stop.
+  let indexAllRun = IndexAllRun()
+
+  /// Whether the full-text index has opened, for Index All RFCs to be offered.
+  private(set) var hasTextIndex = false
+
   // MARK: - Bootstrap
 
   func bootstrap() async {
@@ -456,24 +444,16 @@ final class LibraryModel {
     indexState = .loading
     // Before anything is awaited, so that the parse is already running when this
     // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
-    // makes the first window at that suspension: the window is about 255 ms of the
-    // main thread, and the parse, which needs nothing from it, runs beside it rather
-    // than after it (#367). Every `await` stays below this line.
+    // makes the first window at that suspension: the window holds the main thread
+    // until the "First window made" signpost, and the parse, which needs nothing from
+    // it, runs beside it rather than after it (#367). Every `await` stays below this line.
     async let cached = Self.loadCachedIndex(from: store)
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
     // Just Published needs neither the index nor the downloads, so it starts beside
-    // them rather than after the index is applied. It is decoration: a failure leaves
-    // it empty, and is logged rather than shown (#125).
-    Task(name: "Fetch recent RFCs") {
-      do {
-        recent = try await client.fetchRecent()
-      } catch {
-        libraryLog.error(
-          "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
-      }
-    }
+    // them rather than after the index is applied.
+    recentRefresh.start { await self.refreshRecent() }
     await refreshPointersInPack()
     do {
       if let (prepared, updatedAt) = try await cached {
@@ -484,12 +464,14 @@ final class LibraryModel {
           checkIndex()
         }
       } else {
-        await refreshIndex()
+        await refreshIndexNow()
       }
     } catch {
       indexState = .failed(error)
       settleIndex()
     }
+    // Only the Reading Path items wait for it, so not the list.
+    Task(name: "Look for a citation index") { await refreshCitationIndex() }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     Task(name: "Refresh errata") { await refreshErrata() }
@@ -504,6 +486,7 @@ final class LibraryModel {
         return
       }
       self?.textIndexer = indexer
+      self?.hasTextIndex = true
       // A list made before the index opened has no section hits, and an index that is
       // already up to date never reports a change: its tabs search the text now.
       self?.textIndexChanged()
@@ -632,6 +615,7 @@ final class LibraryModel {
           do {
             let pack = try await store.installIndexesPack(
               from: PackInstaller.source(fromArgument: indexes))
+            await refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {
             libraryLog.error(
@@ -682,19 +666,46 @@ final class LibraryModel {
   /// false is the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
   /// and fails at once when there is none.
-  func refreshIndex(onExpensiveNetworks: Bool = true) async {
+  private func refreshIndex(onExpensiveNetworks: Bool) async {
     do {
       // Only with an index in memory: without one, a `304` would leave nothing to
       // show, so the whole index is asked for.
       let kept = index == nil ? nil : store.indexCheck()
       let validators = kept?.validators(at: .now)
+      // With no index to show, the list shows the download instead (#770), until
+      // the index downloaded has been applied or has failed. Not the automatic
+      // check's, which may wait for a cheap network for as long as there is none:
+      // it runs under the failure, and its Try Again, until it has the index.
+      let isFirstDownload = index == nil && onExpensiveNetworks
+      var onReceived: (@Sendable (Int64) -> Void)?
+      if isFirstDownload {
+        indexBytesReceived = 0
+        indexDownloads += 1
+        let download = indexDownloads
+        // Off the main actor, every packet: only the steps the list shows go over
+        // to it.
+        let steps = OSAllocatedUnfairLock(initialState: IndexPlaceholder.ProgressSteps())
+        onReceived = { [weak self] bytes in
+          guard steps.withLock({ $0.isStep(bytes) }) else { return }
+          Task { @MainActor in
+            self?.indexReceived(bytes, in: download)
+          }
+        }
+      }
+      defer {
+        if isFirstDownload {
+          indexBytesReceived = nil
+        }
+      }
       let interval = signposter.beginInterval("Fetch index")
       let fetched: IndexFetch
       do {
         // Ended on a throw too, so an offline refresh does not leave it open.
         defer { signposter.endInterval("Fetch index", interval) }
         fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
-          .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
+          .fetchIndexData(
+            unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks,
+            onReceived: onReceived)
       }
       switch IndexRefreshOutcome(fetched, kept: kept) {
       case .recordUnchanged(let kept):
@@ -702,7 +713,8 @@ final class LibraryModel {
       case .settle:
         settleIndex()
       case .install(let data, let validators):
-        // Off the main actor: the parse alone is about a second (#124).
+        // Off the main actor: the parse, with what is built from it, is the "Parse
+        // index" signpost (#124).
         let prepared = try await Self.parse(data)
         try await store.storeIndex(data, parsed: prepared.index, validators: validators)
         apply(prepared, updatedAt: .now)
@@ -712,11 +724,22 @@ final class LibraryModel {
       // discarded either.
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      if index == nil {
+      // A refresh canceled, the automatic check that a person's replaced (#983) or
+      // one iOS's background task ended, leaves the failure already shown as it was
+      // rather than showing its cancellation.
+      if index == nil, !(Task.isCancelled && indexState.isFailed) {
         indexState = .failed(error)
         settleIndex()
       }
     }
+  }
+
+  /// Records the bytes `download` has received; ignored once it has ended.
+  private func indexReceived(_ bytes: Int64, in download: Int) {
+    guard download == indexDownloads, let shown = indexBytesReceived, bytes > shown else {
+      return
+    }
+    indexBytesReceived = bytes
   }
 
   /// Only assigns: everything in `prepared` was built off the main actor.
@@ -743,6 +766,10 @@ final class LibraryModel {
   /// then on an intent takes what there is rather than waiting in `settledSearch()`.
   /// Not `indexState`, which a launch whose fetch answers nothing leaves loading.
   @ObservationIgnored private let indexSettled = Latch()
+
+  /// Whether the index has loaded or failed to, for a caller that cannot wait for
+  /// `settledSearch()`: a script's accessor (#762).
+  var hasIndexSettled: Bool { indexSettled.isOpen }
 
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
@@ -846,8 +873,9 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The refresh of the index under way, the automatic daily check's or a Retry's,
-  /// which a second one joins.
+  /// The refresh of the index under way, the automatic daily check's or a person's,
+  /// which a second one joins, except that a person's replaces the automatic check
+  /// (#983).
   @ObservationIgnored private let indexRefresh = SharedRefresh(name: "Refresh index")
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
@@ -861,7 +889,7 @@ final class LibraryModel {
   /// The revisions come first because the index check waits for a network that is
   /// neither expensive nor constrained (#314), which on a phone network can outlast
   /// iOS's background task. Canceling this, as iOS does when that task expires,
-  /// cancels the check.
+  /// cancels the check, or the person's refresh it joined.
   func refreshForBookmarks() async {
     await bootstrap()
     await indexLoaded.wait()
@@ -881,19 +909,29 @@ final class LibraryModel {
   /// under way, or a new one.
   @discardableResult
   private func checkIndex() -> Task<Void, Never> {
-    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: false) }
+    indexRefresh.start(replaceable: true) {
+      await self.refreshIndex(onExpensiveNetworks: false)
+    }
   }
 
-  /// Retry, after the index failed: on any network, as a person asked for it, and
-  /// joining a refresh already under way rather than fetching the index beside it.
+  /// Retry, after the index failed: on any network, as a person asked for it. It
+  /// joins a person's refresh already under way rather than fetching the index beside
+  /// it, and replaces the automatic check, which may wait for a cheap network for as
+  /// long as there is none (#983).
   func retryIndex() {
-    indexRefresh.start { await self.refreshIndex() }
+    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: true) }
   }
 
-  /// Compares the bookmarked RFCs with the last baseline, after every change to the
-  /// index or the revisions, and posts what changed (`BookmarkNotifications`). Runs
-  /// whether notifications are on or not, so the baseline is current when they are
-  /// turned on.
+  /// The index fetched now, on any network, by the rule of `retryIndex`, and waited
+  /// for: pull to refresh and the first launch (#984).
+  func refreshIndexNow() async {
+    await indexRefresh.join { await self.refreshIndex(onExpensiveNetworks: true) }
+  }
+
+  /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
+  /// baseline, after every change to the index or the revisions, and posts what
+  /// changed (`BookmarkNotifications`). Runs whether notifications are on or not, so
+  /// the baseline is current when they are turned on.
   private func compareBookmarks() {
     let previous = bookmarkComparison
     bookmarkComparison = Task(name: "Compare bookmarks") {
@@ -907,18 +945,23 @@ final class LibraryModel {
     // start every one afresh at the next launch that opens the real one.
     guard !AppData.isStoredInMemory else { return }
     let bookmarks: Set<DocumentID>
+    let groups: Set<String>
     do {
-      // Read here rather than taken from `bookmarkedDocuments`, which a failed read
-      // leaves empty: a baseline of no bookmarks would start every one afresh.
+      // Read here rather than taken from `bookmarkedDocuments` and `followedGroups`,
+      // which a failed read leaves empty: a baseline of none would start every one
+      // afresh.
       bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
+      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
     } catch {
       libraryLog.error(
-        "reading bookmarks to compare failed: \(String(describing: error), privacy: .public)")
+        "reading bookmarks or followed groups to compare failed: \(String(describing: error), privacy: .public)"
+      )
       return
     }
     let previous = await store.bookmarkBaseline()
     let baseline = BookmarkBaseline(
-      bookmarks: bookmarks, index: index, revisions: revisions, carryingOver: previous)
+      bookmarks: bookmarks, followedGroups: groups, index: index, revisions: revisions,
+      carryingOver: previous)
     guard baseline != previous else { return }
     do {
       // Kept before anything is posted: a baseline that cannot be kept would report
@@ -955,6 +998,22 @@ final class LibraryModel {
     } catch {
       libraryLog.error(
         "fetching working groups failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  // MARK: - Just Published
+
+  /// The feed kept, then a newer one if the RFC Editor has it, asked for only on a
+  /// cheap network (`RecentFeedRefresh`). It is decoration: a failure keeps what is
+  /// shown, and is logged rather than shown (#125).
+  private func refreshRecent() async {
+    do {
+      try await RecentFeedRefresh.run(store: store, client: clientOnCheapNetworks) { feed in
+        if feed != recent { recent = feed }
+      }
+    } catch {
+      libraryLog.error(
+        "refreshing recent RFCs failed: \(String(describing: error), privacy: .public)")
     }
   }
 
@@ -1046,7 +1105,7 @@ final class LibraryModel {
   ///
   /// Derived once per index rather than per read: `SidebarView.body` reads this, so
   /// as a computed property it counted all 9,842 RFCs and sorted them again on every
-  /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
+  /// body pass, dozens of times a session.
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
@@ -1061,7 +1120,7 @@ final class LibraryModel {
 
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
-  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  /// than a spinner. Four, since a build of a large RFC holds megabytes.
   ///
   /// The whole preview rather than the build alone, so a build is never paired with
   /// another parse of its document. A document's previews go when it is removed or
@@ -1101,6 +1160,45 @@ final class LibraryModel {
 
   private func textIndexChanged() {
     textIndexVersion += 1
+  }
+
+  /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
+  /// on a network that is neither metered nor in Low Data Mode, and indexes it without
+  /// keeping its body.
+  func indexAllRFCs() {
+    guard let textIndexer else { return }
+    let entries = Dictionary(
+      indexableRFCs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let client = clientOnCheapNetworks
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    indexAllRun.start(
+      entries.keys.sorted(), indexer: textIndexer,
+      fetch: { id in
+        let entry = entries[id]
+        return try await client.fetchPreferredDocument(
+          id, availableFormats: entry?.formats, entry: entry
+        ).document
+      }, changed: changed)
+  }
+
+  /// How many of `indexableRFCs` Index All RFCs would download; nil while the
+  /// full-text index has not opened.
+  func unindexedRFCCount() async -> Int? {
+    await textIndexer?.unindexed(indexableRFCs.map(\.id))
+  }
+
+  /// What the full-text index holds, and how much of the disk it takes; nil while it
+  /// has not opened.
+  func textIndexUsage() async -> TextIndexer.Usage? {
+    await textIndexer?.usage()
+  }
+
+  /// Remove Full-Text Index: stops Index All RFCs, and keeps in the index only the
+  /// RFCs whose bodies are stored.
+  func removeIndexOfAllRFCs() async {
+    guard let textIndexer else { return }
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await indexAllRun.remove(from: textIndexer, changed: changed)
   }
 
   /// What the full-text search finds for `list` (#37): its section hits, narrowed as
@@ -1370,7 +1468,13 @@ final class LibraryModel {
 
     /// Opens `id` in a window of its own, from a menu that offers it.
     func openWindow(for id: DocumentID) {
-      openInNewScene(RFCLink(id: id), inBackground: false)
+      openWindow(for: RFCLink(id: id))
+    }
+
+    /// Opens `link` in a window of its own, at the place it names: a reference's
+    /// long-press menu (#763).
+    func openWindow(for link: RFCLink) {
+      openInNewScene(link, inBackground: false)
     }
   #endif
 
@@ -1402,6 +1506,14 @@ final class LibraryModel {
         openInNewWindow(link)
       }
     }
+
+    /// Opens `link` in a new tab of the window showing `scene`, from a menu in it
+    /// (#761): a right click does not make a background window key, and a new tab
+    /// joins the key window's group.
+    func openTab(_ link: RFCLink, beside scene: NavigationModel) {
+      windows?.bringForward(scene)
+      openInNewScene(link, inBackground: false)
+    }
   #endif
 
   // MARK: - Documents
@@ -1427,7 +1539,17 @@ final class LibraryModel {
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
     let pack = try await store.installLegacyPack(from: source)
     await refreshPointersInPack()
+    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
+    await textIndexer?.legacyPackInstalled(changed: changed)
     return pack
+  }
+
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, for an export of
+  /// it (#377).
+  func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
+    let data = try await store.publishedFile(id, format: format, client: client)
+    await evictIfGrown()
+    return data
   }
 
   func originalText(for id: DocumentID) async throws -> String {
@@ -1464,8 +1586,10 @@ final class LibraryModel {
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
+    // A document with annotations is kept as a bookmarked one is (#522).
+    let annotated = try AnnotationStore.annotatedDocuments(in: context)
     return CacheEviction.pinned(
-      bookmarked: bookmarked, read: read, marked: marked,
+      bookmarked: bookmarked.union(annotated), read: read, marked: marked,
       open: Set(sceneRegistry.open.compactMap(\.shown)), withMembers: withMembers(of:))
   }
 
@@ -1473,8 +1597,8 @@ final class LibraryModel {
 
   /// What each tier holds, and what of the cache Clear Cache would remove, for
   /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
-  /// fetch still running is counted when it lands. Nothing is clearable when the
-  /// marks cannot be read, as Clear Cache then removes nothing.
+  /// fetch still running is counted when it lands. Nothing is clearable when what
+  /// `sparedFromClearing` spares cannot be told, as Clear Cache then removes nothing.
   func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
     guard let spared = sparedFromClearing() else {
@@ -1494,8 +1618,14 @@ final class LibraryModel {
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper
-  /// runs; nil when they cannot be read.
+  /// runs; nil when they cannot be read, or when what is wanted offline is not known
+  /// yet, which would spare none of the bookmarks kept offline, nor a marked BCP's
+  /// members.
   private func sparedFromClearing() -> Set<DocumentID>? {
+    guard userData.knowsWantedOffline(keepsBookmarks: keepsBookmarksOffline) else {
+      libraryLog.error("Clear Cache spares everything, what is wanted offline has not been read")
+      return nil
+    }
     do {
       return CacheEviction.spared(
         marked: try OfflineMarkStore.markedDocuments(in: container.mainContext),
@@ -1511,23 +1641,19 @@ final class LibraryModel {
   /// Keeps nothing offline any more: removes every mark, on every device, since marks
   /// are synced, and turns off keeping this device's bookmarks. The bodies go back
   /// into the reading cache, as an unmarked one does, where eviction or Clear Cache
-  /// removes them. A removal that could not be saved is logged and changes nothing:
-  /// it is made in a context of its own, discarded with it, since rolling back the
-  /// app's context would discard whatever else waits there to be saved, such as a
-  /// bookmark whose save failed.
+  /// removes them. A removal that could not be saved is logged and changes nothing
+  /// (`UserDataMirror.removeAllOfflineMarks(first:)`).
   func removeAllOffline() {
+    let keptBookmarks = keepsBookmarksOffline
     do {
-      try OfflineMarkStore.removeAll(in: ModelContext(container))
+      // One reconciliation for both, without the bookmarks: the marks' report runs it.
+      try userData.removeAllOfflineMarks(first: { storeKeepsBookmarksOffline(false) })
     } catch {
+      // Nothing was reconciled, so restoring the setting is all there is to undo.
+      storeKeepsBookmarksOffline(keptBookmarks)
       libraryLog.error(
         "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
-      return
     }
-    storeKeepsBookmarksOffline(false)
-    // One reconciliation for both: the marks' refresh runs it when they changed.
-    let marks = offlineMarks
-    refreshOfflineMarks()
-    if offlineMarks == marks { wantedOfflineChanged() }
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
@@ -1542,39 +1668,24 @@ final class LibraryModel {
     return await store.downloadedSize(id)
   }
 
-  /// The documents the reader has opened, most recent first, a BCP, STD or FYI
-  /// among them as itself (#321).
-  ///
-  /// Fetched on demand rather than observed, and that is the point: the Recently
-  /// read list is history as of the moment the filter is entered, and a live query
-  /// re-sorted it under the click that was reading it. `NavigationModel` takes one
-  /// of these when its filter changes, exactly as it takes `availableOfflineNumbers`.
-  ///
-  /// Empty when the fetch fails, which is logged: the list is only shown, and
-  /// nothing is decided by its being empty.
+  /// `UserDataMirror.recentlyRead`.
   func recentlyRead() -> [DocumentID] {
-    do {
-      return try ReadingPositionStore.recentlyRead(in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "reading the recently read list failed: \(String(describing: error), privacy: .public)")
-      return []
-    }
+    userData.recentlyRead()
   }
 
   // MARK: - Reading paths (#189)
 
   enum ReadingPathResult {
     case path(ReadingPath)
-    /// No `indexes` pack is installed, which the sheet says rather than computing a
-    /// partial path from the documents in the cache.
+    /// There is no `indexes` pack, bundled or installed, which the sheet says rather
+    /// than computing a partial path from the documents in the cache.
     case noIndex
     /// The pack is there and did not read: logged, and said in a sentence.
     case failed
   }
 
-  /// The reading path from `root`, `depth` citations deep, read from the installed
-  /// `indexes` pack off the main actor.
+  /// The reading path from `root`, `depth` citations deep, read from the `indexes`
+  /// pack `DocumentStore.citationIndexURL()` chooses, off the main actor.
   func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
     guard let url = await store.citationIndexURL() else { return .noIndex }
     do {
@@ -1609,8 +1720,8 @@ final class LibraryModel {
     Task(name: "Keep offline") { try? await offlineKeeper.fetchNow(id) }
   }
 
-  /// Saves the mark and reads the marks again at once, rather than when the save's
-  /// notification arrives, which is after the next turn of the run loop. Answers
+  /// Saves the mark, whose save reads the marks again before this returns (the
+  /// mirror's `ModelContext.didSave`, posted synchronously on the main actor). Answers
   /// whether it was saved.
   private func mark(_ id: DocumentID, keptOffline isKept: Bool) -> Bool {
     do {
@@ -1619,7 +1730,6 @@ final class LibraryModel {
       libraryLog.failure(of: id, "marking Keep Offline failed", error)
       return false
     }
-    refreshOfflineMarks()
     return true
   }
 
@@ -1631,6 +1741,9 @@ final class LibraryModel {
       let data = try await client.fetchDocumentData(id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
+      // Not private API, but not documented either: the notification Safari posts,
+      // which the Dock answers today. If a macOS stops answering it, the stack stops
+      // bouncing and nothing says so; the file is saved all the same (#762).
       DistributedNotificationCenter.default().post(
         name: Notification.Name("com.apple.DownloadFileFinished"), object: file.path)
     }
@@ -1651,4 +1764,26 @@ final class LibraryModel {
       return file
     }
   #endif
+}
+
+/// What a list counted in the sidebar lists from: the library's inputs as they
+/// stand, where a tab's are the ones it took on entering its filter.
+private struct LibrarySources: ListSources {
+  let library: LibraryModel
+
+  var bookmarked: Set<DocumentID> { library.bookmarkedDocuments }
+  var recentlyRead: [DocumentID] { library.recentlyRead() }
+  var downloaded: Set<Int> { library.availableOfflineNumbers }
+
+  func members(of collection: UUID) -> [Int] {
+    library.collections[collection]?.rfcNumbers ?? []
+  }
+
+  func collection(named name: String) -> UUID? {
+    library.collections.collection(named: name)?.id
+  }
+
+  func query(of collection: UUID) -> String? {
+    library.collections[collection]?.query
+  }
 }

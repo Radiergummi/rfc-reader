@@ -12,6 +12,9 @@
     static let showFindInterface = FindCommand(.showFindInterface)
     static let nextMatch = FindCommand(.nextMatch)
     static let previousMatch = FindCommand(.previousMatch)
+    /// Use Selection for Find (#761), which `NSTextView` already performs; sent by
+    /// `ReaderWindowController.useSelectionForFind()`.
+    static let setSearchString = FindCommand(.setSearchString)
 
     @objc let tag: Int
 

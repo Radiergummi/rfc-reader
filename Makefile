@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim run install trace benchmark build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app epubcheck xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -9,6 +9,7 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
+LAYOUT_BENCHMARKS := Tools/benchmarks-layout
 # RFCKit, built as the root package, fails on a warning; the other packages say so
 # in their manifests. See RFCKit's manifest for why it cannot (#440).
 RFCKIT_WARNINGS := -Xswiftc -warnings-as-errors
@@ -108,7 +109,10 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3261 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6455 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3261 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6455 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830 rfc9110
+# The text renderings RFCReaderKit's suites read beside their XML: an annotation made
+# in the legacy parse of an RFC relocates into its authored XML (#522).
+CORPUS_TEST_APP_TEXT_DOCUMENTS := rfc9110
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935 rfc9051 rfc9111 rfc9499 rfc9692
 
@@ -122,33 +126,72 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 # ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
-# saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
-# run on a Mac only, where the package builds; the weekly Linux job skips them.
+# saying so, from `CorpusText`, or in RFCReaderKit `CorpusXML`, rather than on a
+# missing file. RFCReaderKit's suites run on a Mac only, where the package builds:
+# `test-corpus-app`.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter CorpusBacked
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
-	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
-	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked)
+	$(if $(DARWIN),$(MAKE) test-corpus-app)
+
+## Run RFCReaderKit's corpus-backed suites alone, fetching the RFCXML they read
+# On a Mac only, where the package builds; `test-corpus` runs it after the others.
+# CI's macOS job runs it on its own, since the Linux job has run the rest.
+test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) \
+  $(CORPUS_TEST_APP_TEXT_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
+	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
+	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked
+
+## Validate the EPUB export with epubcheck, over the committed fixtures
+# Not part of `check` or CI: epubcheck needs Java (`brew install epubcheck`). The
+# EPUB writer's tests write each fixture's book into .build/epub when
+# RFC_EPUB_OUTPUT names it, and epubcheck reads every one (#408).
+EPUB_OUTPUT := .build/epub
+epubcheck:
+	@command -v epubcheck >/dev/null || { echo "epubcheck is not installed: brew install epubcheck" >&2; exit 1; }
+	rm -rf $(EPUB_OUTPUT)
+	RFC_EPUB_OUTPUT=$(abspath $(EPUB_OUTPUT)) \
+	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter "write the book for epubcheck"
+	@status=0; for book in $(EPUB_OUTPUT)/*.epub; do epubcheck --quiet "$$book" || status=1; done; exit $$status
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
-# RFCs (Tools/benchmarks). Not part of `check`: the numbers are this machine's,
-# and the first run needs the network. A change is measured against a baseline
-# saved before it:
+# RFCs (Tools/benchmarks), then of the reader's TextKit layout (Tools/benchmarks-layout,
+# without package-benchmark's malloc interposer, which crashes TextKit, #582). Not
+# part of `check`: the numbers are this machine's, and the first run needs the
+# network. A change is measured against a baseline saved before it, which each
+# package keeps of its own:
 #
 #   make benchmark BENCHMARK_ARGS='baseline update before'
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
-#   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
+#   make benchmark-core BENCHMARK_ARGS='--filter "Index.*"'
 #
+# `benchmark` runs both packages with the same arguments, one after the other, so
+# that under `make -j` neither is measured while the other runs, and runs the second
+# even when the first fails, so that a `baseline update` leaves neither stale; it
+# fails if either did. Arguments only one of them can take, such as a `--filter` or
+# `--target`, or a baseline saved in only one, go to that package alone:
+# `make benchmark-core` or `make benchmark-layout`; `benchmark` refuses a `--filter`
+# or `--target`, since a filtered `baseline update` would save an empty baseline in
+# the package the filter matches nothing in, which a later `baseline compare` fails on.
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xml rfc5661.txt rfc793.txt
+LAYOUT_BENCHMARK_INPUTS := rfc9000.xml rfc5661.txt
 BENCHMARK_ARGS ?=
-benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+benchmark:
+	$(if $(filter --filter% --target%,$(BENCHMARK_ARGS)),$(error a --filter or --target is one package's: run make benchmark-core or make benchmark-layout))
+	$(MAKE) benchmark-core; core=$$?; $(MAKE) benchmark-layout && exit $$core
+
+benchmark-core: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+benchmark-layout: $(LAYOUT_BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(LAYOUT_BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 ## Build the benchmarks without running them
 # Part of `build` on a Mac, and what CI's macOS package job runs, so an API change
@@ -156,6 +199,7 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 # next wants a baseline (#419). Debug: it checks that they compile, not how fast.
 build-benchmarks:
 	swift build --package-path $(BENCHMARKS)
+	swift build --package-path $(LAYOUT_BENCHMARKS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
@@ -163,11 +207,11 @@ build-benchmarks:
 # text.noindex. Written to a partial file first, like the legacy RFCs below.
 $(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
 
 $(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
 # The RFC index, fetched when it is missing, for what reads it without a corpus run:
 # the overrides check and `test-corpus`. What they take from it was fixed when each
@@ -344,6 +388,38 @@ run-sim: ios-app
 	  xcrun simctl launch --terminate-running-process '$(IOS_SIMULATOR)' \
 	    "$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$app/Info.plist")"
 
+## Run one hand check in the iOS Simulator and export its screenshots
+# The scenarios in App/HandChecks (#743) drive the app from outside with XCUITest:
+# they tap, swipe, long-press, open links and answer the system's alerts, which
+# `run-sim` cannot. Each starts from a first launch: the app is removed from the
+# simulated device first, with what it stored and the permissions it was given.
+# The screenshots its steps save land in hand-checks/<CHECK>/, named by the step,
+# with the run's result bundle beside them, whether it passed or not. No
+# diagnostics on a failure: the sysdiagnose xcodebuild collects then is slow, and
+# the screenshots say more. Not part of `check` or CI: a change
+# that needs a hand check runs the one it needs. Without CHECK, it lists them.
+#
+#   make hand-check CHECK=testReaderStackPushAndPop
+#   make hand-check CHECK=testCitationLongPress IOS_SIMULATOR='iPad Air 11-inch (M4)'
+#
+HAND_CHECKS := hand-checks
+hand-check: hand-check-check xcodeproj
+	@rm -rf '$(HAND_CHECKS)/$(CHECK)' '$(HAND_CHECKS)/$(CHECK).xcresult'
+	@xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null
+	@xcrun simctl uninstall '$(IOS_SIMULATOR)' me.mazetti.rfc-reader
+	@mkdir -p '$(HAND_CHECKS)'
+	xcodebuild test -project $(PROJECT) -scheme HandChecks \
+	  -destination 'platform=iOS Simulator,name=$(IOS_SIMULATOR)' -configuration $(CONFIGURATION) \
+	  -only-testing:'HandChecks/HandChecks/$(CHECK)' -resultBundlePath '$(HAND_CHECKS)/$(CHECK).xcresult' \
+	  -collect-test-diagnostics never -quiet $(SIGNING); \
+	  status=$$?; \
+	  Tools/hand-checks/export.py '$(HAND_CHECKS)/$(CHECK).xcresult' '$(HAND_CHECKS)/$(CHECK)'; \
+	  exit $$status
+
+hand-check-check:
+	@sed -n 's/^ *func \(test[A-Za-z]*\)().*/\1/p' App/HandChecks/*.swift | grep -Fqx '$(CHECK)' || \
+	  { echo "set CHECK to one of these:"; sed -n 's/^ *func \(test[A-Za-z]*\)().*/  \1/p' App/HandChecks/*.swift; exit 1; }
+
 ## Build and launch the macOS app
 # A running copy is quit first, or `open` would just bring the old build back to
 # the front.
@@ -354,15 +430,73 @@ run: build-app
 	  echo "launching $$app"; \
 	  open "$$app"
 
+## Fetch the RFC index the app bundles, for a first launch offline (#770)
+# Into App/Resources, which git ignores, afresh every time: the app dates the bundled
+# index by when it was fetched, so one left from months ago would read as current.
+# project.yml's "Bundle the RFC index" phase copies it into the app; a Release build
+# fails without it, and a Debug build bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+BUNDLED_INDEX := App/Resources/rfc-index.xml
+bundled-index:
+	@mkdir -p $(dir $(BUNDLED_INDEX))
+	$(CURL) --compressed -o $(BUNDLED_INDEX).part https://www.rfc-editor.org/rfc-index.xml && \
+	  mv $(BUNDLED_INDEX).part $(BUNDLED_INDEX)
+
+## Fetch the indexes pack the app bundles (#738)
+# The release App/indexes-pack.mk pins, into App/Resources/indexes, which git
+# ignores: its two files are downloaded beside it and moved in only once both match
+# the pinned SHA-256, and a pack already there that matches is kept; a pack of
+# another schema than IndexSchema.version, which the app would refuse, fails it.
+# project.yml's "Bundle the indexes pack" phase copies it into the app; a Release
+# build fails without it or with files other than the pinned ones, and a Debug build
+# bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+include App/indexes-pack.mk
+INDEXES_PACK := App/Resources/indexes
+INDEX_SCHEMA := Packages/RFCKit/Sources/RFCKit/Index/IndexSchema.swift
+INDEXES_PACK_URL ?= https://github.com/Radiergummi/rfc-reader/releases/download/$(INDEXES_PACK_TAG)
+define indexes_pack_digests
+printf '%s  indexes.sqlite\n%s  manifest.json\n' \
+  '$(INDEXES_PACK_SQLITE_SHA256)' '$(INDEXES_PACK_MANIFEST_SHA256)'
+endef
+indexes-pack:
+	@test -n '$(INDEXES_PACK_TAG)' || { echo "App/indexes-pack.mk pins no indexes pack yet"; exit 1; }
+	@if [ -d $(INDEXES_PACK) ] && \
+	  (cd $(INDEXES_PACK) && $(indexes_pack_digests) | shasum -a 256 -c -s -); then \
+	  echo "$(INDEXES_PACK) is $(INDEXES_PACK_TAG)"; \
+	else \
+	  rm -rf $(INDEXES_PACK).part && mkdir -p $(INDEXES_PACK).part && \
+	  for file in indexes.sqlite manifest.json; do \
+	    $(CURL) -L -o $(INDEXES_PACK).part/$$file $(INDEXES_PACK_URL)/$$file || exit 1; \
+	  done && \
+	  (cd $(INDEXES_PACK).part && $(indexes_pack_digests) | shasum -a 256 -c -) && \
+	  rm -rf $(INDEXES_PACK) && mv $(INDEXES_PACK).part $(INDEXES_PACK); \
+	fi
+	@schema=$$(sqlite3 -readonly $(INDEXES_PACK)/indexes.sqlite "SELECT value FROM meta WHERE key = 'schema'"); \
+	  expected=$$(sed -n 's/.*static let version = \([0-9]*\).*/\1/p' $(INDEX_SCHEMA)); \
+	  test "$$schema" = "$$expected" || { \
+	    echo "$(INDEXES_PACK_TAG) has schema $$schema, and the app reads $$expected: pin a pack built by this commit"; \
+	    exit 1; }
+
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
-install: build-app
+install: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  rm -rf '/Applications/$(SCHEME).app'; \
 	  cp -R "$$app" /Applications/; \
 	  echo "installed /Applications/$(SCHEME).app"
+
+## Sign the update feed for a published release, into site/public (VERSION=x.y.z)
+# On the maintainer's machine, whose keychain holds the feed's key (#911).
+appcast: xcodeproj
+	@test -n "$(VERSION)" || { echo "usage: make appcast VERSION=x.y.z" >&2; exit 1; }
+	Tools/release/appcast.sh $(VERSION) '$(call build_setting,generic/platform=macOS,BUILD_DIR)'
+
+## Deploy the site and its update feed to rfc-reader.mazetti.me
+publish-feed:
+	Tools/release/publish-feed.sh
 
 ## Record a Time Profiler trace of a scripted session and print the signposts
 # Release, because that is what ships and what the numbers should describe; a
@@ -384,7 +518,7 @@ install: build-app
 TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
-trace: build-app
+trace: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \

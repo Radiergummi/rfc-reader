@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftUI
 
 #if os(macOS)
@@ -8,12 +9,12 @@ import SwiftUI
         Button("New Window") {
           AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
         }
-        .keyboardShortcut("n", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.newWindow.keyboardShortcut)
 
         Button("New Tab") {
           AppDelegate.shared?.openTab(inBackground: false)
         }
-        .keyboardShortcut("t", modifiers: .command)
+        .keyboardShortcut(ReaderShortcut.newTab.keyboardShortcut)
       }
     }
   }

@@ -42,13 +42,15 @@ struct InfoView: View {
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
-            let summary = ErrataSummary(errata: errata, sections: sections)
+            // The sections the reader draws, as the chips find them.
+            let summary = ErrataSummary(errata: errata, sections: ErrataMarks.drawn(sections))
             // Errata of only a status a later feed adds are neither listed nor counted.
             if !summary.items.isEmpty || summary.notListed != nil {
               ErrataSection(summary: summary, selectSection: selectSection)
             }
           }
-          if let document, document.series == .rfc {
+          // Without a citation index a reading path can only say there is none.
+          if let document, document.series == .rfc, library.hasCitationIndex {
             InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)
@@ -69,6 +71,9 @@ struct InfoView: View {
         #endif
         .frame(maxWidth: .infinity, alignment: .leading)
       }
+      // The pane takes focus as it shows: no ring round its first chip until a key
+      // moves focus there.
+      .clearsFocusOnAppear()
     } else {
       Color.clear
     }
@@ -191,13 +196,17 @@ private struct ProvenanceStep: View {
       .accessibilityLabel(Text(verbatim: step.accessibilityLabel))
       #if os(macOS)
         .popover(item: $card, arrowEdge: .bottom) { card in
-          WorkingGroupCard(summary: card.summary)
+          WorkingGroupCard(group: card.id, summary: card.summary)
           .padding()
           .frame(width: GlossaryCard.width)
+          // Its Follow button reads the library, which this pane takes rather than
+          // reads from the environment.
+          .environment(library)
         }
       #else
         .sheet(item: $card) { card in
-          WorkingGroupSheet(summary: card.summary)
+          WorkingGroupSheet(group: card.id, summary: card.summary)
+          .environment(library)
         }
       #endif
     }
@@ -221,13 +230,14 @@ private struct GroupCard: Identifiable {
   /// A working group's card as a sheet, as a glossary entry is one: a medium detent,
   /// so the document stays in view above it.
   private struct WorkingGroupSheet: View {
+    let group: String
     let summary: WorkingGroupSummary
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
       NavigationStack {
         ScrollView {
-          WorkingGroupCard(summary: summary)
+          WorkingGroupCard(group: group, summary: summary)
             .padding()
         }
         .toolbar {
@@ -246,6 +256,8 @@ private struct GroupCard: Identifiable {
 private struct FactStrip: View {
   let facts: [DocumentInfo.Fact]
 
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   var body: some View {
     HStack(spacing: 0) {
       ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
@@ -261,15 +273,14 @@ private struct FactStrip: View {
 
   private func factView(_ fact: DocumentInfo.Fact) -> some View {
     VStack(spacing: 2) {
+      // Wrapped rather than shrunk at an accessibility size (#760).
       Text(fact.value)
         .font(.infoFact)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .lineLimit(dynamicTypeSize.lines(1))
       Text(fact.label)
         .font(.infoFactCaption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .lineLimit(dynamicTypeSize.lines(1))
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)
@@ -313,14 +324,17 @@ private struct ErrataSection: View {
   }
 }
 
-private struct ErratumView: View {
+/// One erratum, as the Info pane and an errata chip's list show it (#387).
+struct ErratumView: View {
   let item: ErrataSummary.Item
-  let selectSection: (String) -> Void
+  /// Goes to the section the erratum names; nil where the list is already there, as a
+  /// chip's is.
+  var selectSection: ((String) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(alignment: .firstTextBaseline) {
-        if let anchor = item.anchor {
+        if let anchor = item.anchor, let selectSection {
           Button {
             selectSection(anchor)
           } label: {
@@ -487,8 +501,6 @@ private struct DocumentChip: View {
           Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
-    // The system's focus ring drew round the first chip as soon as the pane showed.
-    .focusEffectDisabled()
     .accessibilityHint("Opens the document")
   }
 }
@@ -509,7 +521,6 @@ private struct KeywordTag: View {
         .background(.fill.secondary, in: .capsule)
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
     .help("Search the library for “\(keyword)”")
     .accessibilityHint("Searches the library for it")
   }
@@ -541,7 +552,6 @@ private struct LinkRow: View {
         content(detail: nil, trailing: "arrow.up.right")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       .help(url.absoluteString)
     case .file(let document, let format):
       let url = RFCEditorEndpoints.document(document, format: format)
@@ -552,7 +562,6 @@ private struct LinkRow: View {
           detail: nil, trailing: outcomeSymbol ?? (isOptionHeld ? "arrow.down" : "arrow.up.right"))
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       #if os(macOS)
         .onModifierKeysChanged(mask: .option, initial: true) { _, keys in
           isOptionHeld = keys.contains(.option)
@@ -571,7 +580,6 @@ private struct LinkRow: View {
         content(detail: text, trailing: outcomeSymbol ?? "doc.on.doc")
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       .help("Copy \(row.label)")
       .resets($outcome, to: nil, after: .seconds(1.5))
     default:
@@ -645,7 +653,8 @@ private struct LinkRow: View {
 /// pane that is the store's rather than the index's.
 ///
 /// One row whose icon is the control, as a download is in Safari's list: the filled
-/// arrow turns to a cross under the pointer and stops keeping the copy, and the
+/// arrow turns to a cross under the pointer and stops keeping the copy (on iOS, with
+/// no pointer, a tap asks first, #763), and the
 /// outline arrow of a document not kept keeps it, moving a copy already read or
 /// downloading one (#358). A copy no longer kept goes to the reading cache, which
 /// may remove it when it needs the room; the tooltip says so. Whether it is kept is
@@ -664,22 +673,32 @@ private struct OfflineSection: View {
   @State private var downloadFailed = false
   /// Whether that was for want of room on the disk rather than a failed fetch.
   @State private var hadNoRoom = false
+  #if !os(macOS)
+    /// Whether iOS asks before it stops keeping the copy (#763).
+    @State private var confirmsStopping = false
+  #endif
 
   private var isKept: Bool {
     document.series == .rfc && library.offlineMarks.contains(document)
   }
 
+  /// Whether Available Offline lists it, which the status says as a row's mark does
+  /// (#769): kept by its mark, or as a bookmark while bookmarks are kept. The control
+  /// stays the mark's.
+  private var isAvailable: Bool {
+    library.isAvailableOffline(document)
+  }
+
   var body: some View {
     InfoSection(title: String(localized: "Offline")) {
       HStack(spacing: 10) {
-        Button(action: toggle) {
+        Button(action: press) {
           Image(systemName: symbol)
             .font(.title3)
             .foregroundStyle(isKept && isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
         .disabled(isWorking || document.series != .rfc)
         .onHover { isHovering = $0 }
         .help(help)
@@ -688,9 +707,9 @@ private struct OfflineSection: View {
         Text(
           downloadFailed
             ? (hadNoRoom ? "Not enough space" : "Couldn't download")
-            : isKept ? "Kept offline" : "Not kept offline"
+            : isAvailable ? "Available offline" : "Not available offline"
         )
-        .foregroundStyle(isKept ? .primary : .secondary)
+        .foregroundStyle(isAvailable ? .primary : .secondary)
         Spacer()
         if isKept, let size {
           Text(size.formatted(.byteCount(style: .file)))
@@ -709,6 +728,31 @@ private struct OfflineSection: View {
       if !Task.isCancelled { self.size = size }
     }
     .resets($downloadFailed, to: false, after: .seconds(1.5))
+    #if !os(macOS)
+      .confirmationDialog(
+        "Stop keeping this RFC offline?", isPresented: $confirmsStopping,
+        titleVisibility: .visible
+      ) {
+        // What the button and the message say, whatever the mark became while the
+        // dialog was up.
+        Button("Stop Keeping Offline", role: .destructive) { setKept(false) }
+      } message: {
+        Text(
+          "Stop keeping it offline. The copy moves to the reading cache, which may remove it when it needs the room."
+        )
+      }
+    #endif
+  }
+
+  /// Stops keeping the copy at once on the Mac, whose icon turns to a cross under the
+  /// pointer first; on iOS, which has no pointer to show it, a tap asks first (#763).
+  /// Keeping a copy never asks.
+  private func press() {
+    #if os(macOS)
+      setKept(!isKept)
+    #else
+      if isKept { confirmsStopping = true } else { setKept(true) }
+    #endif
   }
 
   private var symbol: String {
@@ -726,9 +770,8 @@ private struct OfflineSection: View {
       : String(localized: "Keep a copy to read offline.")
   }
 
-  private func toggle() {
+  private func setKept(_ keeps: Bool) {
     isWorking = true
-    let keeps = !isKept
     Task {
       do {
         try await library.setKeptOffline(document, keeps)

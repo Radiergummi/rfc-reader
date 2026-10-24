@@ -78,12 +78,47 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+  /// The collection export sheet on show, if any (#385), for the same reason.
+  var collectionExport: CollectionExportRequest?
+
+  /// What Save as Collection… would keep (#355): the list on show as a query of the
+  /// whole library (`LibraryList.savedQuery`). Nil, and the item disabled, while the
+  /// list is not searched: there is nothing to keep that the sidebar doesn't list;
+  /// and while its search names its filter's qualifier again, which no query keeps.
+  var savedQuery: String? {
+    guard let list = listed?.list, !list.query.isUnsearchedQuery,
+      let query = list.savedQuery(in: library.collections)
+    else { return nil }
+    // Not a search for a section, which a collection's list never shows.
+    return CollectionStore.isValidQuery(query) ? query : nil
+  }
+
+  /// The query of the collection made from one that the tab lists (#355), which is
+  /// in the whole library's order rather than one of its own; nil for every other
+  /// list.
+  var collectionQuery: String? {
+    guard case .collection(let identifier) = filter else { return nil }
+    return library.collections[identifier]?.query
+  }
+
+  /// Whether the tab lists a collection made from a query (#355).
+  var listsDynamicCollection: Bool { collectionQuery != nil }
+
+  /// Save as Collection…: the editor, with the query to keep. On the Mac through
+  /// `ReaderWindowController.saveAsCollection()`, which opens the sidebar first.
+  func saveAsCollection() {
+    guard let savedQuery else { return }
+    collectionEditor = .save(query: savedQuery)
+  }
   /// The reading path sheet on show, if any (#189): asked for by a row's context
   /// menu or the Info pane, presented by `ReaderScene`, for the same reason.
   var readingPath: ReadingPathRequest?
   /// The glossary entry on show on iOS, asked for by a view that cannot present it:
   /// the reader header, hosted outside the view-controller hierarchy (#362).
   var glossaryTerm: Glossary.Term?
+  /// The whole document's errata on show on iOS, asked for by the reader header for
+  /// the same reason (#387).
+  var errataShown: ErrataRequest?
 
   /// The library the list is computed from, and which the inputs below are taken
   /// from on entering a filter.
@@ -171,7 +206,7 @@ final class NavigationModel: Identifiable {
         select(newValue)
       } else {
         // A jump a script waits on is not coming: its reader goes.
-        updateRequests { $0.hide(in: &history) }
+        updateRequests(outcome: .interrupted) { $0.hide(in: &history) }
       }
     }
   }
@@ -208,16 +243,34 @@ final class NavigationModel: Identifiable {
   /// only when it changes.
   private(set) var scrollRequest: ScrollRequest?
 
+  /// How a jump within the document ended, for whoever waits on it: a script's
+  /// `jump to section`, which reports all but the first as an error (#762).
+  enum JumpOutcome {
+    /// The reader went there.
+    case landed
+    /// The document holds no such place.
+    case noSuchPlace
+    /// There was no document to jump in: none on screen, or it failed to load.
+    case notShown
+    /// The document was hidden, the tab went somewhere else, or another jump was
+    /// asked for, before the reader made it.
+    case interrupted
+  }
+
   /// The scroll request, and whoever waits for the jump it asked for: a script,
   /// whose next command must find the jump in the history (#482).
-  @ObservationIgnored private var requests = ScrollRequests<() -> Void>()
+  @ObservationIgnored private var requests = ScrollRequests<(JumpOutcome) -> Void>()
 
-  /// Makes `change` to the requests, publishes the request, and then ends the wait
-  /// the change ended, if it ended one.
-  private func updateRequests(_ change: (inout ScrollRequests<() -> Void>) -> (() -> Void)?) {
+  /// Makes `change` to the requests, publishes the request, and then tells the
+  /// waiter whose wait the change ended, if it ended one, that its jump ended as
+  /// `outcome`.
+  private func updateRequests(
+    outcome: JumpOutcome,
+    _ change: (inout ScrollRequests<(JumpOutcome) -> Void>) -> ((JumpOutcome) -> Void)?
+  ) {
     let ended = change(&requests)
     if scrollRequest != requests.current { scrollRequest = requests.current }
-    ended?()
+    ended?(outcome)
   }
 
   var canGoBack: Bool { history.canGoBack }
@@ -239,8 +292,43 @@ final class NavigationModel: Identifiable {
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
     let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    guard route.reveals else {
+      follow(route)
+      return
+    }
+    // The list's own selected row: on iOS the root of the stack of readers, which a
+    // jump in a reader a citation pushed leaves where it is (#263).
+    let row = route.row(selected: listSelection)
+    let list = listOnShow
+    let reveals = route.reveals(selected: listSelection, among: list.rows)
     follow(route)
-    if route.reveals { sidebarSelection = .all }
+    if reveals {
+      sidebarSelection = .all
+      searchText = ""
+      // Only where it is what hides the row: it is the reader's choice for the tab.
+      if let row, library.metadata(row)?.isObsolete == true {
+        listOptions.showsObsolete = true
+      }
+    } else if sidebarSelection != list.filter {
+      // A collapsed sidebar pushes the list the row is on show in, and the reader.
+      sidebarSelection = list.filter
+    }
+  }
+
+  /// The list the reader sees, and its rows if they are those the inputs ask for
+  /// now: nil while a new filter's list is still being made, or typing has not
+  /// paused for the search, when the rows on show are about to be replaced.
+  ///
+  /// The filter's list, but where a collapsed sidebar is on screen in its place
+  /// (iOS) and searched: that shows the whole library's results, which All lists
+  /// with the query kept (#345).
+  private var listOnShow: (filter: LibraryFilter, rows: [DocumentID]?) {
+    let searchesLibrary = sidebarSelection == nil && !appliedQuery.isUnsearchedQuery
+    let shownFilter: LibraryFilter = searchesLibrary ? .all : filter
+    guard AppliedSearch.query(for: searchText) == requestedQuery, let request = request(),
+      shows(request), let listed
+    else { return (shownFilter, nil) }
+    return (shownFilter, (searchesLibrary ? listed.librarySearch : listed.rows).map(\.id))
   }
 
   private func follow(_ route: OpenRoute) {
@@ -420,15 +508,21 @@ final class NavigationModel: Identifiable {
   /// records it through `recordJump(to:in:)` where its document holds the place.
   /// `whenSettled` runs once it has, or once the reader has done what else it will
   /// with the place: after the document loads, if it is still loading.
-  func jump(toSection section: String, whenSettled done: @escaping () -> Void = {}) {
-    updateRequests { $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done) }
+  func jump(
+    toSection section: String, whenSettled done: @escaping (JumpOutcome) -> Void = { _ in }
+  ) {
+    // With no document on screen this jump's wait ends at once; with one, the jump
+    // it replaces is the one whose wait ends, unmade.
+    updateRequests(outcome: selection != nil ? .interrupted : .notShown) {
+      $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done)
+    }
   }
 
   /// The reader has done what it will with `request`, where that recorded nothing:
   /// a bibliography entry shown, a place the document does not hold, or a document
   /// that failed to load.
-  func settle(_ request: ScrollRequest) {
-    updateRequests { $0.settle(request) }
+  func settle(_ request: ScrollRequest, as outcome: JumpOutcome) {
+    updateRequests(outcome: outcome) { $0.settle(request) }
   }
 
   /// A place the document on screen holds: its own history entry, so Back undoes
@@ -436,7 +530,7 @@ final class NavigationModel: Identifiable {
   /// section's number and its anchor are one place (#482).
   func recordJump(to section: String, in places: DocumentPlaces) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places)
+    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places, ending: .landed)
   }
 
   func goBack() {
@@ -461,9 +555,14 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
+  /// `outcome` is how a jump this ends the wait for ended: only the reader recording
+  /// it is the jump made; anywhere else the tab goes, it was not (#762).
+  private func go(
+    to place: HistoryEntry, in places: DocumentPlaces? = nil,
+    ending outcome: JumpOutcome = .interrupted
+  ) {
     var arrived: HistoryEntry?
-    updateRequests {
+    updateRequests(outcome: outcome) {
       let went = $0.go(to: place, in: &history, leaving: visiblePosition, places: places)
       arrived = went.arrived
       return went.ended
@@ -472,14 +571,14 @@ final class NavigationModel: Identifiable {
   }
 
   private func arrive(at place: HistoryEntry) {
-    updateRequests { $0.arrive(at: place.section) }
+    updateRequests(outcome: .interrupted) { $0.arrive(at: place.section) }
     visiblePosition = place.section
   }
 
   /// At a place in a reader the stack kept, which is where it was left: nothing to
   /// scroll to, unless the reader was let go and is made again.
   private func arriveKept(at place: HistoryEntry) {
-    updateRequests { $0.arrive(at: place.section, inKeptReader: true) }
+    updateRequests(outcome: .interrupted) { $0.arrive(at: place.section, inKeptReader: true) }
     visiblePosition = place.section
   }
 
@@ -519,8 +618,10 @@ final class NavigationModel: Identifiable {
   // MARK: - Across launches
 
   /// What this tab keeps across launches (#155), with its reader's inspector tab.
-  func snapshot(inspectorTab: InspectorTab) -> SceneSnapshot {
-    SceneSnapshot(history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue)
+  func snapshot(inspectorTab: InspectorTab, layout: WindowLayout? = nil) -> SceneSnapshot {
+    SceneSnapshot(
+      history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue,
+      layout: layout)
   }
 
   /// Puts the tab back as `snapshot` left it, and its inspector tab into `reader`.
@@ -545,7 +646,10 @@ extension NavigationModel: ListSources {
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collections.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?
-      .id
+    library.collections.collection(named: name)?.id
+  }
+
+  func query(of collection: UUID) -> String? {
+    library.collections[collection]?.query
   }
 }

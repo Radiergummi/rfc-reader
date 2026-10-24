@@ -23,13 +23,18 @@ struct DocumentMenusTests {
 
   @Test func `more has the original text apart from the pages elsewhere`() {
     let more = DocumentMenus.more(
-      showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)
-    #expect(titles(more) == [["Original Text"], ["Open on rfc-editor.org", "Datatracker"]])
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(
+      titles(more) == [["Original Text", "Translate"], ["Open on rfc-editor.org", "Datatracker"]])
   }
 
   @Test func `errata and the preceding draft appear only where the document has them`() {
     let more = DocumentMenus.more(
-      showsOriginal: false, errata: errata, precedingDraft: draft, locale: .english)
+      showsOriginal: false, showsTranslation: false, errata: errata, precedingDraft: draft,
+      offersTranslation: true,
+      locale: .english)
     #expect(
       titles(more)[1] == ["Open on rfc-editor.org", "Errata", "Datatracker", "Preceding Draft"])
     #expect(more[1][1].action == .openErrata(errata))
@@ -38,12 +43,45 @@ struct DocumentMenusTests {
 
   @Test func `original text is a toggle showing whether it is on`() {
     #expect(
-      DocumentMenus.more(showsOriginal: true, errata: nil, precedingDraft: nil, locale: .english)[
-        0][0].isOn == true)
+      DocumentMenus.more(
+        showsOriginal: true, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
+        locale: .english)[
+          0][0].isOn == true)
     #expect(
-      DocumentMenus.more(showsOriginal: false, errata: nil, precedingDraft: nil, locale: .english)[
-        0][0].isOn == false
+      DocumentMenus.more(
+        showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+        offersTranslation: true,
+        locale: .english)[
+          0][0].isOn == false
     )
+  }
+
+  /// The translation is the reader's text in another language (#749), not a page
+  /// elsewhere, so it sits beside the original text.
+  @Test func `translate is a toggle beside the original text`() {
+    let shown = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: true, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(shown[0][1].action == .toggleTranslation)
+    #expect(shown[0][1].isOn == true)
+    let hidden = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: true,
+      locale: .english)
+    #expect(hidden[0][1].isOn == false)
+    #expect(
+      DocumentMenus.Action.toggleTranslation.effect(for: .rfc(9110), metadata: nil, section: nil)
+        == .toggleTranslation)
+  }
+
+  @Test func `a reader of English alone is not offered a translation`() {
+    let more = DocumentMenus.more(
+      showsOriginal: false, showsTranslation: false, errata: nil, precedingDraft: nil,
+      offersTranslation: false,
+      locale: .english)
+    #expect(titles(more)[0] == ["Original Text"])
   }
 
   @Test func `with no collections, add to collection offers only a new one`() {
@@ -75,6 +113,16 @@ struct DocumentMenusTests {
     #expect(menu[0].map(\.action) == [.toggleCollection(http), .toggleCollection(dns)])
   }
 
+  /// A collection made from a query takes nothing added to it (#355).
+  @Test func `a dynamic collection is not offered`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "HTTP", color: .blue, members: []),
+      .init(id: UUID(), name: "QUIC", color: .green, members: [], query: "wg:quic"),
+    ])
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot, locale: .english)
+    #expect(titles(menu) == [["HTTP"], ["New Collection…"]])
+  }
+
   /// Each collection is shown as the sidebar shows it, as a folder in its color, so
   /// the menu and the sidebar name the same collection the same way.
   /// A collection's name is the user's own text, never a key, even when it is a
@@ -90,7 +138,7 @@ struct DocumentMenusTests {
   @Test func `cite names each style`() {
     #expect(
       titles(DocumentMenus.cite(locale: .english))[0]
-        == ["Short", "Full citation", "Markdown link", "BibTeX", "URL"])
+        == ["Short", "Full Citation", "Markdown Link", "BibTeX", "URL"])
   }
 
   @Test func `a collection's item is its folder in its color`() {
@@ -152,5 +200,75 @@ struct DocumentMenuEffectsTests {
 
   @Test func `original text toggles`() {
     #expect(effect(.toggleOriginalText) == .toggleOriginalText)
+  }
+}
+
+/// A library row's and a reference's menus (#761): one table each for the Mac and iOS.
+@Suite("Row and reference menus")
+struct RowAndReferenceMenusTests {
+
+  /// The Mac opens a row in a tab or a window, then everything the library does
+  /// with it, then Share.
+  @Test func `a Mac row opens first, then the library's actions, then share`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
+        == [
+          [.openInNewTab, .openInNewWindow],
+          [.bookmark, .addToCollection, .readingPath, .keepOffline],
+          [.share],
+        ])
+  }
+
+  /// An iPhone opens no window, an iPad one, and neither a tab.
+  @Test func `a device offers only the windows and tabs it can open`() {
+    let iPhone = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+      hasCitationIndex: true)
+    #expect(iPhone.first == [.bookmark, .addToCollection, .readingPath, .keepOffline])
+    let iPad = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: false, opensWindows: true, inCollection: false,
+      hasCitationIndex: true)
+    #expect(iPad.first == [.openInNewWindow])
+  }
+
+  /// A series is bookmarked and opened as itself, but a collection holds RFCs, and
+  /// a series is not shared (#321).
+  @Test func `a series is bookmarked and opened, not collected or shared`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: false, opensTabs: true, opensWindows: true, inCollection: false,
+        hasCitationIndex: true)
+        == [[.openInNewTab, .openInNewWindow], [.bookmark]])
+  }
+
+  /// A reference opens where the device can, then copies its link or cites it.
+  @Test func `a reference opens first, then copies its link or cites it`() {
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: true, opensWindows: true)
+        == [[.openInNewTab, .openInNewWindow], [.copyLink, .cite]])
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false) == [[.copyLink, .cite]])
+    // Nothing to cite from without the index's entry.
+    #expect(
+      DocumentMenus.referenceActions(opensTabs: false, opensWindows: false, describes: false)
+        == [[.copyLink]])
+  }
+
+  /// Without a citation index a reading path could only say there is none (#769).
+  @Test func `a row offers no reading path without a citation index`() {
+    #expect(
+      DocumentMenus.rowActions(
+        isRFC: true, opensTabs: false, opensWindows: false, inCollection: false,
+        hasCitationIndex: false
+      ).first == [.bookmark, .addToCollection, .keepOffline])
+  }
+
+  @Test func `a collection's row can be removed from it, last`() {
+    let actions = DocumentMenus.rowActions(
+      isRFC: true, opensTabs: true, opensWindows: true, inCollection: true,
+      hasCitationIndex: true)
+    #expect(actions.last == [.removeFromCollection])
   }
 }

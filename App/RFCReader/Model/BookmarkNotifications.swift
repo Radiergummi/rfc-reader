@@ -39,10 +39,10 @@ enum BookmarkNotifications {
   }
 
   /// At launch, before a tap on a notification can be delivered: a tap that launched
-  /// the app arrives as soon as it has finished launching.
+  /// the app arrives as soon as it has finished launching. Not where iOS is asked for
+  /// the daily refresh, which waits for the scene that handles it (`RFCReaderApp`).
   static func install() {
     UNUserNotificationCenter.current().delegate = delegate
-    if isEnabled { scheduleRefresh() }
     #if os(macOS)
       Task(name: "Refresh bookmarks daily") {
         // The continuous clock, which runs on while the Mac sleeps, so a refresh
@@ -121,6 +121,21 @@ enum BookmarkNotifications {
         notificationLog.error(
           "scheduling the bookmark refresh failed: \(String(describing: error), privacy: .public)"
         )
+      }
+    #endif
+  }
+
+  /// At launch, once the scene is up: iOS raises an exception, which no `catch`
+  /// catches, for a request submitted before the scene's `.backgroundTask` has
+  /// registered its handler (#980). Only when none is pending, since a new request
+  /// replaces the pending one and would put it off by another day at every launch.
+  static func scheduleRefreshUnlessPending() async {
+    #if os(iOS)
+      guard isEnabled else { return }
+      let pending = await BGTaskScheduler.shared.pendingTaskRequests()
+      // Unless the reader turned it off while the system answered.
+      if isEnabled, !pending.contains(where: { $0.identifier == refreshIdentifier }) {
+        scheduleRefresh()
       }
     #endif
   }

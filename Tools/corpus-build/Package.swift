@@ -45,15 +45,12 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
     .package(url: "https://github.com/apple/swift-log", exact: "1.16.1"),
     // SHA-256 for the manifest: CryptoKit on Apple platforms, BoringSSL on Linux.
-    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.1"),
   ],
   targets: [
     .target(
       name: "RFCCorpusKit",
       dependencies: [
-        // The system's SQLite, for the index database (#174), as RFCKit has it for
-        // the full-text index (#37).
-        .product(name: "CSQLite", package: "RFCKit"),
         .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "Crypto", package: "swift-crypto"),
       ],
@@ -72,7 +69,8 @@ let package = Package(
     .testTarget(
       name: "RFCCorpusKitTests",
       // corpus-build is here to be built, not imported: the command-line tests run
-      // the binary, as `make` does.
+      // the binary, as `make` does. CSQLite to read the index database back through
+      // SQLite's own API, not the helper that wrote it.
       dependencies: [
         "RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "CSQLite", package: "RFCKit"),

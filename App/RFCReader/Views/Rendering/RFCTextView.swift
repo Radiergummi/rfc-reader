@@ -69,6 +69,8 @@ struct RFCTextView: View {
         // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
         palette: settings.palette,
         outlinesEveryChip: contrast == .increased,
+        // Read here, where it is observed: a highlight made or changed draws again.
+        highlights: library.annotations.highlights(of: inputs.documentID),
         width: geometry.size.width)
     }
   }
@@ -224,6 +226,8 @@ struct ReaderInputs {
     let palette: ReaderPalette
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
+    /// The document's highlights (#522).
+    let highlights: [AnnotationSnapshot.HighlightEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -258,11 +262,17 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
+      }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -311,6 +321,11 @@ struct ReaderInputs {
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.setHighlights(highlights)
+      // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
+      // the reader on screen's.
+      let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
+      (textView as? ReaderTextView)?.findReader = findReader
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -335,6 +350,8 @@ struct ReaderInputs {
     let palette: ReaderPalette
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
+    /// The document's highlights (#522).
+    let highlights: [AnnotationSnapshot.HighlightEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -403,14 +420,23 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.isTranslation = { [weak coordinator = context.coordinator] in
+        coordinator?.built?.isTranslation == true
+      }
       textView.publicURL = { [weak coordinator = context.coordinator] link in
         coordinator?.publicURL(for: link)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
       }
+      textView.disclosureAction = { [weak coordinator = context.coordinator] in
+        coordinator?.disclosureAction()
+      }
       textView.choosePresentation = { [weak coordinator = context.coordinator] in
         coordinator?.onChoosePresentation
+      }
+      textView.spokenStates = { [weak coordinator = context.coordinator] in
+        coordinator?.spokenStates() ?? [:]
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
@@ -431,6 +457,15 @@ struct ReaderInputs {
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
+      }
+      textView.highlight = { [weak coordinator = context.coordinator] range, color in
+        coordinator?.highlight(range, color: color)
+      }
+      textView.highlightColors = { [weak coordinator = context.coordinator] in
+        coordinator?.highlightColors ?? HighlightColor.allCases
+      }
+      textView.clickedText = { [weak coordinator = context.coordinator] event in
+        coordinator?.clickedText(event)
       }
 
       let host = NSHostingController(
@@ -465,6 +500,7 @@ struct ReaderInputs {
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.setHighlights(highlights)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

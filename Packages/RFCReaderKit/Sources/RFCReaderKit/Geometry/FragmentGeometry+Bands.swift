@@ -66,3 +66,59 @@ extension FragmentGeometry {
     return result
   }
 }
+
+extension FragmentGeometry {
+  /// One line's piece of a highlight (#522): a fill shaped as a requirement band is,
+  /// or for an underline a rule under the text.
+  public struct HighlightRect: Equatable, Sendable {
+    public let rect: CGRect
+    public let corners: Corners
+    public let color: HighlightColor
+  }
+
+  /// How thick a highlight's underline is, and how far under the baseline it sits.
+  public static let highlightRuleWidth: CGFloat = 2
+  public static let highlightRuleOffset: CGFloat = 2
+
+  /// Where the highlights in `marks` are drawn on the lines of the fragment spanning
+  /// `fragment`. A fill is a requirement band's shape (`bandRects`): one rect a line,
+  /// joined into one shape across the lines of one highlight, with rounded ends. An
+  /// underline is a rule under each line's piece of it, from the glyphs' start to
+  /// their end, which never reaches past them.
+  public static func highlightRects(
+    _ marks: [HighlightMark],
+    in text: NSAttributedString,
+    lines: [NSTextLineFragment],
+    fragment: NSRange,
+    origin: CGPoint
+  ) -> [HighlightRect] {
+    var result: [HighlightRect] = []
+    for mark in marks {
+      guard mark.color.isUnderline else {
+        for band in bandRects(
+          [mark.range], in: text, lines: lines, fragment: fragment, origin: origin)
+        {
+          result.append(HighlightRect(rect: band.rect, corners: band.corners, color: mark.color))
+        }
+        continue
+      }
+      for line in lines {
+        let lineRange = NSRange(
+          location: fragment.location + line.characterRange.location,
+          length: line.characterRange.length)
+        guard NSMaxRange(lineRange) <= text.length,
+          let piece = mark.range.intersection(lineRange), piece.length > 0
+        else { continue }
+        let bounds = line.typographicBounds
+        let baseline = bounds.minY + line.glyphOrigin.y
+        let startX = line.locationForCharacter(at: piece.location - fragment.location).x
+        let endX = line.locationForCharacter(at: NSMaxRange(piece) - fragment.location).x
+        let rect = CGRect(
+          x: origin.x + bounds.minX + startX, y: origin.y + baseline + highlightRuleOffset,
+          width: endX - startX, height: highlightRuleWidth)
+        result.append(HighlightRect(rect: rect, corners: [], color: mark.color))
+      }
+    }
+    return result
+  }
+}

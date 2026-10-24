@@ -17,7 +17,8 @@ import SwiftUI
     @Binding var showsInspector: Bool
     /// Save to Files and the print sheet, which are the reader's: their state and
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
-    let exportDocument: (ExportFormat) -> Void
+    /// A format, and the anchor of the one section to export or nil (#386).
+    let exportDocument: (ExportFormat, String?) -> Void
     let printDocument: () -> Void
     /// False while reading on has put the bars away (`ReaderChrome`). The bottom
     /// bar goes by losing its items, which dissolve in place, rather than by
@@ -56,14 +57,14 @@ import SwiftUI
             Label("Contents", systemImage: "list.bullet.rectangle.portrait")
           }
           // The same chord as the Mac's (#157).
-          .keyboardShortcut("i", modifiers: [.command, .option])
+          .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
 
           Button {
             press(.info)
           } label: {
             Label("Info", systemImage: "info.circle")
           }
-          .keyboardShortcut("i", modifiers: .command)
+          .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
 
           TextSizeButton(library: library)
         }
@@ -107,25 +108,50 @@ import SwiftUI
     /// the print sheet.
     private var moreMenu: some View {
       Menu {
+        // The way into Find from the screen (#763); ⌘F is `DocumentCommands`'.
+        Button("Find in Document", systemImage: "magnifyingglass") { reader.presentFind() }
+          .disabled(!reader.offersFind)
+        Divider()
         Menu("Cite", systemImage: "quote.opening") {
           MenuSections(sections: DocumentMenus.cite(), perform: perform)
+        }
+        // Also the Bookmark button's long press (#349), which nothing on screen
+        // shows; here it can be found (#763).
+        Menu("Add to Collection", systemImage: "folder.badge.plus") {
+          AddToCollectionItems(
+            document: id, library: library, navigation: navigation, undoManager: undoManager)
         }
         Divider()
         MenuSections(
           sections: DocumentMenus.more(
-            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            showsOriginal: reader.showOriginal,
+            showsTranslation: reader.showTranslation,
+            errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           perform: perform)
         Divider()
         ReadingModePicker(reader: reader)
         FocusSteps(reader: reader)
+        // On an iPad, as its menu bar would hold them; an iPhone's VoiceOver and
+        // Voice Control reach them as the reader's own actions (#760).
+        if horizontalSizeClass == .regular {
+          OutlineSectionItems(reader: reader)
+        }
         if SideBySide.isOffered(in: horizontalSizeClass) {
           CompareItems(id: id, library: library, reader: reader)
         }
         Divider()
         Menu("Export", systemImage: "square.and.arrow.down") {
           ForEach(reader.exportFormats) { format in
-            Button(format.name()) { exportDocument(format) }
+            Button(format.name()) { exportDocument(format, nil) }
+          }
+          // The section on screen alone, in a format that takes one (#386).
+          if let section = reader.exportableSection {
+            Menu(ExportScope.currentSection.name()) {
+              ForEach(reader.exportFormats.filter(\.narrows)) { format in
+                Button(format.name()) { exportDocument(format, section) }
+              }
+            }
           }
         }
         // Not for a document read as its PDF or PostScript original (#207).
@@ -152,14 +178,15 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      library.toggleBookmark(identity, documentTitle: reader.documentTitle)
+      library.toggleBookmark(
+        identity, documentTitle: reader.documentTitle, undoManager: undoManager)
     }
   }
 
   /// The reader's own text size on iOS, and how diagrams are shown: "Aa" opens a
   /// menu, as Safari's page menu does. Its first row is a small "A", the size as a
   /// percentage of the system's, and a large "A", and stays open while the size is
-  /// stepped; below it are Use System Size, Draw diagrams, and Reading Settings,
+  /// stepped; below it are Use System Size, Show Diagrams as Figures, and Reading Settings,
   /// which opens the rest of the settings (#703), iOS having no Settings scene. The
   /// platform's own menu rather than a popover: a compact control group is the
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
@@ -207,7 +234,8 @@ import SwiftUI
         }
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
 
-        Toggle("Draw Diagrams", systemImage: "square.grid.3x3", isOn: $settings.drawDiagrams)
+        Toggle(
+          "Show Diagrams as Figures", systemImage: "square.grid.3x3", isOn: $settings.drawDiagrams)
 
         Button("Reading Settings…", systemImage: "gearshape") {
           showsSettings = true

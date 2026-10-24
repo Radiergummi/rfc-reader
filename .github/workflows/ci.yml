@@ -47,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
       - name: actionlint
-        uses: reviewdog/action-actionlint@a8ac3eea598697a830f7d8e701fc9fcbfde88974 # v1.80.0
+        uses: reviewdog/action-actionlint@3cbf14efd750961dba35fccbf00f9e14028cb1f5 # v1.80.2
         with:
           # Every finding in every workflow fails the job, not only those in lines
           # a pull request touches.
@@ -55,7 +55,7 @@ jobs:
           filter_mode: nofilter
           fail_level: error
       - name: zizmor
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
         with:
           version: 1.30.1
           inputs: .github/workflows
@@ -94,8 +94,8 @@ jobs:
           path: |
             Packages/RFCKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
-          restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**', '!Tools/benchmarks-layout/**') }}-${{ github.sha }}
+          restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**', '!Tools/benchmarks-layout/**') }}-
       # SQLite's headers, for RFCKit's full-text index (#37) and corpus-build's index
       # database (#174): the image has the library but not them. make and curl for the patch check below.
       - name: Install tools
@@ -111,7 +111,7 @@ jobs:
           path: |
             Packages/RFCKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**', '!Tools/benchmarks-layout/**') }}-${{ github.sha }}
       - name: Month
         id: month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"

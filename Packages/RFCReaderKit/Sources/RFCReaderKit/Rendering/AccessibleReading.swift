@@ -45,9 +45,14 @@ public enum AccessibleReading {
   /// `chipLabel` turns a chip's label into what the accessor returns, given the
   /// chip's range, so it can keep what the accessor gives the chip itself, the link
   /// among it; `label` where none is given.
+  ///
+  /// `said` is what to say before a character beside the text, by its offset: a
+  /// disclosed heading's state before its line break (`Folding.spokenStates`, #760),
+  /// which the reading mode, not the build, decides.
   public static func reading<Reading>(
     _ range: NSRange,
     in text: NSAttributedString,
+    saying said: [Int: String] = [:],
     text read: (NSRange) -> Reading?,
     label: (String) -> Reading,
     chipLabel: ((String, NSRange) -> Reading)? = nil,
@@ -55,7 +60,7 @@ public enum AccessibleReading {
   ) -> Reading? {
     guard NSIntersectionRange(range, NSRange(location: 0, length: text.length)).length > 0
     else { return read(range) }
-    let pieces = pieces(of: range, in: text)
+    let pieces = saying(said, in: pieces(of: range, in: text))
     if pieces == [.text(range)] { return read(range) }
     return join(
       pieces.compactMap { piece in
@@ -65,6 +70,26 @@ public enum AccessibleReading {
         case .chipLabel(let spoken, let chip): chipLabel?(spoken, chip) ?? label(spoken)
         }
       })
+  }
+
+  /// `pieces` with each of `said` spoken before the character at its offset, where
+  /// that character is in a piece read as text: the piece is cut there.
+  static func saying(_ said: [Int: String], in pieces: [Piece]) -> [Piece] {
+    guard !said.isEmpty else { return pieces }
+    return pieces.flatMap { piece -> [Piece] in
+      guard case .text(let range) = piece else { return [piece] }
+      let inside = said.keys.filter { NSLocationInRange($0, range) }.sorted()
+      guard !inside.isEmpty else { return [piece] }
+      var cut: [Piece] = []
+      var start = range.location
+      for offset in inside {
+        if offset > start { cut.append(.text(NSRange(location: start, length: offset - start))) }
+        if let words = said[offset] { cut.append(.label(words)) }
+        start = offset
+      }
+      cut.append(.text(NSRange(location: start, length: NSMaxRange(range) - start)))
+      return cut
+    }
   }
 
   public static func pieces(of range: NSRange, in text: NSAttributedString) -> [Piece] {
@@ -83,8 +108,8 @@ public enum AccessibleReading {
     }
 
     // An attachment the reader adds to the document's words with nothing to say for
-    // it, a code block's copy button, is a pointer's control and not read at all:
-    // VoiceOver would otherwise name the object-replacement character.
+    // it is not read at all: VoiceOver would otherwise name the object-replacement
+    // character. A code block's copy button has its name to say (#760).
     func readUnlabelled(_ range: NSRange) {
       text.enumerateAttribute(.attachment, in: range) { value, piece, _ in
         guard value != nil,
@@ -292,4 +317,21 @@ extension AccessibleReading {
   /// icon, because it is the one character of the chip that says nothing of its
   /// own, and an IPA pronunciation can't be made of the label.
   static let informativePronunciation = "ɪnˈfɔɹmətɪv"
+
+  /// What an aside's caption, set in capitals, is pronounced as on iOS (#872): the
+  /// word its `.rfcSpoken` label is, as macOS says it. Only the English captions: a
+  /// translated document's (#749) has no IPA to give, and is read as drawn.
+  static func captionPronunciation(_ caption: String) -> String? {
+    switch caption {
+    case DocumentLabels.english.note: notePronunciation
+    case DocumentLabels.english.notes: notesPronunciation
+    default: nil
+    }
+  }
+
+  /// "Note" in IPA.
+  static let notePronunciation = "noʊt"
+
+  /// "Notes" in IPA.
+  static let notesPronunciation = "noʊts"
 }

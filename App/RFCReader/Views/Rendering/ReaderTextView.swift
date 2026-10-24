@@ -11,6 +11,17 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
+    /// The reader state Find is installed in as this comes into a window (#763):
+    /// nil for a preview's reader and one the stack keeps below its top.
+    weak var findReader: ReaderState? {
+      didSet { installsFind(in: findReader) }
+    }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      installsFind(in: findReader)
+    }
+
     /// Whether the bars are hidden, set by the coordinator the moment `ReaderChrome`
     /// decides so, before the safe area follows: the top inset holds at the bars'
     /// height meanwhile (`ReaderChrome.topInset`).
@@ -76,11 +87,35 @@ import RFCReaderKit
 
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// Whether the text is a translation (#749), which offers no quote: asked
+    /// rather than `quoteSelection`, which makes the whole quote.
+    var isTranslation: () -> Bool = { false }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
+
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever UIKit offers: VoiceOver and Voice Control reach it as an
+    /// action of the text (#760).
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+      get {
+        var actions = super.accessibilityCustomActions ?? []
+        if let (name, toggle) = disclosureAction() {
+          actions.append(
+            UIAccessibilityCustomAction(name: name) { _ in
+              toggle()
+              return true
+            })
+        }
+        return actions
+      }
+      set { super.accessibilityCustomActions = newValue }
+    }
 
     /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
     func copyAsQuote() {
@@ -208,11 +243,20 @@ import RFCReaderKit
 
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// Whether the text is a translation (#749), which offers no quote: asked
+    /// rather than `quoteSelection`, which makes the whole quote.
+    var isTranslation: () -> Bool = { false }
     /// The URL a copy links a link of the text to (`LinkCopy.publicURL`), from the
     /// coordinator, which knows the document (#778).
     var publicURL: (URL) -> URL? = { _ in nil }
     /// The build's hang (#433), which a copy's rich flavors leave out of its indents.
     var sectionNumberHang: () -> CGFloat = { 0 }
+    /// What opens or closes the outline's section, or Implementer's aside, the cursor
+    /// is in, and its name, from the coordinator: an action of the text (#760).
+    var disclosureAction: () -> (name: String, toggle: () -> Void)? = { nil }
+    /// What VoiceOver says after each disclosed heading, by offset, from the
+    /// coordinator: whether the reading mode has it open (#760).
+    var spokenStates: () -> [Int: String] = { [:] }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
     var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
@@ -225,9 +269,34 @@ import RFCReaderKit
       Clipboard.write(.quote(quote), announcing: .quote)
     }
 
-    /// Look Up from the menu or the keyboard: a reference under the selection is
-    /// still previewed rather than looked up. A force click never arrives here; see
-    /// `trackReferenceClick(_:link:at:)`.
+    /// Highlights a range of the text in a color, or in the one last used (#522),
+    /// through the coordinator.
+    var highlight: (NSRange, HighlightColor?) -> Void = { _, _ in }
+    /// The colors the context menu offers, the one last used first.
+    var highlightColors: () -> [HighlightColor] = { HighlightColor.allCases }
+    /// Told of a click that selected nothing and cleared no selection, which in a
+    /// highlight opens its popover.
+    var clickedText: (NSEvent) -> Void = { _ in }
+
+    /// Edit ▸ Highlight (⌃⌘H, Books' shortcut): the selection, in the color last used.
+    @objc func highlightSelection(_ sender: Any?) {
+      guard selectedRange().length > 0 else { return }
+      highlight(selectedRange(), nil)
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
+    /// The context menu's color, from its Highlight row.
+    @objc private func highlightItem(_ sender: NSMenuItem) {
+      guard let color = sender.representedObject as? HighlightColor, selectedRange().length > 0
+      else { return }
+      highlight(selectedRange(), color)
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
+    /// Look Up. A gesture on a reference previews it, as a force click does (the
+    /// coordinator's `quickLookReference(with:)`); anywhere else, and from the menu or
+    /// the keyboard, which have no location to test, it is AppKit's own Look Up. A force
+    /// click never arrives here; see `trackReferenceClick(_:link:at:)`.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }
       super.quickLook(with: event)
@@ -329,7 +398,10 @@ import RFCReaderKit
         // the text view, hung the app as a card once did (#396).
         trackReferenceClick(event, link: nil, at: nil)
       } else {
+        // A click that only clears a selection opens nothing (#522).
+        let hadSelection = selectedRange().length > 0
         super.mouseDown(with: event)
+        if !hadSelection, selectedRange().length == 0 { clickedText(event) }
       }
     }
 
@@ -469,7 +541,7 @@ import RFCReaderKit
       let clickedBox = FigureCopy.box(at: clicked, in: text)
       let box = clickedBox ?? FigureCopy.box(in: selectedRange(), of: text)
       let figure = box?.content
-      let quotes = selectedRange().length > 0
+      let quotes = selectedRange().length > 0 && !isTranslation()
       let gloss = followGloss(event)
       guard figure != nil || quotes || gloss != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
@@ -491,6 +563,8 @@ import RFCReaderKit
         quote.target = self
         let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
         result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
+        // A highlight is made from a selection, as a quote is copied from one (#522).
+        result.insertItem(highlightMenuItem(), at: copyIndex.map { $0 + 2 } ?? result.items.count)
       }
       if let box, figure != nil {
         let item = NSMenuItem(
@@ -511,8 +585,40 @@ import RFCReaderKit
           toggle.representedObject = (box.presentationKey, FigureMenu.offered(from: shown))
           result.insertItem(toggle, at: 1)
         }
+        // A code block's button as an item too, beside Copy Figure, so Voice Control
+        // can name it (#760).
+        if let code = text.code(ofBlock: box, touching: near) {
+          let copy = NSMenuItem(
+            title: String(localized: "Copy Code"), action: #selector(copyCodeItem(_:)),
+            keyEquivalent: "")
+          copy.target = self
+          copy.representedObject = code
+          result.insertItem(copy, at: 1)
+        }
       }
       return result
+    }
+
+    /// Highlight, with a color each, the one last used first (#522).
+    private func highlightMenuItem() -> NSMenuItem {
+      let item = NSMenuItem(title: String(localized: "Highlight"), action: nil, keyEquivalent: "")
+      let colors = NSMenu(title: String(localized: "Highlight"))
+      for color in highlightColors() {
+        let choice = NSMenuItem(
+          title: color.title(), action: #selector(highlightItem(_:)), keyEquivalent: "")
+        choice.target = self
+        choice.representedObject = color
+        choice.image = HighlightSwatch.image(color)
+        choice.showsImageOnMacOS27()
+        colors.addItem(choice)
+      }
+      item.submenu = colors
+      return item
+    }
+
+    @objc private func copyCodeItem(_ sender: NSMenuItem) {
+      guard let code = sender.representedObject as? String else { return }
+      Clipboard.copy(code, announcing: .code)
     }
 
     @objc private func followGlossItem(_ sender: NSMenuItem) {
@@ -592,6 +698,21 @@ import RFCReaderKit
 
     // MARK: - What VoiceOver reads (#12)
 
+    /// Expand Section or Collapse Section, or Expand Aside or Collapse Aside, for
+    /// what the cursor is in, beside whatever AppKit offers: VoiceOver and Voice Control reach it as an
+    /// action of the text (#760).
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
+      var actions = super.accessibilityCustomActions() ?? []
+      if let (name, toggle) = disclosureAction() {
+        actions.append(
+          NSAccessibilityCustomAction(name: name) {
+            toggle()
+            return true
+          })
+      }
+      return actions
+    }
+
     /// A diagram is said as its label, not read out one box-drawing character at a
     /// time. `AccessibleReading` decides what each part of `range` becomes; the text
     /// parts come from `super`, so they keep every attribute AppKit gives VoiceOver.
@@ -603,6 +724,7 @@ import RFCReaderKit
       AccessibleReading.reading(
         range,
         in: attributedString(),
+        saying: spokenStates(),
         text: { super.accessibilityAttributedString(for: $0) },
         label: { NSAttributedString(string: $0) },
         // A chip said as a label is still a link (#457): the label takes the
@@ -628,6 +750,7 @@ import RFCReaderKit
       AccessibleReading.reading(
         range,
         in: attributedString(),
+        saying: spokenStates(),
         text: { super.accessibilityString(for: $0) },
         label: { $0 },
         join: { $0.joined() })

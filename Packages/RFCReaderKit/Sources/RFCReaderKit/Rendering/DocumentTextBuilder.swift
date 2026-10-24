@@ -26,6 +26,9 @@ public final class DocumentTextBuilder {
   var entries: [AnchorIndex.Entry] = []
   /// See `BuiltDocument.keepsWithNext`.
   var keepsWithNext: Set<Int> = []
+  /// Which storage characters are which model characters (#522), recorded as the
+  /// document is appended; nil until `appendDocument` starts it.
+  var positions: PositionMap.Recorder?
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -40,6 +43,10 @@ public final class DocumentTextBuilder {
     monospaceAdvances[style.bodySize] = advance
     return advance
   }
+
+  /// Whether a section, or the abstract, has been appended, so the next is joined
+  /// to it in the model text.
+  var hasModelUnit = false
 
   /// Serial number for the next chip, so no two chip runs carry the same value.
   /// See the chip case in `run(_:base:)`.
@@ -71,6 +78,11 @@ public final class DocumentTextBuilder {
   /// anything is emitted, and left empty in a build with no live links: on paper
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
+  /// The backlinks to use instead of the document's own: a translation's, which are
+  /// its original's (#749).
+  var givenBacklinks: [String: [Backlink]]?
+  /// The errata each heading's chip lists (#387).
+  var errata = ErrataMarks.none
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -118,13 +130,18 @@ public final class DocumentTextBuilder {
   /// The color of a character a decorated block draws over instead of showing.
   public static let hiddenColor = PlatformColor.clear
 
+  /// The words the builder writes into the body itself: English, or a
+  /// translation's (#749).
+  let labels: DocumentLabels
+
   init(
     style: ReadingStyle, choices: PresentationChoices = .defaults,
-    hints: ArtworkHints = .bundled
+    hints: ArtworkHints = .bundled, labels: DocumentLabels = .english
   ) {
     self.style = style
     self.choices = choices
     self.hints = hints
+    self.labels = labels
   }
 
   /// - Parameter title: a title block to open the text with. The reader has none —
@@ -132,26 +149,68 @@ public final class DocumentTextBuilder {
   ///   above the text, so a print passes one (#375).
   /// - Parameter choices: the blocks the reader asked to see as their source.
   /// - Parameter hints: reviewed artwork types; tests pass their own.
+  /// - Parameters:
+  ///   - errata: the errata to mark after the headings (#387); only a build for the
+  ///     reader has them.
+  ///   - translation: for a translated document (#749), the labels its translation
+  ///     gave; nil for the original, which is English throughout.
   public static func build(
     _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
-    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none, translation: DocumentLabels? = nil
   ) -> BuiltDocument {
-    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
-    if style.emitsLinks {
-      builder.hang = style.sectionNumberHang
+    let builder = DocumentTextBuilder(
+      style: style, choices: choices, hints: hints, labels: translation ?? .english)
+    builder.errata = errata
+    return build(document, title: title, translation: translation, with: builder)
+  }
+
+  /// A translated document's build (#749), in its labels, with the original's
+  /// backlinks: a reference the translation lost the words of is still one the
+  /// section makes.
+  public static func build(
+    _ translated: TranslatedDocument, style: ReadingStyle,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none
+  ) -> BuiltDocument {
+    let builder = DocumentTextBuilder(
+      style: style, choices: choices, hints: hints, labels: translated.labels)
+    builder.givenBacklinks = translated.backlinks
+    builder.errata = errata
+    return build(
+      translated.document, title: nil, translation: translated.labels, with: builder)
+  }
+
+  private static func build(
+    _ document: RFCDocument, title: TitleBlock?, translation: DocumentLabels?,
+    with builder: DocumentTextBuilder
+  ) -> BuiltDocument {
+    // In an autorelease pool of its own: a build runs off the main actor, where what
+    // it autoreleases was not drained when it ended, so every document opened left
+    // a build's worth behind. A run of builds in an `@concurrent` function shows it
+    // in the process's footprint (#853).
+    autoreleasepool {
+      if builder.style.emitsLinks {
+        builder.hang = builder.style.sectionNumberHang
+      }
+      if let title { builder.appendTitle(title) }
+      builder.appendDocument(document)
+      builder.setDecoratedLinesOnWholePoints()
+      reserveChipPadding(in: builder.output)
+      // Last: it carries the decorations, indents, insets and widths set so far, and
+      // nothing rewrites them after it.
+      builder.setDecorationFacts()
+      // Handed over, not copied: `builder` ends here, so nothing is left that could
+      // write `output` once the result leaves this function. A copy would also be
+      // shallow, sharing every attribute value with the original, so it protected
+      // nothing and cost a pass over the whole text. See `BuiltDocument`.
+      return BuiltDocument(
+        text: builder.output, anchors: AnchorIndex(builder.entries),
+        keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+        grammar: builder.grammar.withoutParsedBlocks,
+        sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
+        positions: builder.positions?.map ?? .empty)
     }
-    if let title { builder.appendTitle(title) }
-    builder.appendDocument(document)
-    builder.setDecoratedLinesOnWholePoints()
-    reserveChipPadding(in: builder.output)
-    // Handed over, not copied: `builder` ends here, so nothing is left that could
-    // write `output` once the result leaves this function. A copy would also be
-    // shallow, sharing every attribute value with the original, so it protected
-    // nothing and cost a pass over the whole text. See `BuiltDocument`.
-    return BuiltDocument(
-      text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks, grammar: builder.grammar,
-      sectionNumberHang: builder.hang)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -174,6 +233,23 @@ public final class DocumentTextBuilder {
     output.append(NSAttributedString(string: string, attributes: attributes))
   }
 
+  /// Appends `runs`, whose text is the model text's next (#522): inline runs, whose
+  /// only characters of their own are a chip's attachment and word joiner.
+  func appendModel(_ runs: NSAttributedString) {
+    let start = output.length
+    output.append(runs)
+    positions?.advance(output.mutableString, range: NSRange(location: start, length: runs.length))
+  }
+
+  /// The join the model text has here, between two elements (`ModelText`).
+  func joinModel() {
+    positions?.join(storage: output.mutableString)
+  }
+
+  /// Model text this build does not show, at the cursor.
+  func skipModel(_ length: Int) {
+    positions?.skip(length)
+  }
   /// The width of `string` set as one line in `font`.
   func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
     lineWidth(NSAttributedString(string: string, attributes: [.font: font]))
@@ -242,12 +318,17 @@ extension DocumentTextBuilder {
 
   func appendDocument(_ document: RFCDocument) {
     documentID = document.header.id
+    // A translation's sentences are not the original's, so it places no highlight
+    // and records no map (#749, #522).
+    if givenBacklinks == nil {
+      positions = PositionMap.Recorder(model: ModelText(document))
+    }
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
     grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
-      backlinks = Backlinks.within(document)
+      backlinks = givenBacklinks ?? Backlinks.within(document)
       glossMatcher = GlossMatcher(document.definedTerms, abbreviations: document.abbreviations)
       hasAbbreviations = !document.abbreviations.isEmpty
       for term in document.definedTerms.values {
@@ -276,9 +357,10 @@ extension DocumentTextBuilder {
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
     glossedInSection = []
+    hasModelUnit = true
     mark(Self.abstractAnchor)
     keepsWithNext.insert(output.length)
-    append("Abstract\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
+    append(labels.abstract + "\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
     // Emitted quiet, rather than emitted and then quietened. A post-pass has to
     // guess which runs "count" — matching against a dynamic color to find the
     // ones to step back — and anything the builder *measures* against the style
@@ -347,6 +429,15 @@ extension DocumentTextBuilder {
     body()
   }
 
+  /// `Section.numberPrefix`, with an appendix's word in the labels' language.
+  private func numberPrefix(of section: Section) -> String {
+    let prefix = section.numberPrefix
+    let english = section.appendixWord.label
+    guard section.isAppendix, prefix.hasPrefix(english) else { return prefix }
+    let word = section.appendixWord == .annex ? labels.annex : labels.appendix
+    return word + prefix.dropFirst(english.count)
+  }
+
   private func appendSection(_ section: Section, depth: Int) {
     // The bibliography is not part of the reading flow: every citation in the
     // prose already links straight to the document it names, so the section is
@@ -355,7 +446,18 @@ extension DocumentTextBuilder {
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
     glossedInSection = []
-    mark(section.anchor, heading: section.displayTitle, place: section.place, depth: depth)
+    // The model text sets a section apart from what came before by a join that
+    // belongs to no anchor, and starts it where its span does: a build that drifted
+    // from the model text in the section before is back on it here.
+    if hasModelUnit { joinModel() }
+    hasModelUnit = true
+    if let start = positions?.model.span(of: section.anchor)?.range.lowerBound {
+      positions?.cursor = start
+    }
+    let numberPrefix = numberPrefix(of: section)
+    mark(
+      section.anchor, heading: numberPrefix + section.headingWords.plainText, place: section.place,
+      depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
@@ -369,14 +471,24 @@ extension DocumentTextBuilder {
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
       spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15,
       hangsNumber: hangingNumber != nil)
+    // The number and an appendix's qualifier are the reader's to compose; the
+    // model text of a heading is its title alone.
+    let qualifierWords =
+      section.qualifier == nil ? "" : Array(section.headingWords.prefix(1)).plainText
     if let hangingNumber {
       appendHangingNumber(
-        hangingNumber, of: section.anchor, copiedAs: section.numberPrefix, attributes: attributes)
-      output.append(inlineRuns(section.headingWords, base: attributes))
-    } else {
-      output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+        hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
+    }
+    let lead = (hangingNumber == nil ? numberPrefix : "") + qualifierWords
+    if !lead.isEmpty {
+      output.append(inlineRuns([.text(lead)], base: attributes))
+    }
+    appendModel(inlineRuns(section.title, base: attributes))
+    if let marked = errata.bySection[section.anchor], !marked.isEmpty {
+      output.append(errataChip(section.anchor, items: marked, base: attributes))
     }
     append("\n", attributes)
+    joinModel()
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
     }
@@ -406,7 +518,12 @@ extension DocumentTextBuilder {
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {
+    var isFirst = true
     for block in blocks {
+      // A bibliography's list is no part of the model text, so no join comes before it.
+      if case .references = block { continue }
+      if !isFirst { joinModel() }
+      isFirst = false
       switch block {
       case .paragraph(let paragraph):
         appendParagraph(paragraph, indent: indent)
@@ -475,7 +592,7 @@ extension DocumentTextBuilder {
     if glossedInParagraph != nil, hasAbbreviations {
       expandedInParagraph = Abbreviation.shortForms(expandedIn: paragraph.plainText)
     }
-    output.append(inlineRuns(paragraph.inlines, base: attributes))
+    appendModel(inlineRuns(paragraph.inlines, base: attributes))
     glossedInParagraph = nil
     expandedInParagraph = []
     append("\n", attributes)

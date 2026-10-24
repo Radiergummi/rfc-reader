@@ -24,6 +24,7 @@
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
     @State private var readingPathAfterPanel: ReadingPathRequest?
 
@@ -52,7 +53,9 @@
             navigation: navigation, reader: reader,
             isBookmarked: library.bookmarkedDocuments.contains(identity),
             showsInspector: $showsInspector,
-            exportDocument: { output.exportDocument(id, as: $0, library: library) },
+            exportDocument: {
+              output.exportDocument(id, as: $0, section: $1, library: library)
+            },
             printDocument: {
               output.printDocument(
                 id, original: reader.showOriginal,
@@ -107,7 +110,7 @@
             set: { if !$0 { output.finishExport() } }),
           document: output.exported,
           contentType: (output.exported?.format ?? .pdf).contentType,
-          defaultFilename: ExportFormat.fileStem(for: id)
+          defaultFilename: output.exported?.fileStem ?? ExportFormat.fileStem(for: id)
         ) { _ in
           output.finishExport()
         }
@@ -158,7 +161,8 @@
         }
         .buttonStyle(.glass)
         .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        // Rising from the bottom edge is motion: with Reduce Motion it fades (#760).
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
     }
   }

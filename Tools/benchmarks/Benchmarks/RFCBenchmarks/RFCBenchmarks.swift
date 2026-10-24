@@ -94,6 +94,34 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
+  // A parsed document kept encoded, decoded instead of parsed again (#606): each
+  // document above, from JSON and from a binary property list, to set against its
+  // parse. A format is cached only where decoding is at least twice as fast.
+  let documents: [(name: String, parse: @Sendable (Data) throws -> RFCDocument)] = [
+    ("rfc9110.xml", { try RFCXMLParser.parse($0) }),
+    ("rfc9000.xml", { try RFCXMLParser.parse($0) }),
+    ("rfc5661.txt", { LegacyTextParser.parse($0) }),
+    ("rfc793.txt", { LegacyTextParser.parse($0) }),
+  ]
+  for (name, parse) in documents {
+    Benchmark("Decode JSON: \(name)") { benchmark, data in
+      try iterate(benchmark) {
+        blackHole(try JSONDecoder().decode(RFCDocument.self, from: data))
+      }
+    } setup: {
+      try JSONEncoder().encode(parse(corpus.data(name)))
+    }
+    Benchmark("Decode property list: \(name)") { benchmark, data in
+      try iterate(benchmark) {
+        blackHole(try PropertyListDecoder().decode(RFCDocument.self, from: data))
+      }
+    } setup: {
+      let encoder = PropertyListEncoder()
+      encoder.outputFormat = .binary
+      return try encoder.encode(parse(corpus.data(name)))
+    }
+  }
+
   // The reader's column, 712 pt, as #357 measured the builds. RFC 8927 and RFC 8727
   // are mostly source code, so they are what syntax highlighting is measured on;
   // RFC 8727 holds the corpus's largest JSON block, 53 KB.
@@ -123,6 +151,31 @@ let benchmarks: @Sendable () -> Void = {
       return (content.text, type)
     }
   }
+  // What laying RFC 8727 out asks of its decorations: the span of every decorated
+  // paragraph, once each, as each fragment's layout does. A verbatim block lays out
+  // one fragment per line, so its long JSON block asks once for each of its lines
+  // (#766).
+  Benchmark("Decoration spans: RFC 8727") { (benchmark, input: DecoratedParagraphs) in
+    iterate(benchmark) {
+      for paragraph in input.paragraphs {
+        blackHole(FragmentGeometry.decorationSpan(in: input.built.text, fragment: paragraph))
+      }
+    }
+  } setup: {
+    let built = DocumentTextBuilder.build(
+      try RFCXMLParser.parse(corpus.data("rfc8727.xml")), style: style)
+    let string = built.text.string as NSString
+    var paragraphs: [NSRange] = []
+    var location = 0
+    while location < string.length {
+      let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+      if built.text.attribute(.rfcDecoration, at: paragraph.location, effectiveRange: nil) != nil {
+        paragraphs.append(paragraph)
+      }
+      location = NSMaxRange(paragraph)
+    }
+    return DecoratedParagraphs(built: built, paragraphs: paragraphs)
+  }
   Benchmark("Build: RFC 5661") { benchmark, document in
     iterate(benchmark) {
       blackHole(DocumentTextBuilder.build(document, style: style))
@@ -138,6 +191,12 @@ func iterate(_ benchmark: Benchmark, _ body: () throws -> Void) rethrows {
   for _ in benchmark.scaledIterations {
     try autoreleasepool(invoking: body)
   }
+}
+
+/// A built document and its decorated paragraphs, what laying it out asks spans for.
+struct DecoratedParagraphs: Sendable {
+  let built: BuiltDocument
+  let paragraphs: [NSRange]
 }
 
 /// The directory the inputs are read from, looked up only when a benchmark's

@@ -21,10 +21,14 @@ extension DocumentTextBuilder {
   /// or three short ones, and tab stops do not wrap. So measure first: grid when
   /// the natural widths fit, stacked when they do not. The stacked shape is also
   /// what a phone measure needs for tables that fit comfortably on a Mac.
-  func tableShape(widths: [CGFloat]) -> TableShape {
+  ///
+  /// Against the measure less `indent`: a grid starts at its indent and does not
+  /// wrap, so one inside a list, a quotation or an aside that fit the column but not
+  /// what its indent leaves of it lost the end of its last column (#765).
+  func tableShape(widths: [CGFloat], indent: CGFloat) -> TableShape {
     guard !widths.isEmpty else { return .grid }
     let total = widths.reduce(0, +) + Self.columnGutter * CGFloat(widths.count - 1)
-    return total <= style.measure ? .grid : .stacked
+    return total <= style.measure - indent ? .grid : .stacked
   }
 
   func naturalColumnWidths(_ table: RFCKit.Table) -> [CGFloat] {
@@ -123,15 +127,25 @@ extension DocumentTextBuilder {
     // numbers, and every cell costs a `CTLine` to measure.
     let widths = naturalColumnWidths(table)
     let start = output.length
-    switch tableShape(widths: widths) {
-    case .grid: appendGridTable(table, widths: widths, indent: indent)
-    case .stacked: appendStackedTable(table, indent: indent)
+    let layout = TableModelLayout(table, from: positions?.cursor ?? 0)
+    let firstRun = positions?.runCount ?? 0
+    switch tableShape(widths: widths, indent: indent) {
+    case .grid: appendGridTable(table, widths: widths, indent: indent, layout: layout)
+    case .stacked: appendStackedTable(table, indent: indent, layout: layout)
     }
+    // A cell's lines and the joins between cells fall where the shape sets them, so
+    // they were mapped where they fell; whatever the shape left out is hidden here.
+    positions?.hideUnmapped(in: layout.start..<layout.end, since: firstRun)
+    positions?.cursor = layout.end
     decorate(from: start, with: .table)
-    appendCaption(Self.caption("Table", number: table.number, title: table.title), indent: indent)
+    appendCaption(
+      Self.caption(labels.table, number: table.number, title: table.title), indent: indent,
+      blockStart: start)
   }
 
-  private func appendGridTable(_ table: RFCKit.Table, widths: [CGFloat], indent: CGFloat) {
+  private func appendGridTable(
+    _ table: RFCKit.Table, widths: [CGFloat], indent: CGFloat, layout: TableModelLayout
+  ) {
     var location = indent
     var stops: [NSTextTab] = []
     for width in widths.dropLast() {
@@ -144,7 +158,8 @@ extension DocumentTextBuilder {
     // row.
     let (headerAttributes, dataAttributes) = gridRowAttributes(rowStyle)
 
-    for (index, row) in (table.header + table.rows).enumerated() {
+    let rows = table.header + table.rows
+    for (index, row) in rows.enumerated() {
       let attributes = index < table.header.count ? headerAttributes : dataAttributes
       mark(row.anchor)
       // A row is as many lines as its tallest cell has, each holding every cell's
@@ -157,15 +172,40 @@ extension DocumentTextBuilder {
         // A line ends at its last cell with something on it, not in trailing tabs.
         let last = cells.lastIndex { $0.count > line } ?? 0
         for (column, cell) in cells.enumerated().prefix(last + 1) {
-          if column > 0 { append("\t", attributes) }
-          if line < cell.count { output.append(cell[line]) }
+          if column > 0 {
+            append("\t", attributes)
+            // The first line's tab is the join between the two cells.
+            if line == 0 { mapTableJoin(at: layout.cells[index][column] - 1) }
+          }
+          if line < cell.count {
+            appendCellLine(cell[line], model: layout.line(line, ofCell: column, inRow: index))
+          }
         }
       }
       append("\n", attributes)
+      if index < rows.count - 1 { mapTableJoin(at: layout.rows[index + 1] - 1) }
     }
   }
 
-  private func appendStackedTable(_ table: RFCKit.Table, indent: CGFloat) {
+  /// Maps the storage's last character, a tab or a newline just appended, to the
+  /// model text's join at `model`.
+  private func mapTableJoin(at model: Int) {
+    positions?.map(storage: output.length - 1, model: model, length: 1)
+  }
+
+  /// Appends one line of a cell, whose model text starts at `model`.
+  private func appendCellLine(_ line: NSAttributedString, model: Int?) {
+    let start = output.length
+    output.append(line)
+    if let model {
+      positions?.align(
+        output.mutableString, range: NSRange(location: start, length: line.length), model: model)
+    }
+  }
+
+  private func appendStackedTable(
+    _ table: RFCKit.Table, indent: CGFloat, layout: TableModelLayout
+  ) {
     let headers = table.header.first?.cells ?? []
     // Nothing here varies by row or cell, so the three dictionaries are built
     // once for the whole table rather than once per cell.
@@ -180,14 +220,17 @@ extension DocumentTextBuilder {
     // The header has no row of its own here: it labels every cell instead. A link
     // to a header row lands at the top of the table, where the first label is.
     for row in table.header { mark(row.anchor) }
-    for row in table.rows {
+    for (rowIndex, row) in table.rows.enumerated() {
       mark(row.anchor)
+      let index = table.header.count + rowIndex
       for (column, cell) in row.cells.enumerated() {
         if column < headers.count {
           appendCell(headers[column], attributes: labelAttributes)
           append("  ", attributes)
         }
-        appendCell(cell, attributes: attributes)
+        appendCell(cell, attributes: attributes) { line in
+          layout.line(line, ofCell: column, inRow: index)
+        }
         append("\n", attributes)
       }
       // A blank line separates one row's cells from the next row's. It needs no
@@ -198,26 +241,109 @@ extension DocumentTextBuilder {
 
   /// A stacked cell, or its label, with its lines set apart by line separators, so
   /// the cell is one paragraph however many lines it has (#506).
-  private func appendCell(_ cell: [Inline], attributes: [NSAttributedString.Key: Any]) {
+  /// Each line's model text starts where `model` says, or it is a label, which the
+  /// model has not.
+  private func appendCell(
+    _ cell: [Inline], attributes: [NSAttributedString.Key: Any],
+    model: (Int) -> Int? = { _ in nil }
+  ) {
     for (line, text) in Self.lines(of: inlineRuns(cell, base: attributes)).enumerated() {
       if line > 0 { append(Self.cellLineSeparator, attributes) }
-      output.append(text)
+      appendCellLine(text, model: model(line))
     }
   }
 
-  /// `Figure 3: Packet layout`; `Figure 3` when the block has no title, as xml2rfc's
-  /// text and HTML writers caption every numbered figure and table, so the prose's
-  /// "see Figure 3" has something to find; just the title when it is unnumbered.
+  /// `BlockCaption.text`, which the exports caption with too.
   static func caption(_ kind: String, number: Int?, title: String?) -> String? {
-    guard let number else { return title }
-    return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
+    BlockCaption.text(kind, number: number, title: title)
   }
 
-  func appendCaption(_ caption: String?, indent: CGFloat) {
+  /// A figure's or a table's caption, under its block, which starts at `blockStart`.
+  /// The block's last paragraph keeps with it (`BuiltDocument.keepsWithNext`), so a
+  /// printed page never ends on the block and opens the next on its caption alone
+  /// (#765). A stacked table ends on the blank line after its last row, which keeps
+  /// too, back to the last paragraph with text. A block that emitted nothing has no
+  /// paragraph to keep, and the one before it is not its.
+  ///
+  /// A figure's title is model text (`ModelText`), and `title` says where: the
+  /// caption ends with it, and the newline after it is the join after it there.
+  func appendCaption(
+    _ caption: String?, indent: CGFloat, blockStart: Int, title: (model: Int, text: String)? = nil
+  ) {
+    if let title, caption?.isEmpty ?? true {
+      // Nothing draws the title, nor the join after it.
+      positions?.hide(title.model..<title.model + title.text.utf16.count + 1)
+    }
     guard let caption, !caption.isEmpty else { return }
+    var end = output.length
+    while end > blockStart {
+      let paragraph = output.mutableString.paragraphRange(
+        for: NSRange(location: end - 1, length: 0))
+      keepsWithNext.insert(paragraph.location)
+      guard paragraph.length == 1 else { break }
+      end = paragraph.location
+    }
     append(
       caption + "\n",
       captionAttributes(
         paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center)))
+    if let title {
+      let length = title.text.utf16.count + 1
+      positions?.map(storage: output.length - length, model: title.model, length: length)
+    }
+  }
+}
+
+/// Where a table's rows, cells and cells' lines start in the model text (#522), which
+/// sets the rows in order, the header's first, a row's cells joined by tabs and the
+/// rows by newlines (`ModelText`), whatever shape the table is drawn in.
+struct TableModelLayout {
+  let start: Int
+  let end: Int
+  /// Where each row starts, the header's first.
+  let rows: [Int]
+  /// Where each cell of each row starts.
+  let cells: [[Int]]
+  /// Where each line of each cell starts, from the cell's start.
+  private let lines: [[[Int]]]
+
+  init(_ table: RFCKit.Table, from start: Int) {
+    var offset = start
+    var rows: [Int] = []
+    var cells: [[Int]] = []
+    var lines: [[[Int]]] = []
+    for (index, row) in (table.header + table.rows).enumerated() {
+      if index > 0 { offset += 1 }
+      rows.append(offset)
+      var rowCells: [Int] = []
+      var rowLines: [[Int]] = []
+      for (column, cell) in row.cells.enumerated() {
+        if column > 0 { offset += 1 }
+        rowCells.append(offset)
+        var cellLines = [0]
+        var length = 0
+        for unit in cell.plainText.utf16 {
+          length += 1
+          if unit == 0x0A { cellLines.append(length) }
+        }
+        rowLines.append(cellLines)
+        offset += length
+      }
+      cells.append(rowCells)
+      lines.append(rowLines)
+    }
+    self.start = start
+    end = offset
+    self.rows = rows
+    self.cells = cells
+    self.lines = lines
+  }
+
+  /// Where line `line` of a cell starts in the model text.
+  func line(_ line: Int, ofCell column: Int, inRow row: Int) -> Int? {
+    guard row < lines.count, column < lines[row].count, line < lines[row][column].count else {
+      return nil
+    }
+    return cells[row][column] + lines[row][column][line]
   }
 }

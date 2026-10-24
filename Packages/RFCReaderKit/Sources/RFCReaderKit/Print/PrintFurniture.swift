@@ -45,14 +45,28 @@ public struct PrintFurniture: Equatable, Sendable {
     )
   }
 
-  /// `RFC 9110: HTTP Semantics`: what a print job is called, which the print
-  /// panel's Save as PDF sheet offers as the file's title. Either half alone when
-  /// the other is unknown.
+  /// `RFC 9110: HTTP Semantics`: an exported PDF's title, in its info. Either half
+  /// alone when the other is unknown.
   public static func documentTitle(id: DocumentID?, title: String?) -> String {
     [id?.displayName, title]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
       .joined(separator: ": ")
+  }
+
+  /// `RFC 9110 – HTTP Semantics`: what a print job is called, which Save as PDF
+  /// offers as the file's name, so with nothing a file's name cannot hold. Not a
+  /// colon, which the Finder shows as a slash and OneDrive, SMB shares and Windows
+  /// refuse; not a slash either, which the save panel writes as a colon.
+  public static func jobTitle(id: DocumentID?, title: String?) -> String {
+    let safeTitle = title?
+      .replacingOccurrences(of: ": ", with: " – ")
+      .replacingOccurrences(of: ":", with: "-")
+      .replacingOccurrences(of: "/", with: "-")
+    return [id?.displayName, safeTitle]
+      .compactMap { $0 }
+      .filter { !$0.isEmpty }
+      .joined(separator: " – ")
   }
 
   /// The trailing end of the footer, as an RFC numbers its pages.

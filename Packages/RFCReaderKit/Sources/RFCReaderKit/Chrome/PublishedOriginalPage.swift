@@ -99,6 +99,44 @@ public struct PublishedOriginalPage: Hashable, Sendable {
     return document.flatMap { PublishedOriginal(id, formats: formats, text: $0) }
   }
 
+  /// An export of an RFC read as its original, which Print and Export do not offer
+  /// (`offersPrintAndExport`), asked of a script, a shortcut or a collection (#383):
+  /// refused in the words the panel says it with.
+  public struct NotExportable: LocalizedError {
+    public let status: Status
+
+    public init(status: Status) {
+      self.status = status
+    }
+
+    public func message(in locale: Locale) -> String {
+      status.panelExplanation(in: locale)
+    }
+
+    public var errorDescription: String? { message(in: .interface) }
+  }
+
+  /// Throws `NotExportable` for a scan, and for a pointer by the pack or by `text`.
+  /// An index that has not named the RFC (`formats` nil) says nothing either way.
+  public static func checkExportable(
+    _ id: DocumentID, formats: [FileFormat]?, text document: RFCDocument?,
+    pointerInPack: Bool = false
+  ) throws {
+    guard let formats,
+      let status = Status(id, formats: formats, text: document, pointerInPack: pointerInPack)
+    else { return }
+    throw NotExportable(status: status)
+  }
+
+  /// Whether an export has to read the RFC's text to know whether it is the RFC:
+  /// only when the index lists an original beside the text, which the text alone
+  /// can say it points to.
+  public static func exportReadsText(_ id: DocumentID, formats: [FileFormat]?) -> Bool {
+    guard let formats else { return false }
+    return PublishedOriginal(id, formats: formats) == nil
+      && PublishedOriginal(pointer: id, formats: formats) != nil
+  }
+
   /// Whether Print and Export offer the document: one on screen and read as its
   /// text. A pointer's text is not the RFC, so printing it would print a line
   /// saying where the RFC is.

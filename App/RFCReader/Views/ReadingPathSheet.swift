@@ -102,12 +102,12 @@ struct ReadingPathSheet: View {
       ContentUnavailableView(
         "No Citation Index", systemImage: "point.3.connected.trianglepath.dotted",
         description: Text(
-          "A reading path is computed from the citation index, which is a data pack of its own and isn't installed."
+          "A reading path is computed from the citation index, which this version of the app doesn't include."
         ))
     case .failed:
       ContentUnavailableView(
         "Couldn't Read the Citation Index", systemImage: "exclamationmark.triangle",
-        description: Text("The installed index pack couldn't be read."))
+        description: Text("The citation index couldn't be read."))
     case .path(let path, let assumed, let steps):
       list(path, assumed: assumed, steps: steps)
     }

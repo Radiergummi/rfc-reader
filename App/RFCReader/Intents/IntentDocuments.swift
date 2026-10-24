@@ -13,6 +13,8 @@ nonisolated enum IntentFailure: Error, CustomLocalizedStringResourceConvertible 
   case notLoaded(DocumentID, reason: String)
   /// The section is not in the document, which has changed since it was chosen.
   case noSuchSection(SectionIdentifier)
+  /// The document loaded, and could not be exported for the reason given (#384).
+  case notExported(DocumentID, reason: String)
 
   var localizedStringResource: LocalizedStringResource {
     switch self {
@@ -24,6 +26,8 @@ nonisolated enum IntentFailure: Error, CustomLocalizedStringResourceConvertible 
       "\(id.displayName) didn't load: \(reason)"
     case .noSuchSection(let identifier):
       "\(identifier.document.displayName) has no section \(identifier.anchor)."
+    case .notExported(let id, let reason):
+      "\(id.displayName) couldn't be exported: \(reason)"
     }
   }
 }

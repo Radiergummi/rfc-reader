@@ -86,6 +86,9 @@ public enum SearchQuery {
     }
   }
 
+  /// Every filter's name, in the grammar's order: what the help lists (#780).
+  public static var filterNames: [String] { Qualifier.allCases.map(\.name) }
+
   /// A `status:` value, with the long spellings it is also read by, and the statuses
   /// it stands for. `current` is not a status but the obsolete filter, and has none.
   struct StatusValue: Sendable {
@@ -458,6 +461,17 @@ public enum SearchQuery {
   /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
   /// mark, and `status:bcp` is still a filter.
   public static func words(in query: String) -> [String] {
+    scan(query).words
+  }
+
+  /// Whether `query` ends inside a quote it opened, which would take in whatever
+  /// were written after it, as the value's.
+  public static func leavesQuoteOpen(_ query: String) -> Bool {
+    scan(query).isQuoted
+  }
+
+  /// `words(in:)`, and whether a quote is still open at the end.
+  private static func scan(_ query: String) -> (words: [String], isQuoted: Bool) {
     var words: [String] = []
     var word = ""
     var quoted = false
@@ -476,7 +490,7 @@ public enum SearchQuery {
       word.append(character)
     }
     if !word.isEmpty { words.append(word) }
-    return words
+    return (words, quoted)
   }
 
   /// The last word of `query` while the reader is still typing it, or nil once
@@ -633,11 +647,11 @@ public enum SearchQuery {
   }
 
   /// The completions a search field shows as the reader types: `suggestions(for:in:)`,
-  /// only once a word has been begun. A list over the results at every space, after
-  /// every filter taken as a token, or on clearing the field would hide them while
-  /// the reader types.
+  /// only once a word has been begun, or every filter while the field is empty, which
+  /// is where the syntax is taught (#781). A list over the results at every space, or
+  /// after every filter taken as a token, would hide them while the reader types.
   public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
-    guard wordBeingTyped(in: query) != nil else { return [] }
+    guard query.isEmpty || wordBeingTyped(in: query) != nil else { return [] }
     return suggestions(for: query, in: index)
   }
 
@@ -718,6 +732,9 @@ public struct UnknownSearchTerm: Sendable, Hashable {
     case workingGroup
     /// A collection `in:` names that the library doesn't hold.
     case collection
+    /// A collection `in:` names that is made from a query, which has no members to
+    /// search in.
+    case dynamicCollection
   }
 
   /// The word as written in the query.

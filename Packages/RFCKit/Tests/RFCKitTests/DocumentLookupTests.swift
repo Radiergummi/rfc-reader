@@ -35,13 +35,12 @@ struct DocumentLookupTests {
     #expect(try lookup("2616") == [])
   }
 
-  @Test func `an obsoleted RFC is found, and says what replaced it`() throws {
+  @Test func `an obsoleted RFC is found`() throws {
     let index = try Fixtures.sampleIndex()
     let rfc = try #require(
       DocumentLookup.rfcs(matching: "7231", in: IndexSearch(index: index)).first)
     #expect(rfc.isObsolete)
-    #expect(rfc.obsoletionNote == "Obsoleted by RFC 9110")
-    #expect(index[9110]?.obsoletionNote == nil)
+    #expect(rfc.obsoletedBy == [.rfc(9110)])
   }
 
   /// What a Shortcut or Spotlight hands back: the file stems, in the order given,

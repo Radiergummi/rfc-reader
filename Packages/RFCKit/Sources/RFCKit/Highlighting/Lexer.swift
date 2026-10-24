@@ -258,8 +258,10 @@ struct Lexer: Highlighter {
     var output = TokenRun()
     var position = 0
     // `matches` rather than `enumerateMatches`, whose block takes an unsafe pointer.
-    let matches = state.expression.matches(
-      in: text, options: matching, range: NSRange(location: 0, length: length))
+    let matches = drainingAutoreleases {
+      state.expression.matches(
+        in: text, options: matching, range: NSRange(location: 0, length: length))
+    }
     for match in matches {
       guard let matched = state.rule(matching: match) else { continue }
       output.append(NSRange(location: position, length: match.range.location - position), .plain)
@@ -338,15 +340,17 @@ struct WindowedText {
       searched += end.offset - start.offset
       var match: NSTextCheckingResult?
       var hitEnd = false
-      // Unsafe only in the pointer the block is handed to stop the search at its
-      // first match, which it writes and does not keep.
-      unsafe expression.enumerateMatches(
-        in: window, options: Lexer.matching,
-        range: NSRange(location: position - start.offset, length: end.offset - position)
-      ) { result, flags, stop in
-        match = result
-        hitEnd = flags.contains(.hitEnd)
-        unsafe stop.pointee = true
+      drainingAutoreleases {
+        // Unsafe only in the pointer the block is handed to stop the search at its
+        // first match, which it writes and does not keep.
+        unsafe expression.enumerateMatches(
+          in: window, options: Lexer.matching,
+          range: NSRange(location: position - start.offset, length: end.offset - position)
+        ) { result, flags, stop in
+          match = result
+          hitEnd = flags.contains(.hitEnd)
+          unsafe stop.pointee = true
+        }
       }
       if end.offset == length || (match != nil && !hitEnd) {
         return match?.adjustingRanges(offset: start.offset)
@@ -408,4 +412,18 @@ struct PatternShape {
       index += 1
     }
   }
+}
+
+/// `body` in an autorelease pool of its own, so what a search autoreleases — the
+/// window bridged to `NSString`, the matches — is freed as it returns. Without one it
+/// waits for the caller's pool, and a build off the main actor runs where none drains
+/// between builds: a run of them in an `@concurrent` function shows it in the
+/// process's footprint (#853). Linux's Foundation has no pools.
+@inline(__always)
+func drainingAutoreleases<Result>(_ body: () throws -> Result) rethrows -> Result {
+  #if canImport(ObjectiveC)
+    try autoreleasepool(invoking: body)
+  #else
+    try body()
+  #endif
 }

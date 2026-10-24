@@ -27,11 +27,3 @@ public enum DocumentLookup {
     identifiers.compactMap { DocumentID(fileStem: $0).flatMap { index[$0] } }
   }
 }
-
-extension RFCMetadata {
-  /// `Obsoleted by RFC 9110`, or nil for an RFC that is current.
-  public var obsoletionNote: String? {
-    guard isObsolete else { return nil }
-    return "Obsoleted by \(obsoletedBy.map(\.displayName).joined(separator: ", "))"
-  }
-}

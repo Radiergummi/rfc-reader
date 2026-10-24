@@ -25,6 +25,8 @@ public protocol ListSources {
   func members(of collection: UUID) -> [Int]
   /// The collection a query's `in:` names, by its name in any case.
   func collection(named name: String) -> UUID?
+  /// A dynamic collection's query (#355), or nil for a manual one.
+  func query(of collection: UUID) -> String?
 }
 
 /// Everything a library list is a function of, and the list it makes.
@@ -50,12 +52,20 @@ public struct LibraryList: Hashable, Sendable {
   /// The members of each collection the query's `in:` names, by its name lowercased.
   /// A name missing here is a collection the library doesn't hold.
   public let collections: [String: [Int]]
+  /// The collections the query's `in:` names that are made from a query, by their
+  /// names lowercased: unknown terms, since they have no members to search in.
+  public let dynamicCollections: Set<String>
+  /// A dynamic collection's query (#355), normalized: the collection lists what it
+  /// matches in the whole library, as if it were typed before `query`. Nil for every
+  /// other list.
+  public let definition: String?
 
   public init(
     filter: LibraryFilter, query: String, bookmarked: Set<DocumentID> = [],
     recentlyRead: [DocumentID] = [],
     downloaded: Set<Int> = [], options: ListOptions = ListOptions(), members: [Int] = [],
-    collections: [String: [Int]] = [:]
+    collections: [String: [Int]] = [:], dynamicCollections: Set<String> = [],
+    definition: String? = nil
   ) {
     self.filter = filter
     self.query = query.normalizedQuery
@@ -65,6 +75,42 @@ public struct LibraryList: Hashable, Sendable {
     self.options = options
     self.members = members
     self.collections = collections
+    self.dynamicCollections = dynamicCollections
+    self.definition = definition?.normalizedQuery
+  }
+
+  /// Whether this is a dynamic collection's list.
+  private var isDynamic: Bool { definition != nil }
+
+  /// The filter whose rows the list starts from: a dynamic collection's are the whole
+  /// library's.
+  private var listedFilter: LibraryFilter { isDynamic ? .all : filter }
+
+  /// What the list is searched for: a dynamic collection's query and the tab's, as one.
+  /// A quote the collection's query leaves open is closed first, or it would take the
+  /// tab's words into its last value.
+  var searchedQuery: String {
+    guard let definition else { return query }
+    guard !query.isEmpty else { return definition }
+    let closed = SearchQuery.leavesQuoteOpen(definition) ? "\(definition)\"" : definition
+    return "\(closed) \(query)"
+  }
+
+  /// Whether rows can be dragged into a new order (`ListOptions.allowsMoving`): never
+  /// in a dynamic collection, whose rows are matched rather than placed.
+  public var allowsMoving: Bool {
+    !isDynamic && options.allowsMoving(in: filter, query: query)
+  }
+
+  /// Whether View Options' order turns the list round (`ListOptions.canReorder`): a
+  /// dynamic collection's, its query `definition`, as the whole library's, unless that
+  /// query sorts it, as `rows` keeps its own sort.
+  public static func canReorder(
+    _ filter: LibraryFilter, definition: String?, query: String
+  ) -> Bool {
+    guard let definition else { return ListOptions.canReorder(filter, query: query) }
+    return ListOptions.canReorder(.all, query: query)
+      && IndexSearch.parseQuery(definition).filters.sort == nil
   }
 
   /// The list `filter` shows, reading from `sources` only the inputs it and `query`
@@ -74,15 +120,25 @@ public struct LibraryList: Hashable, Sendable {
   public static func reading(
     _ filter: LibraryFilter, query: String, options: ListOptions, from sources: some ListSources
   ) -> LibraryList {
-    let asked = IndexSearch.parseQuery(query.normalizedQuery).filters
+    var defined: String?
+    if case .collection(let identifier) = filter { defined = sources.query(of: identifier) }
+    let asked = IndexSearch.parseQuery(
+      LibraryList(filter: filter, query: query, definition: defined).searchedQuery
+    ).filters
+    // A dynamic collection's members are whatever its query matches.
     var members: [Int] {
-      guard case .collection(let identifier) = filter else { return [] }
+      guard case .collection(let identifier) = filter, defined == nil else { return [] }
       return sources.members(of: identifier)
     }
     var collections: [String: [Int]] = [:]
+    var dynamicCollections: Set<String> = []
     for name in asked.collectionNames {
       guard let identifier = sources.collection(named: name) else { continue }
-      collections[name.lowercased()] = sources.members(of: identifier)
+      if sources.query(of: identifier) != nil {
+        dynamicCollections.insert(name.lowercased())
+      } else {
+        collections[name.lowercased()] = sources.members(of: identifier)
+      }
     }
     return LibraryList(
       filter: filter,
@@ -95,37 +151,43 @@ public struct LibraryList: Hashable, Sendable {
         ? sources.downloaded : [],
       options: options,
       members: members,
-      collections: collections
+      collections: collections,
+      dynamicCollections: dynamicCollections,
+      definition: defined
     )
   }
 
   /// The terms of the query that name something unknown: a qualifier or a value this
   /// version doesn't know, a working group `index` doesn't name, or a collection the
-  /// library doesn't hold. While there is one, the list is empty, and these say why.
+  /// library doesn't hold or that is made from a query. While there is one, the list is empty, and these say why.
   public func unknownTerms(in index: RFCIndex) -> [UnknownSearchTerm] {
-    unknownTerms(of: IndexSearch.parseQuery(query), in: index)
+    unknownTerms(of: IndexSearch.parseQuery(searchedQuery), in: index)
   }
 
+  /// `parsed` is `searchedQuery`'s.
   private func unknownTerms(
     of parsed: SearchQuery.Parsed, in index: RFCIndex
   ) -> [UnknownSearchTerm] {
-    let known = SearchQuery.unknownTerms(in: query, index: index)
+    let known = SearchQuery.unknownTerms(in: searchedQuery, index: index)
     guard parsed.filters.collectionNames.contains(where: { collections[$0.lowercased()] == nil })
     else { return known }
-    // Each word naming a collection the library doesn't hold, as it was written.
-    let missing = SearchQuery.words(in: query).filter { word in
-      IndexSearch.parseQuery(word).filters.collectionNames.contains {
-        collections[$0.lowercased()] == nil
-      }
+    // Each word naming a collection the library doesn't hold, or holds as a query,
+    // as it was written.
+    let missing = SearchQuery.words(in: searchedQuery).compactMap { word -> UnknownSearchTerm? in
+      let names = IndexSearch.parseQuery(word).filters.collectionNames.map { $0.lowercased() }
+      guard let name = names.first(where: { collections[$0] == nil }) else { return nil }
+      let reason: UnknownSearchTerm.Reason =
+        dynamicCollections.contains(name) ? .dynamicCollection : .collection
+      return UnknownSearchTerm(word: word, reason: reason)
     }
-    return known + missing.map { UnknownSearchTerm(word: $0, reason: .collection) }
+    return known + missing
   }
 
   /// The search's hits for the part of the query the index can answer, best first:
   /// what `rows(in:search:hits:)` narrows the filter's rows by. None when the query
   /// names something unknown, or asks the index for nothing.
   public func hits(from search: IndexSearch, now: Date = Date()) -> [RFCMetadata] {
-    hits(for: IndexSearch.parseQuery(query), from: search, now: now)
+    hits(for: IndexSearch.parseQuery(searchedQuery), from: search, now: now)
   }
 
   private func hits(
@@ -146,7 +208,7 @@ public struct LibraryList: Hashable, Sendable {
   public func rows(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [LibraryRow] {
-    let parsed = IndexSearch.parseQuery(query)
+    let parsed = IndexSearch.parseQuery(searchedQuery)
     // A query naming a section is about sections, which only the full-text search
     // has: it lists none of the index's rows (answered on #37, 2026-10-14).
     guard unknownTerms(of: parsed, in: index).isEmpty, parsed.filters.section == nil else {
@@ -154,8 +216,8 @@ public struct LibraryList: Hashable, Sendable {
     }
     // In the whole library the reader's data is the list (`narrowing`), so the
     // index's every row would be made only to be thrown away.
-    let isReplaced = filter == .all && !parsed.filters.readerData.isEmpty
-    var base = isReplaced ? [] : rows(of: filter, in: index)
+    let isReplaced = listedFilter == .all && !parsed.filters.readerData.isEmpty
+    var base = isReplaced ? [] : rows(of: listedFilter, in: index)
     let narrowed = narrowing(base, in: index, by: parsed.filters)
     base = narrowed.rows
     // A query of only what was narrowed by, and a sort, searches for nothing more,
@@ -165,7 +227,15 @@ public struct LibraryList: Hashable, Sendable {
       let found = hits ?? search.map { self.hits(for: parsed, from: $0) }
       if let found { base = searched(base, found: found, isNarrowed: narrowed.isNarrowed) }
     }
-    return options.apply(to: sorted(base, by: parsed.filters.sort), filter: filter, query: query)
+    // A dynamic collection has no order of its own: newest first, unless its query
+    // sorts it, or the tab searches it, which puts it in order of relevance.
+    var sort = parsed.filters.sort
+    var options = self.options
+    if isDynamic, query.isUnsearchedQuery {
+      // Its own `sort:` is kept as it is: View Options reverses only the default.
+      if sort == nil { sort = .newest } else { options.order = .newestFirst }
+    }
+    return options.apply(to: sorted(base, by: sort), filter: listedFilter, query: query)
   }
 
   /// `rows` in the order a query's `sort:` asks for, or as they are without one.
@@ -204,7 +274,7 @@ public struct LibraryList: Hashable, Sendable {
         .filter { listed.insert($0.id).inserted }
       // One input keeps its own order; several are put newest first, as every list is.
       if asking.count > 1 { union.sort(by: LibraryRow.isNewer) }
-      rows = filter == .all ? union : rows.filter { listed.contains($0.id) }
+      rows = listedFilter == .all ? union : rows.filter { listed.contains($0.id) }
       isNarrowed = true
     }
     if !asked.collectionNames.isEmpty {
@@ -251,7 +321,7 @@ public struct LibraryList: Hashable, Sendable {
     _ base: [LibraryRow], found: [RFCMetadata], isNarrowed: Bool
   ) -> [LibraryRow] {
     // Everything is allowed in the whole library, so there is nothing to filter.
-    if case .all = filter, !isNarrowed { return found.map(LibraryRow.rfc) }
+    if case .all = listedFilter, !isNarrowed { return found.map(LibraryRow.rfc) }
     // In order of relevance, a series row where its best hit is: it is found when
     // any of the RFCs it names is. Only the reader's data holds one, so the RFC
     // rows, thousands in a stream or a group, go in a set.
@@ -298,10 +368,10 @@ extension LibraryList {
   /// its words, as the filter, the qualifiers and the options narrow it. `sort:`
   /// orders the RFC rows only, and narrows nothing.
   public func textQuery(in index: RFCIndex, search: IndexSearch?) -> TextQuery? {
+    // The tab's words only: a dynamic collection's narrow the documents below.
     let parsed = IndexSearch.parseQuery(query)
     let section = parsed.filters.section
-    guard !parsed.text.isUnsearchedQuery || section != nil,
-      unknownTerms(of: parsed, in: index).isEmpty
+    guard !parsed.text.isUnsearchedQuery || section != nil, unknownTerms(in: index).isEmpty
     else {
       return nil
     }
@@ -317,9 +387,14 @@ extension LibraryList {
     }
     let narrowing = LibraryList(
       filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
-      downloaded: downloaded, options: options, members: members, collections: collections)
+      downloaded: downloaded, options: options, members: members, collections: collections,
+      dynamicCollections: dynamicCollections, definition: definition)
     let rows = narrowing.rows(in: index, search: search)
-    let documents = rows.flatMap { row in row.rfc.map { [$0.id] } ?? row.members.map(\.id) }
+    // An RFC published only as a PDF or a PostScript has no text to index: counted,
+    // a search over it could never say it had searched everything.
+    let documents = rows.flatMap { row in row.rfc.map { [$0] } ?? row.members }
+      .filter { !$0.hasOnlyPrintFormats }
+      .map(\.id)
     return TextQuery(words: parsed.text, section: section, documents: Set(documents))
   }
 }
@@ -338,5 +413,64 @@ extension SearchFilters {
       return nil
     }
     return indexed
+  }
+}
+
+extension LibraryList {
+  /// What Save as Collection… keeps (#355): the list as a query of the whole library,
+  /// so the collection lists what the tab listed. The tab's filter becomes the
+  /// qualifier that lists the same, as the built-ins' table on #355 has them, and
+  /// what the tab searches for follows it. A dynamic collection's own query stands
+  /// for its filter.
+  ///
+  /// Nil when the search names its filter's qualifier again, as `is:offline` does in
+  /// Bookmarks: the tab narrows its filter by it, where the values of one qualifier
+  /// in a query are a union, so no query lists what the tab lists.
+  public func savedQuery(in collections: CollectionSnapshot) -> String? {
+    guard !searchRepeatsFilter else { return nil }
+    let qualifier: String
+    switch filter {
+    case .all: qualifier = ""
+    case .bookmarks: qualifier = "is:bookmarked"
+    case .recent: qualifier = "is:read sort:last-read"
+    case .downloaded: qualifier = "is:offline"
+    case .standards: qualifier = "status:internet-standard"
+    case .bestCurrentPractice: qualifier = "status:bcp"
+    case .stream(let stream): qualifier = Self.formatted { $0.streams = [stream] }
+    case .workingGroup(let group): qualifier = Self.formatted { $0.workingGroups = [group] }
+    case .series(let id): qualifier = Self.formatted { $0.scopes = [.document(id)] }
+    case .collection(let identifier):
+      // The tab searches its query and the search as one, a quote left open closed.
+      if definition != nil {
+        return searchedQuery
+      } else if let name = collections[identifier]?.name {
+        qualifier = Self.formatted { $0.scopes = [.collection(name)] }
+      } else {
+        qualifier = ""
+      }
+    }
+    return "\(qualifier) \(query)".normalizedQuery
+  }
+
+  /// Whether the search names the qualifier `savedQuery` keeps the filter as.
+  private var searchRepeatsFilter: Bool {
+    let asked = IndexSearch.parseQuery(query).filters
+    switch filter {
+    case .all: return false
+    case .bookmarks, .recent, .downloaded: return !asked.readerData.isEmpty
+    case .standards, .bestCurrentPractice: return !asked.statuses.isEmpty
+    case .stream: return !asked.streams.isEmpty
+    case .workingGroup: return !asked.workingGroups.isEmpty
+    case .series: return !asked.scopes.isEmpty
+    // A dynamic collection's tab lists its query and the search as one already.
+    case .collection: return definition == nil && !asked.scopes.isEmpty
+    }
+  }
+
+  /// The qualifiers of filters set by `set`, as the search field writes them.
+  private static func formatted(_ set: (inout SearchFilters) -> Void) -> String {
+    var filters = SearchFilters()
+    set(&filters)
+    return SearchQuery.format(text: "", filters: filters)
   }
 }

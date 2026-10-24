@@ -15,6 +15,15 @@ public enum CollectionStore {
   public enum Failure: Error, Equatable {
     case emptyName
     case noSuchCollection
+    /// A dynamic collection's query was empty, which would list every RFC (#355).
+    case emptyQuery
+    /// A document was added to a dynamic collection, whose members are not chosen.
+    case dynamic
+    /// A manual collection was given a query.
+    case notDynamic
+    /// A dynamic collection's query named a section, which only the full-text search
+    /// has: its list would always be empty.
+    case sectionQuery
   }
 
   // MARK: - Collections
@@ -23,19 +32,25 @@ public enum CollectionStore {
   /// their order: a reading path saved as a collection (#189). One save, and what
   /// `add` would leave out is left out: a document that is not an RFC, and a second
   /// copy of one.
+  ///
+  /// With a `query`, a dynamic collection (#355), whose members are whatever the
+  /// query matches; it is kept normalized, as the search field reads it, and
+  /// `documents` are not added to it.
   @discardableResult
   public static func create(
     named name: String, color: CollectionColor, documents: [DocumentID] = [],
-    in context: ModelContext
+    query: String? = nil, in context: ModelContext
   ) throws -> DocumentCollection {
     let name = try validName(name)
+    let query = try query.map(validQuery)
     let last = try collections(in: context).last?.position
     let collection = DocumentCollection(
-      name: name, color: color, position: CollectionOrder.appending(after: last))
+      name: name, color: color, position: CollectionOrder.appending(after: last), query: query)
     context.insert(collection)
     var position: Double?
     var added: Set<DocumentID> = []
-    for document in documents where document.series == .rfc && added.insert(document).inserted {
+    for document in documents
+    where query == nil && document.series == .rfc && added.insert(document).inserted {
       let next = CollectionOrder.appending(after: position)
       context.insert(
         DocumentCollectionItem(
@@ -46,12 +61,18 @@ public enum CollectionStore {
     return collection
   }
 
-  /// The editor's name and color, in one save.
+  /// The editor's name and color, and a dynamic collection's query when given, in
+  /// one save. A manual collection is never given one: its members are chosen.
   public static func update(
-    _ identifier: UUID, name: String, color: CollectionColor, in context: ModelContext
+    _ identifier: UUID, name: String, color: CollectionColor, query: String? = nil,
+    in context: ModelContext
   ) throws {
     let name = try validName(name)
     let collection = try collection(identifier, in: context)
+    if let query {
+      guard collection.query != nil else { throw Failure.notDynamic }
+      collection.query = try validQuery(query)
+    }
     collection.name = name
     collection.color = color
     try context.save()
@@ -90,7 +111,7 @@ public enum CollectionStore {
   public static func add(
     _ document: DocumentID, to identifier: UUID, in context: ModelContext
   ) throws {
-    _ = try collection(identifier, in: context)
+    guard try collection(identifier, in: context).query == nil else { throw Failure.dynamic }
     guard document.series == .rfc else { return }
     let items = try items(in: identifier, context: context)
     guard !items.contains(where: { $0.documentKey == document.fileStem }) else { return }
@@ -246,6 +267,18 @@ public enum CollectionStore {
       preconditionFailure("renumbered neighbors are a spacing apart")
     }
     return value
+  }
+
+  /// What the editor enables its button by for a dynamic collection: a query that
+  /// asks for something, and not for a section, so the button and the store agree.
+  public static func isValidQuery(_ query: String) -> Bool {
+    !query.isUnsearchedQuery && IndexSearch.parseQuery(query).filters.section == nil
+  }
+
+  private static func validQuery(_ query: String) throws -> String {
+    guard !query.isUnsearchedQuery else { throw Failure.emptyQuery }
+    guard isValidQuery(query) else { throw Failure.sectionQuery }
+    return query.normalizedQuery
   }
 
   /// Whether `create` and `update` take the name: one with more than spaces.

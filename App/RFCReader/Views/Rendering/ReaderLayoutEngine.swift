@@ -20,6 +20,12 @@ import os
 /// RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   weak var textView: PlatformTextView?
+  /// The hosted header among the text view's subviews, which `redraw()` leaves alone.
+  #if canImport(UIKit)
+    weak var header: UIView?
+  #else
+    weak var header: NSView?
+  #endif
   private(set) var keeper = AnchorKeeper()
   private(set) var built: BuiltDocument?
   /// What the signposts name; see `Signposts`.
@@ -110,11 +116,43 @@ final class ReaderLayoutEngine: PinSurface {
     }
   }
 
+  /// Draws the fragments again without laying them out (#747): what a change only
+  /// to what they draw needs, such as Implementer's bands.
+  func redraw() {
+    guard let textView, let layout = textView.textLayoutManager else { return }
+    let interval = signposter.beginInterval(
+      "Redraw", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
+    defer { signposter.endInterval("Redraw", interval) }
+    layout.invalidateRenderingAttributes(for: layout.documentRange)
+    // The views TextKit draws the laid-out fragments in, which the text view's own
+    // display does not reach: a highlight made in view, or a band found, was drawn
+    // only once its paragraph was laid out again, as a run of the app showed (#522).
+    // Not the hosted header, which draws no text. Only those views are drawn again;
+    // nothing is laid out.
+    var views = textView.subviews.filter { $0 !== header }
+    while let view = views.popLast() {
+      #if canImport(UIKit)
+        view.setNeedsDisplay()
+      #else
+        view.needsDisplay = true
+      #endif
+      views += view.subviews
+    }
+    #if canImport(UIKit)
+      textView.setNeedsDisplay()
+    #else
+      textView.needsDisplay = true
+    #endif
+  }
+
   /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
   /// and the reader's line kept, at the shown paragraph nearest it where it was
   /// folded, or put at `place`, a jump's target the folding has just shown.
   func refold(_ hidden: HiddenText, placeAt place: Int? = nil) {
     guard let layout = textView?.textLayoutManager else { return }
+    let interval = signposter.beginInterval(
+      "Refold", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
+    defer { signposter.endInterval("Refold", interval) }
     if let place {
       keeper.jumped(to: ReaderAnchor(characterOffset: place))
     } else if case .line(let anchor) = keeper.place, hidden.contains(anchor.characterOffset) {
@@ -243,8 +281,8 @@ final class ReaderLayoutEngine: PinSurface {
   private var completionInterval: OSSignpostIntervalState?
 
   /// How long this engine's completion lays out before it yields to let the run loop
-  /// draw and take input: a slice is 3–5 ms and the budget is checked before each,
-  /// so a turn is one or two slices. Each text view's engine has a budget of its own.
+  /// draw and take input: a slice fits in a frame (`SlicePlanner`) and the budget is
+  /// checked before each, so a turn is one or two slices. Each text view's engine has a budget of its own.
   private static let turnBudget = Duration.milliseconds(4)
 
   /// Lays the document out from its start in the background, a turn's budget at a

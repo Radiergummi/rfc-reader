@@ -17,7 +17,7 @@ struct ReadingModePicker: View {
           guard mode != reader.folding.mode else { return }
           // Focus starts on the section being read, which the text view knows, the
           // abstract included.
-          // The folding index is there in Focus, the one mode that keeps anything.
+          // Focus is the one mode that keeps anything, and its folding index is there.
           reader.folding =
             reader.foldingIndex.map { reader.folding.switching(to: mode, in: $0) }
             ?? Folding(mode: mode)
@@ -28,6 +28,27 @@ struct ReadingModePicker: View {
       }
     }
     .pickerStyle(.menu)
+  }
+}
+
+/// Expand Section and Collapse Section, which open and close the outline's section
+/// at the reader's line, for whoever does not point at its heading (#760). No
+/// shortcut: the reader's keys are #711's to give.
+struct OutlineSectionItems: View {
+  let reader: ReaderState
+
+  var body: some View {
+    if reader.folding.mode == .outline {
+      let section = reader.outlineSection
+      Button("Expand Section", systemImage: "chevron.forward") {
+        reader.setOutlineSection(expanded: true)
+      }
+      .disabled(section == nil || section?.isExpanded == true)
+      Button("Collapse Section", systemImage: "chevron.down") {
+        reader.setOutlineSection(expanded: false)
+      }
+      .disabled(section?.isExpanded != true)
+    }
   }
 }
 
@@ -42,10 +63,10 @@ struct FocusSteps: View {
       // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
       // its paragraphs' ends, and leave the two together alone.
       Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
-        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+        .keyboardShortcut(ReaderShortcut.nextSection.keyboardShortcut)
         .disabled(!reader.canStepFocus(.next))
       Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
-        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+        .keyboardShortcut(ReaderShortcut.previousSection.keyboardShortcut)
         .disabled(!reader.canStepFocus(.previous))
     }
   }

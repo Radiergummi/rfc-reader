@@ -17,7 +17,8 @@ import SwiftUI
 
     func makeNSView(context: Context) -> NSSearchField {
       let field = NSSearchField()
-      field.placeholderString = String(localized: "Search")
+      // Just "Search…": the syntax is taught by the filters the field suggests (#781).
+      field.placeholderString = String(localized: "Search…")
       field.delegate = context.coordinator
       field.suggestionsDelegate = context.coordinator
       return field
@@ -35,6 +36,13 @@ import SwiftUI
 
     func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation, library: library) }
 
+    /// What a suggestion under the field stands for: a completion, or Search Syntax…,
+    /// which opens the help at the search (#781).
+    enum Pick: Hashable {
+      case suggestion(SearchQuery.Suggestion)
+      case syntaxHelp
+    }
+
     final class Coordinator: NSObject, NSSearchFieldDelegate, NSTextSuggestionsDelegate {
       var navigation: NavigationModel
       var library: LibraryModel
@@ -46,18 +54,22 @@ import SwiftUI
 
       // MARK: Completion (#21)
 
-      /// AppKit's own suggestions menu under the field: the qualifier being typed,
-      /// or its values. A qualifier the search does not know is shown dimmed, with
-      /// what becomes of it.
+      /// AppKit's own suggestions menu under the field: every filter while it is
+      /// empty, the qualifier being typed, or its values. A qualifier the search does
+      /// not know is shown dimmed, with what becomes of it. Under any of them, Search
+      /// Syntax… opens the help at the search (#781): AppKit asks for suggestions only
+      /// as the text changes, so an empty field the reader has only clicked into shows
+      /// none, and this is the way to the rest of the syntax from there on.
       func textField(
         _ textField: NSTextField,
         provideUpdatedSuggestions responseHandler:
-          @escaping (NSSuggestionItemResponse<SearchQuery.Suggestion>) -> Void
+          @escaping (NSSuggestionItemResponse<Pick>) -> Void
       ) {
         guard let index = library.index else { return responseHandler(NSSuggestionItemResponse()) }
         let items = SearchQuery.suggestionsWhileTyping(for: textField.stringValue, in: index).map {
           suggestion in
-          var item = NSSuggestionItem(representedValue: suggestion, title: suggestion.word)
+          var item = NSSuggestionItem(
+            representedValue: Pick.suggestion(suggestion), title: suggestion.word)
           if suggestion.isUnknown {
             var title = AttributedString(suggestion.word)
             title.foregroundColor = .secondaryLabelColor
@@ -66,24 +78,32 @@ import SwiftUI
           }
           return item
         }
-        responseHandler(NSSuggestionItemResponse(items: items))
+        guard !items.isEmpty else { return responseHandler(NSSuggestionItemResponse()) }
+        let help = NSSuggestionItem(
+          representedValue: Pick.syntaxHelp, title: String(localized: "Search Syntax…"))
+        responseHandler(
+          NSSuggestionItemResponse(itemSections: [
+            NSSuggestionItemSection(items: items), NSSuggestionItemSection(items: [help]),
+          ]))
       }
 
       /// No inline completion while a suggestion is highlighted: AppKit's assumes it
       /// extends what was typed, and `is:b` completes to `status:bcp`. Said here
       /// rather than left out, as the protocol has a default of its own.
       func textField(
-        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<SearchQuery.Suggestion>
+        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<Pick>
       ) -> String? {
         nil
       }
 
       /// Taking a suggestion applies it at once, as Return does: a pick is not
       /// typing, and the list should not wait for a pause.
-      func textField(
-        _ textField: NSTextField, didSelect item: NSSuggestionItem<SearchQuery.Suggestion>
-      ) {
-        textField.stringValue = item.representedValue.accepted
+      func textField(_ textField: NSTextField, didSelect item: NSSuggestionItem<Pick>) {
+        guard case .suggestion(let suggestion) = item.representedValue else {
+          HelpWindow.show(at: .search)
+          return
+        }
+        textField.stringValue = suggestion.accepted
         navigation.searchText = textField.stringValue
         navigation.applySearchWithoutPause()
       }

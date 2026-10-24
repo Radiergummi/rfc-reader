@@ -50,6 +50,26 @@
         ReaderPreferences.stepFontSizeUp()
         return true
       }
+      // ⌘← and ⌘→ go back and forward where no field is being edited (#761); see
+      // `HistoryArrowShortcut`.
+      if let step = HistoryArrowShortcut.step(
+        characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags,
+        inText: (firstResponder as? NSText)?.isEditable == true),
+        let controller = windowController as? ReaderWindowController
+      {
+        // With nowhere to go the key passes on, as it did to a disabled menu item.
+        let navigation = controller.navigation
+        switch step {
+        case .back where navigation.canGoBack:
+          navigation.goBack()
+          return true
+        case .forward where navigation.canGoForward:
+          navigation.goForward()
+          return true
+        default:
+          break
+        }
+      }
       return super.performKeyEquivalent(with: event)
     }
 

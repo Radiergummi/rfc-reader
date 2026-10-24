@@ -18,6 +18,8 @@ struct RetryingTransportTests {
   /// One scripted outcome of a request.
   enum Outcome: Sendable {
     case status(Int)
+    /// A status with a `Retry-After` header of `value`.
+    case statusRetryingAfter(Int, String)
     case failure(URLError.Code)
   }
 
@@ -37,6 +39,11 @@ struct RetryingTransportTests {
       case .status(let status):
         let response = HTTPURLResponse(
           url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+        return (Data("body \(status)".utf8), response)
+      case .statusRetryingAfter(let status, let value):
+        let response = HTTPURLResponse(
+          url: request.url!, statusCode: status, httpVersion: nil,
+          headerFields: ["Retry-After": value])!
         return (Data("body \(status)".utf8), response)
       case .failure(let code):
         throw URLError(code)
@@ -68,6 +75,52 @@ struct RetryingTransportTests {
     #expect(data == Data("body 200".utf8))
     #expect(transport.requests == 3)
     #expect(sleeps.recorded == [.seconds(1), .seconds(2)], "the delay doubles")
+  }
+
+  @Test func `a Retry-After longer than the backoff is waited out`() async throws {
+    let transport = ScriptedTransport([.statusRetryingAfter(429, "30")])
+    let sleeps = Sleeps()
+    let response = try await Self.retrying(transport, sleeps: sleeps).response(
+      for: URLRequest(url: Self.url)
+    ).1
+    #expect(response.statusCode == 200)
+    #expect(sleeps.recorded == [.seconds(30)])
+  }
+
+  @Test func `a Retry-After shorter than the backoff leaves the backoff`() async throws {
+    let transport = ScriptedTransport([.status(503), .statusRetryingAfter(503, "1")])
+    let sleeps = Sleeps()
+    _ = try await Self.retrying(transport, sleeps: sleeps).response(for: URLRequest(url: Self.url))
+    #expect(sleeps.recorded == [.seconds(1), .seconds(2)])
+  }
+
+  @Test func `a Retry-After is waited out only up to the cap`() async throws {
+    let transport = ScriptedTransport([
+      .statusRetryingAfter(503, "86400"), .statusRetryingAfter(503, "99999999999999999999"),
+    ])
+    let sleeps = Sleeps()
+    _ = try await Self.retrying(transport, sleeps: sleeps).response(for: URLRequest(url: Self.url))
+    #expect(
+      sleeps.recorded == [RetryingTransport.longestRetryAfter, RetryingTransport.longestRetryAfter])
+  }
+
+  @Test func `a Retry-After is spread by the jitter, never below what was asked`() async throws {
+    for (jitter, expected) in [(0.5, Duration.seconds(15)), (1.5, .seconds(15))] {
+      let transport = ScriptedTransport([.statusRetryingAfter(429, "10")])
+      let sleeps = Sleeps()
+      _ = try await Self.retrying(transport, sleeps: sleeps, jitter: jitter)
+        .response(for: URLRequest(url: Self.url))
+      #expect(sleeps.recorded == [expected])
+    }
+  }
+
+  @Test func `a Retry-After given as a date leaves the backoff`() async throws {
+    let transport = ScriptedTransport([
+      .statusRetryingAfter(429, "Wed, 21 Oct 2026 07:28:00 GMT")
+    ])
+    let sleeps = Sleeps()
+    _ = try await Self.retrying(transport, sleeps: sleeps).response(for: URLRequest(url: Self.url))
+    #expect(sleeps.recorded == [.seconds(1)])
   }
 
   @Test func `a network failure and a rate limit are retried too`() async throws {

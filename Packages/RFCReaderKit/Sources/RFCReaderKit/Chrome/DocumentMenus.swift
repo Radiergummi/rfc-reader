@@ -14,6 +14,9 @@ public enum DocumentMenus {
     case copyCitation(CitationStyle)
     case copySectionLink
     case toggleOriginalText
+    /// Shows the document translated into the reader's language, or the original
+    /// again (#749).
+    case toggleTranslation
     case openInfoPage
     case openErrata(URL)
     case openDatatracker
@@ -34,6 +37,7 @@ public enum DocumentMenus {
     case copy(String, CopyFeedback)
     case open(URL)
     case toggleOriginalText
+    case toggleTranslation
   }
 
   /// An item's symbol, and the color it is drawn in where it has one of its own —
@@ -78,10 +82,13 @@ public enum DocumentMenus {
     ]
   }
 
-  /// What is used least: the original text, and the document's pages elsewhere —
-  /// errata and the preceding draft only where the document has them.
+  /// What is used least: the original text and a translation, and the document's
+  /// pages elsewhere — errata and the preceding draft only where the document has
+  /// them. A translation is not offered to a reader who reads only English
+  /// (`DocumentTranslation.target`).
   public static func more(
-    showsOriginal: Bool, errata: URL?, precedingDraft: URL?, locale: Locale = .interface
+    showsOriginal: Bool, showsTranslation: Bool, errata: URL?, precedingDraft: URL?,
+    offersTranslation: Bool = DocumentTranslation.target != nil, locale: Locale = .interface
   ) -> Sections<Action> {
     var pages: [Item<Action>] = [
       Item(String(kit: "Open on rfc-editor.org", locale: locale), .openInfoPage)
@@ -94,11 +101,15 @@ public enum DocumentMenus {
     }
     let original = Item(
       String(kit: "Original Text", locale: locale), Action.toggleOriginalText, isOn: showsOriginal)
-    return [[original], pages]
+    guard offersTranslation else { return [[original], pages] }
+    let translation = Item(
+      String(kit: "Translate", locale: locale), Action.toggleTranslation, isOn: showsTranslation)
+    return [[original, translation], pages]
   }
 
   /// Every collection, checked where `document` is already in it, and New
-  /// Collection (#349) — after a separator only when there are collections above it.
+  /// Collection (#349); not one made from a query, whose members are not chosen
+  /// (#355) — after a separator only when there are collections above it.
   /// With no document, New Collection alone: there is nothing to add or check.
   public static func addToCollection(
     _ document: DocumentID?, in snapshot: CollectionSnapshot, locale: Locale = .interface
@@ -108,12 +119,74 @@ public enum DocumentMenus {
     ]
     guard let document else { return [create] }
     let containing = snapshot.collections(containing: document)
-    let collections = snapshot.collections.map { collection -> Item<CollectionAction> in
+    let manual = snapshot.collections.filter { !$0.isDynamic }
+    let collections = manual.map { collection -> Item<CollectionAction> in
       Item(
         collection.name, .toggleCollection(collection.id), isOn: containing.contains(collection.id),
         icon: Icon("folder", color: collection.color))
     }
     return collections.isEmpty ? [create] : [collections, create]
+  }
+
+  /// What a library row's context menu offers, by kind, in order: one table for the
+  /// Mac's menu and iOS's (#761), which had drifted apart, each rendering an action
+  /// with its own control. The title of each is the renderer's: several are
+  /// controls with a state of their own, such as Keep Offline and Add to Collection.
+  public enum RowAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case bookmark
+    case addToCollection
+    case readingPath
+    case keepOffline
+    case share
+    case removeFromCollection
+  }
+
+  /// What a References panel row that names an RFC offers on a right click or a
+  /// long press, by kind, in order (#761): one list for the Mac and iOS.
+  public enum ReferenceAction: Hashable, Sendable {
+    case openInNewTab
+    case openInNewWindow
+    case copyLink
+    case cite
+  }
+
+  /// A reference's menu, where the device opens tabs or windows as given. Cite only
+  /// where the index `describes` the document, which a citation is made from: not a
+  /// BCP, STD or FYI, nor anything before the index has loaded.
+  public static func referenceActions(
+    opensTabs: Bool, opensWindows: Bool, describes: Bool = true
+  ) -> [[ReferenceAction]] {
+    var opening: [ReferenceAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    return [opening, describes ? [.copyLink, .cite] : [.copyLink]].filter { !$0.isEmpty }
+  }
+
+  /// The row menu of a row that `isRFC`, or is a BCP, STD or FYI read as itself,
+  /// which is bookmarked and opened but neither added to a collection nor shared:
+  /// a collection holds RFCs (#321). `opensTabs` and `opensWindows` are what the
+  /// device can open it in; `inCollection` is whether the list is a collection's.
+  /// Reading Path is offered only with `hasCitationIndex`, without which it can only
+  /// say there is none (#769).
+  public static func rowActions(
+    isRFC: Bool, opensTabs: Bool, opensWindows: Bool, inCollection: Bool,
+    hasCitationIndex: Bool
+  ) -> [[RowAction]] {
+    var opening: [RowAction] = []
+    if opensTabs { opening.append(.openInNewTab) }
+    if opensWindows { opening.append(.openInNewWindow) }
+    var library: [RowAction] = [.bookmark]
+    if isRFC {
+      library.append(.addToCollection)
+      if hasCitationIndex { library.append(.readingPath) }
+      library.append(.keepOffline)
+    }
+    let sections = [
+      opening, library, isRFC ? [.share] : [], inCollection ? [.removeFromCollection] : [],
+    ]
+    return sections.filter { !$0.isEmpty }
   }
 }
 
@@ -130,6 +203,7 @@ extension DocumentMenus.Action {
       }
     case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section), .link)
     case .toggleOriginalText: .toggleOriginalText
+    case .toggleTranslation: .toggleTranslation
     case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
     case .openErrata(let url), .openPrecedingDraft(let url): .open(url)
     case .openDatatracker: .open(RFCEditorEndpoints.datatracker(id))

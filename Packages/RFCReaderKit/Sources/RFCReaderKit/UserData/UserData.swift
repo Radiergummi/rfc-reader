@@ -2,21 +2,24 @@ import Foundation
 import RFCKit
 import SwiftData
 
-/// The reader's own data: bookmarks, reading positions (#152) and collections (#349).
+/// The reader's own data: bookmarks, reading positions (#152), collections (#349),
+/// Keep Offline marks (#358), highlights (#522) and followed working groups (#731).
 ///
 /// Versioned from the start, so a change to the schema is a migration rather than a
-/// store that no longer opens. `SchemaV5` is the one the app uses, V3's keys and
+/// store that no longer opens. `SchemaV6` is the one the app uses, V3's keys and
 /// shape carried over unchanged: it is CloudKit's shape — no `@Attribute(.unique)`, every attribute optional or defaulted — so
 /// turning sync on later is configuration, not another migration. Uniqueness is the
 /// stores' job instead (a lookup by the document's `fileStem`, and `deduplicate`),
 /// since CloudKit can deliver two rows for one document.
 ///
 /// Here rather than in the App target so the migration can be tested.
-public typealias Bookmark = SchemaV5.Bookmark
-public typealias ReadingPosition = SchemaV5.ReadingPosition
-public typealias DocumentCollection = SchemaV5.DocumentCollection
-public typealias DocumentCollectionItem = SchemaV5.DocumentCollectionItem
-public typealias OfflineMark = SchemaV5.OfflineMark
+public typealias Bookmark = SchemaV6.Bookmark
+public typealias ReadingPosition = SchemaV6.ReadingPosition
+public typealias DocumentCollection = SchemaV6.DocumentCollection
+public typealias DocumentCollectionItem = SchemaV6.DocumentCollectionItem
+public typealias OfflineMark = SchemaV6.OfflineMark
+public typealias FollowedGroup = SchemaV6.FollowedGroup
+public typealias Highlight = SchemaV6.Highlight
 
 /// Today's models as they were before #152, exactly: a bare RFC number, unique.
 public enum SchemaV1: VersionedSchema {
@@ -367,6 +370,206 @@ public enum SchemaV5: VersionedSchema {
   }
 }
 
+/// V5, a collection's query (#355), the highlights (#522) and the followed working
+/// groups (#731). Its own copies of V5's models, identical to them but for
+/// `DocumentCollection.query`, for the reason V4 has its own of V3's, and the two
+/// that V5 has not: `Highlight` and `FollowedGroup`.
+public enum SchemaV6: VersionedSchema {
+  public static let versionIdentifier = Schema.Version(6, 0, 0)
+  public static var models: [any PersistentModel.Type] {
+    [
+      Bookmark.self, ReadingPosition.self, DocumentCollection.self, DocumentCollectionItem.self,
+      OfflineMark.self, Highlight.self, FollowedGroup.self,
+    ]
+  }
+
+  @Model
+  public final class Bookmark {
+    /// The document's `fileStem`: `rfc9110`, `bcp14`.
+    public var documentKey: String = ""
+    public var title: String = ""
+    public var createdAt: Date = Date.distantPast
+
+    public init(document: DocumentID, title: String, createdAt: Date = .now) {
+      self.documentKey = document.fileStem
+      self.title = title
+      self.createdAt = createdAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+
+  /// V4's, `originalName` included, which V4's needs: see there.
+  @Model
+  public final class ReadingPosition {
+    public var documentKey: String = ""
+    /// The nearest anchor at or above the place the reader left, as a
+    /// `ReadingPlace` has it. V1 and V2 called it the section anchor.
+    @Attribute(originalName: "sectionAnchor") public var anchor: String?
+    /// Characters past `anchor`, or nil when no place is recorded.
+    public var offset: Int?
+    public var updatedAt: Date = Date.distantPast
+
+    public init(document: DocumentID, place: ReadingPlace?, updatedAt: Date = .now) {
+      self.documentKey = document.fileStem
+      self.anchor = place?.anchor
+      self.offset = place?.offset
+      self.updatedAt = updatedAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+
+    public var place: ReadingPlace? {
+      get { offset.map { ReadingPlace(anchor: anchor, offset: $0) } }
+      set {
+        anchor = newValue?.anchor
+        offset = newValue?.offset
+      }
+    }
+  }
+
+  /// A named, user-made list of documents. Its members are `DocumentCollectionItem`
+  /// rows naming it by `identifier`, not a relationship: two devices adding to one
+  /// collection then each insert a row, and nothing is lost when they meet.
+  @Model
+  public final class DocumentCollection {
+    public var identifier: UUID = UUID()
+    public var name: String = ""
+    /// A `CollectionColor` raw value. An unknown name reads as the default.
+    public var colorName: String = CollectionColor.default.rawValue
+    /// Where the collection sits in the sidebar, ascending.
+    public var position: Double = 0
+    public var createdAt: Date = Date.distantPast
+    /// What a dynamic collection lists, in the search field's grammar
+    /// (`IndexSearch.parseQuery`): its members are whatever matches. Nil for a
+    /// manual collection, whose members are its items.
+    public var query: String?
+
+    public init(
+      name: String, color: CollectionColor, position: Double, query: String? = nil,
+      createdAt: Date = .now
+    ) {
+      self.identifier = UUID()
+      self.name = name
+      self.colorName = color.rawValue
+      self.position = position
+      self.query = query
+      self.createdAt = createdAt
+    }
+
+    public var color: CollectionColor {
+      get { CollectionColor(name: colorName) }
+      set { colorName = newValue.rawValue }
+    }
+  }
+
+  /// One document in one collection.
+  @Model
+  public final class DocumentCollectionItem {
+    public var collectionIdentifier: UUID?
+    /// The document's `fileStem`, as `Bookmark.documentKey` is: `rfc9110`.
+    public var documentKey: String = ""
+    /// Where the item sits in its collection, ascending.
+    public var position: Double = 0
+    public var addedAt: Date = Date.distantPast
+
+    public init(collection: UUID, document: DocumentID, position: Double, addedAt: Date = .now) {
+      self.collectionIdentifier = collection
+      self.documentKey = document.fileStem
+      self.position = position
+      self.addedAt = addedAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+
+  /// A document the reader wants kept on this device, and every other, for reading
+  /// offline: a promise, where a bookmark is only "find this again". Keyed on the
+  /// document's `fileStem`, as a bookmark is, and synced like one, so marking a
+  /// document on the Mac makes the iPhone fetch it.
+  @Model
+  public final class OfflineMark {
+    /// The document's `fileStem`: `rfc9110`.
+    public var documentKey: String = ""
+    public var markedAt: Date = Date.distantPast
+
+    public init(document: DocumentID, markedAt: Date = .now) {
+      self.documentKey = document.fileStem
+      self.markedAt = markedAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+
+  /// A working group the reader follows: listed first in the sidebar, and announced
+  /// when it publishes an RFC. Keyed on the group's acronym in lower case, as the
+  /// index spells it, and synced like a bookmark.
+  @Model
+  public final class FollowedGroup {
+    /// "httpbis".
+    public var acronym: String = ""
+    public var followedAt: Date = Date.distantPast
+
+    public init(acronym: String, followedAt: Date = .now) {
+      self.acronym = acronym.lowercased()
+      self.followedAt = followedAt
+    }
+  }
+
+  /// Color over a passage of a document (#522), from one position of its model text
+  /// to another (`Target`), with the quote it covered. A row of its own, keyed on the
+  /// document's `fileStem`, in CloudKit's shape: nothing unique, every attribute
+  /// defaulted or optional. `identifier` is the highlight's identity, which a note
+  /// names.
+  @Model
+  public final class Highlight {
+    public var identifier: UUID = UUID()
+    /// The document's `fileStem`: `rfc9110`.
+    public var documentKey: String = ""
+    /// Where the highlight was made. Never overwritten by relocation.
+    public var startAnchor: String = ""
+    public var startOffset: Int = 0
+    public var endAnchor: String = ""
+    public var endOffset: Int = 0
+    /// Where relocation found it since, when it moved or a finer anchor holds it now.
+    public var relocatedStartAnchor: String?
+    public var relocatedStartOffset: Int?
+    public var relocatedEndAnchor: String?
+    public var relocatedEndOffset: Int?
+    public var quoteExact: String = ""
+    public var quotePrefix: String = ""
+    public var quoteSuffix: String = ""
+    public var quoteLength: Int?
+    public var quoteDigest: String?
+    /// A `HighlightColor` raw value. An unknown name reads as the default.
+    public var colorName: String = HighlightColor.default.rawValue
+    public var createdAt: Date = Date.distantPast
+    public var modifiedAt: Date = Date.distantPast
+
+    public init(
+      document: DocumentID, start: Position, end: Position, quote: Quote, color: HighlightColor,
+      createdAt: Date = .now
+    ) {
+      self.identifier = UUID()
+      self.documentKey = document.fileStem
+      self.startAnchor = start.anchor
+      self.startOffset = start.offset
+      self.endAnchor = end.anchor
+      self.endOffset = end.offset
+      self.quoteExact = quote.exact
+      self.quotePrefix = quote.prefix
+      self.quoteSuffix = quote.suffix
+      self.quoteLength = quote.length
+      self.quoteDigest = quote.digest
+      self.colorName = color.rawValue
+      self.createdAt = createdAt
+      self.modifiedAt = createdAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+}
+
 /// V1 to V3 by way of V2 (#152). Every row survives, as `rfcN`, and a section
 /// anchor becomes a place at offset zero.
 ///
@@ -382,9 +585,9 @@ public enum SchemaV5: VersionedSchema {
 /// left alone, so running the second stage again changes nothing.
 public enum UserDataMigrationPlan: SchemaMigrationPlan {
   public static var schemas: [any VersionedSchema.Type] {
-    [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self, SchemaV5.self]
+    [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self, SchemaV5.self, SchemaV6.self]
   }
-  public static var stages: [MigrationStage] { [v1ToV2, v2ToV3, v3ToV4, v4ToV5] }
+  public static var stages: [MigrationStage] { [v1ToV2, v2ToV3, v3ToV4, v4ToV5, v5ToV6] }
 
   static let v1ToV2 = MigrationStage.lightweight(
     fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
@@ -396,6 +599,12 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
   /// Adds the Keep Offline marks' entity and changes nothing else (#358).
   static let v4ToV5 = MigrationStage.lightweight(
     fromVersion: SchemaV4.self, toVersion: SchemaV5.self)
+
+  /// Adds a collection's query, nil for every collection there is, which is manual
+  /// (#355), the highlights' entity (#522) and the followed working groups' entity
+  /// (#731), and changes nothing else.
+  static let v5ToV6 = MigrationStage.lightweight(
+    fromVersion: SchemaV5.self, toVersion: SchemaV6.self)
 
   static let v2ToV3 = MigrationStage.custom(
     fromVersion: SchemaV2.self, toVersion: SchemaV3.self,
@@ -418,16 +627,17 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
 
 /// Opening the store, and keeping it one row per document.
 public enum UserData {
-  /// The app's container: V5, migrated from whatever version is on disk.
+  /// The app's container: V6, migrated from whatever version is on disk.
   public static func container(configurations: ModelConfiguration...) throws -> ModelContainer {
     try ModelContainer(
-      for: Schema(versionedSchema: SchemaV5.self), migrationPlan: UserDataMigrationPlan.self,
+      for: Schema(versionedSchema: SchemaV6.self), migrationPlan: UserDataMigrationPlan.self,
       configurations: configurations)
   }
 
   /// Merges rows that name the same document — keeping the newest bookmark and
-  /// reading position, and the earliest item in a collection and Keep Offline mark. Without a unique
-  /// constraint — CloudKit refuses one — two devices, or a race, can leave two.
+  /// reading position, and the earliest item in a collection, Keep Offline mark and
+  /// followed group. Without a unique constraint — CloudKit refuses one — two
+  /// devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
     let bookmarks = try context.fetch(
@@ -449,12 +659,19 @@ public enum UserData {
     let marks = try context.fetch(
       FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
     removeDuplicates(marks, keyedBy: \.documentKey, in: context)
+    let groups = try context.fetch(
+      FetchDescriptor<FollowedGroup>(sortBy: [SortDescriptor(\.followedAt)]))
+    removeDuplicates(groups, keyedBy: \.acronym, in: context)
+    // One row per highlight, the latest edit kept.
+    let highlights = try context.fetch(
+      FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
+    removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
     if context.hasChanges { try context.save() }
   }
 
   /// Keeps the first row per key and deletes the rest, so `rows` come in the order
   /// of preference: newest first for bookmarks and positions, earliest first for
-  /// collection items and marks.
+  /// collection items, marks and followed groups.
   private static func removeDuplicates<Row: PersistentModel>(
     _ rows: [Row], keyedBy key: (Row) -> String, in context: ModelContext
   ) {

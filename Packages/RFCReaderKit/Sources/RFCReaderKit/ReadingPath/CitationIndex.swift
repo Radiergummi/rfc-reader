@@ -1,9 +1,9 @@
 import Foundation
 import RFCKit
-import SQLite3
 
-/// The citation graph of the installed `indexes` pack, read-only (#189): the first
-/// reader of the `indexes.sqlite` that corpus-build's `IndexDatabase` writes.
+/// The citation graph of the `indexes` pack, bundled or installed, read-only
+/// (#189): the first reader of the `indexes.sqlite` that corpus-build's
+/// `IndexDatabase` writes.
 ///
 /// One connection, used from one task: open it, ask, and let it go. It is not
 /// `Sendable`; `readingPath(from:depth:in:)` does all three for a caller off the
@@ -11,8 +11,6 @@ import SQLite3
 public final class CitationIndex {
   /// The database's name inside the pack.
   public static let fileName = "indexes.sqlite"
-  /// The `IndexDatabase.schemaVersion` this reads; any other is refused.
-  public static let schemaVersion = 2
   /// The share of the corpus that has to cite a document normatively for the
   /// document to be assumed: more than 2%, about 200 documents, decided on #189.
   public static let assumedShare = 0.02
@@ -25,15 +23,14 @@ public final class CitationIndex {
     case query(String)
   }
 
-  private var connection: OpaquePointer?
+  private let database: SQLiteDatabase
 
   public init(contentsOf url: URL) throws {
     // Read-only, and never created: a missing pack is a failure, not an empty index.
-    guard sqlite3_open_v2(url.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
-      let message = Self.message(of: connection)
-      sqlite3_close(connection)
-      connection = nil
-      throw Failure.unreadable(message)
+    do {
+      database = try SQLiteDatabase(contentsOf: url, readOnly: true)
+    } catch let failure as SQLiteDatabase.Failure {
+      throw Failure.unreadable(failure.description)
     }
     let schema: String?
     do {
@@ -42,10 +39,8 @@ public final class CitationIndex {
       // SQLite opens lazily: a file that is not a database fails at the first query.
       throw Failure.unreadable(message)
     }
-    guard schema == String(Self.schemaVersion) else { throw Failure.unknownSchema(schema) }
+    guard schema == String(IndexSchema.version) else { throw Failure.unknownSchema(schema) }
   }
-
-  deinit { sqlite3_close(connection) }
 
   /// What `id` cites normatively, each document once, in the order the index wrote
   /// its citations: document order, the bibliography's uncited entries last.
@@ -106,45 +101,32 @@ public final class CitationIndex {
   // MARK: - SQLite
 
   private func strings(_ sql: String, binding values: [String] = []) throws -> [String] {
-    try rows(sql, binding: values) { statement in Self.text(statement, 0) }.compactMap(\.self)
+    try rows(sql, binding: values) { $0.text(at: 0) }.compactMap(\.self)
   }
 
   private func pairs(_ sql: String, binding values: [String]) throws -> [(String, String?)] {
     try rows(sql, binding: values) { statement in
-      Self.text(statement, 0).map { ($0, Self.text(statement, 1)) }
+      statement.text(at: 0).map { ($0, statement.text(at: 1)) }
     }.compactMap(\.self)
   }
 
+  /// Every row of `sql`, read by `read`, with `values` bound in order. What SQLite
+  /// refuses is a `Failure.query`.
   private func rows<Row>(
-    _ sql: String, binding values: [String], _ read: (OpaquePointer) -> Row
+    _ sql: String, binding values: [String], _ read: (SQLiteDatabase.Statement) -> Row
   ) throws -> [Row] {
-    var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK,
-      let statement
-    else { throw Failure.query(Self.message(of: connection)) }
-    defer { sqlite3_finalize(statement) }
-    for (index, value) in values.enumerated() {
-      guard sqlite3_bind_text(statement, Int32(index + 1), value, -1, Self.transient) == SQLITE_OK
-      else { throw Failure.query(Self.message(of: connection)) }
-    }
-    var rows: [Row] = []
-    while true {
-      switch sqlite3_step(statement) {
-      case SQLITE_ROW: rows.append(read(statement))
-      case SQLITE_DONE: return rows
-      default: throw Failure.query(Self.message(of: connection))
+    do {
+      let statement = try database.prepare(sql)
+      for (index, value) in values.enumerated() {
+        try statement.bind(value, at: Int32(index + 1))
       }
+      var rows: [Row] = []
+      while try statement.step() {
+        rows.append(read(statement))
+      }
+      return rows
+    } catch let failure as SQLiteDatabase.Failure {
+      throw Failure.query(failure.description)
     }
-  }
-
-  private static func text(_ statement: OpaquePointer, _ column: Int32) -> String? {
-    sqlite3_column_text(statement, column).map { String(cString: $0) }
-  }
-
-  /// SQLite copies a bound value before the call returns.
-  private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-  private static func message(of connection: OpaquePointer?) -> String {
-    connection.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "SQLite failed"
   }
 }

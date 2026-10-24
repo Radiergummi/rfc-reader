@@ -45,6 +45,18 @@
     /// Set on a window AppKit restores (#155), whose panel is put right once, the
     /// first time it is made key. See `windowDidBecomeKey(_:)`.
     var correctsPanelOnFirstKey = false
+    /// The layout a restored window came back with, until it has been put back
+    /// (#762): its columns on the window's first turn as key, when it is laid out,
+    /// and its panel once its document can be described. Until each part is back, it
+    /// is what the window keeps of that part, since what the window shows is not it
+    /// yet: a tab left in the background is never key, and its saved columns would be
+    /// lost to the defaults.
+    var restoredLayout: WindowLayout?
+    var restoresColumns = false
+    var restoresPanel = false
+    /// The column widths last kept, so a resize that moved no column does not ask
+    /// AppKit to encode the window's state again.
+    private var keptColumnWidths: (sidebar: Double?, list: Double?)?
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
@@ -66,10 +78,14 @@
         backing: .buffered,
         defer: false
       )
-      // Everything in this app is the same kind of window, so a new one joins the
-      // front window's tab group rather than opening beside it.
+      // Everything in this app is the same kind of window, so one tabs with another.
+      // Whether a window shown on its own joins the front group is the user's "Prefer
+      // tabs" setting (`.automatic`): `.preferred` tabbed every one, so File ▸ New
+      // Window did what New Tab does (#762). A tab is ordered into its group
+      // explicitly, and a window that has to stand alone says so as it is shown
+      // (`AppDelegate.openWindow(tabbedWith:inBackground:standsAlone:)`).
       window.tabbingIdentifier = "org.rfc-editor.reader"
-      window.tabbingMode = .preferred
+      window.tabbingMode = .automatic
       output = DocumentOutputController(
         window: window, navigation: navigation, reader: reader, library: library)
       // No frame autosave name here. It is one name per window, and giving every
@@ -105,12 +121,16 @@
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
       // that column is dragged.
-      // Collapsing or expanding the sidebar resizes the subviews too, so this is also
-      // where View ▸ Show Sidebar learns which title to show.
+      // Collapsing or expanding the sidebar or the panel resizes the subviews too, so
+      // this is also where View ▸ Show Sidebar, Contents and Info learn their titles.
       splitController.didResizeSubviews = { [weak self] in
         guard let self else { return }
         self.toolbar?.capTitleToList()
-        ActiveReaderWindow.shared.sidebarChanged(self)
+        ActiveReaderWindow.shared.layoutChanged(self)
+        // The columns' widths are part of what the window keeps (#762), and nothing
+        // observable says they changed. Not on every frame of a resize of the window,
+        // only once it ends; a divider's drag is no live resize, and is kept as it goes.
+        if self.window?.inLiveResize != true { self.keepColumnWidths() }
       }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
@@ -341,12 +361,20 @@
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
       if reader.canDescribe {
+        if restoresPanel, let layout = restoredLayout {
+          restoresPanel = false
+          if layout.panelIsOpen, !isPanelOpen { splitController.openPanel() }
+          finishRestoringLayout()
+        }
         // The panel may have been opened or shut by the tab group rather than by a
         // toggle, so the floor follows whatever state it is in now.
         splitController.applyMinimumWidth()
       } else {
         splitController.closePanel()
       }
+      // Whether the panel is open is part of what the window keeps (#762), and is no
+      // observable state; this is where it changes other than by the toggle.
+      window?.invalidateRestorableState()
     }
 
     // MARK: - The sidebar
@@ -374,6 +402,14 @@
       }
     }
 
+    /// File > Save as Collection… (#355), with the sidebar opened first, as
+    /// `newCollection()` does, so the collection is in view once made.
+    func saveAsCollection() {
+      revealSidebar { [navigation] in
+        navigation.saveAsCollection()
+      }
+    }
+
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
       splitController.openSidebar()
@@ -386,6 +422,7 @@
 
     func togglePanel() {
       splitController.togglePanel()
+      window?.invalidateRestorableState()
     }
 
     /// A pane's toolbar button: opens the panel on that pane, swaps an open panel to
@@ -459,6 +496,34 @@
       window.makeFirstResponder(text)
     }
 
+    /// Edit ▸ Jump to Selection (#761), handed to the text with the selection, as Copy
+    /// as Quote is and for its reason: with the find bar's field focused, the
+    /// responder chain would center the field's own selection. Scrolled to first,
+    /// which `centerSelectionInVisibleArea` never does: that is what opens a folded
+    /// section, makes this side lead a side-by-side reading and places a far-off
+    /// range exactly (`ReaderTextView.revealRange`).
+    func jumpToSelection() {
+      guard let text = selectedText else { return }
+      text.scrollRangeToVisible(text.selectedRange())
+      text.centerSelectionInVisibleArea(nil)
+    }
+
+    /// Edit ▸ Use Selection for Find (#761), from the text with the selection, for
+    /// Jump to Selection's reason.
+    func useSelectionForFind() {
+      selectedText?.performTextFinderAction(FindCommand.setSearchString)
+    }
+
+    /// The text Use Selection for Find and Jump to Selection act on, when something
+    /// in it is selected: the original text's selection is not mirrored in
+    /// `ReaderState`, so the menu lets it through and this checks.
+    private var selectedText: NSTextView? {
+      guard let text = FirstResponderSearch.searchableText(in: quotedReaderView),
+        text.selectedRange().length > 0
+      else { return nil }
+      return text
+    }
+
     /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
     /// responder chain, which reaches no text view with the sidebar, the contents
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
@@ -466,6 +531,13 @@
     func copyAsQuote() {
       let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
+    /// Edit ▸ Highlight (#522), handed to the reader's text as Copy as Quote is, and for
+    /// its reason.
+    func highlightSelection() {
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
+      (text as? ReaderTextView)?.highlightSelection(nil)
     }
 
     /// The reader whose selection Copy as Quote copies: the one beside a compared
@@ -480,11 +552,31 @@
       return splitController.readerView
     }
 
+    /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
+    func perform(_ action: DocumentMenus.Action) {
+      guard let id = navigation.shown else { return }
+      DocumentActionPerformer(
+        id: id, metadata: library.metadata(id), reader: reader,
+        open: { NSWorkspace.shared.open($0) }
+      ).perform(action)
+    }
+
+    /// File ▸ Share… (#761): the picker the toolbar's Share item opens, hanging below
+    /// the toolbar's middle, for a window whose toolbar is hidden.
+    func share() {
+      guard let id = navigation.shown, let window, let content = window.contentView else { return }
+      let picker = NSSharingServicePicker(items: [RFCEditorEndpoints.infoPage(id)])
+      let below = NSRect(
+        x: content.bounds.midX, y: window.contentLayoutRect.maxY, width: 1, height: 1)
+      picker.show(relativeTo: below, of: content, preferredEdge: .minY)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
       guard let id = navigation.selection else { return }
-      library.toggleBookmark(id, documentTitle: reader.documentTitle)
+      library.toggleBookmark(
+        id, documentTitle: reader.documentTitle, undoManager: window?.undoManager)
     }
 
     // MARK: - Go to RFC
@@ -538,6 +630,16 @@
         correctsPanelOnFirstKey = false
         Task { [weak self] in self?.closePanelWithoutDocument() }
       }
+      // On the same turn, once the window is in its group and laid out at its frame,
+      // which it was not when its state was decoded (#762).
+      if restoresColumns, let layout = restoredLayout {
+        restoresColumns = false
+        Task { [weak self] in
+          self?.splitController.restoreColumnWidths(
+            sidebar: layout.sidebarWidth, list: layout.listWidth)
+          self?.finishRestoringLayout()
+        }
+      }
     }
 
     /// Hands the list first responder the first time this window comes up, so the
@@ -553,6 +655,24 @@
     /// Where a palette asked for while the window was minimized is shown.
     func windowDidDeminiaturize(_ notification: Notification) {
       showOrHideQuickOpen()
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+      keepColumnWidths()
+    }
+
+    /// Asks AppKit to encode the window's state again where the columns moved.
+    private func keepColumnWidths() {
+      let widths = splitController.columnWidths
+      guard keptColumnWidths.map({ $0 != widths }) ?? true else { return }
+      keptColumnWidths = widths
+      window?.invalidateRestorableState()
+    }
+
+    /// Once the restored layout's columns and panel are both back, what the window
+    /// shows is what it keeps.
+    private func finishRestoringLayout() {
+      if !restoresColumns, !restoresPanel { restoredLayout = nil }
     }
 
     func windowWillClose(_ notification: Notification) {

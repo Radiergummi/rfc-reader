@@ -33,6 +33,9 @@ struct ReaderScene: ViewModifier {
       .sheet(item: $navigation.collectionEditor) { mode in
         CollectionEditorSheet(mode: mode)
       }
+      .sheet(item: $navigation.collectionExport) { request in
+        CollectionExportSheet(request: request)
+      }
       .sheet(item: $navigation.readingPath) { request in
         ReadingPathSheet(root: request.root)
       }
@@ -40,6 +43,9 @@ struct ReaderScene: ViewModifier {
         // For the reader header, which cannot present on iOS; see `GlossaryPresentation`.
         .sheet(item: $navigation.glossaryTerm) { term in
           GlossarySheet(term: term)
+        }
+        .sheet(item: $navigation.errataShown) { request in
+          ErrataSheet(items: request.items)
         }
       #endif
   }
