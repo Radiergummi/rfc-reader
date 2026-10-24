@@ -468,7 +468,8 @@ struct DocumentView: View {
             .navigationTitle(identity.displayName)
             .modifier(
               IOSDraftChrome(
-                library: library, navigation: navigation, reader: reader,
+                document: session.state.document, library: library, navigation: navigation,
+                reader: reader,
                 showsInspector: $showsInspector, isShown: showsReaderState))
         }
       #endif

@@ -61,11 +61,14 @@ public actor DraftStore {
   // MARK: - What Datatracker says
 
   /// What Datatracker says of the draft `id` names: as kept, while that is less than
-  /// a day old, and asked again otherwise. Kept as it was when the ask fails, which
-  /// is then the error only if nothing is kept.
+  /// a day old and knows of the revision `id` names, and asked again otherwise, as
+  /// for a link to a revision published since. Kept as it was when the ask fails,
+  /// which is then the error only if nothing is kept.
   public func info(for id: DraftID, client: any DraftFetching) async throws -> DraftInfo {
     let kept = keptInfo(for: id)
-    if let kept, now().timeIntervalSince(kept.fetchedAt) < Self.infoLifetime {
+    if let kept, now().timeIntervalSince(kept.fetchedAt) < Self.infoLifetime,
+      !Self.names(id, newerThan: kept.info)
+    {
       return kept.info
     }
     if let fetch = infoFetches[id.name] { return try await fetch.value }
@@ -83,6 +86,14 @@ public actor DraftStore {
     infoFetches[id.name] = fetch
     defer { infoFetches[id.name] = nil }
     return try await fetch.value
+  }
+
+  /// Whether `id` names a revision past the newest `info` knows of.
+  private static func names(_ id: DraftID, newerThan info: DraftInfo) -> Bool {
+    guard let revision = id.revision.flatMap({ Int($0) }),
+      let newest = Int(info.newestRevision)
+    else { return false }
+    return revision > newest
   }
 
   /// What is kept of Datatracker's description, and when it was fetched: the file's
@@ -130,6 +141,9 @@ public actor DraftStore {
   /// fetched, as the revision's file is.
   public func originalText(_ id: DraftID, client: any DraftFetching) async throws -> String {
     let revision = try await revision(of: id, client: client)
+    // The reader's fetch of the same revision, running, is the one download: a draft
+    // opened as its original text asks for both at once.
+    if let fetch = fetches[revision] { _ = try? await fetch.value }
     let url = Self.fileURL(revision, in: directory)
     let data: Data
     if let kept = try? Data(contentsOf: url) {
@@ -138,7 +152,13 @@ public actor DraftStore {
       data = try await client.fetchDraftData(revision, format: .text)
       try? data.write(to: url, options: .atomic)
     }
-    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
+    return await Self.originalText(of: data)
+  }
+
+  /// The text without its page breaks, made off the actor, as a parse is.
+  @concurrent
+  private static func originalText(of data: Data) async -> String {
+    LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 
   /// The kept text of `id`, parsed off the actor; nil when none is kept.

@@ -496,7 +496,20 @@
         case .newWindow: .newWindow
         case .frontTab, nil: .frontTab
         }
-      LibraryModel.shared.open(link, placement: placement)
+      guard case .draft(var draft) = link, draft.id.revision == nil else {
+        LibraryModel.shared.open(link, placement: placement)
+        return
+      }
+      // A draft without a revision opens once Datatracker has said which is the
+      // newest, so the command waits for that: a script's next command, such as
+      // `jump to section`, then finds the draft on screen.
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      Task {
+        draft.id = await LibraryModel.shared.revision(of: draft.id)
+        LibraryModel.shared.open(.draft(draft), placement: placement)
+        command.resumeExecution(withResult: nil)
+      }
     }
   }
 

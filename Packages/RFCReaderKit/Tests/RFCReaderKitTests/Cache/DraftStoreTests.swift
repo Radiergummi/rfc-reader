@@ -115,6 +115,20 @@ struct DraftStoreTests {
     #expect(network.askedInfo == 2)
   }
 
+  /// A link to a revision published since Datatracker was last asked, within the day.
+  @Test func `a revision newer than the newest kept asks Datatracker again`() async throws {
+    let network = Network(newest: "04")
+    let store = DraftStore(directory: directory())
+    _ = try await store.info(for: Self.name, client: network)
+    network.publish("05")
+    let info = try await store.info(for: Self.revision("05"), client: network)
+    #expect(info.newestRevision == "05")
+    #expect(network.askedInfo == 2)
+    // One it knows of, older or the newest, is what is kept.
+    _ = try await store.info(for: Self.revision("03"), client: network)
+    #expect(network.askedInfo == 2)
+  }
+
   /// A draft opened without a revision asks for its header and its revision at once.
   @Test func `two asks of Datatracker at once are one`() async throws {
     let network = Network(newest: "04")
