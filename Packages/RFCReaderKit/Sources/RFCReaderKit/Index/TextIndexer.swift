@@ -280,14 +280,15 @@ public actor TextIndexer {
     await reconcile(changed: changed)
   }
 
-  /// The legacy pack was installed: the retained RFCs it holds are dropped, since
-  /// their anchors are those of what the run read before, not of the pack the reader
-  /// now shows them from. The next run reads them from the pack; one with a stored
-  /// body is indexed again now, by the reconcile.
+  /// The legacy pack was installed: the indexed RFCs the reader now shows from the
+  /// pack are dropped, since their anchors are those of what was read before -- a
+  /// stored text, or what Index All RFCs downloaded -- not of the pack. One with a
+  /// stored body is indexed again now, by the reconcile, from the pack, though the
+  /// body's date is as it was; a retained one is read from the pack by the next run.
   public func legacyPackInstalled(changed: @Sendable () async -> Void = {}) async {
-    guard indexedDocuments() != nil else { return }
+    guard let before = indexedDocuments() else { return }
     var dropped = 0
-    for id in await store.inLegacyPack(retained) {
+    for id in await store.readFromLegacyPack(Set(before.keys)) {
       do {
         try index.remove(id)
         indexed?[id] = nil
