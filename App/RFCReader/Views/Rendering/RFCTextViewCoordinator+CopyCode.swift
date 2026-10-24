@@ -125,7 +125,7 @@ import RFCReaderKit
       checkmark.symbolConfiguration = .init(
         pointSize: (font?.pointSize ?? rect.height * 0.7) * DocumentTextBuilder.copyButtonScale,
         weight: .regular)
-      checkmark.contentTintColor = RFCColors.secondaryLabel
+      checkmark.contentTintColor = ReaderPalette.themedSecondaryText
       showCopyFeedback(checkmark, in: frame)
     }
 

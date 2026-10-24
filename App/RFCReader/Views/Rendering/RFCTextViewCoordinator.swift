@@ -70,11 +70,17 @@ final class RFCTextViewCoordinator: NSObject {
   /// rather than laying it out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
-  /// Draws the page, the text and the decoration in `palette` from now on, and
-  /// redraws what is on screen if it changed. Never a layout: a palette is the
-  /// draw-time half of the settings, and costs neither a rebuild nor the reader's
-  /// place. So is Increase Contrast, which outlines every chip (#457).
-  func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
+  /// Draws the page, the text and the decoration in the theme `settings` choose for
+  /// `appearance` from now on, and redraws what is on screen if it changed. Never a
+  /// layout: a palette is the draw-time half of the settings, and costs neither a
+  /// rebuild nor the reader's place. So is Increase Contrast, which outlines every
+  /// chip (#457).
+  func apply(
+    _ settings: ReaderSettings, in appearance: PaletteAppearance, outlinesEveryChip: Bool
+  ) {
+    // Before the redraw, which resolves the text's colors to the themes chosen.
+    ReaderPalette.choose(light: settings.lightPalette, dark: settings.darkPalette)
+    let palette = settings.palette(for: appearance)
     guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView
     else { return }
     // The laid-out fragments are rendered again, which reads the box, and their

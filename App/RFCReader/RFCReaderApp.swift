@@ -17,8 +17,6 @@ struct RFCReaderApp: App {
       BookmarkNotifications.install()
       // Before any scene, whose toolbars anchor the tips (#782).
       ReaderTips.configure()
-      // Before the first reader draws, so its text is in the page themes chosen (#704).
-      ReaderPalette.follow()
     }
   #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
