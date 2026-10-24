@@ -73,6 +73,13 @@ extension DocumentTextBuilder {
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
     attributes[.kern] = style.codeLabelFont.pointSize * 0.08
     attributes[.rfcSpoken] = caption
+    #if canImport(UIKit)
+      // A `UITextView` reads no `.rfcSpoken`, so iOS is given the word as its
+      // pronunciation instead (#872). Only the reader has captions.
+      if let pronunciation = AccessibleReading.captionPronunciation(caption) {
+        attributes[.accessibilitySpeechIPANotation] = pronunciation
+      }
+    #endif
     output.append(NSAttributedString(string: caption.uppercased(), attributes: attributes))
     output.append(lineBreak)
   }
