@@ -14,20 +14,17 @@ import Testing
 @Suite("Reader palette")
 struct ReaderPaletteTests {
   /// The automatic palette is what the reader drew before there was a palette, so
-  /// its colors are `RFCColors`' own, and it recolors nothing: the default draws
+  /// its colors are `RFCColors`' own, and it draws no page: the default draws
   /// exactly as before page themes.
   @Test func `the automatic palette draws the system colors`() {
     let palette = ReaderPalette.automatic
-    #expect(palette.drawsStoredColors)
+    #expect(palette.drawsSystemColors)
     #expect(palette.pageBackground == nil)
     #expect(palette.selection == nil)
-    #expect(palette.text === RFCColors.label)
-    #expect(palette.secondaryText === RFCColors.secondaryLabel)
+    #expect(palette.text == RFCColors.label)
+    #expect(palette.secondaryText == RFCColors.secondaryLabel)
     #expect(palette.stroke === RFCColors.stroke)
     #expect(palette.stated.isEmpty)
-    #expect(palette.foreground(for: RFCColors.label) == nil)
-    #expect(palette.foreground(for: RFCColors.secondaryLabel) == nil)
-    #expect(palette.foreground(for: nil) == nil)
   }
 
   /// Its colors resolve as `RFCColors`' do, in each appearance: the links as the
@@ -38,6 +35,8 @@ struct ReaderPaletteTests {
   {
     let palette = ReaderPalette.automatic
     let pairs: [(PlatformColor, PlatformColor)] = [
+      (palette.text, RFCColors.label),
+      (palette.secondaryText, RFCColors.secondaryLabel),
       (palette.link, RFCColors.readerLink),
       (palette.cardLink, RFCColors.cardLink(over: RFCColors.readerLink)),
       (palette.cardFill, RFCColors.cardFill),
@@ -67,7 +66,9 @@ struct ReaderPaletteTests {
         "automatic", "paper", "sepia", "gray", "high-contrast",
       ])
     #expect(
-      ReaderPalette.offered(in: .dark).map(\.id) == ["automatic", "night", "black", "high-contrast"])
+      ReaderPalette.offered(in: .dark).map(\.id) == [
+        "automatic", "night", "black", "high-contrast",
+      ])
     #expect(ReaderPalette.named(ReaderPalette.night.id, in: .light) == .automatic)
   }
 
@@ -75,7 +76,7 @@ struct ReaderPaletteTests {
   /// in the colors it states.
   @Test func `every theme but automatic draws a page`() throws {
     for palette in ReaderPalette.all where palette != .automatic {
-      #expect(!palette.drawsStoredColors, "\(palette.id)")
+      #expect(!palette.drawsSystemColors, "\(palette.id)")
       #expect(Set(palette.stated.keys) == palette.appearances, "\(palette.id)")
       let page = try #require(palette.pageBackground, "\(palette.id)")
       for (appearance, colors) in palette.stated {
@@ -104,19 +105,19 @@ struct ReaderPaletteTests {
     for palette in ReaderPalette.all {
       let minimum = palette == .highContrast ? 7 : AccentContrast.minimumContrast
       for (appearance, colors) in palette.stated {
-        let pairs: [(String, SRGBColor, SRGBColor)] = [
-          ("text on the page", colors.text, colors.page),
-          ("secondary text on the page", colors.secondaryText, colors.page),
-          ("a link on the page", colors.link, colors.page),
-          ("text on a card", colors.text, colors.card),
-          ("secondary text on a card", colors.secondaryText, colors.card),
-          ("a link on a card", colors.cardLink, colors.card),
-          ("text in an aside", colors.text, colors.aside),
-          ("secondary text in an aside", colors.secondaryText, colors.aside),
-          ("a link in an aside", colors.cardLink, colors.aside),
+        let pairs: KeyValuePairs<String, (color: SRGBColor, background: SRGBColor)> = [
+          "text on the page": (colors.text, colors.page),
+          "secondary text on the page": (colors.secondaryText, colors.page),
+          "a link on the page": (colors.link, colors.page),
+          "text on a card": (colors.text, colors.card),
+          "secondary text on a card": (colors.secondaryText, colors.card),
+          "a link on a card": (colors.cardLink, colors.card),
+          "text in an aside": (colors.text, colors.aside),
+          "secondary text in an aside": (colors.secondaryText, colors.aside),
+          "a link in an aside": (colors.cardLink, colors.aside),
         ]
-        for (role, color, background) in pairs {
-          let ratio = color.contrast(with: background)
+        for (role, pair) in pairs {
+          let ratio = pair.color.contrast(with: pair.background)
           #expect(ratio >= minimum, "\(palette.id) in \(appearance): \(role) is \(ratio):1")
         }
       }
@@ -125,64 +126,75 @@ struct ReaderPaletteTests {
 
   // MARK: - Text
 
-  /// A theme draws the label colors the builder stores in its own text colors, and
-  /// leaves every other color, such as a syntax color, as it is.
-  @Test func `a theme maps the stored label colors to its own`() {
-    let palette = ReaderPalette.sepia
-    #expect(palette.foreground(for: RFCColors.label) === palette.text)
-    #expect(palette.foreground(for: RFCColors.secondaryLabel) === palette.secondaryText)
-    #expect(palette.foreground(for: nil) === palette.text)
-    #expect(palette.foreground(for: DocumentTextBuilder.hiddenColor) == nil)
-    #expect(palette.foreground(for: SyntaxTheme.standard.color(for: .keyword)) == nil)
+  /// The text colors the builder stores resolve, as they are drawn, to the theme
+  /// chosen for the appearance they are drawn in: a theme switch is a redraw (#704).
+  @Test(arguments: PaletteAppearance.allCases)
+  func `the themed text colors resolve to the theme chosen`(appearance: PaletteAppearance)
+    throws
+  {
+    let chosen: @Sendable (PaletteAppearance) -> ReaderPalette = {
+      $0 == .light ? .sepia : .black
+    }
+    let theme = chosen(appearance)
+    for (role, color) in [
+      (theme.text, ReaderPalette.themed(\.text, from: chosen)),
+      (theme.secondaryText, ReaderPalette.themed(\.secondaryText, from: chosen)),
+    ] {
+      let resolved = try #require(Self.resolved(color, in: appearance))
+      let expected = try #require(Self.resolved(role, in: appearance))
+      #expect(resolved == expected, "\(theme.id) in \(appearance)")
+    }
   }
 
-  /// Over a built document, a theme recolors the label-colored text and nothing
-  /// else, leaves the links to the text view, and the automatic palette recolors
-  /// nothing at all.
-  @Test func `the recolored runs are the stored label colors, links aside`() throws {
-    let text = try LayoutFixture.built().text
-    let whole = NSRange(location: 0, length: text.length)
-    #expect(ReaderPalette.automatic.recoloredRuns(in: text, range: whole).isEmpty)
+  /// Under the automatic theme, which nothing has replaced, the stored text colors
+  /// draw as the system's label colors: the default is unchanged.
+  @Test(arguments: PaletteAppearance.allCases)
+  func `the themed text colors are the system's under the automatic theme`(
+    appearance: PaletteAppearance
+  ) throws {
+    for (color, system) in [
+      (ReaderPalette.themedText, RFCColors.label),
+      (ReaderPalette.themedSecondaryText, RFCColors.secondaryLabel),
+    ] {
+      let resolved = try #require(Self.resolved(color, in: appearance))
+      let expected = try #require(Self.resolved(system, in: appearance))
+      #expect(resolved == expected, "in \(appearance)")
+    }
+  }
 
-    let palette = ReaderPalette.sepia
-    let runs = palette.recoloredRuns(in: text, range: whole)
-    #expect(!runs.isEmpty)
-    var covered = IndexSet()
-    for run in runs {
-      covered.insert(integersIn: run.range.location..<NSMaxRange(run.range))
-      text.enumerateAttributes(in: run.range) { attributes, _, _ in
-        #expect(attributes[.link] == nil)
-        let stored = attributes[.foregroundColor] as? PlatformColor
-        #expect(palette.foreground(for: stored) === run.color)
+  /// The reader's build stores the themed text colors, which follow a theme switch;
+  /// a print's stores the system's, so paper keeps the paper palette whatever the
+  /// screen's theme.
+  @Test func `the screen's text follows the theme and paper's does not`() throws {
+    let document = try Fixtures.rfc8999()
+    let screen = DocumentTextBuilder.build(document, style: ReadingStyle()).text
+    let paper = DocumentTextBuilder.build(
+      document, style: PrintLayout(paperSize: PrintLayout.letter).style
+    ).text
+    func colors(in text: NSAttributedString) -> [PlatformColor] {
+      var colors: [PlatformColor] = []
+      text.enumerateAttribute(
+        .foregroundColor, in: NSRange(location: 0, length: text.length)
+      ) { value, _, _ in
+        if let color = value as? PlatformColor { colors.append(color) }
       }
+      return colors
     }
-    // Every label-colored character that is no link is in a run.
-    text.enumerateAttributes(in: whole) { attributes, range, _ in
-      guard attributes[.link] == nil,
-        palette.foreground(for: attributes[.foregroundColor] as? PlatformColor) != nil
-      else { return }
-      #expect(covered.contains(integersIn: range.location..<NSMaxRange(range)))
-    }
-    // Neighbors of one color are one run.
-    for (run, next) in zip(runs, runs.dropFirst()) {
-      #expect(NSMaxRange(run.range) < next.range.location || run.color !== next.color)
-    }
+    let onScreen = colors(in: screen)
+    #expect(onScreen.contains { $0 === ReaderPalette.themedText })
+    #expect(onScreen.contains { $0 === ReaderPalette.themedSecondaryText })
+    #expect(!onScreen.contains { $0 == RFCColors.label || $0 == RFCColors.secondaryLabel })
+    let onPaper = colors(in: paper)
+    #expect(onPaper.contains { $0 == RFCColors.label })
+    #expect(!onPaper.contains { $0 === ReaderPalette.themedText })
+    #expect(!onPaper.contains { $0 === ReaderPalette.themedSecondaryText })
   }
 
-  /// A run that starts or ends outside the range asked for is cut to it: a
-  /// fragment is recolored and nothing beyond it.
-  @Test func `the recolored runs stay inside the range asked for`() throws {
-    let text = try LayoutFixture.built().text
-    let range = NSRange(location: 3, length: min(200, text.length - 3))
-    for run in ReaderPalette.sepia.recoloredRuns(in: text, range: range) {
-      #expect(NSIntersectionRange(run.range, range) == run.range)
-    }
-  }
-
-  /// A theme colors the links itself, on the page and on a card, and the hung
-  /// section number and the backlink caption keep their quieter color in the
-  /// theme's secondary text (#704). The automatic palette leaves them as the text
-  /// view draws them, which the backlink and section number tests pin.
+  /// A theme colors the links itself, on the page and on a card, and a hovered
+  /// section number in its text color, while a resting one and the backlink
+  /// caption keep the stored, themed, secondary color (#704). The automatic
+  /// palette leaves them as the text view draws them, which the backlink and
+  /// section number tests pin.
   @Test func `a theme colors the links`() throws {
     let palette = ReaderPalette.night
     let defaults: [NSAttributedString.Key: Any] = [.foregroundColor: RFCColors.accent]
@@ -195,10 +207,10 @@ struct ReaderPaletteTests {
     let caption = try #require(
       ReaderLinkScheme.url("two", scheme: ReaderLinkScheme.backlinksScheme))
     let kept = LinkRendering.attributes(for: caption, defaults: defaults, palette: palette)
-    #expect(kept[.foregroundColor] as? PlatformColor === palette.secondaryText)
+    #expect(kept[.foregroundColor] == nil)
     let resting = LinkRendering.attributes(
       for: jump, defaults: defaults, sectionNumber: .resting, palette: palette)
-    #expect(resting[.foregroundColor] as? PlatformColor === palette.secondaryText)
+    #expect(resting[.foregroundColor] == nil)
     let hovered = LinkRendering.attributes(
       for: jump, defaults: defaults, sectionNumber: .hovered, palette: palette)
     #expect(hovered[.foregroundColor] as? PlatformColor === palette.text)

@@ -14,7 +14,7 @@ private struct ReaderPaletteStyle: ViewModifier {
   let palette: ReaderPalette
 
   func body(content: Content) -> some View {
-    if palette.drawsStoredColors {
+    if palette.drawsSystemColors {
       content
     } else {
       content

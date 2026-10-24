@@ -43,7 +43,6 @@ final class RFCTextViewCoordinator: NSObject {
       #if !canImport(UIKit)
         systemSelection = textView?.selectedTextAttributes ?? [:]
       #endif
-      textView?.textLayoutManager?.renderingAttributesValidator = Self.recoloring(with: paletteBox)
       setUpAccessibilityRotors()
     }
   }
@@ -65,10 +64,10 @@ final class RFCTextViewCoordinator: NSObject {
   /// lights up. Behind a lock for the reason `linkAttributes` is.
   nonisolated let hoveredSectionNumber = Mutex<NSRange?>(nil)
 
-  /// The colors this reader draws its page, text and decoration in: the page theme
-  /// for the appearance it is drawn in (#703, #704). A box the fragments and the
-  /// rendering attributes' validator keep, so that `apply(palette:outlinesEveryChip:)`
-  /// recolors what is already laid out rather than laying it out again.
+  /// The colors this reader draws its page, links and decoration in: the page theme
+  /// for the appearance it is drawn in (#703, #704). A box the fragments keep, so
+  /// that `apply(palette:outlinesEveryChip:)` recolors what is already laid out
+  /// rather than laying it out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
   /// Draws the page, the text and the decoration in `palette` from now on, and
@@ -79,8 +78,8 @@ final class RFCTextViewCoordinator: NSObject {
     guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView
     else { return }
     // The laid-out fragments are rendered again, which reads the box, and their
-    // rendering attributes validated again, which recolors the text
-    // (`recoloring(with:)`).
+    // text resolves its colors again, to the theme chosen
+    // (`ReaderPalette.themedText`).
     engine.redraw()
     drawPage(palette, in: textView)
     if let header, let environment {
@@ -104,30 +103,6 @@ final class RFCTextViewCoordinator: NSObject {
       if let highlight = palette.selection { selection[.backgroundColor] = highlight }
       textView.selectedTextAttributes = selection
     #endif
-  }
-
-  /// What sets the text's rendering attributes as TextKit draws each fragment: the
-  /// runs `ReaderPalette.recoloredRuns(in:range:)` names, in the palette's colors
-  /// over the stored ones, which the builder keeps writing as the system's (#704).
-  /// Nothing under the automatic palette, but taking away what another left.
-  ///
-  /// Made here, outside the main actor, because TextKit may validate off the main
-  /// thread, as it lays out; it reads the box, the storage and the layout manager
-  /// it is handed, as the fragments do.
-  nonisolated private static func recoloring(with box: ReaderPaletteBox)
-    -> (NSTextLayoutManager, NSTextLayoutFragment) -> Void
-  {
-    { layoutManager, fragment in
-      layoutManager.removeRenderingAttribute(.foregroundColor, for: fragment.rangeInElement)
-      let palette = box.palette
-      guard !palette.drawsStoredColors, let text = layoutManager.attributedText,
-        let range = layoutManager.range(of: fragment.rangeInElement)
-      else { return }
-      for run in palette.recoloredRuns(in: text, range: range) {
-        guard let textRange = layoutManager.textRange(for: run.range) else { continue }
-        layoutManager.addRenderingAttribute(.foregroundColor, value: run.color, for: textRange)
-      }
-    }
   }
 
   /// A text view's link attributes, the same for a link on a card (#694), and what

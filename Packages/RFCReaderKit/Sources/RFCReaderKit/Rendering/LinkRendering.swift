@@ -34,10 +34,9 @@ public enum LinkRendering {
   /// number: it keeps its quieter color, and comes up to the label's under the
   /// pointer, as `sectionNumber` says it is.
   ///
-  /// Under a page theme (#704), `palette`, every color is the theme's instead:
-  /// the link's, the card link's where the link is `onCard`, and the theme's
-  /// secondary and body text where the storage's color is kept. The automatic
-  /// palette changes nothing.
+  /// Under a page theme (#704), `palette`, a link is drawn in the theme's link
+  /// color, or its card link color where the link is `onCard`, and a hovered
+  /// number in its text color. The automatic palette changes nothing.
   public static func attributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
     caption: [NSAttributedString.Key: Any] = [:], sectionNumber: SectionNumberState? = nil,
@@ -45,22 +44,18 @@ public enum LinkRendering {
   ) -> [NSAttributedString.Key: Any] {
     var attributes = defaults
     if let sectionNumber {
-      attributes[.foregroundColor] =
-        sectionNumber == .hovered
-        ? palette.foreground(for: RFCColors.label) ?? RFCColors.label
-        : palette.foreground(for: RFCColors.secondaryLabel)
+      attributes[.foregroundColor] = sectionNumber == .hovered ? palette.text : nil
       return attributes
     }
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
     guard let url = link as? URL, url.scheme == ReaderLinkScheme.backlinksScheme else {
-      if !palette.drawsStoredColors {
+      if !palette.drawsSystemColors {
         attributes[.foregroundColor] = onCard ? palette.cardLink : palette.link
       }
       return attributes
     }
-    // The caption's own color, which the builder stores as the secondary label's.
-    attributes[.foregroundColor] = palette.foreground(for: RFCColors.secondaryLabel)
+    attributes[.foregroundColor] = nil
     attributes.merge(caption) { _, caption in caption }
     return attributes
   }

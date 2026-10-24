@@ -5,6 +5,10 @@ struct OriginalTextView: View {
   #if canImport(UIKit)
     @Environment(ReaderState.self) private var reader
   #endif
+  /// For the page theme, which is the light one or the dark one by the appearance
+  /// (#704).
+  @ReaderSettingsValue private var settings
+  @Environment(\.colorScheme) private var colorScheme
   let text: String?
   let failure: LoadFailure?
   let fontSize: Double
@@ -13,12 +17,17 @@ struct OriginalTextView: View {
   let isShown: Bool
   let tryAgain: () -> Void
 
+  private var palette: ReaderPalette {
+    settings.palette(for: PaletteAppearance(colorScheme))
+  }
+
   var body: some View {
     if let text {
       #if canImport(UIKit)
-        OriginalTextBody(text: text, fontSize: fontSize, reader: isShown ? reader : nil)
+        OriginalTextBody(
+          text: text, fontSize: fontSize, palette: palette, reader: isShown ? reader : nil)
       #else
-        OriginalTextBody(text: text, fontSize: fontSize)
+        OriginalTextBody(text: text, fontSize: fontSize, palette: palette)
       #endif
     } else if let failure {
       ContentUnavailableView {
