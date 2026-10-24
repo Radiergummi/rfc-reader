@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftUI
 
 /// Back and Forward through the scene's history, in the bar beside the sidebar.
@@ -9,9 +10,16 @@ struct HistoryButtons: View {
     Button {
       navigation.goBack()
     } label: {
-      Label("Back", systemImage: "chevron.backward")
+      // An image, not a `Label`: with a label, iOS 26 never shows a toolbar item's
+      // popover tip (#782).
+      Image(systemName: "chevron.backward")
+        .accessibilityLabel("Back")
     }
     .disabled(!navigation.canGoBack)
+    // Once a citation has given Back somewhere to go: previews read it without
+    // going (#782). Only beside other columns, the one place this is shown: an
+    // iPhone has no Back of ours.
+    .helpTip(PreviewTip(), isOffered: navigation.canGoBack)
 
     Button {
       navigation.goForward()

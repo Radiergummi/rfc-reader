@@ -412,8 +412,9 @@ struct StorageSettings: View {
         }
       }
       // Until the cache is counted too, when there is nothing yet to say it empties,
-      // and while all it holds is in use.
-      .disabled((usage?.clearable.documents ?? 0) == 0)
+      // and while all it holds is in use. By its bytes: what Datatracker said of a
+      // draft is no document, and may be all there is (#728).
+      .disabled((usage?.clearable.bytes ?? 0) == 0)
       if let usage, usage.cache.documents > usage.clearable.documents {
         Text(
           "\(usage.cache.documents - usage.clearable.documents) documents in use stay in the cache."

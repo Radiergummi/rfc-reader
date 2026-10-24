@@ -56,7 +56,8 @@ final class QuickOpenController {
     let exact = DocumentReference.link(from: query)
     let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
     results.show(
-      query: query, exact: exact, members: members,
+      query: query, exact: exact,
+      draft: exact == nil ? DocumentReference.draft(from: query) : nil, members: members,
       registry: library.registryMatches(for: query),
       isObsolete: { [library] in library.metadata($0)?.isObsolete ?? false })
   }
@@ -82,6 +83,11 @@ final class QuickOpenController {
   }
 
   func open(_ link: RFCLink, activation: LinkActivation = .current) {
+    open(.rfc(link), activation: activation)
+  }
+
+  /// An RFC, or the draft typed (#728).
+  func open(_ link: ReadableLink, activation: LinkActivation = .current) {
     guard !isClosing else { return }
     library.open(link, activation: activation, in: navigation)
     close()

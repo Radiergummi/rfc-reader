@@ -167,7 +167,7 @@ struct QuickOpenResultsTests {
     results.show(query: "ab", exact: nil)
     #expect(results.activate(.here) == nil)
     let opening = results.show(hits: [.rfc(4), .rfc(1)], for: "ab")
-    #expect(opening?.link.id == .rfc(4))
+    #expect(opening?.link.document == .rfc(.rfc(4)))
   }
 
   /// A new exact resolution is what the reader just typed, so it takes the
@@ -329,7 +329,7 @@ struct QuickOpenResultsTests {
     results.show(query: "ht", exact: nil)
     _ = results.activate(.here)
     #expect(results.show(hits: [.rfc(1)], for: "h") == nil)
-    #expect(results.show(hits: [.rfc(2)], for: "ht")?.link == RFCLink(id: .rfc(2)))
+    #expect(results.show(hits: [.rfc(2)], for: "ht")?.link == .rfc(RFCLink(id: .rfc(2))))
   }
 
   @Test func `typing on after return is a change of mind`() {
@@ -427,5 +427,30 @@ struct QuickOpenResultsTests {
       query: "HTTP2-Settings", exact: nil, registry: [settings],
       isObsolete: { $0 == .rfc(7540) })
     #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(9113))])
+  }
+
+  // MARK: - Drafts (#728)
+
+  @Test func `a draft's name is its one row, which return opens`() throws {
+    let draft = try #require(DocumentReference.draft(from: "draft-ietf-quic-http-34"))
+    var results = QuickOpenResults()
+    results.show(query: "draft-ietf-quic-http-34", exact: nil, draft: draft)
+    results.show(hits: [.rfc(9114)], for: "draft-ietf-quic-http-34")
+    #expect(results.rows.isEmpty)
+    #expect(
+      results.activate(.here) == QuickOpenResults.Opening(link: .draft(draft), activation: .here))
+    results.show(query: "9114", exact: RFCLink(id: .rfc(9114)))
+    #expect(results.draft == nil)
+    #expect(results.rows.map(\.link.id) == [.rfc(9114)])
+  }
+
+  @Test func `a draft is named by its name or a link to it, and nothing else`() {
+    #expect(DocumentReference.draft(from: " draft-ietf-quic-http ")?.id.revision == nil)
+    #expect(
+      DocumentReference.draft(from: "https://datatracker.ietf.org/doc/draft-ietf-quic-http/34/")?
+        .id.description == "draft-ietf-quic-http-34")
+    #expect(DocumentReference.draft(from: "9114") == nil)
+    #expect(DocumentReference.draft(from: "rfc://9114") == nil)
+    #expect(DocumentReference.draft(from: "http semantics") == nil)
   }
 }

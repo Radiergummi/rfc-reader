@@ -746,6 +746,16 @@
         }
       }
     },
+    "Changes since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@"
+          }
+        }
+      }
+    },
     "Check for Updates…" : {
       "localizations" : {
         "de" : {
@@ -1092,6 +1102,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
+    "Couldn't load %@ to compare" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte zum Vergleich nicht geladen werden"
           }
         }
       }
@@ -1717,6 +1737,16 @@
         }
       }
     },
+    "Hide Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen ausblenden"
+          }
+        }
+      }
+    },
     "Hide Read" : {
       "localizations" : {
         "de" : {
@@ -1933,6 +1963,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Datenpaket %@ installiert"
+          }
+        }
+      }
+    },
+    "Internet-Draft" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft"
           }
         }
       }
@@ -2547,6 +2587,16 @@
         }
       }
     },
+    "Open on Datatracker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Datatracker öffnen"
+          }
+        }
+      }
+    },
     "Open on rfc-editor.org" : {
       "localizations" : {
         "de" : {
@@ -3037,12 +3087,32 @@
         }
       }
     },
+    "Reset Tips at Next Launch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipps beim nächsten Start zurücksetzen"
+          }
+        }
+      }
+    },
     "Retry" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Revision" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision"
           }
         }
       }
@@ -3313,6 +3383,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs vom 1. April zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes Since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@ zeigen"
           }
         }
       }

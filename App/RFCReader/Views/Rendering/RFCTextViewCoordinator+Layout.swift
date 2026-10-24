@@ -46,7 +46,7 @@ extension RFCTextViewCoordinator {
       storage.install(built.text)
     }
     reportSelection()
-    engine.installed(built, document: documentID)
+    engine.installed(built, document: document)
     reportVisibleAnchor()
     findBands()
     placeHighlights()
@@ -112,7 +112,7 @@ extension RFCTextViewCoordinator {
     // them, until the bands are drawn (#747).
     let interval = signposter.beginInterval(
       "Find bands", id: signposter.makeSignpostID(),
-      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
+      "\(self.document?.displayName ?? "untitled", privacy: .public)")
     bandsTask = Task {
       let bands = await Self.bands(of: requirements, in: built)
       // A later build or requirements have forgotten this task and started their own.

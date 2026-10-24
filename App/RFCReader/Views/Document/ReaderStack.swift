@@ -55,23 +55,33 @@
     @ViewBuilder
     private func readerView(_ reader: ReaderPath.Reader, in path: ReaderPath) -> some View {
       if path.retains(reader) {
-        // A BCP, STD or FYI shows its first member, once the index names it (#656).
-        if let shown = library.documentShown(for: reader.id) {
+        switch reader.document {
+        case .draft:
+          // A draft is read as itself (#728).
           DocumentView(
-            id: shown, identity: reader.id, depth: reader.depth, showsInspector: $showsInspector
+            id: reader.document, depth: reader.depth, showsInspector: $showsInspector
           )
-          // Made again when the RFC shown changes for the same reader (#656).
-          .id(ShownReader(reader: reader, shown: shown))
-        } else {
-          ProgressView("Loading \(reader.id.displayName)…")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(reader.id.displayName)
+          .id(ShownReader(reader: reader, shown: reader.document))
+        case .rfc(let id):
+          // A BCP, STD or FYI shows its first member, once the index names it (#656).
+          if let shown = library.documentShown(for: id) {
+            DocumentView(
+              id: .rfc(shown), identity: reader.document, depth: reader.depth,
+              showsInspector: $showsInspector
+            )
+            // Made again when the RFC shown changes for the same reader (#656).
+            .id(ShownReader(reader: reader, shown: .rfc(shown)))
+          } else {
+            ProgressView("Loading \(id.displayName)…")
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .navigationTitle(id.displayName)
+          }
         }
       } else {
         // Out of sight under the readers kept, and made again if the stack is
         // popped back to it. Its title is what the back button above it says.
         Color.clear
-          .navigationTitle(reader.id.displayName)
+          .navigationTitle(reader.document.displayName)
       }
     }
   }
@@ -80,6 +90,6 @@
   /// reader whose first member changes is made again (#656).
   private struct ShownReader: Hashable {
     let reader: ReaderPath.Reader
-    let shown: DocumentID
+    let shown: ReadableDocument
   }
 #endif

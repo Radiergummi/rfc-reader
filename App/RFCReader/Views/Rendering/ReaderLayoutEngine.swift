@@ -59,7 +59,7 @@ final class ReaderLayoutEngine: PinSurface {
   // MARK: - Changes of geometry
 
   /// A new storage is in: carries the place across and puts it back.
-  func installed(_ built: BuiltDocument, document: DocumentID?) {
+  func installed(_ built: BuiltDocument, document: ReadableDocument?) {
     documentName = document?.displayName ?? "untitled"
     let carried = self.built.map { keeper.carried(in: $0.anchors) }
     self.built = built

@@ -159,9 +159,10 @@ public struct LoadFailure {
 
   /// What was being loaded: the document, its original text, which has a not-found
   /// of its own, or the RFC index, which is not a document and has no page to send
-  /// the reader to.
+  /// the reader to; or an Internet-Draft (#728), which is the IETF's, not the RFC
+  /// Editor's.
   public enum Subject: Sendable {
-    case document, originalText, index
+    case document, originalText, index, draft
   }
 
   /// What failed, as far as the reader can tell from the error.
@@ -212,6 +213,15 @@ public struct LoadFailure {
           kit:
             "A secure connection couldn't be made. If this network has a login page, sign in, or check its proxy settings, then try again.",
           locale: locale)
+      case (.notFound, .draft):
+        String(kit: "The IETF doesn't have this draft, or this revision of it.", locale: locale)
+      case (.server, .draft):
+        String(
+          kit: "The IETF's servers aren't responding right now. Try again later.", locale: locale)
+      case (.unreadable, .draft):
+        String(kit: "This draft couldn't be read. It may open on Datatracker.", locale: locale)
+      case (.other, .draft):
+        String(kit: "Try again, or open the draft on Datatracker.", locale: locale)
       case (.notFound, .document):
         String(kit: "The RFC Editor doesn't have this document.", locale: locale)
       case (.notFound, .originalText):
@@ -250,7 +260,7 @@ public struct LoadFailure {
       }
     case let error as RFCEditorClient.ClientError:
       switch error {
-      case .notFound:
+      case .notFound, .draftNotFound:
         return .notFound
       case .httpStatus(let status, _) where status == 429 || (500..<600).contains(status):
         return .server

@@ -37,7 +37,7 @@ public struct NavigationHistory: Sendable {
   /// walking the history.
   public var returnOffer: HistoryEntry? {
     guard arrivedByGoing, let current = shown, let previous = backward.last,
-      previous.id == current.id
+      previous.document == current.document
     else { return nil }
     return previous
   }
@@ -67,28 +67,32 @@ public struct NavigationHistory: Sendable {
     defer { isHidden = false }
     let anchor = { (section: String) in places?.anchor(for: section) ?? section }
     let place = HistoryEntry(
-      id: place.id, section: place.section.map(anchor), arrival: place.arrival)
+      document: place.document, section: place.section.map(anchor), arrival: place.arrival)
     let position = position.map(anchor)
     // Reopening the hidden document from its row, which names no section: back
     // where it was, and not a jump to offer a way back from. A row is from outside
     // the reader, so the readers are stacked again from here (#263).
-    if isHidden, place.section == nil, let current, place.id == current.id {
+    if isHidden, place.section == nil, let current, place.document == current.document {
       arrivedByGoing = false
-      self.current = HistoryEntry(id: current.id, section: current.section, arrival: place.arrival)
+      self.current = HistoryEntry(
+        document: current.document, section: current.section, arrival: place.arrival)
       return nil
     }
-    if let current, place.id == current.id, place.section == current.section.map(anchor) {
+    if let current, place.document == current.document,
+      place.section == current.section.map(anchor)
+    {
       // Not a navigation, so not a new way of arriving either: a jump to where the
       // reader is must not reach back past an arrival from outside. An arrival from
       // outside is one still, and starts the stack again (#263).
       let arrival = place.arrival == .root ? .root : current.arrival
       guard let section = place.section else {
-        self.current = HistoryEntry(id: current.id, section: current.section, arrival: arrival)
+        self.current = HistoryEntry(
+          document: current.document, section: current.section, arrival: arrival)
         return nil
       }
       let reported = places?.section(of: section) ?? section
       if position == nil || position == section || position == reported {
-        let arrived = HistoryEntry(id: place.id, section: section, arrival: arrival)
+        let arrived = HistoryEntry(document: place.document, section: section, arrival: arrival)
         self.current = arrived
         return arrived
       }
@@ -142,13 +146,13 @@ public struct NavigationHistory: Sendable {
   ///
   /// From the history rather than beside it, so that the system back button and
   /// Back cannot disagree about where they go.
-  public var stackedDocuments: [DocumentID] {
+  public var stackedDocuments: [ReadableDocument] {
     guard let shown else { return [] }
-    var documents = [shown.id]
+    var documents = [shown.document]
     var arrival = shown.arrival
     for entry in backward.reversed() {
       guard arrival == .citation else { break }
-      if entry.id != documents.last { documents.append(entry.id) }
+      if entry.document != documents.last { documents.append(entry.document) }
       arrival = entry.arrival
     }
     return documents.reversed()

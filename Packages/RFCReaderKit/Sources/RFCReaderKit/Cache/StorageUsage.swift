@@ -15,6 +15,11 @@ public struct StorageUsage: Sendable, Equatable {
   public init(_ entries: [CacheEviction.Entry]) {
     self.init(documents: entries.count, bytes: entries.reduce(0) { $0 + $1.bytes })
   }
+
+  /// This and `other` together.
+  public func adding(_ other: StorageUsage) -> StorageUsage {
+    StorageUsage(documents: documents + other.documents, bytes: bytes + other.bytes)
+  }
 }
 
 /// What Settings' Storage tab states (#358): what each tier holds, and what of the

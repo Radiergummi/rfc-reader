@@ -15,6 +15,8 @@ struct RFCReaderApp: App {
       // Before the app has finished launching, which is when a tap on a
       // notification that launched it is delivered.
       BookmarkNotifications.install()
+      // Before any scene, whose toolbars anchor the tips (#782).
+      ReaderTips.configure()
     }
   #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
@@ -60,7 +62,8 @@ struct RFCReaderApp: App {
             // Every open scene receives this, so the routing decision cannot
             // be made here: `LibraryModel` holds the registry and picks
             // exactly one scene to act on it.
-            if let link = RFCLink(url: url) {
+            // An RFC, or a draft (#728).
+            if let link = ReadableLink(url: url) {
               library.route(link)
             }
           }

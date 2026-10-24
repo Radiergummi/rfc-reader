@@ -24,8 +24,14 @@ struct DocumentCommands: Commands {
     private var reader: ReaderState? { active.controller?.reader }
     /// A document is on screen, not just selected: a selection is also showing while
     /// it loads and when it failed to, and `hasDocument` stays true after the
-    /// selection is cleared.
+    /// selection is cleared. An RFC or a draft (#728), whose text has Find, Reading
+    /// Mode, Focus and the Outline as an RFC's does.
     private var showsDocument: Bool {
+      navigation?.shownDocument != nil && reader?.hasDocument == true
+    }
+    /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
+    /// (#728). The Document menu offers a draft its text's toggles.
+    private var showsRFC: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
     /// A document on screen that Print and Export offer: not one read as its PDF or
@@ -52,7 +58,7 @@ struct DocumentCommands: Commands {
     /// the reader's text or beside a compared document's, never the original text's
     /// or a translation's.
     private var hasQuotableSelection: Bool {
-      showsDocument && reader?.showOriginal != true && reader?.readsTranslation != true
+      showsRFC && reader?.showOriginal != true && reader?.readsTranslation != true
         && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
     }
 
@@ -198,7 +204,7 @@ struct DocumentCommands: Commands {
           .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }
-          .disabled(!showsDocument)
+          .disabled(!showsRFC)
       }
       // The document's own actions, the toolbar's Cite and More menus rendered from
       // the same sections, so the two cannot drift (#761): with the toolbar hidden or
@@ -216,12 +222,17 @@ struct DocumentCommands: Commands {
           // Disabled rather than gone with no reader window, as the other menus'
           // items are: an empty menu in the bar says nothing.
           MenuSections(
-            sections: DocumentMenus.more(
-              showsOriginal: reader?.showOriginal == true,
-              showsTranslation: reader?.showTranslation == true,
-              errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
-                .errataURL,
-              precedingDraft: reader?.precedingDraft),
+            sections: navigation?.shownDraft != nil
+              // A draft's text has its toggles, and none of an RFC's pages (#728).
+              ? DocumentMenus.draftMore(
+                showsOriginal: reader?.showOriginal == true,
+                showsTranslation: reader?.showTranslation == true)
+              : DocumentMenus.more(
+                showsOriginal: reader?.showOriginal == true,
+                showsTranslation: reader?.showTranslation == true,
+                errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
+                  .errataURL,
+                precedingDraft: reader?.precedingDraft),
             perform: perform)
         }
         .disabled(!showsDocument)
@@ -394,7 +405,7 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { reader?.findInteraction?.findPrevious() }
             .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
         }
-        .disabled(navigation?.selection == nil || reader?.offersFind != true)
+        .disabled(navigation?.shownDocument == nil || reader?.offersFind != true)
       }
     #endif
   }

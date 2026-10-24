@@ -50,6 +50,8 @@ import SwiftUI
 
       ToolbarItem(placement: .primaryAction) {
         moreMenu
+          // Reading Mode is in it, and nowhere else on screen (#782).
+          .helpTip(ReadingModeTip())
       }
 
       if showsBottomBar {
@@ -162,7 +164,10 @@ import SwiftUI
         Button("Print…", systemImage: "printer") { printDocument() }
           .disabled(!reader.offersPrintAndExport)
       } label: {
-        Label("More", systemImage: "ellipsis")
+        // An image, not a `Label`: with a label, iOS 26 never shows a toolbar
+        // item's popover tip (#782).
+        Image(systemName: "ellipsis")
+          .accessibilityLabel("More")
       }
     }
 
@@ -198,7 +203,7 @@ import SwiftUI
   /// platform's own menu rather than a popover: a compact control group is the
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
   /// `DocumentCommands`'. #708 replaces it with a quick panel.
-  private struct TextSizeButton: View {
+  struct TextSizeButton: View {
     let library: LibraryModel
     @ReaderSettingsValue private var settings
     @State private var showsSettings = false

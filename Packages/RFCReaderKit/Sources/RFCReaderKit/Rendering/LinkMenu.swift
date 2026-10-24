@@ -59,7 +59,10 @@ public enum LinkMenu {
       copyLink = .none
     }
     switch destination {
-    case .document(let document): return Items(copyLink: copyLink, document: document)
+    case .document(.rfc(let document)): return Items(copyLink: copyLink, document: document)
+    // A draft's link in an RFC opens where it is clicked; the menu's tab and window
+    // are an RFC's.
+    case .document(.draft): return Items(copyLink: copyLink, document: nil)
     case .unhandled: return Items(copyLink: copyLink, document: nil, opens: false)
     case .jump, .reference: return Items(copyLink: copyLink, document: nil)
     }

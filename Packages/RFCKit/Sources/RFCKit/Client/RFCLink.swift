@@ -112,6 +112,18 @@ public struct RFCLink: Hashable, Sendable {
     String(name.prefix { $0 != "." })
   }
 
+  /// The section and the anchor `url`'s fragment names, at most one of them.
+  static func place(inFragmentOf url: URL) -> (section: String?, anchor: String?) {
+    // Decoded, which `url.fragment` is not: the builders percent-encode a section,
+    // and `section-4.2%20draft` has to come back as the section it was.
+    let fragment = url.fragment(percentEncoded: false) ?? ""
+    let section = SectionAnchor.sectionNumber(fromAnchor: fragment)
+    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
+    // cannot, and a bare `#4.2` is no section either (#276).
+    let anchor = section == nil && fragment.first?.isNumber == false ? fragment : nil
+    return (section, anchor)
+  }
+
   /// The link `url` makes: any address of a document at the RFC Editor, Datatracker
   /// or `ietf.org`, or the app's own, with the section or anchor it was opened at.
   public init?(url: URL) {
@@ -123,14 +135,7 @@ public struct RFCLink: Hashable, Sendable {
   private init?(url: URL, strictly: Bool) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
-    // Decoded, which `url.fragment` is not: the builders percent-encode a section,
-    // and `section-4.2%20draft` has to come back as the section it was.
-    let fragment = url.fragment(percentEncoded: false) ?? ""
-    let fragmentSection = SectionAnchor.sectionNumber(fromAnchor: fragment)
-    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
-    // cannot, and a bare `#4.2` is no section either (#276).
-    let fragmentAnchor =
-      fragmentSection == nil && fragment.first?.isNumber == false ? fragment : nil
+    let (fragmentSection, fragmentAnchor) = Self.place(inFragmentOf: url)
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }

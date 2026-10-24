@@ -1458,6 +1458,16 @@
         }
       }
     },
+    "Force-click a reference to read the RFC it names without leaving this one, or rest the pointer on it for its abstract." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicke kräftig auf einen Verweis, um den genannten RFC zu lesen, ohne diesen zu verlassen, oder lass den Zeiger darauf ruhen, um seine Zusammenfassung zu sehen."
+          }
+        }
+      }
+    },
     "Formats" : {
       "localizations" : {
         "de" : {
@@ -1514,6 +1524,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gehe zu RFC"
+          }
+        }
+      }
+    },
+    "Go to RFC opens it straight away, by its number or words from its title." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder Wörter aus seinem Titel."
           }
         }
       }
@@ -1808,6 +1828,16 @@
         }
       }
     },
+    "Internet-Draft, not an RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft, kein RFC"
+          }
+        }
+      }
+    },
     "It asked for at least two independent, interoperable implementations. RFC 6410 removed the level in 2011, and a document still at it stays there until it is reclassified." : {
       "localizations" : {
         "de" : {
@@ -1904,6 +1934,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schlagwörter"
+          }
+        }
+      }
+    },
+    "Know Which RFC You Want?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du weißt, welchen RFC du suchst?"
+          }
+        }
+      }
+    },
+    "Learn More…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr erfahren …"
           }
         }
       }
@@ -2468,6 +2518,26 @@
         }
       }
     },
+    "Press %@ to go straight to it, by its number or words from its title." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drücke %@, um direkt zu ihm zu gehen, über seine Nummer oder Wörter aus seinem Titel."
+          }
+        }
+      }
+    },
+    "Preview Before You Go" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschau, bevor du gehst"
+          }
+        }
+      }
+    },
     "Previous Section" : {
       "localizations" : {
         "de" : {
@@ -2524,6 +2594,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Veröffentlicht %@"
+          }
+        }
+      }
+    },
+    "Published as %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlicht als %@"
           }
         }
       }
@@ -2748,6 +2828,26 @@
         }
       }
     },
+    "Read an Outline, or One Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Gliederung lesen, oder Abschnitt für Abschnitt"
+          }
+        }
+      }
+    },
+    "Reading Mode, in this menu, folds the document to its headings, or shows one section at a time." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Lesemodus in diesem Menü klappt das Dokument auf seine Überschriften zusammen oder zeigt einen Abschnitt nach dem anderen."
+          }
+        }
+      }
+    },
     "Reading Modes" : {
       "localizations" : {
         "de" : {
@@ -2884,6 +2984,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Revision %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision %lld"
+          }
+        }
+      }
+    },
+    "Revision %lld is the newest" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision %lld ist die neueste"
           }
         }
       }
@@ -3284,6 +3404,16 @@
         }
       }
     },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
+          }
+        }
+      }
+    },
     "Text" : {
       "localizations" : {
         "de" : {
@@ -3300,6 +3430,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die höchste Reifestufe der IETF: ein stabiler Standard, weit verbreitet implementiert und im Einsatz."
+          }
+        }
+      }
+    },
+    "The IETF's servers aren't responding right now. Try again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Server der IETF antworten gerade nicht. Versuche es später noch einmal."
           }
         }
       }
@@ -3650,6 +3790,16 @@
         }
       }
     },
+    "This draft couldn't be read. It may open on Datatracker." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Draft konnte nicht gelesen werden. Auf Datatracker lässt er sich vielleicht öffnen."
+          }
+        }
+      }
+    },
     "This section of %@ has no counterpart in %@" : {
       "localizations" : {
         "de" : {
@@ -3706,6 +3856,16 @@
         }
       }
     },
+    "Touch and hold a reference to read the RFC it names without leaving this one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berühre einen Verweis und halte ihn, um den genannten RFC zu lesen, ohne diesen zu verlassen."
+          }
+        }
+      }
+    },
     "Translate" : {
       "localizations" : {
         "de" : {
@@ -3732,6 +3892,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versuche es erneut oder öffne das Dokument auf rfc-editor.org."
+          }
+        }
+      }
+    },
+    "Try again, or open the draft on Datatracker." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche es noch einmal, oder öffne den Draft auf Datatracker."
           }
         }
       }

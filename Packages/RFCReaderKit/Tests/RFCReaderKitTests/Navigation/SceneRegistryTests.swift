@@ -56,6 +56,42 @@ struct SceneRegistryTests {
     #expect(route(bcp14, in: &registry) == .deliver(Delivery(bcp14, to: recent)))
   }
 
+  /// A draft names no series member, so it waits for no index (#728).
+  @Test func `a draft's link waits for no index`() throws {
+    var registry = registry(ready: false)
+    let tab = Tab()
+    _ = registry.register(tab)
+    let draft = ReadableLink.draft(
+      DraftLink(id: try #require(DraftID(parsing: "draft-ietf-quic-http-34"))))
+    guard case .deliver(let delivery) = registry.route(draft, showing: { _ in nil }) else {
+      Issue.record("the draft's link waited")
+      return
+    }
+    #expect(delivery.link == draft)
+    #expect(delivery.scene === tab)
+  }
+
+  /// A draft's link without a revision means the draft, whichever revision a tab
+  /// opened it at: that tab takes it, not the one used last (#728).
+  @Test func `a draft's link without a revision goes to the tab reading that draft`() throws {
+    var registry = registry()
+    let reading = Tab()
+    let recent = Tab()
+    _ = registry.register(reading)
+    _ = registry.register(recent)
+    let shown = ReadableDocument.draft(try #require(DraftID(parsing: "draft-ietf-quic-http-34")))
+    let newest = ReadableLink.draft(
+      DraftLink(id: try #require(DraftID(parsing: "draft-ietf-quic-http"))))
+    guard
+      case .deliver(let delivery) = registry.route(
+        newest, showing: { $0 === reading ? shown : nil })
+    else {
+      Issue.record("the draft's link waited")
+      return
+    }
+    #expect(delivery.scene === reading)
+  }
+
   /// With no tab open, a window is opened for the link, and the tab it makes takes it,
   /// once.
   @Test func `with no tab, the link waits for the tab a new window makes`() {
@@ -244,12 +280,12 @@ struct SceneRegistryTests {
 
   /// What a decision came to, comparable: the link and the tab, by identity.
   struct Delivery: Equatable {
-    let link: RFCLink
+    let link: ReadableLink
     let scene: ObjectIdentifier
     let bringsForward: Bool
 
     init(_ link: RFCLink, to scene: Tab, bringsForward: Bool = true) {
-      self.link = link
+      self.link = .rfc(link)
       self.scene = ObjectIdentifier(scene)
       self.bringsForward = bringsForward
     }
