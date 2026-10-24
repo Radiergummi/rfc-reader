@@ -188,7 +188,8 @@
         return nil
       }
       let name = specifier.name
-      return MainActor.assumeIsolated {
+      // Indices, as NSNumber is not Sendable to Xcode 26's SDK.
+      let indices: [Int]? = MainActor.assumeIsolated {
         let collections = LibraryModel.shared.collections
         let named = ScriptCollectionName(
           name, collections: collections,
@@ -196,9 +197,7 @@
         let command = NSScriptCommand.current()
         switch named {
         case .collection(let identifier):
-          return collections.collections.firstIndex { $0.id == identifier }.map {
-            [NSNumber(value: $0)]
-          }
+          return collections.collections.firstIndex { $0.id == identifier }.map { [$0] }
         case .builtIn where command is NSDeleteCommand || command is NSSetCommand:
           ScriptError.report(
             "“\(name)” is a list RFC Reader keeps, not a collection you made, so it can't be changed or deleted."
@@ -208,6 +207,7 @@
           return nil
         }
       }
+      return indices?.map { NSNumber(value: $0) }
     }
   }
 
