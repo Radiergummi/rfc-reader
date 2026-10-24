@@ -67,17 +67,28 @@ extension ExportFormat {
     }
   }
 
+  /// `RFC-10042.pdf`, `BCP-14.pdf`: the document's file, named as it is cited.
   /// `RFC-9110-section-4.2.pdf`, `RFC-9110-introduction.pdf`: the file of one
   /// section, named as the document's is, then by the section's anchor, which an
   /// RFC's links name it by too. An anchor is an XML name, so it is a file's too.
-  public func fileName(for id: DocumentID, section anchor: String?) -> String {
-    "\(Self.fileStem(for: id, section: anchor)).\(pathExtension)"
+  /// `RFC-9110 Highlights and Notes.md`: the highlights and notes, which are not
+  /// the document's Markdown and must not take its name.
+  public func fileName(
+    for id: DocumentID, section anchor: String? = nil, locale: Locale = .interface
+  ) -> String {
+    "\(fileStem(for: id, section: anchor, locale: locale)).\(pathExtension)"
   }
 
-  /// `RFC-9110-section-4.2`: a section's file name without its extension, which
-  /// iOS's Save to Files adds; the document's for no section.
-  public static func fileStem(for id: DocumentID, section anchor: String?) -> String {
-    anchor.map { "\(fileStem(for: id))-\($0)" } ?? fileStem(for: id)
+  /// `RFC-9110-section-4.2`: the file name without its extension, which iOS's Save
+  /// to Files adds; the document's for no section.
+  public func fileStem(
+    for id: DocumentID, section anchor: String? = nil, locale: Locale = .interface
+  ) -> String {
+    let document = Self.fileStem(for: id)
+    if self == .annotations {
+      return String(kit: "\(document) Highlights and Notes", locale: locale)
+    }
+    return anchor.map { "\(document)-\($0)" } ?? document
   }
 }
 

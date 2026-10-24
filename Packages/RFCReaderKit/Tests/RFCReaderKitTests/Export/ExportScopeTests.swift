@@ -50,8 +50,10 @@ struct ExportScopeTests {
     #expect(
       ExportFormat.markdown.fileName(for: .rfc(9110), section: "acknowledgments")
         == "RFC-9110-acknowledgments.md")
-    #expect(ExportFormat.fileStem(for: .rfc(9110), section: "section-4") == "RFC-9110-section-4")
-    #expect(ExportFormat.fileStem(for: .rfc(9110), section: nil) == "RFC-9110")
+    #expect(
+      ExportFormat.pdf.fileStem(for: .rfc(9110), section: "section-4", locale: .english)
+        == "RFC-9110-section-4")
+    #expect(ExportFormat.pdf.fileStem(for: .rfc(9110), section: nil) == "RFC-9110")
     #expect(ExportFormat.pdf.fileName(for: .rfc(9110), section: nil) == "RFC-9110.pdf")
   }
 

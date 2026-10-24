@@ -91,10 +91,46 @@ struct ExportFormatTests {
   @Test func `highlights and notes are a Markdown file`() {
     #expect(ExportFormat.annotations.source == .rendered)
     #expect(ExportFormat.annotations.contentType == ExportFormat.markdown.contentType)
-    #expect(ExportFormat.annotations.fileName(for: .rfc(9110)) == "RFC-9110.md")
     #expect(ExportFormat.annotations.name(in: .english) == "Highlights and Notes")
     #expect(ExportFormat.annotations.renaming("RFC-9110.pdf") == "RFC-9110.md")
     #expect(!ExportFormat.annotations.narrows)
+  }
+
+  /// Not `RFC-9110.md`, which the document's own Markdown is.
+  @Test func `the highlights and notes are named apart from the document's Markdown`() {
+    #expect(
+      ExportFormat.annotations.fileName(for: .rfc(9110), locale: .english)
+        == "RFC-9110 Highlights and Notes.md")
+    #expect(
+      ExportFormat.annotations.fileName(for: DocumentID(series: .bcp, number: 14), locale: .english)
+        == "BCP-14 Highlights and Notes.md")
+    #expect(
+      ExportFormat.annotations.fileStem(for: .rfc(9110), locale: .english)
+        == "RFC-9110 Highlights and Notes")
+    #expect(ExportFormat.markdown.fileName(for: .rfc(9110)) == "RFC-9110.md")
+  }
+
+  /// A name the format chose follows the format chosen next; a name the user
+  /// changed keeps the change, and only its extension follows.
+  @Test func `a new format names the file its own way until the name is changed`() {
+    #expect(
+      ExportFormat.annotations.renaming(
+        "RFC-9110.pdf", from: .pdf, for: .rfc(9110), section: nil, locale: .english)
+        == "RFC-9110 Highlights and Notes.md")
+    #expect(
+      ExportFormat.markdown.renaming(
+        "RFC-9110 Highlights and Notes.md", from: .annotations, for: .rfc(9110), section: nil,
+        locale: .english)
+        == "RFC-9110.md")
+    #expect(
+      ExportFormat.annotations.renaming(
+        "HTTP reading.pdf", from: .pdf, for: .rfc(9110), section: nil, locale: .english)
+        == "HTTP reading.md")
+    #expect(
+      ExportFormat.html.renaming(
+        "RFC-9110-section-4.pdf", from: .pdf, for: .rfc(9110), section: "section-4",
+        locale: .english)
+        == "RFC-9110-section-4.html")
   }
 
   /// The next document's export does not start on a file of this one's notes.
