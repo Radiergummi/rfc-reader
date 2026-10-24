@@ -2827,6 +2827,16 @@
         }
       }
     },
+    "Reset Tips at Next Launch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipps beim nächsten Start zurücksetzen"
+          }
+        }
+      }
+    },
     "Retry" : {
       "localizations" : {
         "de" : {

@@ -1,5 +1,6 @@
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// Where to open the help: a section, or its top. A new value each time it is asked
 /// for, so asking for the section already in view scrolls back to it.
@@ -110,3 +111,62 @@ struct HelpView: View {
     }
   }
 #endif
+
+/// Opens the help at a section, or at its top: its window on the Mac, and on iOS
+/// the scene's sheet, which `ContentView` presents (#782). Called as a function, as
+/// `OpenURLAction` is.
+struct ShowHelpAction: Sendable {
+  let show: @MainActor @Sendable (HelpSection?) -> Void
+
+  @MainActor func callAsFunction(_ section: HelpSection?) { show(section) }
+}
+
+extension EnvironmentValues {
+  @Entry var showHelp = ShowHelpAction { section in
+    #if os(macOS)
+      HelpWindow.show(at: section)
+    #endif
+  }
+}
+
+extension View {
+  /// `tip`'s popover on this view, whose Learn More opens the help at the tip's
+  /// section and ends the tip (#782), while `isOffered`: only where what it teaches
+  /// can be done. `arrowEdge` is the edge of the popover its arrow is on: `.bottom`
+  /// for a view in a bottom bar, whose popover would otherwise be put below it, off
+  /// the screen.
+  func helpTip(
+    _ tip: some HelpTip, arrowEdge: Edge = .top, isOffered: Bool = true
+  ) -> some View {
+    modifier(HelpTipPopover(tip: tip, arrowEdge: arrowEdge, isOffered: isOffered))
+  }
+}
+
+private struct HelpTipPopover<Shown: HelpTip>: ViewModifier {
+  let tip: Shown
+  let arrowEdge: Edge
+  let isOffered: Bool
+  @Environment(\.showHelp) private var showHelp
+  #if os(macOS)
+    /// TipKit offers a tip to every window at once; it is shown in the main one, key
+    /// or not: the tip's popover takes key when clicked.
+    @Environment(\.controlActiveState) private var activeState
+  #endif
+
+  private var isShown: Bool {
+    #if os(macOS)
+      isOffered && activeState != .inactive
+    #else
+      isOffered
+    #endif
+  }
+
+  func body(content: Content) -> some View {
+    let showHelp = showHelp
+    let tip = tip
+    content.popoverTip(isShown ? tip : nil, arrowEdge: arrowEdge) { _ in
+      showHelp(tip.helpSection)
+      tip.invalidate(reason: .actionPerformed)
+    }
+  }
+}

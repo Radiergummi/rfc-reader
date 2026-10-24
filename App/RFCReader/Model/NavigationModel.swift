@@ -2,6 +2,7 @@ import Observation
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// Everything one tab is looking at: which document, which sidebar filter, what was
 /// typed into search, and the back/forward stack that got it here.
@@ -38,8 +39,16 @@ final class NavigationModel: Identifiable {
   }
   /// What is typed into search. The list follows `appliedQuery`, not this.
   var searchText = "" {
-    didSet { followSearchText(pausing: true) }
+    didSet {
+      // A search cleared, which Go to RFC's tip counts unless it was committed (#782).
+      if searches.changed(from: oldValue, to: searchText) {
+        ReaderTips.searchTyped.sendDonation()
+      }
+      followSearchText(pausing: true)
+    }
   }
+  /// The searches made, for Go to RFC's tip (#782).
+  @ObservationIgnored private var searches = ReaderTips.Searches()
   /// The search text, trimmed, once typing pauses (#124): what the list is asked to
   /// search for. Read only to make the list; views read `appliedQuery`.
   private var requestedQuery = ""
@@ -360,6 +369,13 @@ final class NavigationModel: Identifiable {
     followSearchText(pausing: false)
   }
 
+  /// Return in the field, or a suggestion taken: the search applied at once, and
+  /// counted for Go to RFC's tip (#782).
+  func commitSearch() {
+    if searches.committed(searchText) { ReaderTips.searchTyped.sendDonation() }
+    applySearchWithoutPause()
+  }
+
   /// Sets the search text and applies it before returning, searching on the main
   /// actor: for a script, which reads the list straight after setting the text.
   func setSearchTextSynchronously(_ text: String) {
@@ -562,12 +578,19 @@ final class NavigationModel: Identifiable {
     ending outcome: JumpOutcome = .interrupted
   ) {
     var arrived: HistoryEntry?
+    let leaving = history.shown?.id
     updateRequests(outcome: outcome) {
       let went = $0.go(to: place, in: &history, leaving: visiblePosition, places: places)
       arrived = went.arrived
       return went.ended
     }
     if let arrived { visiblePosition = arrived.section }
+    // Another document in the reader, which Reading Mode's tip counts, and when it
+    // was cited, Back has somewhere to go: Previews' tip (#782).
+    if let arrived, arrived.id != leaving {
+      ReaderTips.documentOpened.sendDonation()
+      if place.arrival == .citation { ReaderTips.citationFollowed.sendDonation() }
+    }
   }
 
   private func arrive(at place: HistoryEntry) {

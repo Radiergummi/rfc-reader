@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// The document a reference names, as a force click (macOS) or a long press (iOS)
 /// previews it: Safari's link preview, for RFCs (#29).
@@ -51,6 +52,8 @@ struct DocumentPreview: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(width: size.width, height: size.height)
+    // A preview made: Previews' tip has no more to say (#782).
+    .onAppear { PreviewTip().invalidate(reason: .actionPerformed) }
     // Again when Bold Text changes, which the kept build was made without (#765).
     .task(id: legibilityWeight) { await load() }
   }

@@ -50,6 +50,9 @@ struct SidebarView: View {
       .safeAreaInset(edge: .top) {
         VStack(alignment: .leading, spacing: 6) {
           SidebarSearchField(navigation: navigation, library: library)
+          // After searches typed one after another: ⌘K goes straight to an RFC
+          // known by its number or title (#782).
+          .helpTip(GoToRFCTip())
           // The field keeps the query as typed; the filters it sets are named
           // under it, each removable (#21). `NSSearchField` draws no tokens.
           SearchFilterChips(navigation: navigation)
@@ -83,7 +86,7 @@ struct SidebarView: View {
       // Just "Search…": the syntax is taught by the filters an empty field suggests
       // (#781).
       .filterSearchable(navigation: navigation, prompt: String(localized: "Search…"))
-      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
+      .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
