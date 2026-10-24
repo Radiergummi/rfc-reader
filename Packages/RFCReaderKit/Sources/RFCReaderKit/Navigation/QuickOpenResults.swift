@@ -31,14 +31,27 @@ public struct QuickOpenResults: Equatable, Sendable {
   ///
   /// A paste that names a document is the number of the RFC it names, the way the
   /// Mac's palette reads it: a link's section is not part of the number, and a BCP
-  /// or an STD names no RFC by its own number, so it keeps nothing. Anything else,
-  /// such as a letter typed on an iPad's keyboard, is dropped.
+  /// or an STD names no RFC by its own number, so it keeps nothing. One character
+  /// that is not a digit, such as a letter typed on an iPad's keyboard, is dropped.
+  /// Any other text keeps nothing: its digits run together would be a number it
+  /// never named.
   public static func digits(in text: String) -> String {
     let digits = text.compactMap(asciiDigit)
-    guard digits.count < text.count, let link = DocumentReference.link(from: text) else {
+    if digits.count == text.count {
       return String(digits)
     }
-    return link.id.series == .rfc ? String(link.id.number) : ""
+    if let link = DocumentReference.link(from: text) {
+      return link.id.series == .rfc ? String(link.id.number) : ""
+    }
+    return text.count - digits.count == 1 ? String(digits) : ""
+  }
+
+  /// What iOS's field lists for the digits typed into it (#579): the RFC with that
+  /// number, and nothing else, so there is no search to wait for. Neither the RFCs
+  /// whose numbers begin with it nor a registry value: the search field beside it
+  /// finds those. Parsed as the Mac's palette parses a number, so no RFC 0.
+  public static func link(forNumber digits: String) -> RFCLink? {
+    DocumentID(parsing: digits).map { RFCLink(id: $0) }
   }
 
   /// A decimal digit, of any script, as ASCII: not a superscript, a circled number
@@ -214,17 +227,6 @@ public struct QuickOpenResults: Equatable, Sendable {
     } else {
       keepSelection()
     }
-  }
-
-  /// What iOS's field shows for the digits typed into it (#579): the RFC with that
-  /// number, and nothing else, so there is no search to wait for. Neither the RFCs
-  /// whose numbers begin with it nor a registry value: the search field beside it
-  /// finds those.
-  public mutating func show(number digits: String) {
-    // Parsed as the Mac's palette parses a number, so no RFC 0.
-    let id = DocumentID(parsing: digits).flatMap { $0.series == .rfc ? $0 : nil }
-    show(query: digits, exact: id.map { RFCLink(id: $0) })
-    show(hits: [], for: digits)
   }
 
   /// What the search found for `query`. Ignored when the reader has typed on since:

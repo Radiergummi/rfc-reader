@@ -460,6 +460,22 @@ struct QuickOpenNumberTests {
     #expect(QuickOpenResults.digits(in: "BCP 14") == "")
   }
 
+  /// A paste that names no document keeps nothing, rather than run the digits of
+  /// several numbers together into one that names another RFC.
+  @Test func `a pasted text that names no document keeps nothing`() {
+    #expect(QuickOpenResults.digits(in: "RFC 9110, section 4") == "")
+    #expect(QuickOpenResults.digits(in: "www.rfc-editor.org/rfc/rfc9110#section-15.5.1") == "")
+    #expect(QuickOpenResults.digits(in: "HTTP status 425") == "")
+  }
+
+  /// One stray character, as a key of an iPad's keyboard types, is dropped, wherever
+  /// in the number it lands.
+  @Test func `a character typed into a number is dropped`() {
+    #expect(QuickOpenResults.digits(in: "9110a") == "9110")
+    #expect(QuickOpenResults.digits(in: "91a10") == "9110")
+    #expect(QuickOpenResults.digits(in: "a") == "")
+  }
+
   /// A region whose number pad types Eastern Arabic digits types an RFC number all
   /// the same.
   @Test func `another script's digits are kept as ASCII`() {
@@ -469,29 +485,17 @@ struct QuickOpenNumberTests {
   /// The RFC with that number, and none of those whose numbers begin with it, nor a
   /// registry value: `911` is RFC 911 alone.
   @Test func `a number lists the RFC with that number alone`() {
-    var results = QuickOpenResults()
-    results.show(number: "911")
-    #expect(results.rows == [QuickOpenResults.Row(link: RFCLink(id: .rfc(911)))])
-    #expect(results.openable == RFCLink(id: .rfc(911)))
-    #expect(!results.isSearching)
+    #expect(QuickOpenResults.link(forNumber: "911") == RFCLink(id: .rfc(911)))
   }
 
-  @Test func `nothing typed lists nothing and says nothing`() {
-    var results = QuickOpenResults()
-    results.show(number: "")
-    #expect(results.rows.isEmpty)
-    #expect(results.openable == nil)
-    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+  @Test func `nothing typed lists nothing`() {
+    #expect(QuickOpenResults.link(forNumber: "") == nil)
   }
 
   /// Digits past any RFC's number name none, and nor does zero.
   @Test func `a number no RFC can have lists nothing`() {
-    var results = QuickOpenResults()
-    results.show(number: "99999999999999999999999")
-    #expect(results.rows.isEmpty)
-    results.show(number: "0")
-    #expect(results.rows.isEmpty)
-    #expect(results.openable == nil)
+    #expect(QuickOpenResults.link(forNumber: "99999999999999999999999") == nil)
+    #expect(QuickOpenResults.link(forNumber: "0") == nil)
   }
 
   @Test func `the placeholder asks for a number`() {
