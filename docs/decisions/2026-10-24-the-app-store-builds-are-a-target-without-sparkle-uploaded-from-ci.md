@@ -1,8 +1,8 @@
 # The App Store builds are a target without Sparkle, uploaded from CI
 
-*Proposed October 2026 (#994, part of #740); a plan, nothing of it built. The questions marked **Open** are the maintainer's.*
+*Decided 24 October 2026 (#994, part of #740; the maintainer's answers are recorded on the issue). A plan: nothing of it is built yet.*
 
-The Mac app's releases are Developer ID builds that update themselves with Sparkle ("The Mac app is released from CI and updated by Sparkle"). VISION.md plans an App Store build on both platforms, and a TestFlight build of the iOS app for testers. This record plans what those need on top of what exists, so that the work can be split into issues and the maintainer's part is listed in one place. No release of the app has been tagged yet, and when the first is, is the maintainer's call.
+The Mac app's releases are Developer ID builds that update themselves with Sparkle ("The Mac app is released from CI and updated by Sparkle"). VISION.md plans an App Store build on both platforms, and a TestFlight build of the iOS app for testers. This record plans what those need on top of what exists, so that the work can be split into issues and the maintainer's part is listed in one place. No release of the app has been tagged yet. When the first is stays open, and nothing holds releases back until then.
 
 ## The Mac App Store build is a second macOS target
 
@@ -18,7 +18,7 @@ A Mac App Store build may not update itself (App Review Guideline 2.4.5 (vii)), 
 - **Why a condition, not `canImport(Sparkle)`.** Every target in the project shares the build products directory, so `canImport(Sparkle)` may come out true in a target that doesn't depend on Sparkle. A condition the target sets is what the code can rely on.
 - **The bundle ID stays `me.mazetti.rfc-reader`.** With it, the Mac App Store app joins the iOS app's record (universal purchase), its data and later its CloudKit container (#655). The two Mac builds can then not be installed side by side without sharing a sandbox container, which is what a person moving from one to the other wants anyway.
 - **Distribution needs its own certificates and profiles.** The Developer ID build ships as a disk image. The App Store build is a signed installer package, which needs an Apple Distribution certificate, a Mac Installer Distribution certificate and an App Store provisioning profile for the app and for its extension.
-- **Open:** whether the Developer ID channel continues once the App Store build exists, or ends with a last Sparkle update that points to the store.
+- **Both channels stay.** The Developer ID build and its Sparkle updates continue beside the Mac App Store build. The question is decided again once the Mac App Store build has shipped one release: whether the Developer ID channel then ends with a last Sparkle update that points to the store.
 
 ## The App Store builds go to TestFlight from CI
 
@@ -29,10 +29,10 @@ The Mac release is made by `release.yml` on a `v*` tag, so that a build can be t
 - **The iOS build is the existing `RFCReader` target, unchanged.** It signs with the target's one entitlements file, the macOS sandbox keys and the `mach-lookup` exceptions included, as device builds do now. The first upload's validation is where that is confirmed for distribution.
 - **The build number is the run number, as now.** App Store Connect requires it to grow within a version on each platform, which the run number does. All three builds of a release share it.
 - **Signing happens on the runner, as for Developer ID:** a keychain made for the job, with the certificates imported from secrets and removed after.
-  - **Proposed:** the Apple Distribution and Mac Installer Distribution certificates as one PKCS#12 secret with its password, beside `SIGNING_DATA`. The four App Store provisioning profiles (app and extension, iOS and macOS) are made by `-allowProvisioningUpdates` with the API key, so that no profile has to be renewed in a secret by hand.
-  - **The alternative:** Xcode's cloud-managed distribution certificate, which needs no certificate on the runner at all. It needs an API key with the Admin role, or one granted access to cloud-managed distribution certificates.
-- **Open:** which App Store Connect API key uploads. The repository already has one for notarization (`APPLE_API_KEY_DATA`), which the Sparkle decision made this repository's own so it can be revoked alone. Uploading builds needs at least the Developer role, which notarizing needs too, so the key may upload already. Making profiles with `-allowProvisioningUpdates` may need App Manager or Admin. Either that key's role is raised, or a second key is made for uploads and profiles. The certificate route depends on the answer.
-- **Open:** whether TestFlight gets only tagged releases, or also every push to `main` for internal testers. VISION.md's roadmap wants "TestFlight for yourself" early. The plan works for both; a build from `main` would need its own run-number range so that it never collides with a release.
+  - **The certificates are one PKCS#12 secret.** The Apple Distribution and Mac Installer Distribution certificates go in one PKCS#12 secret with its password, beside `SIGNING_DATA`, as the Developer ID certificate does. The four App Store provisioning profiles (app and extension, iOS and macOS) are made by `-allowProvisioningUpdates` with the API key, so that no profile has to be renewed in a secret by hand.
+  - **Cloud-managed certificates were considered and rejected.** Xcode's cloud-managed distribution certificate needs no certificate on the runner at all, but it needs an API key with the Admin role, or one granted access to cloud-managed distribution certificates. That would put an Admin key in a GitHub secret.
+- **A second App Store Connect API key uploads and makes profiles.** The repository already has one for notarization (`APPLE_API_KEY_DATA`), which the Sparkle decision made this repository's own so it can be revoked alone. It keeps its role. Uploading builds needs at least the Developer role, and making profiles with `-allowProvisioningUpdates` may need App Manager; the new key gets what those need and no more, and like the first it can be revoked alone.
+- **TestFlight gets tagged releases only.** VISION.md's roadmap wants "TestFlight for yourself" early, and a tagged release is enough for that. Builds from every push to `main` for internal testers can come later, from a workflow with its own run-number range so that they never collide with a release.
 - **The Xcode that archives must be a released one.** The release workflow archives with Xcode 26.6 today. Each spring App Store Connect starts refusing uploads built with the previous year's SDK, and the archive then has to move to Xcode 27; `app-build-xcode-27` already builds with it. `AppIcon-27` is compiled only by Xcode 27 (`project.yml`, `APP_ICON_2700`).
 - **Once uploads exist, CI builds iOS in Release too.** CI's Release build (#992) is macOS only, the platform released today.
 
@@ -40,7 +40,7 @@ The Mac release is made by `release.yml` on a `v*` tag, so that a build can be t
 
 The app uses encryption only through the system: HTTPS through `URLSession`, and CryptoKit's SHA-256 for integrity checks and identifiers (`DataPack`, `SpotlightEntry`, `Annotations/Target`). Using the operating system's encryption, and hashing for integrity or authentication, are the exempt cases in Apple's export-compliance questions.
 
-- **Proposed:** `ITSAppUsesNonExemptEncryption: false` in `project.yml`'s Info properties, so that no upload stops at the question. With it there is no documentation to upload and no French declaration to file.
+- **`ITSAppUsesNonExemptEncryption: false`** in `project.yml`'s Info properties, so that no upload stops at the question. With it there is no documentation to upload and no French declaration to file.
 - The maintainer confirms that answer in App Store Connect once, for the app record. It is a legal statement, and this record is not legal advice.
 
 ## CloudKit
@@ -68,30 +68,31 @@ It gates the first TestFlight or App Store build that contains sync (#655). Buil
   - The converted legacy RFCs, the `legacy-xml` pack.
 
   Only the pack is a modified text, the case #215 asked the IETF Trust about. Nothing in a release build downloads it today, so **#215 doesn't gate a first submission** as long as "Read everything offline" isn't in it.
-- **Open:** whether to ask the Trust, in the same correspondence, about the app's listing as a paid product and about the bundled index's abstracts of older RFCs. That answers the content-rights question with a letter rather than a reading of the licenses.
-- **Open:** the app's name. VISION.md expects "RFC Reader" to be taken. An App Store name is unique across the store and is reserved by making the app record.
-- **Open:** the price and the business model: paid up front, free, or free with a purchase. Also which countries, and whether the Mac and iOS apps are one purchase (universal purchase, which the shared bundle ID allows).
+- **The Trust is asked in the same correspondence as #215**, about the app's listing in the App Store and about the bundled index's abstracts of RFCs from before November 2008. That answers the content-rights question with a letter rather than a reading of the licenses.
+- **The name is "RFC Reader" if it is free.** VISION.md expects it to be taken. An App Store name is unique across the store and is reserved by making the app record, so making the record is how it is tried. If it is taken, a name is chosen from a short list before any metadata is written.
+- **The app is one free, universal purchase.** Free, with no purchase inside it, and one record for the Mac and iOS apps, which the shared bundle ID allows. A free app needs no Paid Applications agreement, and no tax or banking forms.
 
 ## Checklist before a first submission
 
-In order. Items marked **(maintainer)** are the maintainer's alone.
+The builds are distributed in this order: TestFlight on iOS, then the App Store on iOS, then the Mac App Store. The list is in order too, and items marked **(maintainer)** are the maintainer's alone.
 
-1. **(maintainer)** Decide the name, and reserve it by making the app record in App Store Connect for `me.mazetti.rfc-reader` (iOS and macOS).
-2. **(maintainer)** Decide the price, the business model and the countries, and sign the Paid Applications agreement in App Store Connect if the app is paid, with its tax and banking forms.
-3. **(maintainer)** Decide the distribution order: TestFlight on iOS first, then the App Store on iOS, then the Mac App Store. Decide also whether the Developer ID channel continues.
-4. Add `ITSAppUsesNonExemptEncryption: false` to `project.yml`, and settle whether `NSContactsUsageDescription` stays.
-5. Build the `RFCReaderAppStore` target, its `APP_STORE` condition and its entitlements, with a CI build of it, unsigned, beside the Developer ID one.
-6. **(maintainer)** Decide which App Store Connect API key uploads, with what role, and store it as a secret (or raise the notarization key's role).
-7. **(maintainer)** Make the Apple Distribution and Mac Installer Distribution certificates, or enable cloud-managed signing, and store them as secrets.
-8. Add the iOS and the Mac App Store archive-and-upload jobs to `release.yml`, and an iOS Release build to CI.
-9. Write the privacy policy page on `rfc-reader.mazetti.me`, and a support page or address.
-10. **(maintainer)** Decide when to release, and tag the first release that uploads. Install the TestFlight build on a device and test it.
-11. Take the screenshots: iPhone, iPad and Mac, in English and German, since the app's chrome is localized.
-12. **(maintainer)** Write the description, keywords and subtitle in English and German. Answer the age rating, App Privacy ("Data Not Collected"), export compliance and content-rights questions, and give review notes (no account is needed to use the app).
-13. **(maintainer)** Submit for review.
+- [ ] **(maintainer)** Make the app record in App Store Connect for `me.mazetti.rfc-reader` (iOS and macOS), as one free, universal purchase, to reserve "RFC Reader". If the name is taken, choose one from a short list before any metadata is written.
+- [ ] **(maintainer)** Choose the countries the app is offered in.
+- [ ] **(maintainer)** Write to the IETF Trust about the App Store listing and the bundled index's abstracts of RFCs from before November 2008, in the same correspondence as #215.
+- [ ] Add `ITSAppUsesNonExemptEncryption: false` to `project.yml`, and settle whether `NSContactsUsageDescription` stays.
+- [ ] Build the `RFCReaderAppStore` target, its `APP_STORE` condition and its entitlements, with a CI build of it, unsigned, beside the Developer ID one.
+- [ ] **(maintainer)** Make the second App Store Connect API key, for uploads and profiles, and store it as a secret.
+- [ ] **(maintainer)** Make the Apple Distribution and Mac Installer Distribution certificates, and store them as one PKCS#12 secret with its password.
+- [ ] Add the iOS and the Mac App Store archive-and-upload jobs to `release.yml`, and an iOS Release build to CI.
+- [ ] Write the privacy policy page on `rfc-reader.mazetti.me`, and a support page or address.
+- [ ] **(maintainer)** Tag the first release that uploads, when it suits; the date is open. Install the TestFlight build on a device and test it.
+- [ ] Take the screenshots: iPhone, iPad and Mac, in English and German, since the app's chrome is localized.
+- [ ] **(maintainer)** Write the description, keywords and subtitle in English and German. Answer the age rating, App Privacy ("Data Not Collected"), export compliance and content-rights questions, and give review notes (no account is needed to use the app).
+- [ ] **(maintainer)** Submit the iOS app for review, and once it is in the store, the Mac App Store build.
 
 After the first submission:
 
-- Before a release that contains sync (#655), deploy the CloudKit schema to production, and from then on keep schema changes additive.
-- Before "Read everything offline" ships, wait for the IETF Trust's answer (#215).
-- Before the spring SDK deadline, archive with Xcode 27.
+- [ ] Before a release that contains sync (#655), deploy the CloudKit schema to production, and from then on keep schema changes additive.
+- [ ] Before "Read everything offline" ships, wait for the IETF Trust's answer (#215).
+- [ ] Before the spring SDK deadline, archive with Xcode 27.
+- [ ] **(maintainer)** Once the Mac App Store build has shipped one release, decide whether the Developer ID channel continues.
