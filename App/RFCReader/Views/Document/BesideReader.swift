@@ -18,7 +18,7 @@ struct BesideReader: View {
   @State private var citedEntry: Reference?
 
   var body: some View {
-    DocumentView(id: reading.pair.other, isBeside: true)
+    DocumentView(id: .rfc(reading.pair.other), isBeside: true)
       .id(reading.pair.other)
       .overlay(alignment: .bottom) {
         BesideBar(reading: reading, close: main.endComparison)

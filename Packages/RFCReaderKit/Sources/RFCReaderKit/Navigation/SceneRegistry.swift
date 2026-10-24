@@ -32,7 +32,8 @@ public struct SceneRegistry<Scene: AnyObject> {
   /// A link handed to a tab: open it there, and when `bringsForward`, make that the
   /// tab in use and bring its window forward.
   public struct Delivery {
-    public let link: RFCLink
+    /// To an RFC or a draft (#728).
+    public let link: ReadableLink
     public let scene: Scene
     /// False for a tab opened behind the one in use, which stays behind.
     public let bringsForward: Bool
@@ -55,7 +56,7 @@ public struct SceneRegistry<Scene: AnyObject> {
 
   /// A link for a tab being made: unbound until that tab registers.
   private struct ForNewTab {
-    let link: RFCLink
+    let link: ReadableLink
     var bringsForward: Bool
     var scene: Weak?
   }
@@ -69,7 +70,7 @@ public struct SceneRegistry<Scene: AnyObject> {
 
   /// A link routed from outside, waiting.
   private struct Routed {
-    let link: RFCLink
+    let link: ReadableLink
     var target: RoutedTarget
   }
 
@@ -125,10 +126,27 @@ public struct SceneRegistry<Scene: AnyObject> {
     _ link: RFCLink, showing: (Scene) -> DocumentID?,
     preferring isPreferred: (Scene) -> Bool = { _ in false }
   ) -> Decision {
+    route(
+      .rfc(link), showing: { showing($0).map(ReadableDocument.rfc) }, preferring: isPreferred)
+  }
+
+  /// `route(_:showing:preferring:)` for a link to an RFC or a draft (#728).
+  public mutating func route(
+    _ link: ReadableLink, showing: (Scene) -> ReadableDocument?,
+    preferring isPreferred: (Scene) -> Bool = { _ in false }
+  ) -> Decision {
     scenes.removeAll { $0.scene == nil }
+    // A draft named without a revision is the draft, at whichever revision a tab
+    // opened it: a tab holds the revision it resolved to (#728).
+    let namesNewest = if case .draft(let draft) = link { draft.id.revision == nil } else { false }
     guard
       let target = LinkRouting.target(
-        for: link.id, in: open, showing: showing, preferring: isPreferred)
+        for: link.document, in: open,
+        showing: { scene in
+          let held = showing(scene)
+          guard namesNewest, case .draft(let draft) = held else { return held }
+          return draft.at(revision: nil).map(ReadableDocument.draft)
+        }, preferring: isPreferred)
     else {
       routed = Routed(link: link, target: .nextScene)
       return .openWindow
@@ -145,8 +163,12 @@ public struct SceneRegistry<Scene: AnyObject> {
 
   /// Holds `link` for the next tab to register that no other link is held for: one
   /// being made for it, in front or behind.
-  public mutating func hold(_ link: RFCLink, bringsForward: Bool) {
+  public mutating func hold(_ link: ReadableLink, bringsForward: Bool) {
     forNewTabs.append(ForNewTab(link: link, bringsForward: bringsForward, scene: nil))
+  }
+
+  public mutating func hold(_ link: RFCLink, bringsForward: Bool) {
+    hold(.rfc(link), bringsForward: bringsForward)
   }
 
   /// The index has arrived, or failed to: every link held for it whose tab is there.
@@ -179,9 +201,10 @@ public struct SceneRegistry<Scene: AnyObject> {
 
   /// Whether `link` is still to wait for the index: a BCP, STD or FYI link, whose
   /// reader shows its first member, which only the index names (#241, #656), before the
-  /// index has arrived or failed to. A plain RFC link never does.
-  private func waitsForIndex(_ link: RFCLink) -> Bool {
-    link.id.series != .rfc && !isIndexSettled
+  /// index has arrived or failed to. A plain RFC link never does, nor a draft's.
+  private func waitsForIndex(_ link: ReadableLink) -> Bool {
+    guard case .rfc(let link) = link else { return false }
+    return link.id.series != .rfc && !isIndexSettled
   }
 
   /// A link delivered at once and brought forward is the later ask: a link held for a

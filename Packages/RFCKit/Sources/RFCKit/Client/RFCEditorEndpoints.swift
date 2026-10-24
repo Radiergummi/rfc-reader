@@ -37,6 +37,22 @@ public enum RFCEditorEndpoints {
     datatrackerBase.appending(path: "doc/\(name)/")
   }
 
+  /// What Datatracker says of an Internet-Draft, as JSON: its title, state and
+  /// revisions (`DraftInfo`), `/doc/draft-ietf-httpbis-semantics/doc.json`.
+  public static func draftInfo(_ name: String) -> URL {
+    datatrackerBase.appending(path: "doc/\(name)/doc.json")
+  }
+
+  /// The IETF's archive, which keeps every revision of every draft.
+  public static let draftArchiveBase = URL(string: "https://www.ietf.org/archive/id/")!
+
+  /// One revision of a draft in the given format, from the IETF's archive:
+  /// `/archive/id/draft-ietf-httpbis-semantics-19.xml`. Its XML is there only where the
+  /// revision was submitted as XML.
+  public static func draft(_ id: DraftID, format: FileFormat) -> URL {
+    draftArchiveBase.appending(path: "\(id.description).\(format.pathExtension)")
+  }
+
   /// The rfc-reader R2 bucket's public domain, where the revisions workflow publishes the
   /// files it refreshes daily.
   static let publishedDataBase = URL(string: "https://data.rfc-reader.mazetti.me/")!

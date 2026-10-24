@@ -353,6 +353,14 @@
       switch menu {
       case citeMenu:
         add(DocumentMenus.cite(), to: menu)
+      case moreMenu where navigation.shownDraft != nil:
+        // A draft's text has its toggles, and none of an RFC's pages, Export or
+        // Print (#728).
+        add(
+          DocumentMenus.draftMore(
+            showsOriginal: reader.showOriginal, showsTranslation: reader.showTranslation),
+          to: menu)
+        return
       case moreMenu:
         add(
           DocumentMenus.more(
@@ -430,6 +438,9 @@
         NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
         // Neither needs a document, so a window without one has both.
         return true
+      case NSToolbarItem.Identifier.rfcMore.rawValue:
+        // A draft's has its text's toggles (#728).
+        return id != nil || navigation.shownDraft != nil
       default:
         return id != nil
       }
@@ -446,11 +457,11 @@
 
     /// What an item of Cite, More or Add to Collection does.
     @objc private func performMenuAction(_ sender: NSMenuItem) {
-      guard let id else { return }
       switch sender.representedObject {
       case let action as DocumentMenus.Action:
         controller.perform(action)
       case let action as DocumentMenus.CollectionAction:
+        guard let id else { return }
         CollectionActionPerformer(
           document: id, library: library, navigation: navigation,
           undoManager: controller.window?.undoManager

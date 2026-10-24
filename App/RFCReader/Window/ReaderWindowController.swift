@@ -288,7 +288,7 @@
     private var windowTitle: WindowTitle {
       WindowTitle(
         // Still set on the window, because the tab bar reads it from there.
-        title: navigation.selection?.displayName ?? library.title(for: navigation.filter),
+        title: navigation.shownDocument?.displayName ?? library.title(for: navigation.filter),
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
         // A series names its members (#656).
@@ -298,13 +298,17 @@
               ?? DocumentActions.subtitle(
                 metadata: library.metadata($0), documentTitle: reader.documentTitle)
           }?
-          .truncated(to: Self.subtitleLimit) ?? "",
+          .truncated(to: Self.subtitleLimit)
+          ?? (navigation.shownDraft != nil
+            ? reader.documentTitle?.truncated(to: Self.subtitleLimit) : nil)
+            ?? "",
         // The reader's own copy, shown once its header scrolls away. Whole, not
         // truncated like the tab's: the item ellipsizes to whatever room it has.
-        documentTitle: navigation.selection?.displayName ?? "",
+        documentTitle: navigation.shownDocument?.displayName ?? "",
+        // A draft has no index entry: its header's title (#728).
         documentSubtitle: navigation.selection.flatMap {
           library.seriesMembers($0) ?? library.metadata($0)?.title
-        } ?? "",
+        } ?? (navigation.shownDraft != nil ? reader.documentTitle ?? "" : ""),
         isBookmarked: isBookmarked
       )
     }
@@ -554,9 +558,11 @@
 
     /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
     func perform(_ action: DocumentMenus.Action) {
-      guard let id = navigation.shown else { return }
+      // An RFC, or a draft (#728), whose text has the toggles alone.
+      guard navigation.shownDocument != nil else { return }
+      let id = navigation.shown
       DocumentActionPerformer(
-        id: id, metadata: library.metadata(id), reader: reader,
+        id: id, metadata: id.flatMap(library.metadata), reader: reader,
         open: { NSWorkspace.shared.open($0) }
       ).perform(action)
     }

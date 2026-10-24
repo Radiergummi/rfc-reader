@@ -50,6 +50,8 @@ struct RevisionsSummaryTests {
     #expect(line.detail == "In the RFC Editor queue")
     #expect(
       line.url.absoluteString == "https://datatracker.ietf.org/doc/draft-ietf-example-rfc9990bis/")
+    // The revision the line names, which the reader opens (#728).
+    #expect(line.draft?.description == "draft-ietf-example-rfc9990bis-22")
     #expect(
       line.accessibilityLabel
         == "Being replaced by draft-ietf-example-rfc9990bis, revision 22, in the RFC Editor queue")

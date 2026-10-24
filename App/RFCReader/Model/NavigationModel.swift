@@ -253,21 +253,39 @@ final class NavigationModel: Identifiable {
   /// view that saw its list's selection change took it for a new row tapped and
   /// emptied the stack's path as it pushed, so the cited RFC never slid in and Back
   /// went to the list (measured, #679).
-  var listSelection: DocumentID? {
+  ///
+  /// On iOS a draft at the root is selected too, though no row is it (#728): a
+  /// collapsed split view shows its reader while the selection is anything but nil,
+  /// so a draft opened from the list pushes the reader as a row does, and a draft
+  /// over an RFC is a change of selection rather than one cleared. Cleared, the
+  /// split view popped the reader, and pushing it back while it went drew the
+  /// draft's bottom bar twice.
+  var listSelection: ReadableDocument? {
     get {
       #if os(macOS)
-        selection
+        selection.map(ReadableDocument.rfc)
       #else
-        readerPath.root?.id
+        readerPath.root?.document
       #endif
     }
-    set { selection = newValue }
+    set {
+      // The list sets a row or nil, never a draft, which has no row.
+      guard newValue?.draft == nil else { return }
+      selection = newValue?.rfc
+    }
   }
 
   /// The document the history holds, shown or not. A collapsed split view that has
   /// gone back to its list hides the document and still holds it, so a link to it
   /// belongs in this tab: routing reads this, not `selection` (#256).
-  var heldDocument: DocumentID? { history.current?.id }
+  var heldDocument: ReadableDocument? { history.current?.document }
+
+  /// What the reader shows: the RFC selected, or a draft's revision (#728), which
+  /// has no row in the list, and so is never `selection`.
+  var shownDocument: ReadableDocument? { history.shown?.document }
+
+  /// The draft on screen, if the reader shows one (#728).
+  var shownDraft: DraftID? { shownDocument?.draft }
 
   /// The RFC whose text the tab's reader shows (#656): `selection`, or the first
   /// member of the BCP, STD or FYI selected; nil while a series waits for the index.
@@ -327,16 +345,51 @@ final class NavigationModel: Identifiable {
   /// A BCP, STD or FYI is opened as itself, so it is bookmarked and recorded as the
   /// series; its reader shows its first member (#656).
   func open(_ link: RFCLink, arrival: HistoryEntry.Arrival = .root) {
-    let route = OpenRoute.route(link, arrival: arrival, selected: selection, shown: shown)
+    open(.rfc(link), arrival: arrival)
+  }
+
+  /// `open(_:arrival:)` for a link to an RFC or a draft (#728). A draft has no row, so
+  /// opening one leaves the list as it is.
+  ///
+  /// A draft named without a revision opens at its newest, asked first, so that the
+  /// history, the reading position and the translation name the revision read
+  /// rather than whichever is the newest when they are next looked at. Where nobody
+  /// can say which that is, offline with nothing kept, it opens by its name, and
+  /// fails to load as it would have.
+  func open(_ link: ReadableLink, arrival: HistoryEntry.Arrival = .root) {
+    newestRevisionLookup?.cancel()
+    newestRevisionLookup = nil
+    guard case .draft(var draft) = link, draft.id.revision == nil else {
+      follow(link, arrival: arrival)
+      return
+    }
+    // Anything the tab went to while Datatracker was asked, a row, a link or Back,
+    // is later than this open, and stays.
+    let held = history.current
+    newestRevisionLookup = Task { [weak self, library] in
+      draft.id = await library.revision(of: draft.id)
+      guard let self, !Task.isCancelled, history.current == held else { return }
+      follow(.draft(draft), arrival: arrival)
+    }
+  }
+
+  /// The newest revision of a draft opened without one, being asked for (#728); a
+  /// later open replaces it.
+  @ObservationIgnored private var newestRevisionLookup: Task<Void, Never>?
+
+  private func follow(_ link: ReadableLink, arrival: HistoryEntry.Arrival) {
+    let route = OpenRoute.route(
+      link, arrival: arrival, selected: shownDocument,
+      shown: shown.map(ReadableDocument.rfc) ?? shownDocument)
     guard route.reveals else {
       follow(route)
       return
     }
     // The list's own selected row: on iOS the root of the stack of readers, which a
     // jump in a reader a citation pushed leaves where it is (#263).
-    let row = route.row(selected: listSelection)
+    let row = route.row(selected: listSelection?.rfc)
     let list = listOnShow
-    let reveals = route.reveals(selected: listSelection, among: list.rows)
+    let reveals = route.reveals(selected: listSelection?.rfc, among: list.rows)
     follow(route)
     if reveals {
       sidebarSelection = .all
@@ -553,8 +606,8 @@ final class NavigationModel: Identifiable {
   ) {
     // With no document on screen this jump's wait ends at once; with one, the jump
     // it replaces is the one whose wait ends, unmade.
-    updateRequests(outcome: selection != nil ? .interrupted : .notShown) {
-      $0.jump(to: section, inDocumentOnScreen: selection != nil, waiter: done)
+    updateRequests(outcome: shownDocument != nil ? .interrupted : .notShown) {
+      $0.jump(to: section, inDocumentOnScreen: shownDocument != nil, waiter: done)
     }
   }
 
@@ -569,8 +622,10 @@ final class NavigationModel: Identifiable {
   /// it, unless the reader is already there. Compared in `places`' spelling, so a
   /// section's number and its anchor are one place (#482).
   func recordJump(to section: String, in places: DocumentPlaces) {
-    guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section, arrival: .citation), in: places, ending: .landed)
+    guard let document = shownDocument else { return }
+    go(
+      to: HistoryEntry(document: document, section: section, arrival: .citation), in: places,
+      ending: .landed)
   }
 
   func goBack() {
@@ -630,19 +685,19 @@ final class NavigationModel: Identifiable {
   /// `shows(_:at:)`.
   private(set) var readerPath = ReaderPath(NavigationHistory())
 
-  /// Whether the reader of `id` at `depth` in the stack is the one on screen, whose
-  /// the window's reader state is. `depth` is nil for a reader that is not stacked,
-  /// the Mac's, which is on screen while its document is selected.
-  func shows(_ id: DocumentID, at depth: Int?) -> Bool {
-    guard let depth else { return selection == id }
-    return readerPath.isTop(id, at: depth)
+  /// Whether the reader of `document` at `depth` in the stack is the one on screen,
+  /// whose the window's reader state is. `depth` is nil for a reader that is not
+  /// stacked, the Mac's, which is on screen while its document is.
+  func shows(_ document: ReadableDocument, at depth: Int?) -> Bool {
+    guard let depth else { return shownDocument == document }
+    return readerPath.isTop(document, at: depth)
   }
 
-  /// Whether the tab still holds the reader of `id` at `depth`, on screen or, on
-  /// iOS, kept below the top of the stack.
-  func holds(_ id: DocumentID, at depth: Int?) -> Bool {
-    guard let depth else { return selection == id }
-    return readerPath.holds(id, at: depth)
+  /// Whether the tab still holds the reader of `document` at `depth`, on screen or,
+  /// on iOS, kept below the top of the stack.
+  func holds(_ document: ReadableDocument, at depth: Int?) -> Bool {
+    guard let depth else { return shownDocument == document }
+    return readerPath.holds(document, at: depth)
   }
 
   /// The stack's own back, the system back button or a swipe from the edge, which

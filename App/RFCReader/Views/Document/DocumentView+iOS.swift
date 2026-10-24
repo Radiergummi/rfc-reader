@@ -23,10 +23,6 @@
     let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
-    @State private var readingPathAfterPanel: ReadingPathRequest?
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { chrome.isCollapsed }
@@ -70,40 +66,12 @@
         // The original text has no reader to bring them back with a tap, and the
         // reader made afresh on the way back starts with them showing.
         .onChange(of: reader.showOriginal) { barsHidden = false }
-        // An overlay rather than an inset: it floats over the text and takes no
-        // layout, so it cannot disturb the column, which is derived from this
-        // view's frame.
-        .overlay(alignment: .bottom) {
-          returnButton.animation(.snappy, value: visibleReturn)
-        }
-        // Long enough to decide, without sitting over the text for good. Not under
-        // VoiceOver, where a control that leaves on a timer may be gone before it
-        // is reached: there it stays until the next navigation replaces it.
-        .task(id: visibleReturn) {
-          guard visibleReturn != nil, !voiceOverEnabled else { return }
-          try? await Task.sleep(for: .seconds(8))
-          guard !Task.isCancelled else { return }
-          navigation.settleReturnOffer()
-        }
-        // In compact width the panel is a sheet, and a `.sheet` of our own rather
-        // than the one `.inspector` turns itself into: that one, swiped away, set
-        // the binding back to false but dropped the next request to show it, so the
-        // panel's buttons opened it only on every other tap. Beside other columns
-        // it is the tab's inspector (`ContentView`).
-        //
-        // The panel is the stack's, and only the reader on top presents it (#263):
-        // the readers below would present it too, out of sight.
-        .sheet(isPresented: isCompact && isShown ? $showsInspector : .constant(false)) {
-          guard let request = readingPathAfterPanel else { return }
-          readingPathAfterPanel = nil
-          navigation.readingPath = request
-        } content: {
-          PanelHost(
-            isPresented: $showsInspector, closesAfterChoice: true,
-            readingPathAfterClosing: $readingPathAfterPanel
-          )
-          .presentationDetents([.medium, .large])
-        }
+        .modifier(ReturnOfferOverlay(navigation: navigation, document: document))
+        .modifier(
+          PanelSheet(
+            navigation: navigation, showsInspector: $showsInspector,
+            isPresented: isCompact && isShown)
+        )
         .fileExporter(
           isPresented: Binding(
             get: { output.exported != nil },
@@ -138,6 +106,53 @@
       }
     }
 
+  }
+
+  /// The panel in compact width: a sheet, and a `.sheet` of our own rather than the
+  /// one `.inspector` turns itself into: that one, swiped away, set the binding back
+  /// to false but dropped the next request to show it, so the panel's buttons opened
+  /// it only on every other tap. Beside other columns it is the tab's inspector
+  /// (`ContentView`).
+  ///
+  /// The panel is the stack's, and only the reader on top presents it (#263): the
+  /// readers below would present it too, out of sight. An RFC's and a draft's (#728).
+  struct PanelSheet: ViewModifier {
+    let navigation: NavigationModel
+    @Binding var showsInspector: Bool
+    /// Whether this reader presents the panel as a sheet.
+    let isPresented: Bool
+
+    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
+    @State private var readingPathAfterPanel: ReadingPathRequest?
+
+    func body(content: Content) -> some View {
+      content
+        .sheet(isPresented: isPresented ? $showsInspector : .constant(false)) {
+          guard let request = readingPathAfterPanel else { return }
+          readingPathAfterPanel = nil
+          navigation.readingPath = request
+        } content: {
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .presentationDetents([.medium, .large])
+        }
+    }
+  }
+
+  /// "Back to § 4.2" after following a link within the document (#254), an RFC's or
+  /// a draft's (#728). In a single column there is no back/forward pair, and the
+  /// system back button leaves the document.
+  struct ReturnOfferOverlay: ViewModifier {
+    let navigation: NavigationModel
+    /// What the offer names its place in.
+    let document: RFCDocument?
+
+    @Environment(\.sceneChrome) private var chrome
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Where a tap on the return offer goes, while it is on show.
     ///
     /// In a single column only: beside other columns, the back/forward pair is in
@@ -146,9 +161,25 @@
       chrome.isCollapsed ? navigation.returnOffer : nil
     }
 
-    /// "Back to § 4.2" after following a link within the document (#254). In a
-    /// single column there is no back/forward pair, and the system back button
-    /// leaves the document.
+    func body(content: Content) -> some View {
+      content
+        // An overlay rather than an inset: it floats over the text and takes no
+        // layout, so it cannot disturb the column, which is derived from this
+        // view's frame.
+        .overlay(alignment: .bottom) {
+          returnButton.animation(.snappy, value: visibleReturn)
+        }
+        // Long enough to decide, without sitting over the text for good. Not under
+        // VoiceOver, where a control that leaves on a timer may be gone before it
+        // is reached: there it stays until the next navigation replaces it.
+        .task(id: visibleReturn) {
+          guard visibleReturn != nil, !voiceOverEnabled else { return }
+          try? await Task.sleep(for: .seconds(8))
+          guard !Task.isCancelled else { return }
+          navigation.settleReturnOffer()
+        }
+    }
+
     @ViewBuilder
     private var returnButton: some View {
       if let offer = visibleReturn {
@@ -164,6 +195,65 @@
         // Rising from the bottom edge is motion: with Reduce Motion it fades (#760).
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
+    }
+  }
+#endif
+
+#if !os(macOS)
+  /// A draft's chrome on iOS (#728): its name in the bar, and of an RFC's toolbar
+  /// what a draft has, Contents, the text size and More with the text's Original
+  /// Text and Translate, with the panel as a sheet in compact width, as
+  /// `IOSDocumentChrome` presents it. Not Bookmark, Share or Info, nor More's other
+  /// items, whose actions are an RFC's: the index lists it, and a draft is in no
+  /// index.
+  struct IOSDraftChrome: ViewModifier {
+    /// What the return offer names its place in.
+    let document: RFCDocument?
+    let library: LibraryModel
+    let navigation: NavigationModel
+    let reader: ReaderState
+    @Binding var showsInspector: Bool
+    /// Whether the window's reader state is this reader's; only the reader on top
+    /// presents the panel.
+    let isShown: Bool
+
+    @Environment(\.sceneChrome) private var chrome
+    @Environment(\.openURL) private var openURL
+
+    func body(content: Content) -> some View {
+      content
+        .navigationBarTitleDisplayMode(.inline)
+        .modifier(ReturnOfferOverlay(navigation: navigation, document: document))
+        .toolbar {
+          ToolbarItemGroup(placement: .bottomBar) {
+            Button {
+              let result = InspectorPane.pressing(
+                .navigation, isOpen: showsInspector, showing: reader.pane)
+              reader.pane = result.pane
+              withAnimation(.snappy) { showsInspector = result.isOpen }
+            } label: {
+              Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+            }
+            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
+            TextSizeButton(library: library)
+            Menu {
+              MenuSections(
+                sections: DocumentMenus.draftMore(
+                  showsOriginal: reader.showOriginal, showsTranslation: reader.showTranslation),
+                perform: { action in
+                  DocumentActionPerformer(
+                    id: nil, metadata: nil, reader: reader, open: { openURL($0) }
+                  ).perform(action)
+                })
+            } label: {
+              Label("More", systemImage: "ellipsis")
+            }
+          }
+        }
+        .modifier(
+          PanelSheet(
+            navigation: navigation, showsInspector: $showsInspector,
+            isPresented: chrome.isCollapsed && isShown))
     }
   }
 #endif

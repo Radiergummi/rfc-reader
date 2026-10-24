@@ -12,8 +12,8 @@ public enum LinkRouting {
   /// selected. `isPreferred` picks the tab of the window that was key last, on
   /// macOS: a tab opened behind it, or a script navigating another window, becomes
   /// the most recently used without being the one the reader is in (#277).
-  public static func target<Scene>(
-    for document: DocumentID, in scenes: [Scene], showing: (Scene) -> DocumentID?,
+  public static func target<Scene, Document: Equatable>(
+    for document: Document, in scenes: [Scene], showing: (Scene) -> Document?,
     preferring isPreferred: (Scene) -> Bool = { _ in false }
   ) -> Scene? {
     scenes.first { showing($0) == document && isPreferred($0) }
