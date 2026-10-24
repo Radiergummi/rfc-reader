@@ -192,6 +192,26 @@
       return ScriptableCollection(identifier)
     }
 
+    /// `collection "HTTP"`: the first of that name in the sidebar, in any case. A
+    /// built-in list's name is refused in words (#987), since only the reader's
+    /// collections are elements and none of the commands can change a built-in one.
+    @objc(valueInScriptCollectionsWithName:)
+    func valueInScriptCollections(withName name: String) -> ScriptableCollection? {
+      let groups = Set(Self.settledIndex?.rfcs.compactMap(\.workingGroup) ?? [])
+      switch ScriptCollectionName(
+        name, collections: LibraryModel.shared.collections, workingGroups: groups)
+      {
+      case .collection(let identifier):
+        return ScriptableCollection(identifier)
+      case .builtIn:
+        ScriptError.report(
+          "“\(name)” is a list RFC Reader keeps, not a collection you made, so it can't be changed or deleted.")
+        return nil
+      case nil:
+        return nil
+      }
+    }
+
     /// `make new collection`: made in the store from what it was given, at the end
     /// of the sidebar, as New Collection makes one. With a query it is made from
     /// that query; named, if it was given no name, by its query.
@@ -221,6 +241,22 @@
     @objc(insertObject:inScriptCollectionsAtIndex:)
     func insert(_ collection: ScriptableCollection, inScriptCollectionsAt index: Int) {
       insertInScriptCollections(collection)
+    }
+
+    /// `delete collection "HTTP"`, as the sidebar's Delete Collection does: the
+    /// collection goes, and its RFCs stay in the library (#987).
+    @objc(removeFromScriptCollectionsAtIndex:)
+    func removeFromScriptCollections(at index: Int) {
+      if AppData.isStoredInMemory {
+        ScriptError.report(AppData.storeWarning.message)
+      }
+      let collections = LibraryModel.shared.collections.collections
+      guard collections.indices.contains(index) else { return }
+      let entry = collections[index]
+      let saved = LibraryModel.shared.editCollections {
+        try CollectionStore.delete(entry.id, in: $0)
+      }
+      if !saved { ScriptError.report("“\(entry.name)” could not be deleted.") }
     }
 
     /// The application's `windows`, less any reader window that has closed but is
