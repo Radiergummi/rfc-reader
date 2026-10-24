@@ -119,7 +119,10 @@ public struct ListOptions: Hashable, Sendable {
     let scope =
       searching
       ? Self.scope(searchScope.leaving(asked, in: filter), definedBy: definition) : SearchScope()
-    let hidesRead = hidesRead && filter != .recent && !asked.readerData.contains(.read)
+    let asksForRead =
+      asked.readerData.contains(.read)
+      || definition.map { IndexSearch.parseQuery($0).filters.readerData.contains(.read) } == true
+    let hidesRead = hidesRead && filter != .recent && !asksForRead
     let hidesAprilFirst =
       !showsAprilFirst && definition == nil && Self.listsFromIndex(filter, asked: asked)
     let showsObsolete = showsObsolete(searching: searching)

@@ -86,6 +86,17 @@ struct ListOptionsTests {
     #expect(options.apply(to: rows, filter: .all, query: "is:read", read: read).count == 3)
   }
 
+  /// A dynamic collection made from `is:read` asks for the read as the query does.
+  @Test func `hide read leaves a dynamic collection of the read alone`() {
+    let options = ListOptions(hidesRead: true)
+    let read: Set<DocumentID> = [.rfc(7231)]
+
+    #expect(
+      options.apply(
+        to: rows, filter: .collection(UUID()), query: "", read: read, definition: "is:read"
+      ).count == 3)
+  }
+
   // MARK: - April 1st RFCs (#713)
 
   private let jokes = [9110, 2549, 1149].map { LibraryRow.rfc(Fixtures.metadata($0)) }
