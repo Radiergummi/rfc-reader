@@ -439,9 +439,9 @@ struct SidebarView: View {
   #if os(macOS)
     @ViewBuilder
     private var justPublished: some View {
-      if !library.recent.isEmpty {
+      if !library.justPublished.isEmpty {
         Section("Just Published") {
-          ForEach(library.recent.prefix(5)) { recent in
+          ForEach(library.justPublished.prefix(5)) { recent in
             Button {
               library.open(recent.id, activation: .current, in: navigation)
             } label: {

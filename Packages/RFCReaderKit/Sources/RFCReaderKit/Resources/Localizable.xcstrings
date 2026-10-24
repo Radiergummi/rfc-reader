@@ -1138,6 +1138,16 @@
         }
       }
     },
+    "Current Only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur aktuelle"
+          }
+        }
+      }
+    },
     "Current Section" : {
       "localizations" : {
         "de" : {

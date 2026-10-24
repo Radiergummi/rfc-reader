@@ -52,6 +52,9 @@ public struct LibraryList: Hashable, Sendable {
   /// The members of each collection the query's `in:` names, by its name lowercased.
   /// A name missing here is a collection the library doesn't hold.
   public let collections: [String: [Int]]
+  /// Whether the rows are a search's, as the options show them: a query that is not
+  /// empty, or the list `textQuery` narrows a search by, of its qualifiers alone.
+  private(set) var isSearch: Bool
   /// The collections the query's `in:` names that are made from a query, by their
   /// names lowercased: unknown terms, since they have no members to search in.
   public let dynamicCollections: Set<String>
@@ -75,6 +78,7 @@ public struct LibraryList: Hashable, Sendable {
     self.options = options
     self.members = members
     self.collections = collections
+    self.isSearch = !self.query.isEmpty
     self.dynamicCollections = dynamicCollections
     self.definition = definition?.normalizedQuery
   }
@@ -146,6 +150,7 @@ public struct LibraryList: Hashable, Sendable {
       bookmarked: filter == .bookmarks || asked.readerData.contains(.bookmarked)
         ? sources.bookmarked : [],
       recentlyRead: filter == .recent || asked.readerData.contains(.read) || asked.sort == .lastRead
+        || options.hidesRead
         ? sources.recentlyRead : [],
       downloaded: filter == .downloaded || asked.readerData.contains(.offline)
         ? sources.downloaded : [],
@@ -235,7 +240,9 @@ public struct LibraryList: Hashable, Sendable {
       // Its own `sort:` is kept as it is: View Options reverses only the default.
       if sort == nil { sort = .newest } else { options.order = .newestFirst }
     }
-    return options.apply(to: sorted(base, by: sort), filter: listedFilter, query: query)
+    return options.apply(
+      to: sorted(base, by: sort), filter: listedFilter, query: query,
+      read: Set(recentlyRead), searching: isSearch, definition: definition)
   }
 
   /// `rows` in the order a query's `sort:` asks for, or as they are without one.
@@ -380,15 +387,16 @@ extension LibraryList {
     filters.sort = nil
     filters.section = nil
     let qualifiers = SearchQuery.format(text: "", filters: filters)
-    // The whole library, narrowed by nothing, allows every document; hiding the
-    // obsolete RFCs narrows it as a qualifier does.
-    guard filter != .all || !qualifiers.isEmpty || !options.showsObsolete else {
+    // The whole library, narrowed by nothing, allows every document; an option
+    // hiding some of a search's rows narrows it as a qualifier does.
+    guard filter != .all || !qualifiers.isEmpty || options.narrowsSearch(query: query) else {
       return TextQuery(words: parsed.text, section: section, documents: nil)
     }
-    let narrowing = LibraryList(
+    var narrowing = LibraryList(
       filter: filter, query: qualifiers, bookmarked: bookmarked, recentlyRead: recentlyRead,
       downloaded: downloaded, options: options, members: members, collections: collections,
       dynamicCollections: dynamicCollections, definition: definition)
+    narrowing.isSearch = true
     let rows = narrowing.rows(in: index, search: search)
     // An RFC published only as a PDF or a PostScript has no text to index: counted,
     // a search over it could never say it had searched everything.

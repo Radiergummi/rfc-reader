@@ -546,6 +546,16 @@
         }
       }
     },
+    "Advanced" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
+          }
+        }
+      }
+    },
     "All Key Words" : {
       "localizations" : {
         "de" : {
@@ -562,6 +572,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle RFCs sind indiziert."
+          }
+        }
+      }
+    },
+    "All documents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Dokumente"
+          }
+        }
+      }
+    },
+    "All streams" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Streams"
           }
         }
       }
@@ -1076,6 +1106,26 @@
         }
       }
     },
+    "Current documents are neither obsoleted nor Historic. The search field shows the scope, and removing it there searches everything." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuelle Dokumente sind weder veraltet noch historisch. Das Suchfeld zeigt den Bereich, und wer ihn dort entfernt, durchsucht alles."
+          }
+        }
+      }
+    },
+    "Current documents only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur aktuelle Dokumente"
+          }
+        }
+      }
+    },
     "Defined In" : {
       "localizations" : {
         "de" : {
@@ -1563,6 +1613,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Hide Read" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelesene ausblenden"
           }
         }
       }
@@ -2457,6 +2517,26 @@
         }
       }
     },
+    "Otherwise lists are denser, and the status is still read by VoiceOver." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonst sind Listen dichter, und VoiceOver liest den Status weiterhin vor."
+          }
+        }
+      }
+    },
+    "Otherwise the April Fools' Day RFCs are left out of lists, search and Just Published. A bookmark, a collection or a link still shows them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonst fehlen die Aprilscherz-RFCs in Listen, in der Suche und unter „Gerade veröffentlicht“. Ein Lesezeichen, eine Sammlung oder ein Link zeigt sie weiterhin."
+          }
+        }
+      }
+    },
     "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it." : {
       "localizations" : {
         "de" : {
@@ -2887,6 +2967,16 @@
         }
       }
     },
+    "Search" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen"
+          }
+        }
+      }
+    },
     "Search Library" : {
       "localizations" : {
         "de" : {
@@ -2913,6 +3003,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suchsyntax …"
+          }
+        }
+      }
+    },
+    "Search stream" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stream der Suche"
           }
         }
       }
@@ -3047,6 +3147,16 @@
         }
       }
     },
+    "Show April 1st RFCs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFCs vom 1. April zeigen"
+          }
+        }
+      }
+    },
     "Show Deeper" : {
       "localizations" : {
         "de" : {
@@ -3137,6 +3247,36 @@
         }
       }
     },
+    "Show obsoleted documents in lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veraltete Dokumente in Listen zeigen"
+          }
+        }
+      }
+    },
+    "Show obsoleted documents in search results" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veraltete Dokumente in Suchergebnissen zeigen"
+          }
+        }
+      }
+    },
+    "Show status badges in lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statusmarken in Listen zeigen"
+          }
+        }
+      }
+    },
     "Show the original text rendering by default" : {
       "localizations" : {
         "de" : {
@@ -3193,6 +3333,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sortieren nach"
+          }
+        }
+      }
+    },
+    "Sort lists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listen sortieren"
           }
         }
       }
