@@ -3,7 +3,7 @@ import RFCKit
 import SwiftData
 
 /// The reader's own data: bookmarks, reading positions (#152), collections (#349),
-/// Keep Offline marks (#358) and highlights (#522).
+/// Keep Offline marks (#358), highlights (#522) and followed working groups (#731).
 ///
 /// Versioned from the start, so a change to the schema is a migration rather than a
 /// store that no longer opens. `SchemaV6` is the one the app uses, V3's keys and
@@ -18,6 +18,7 @@ public typealias ReadingPosition = SchemaV6.ReadingPosition
 public typealias DocumentCollection = SchemaV6.DocumentCollection
 public typealias DocumentCollectionItem = SchemaV6.DocumentCollectionItem
 public typealias OfflineMark = SchemaV6.OfflineMark
+public typealias FollowedGroup = SchemaV6.FollowedGroup
 public typealias Highlight = SchemaV6.Highlight
 
 /// Today's models as they were before #152, exactly: a bare RFC number, unique.
@@ -369,15 +370,16 @@ public enum SchemaV5: VersionedSchema {
   }
 }
 
-/// V5, a collection's query (#355) and the highlights (#522). Its own copies of V5's
-/// models, identical to them but for `DocumentCollection.query`, for the reason V4
-/// has its own of V3's.
+/// V5, a collection's query (#355), the highlights (#522) and the followed working
+/// groups (#731). Its own copies of V5's models, identical to them but for
+/// `DocumentCollection.query`, for the reason V4 has its own of V3's, and the two
+/// that V5 has not: `Highlight` and `FollowedGroup`.
 public enum SchemaV6: VersionedSchema {
   public static let versionIdentifier = Schema.Version(6, 0, 0)
   public static var models: [any PersistentModel.Type] {
     [
       Bookmark.self, ReadingPosition.self, DocumentCollection.self, DocumentCollectionItem.self,
-      OfflineMark.self, Highlight.self,
+      OfflineMark.self, Highlight.self, FollowedGroup.self,
     ]
   }
 
@@ -499,6 +501,21 @@ public enum SchemaV6: VersionedSchema {
     public var document: DocumentID? { DocumentID(fileStem: documentKey) }
   }
 
+  /// A working group the reader follows: listed first in the sidebar, and announced
+  /// when it publishes an RFC. Keyed on the group's acronym in lower case, as the
+  /// index spells it, and synced like a bookmark.
+  @Model
+  public final class FollowedGroup {
+    /// "httpbis".
+    public var acronym: String = ""
+    public var followedAt: Date = Date.distantPast
+
+    public init(acronym: String, followedAt: Date = .now) {
+      self.acronym = acronym.lowercased()
+      self.followedAt = followedAt
+    }
+  }
+
   /// Color over a passage of a document (#522), from one position of its model text
   /// to another (`Target`), with the quote it covered. A row of its own, keyed on the
   /// document's `fileStem`, in CloudKit's shape: nothing unique, every attribute
@@ -584,7 +601,8 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
     fromVersion: SchemaV4.self, toVersion: SchemaV5.self)
 
   /// Adds a collection's query, nil for every collection there is, which is manual
-  /// (#355), and the highlights' entity (#522), and changes nothing else.
+  /// (#355), the highlights' entity (#522) and the followed working groups' entity
+  /// (#731), and changes nothing else.
   static let v5ToV6 = MigrationStage.lightweight(
     fromVersion: SchemaV5.self, toVersion: SchemaV6.self)
 
@@ -617,8 +635,9 @@ public enum UserData {
   }
 
   /// Merges rows that name the same document — keeping the newest bookmark and
-  /// reading position, and the earliest item in a collection and Keep Offline mark. Without a unique
-  /// constraint — CloudKit refuses one — two devices, or a race, can leave two.
+  /// reading position, and the earliest item in a collection, Keep Offline mark and
+  /// followed group. Without a unique constraint — CloudKit refuses one — two
+  /// devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
     let bookmarks = try context.fetch(
@@ -640,6 +659,9 @@ public enum UserData {
     let marks = try context.fetch(
       FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
     removeDuplicates(marks, keyedBy: \.documentKey, in: context)
+    let groups = try context.fetch(
+      FetchDescriptor<FollowedGroup>(sortBy: [SortDescriptor(\.followedAt)]))
+    removeDuplicates(groups, keyedBy: \.acronym, in: context)
     // One row per highlight, the latest edit kept.
     let highlights = try context.fetch(
       FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
@@ -649,7 +671,7 @@ public enum UserData {
 
   /// Keeps the first row per key and deletes the rest, so `rows` come in the order
   /// of preference: newest first for bookmarks and positions, earliest first for
-  /// collection items and marks.
+  /// collection items, marks and followed groups.
   private static func removeDuplicates<Row: PersistentModel>(
     _ rows: [Row], keyedBy key: (Row) -> String, in context: ModelContext
   ) {

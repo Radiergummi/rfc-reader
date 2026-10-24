@@ -8,12 +8,13 @@ private let mirrorLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
 /// The sets the app keeps read from the user's data (#595): the bookmarked documents,
-/// the collections, the Recently Read count and the Keep Offline marks, each read
-/// again on a save of what feeds it (`UserDataMirrors`, #603), and after a failed read
-/// on the next save of any kind (#613). Each is published only when it changed, and
-/// its `on…Changed` is then called, for what the app does about it; the bookmarks'
-/// and the marks' first read is reported whatever it found, as until it their
-/// emptiness meant nothing (`knowsWantedOffline(keepsBookmarks:)`).
+/// the collections, the Recently Read count, the Keep Offline marks and the followed
+/// working groups, each read again on a save of what feeds it (`UserDataMirrors`,
+/// #603), and after a failed read on the next save of any kind (#613). Each is
+/// published only when it changed, and its `on…Changed` is then called, for what the
+/// app does about it; the bookmarks' and the marks' first read is reported whatever it
+/// found, as until it their emptiness meant nothing
+/// (`knowsWantedOffline(keepsBookmarks:)`).
 ///
 /// Also where a bookmark or a collection is changed, on the container's main context,
 /// whose save the mirror then reads.
@@ -35,6 +36,10 @@ public final class UserDataMirror {
   /// Every document marked Keep Offline (#358), synced, so a mark made on another
   /// device arrives here too.
   public private(set) var offlineMarks: Set<DocumentID> = []
+
+  /// The acronym of every followed working group, in lower case (#731), synced, so a
+  /// group followed on another device is listed here too.
+  public private(set) var followedGroups: Set<String> = []
 
   /// Every highlight (#522): what the readers draw and the Annotations tab lists.
   public private(set) var annotations = AnnotationSnapshot.empty
@@ -63,6 +68,8 @@ public final class UserDataMirror {
   @ObservationIgnored public var onRecentlyReadCountChanged: () -> Void = {}
   /// Called when `offlineMarks` changed, and after their first read whatever it found.
   @ObservationIgnored public var onOfflineMarksChanged: () -> Void = {}
+  /// Called when `followedGroups` changed, here or by a sync from another device.
+  @ObservationIgnored public var onFollowedGroupsChanged: () -> Void = {}
   /// Called when `annotations` changed.
   @ObservationIgnored public var onAnnotationsChanged: () -> Void = {}
 
@@ -112,6 +119,23 @@ public final class UserDataMirror {
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
     if mirrors.contains(.offlineMarks) { refreshOfflineMarks() }
     if mirrors.contains(.annotations) { refreshAnnotations() }
+    if mirrors.contains(.followedGroups) { refreshFollowedGroups() }
+  }
+
+  private func refreshFollowedGroups() {
+    let groups: Set<String>
+    do {
+      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
+    } catch {
+      // The last set read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.followedGroups)
+      mirrorLog.error(
+        "reading followed groups failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    guard groups != followedGroups else { return }
+    followedGroups = groups
+    onFollowedGroupsChanged()
   }
 
   private func refreshAnnotations() {
