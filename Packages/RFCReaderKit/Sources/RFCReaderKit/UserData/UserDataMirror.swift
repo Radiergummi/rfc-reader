@@ -282,10 +282,12 @@ public final class UserDataMirror {
   /// there to be saved, such as a bookmark whose save failed. A failure is thrown,
   /// after `first` ran, and nothing is reported.
   public func removeAllOfflineMarks(first: () -> Void) throws {
-    try OfflineMarkStore.removeAll(in: ModelContext(container))
-    first()
     let marks = offlineMarks
+    first()
+    // The save's notification reads the marks again, and reports them when they changed.
+    try OfflineMarkStore.removeAll(in: ModelContext(container))
     refreshOfflineMarks()
+    // When none were removed nothing changed, and what `first` changed is reported here.
     if offlineMarks == marks { onOfflineMarksChanged() }
   }
 

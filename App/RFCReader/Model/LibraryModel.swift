@@ -1608,10 +1608,13 @@ final class LibraryModel {
   /// removes them. A removal that could not be saved is logged and changes nothing
   /// (`UserDataMirror.removeAllOfflineMarks(first:)`).
   func removeAllOffline() {
+    let keptBookmarks = keepsBookmarksOffline
     do {
-      // One reconciliation for both: the marks' report runs it.
+      // One reconciliation for both, without the bookmarks: the marks' report runs it.
       try userData.removeAllOfflineMarks(first: { storeKeepsBookmarksOffline(false) })
     } catch {
+      // Nothing was reconciled, so restoring the setting is all there is to undo.
+      storeKeepsBookmarksOffline(keptBookmarks)
       libraryLog.error(
         "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
     }
