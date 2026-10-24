@@ -70,7 +70,8 @@ struct RFCTextView: View {
         palette: settings.palette,
         outlinesEveryChip: contrast == .increased,
         // Read here, where it is observed: a highlight made or changed draws again.
-        highlights: library.annotations.highlights(of: inputs.documentID),
+        // An RFC's only: a draft has none (#728).
+        highlights: inputs.document.rfc.map(library.annotations.highlights(of:)) ?? [],
         width: geometry.size.width)
     }
   }
