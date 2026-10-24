@@ -283,4 +283,14 @@ struct AccentContrastTests {
       #expect(symbol.colors.dark.contrast(with: fill) >= AccentContrast.symbolContrast)
     }
   }
+
+  /// A redline's inserted words are text, held to the minimum on either page (#729).
+  @Test func `the redline's inserted color clears the minimum on the page`() {
+    #expect(
+      AccentContrast.inserted.light.contrast(with: SRGBColor(hex: 0xFF_FFFF))
+        >= AccentContrast.minimumContrast)
+    #expect(
+      AccentContrast.inserted.dark.contrast(with: SRGBColor(hex: 0x1E_1E1E))
+        >= AccentContrast.minimumContrast)
+  }
 }

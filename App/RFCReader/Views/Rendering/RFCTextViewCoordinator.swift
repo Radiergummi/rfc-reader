@@ -109,21 +109,43 @@ final class RFCTextViewCoordinator: NSObject {
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
   var bibliography: [ReferenceGroup] = []
-  /// The document on screen; see `RFCTextView.documentID`.
-  var documentID: DocumentID?
+  /// The document on screen; see `RFCTextView.document`.
+  var document: ReadableDocument?
+  /// The RFC on screen: what a copied link names and a reference's preview is
+  /// resolved from. Nil for a draft (#728), whose quotes and previews are an RFC's
+  /// only.
+  var documentID: DocumentID? { document?.rfc }
+  /// What a copy cites; see `ReaderInputs.citing`.
+  var citing: DocumentID?
   /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
-  /// or nil when nothing is selected (#186); see `QuoteCitation`.
+  /// or nil when nothing is selected (#186); see `QuoteCitation`. Cited as Settings
+  /// say (#712).
   func quote(of range: NSRange) -> QuoteCitation.Quote? {
-    guard let documentID, let built else { return nil }
-    return QuoteCitation.quote(of: range, in: built, document: documentID)
+    guard let citing, let built else { return nil }
+    return QuoteCitation.quote(
+      of: range, in: built, document: citing, cited: environment?.library.citedDocument(citing),
+      settings: ReaderSettings(defaults: .standard))
   }
 
-  /// The URL a copy links `link` to (#778): one anyone can open, or nil where the
-  /// reader has none to hand out.
-  func publicURL(for link: URL) -> URL? {
+  /// Copy Citation's citation of the section `range` starts in, in the style Settings
+  /// chose (#712), or nil where the index has no entry to cite from.
+  func citation(of range: NSRange) -> String? {
+    guard let citing, let built, let cited = environment?.library.citedDocument(citing) else {
+      return nil
+    }
+    let settings = ReaderSettings(defaults: .standard)
+    return DocumentActions.citation(
+      cited, section: QuoteCitation.section(of: range, in: built), style: settings.citationStyle,
+      site: settings.linkSite)
+  }
+
+  /// The URL a copy links `link` to on `site` (#778, #712): one anyone can open, or
+  /// nil where the reader has none to hand out.
+  func publicURL(for link: URL, site: LinkSite) -> URL? {
     guard let documentID else { return nil }
     return LinkCopy.publicURL(
-      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography)
+      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography,
+      site: site)
   }
   /// See `RFCTextView.onChoosePresentation`.
   var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
@@ -391,8 +413,8 @@ final class RFCTextViewCoordinator: NSObject {
           self?.showErrata(at: offset)
         }
       }
-      guard let url = link(at: offset), let documentID,
-        LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
+      guard let url = link(at: offset), let document,
+        LinkDestination.resolve(url, from: document, activation: .here) != .unhandled
       else { return defaultAction }
       // An action, not the link followed here and nil returned: UIKit asks for the
       // primary action as a long press begins too, so following it here navigated

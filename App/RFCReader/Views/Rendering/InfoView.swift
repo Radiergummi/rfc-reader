@@ -16,6 +16,8 @@ struct InfoView: View {
   let document: DocumentID?
   let library: LibraryModel
   let open: (DocumentID) -> Void
+  /// Opens a revising draft (#728).
+  let openDraft: (DraftID) -> Void
   let search: (String) -> Void
   let showReadingPath: (DocumentID) -> Void
   /// The body's sections, which an erratum's section is found in; empty before the
@@ -38,7 +40,9 @@ struct InfoView: View {
           }
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
-              SectionRows(section: section, library: library, open: open, search: search)
+              SectionRows(
+                section: section, library: library, open: open, openDraft: openDraft,
+                search: search)
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
@@ -387,6 +391,7 @@ private struct SectionRows: View {
   let section: DocumentInfo.Section
   let library: LibraryModel
   let open: (DocumentID) -> Void
+  let openDraft: (DraftID) -> Void
   let search: (String) -> Void
 
   var body: some View {
@@ -428,7 +433,7 @@ private struct SectionRows: View {
       VStack(alignment: .leading, spacing: 4) {
         caption(row.label, term: row.term)
         ForEach(lines) { line in
-          DraftLink(line: line) {
+          RevisingDraftLink(line: line, open: openDraft) {
             VStack(alignment: .leading, spacing: 1) {
               Text(line.title).foregroundStyle(.tint)
               Text(line.detail)

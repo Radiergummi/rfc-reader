@@ -181,6 +181,9 @@ public struct RFCEditorClient: Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
+    /// A draft, or a revision of one, that Datatracker or the IETF's archive does
+    /// not have.
+    case draftNotFound(DraftID)
     /// What was being read, and why it could not be: the parser's own error, kept
     /// rather than turned into words.
     case decoding(context: String, underlying: any Error)
@@ -194,6 +197,7 @@ public struct RFCEditorClient: Sendable {
       case .httpStatus(let status, let url):
         "\(url.host() ?? "The server") answered with HTTP \(status)."
       case .notFound(let id): "\(id.displayName) is not published at the RFC Editor."
+      case .draftNotFound(let id): "\(id.displayName) is not at the IETF."
       case .decoding(let context, let underlying): "\(context): \(underlying.localizedDescription)"
       }
     }
@@ -293,6 +297,62 @@ public struct RFCEditorClient: Sendable {
     return FetchedDocument(
       data: data, format: .text, document: LegacyTextParser.parse(data, entry: entry),
       xmlParseFailure: xmlParseFailure)
+  }
+
+  /// What Datatracker says of the draft `id` names, whatever its revision (#728),
+  /// decoded, and the bytes it came as, which the caller keeps.
+  @concurrent
+  public func fetchDraftInfo(_ id: DraftID) async throws -> (info: DraftInfo, data: Data) {
+    let url = RFCEditorEndpoints.draftInfo(id.name)
+    let data: Data
+    do {
+      data = try await fetch(url, accepting: ["application/json"])
+    } catch ClientError.httpStatus(404, _) {
+      throw ClientError.draftNotFound(id)
+    }
+    do {
+      return (try DraftInfo.decode(data), data)
+    } catch {
+      throw ClientError.decoding(context: url.absoluteString, underlying: error)
+    }
+  }
+
+  /// One revision of a draft (#728), from the IETF's archive, read from its text.
+  /// `id` names its revision.
+  ///
+  /// Not from its XML, which the archive has for a revision submitted as XML: that is
+  /// the author's source, unprepped, with no section numbers and no text for a
+  /// reference to a section, both of which the XML parser reads from what prep adds.
+  /// The text is xml2rfc's rendering of it, numbered, and every revision has one.
+  @concurrent
+  public func fetchDraft(_ id: DraftID) async throws -> FetchedDocument {
+    precondition(id.revision != nil, "a draft is fetched at a revision")
+    let data = try await fetchDraftData(id, format: .text)
+    return FetchedDocument(
+      data: data, format: .text, document: Self.parseDraft(data, id: id), xmlParseFailure: nil)
+  }
+
+  /// A draft's revision, parsed from its text through the legacy parser. Its header
+  /// names it by its revision, which the front page gives only beside the title.
+  public static func parseDraft(_ data: Data, id: DraftID) -> RFCDocument {
+    var document = LegacyTextParser.parse(data)
+    document.header.draftName = id.description
+    // The legacy parser takes the line beside the title for part of it, and on a
+    // draft's front page that line is its name.
+    document.header.title = document.header.title
+      .replacingOccurrences(of: id.description, with: "")
+      .trimmingCharacters(in: .whitespaces)
+    return document
+  }
+
+  /// Raw bytes of a draft's revision in the given format, from the IETF's archive.
+  public func fetchDraftData(_ id: DraftID, format: FileFormat) async throws -> Data {
+    let url = RFCEditorEndpoints.draft(id, format: format)
+    do {
+      return try await fetch(url, accepting: Self.mediaTypes(of: format))
+    } catch ClientError.httpStatus(404, _) {
+      throw ClientError.draftNotFound(id)
+    }
   }
 
   /// The RFC index as bytes, so the caller can both parse and keep it, unless it

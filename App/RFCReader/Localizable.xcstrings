@@ -436,6 +436,16 @@
         }
       }
     },
+    "A copied heading keeps its number, as in “4.2. Overview”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine kopierte Überschrift behält ihre Nummer, wie in „4.2. Overview“."
+          }
+        }
+      }
+    },
     "A reading path is computed from the citation index, which this version of the app doesn't include." : {
       "localizations" : {
         "de" : {
@@ -736,6 +746,16 @@
         }
       }
     },
+    "Changes since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@"
+          }
+        }
+      }
+    },
     "Check for Updates…" : {
       "localizations" : {
         "de" : {
@@ -762,6 +782,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wähle ein Legacy-XML-Paket: ein .aar-Archiv oder einen Ordner mit seinem Manifest."
+          }
+        }
+      }
+    },
+    "Citation Style" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitierstil"
           }
         }
       }
@@ -926,6 +956,16 @@
         }
       }
     },
+    "Copy As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopieren als"
+          }
+        }
+      }
+    },
     "Copy Checklist as CSV" : {
       "localizations" : {
         "de" : {
@@ -942,6 +982,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checkliste als Markdown kopieren"
+          }
+        }
+      }
+    },
+    "Copy Citation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellenangabe kopieren"
           }
         }
       }
@@ -976,12 +1026,42 @@
         }
       }
     },
+    "Copy Selection As" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl kopieren als"
+          }
+        }
+      }
+    },
     "Copy as Quote" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Zitat kopieren"
+          }
+        }
+      }
+    },
+    "Copy as Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Text kopieren"
+          }
+        }
+      }
+    },
+    "Copy section numbers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnittsnummern kopieren"
           }
         }
       }
@@ -1022,6 +1102,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ konnte nicht exportiert werden"
+          }
+        }
+      }
+    },
+    "Couldn't load %@ to compare" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte zum Vergleich nicht geladen werden"
           }
         }
       }
@@ -1507,6 +1597,26 @@
         }
       }
     },
+    "For Copy Citation, and the line after a quote." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für „Quellenangabe kopieren“ und die Zeile nach einem Zitat."
+          }
+        }
+      }
+    },
+    "For Share, Copy Link and citations." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für Teilen, „Link kopieren“ und Quellenangaben."
+          }
+        }
+      }
+    },
     "Format" : {
       "localizations" : {
         "de" : {
@@ -1613,6 +1723,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Hide Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen ausblenden"
           }
         }
       }
@@ -1837,6 +1957,16 @@
         }
       }
     },
+    "Internet-Draft" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft"
+          }
+        }
+      }
+    },
     "It holds ^[%lld document](inflect: true). Only the collection is removed; the documents stay in the library." : {
       "localizations" : {
         "de" : {
@@ -1903,6 +2033,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bibliothek"
+          }
+        }
+      }
+    },
+    "Links Point To" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links führen zu"
           }
         }
       }
@@ -2417,6 +2557,16 @@
         }
       }
     },
+    "Open on Datatracker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Datatracker öffnen"
+          }
+        }
+      }
+    },
     "Open on rfc-editor.org" : {
       "localizations" : {
         "de" : {
@@ -2907,12 +3057,32 @@
         }
       }
     },
+    "Reset Tips at Next Launch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipps beim nächsten Start zurücksetzen"
+          }
+        }
+      }
+    },
     "Retry" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Revision" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision"
           }
         }
       }
@@ -3137,6 +3307,16 @@
         }
       }
     },
+    "Sharing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilen"
+          }
+        }
+      }
+    },
     "Show All %@ Results" : {
       "localizations" : {
         "de" : {
@@ -3153,6 +3333,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs vom 1. April zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen zeigen"
+          }
+        }
+      }
+    },
+    "Show Changes Since %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen seit %@ zeigen"
           }
         }
       }

@@ -288,7 +288,7 @@
     private var windowTitle: WindowTitle {
       WindowTitle(
         // Still set on the window, because the tab bar reads it from there.
-        title: navigation.selection?.displayName ?? library.title(for: navigation.filter),
+        title: navigation.shownDocument?.displayName ?? library.title(for: navigation.filter),
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
         // A series names its members (#656).
@@ -298,13 +298,17 @@
               ?? DocumentActions.subtitle(
                 metadata: library.metadata($0), documentTitle: reader.documentTitle)
           }?
-          .truncated(to: Self.subtitleLimit) ?? "",
+          .truncated(to: Self.subtitleLimit)
+          ?? (navigation.shownDraft != nil
+            ? reader.documentTitle?.truncated(to: Self.subtitleLimit) : nil)
+            ?? "",
         // The reader's own copy, shown once its header scrolls away. Whole, not
         // truncated like the tab's: the item ellipsizes to whatever room it has.
-        documentTitle: navigation.selection?.displayName ?? "",
+        documentTitle: navigation.shownDocument?.displayName ?? "",
+        // A draft has no index entry: its header's title (#728).
         documentSubtitle: navigation.selection.flatMap {
           library.seriesMembers($0) ?? library.metadata($0)?.title
-        } ?? "",
+        } ?? (navigation.shownDraft != nil ? reader.documentTitle ?? "" : ""),
         isBookmarked: isBookmarked
       )
     }
@@ -315,6 +319,8 @@
       toolbar?.showDocumentTitle(title.documentTitle, subtitle: title.documentSubtitle)
       toolbar?.showBookmarked(title.isBookmarked)
       window?.toolbar?.validateVisibleItems()
+      // Another document, or none, and Back with somewhere to go or not (#782).
+      toolbar?.showDueTips()
     }
 
     /// The title over the list names the list: the collection the sidebar chose and
@@ -529,8 +535,33 @@
     /// panel or the find bar focused: the find bar is the scroll view's, a parent of
     /// the text view, not a child.
     func copyAsQuote() {
-      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
-      (text as? ReaderTextView)?.copyAsQuote(nil)
+      quotedText?.copyAsQuote(nil)
+    }
+
+    /// Edit ▸ Copy As ▸ Text (#712), whatever Copy is set to; handed to the reader's
+    /// text as Copy as Quote is.
+    func copyAsText() {
+      quotedText?.copyAsText(nil)
+    }
+
+    /// Edit ▸ Copy Citation (#712): of the section the selection starts in, or where
+    /// the reader is when nothing is selected, in the style Settings chose.
+    func copyCitation() {
+      if let text = quotedText, text.selectedRange().length > 0 {
+        text.copyCitation(nil)
+      } else {
+        perform(.copyPreferredCitation)
+      }
+    }
+
+    /// What a citation of the document is made from: the document the tab opened, a
+    /// series as itself (#656). Nil before the index names it.
+    var citedDocument: CitedDocument? {
+      navigation.selection.flatMap(library.citedDocument)
+    }
+
+    private var quotedText: ReaderTextView? {
+      FirstResponderSearch.searchableText(in: quotedReaderView) as? ReaderTextView
     }
 
     /// Edit ▸ Highlight (#522), handed to the reader's text as Copy as Quote is, and for
@@ -554,18 +585,23 @@
 
     /// A Cite or More item, from the toolbar's menus or the menu bar's (#761).
     func perform(_ action: DocumentMenus.Action) {
-      guard let id = navigation.shown else { return }
+      // An RFC, or a draft (#728), whose text has the toggles alone.
+      guard navigation.shownDocument != nil else { return }
+      let id = navigation.shown
       DocumentActionPerformer(
-        id: id, metadata: library.metadata(id), reader: reader,
-        open: { NSWorkspace.shared.open($0) }
+        id: id, cited: citedDocument, reader: reader, open: { NSWorkspace.shared.open($0) }
       ).perform(action)
     }
 
     /// File ▸ Share… (#761): the picker the toolbar's Share item opens, hanging below
     /// the toolbar's middle, for a window whose toolbar is hidden.
     func share() {
-      guard let id = navigation.shown, let window, let content = window.contentView else { return }
-      let picker = NSSharingServicePicker(items: [RFCEditorEndpoints.infoPage(id)])
+      guard navigation.shown != nil, let opened = navigation.selection, let window,
+        let content = window.contentView
+      else { return }
+      let link = DocumentActions.shareLink(
+        id: opened, site: ReaderSettings(defaults: .standard).linkSite)
+      let picker = NSSharingServicePicker(items: [link])
       let below = NSRect(
         x: content.bounds.midX, y: window.contentLayoutRect.maxY, width: 1, height: 1)
       picker.show(relativeTo: below, of: content, preferredEdge: .minY)
@@ -611,6 +647,18 @@
     }
 
     // MARK: - Lifetime
+
+    /// A tip on show goes with the main window, to the one that takes it (#782). Not
+    /// the key window: a tip's own popover takes key when clicked, and closing the
+    /// tip then would take its Learn More and its close button away mid-click.
+    func windowDidResignMain(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
+
+    /// A tip due while another window was main (#782).
+    func windowDidBecomeMain(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
 
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)

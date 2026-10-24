@@ -21,7 +21,9 @@ public struct TranslationCache: Sendable {
 
   /// What `document` has been translated as into `language`, by source; empty when
   /// nothing is kept, or what is kept cannot be read.
-  public func translations(of document: DocumentID, into language: String) -> [String: String] {
+  public func translations(of document: ReadableDocument, into language: String)
+    -> [String: String]
+  {
     guard let data = try? Data(contentsOf: url(of: document, into: language)),
       let translations = try? JSONDecoder().decode([String: String].self, from: data)
     else { return [:] }
@@ -31,7 +33,7 @@ public struct TranslationCache: Sendable {
   /// Adds `translations` to what is kept for `document` in `language`. A failure
   /// to write costs only a translation done again, so it is not reported.
   public func keep(
-    _ translations: [String: String], of document: DocumentID, into language: String
+    _ translations: [String: String], of document: ReadableDocument, into language: String
   ) {
     let kept = self.translations(of: document, into: language).merging(translations) { $1 }
     guard let data = try? JSONEncoder().encode(kept) else { return }
@@ -39,7 +41,7 @@ public struct TranslationCache: Sendable {
     try? data.write(to: url(of: document, into: language), options: .atomic)
   }
 
-  private func url(of document: DocumentID, into language: String) -> URL {
+  private func url(of document: ReadableDocument, into language: String) -> URL {
     directory.appending(path: "\(document.description).\(language).json")
   }
 }

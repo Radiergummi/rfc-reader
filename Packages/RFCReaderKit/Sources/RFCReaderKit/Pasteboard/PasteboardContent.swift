@@ -75,11 +75,15 @@ public struct PasteboardContent: Equatable, Sendable {
   /// HTML and plain text. The rich flavors and the HTML link a reference to the URL
   /// `publicURL` gives for its link, or to nothing, never to the reader's own
   /// (`LinkCopy.publicURL`). `hang` is the build's, which the rich flavors leave
-  /// out (`SelectionText.richCopy`).
+  /// out (`SelectionText.richCopy`). Without `keepingSectionNumbers`, a setting
+  /// (#712), a heading is copied without its number.
   public static func selection(
-    _ selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0
+    _ selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0,
+    keepingSectionNumbers: Bool = true
   ) -> PasteboardContent {
-    let rich = SelectionText.richCopy(of: selection, publicURL: publicURL, hang: hang)
+    let rich = SelectionText.richCopy(
+      of: selection, publicURL: publicURL, hang: hang,
+      keepingSectionNumbers: keepingSectionNumbers)
     let whole = NSRange(location: 0, length: rich.length)
     var flavors: [Flavor] = []
     if let rtfd = try? rich.data(
@@ -88,8 +92,17 @@ public struct PasteboardContent: Equatable, Sendable {
       flavors.append(Flavor(.flatRTFD, .data(rtfd)))
     }
     if let rtf = PasteboardMarkup.rtf(rich) { flavors.append(Flavor(.rtf, .data(rtf))) }
-    flavors.append(Flavor(.html, .text(SelectionText.html(of: selection, publicURL: publicURL))))
-    flavors.append(Flavor(.utf8PlainText, .text(SelectionText.plainText(of: selection))))
+    flavors.append(
+      Flavor(
+        .html,
+        .text(
+          SelectionText.html(
+            of: selection, publicURL: publicURL, keepingSectionNumbers: keepingSectionNumbers))))
+    flavors.append(
+      Flavor(
+        .utf8PlainText,
+        .text(
+          SelectionText.plainText(of: selection, keepingSectionNumbers: keepingSectionNumbers))))
     return PasteboardContent(flavors: flavors)
   }
 }
@@ -99,9 +112,10 @@ extension LinkCopy {
   /// one with nothing of ours to hand out, and a link to the web as it is.
   public static func publicURL(
     for link: URL, from currentDocument: DocumentID, in index: RFCIndex?,
-    bibliography: [ReferenceGroup]
+    bibliography: [ReferenceGroup], site: LinkSite = .rfcEditor
   ) -> URL? {
     guard isReaders(link) else { return link }
-    return forLink(link, from: currentDocument, in: index, bibliography: bibliography)?.url
+    return forLink(
+      link, from: currentDocument, in: index, bibliography: bibliography, site: site)?.url
   }
 }

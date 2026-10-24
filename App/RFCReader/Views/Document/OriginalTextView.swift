@@ -7,6 +7,9 @@ struct OriginalTextView: View {
   #endif
   let text: String?
   let failure: LoadFailure?
+  /// What the text is of, which a failure's suggestion names: an RFC's, or a
+  /// draft's, which is the IETF's (#728).
+  let subject: LoadFailure.Subject
   let fontSize: Double
   /// Whether this is the reader on screen, whose text Find opens over on iOS (#763),
   /// rather than one the stack keeps below its top.
@@ -25,7 +28,7 @@ struct OriginalTextView: View {
         Label("Couldn’t Load the Original Text", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
-        Text(failure.kind.recoverySuggestion(for: .originalText))
+        Text(failure.kind.recoverySuggestion(for: subject))
       } actions: {
         Button("Try Again", action: tryAgain)
         #if !os(macOS)

@@ -83,6 +83,8 @@ public final class DocumentTextBuilder {
   var givenBacklinks: [String: [Backlink]]?
   /// The errata each heading's chip lists (#387).
   var errata = ErrataMarks.none
+  /// What changed since another revision, which a redline build marks (#729).
+  var redline: RevisionDiff?
 
   /// The rules the document's grammar blocks define. Collected before anything is
   /// emitted, so a use links to a definition in a later block (#185).
@@ -126,6 +128,9 @@ public final class DocumentTextBuilder {
   var nextVerbatimOrdinal = 0
   /// The ordinal the next aside gets (`.rfcAside`).
   var nextAsideOrdinal = 0
+  /// How many verbatim blocks and asides of the older revision a redline has set
+  /// (#729), which number from `olderOrdinalBase` rather than among the newer's.
+  var olderOrdinals = (verbatim: 0, aside: 0)
 
   /// The color of a character a decorated block draws over instead of showing.
   public static let hiddenColor = PlatformColor.clear
@@ -163,6 +168,21 @@ public final class DocumentTextBuilder {
       style: style, choices: choices, hints: hints, labels: translation ?? .english)
     builder.errata = errata
     return build(document, title: title, translation: translation, with: builder)
+  }
+
+  /// A redline (#729): `document`, the newer of two, with what `diff` says changed
+  /// since the older marked in it: inserted words tinted and underlined, deleted
+  /// ones struck through and left out of a copy, sections added, moved and removed
+  /// said under their headings.
+  public static func build(
+    _ document: RFCDocument, redline diff: RevisionDiff, style: ReadingStyle,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled,
+    errata: ErrataMarks = .none
+  ) -> BuiltDocument {
+    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
+    builder.redline = diff
+    builder.errata = errata
+    return build(document, title: nil, translation: nil, with: builder)
   }
 
   /// A translated document's build (#749), in its labels, with the original's
@@ -319,8 +339,9 @@ extension DocumentTextBuilder {
   func appendDocument(_ document: RFCDocument) {
     documentID = document.header.id
     // A translation's sentences are not the original's, so it places no highlight
-    // and records no map (#749, #522).
-    if givenBacklinks == nil {
+    // and records no map (#749, #522); nor does a redline, whose text holds the
+    // older revision's words as well (#729).
+    if givenBacklinks == nil, redline == nil {
       positions = PositionMap.Recorder(model: ModelText(document))
     }
     let bibliography = ReferenceGroup.groups(in: document)
@@ -338,6 +359,7 @@ extension DocumentTextBuilder {
       }
     }
     appendAbstract(document.header.abstract)
+    appendRemovedSections(removedSections(after: nil))
     for section in document.sections {
       appendSection(section, depth: 1)
     }
@@ -355,7 +377,10 @@ extension DocumentTextBuilder {
   static let abstractAnchor = "abstract"
 
   private func appendAbstract(_ blocks: [Block]) {
-    guard !blocks.isEmpty else { return }
+    // A redline's abstract may be only the older revision's, removed (#729).
+    let removed = redline?.removedBlocks[
+      RevisionDiff.BlockKey(section: RevisionDiff.abstractKey, index: 0)]
+    guard !blocks.isEmpty || removed != nil else { return }
     glossedInSection = []
     hasModelUnit = true
     mark(Self.abstractAnchor)
@@ -367,7 +392,11 @@ extension DocumentTextBuilder {
     // (artwork's `monospaceScale`, a table's column widths) would be measured at
     // full size and shrunk afterwards, which is a different answer.
     emitting(in: style.scaled(by: Self.abstractScale), color: RFCColors.secondaryLabel) {
-      appendBlocks(blocks, indent: 0)
+      if let redline {
+        appendRedline(blocks, of: RevisionDiff.abstractKey, in: redline)
+      } else {
+        appendBlocks(blocks, indent: 0)
+      }
     }
   }
 
@@ -479,9 +508,15 @@ extension DocumentTextBuilder {
       appendHangingNumber(
         hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
     }
-    let lead = (hangingNumber == nil ? numberPrefix : "") + qualifierWords
-    if !lead.isEmpty {
-      output.append(inlineRuns([.text(lead)], base: attributes))
+    // The number inline is marked as what it copies as too, so a copy can leave
+    // it out (#712), as it can the hung one.
+    if hangingNumber == nil, !numberPrefix.isEmpty {
+      var prefix = attributes
+      prefix[.rfcCopiedAs] = numberPrefix
+      output.append(inlineRuns([.text(numberPrefix)], base: prefix))
+    }
+    if !qualifierWords.isEmpty {
+      output.append(inlineRuns([.text(qualifierWords)], base: attributes))
     }
     appendModel(inlineRuns(section.title, base: attributes))
     if let marked = errata.bySection[section.anchor], !marked.isEmpty {
@@ -492,10 +527,23 @@ extension DocumentTextBuilder {
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
     }
-    appendBlocks(section.blocks, indent: 0)
+    // The removed subsections that lead here, under the heading they stood under;
+    // from the first removed beside this section on, after its subsections, which it
+    // would read as the parent of before them, and with its own removed subsections
+    // still under it.
+    let removed = removedSections(after: section.anchor)
+    let underHeading = removed.prefix { $0.depth > section.depth }
+    if let redline {
+      appendRedlineCaption(for: section.anchor)
+      appendRedline(section.blocks, of: section.anchor, in: redline)
+      appendRemovedSections(underHeading)
+    } else {
+      appendBlocks(section.blocks, indent: 0)
+    }
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
+    appendRemovedSections(removed.dropFirst(underHeading.count))
   }
 
   /// A heading's number in the gutter (#433), between the two tabs its paragraph

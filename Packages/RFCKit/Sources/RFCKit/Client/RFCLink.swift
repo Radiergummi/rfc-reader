@@ -63,13 +63,11 @@ public struct RFCLink: Hashable, Sendable {
     return components.url ?? url
   }
 
+  /// The link at the RFC Editor, whatever site Settings chose: what an export
+  /// writes. Unlike `LinkSite.rfcEditor`'s, a series' section stays in it, so the
+  /// app reads an exported link back to the section.
   public var webURL: URL {
-    guard section == nil, let anchor else {
-      return CitationFormatter.url(for: id, section: section)
-    }
-    // The document's page, which defines the anchor, rather than its info page.
-    return Self.url(
-      RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), fragment: anchor)
+    LinkSite.rfcEditorURL(for: self)
   }
 
   /// The link `url` makes, where a citation can say all of it: an RFC itself, or one
@@ -114,6 +112,18 @@ public struct RFCLink: Hashable, Sendable {
     String(name.prefix { $0 != "." })
   }
 
+  /// The section and the anchor `url`'s fragment names, at most one of them.
+  static func place(inFragmentOf url: URL) -> (section: String?, anchor: String?) {
+    // Decoded, which `url.fragment` is not: the builders percent-encode a section,
+    // and `section-4.2%20draft` has to come back as the section it was.
+    let fragment = url.fragment(percentEncoded: false) ?? ""
+    let section = SectionAnchor.sectionNumber(fromAnchor: fragment)
+    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
+    // cannot, and a bare `#4.2` is no section either (#276).
+    let anchor = section == nil && fragment.first?.isNumber == false ? fragment : nil
+    return (section, anchor)
+  }
+
   /// The link `url` makes: any address of a document at the RFC Editor, Datatracker
   /// or `ietf.org`, or the app's own, with the section or anchor it was opened at.
   public init?(url: URL) {
@@ -125,14 +135,7 @@ public struct RFCLink: Hashable, Sendable {
   private init?(url: URL, strictly: Bool) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
-    // Decoded, which `url.fragment` is not: the builders percent-encode a section,
-    // and `section-4.2%20draft` has to come back as the section it was.
-    let fragment = url.fragment(percentEncoded: false) ?? ""
-    let fragmentSection = SectionAnchor.sectionNumber(fromAnchor: fragment)
-    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
-    // cannot, and a bare `#4.2` is no section either (#276).
-    let fragmentAnchor =
-      fragmentSection == nil && fragment.first?.isNumber == false ? fragment : nil
+    let (fragmentSection, fragmentAnchor) = Self.place(inFragmentOf: url)
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
@@ -158,9 +161,10 @@ public struct RFCLink: Hashable, Sendable {
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "www.ietf.org", "ietf.org":
-      // /rfc/rfc2119.txt, the IETF's own copy.
-      guard !strictly, components.count == 2, components[0] == "rfc",
-        let id = DocumentID(parsing: Self.stem(of: components[1]))
+      // /rfc/rfc2119.txt, the IETF's own copy, and /rfc/bcp/bcp14.txt a series'.
+      guard !strictly, (2...3).contains(components.count), components[0] == "rfc",
+        let id = DocumentID(parsing: Self.stem(of: components[components.count - 1])),
+        components.count == 2 || components[1] == id.series.rawValue.lowercased()
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":

@@ -19,13 +19,22 @@ public struct HistoryEntry: Hashable, Sendable, Codable {
     case citation
   }
 
-  public let id: DocumentID
+  /// The document: an RFC, or a draft's revision (#728).
+  public let document: ReadableDocument
   public var section: String?
   public let arrival: Arrival
 
-  public init(id: DocumentID, section: String? = nil, arrival: Arrival = .root) {
-    self.id = id
+  public init(document: ReadableDocument, section: String? = nil, arrival: Arrival = .root) {
+    self.document = document
     self.section = section
     self.arrival = arrival
   }
+
+  public init(id: DocumentID, section: String? = nil, arrival: Arrival = .root) {
+    self.init(document: .rfc(id), section: section, arrival: arrival)
+  }
+
+  /// The RFC, BCP, STD or FYI, unless the place is in a draft, which has no row in
+  /// the list and no index entry.
+  public var id: DocumentID? { document.rfc }
 }

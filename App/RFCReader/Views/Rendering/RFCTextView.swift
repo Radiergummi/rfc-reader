@@ -28,7 +28,8 @@ struct RFCTextView: View {
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
     measure: MeasurePreference,
-    documentID: DocumentID,
+    document: ReadableDocument,
+    citing: DocumentID? = nil,
     commitsOnClick: (() -> Void)? = nil,
     controller: ReaderController,
     onLink: @escaping (URL, LinkActivation) -> Bool,
@@ -48,7 +49,8 @@ struct RFCTextView: View {
       requirements: requirements,
       bibliography: bibliography,
       measure: measure,
-      documentID: documentID,
+      document: document,
+      citing: citing ?? document.rfc,
       commitsOnClick: commitsOnClick,
       controller: controller,
       onLink: onLink,
@@ -70,7 +72,8 @@ struct RFCTextView: View {
         palette: settings.palette,
         outlinesEveryChip: contrast == .increased,
         // Read here, where it is observed: a highlight made or changed draws again.
-        highlights: library.annotations.highlights(of: inputs.documentID),
+        // An RFC's only: a draft has none (#728).
+        highlights: inputs.document.rfc.map(library.annotations.highlights(of:)) ?? [],
         width: geometry.size.width)
     }
   }
@@ -98,8 +101,12 @@ struct ReaderInputs {
   /// The same preference `DocumentView` derives the build's column from, so the
   /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
-  /// The document on screen, which a force click on an anchor previews (#29).
-  let documentID: DocumentID
+  /// The document on screen, which a force click on an anchor previews (#29): an
+  /// RFC, or a draft's revision (#728).
+  let document: ReadableDocument
+  /// What a copy of it cites (#712): the document the tab opened, a series as itself
+  /// rather than the RFC shown for it (#656). Nil for a draft (#728).
+  let citing: DocumentID?
   /// Set only for the reader inside a link preview (#29): a click anywhere in it
   /// commits the preview rather than selecting, and it previews nothing itself.
   let commitsOnClick: (() -> Void)?
@@ -131,7 +138,8 @@ struct ReaderInputs {
     coordinator.drive(controller)
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
-    coordinator.documentID = documentID
+    coordinator.document = document
+    coordinator.citing = citing
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onChoosePresentation = onChoosePresentation
     #if canImport(UIKit)
@@ -265,8 +273,11 @@ struct ReaderInputs {
       textView.isTranslation = { [weak coordinator = context.coordinator] in
         coordinator?.built?.isTranslation == true
       }
-      textView.publicURL = { [weak coordinator = context.coordinator] link in
-        coordinator?.publicURL(for: link)
+      textView.citeSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.citation(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link, site in
+        coordinator?.publicURL(for: link, site: site)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0
@@ -423,8 +434,11 @@ struct ReaderInputs {
       textView.isTranslation = { [weak coordinator = context.coordinator] in
         coordinator?.built?.isTranslation == true
       }
-      textView.publicURL = { [weak coordinator = context.coordinator] link in
-        coordinator?.publicURL(for: link)
+      textView.citeSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.citation(of: range)
+      }
+      textView.publicURL = { [weak coordinator = context.coordinator] link, site in
+        coordinator?.publicURL(for: link, site: site)
       }
       textView.sectionNumberHang = { [weak coordinator = context.coordinator] in
         coordinator?.built?.sectionNumberHang ?? 0

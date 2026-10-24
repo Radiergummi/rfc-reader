@@ -32,10 +32,12 @@ public enum SelectionText {
   /// `unfolding` undoes RFC 8792's folds in a block shown folded. A caller that
   /// passes one line at a time, as a quote does, has no fold whole to undo, and
   /// would lose only the header that explains the folds it keeps.
-  public static func plainText(of selection: NSAttributedString, unfolding: Bool = true)
-    -> String
-  {
-    let attributed = withoutReaderText(of: selection)
+  /// `keepingSectionNumbers` is Settings' (#712), as in `withoutReaderText`.
+  public static func plainText(
+    of selection: NSAttributedString, unfolding: Bool = true, keepingSectionNumbers: Bool = true
+  ) -> String {
+    let attributed = withoutReaderText(
+      of: selection, keepingSectionNumbers: keepingSectionNumbers)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -88,15 +90,20 @@ public enum SelectionText {
   ///
   /// Nor is how it sets a heading's hung number (#433): the tabs and the number copy
   /// as the heading's own prefix (`.rfcCopiedAs`), so a heading copies the same
-  /// whether the window had room to hang it or not.
-  public static func withoutReaderText(of selection: NSAttributedString) -> NSAttributedString {
+  /// whether the window had room to hang it or not. Without `keepingSectionNumbers`,
+  /// a setting (#712), a heading copies without its number, hung or inline.
+  public static func withoutReaderText(
+    of selection: NSAttributedString, keepingSectionNumbers: Bool = true
+  ) -> NSAttributedString {
     let whole = NSRange(location: 0, length: selection.length)
     var runs: [(range: NSRange, replacement: String)] = []
     selection.enumerateAttribute(.rfcReaderOnly, in: whole) { value, range, _ in
       if value != nil { runs.append((range, "")) }
     }
     selection.enumerateAttribute(.rfcCopiedAs, in: whole) { value, range, _ in
-      if let copied = value as? String { runs.append((range, copied)) }
+      if let copied = value as? String {
+        runs.append((range, keepingSectionNumbers ? copied : ""))
+      }
     }
     guard !runs.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
@@ -142,9 +149,11 @@ public enum SelectionText {
   /// paragraph is set in by on screen and none is in the copy: a paste is indented
   /// the same whether the window had room to hang the numbers or not.
   public static func richCopy(
-    of selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0
+    of selection: NSAttributedString, publicURL: (URL) -> URL?, hang: CGFloat = 0,
+    keepingSectionNumbers: Bool = true
   ) -> NSAttributedString {
-    let withoutReaderText = withoutReaderText(of: selection)
+    let withoutReaderText = withoutReaderText(
+      of: selection, keepingSectionNumbers: keepingSectionNumbers)
     let result = NSMutableAttributedString(
       attributedString: richText(of: withoutReaderText) ?? withoutReaderText)
     let whole = NSRange(location: 0, length: result.length)
@@ -191,8 +200,10 @@ public enum SelectionText {
   /// The HTML a copy of `selection` carries (#778): a `p` per paragraph and a `pre`
   /// per verbatim block, with the text as the plain flavor has it, a reference by
   /// its label, and links as `richCopy` makes them.
-  public static func html(of selection: NSAttributedString, publicURL: (URL) -> URL?) -> String {
-    let text = withoutReaderText(of: selection)
+  public static func html(
+    of selection: NSAttributedString, publicURL: (URL) -> URL?, keepingSectionNumbers: Bool = true
+  ) -> String {
+    let text = withoutReaderText(of: selection, keepingSectionNumbers: keepingSectionNumbers)
     let string = text.string as NSString
     var parts: [String] = []
     // The verbatim block being collected: its box, and the range of its lines so

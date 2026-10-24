@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import TipKit
 
 // macOS has no `WindowGroup`, so nothing on that platform instantiates this view:
 // the window's content is an `NSSplitViewController` built by
@@ -29,7 +30,7 @@ import SwiftUI
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()
     /// The link this window was asked to open (#158), held until it has appeared.
-    @State private var requestedLink: RFCLink?
+    @State private var requestedLink: ReadableLink?
     @State private var hasAppeared = false
     /// This scene's `SceneSnapshot`, kept by the system with the scene (#155).
     @SceneStorage("scene") private var sceneSnapshot: Data?
@@ -43,7 +44,7 @@ import SwiftUI
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
-      navigation.selection?.displayName ?? library.title(for: navigation.filter)
+      navigation.shownDocument?.displayName ?? library.title(for: navigation.filter)
     }
 
     /// The scene's chrome, worked out here once and read by every view inside it
@@ -205,6 +206,13 @@ import SwiftUI
         // Not again while it is on show: a new target would dismiss and present it.
         if helpTarget == nil { helpTarget = HelpTarget() }
       }
+      // A tip's Learn More (#782).
+      .environment(
+        \.showHelp,
+        ShowHelpAction { section in
+          helpTarget = HelpTarget(section: section)
+        }
+      )
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
       // Outermost, and it has to be: an environment value reaches what is *inside*
@@ -274,7 +282,25 @@ struct EmptyDetailView: View {
             .onSubmit(controller.openSelection)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
-          if results.rows.isEmpty {
+          if let draft = results.draft {
+            // The draft typed (#728), which Open and ↵ open.
+            Section {
+              Button {
+                controller.open(.draft(draft))
+              } label: {
+                HStack(spacing: 12) {
+                  Text(verbatim: draft.id.displayName)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                  Spacer(minLength: 0)
+                  Text("Internet-Draft")
+                    .foregroundStyle(.secondary)
+                }
+              }
+              .tint(.primary)
+            }
+          } else if results.rows.isEmpty {
             status
           } else {
             Section {
@@ -291,12 +317,14 @@ struct EmptyDetailView: View {
           }
           ToolbarItem(placement: .confirmationAction) {
             Button("Open", action: controller.openSelection)
-              .disabled(results.openable == nil && !results.isSearching)
+              .disabled(results.openable == nil && !results.isSearching && results.draft == nil)
           }
         }
       }
       .onAppear {
         focused = true
+        // Found: its tip has no more to say (#782).
+        GoToRFCTip().invalidate(reason: .actionPerformed)
         // The check at launch alone goes stale in an app left open for weeks.
         library.refreshRegistriesIfDue()
       }

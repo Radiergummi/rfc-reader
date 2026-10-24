@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import SwiftUI
 
 /// Every reader setting, decoded once from user defaults into one value (#703).
@@ -26,6 +27,14 @@ public struct ReaderSettings: Sendable, Hashable {
   public var drawDiagrams: Bool
   public var syntaxTheme: SyntaxTheme
   public var palette: ReaderPalette
+  /// What a copy cites in, and where its links point (#712). Neither builds nor
+  /// draws anything: read when something is copied or shared.
+  public var citationStyle: CitationStyle
+  public var linkSite: LinkSite
+  /// What Copy puts on the pasteboard (#712).
+  public var copyFormat: CopyFormat
+  /// Whether a copied heading keeps its number as a prefix (#712).
+  public var copiesSectionNumbers: Bool
 
   public init(
     fontSize: Double = ReaderPreferences.defaultFontSize,
@@ -34,7 +43,11 @@ public struct ReaderSettings: Sendable, Hashable {
     preferOriginalText: Bool = ReaderPreferences.defaultPreferOriginalText,
     drawDiagrams: Bool = ReaderPreferences.defaultDrawDiagrams,
     syntaxTheme: SyntaxTheme = .standard,
-    palette: ReaderPalette = .automatic
+    palette: ReaderPalette = .automatic,
+    citationStyle: CitationStyle = ReaderPreferences.defaultCitationStyle,
+    linkSite: LinkSite = ReaderPreferences.defaultLinkSite,
+    copyFormat: CopyFormat = ReaderPreferences.defaultCopyFormat,
+    copiesSectionNumbers: Bool = ReaderPreferences.defaultCopiesSectionNumbers
   ) {
     self.fontSize = ReaderPreferences.clamped(fontSize)
     self.underlineLinks = underlineLinks
@@ -43,6 +56,10 @@ public struct ReaderSettings: Sendable, Hashable {
     self.drawDiagrams = drawDiagrams
     self.syntaxTheme = syntaxTheme
     self.palette = palette
+    self.citationStyle = citationStyle
+    self.linkSite = linkSite
+    self.copyFormat = copyFormat
+    self.copiesSectionNumbers = copiesSectionNumbers
   }
 
   /// What `defaults` holds, each setting falling back to its default where nothing
@@ -61,7 +78,15 @@ public struct ReaderSettings: Sendable, Hashable {
       drawDiagrams: defaults.object(forKey: Keys.drawDiagramsKey) as? Bool
         ?? Keys.defaultDrawDiagrams,
       syntaxTheme: .named(defaults.string(forKey: Keys.syntaxThemeKey)),
-      palette: .named(defaults.string(forKey: Keys.paletteKey))
+      palette: .named(defaults.string(forKey: Keys.paletteKey)),
+      citationStyle: defaults.string(forKey: Keys.citationStyleKey).flatMap(CitationStyle.init)
+        ?? Keys.defaultCitationStyle,
+      linkSite: defaults.string(forKey: Keys.linkSiteKey).flatMap(LinkSite.init)
+        ?? Keys.defaultLinkSite,
+      copyFormat: defaults.string(forKey: Keys.copyFormatKey).flatMap(CopyFormat.init)
+        ?? Keys.defaultCopyFormat,
+      copiesSectionNumbers: defaults.object(forKey: Keys.copiesSectionNumbersKey) as? Bool
+        ?? Keys.defaultCopiesSectionNumbers
     )
   }
 
@@ -85,6 +110,16 @@ public struct ReaderSettings: Sendable, Hashable {
       defaults.set(syntaxTheme.id, forKey: Keys.syntaxThemeKey)
     }
     if palette != old.palette { defaults.set(palette.id, forKey: Keys.paletteKey) }
+    if citationStyle != old.citationStyle {
+      defaults.set(citationStyle.rawValue, forKey: Keys.citationStyleKey)
+    }
+    if linkSite != old.linkSite { defaults.set(linkSite.rawValue, forKey: Keys.linkSiteKey) }
+    if copyFormat != old.copyFormat {
+      defaults.set(copyFormat.rawValue, forKey: Keys.copyFormatKey)
+    }
+    if copiesSectionNumbers != old.copiesSectionNumbers {
+      defaults.set(copiesSectionNumbers, forKey: Keys.copiesSectionNumbersKey)
+    }
   }
 
   /// The build-time half: what the builder sets a document in, for a column of
@@ -121,6 +156,10 @@ public struct ReaderSettingsValue: DynamicProperty {
   @AppStorage private var drawDiagrams: Bool
   @AppStorage private var syntaxTheme: String
   @AppStorage private var palette: String
+  @AppStorage private var citationStyle: CitationStyle
+  @AppStorage private var linkSite: LinkSite
+  @AppStorage private var copyFormat: CopyFormat
+  @AppStorage private var copiesSectionNumbers: Bool
   private let defaults: UserDefaults
 
   public init(store defaults: UserDefaults = .standard) {
@@ -138,6 +177,14 @@ public struct ReaderSettingsValue: DynamicProperty {
     _syntaxTheme = AppStorage(
       wrappedValue: Keys.defaultSyntaxTheme, Keys.syntaxThemeKey, store: defaults)
     _palette = AppStorage(wrappedValue: Keys.defaultPalette, Keys.paletteKey, store: defaults)
+    _citationStyle = AppStorage(
+      wrappedValue: Keys.defaultCitationStyle, Keys.citationStyleKey, store: defaults)
+    _linkSite = AppStorage(wrappedValue: Keys.defaultLinkSite, Keys.linkSiteKey, store: defaults)
+    _copyFormat = AppStorage(
+      wrappedValue: Keys.defaultCopyFormat, Keys.copyFormatKey, store: defaults)
+    _copiesSectionNumbers = AppStorage(
+      wrappedValue: Keys.defaultCopiesSectionNumbers, Keys.copiesSectionNumbersKey,
+      store: defaults)
   }
 
   /// The settings. Setting them writes what changed to user defaults.
@@ -146,7 +193,9 @@ public struct ReaderSettingsValue: DynamicProperty {
       ReaderSettings(
         fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
         preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
-        syntaxTheme: .named(syntaxTheme), palette: .named(palette))
+        syntaxTheme: .named(syntaxTheme), palette: .named(palette),
+        citationStyle: citationStyle, linkSite: linkSite, copyFormat: copyFormat,
+        copiesSectionNumbers: copiesSectionNumbers)
     }
     nonmutating set {
       newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))

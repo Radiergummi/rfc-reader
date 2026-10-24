@@ -29,6 +29,9 @@ import SwiftUI
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Where Share links to (#712).
+    @AppStorage(ReaderPreferences.linkSiteKey) private var linkSite =
+      ReaderPreferences.defaultLinkSite
 
     /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -47,6 +50,8 @@ import SwiftUI
 
       ToolbarItem(placement: .primaryAction) {
         moreMenu
+          // Reading Mode is in it, and nowhere else on screen (#782).
+          .helpTip(ReadingModeTip())
       }
 
       if showsBottomBar {
@@ -159,7 +164,10 @@ import SwiftUI
         Button("Print…", systemImage: "printer") { printDocument() }
           .disabled(!reader.offersPrintAndExport)
       } label: {
-        Label("More", systemImage: "ellipsis")
+        // An image, not a `Label`: with a label, iOS 26 never shows a toolbar
+        // item's popover tip (#782).
+        Image(systemName: "ellipsis")
+          .accessibilityLabel("More")
       }
     }
 
@@ -167,14 +175,18 @@ import SwiftUI
     /// `CollectionActionPerformer`'s.
     private func perform(_ action: DocumentMenus.Action) {
       DocumentActionPerformer(
-        id: id, metadata: metadata, reader: reader, open: { openURL($0) }
+        id: id, cited: library.citedDocument(identity), reader: reader, open: { openURL($0) }
       ).perform(action)
     }
 
+    /// The document the tab opened, a series as itself (#656), on the site Settings
+    /// chose (#712).
     private func shareLink(_ metadata: RFCMetadata) -> some View {
       ShareLink(
-        item: RFCEditorEndpoints.infoPage(id),
-        subject: Text(verbatim: "\(id.displayName): \(metadata.title)"))
+        item: DocumentActions.shareLink(id: identity, site: linkSite),
+        // A series by its designation: the title is its first RFC's.
+        subject: Text(
+          verbatim: identity == id ? "\(id.displayName): \(metadata.title)" : identity.displayName))
     }
 
     private func toggleBookmark() {
@@ -191,7 +203,7 @@ import SwiftUI
   /// platform's own menu rather than a popover: a compact control group is the
   /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
   /// `DocumentCommands`'. #708 replaces it with a quick panel.
-  private struct TextSizeButton: View {
+  struct TextSizeButton: View {
     let library: LibraryModel
     @ReaderSettingsValue private var settings
     @State private var showsSettings = false

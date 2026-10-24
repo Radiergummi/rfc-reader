@@ -30,11 +30,11 @@ struct DocumentView: View {
   /// build again, never an input to the style.
   @Environment(\.legibilityWeight) private var legibilityWeight
 
-  /// The RFC whose text the reader shows.
-  let id: DocumentID
+  /// The RFC whose text the reader shows, or a draft's revision (#728).
+  let id: ReadableDocument
   /// What the tab opened (#656): `id`, or the BCP, STD or FYI whose first member
   /// `id` is. It is what is bookmarked, recorded as read, and titled.
-  let identity: DocumentID
+  let identity: ReadableDocument
   /// The reader's place in the tab's stack of readers on iOS (#263), from 0 at the
   /// root; nil on the Mac, whose one reader is not stacked, and for a reader beside
   /// another.
@@ -68,7 +68,7 @@ struct DocumentView: View {
   @State private var arrivesOnTop = false
 
   #if os(macOS)
-    init(id: DocumentID, identity: DocumentID? = nil, isBeside: Bool = false) {
+    init(id: ReadableDocument, identity: ReadableDocument? = nil, isBeside: Bool = false) {
       self.id = id
       self.identity = identity ?? id
       self.isBeside = isBeside
@@ -81,7 +81,8 @@ struct DocumentView: View {
     /// A reader in the tab's stack. The panel is the stack's, so that an open panel
     /// stays open from one reader to the next.
     init(
-      id: DocumentID, identity: DocumentID? = nil, depth: Int, showsInspector: Binding<Bool>
+      id: ReadableDocument, identity: ReadableDocument? = nil, depth: Int,
+      showsInspector: Binding<Bool>
     ) {
       self.id = id
       self.identity = identity ?? id
@@ -95,7 +96,7 @@ struct DocumentView: View {
 
     /// The reader beside another one (#187), which is not stacked and has no panel
     /// of its own.
-    init(id: DocumentID, isBeside: Bool) {
+    init(id: ReadableDocument, isBeside: Bool) {
       self.id = id
       identity = id
       self.isBeside = isBeside
@@ -128,6 +129,27 @@ struct DocumentView: View {
   private var showsTranslation: Bool {
     showsReaderState ? reader.showTranslation : session.showsTranslation
   }
+
+  /// `content`, comparing the document with what the header asked for (#729), and
+  /// asking again once the document is here. Apart from the rest of the chain, which
+  /// the type checker cannot take in one expression.
+  private func comparing(_ content: some View) -> some View {
+    content
+      .onChange(of: reader.comparedWith) {
+        if showsReaderState { keptComparison = reader.comparedWith }
+        session.compare(with: comparedWith, library: library)
+      }
+      .onChange(of: session.state.document != nil) {
+        session.compare(with: comparedWith, library: library)
+      }
+  }
+
+  /// What the reader compares the document with (#729): the window's choice while
+  /// the reader state is this reader's, and what it last was otherwise.
+  private var comparedWith: ReadableDocument? {
+    showsReaderState ? reader.comparedWith : keptComparison
+  }
+  @State private var keptComparison: ReadableDocument?
 
   /// The framework's configuration for translating the document, nil until it is
   /// first asked for; `.translationTask` runs the translation whenever it changes.
@@ -196,7 +218,8 @@ struct DocumentView: View {
     paneWidth.map { ReaderLayout.column(forWidth: $0, measure: settings.measure) }
   }
 
-  private var metadata: RFCMetadata? { library.metadata(id) }
+  /// The RFC's index entry; nil for a draft (#728), which is in no index.
+  private var metadata: RFCMetadata? { id.rfc.flatMap(library.metadata) }
 
   private var positions: ReadingPositionKeeper {
     ReadingPositionKeeper(id: identity, context: modelContext)
@@ -208,16 +231,20 @@ struct DocumentView: View {
   /// lists them all.
   private var errataMarks: ErrataMarks {
     guard session.state.document != nil, originalOnlyPage == nil else { return .none }
-    return session.errataMarks(for: library.errata?[id])
+    return session.errataMarks(for: id.rfc.flatMap { library.errata?[$0] })
   }
 
   private var buildInputs: BuildInputs {
-    BuildInputs(
+    let redline = comparedWith.flatMap { session.redline?.older == $0 ? $0 : nil }
+    return BuildInputs(
       hasDocument: session.state.document != nil, settings: settings,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
       choices: library.presentationChoices(for: id, drawsDiagrams: settings.drawDiagrams),
       errata: errataMarks,
-      translated: showsTranslation && session.translatedDocument != nil,
+      // A redline is not translated, so a translation arriving under one is no
+      // reason to build it again.
+      translated: redline == nil && showsTranslation && session.translatedDocument != nil,
+      redline: redline,
       hang: { [session, paneWidth, legibilityWeight, measure = settings.measure] style in
         guard let paneWidth else { return 0 }
         let hang = session.sectionNumberHang(in: style, legibilityWeight: legibilityWeight)
@@ -265,7 +292,7 @@ struct DocumentView: View {
   /// The body's first half: the reader, and when the window's reader state is its.
   /// Apart from the rest, which the type checker cannot take in one expression.
   private var readerStateTracking: some View {
-    chromed
+    comparing(chromed)
       .onAppear {
         if !session.hasStartedLoading {
           startLoad()
@@ -388,7 +415,7 @@ struct DocumentView: View {
         // the stack kept finds it where it was left (#263).
         guard isShown, let request, !request.isToKeptReader else { return }
         // Sent somewhere, the reader leads a side-by-side reading (#187).
-        reader.coupling?.lead(id)
+        if let rfc = id.rfc { reader.coupling?.lead(rfc) }
         if request.isUnrecorded {
           follow(request)
         } else {
@@ -450,14 +477,26 @@ struct DocumentView: View {
       #if os(macOS)
         requestingContent.navigationTitle(identity.displayName)
       #else
-        withReaderBeside
-          .navigationTitle(identity.displayName)
-          .modifier(
-            IOSDocumentChrome(
-              id: id, identity: identity, metadata: metadata, document: session.state.document,
-              library: library,
-              navigation: navigation, reader: reader, showsInspector: $showsInspector,
-              barsHidden: $barsHidden, output: output, isShown: showsReaderState))
+        if let rfc = id.rfc, let rfcIdentity = identity.rfc {
+          withReaderBeside
+            .navigationTitle(identity.displayName)
+            .modifier(
+              IOSDocumentChrome(
+                id: rfc, identity: rfcIdentity, metadata: metadata,
+                document: session.state.document, library: library,
+                navigation: navigation, reader: reader, showsInspector: $showsInspector,
+                barsHidden: $barsHidden, output: output, isShown: showsReaderState))
+        } else {
+          // A draft (#728): none of an RFC's actions, which bookmark, keep, export
+          // and print what the index lists.
+          requestingContent
+            .navigationTitle(identity.displayName)
+            .modifier(
+              IOSDraftChrome(
+                document: session.state.document, library: library, navigation: navigation,
+                reader: reader,
+                showsInspector: $showsInspector, isShown: showsReaderState))
+        }
       #endif
     }
   }
@@ -471,7 +510,7 @@ struct DocumentView: View {
         requestingContent
         // Not in a compact width, where neither half is a column.
         // Nor under the top of the stack: the reading is the reader on screen's.
-        if showsReaderState, let beside = reader.sideBySide, beside.pair.reading == id,
+        if showsReaderState, let beside = reader.sideBySide, beside.pair.reading == id.rfc,
           SideBySide.isOffered(in: horizontalSizeClass)
         {
           Divider()
@@ -498,8 +537,11 @@ struct DocumentView: View {
   }
 
   /// What the header says of a translation asked for, nil showing the English.
+  /// None while a redline is asked for, which is not translated, unless the build on
+  /// screen is still the translation: the older document loading, or failing to.
   private var translationMark: TranslationMark? {
-    TranslationMark(
+    guard comparedWith == nil || session.state.built?.isTranslation == true else { return nil }
+    return TranslationMark(
       session.translationPhase, showsTranslation: showsTranslation,
       buildIsTranslation: session.state.built?.isTranslation == true)
   }
@@ -563,8 +605,8 @@ struct DocumentView: View {
   private var originalOnlyPage: PublishedOriginalPage? {
     guard let metadata else { return nil }
     return PublishedOriginalPage(
-      id, formats: metadata.formats, showsOriginal: showsOriginal,
-      text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
+      metadata.id, formats: metadata.formats, showsOriginal: showsOriginal,
+      text: session.state.document, pointerInPack: library.pointersInPack.contains(metadata.id))
   }
 
   @ViewBuilder
@@ -577,6 +619,7 @@ struct DocumentView: View {
       OriginalTextView(
         text: session.originalText,
         failure: session.originalTextFailure,
+        subject: id.draft == nil ? .originalText : .draft,
         fontSize: ReadingStyle(bodySize: settings.fontSize, textSize: textSize).bodySize,
         isShown: showsReaderState,
         tryAgain: { session.startOriginalTextLoad(from: library) }
@@ -588,12 +631,19 @@ struct DocumentView: View {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
         revisions: metadata.map { library.revisionsSummary(for: $0.id) },
+        draft: draftStatus(of: document),
+        comparison: comparedWith.map {
+          DocumentHeaderView.Comparison(
+            older: $0, isShown: session.shownRedline == $0,
+            failed: session.comparisonFailed == $0)
+        },
         translation: translationMark, documentErrata: built.errata.document)
       RFCTextView(
         built: built,
         bibliography: reader.groups,
         measure: settings.measure,
-        documentID: id,
+        document: id,
+        citing: identity.rfc,
         controller: controller,
         onLink: openInApp,
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
@@ -655,7 +705,7 @@ struct DocumentView: View {
         Label("Couldn’t Load \(identity.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
-        Text(failure.kind.recoverySuggestion(for: .document))
+        Text(failure.kind.recoverySuggestion(for: id.draft == nil ? .document : .draft))
       } actions: {
         Button("Try Again") { startLoad() }
         #if !os(macOS)
@@ -663,7 +713,12 @@ struct DocumentView: View {
             Button("Open Settings", action: CellularSettings.open)
           }
         #endif
-        Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
+        switch id {
+        case .rfc(let rfc):
+          Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(rfc))
+        case .draft(let draft):
+          Link("Open on Datatracker", destination: RFCEditorEndpoints.datatrackerDraft(draft.name))
+        }
       }
     } else if session.state.showsProgress(isDue: session.isProgressDue) {
       ProgressView("Loading \(identity.displayName)…")
@@ -688,12 +743,14 @@ struct DocumentView: View {
       VStack(alignment: .leading, spacing: 0) {
         DocumentHeaderView(
           identity: DocumentHeaderView.Identity(
-            header: DocumentHeader(id: id, title: metadata.title),
+            header: DocumentHeader(id: metadata.id, title: metadata.title),
             metadata: metadata,
             revisions: library.revisionsSummary(for: metadata.id),
             // No body to mark: every erratum is the whole document's.
-            documentErrata: session.errataMarks(for: library.errata?[id], drawsBody: false)
-              .document),
+            documentErrata: session.errataMarks(
+              for: library.errata?[metadata.id], drawsBody: false
+            )
+            .document),
           reader: controller
         )
         .padding(.top, 16)
@@ -772,7 +829,9 @@ struct DocumentView: View {
   /// reader of the same RFC (#263): the request would be taken by the wrong one.
   private func showRequestedTab() {
     guard isShown else { return }
-    if let tab = library.takeInspectorRequest(for: identity, in: navigation) { requestedTab = tab }
+    if let rfc = identity.rfc, let tab = library.takeInspectorRequest(for: rfc, in: navigation) {
+      requestedTab = tab
+    }
     guard reader.canDescribe, let tab = requestedTab else { return }
     requestedTab = nil
     reader.show(tab)
@@ -874,6 +933,8 @@ struct DocumentView: View {
     guard !ownsReader, isShown, session.hasStartedLoading else { return }
     session.reinstate(
       into: writer, library: library, showsOriginal: keptOriginal, folding: keptFolding)
+    // The comparison, which reinstating cleared, is the window's while it is on top.
+    writer { $0.comparedWith = keptComparison }
     ownsReader = true
     // The section it is in, which reinstating cleared, and which the controller
     // publishes only as it changes.
@@ -881,6 +942,14 @@ struct DocumentView: View {
     // Where its build placed the highlights, which reinstating cleared too (#522).
     writer.highlightStatuses = controller.highlightStatuses
     updateFolding()
+  }
+
+  /// What the header says of a draft (#728): the revision `document` is, which the
+  /// archive's file names, and what Datatracker says of the draft. Nil for an RFC.
+  private func draftStatus(of document: RFCDocument) -> DraftStatus? {
+    guard let draft = id.draft else { return nil }
+    let shown = document.header.draftName.flatMap(DraftID.init(parsing:)) ?? draft
+    return DraftStatus(shown: shown, info: session.draftInfo)
   }
 
   /// Nil while there is no build to find the place in.

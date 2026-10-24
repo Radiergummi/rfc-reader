@@ -19,11 +19,12 @@ struct ReaderScene: ViewModifier {
       // Any navigation in this tab makes it the most recently used, where an
       // untargeted deep link lands when no tab is preferred over it -- on macOS
       // `LibraryModel.route` prefers the tab of the window that was key last.
-      .onChange(of: navigation.selection) {
+      .onChange(of: navigation.shownDocument) {
         library.activate(navigation)
         // A deselected row leaves nothing on screen, and the panel and the toolbar
-        // must not go on describing the document that was.
-        if navigation.selection == nil { reader.clear() }
+        // must not go on describing the document that was. A draft has no row, and
+        // is on screen without one (#728).
+        if navigation.shownDocument == nil { reader.clear() }
         // Another document read leaves the comparison with this one (#187).
         if let beside = reader.sideBySide, beside.pair.reading != navigation.shown {
           reader.endComparison()

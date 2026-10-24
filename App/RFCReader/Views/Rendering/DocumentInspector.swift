@@ -74,6 +74,8 @@ struct DocumentInspector: View {
   let revealed: ReaderState.RevealedReference?
   let selectSection: (String) -> Void
   let openDocument: (DocumentID) -> Void
+  /// Opens a draft revising the RFC (#728), from the Info pane.
+  let openDraft: (DraftID) -> Void
   /// Searches the library, for a keyword chosen in the Info pane.
   let search: (String) -> Void
   /// Shows the document's reading path (#189), from the Info pane.
@@ -84,8 +86,9 @@ struct DocumentInspector: View {
     case .navigation: navigation
     case .info:
       let infoView = InfoView(
-        info: info, document: document, library: library, open: openDocument, search: search,
-        showReadingPath: showReadingPath, sections: sections, selectSection: selectSection)
+        info: info, document: document, library: library, open: openDocument,
+        openDraft: openDraft, search: search, showReadingPath: showReadingPath,
+        sections: sections, selectSection: selectSection)
       #if os(macOS)
         infoView
       #else
@@ -340,6 +343,13 @@ struct PanelHost: View {
         openDocument: { id in
           leave {
             library.open(id, activation: .current, in: navigation, arrival: .citation)
+          }
+        },
+        openDraft: { draft in
+          leave {
+            library.open(
+              .draft(DraftLink(id: draft)), activation: .current, in: navigation,
+              arrival: .citation)
           }
         },
         search: { text in
@@ -667,7 +677,8 @@ struct ReferenceMenu {
   private func perform(_ action: DocumentMenus.Action, for id: DocumentID) {
     guard
       case .copy(let text, let feedback) = action.effect(
-        for: id, metadata: library.metadata(id), section: nil)
+        for: id, citing: library.citedDocument(id), section: nil,
+        settings: ReaderSettings(defaults: .standard))
     else { return }
     Clipboard.copy(text, announcing: feedback)
   }

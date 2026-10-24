@@ -131,16 +131,16 @@ final class LibraryModel {
   /// app's session. Here rather than in `DocumentSession`, which goes when the
   /// reader goes back. Not persisted.
   private(set) var chosenPresentations:
-    [DocumentID: [PresentationKey: PresentationChoices.Presentation]] = [:]
+    [ReadableDocument: [PresentationKey: PresentationChoices.Presentation]] = [:]
 
   /// The reader's choices in `id`, over the preference for every document.
-  func presentationChoices(for id: DocumentID, drawsDiagrams: Bool) -> PresentationChoices {
+  func presentationChoices(for id: ReadableDocument, drawsDiagrams: Bool) -> PresentationChoices {
     PresentationChoices(drawsDiagrams: drawsDiagrams, chosen: chosenPresentations[id] ?? [:])
   }
 
   func choose(
     _ presentation: PresentationChoices.Presentation, for key: PresentationKey,
-    in id: DocumentID
+    in id: ReadableDocument
   ) {
     chosenPresentations[id, default: [:]][key] = presentation
   }
@@ -436,6 +436,8 @@ final class LibraryModel {
   private let clientOnCheapNetworks = RFCEditorClient(
     transport: URLSessionTransport(session: .rfcEditorOnCheapNetworks))
   private let store = DocumentStore()
+  /// The Internet-Drafts read (#728), apart from the RFCs.
+  private let drafts = DraftStore()
   private var search: IndexSearch?
 
   /// The full-text index (#37), kept to the bodies `store` holds. Nil until bootstrap
@@ -1100,6 +1102,12 @@ final class LibraryModel {
     index?[id]
   }
 
+  /// What a citation of `id` is made from (#712): its entry in the index, or a
+  /// series' members'. Nil before the index names it.
+  func citedDocument(_ id: DocumentID) -> CitedDocument? {
+    index.flatMap { CitedDocument(id, in: $0) }
+  }
+
   /// "RFC 2119 and RFC 8174", the members of a series, for its reader's subtitle
   /// (#656); nil for an RFC, or before the index names them.
   func seriesMembers(_ id: DocumentID) -> String? {
@@ -1293,6 +1301,8 @@ final class LibraryModel {
   func quickOpenHits(for query: String) async -> [DocumentID]? {
     guard !query.isEmpty else { return nil }
     if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
+    // A draft is in no index (#728).
+    if DocumentReference.draft(from: query) != nil { return [] }
     guard index != nil else { return [] }
     guard await Debounce.outlasted(.milliseconds(120)) else { return nil }
     let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
@@ -1376,6 +1386,11 @@ final class LibraryModel {
   /// whatever window the reader next opens, possibly minutes later. iOS brings up a
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
+    route(.rfc(link))
+  }
+
+  /// `route(_:)` for a link to an RFC or a draft (#728).
+  func route(_ link: ReadableLink) {
     let preferred = preferredScene
     switch sceneRegistry.route(link, showing: \.heldDocument, preferring: { $0 === preferred }) {
     case .deliver(let delivery):
@@ -1390,7 +1405,9 @@ final class LibraryModel {
   }
 
   private func carryOut(_ delivery: SceneRegistry<NavigationModel>.Delivery) {
-    if inspectorRequest?.id == delivery.link.id { inspectorRequestScene = delivery.scene }
+    if let id = delivery.link.document.rfc, inspectorRequest?.id == id {
+      inspectorRequestScene = delivery.scene
+    }
     if delivery.bringsForward {
       deliver(delivery.link, to: delivery.scene)
     } else {
@@ -1399,7 +1416,7 @@ final class LibraryModel {
   }
 
   /// Opens `link` in `scene` and makes that the tab in use.
-  private func deliver(_ link: RFCLink, to scene: NavigationModel) {
+  private func deliver(_ link: ReadableLink, to scene: NavigationModel) {
     scene.open(link)
     // The tab that took the link is the most recently used one now, and where the
     // next untargeted link belongs -- even when it already showed that document, so
@@ -1412,7 +1429,7 @@ final class LibraryModel {
 
   #if os(macOS)
     /// Opens a window for `link`, which it takes in `register(_:)`.
-    private func openInNewWindow(_ link: RFCLink) {
+    private func openInNewWindow(_ link: ReadableLink) {
       sceneRegistry.hold(link, bringsForward: true)
       windows?.openWindow()
     }
@@ -1438,6 +1455,14 @@ final class LibraryModel {
     _ link: RFCLink, activation: LinkActivation, in scene: NavigationModel,
     arrival: HistoryEntry.Arrival = .root
   ) {
+    open(.rfc(link), activation: activation, in: scene, arrival: arrival)
+  }
+
+  /// The same for a link to an RFC or a draft (#728).
+  func open(
+    _ link: ReadableLink, activation: LinkActivation, in scene: NavigationModel,
+    arrival: HistoryEntry.Arrival = .root
+  ) {
     switch activation {
     case .here:
       scene.open(link, arrival: arrival)
@@ -1458,7 +1483,7 @@ final class LibraryModel {
   /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
   /// app's `WindowGroup` is a plain one, which cannot take a value. A new window
   /// always comes to the front there, so `inBackground` does not apply.
-  private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
+  private func openInNewScene(_ link: ReadableLink, inBackground: Bool) {
     #if os(macOS)
       sceneRegistry.hold(link, bringsForward: !inBackground)
       windows?.openTab(inBackground: inBackground)
@@ -1490,7 +1515,7 @@ final class LibraryModel {
     /// Opens `link` in a window of its own, at the place it names: a reference's
     /// long-press menu (#763).
     func openWindow(for link: RFCLink) {
-      openInNewScene(link, inBackground: false)
+      openInNewScene(.rfc(link), inBackground: false)
     }
   #endif
 
@@ -1509,6 +1534,11 @@ final class LibraryModel {
     /// means the window it is looking at. With no window open there is no front
     /// tab, and the link is routed the way one from outside is, which opens one.
     func open(_ link: RFCLink, placement: Placement) {
+      open(.rfc(link), placement: placement)
+    }
+
+    /// The same for a link to an RFC or a draft (#728).
+    func open(_ link: ReadableLink, placement: Placement) {
       switch placement {
       case .frontTab:
         if let scene = windows?.activeNavigation {
@@ -1528,7 +1558,7 @@ final class LibraryModel {
     /// joins the key window's group.
     func openTab(_ link: RFCLink, beside scene: NavigationModel) {
       windows?.bringForward(scene)
-      openInNewScene(link, inBackground: false)
+      openInNewScene(.rfc(link), inBackground: false)
     }
   #endif
 
@@ -1542,6 +1572,27 @@ final class LibraryModel {
       id, formats: entry?.formats ?? [], entry: entry, client: client)
     await evictIfGrown()
     return document
+  }
+
+  /// An RFC as `document(for:)` reads it, or a draft's revision (#728): the newest
+  /// when it names none.
+  func document(for document: ReadableDocument) async throws -> RFCDocument {
+    switch document {
+    case .rfc(let id): try await self.document(for: id)
+    case .draft(let id): try await drafts.document(id, client: client)
+    }
+  }
+
+  /// What Datatracker says of a draft (#728): its title, revisions and RFC, asked
+  /// again once a day.
+  func draftInfo(for id: DraftID) async throws -> DraftInfo {
+    try await drafts.info(for: id, client: client)
+  }
+
+  /// The revision `id` names, or the newest Datatracker knows of; `id` itself when
+  /// neither Datatracker nor what is kept can say (#728).
+  func revision(of id: DraftID) async -> DraftID {
+    (try? await drafts.revision(of: id, client: client)) ?? id
   }
 
   /// Records an RFC opened without a load as `document(for:)` records a loaded one:
@@ -1572,6 +1623,14 @@ final class LibraryModel {
     let text = try await store.originalText(id, client: client)
     await evictIfGrown()
     return text
+  }
+
+  /// The plain text of an RFC or a draft's revision (#728).
+  func originalText(for document: ReadableDocument) async throws -> String {
+    switch document {
+    case .rfc(let id): try await originalText(for: id)
+    case .draft(let id): try await drafts.originalText(id, client: client)
+    }
   }
 
   /// Asks the store first, so an open that wrote nothing costs neither the pinned
@@ -1615,22 +1674,31 @@ final class LibraryModel {
   /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
   /// fetch still running is counted when it lands. Nothing is clearable when what
   /// `sparedFromClearing` spares cannot be told, as Clear Cache then removes nothing.
+  /// The drafts read are counted with the cache, and are clearable but for those
+  /// open (#728).
   func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
-    guard let spared = sparedFromClearing() else {
-      var report = await store.storageUsage(sparing: [])
-      report.clearable = StorageUsage(documents: 0, bytes: 0)
-      return report
-    }
-    return await store.storageUsage(sparing: spared)
+    let spared = sparedFromClearing()
+    let draftUsage = await drafts.storageUsage(sparing: openDrafts)
+    var report = await store.storageUsage(sparing: spared ?? [])
+    report.cache = report.cache.adding(draftUsage.cache)
+    report.clearable =
+      spared == nil
+      ? StorageUsage(documents: 0, bytes: 0) : report.clearable.adding(draftUsage.clearable)
+    return report
   }
 
-  /// Empties the reading cache, but for what `sparedFromClearing` spares; when that
-  /// cannot be told, nothing is removed.
+  /// Empties the reading cache, but for what `sparedFromClearing` spares, and the
+  /// drafts read, but for those open; when what to spare cannot be told, nothing is
+  /// removed.
   func clearCache() async {
     guard let spared = sparedFromClearing() else { return }
     forgetPreviews(of: await store.clearCache(sparing: spared))
+    await drafts.clear(sparing: openDrafts)
   }
+
+  /// The drafts open, which Clear Cache spares as it spares the RFCs open (#728).
+  private var openDrafts: Set<DraftID> { Set(sceneRegistry.open.compactMap(\.shownDraft)) }
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
   /// are read here, as for eviction, since the store learns them only when the keeper

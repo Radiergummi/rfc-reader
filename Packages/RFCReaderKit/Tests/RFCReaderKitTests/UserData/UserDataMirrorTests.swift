@@ -74,7 +74,7 @@ struct UserDataMirrorTests {
     mirror.container.mainContext.insert(OfflineMark(document: .rfc(9110)))
 
     try ReadingPositionStore.save(
-      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(9110),
+      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(.rfc(9110)),
       in: ModelContext(mirror.container))
 
     #expect(mirror.bookmarkedDocuments.isEmpty)
@@ -187,7 +187,7 @@ struct UserDataMirrorTests {
 
     mirror.readBookmarks = { try BookmarkStore.bookmarkedDocuments(in: $0) }
     try ReadingPositionStore.save(
-      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(9110),
+      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(.rfc(9110)),
       in: mirror.container.mainContext)
 
     #expect(mirror.knowsWantedOffline(keepsBookmarks: true))

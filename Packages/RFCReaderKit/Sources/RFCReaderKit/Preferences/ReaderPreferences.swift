@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 
 /// The reader's settings as user defaults hold them: each key and its default, once.
 ///
@@ -88,4 +89,21 @@ public enum ReaderPreferences {
   /// The page palette's `ReaderPalette.id`.
   public static let paletteKey = "readerPalette"
   public static let defaultPalette = ReaderPalette.automatic.id
+
+  /// The style of Copy Citation, and of Copy as Quote's citation line (#712): a
+  /// `CitationStyle`'s raw value. Markdown, the line a quote had before the setting.
+  public static let citationStyleKey = "citationStyle"
+  public static let defaultCitationStyle = CitationStyle.markdown
+
+  /// Where Share, Copy Link and citations link to (#712): a `LinkSite`'s raw value.
+  public static let linkSiteKey = "linkSite"
+  public static let defaultLinkSite = LinkSite.rfcEditor
+
+  /// What Copy puts on the pasteboard (#712): a `CopyFormat`'s raw value.
+  public static let copyFormatKey = "copyFormat"
+  public static let defaultCopyFormat = CopyFormat.text
+
+  /// Whether a copied heading keeps its number as a prefix (#712).
+  public static let copiesSectionNumbersKey = "copiesSectionNumbers"
+  public static let defaultCopiesSectionNumbers = true
 }

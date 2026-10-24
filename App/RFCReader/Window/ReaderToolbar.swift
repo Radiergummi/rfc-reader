@@ -2,6 +2,7 @@
   import AppKit
   import RFCKit
   import RFCReaderKit
+  import TipKit
 
   extension NSToolbarItem.Identifier {
     static let rfcNewCollection = NSToolbarItem.Identifier("rfc.newCollection")
@@ -88,6 +89,11 @@
       citeMenu.delegate = self
       collectionMenu.delegate = self
       moreMenu.delegate = self
+      observeTips()
+    }
+
+    isolated deinit {
+      for observation in tipObservations { observation.cancel() }
     }
 
     func showTitle(_ title: String, subtitle: String) {
@@ -230,6 +236,7 @@
         // Always both, dimmed when there is nowhere to go, as Safari does. A pair
         // that appears and vanishes with the history shifts everything beside it.
         let back = button(.rfcBack, "Back", "chevron.backward", #selector(goBack))
+        tipAnchors[.rfcBack] = back
         let forward = button(.rfcForward, "Forward", "chevron.forward", #selector(goForward))
         let group = NSToolbarItemGroup(itemIdentifier: identifier)
         group.label = String(localized: "Navigation")
@@ -302,6 +309,7 @@
           systemSymbolName: "ellipsis.circle", accessibilityDescription: String(localized: "More"))
         item.showsIndicator = false
         item.menu = moreMenu
+        tipAnchors[.rfcMore] = item
         return item
 
       case .rfcSidebarToggle:
@@ -353,6 +361,14 @@
       switch menu {
       case citeMenu:
         add(DocumentMenus.cite(), to: menu)
+      case moreMenu where navigation.shownDraft != nil:
+        // A draft's text has its toggles, and none of an RFC's pages, Export or
+        // Print (#728).
+        add(
+          DocumentMenus.draftMore(
+            showsOriginal: reader.showOriginal, showsTranslation: reader.showTranslation),
+          to: menu)
+        return
       case moreMenu:
         add(
           DocumentMenus.more(
@@ -361,6 +377,10 @@
             errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           to: menu)
+        // As iOS's More has it, and where Reading Mode's tip points (#782): View ▸
+        // Reading Mode alone was not found.
+        menu.addItem(.separator())
+        menu.addItem(readingModeItem())
       case collectionMenu:
         add(DocumentMenus.addToCollection(id, in: library.collections), to: menu)
       default:
@@ -386,6 +406,23 @@
       }
     }
 
+    /// Reading Mode, a submenu of the modes with the one in use checked.
+    private func readingModeItem() -> NSMenuItem {
+      let submenu = NSMenu()
+      for mode in ReadingMode.allCases {
+        let item = NSMenuItem(
+          title: mode.name(), action: #selector(chooseReadingMode), keyEquivalent: "")
+        item.target = self
+        item.representedObject = mode
+        item.state = reader.folding.mode == mode ? .on : .off
+        submenu.addItem(item)
+      }
+      let item = NSMenuItem(
+        title: String(localized: "Reading Mode"), action: nil, keyEquivalent: "")
+      item.submenu = submenu
+      return item
+    }
+
     /// Each item carries its action, which `performMenuAction` carries out.
     private func add<Performed>(_ sections: DocumentMenus.Sections<Performed>, to menu: NSMenu) {
       for (index, items) in sections.enumerated() {
@@ -407,13 +444,16 @@
 
     // MARK: - Validation
 
-    /// More's Export and Print, for a document read as its text (#207); the rest of
-    /// what the toolbar's menus hold is always available.
+    /// More's Export and Print, for a document read as its text (#207), and its
+    /// Reading Mode, for a document on screen (#782); the rest of what the toolbar's
+    /// menus hold is always available.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
       switch item.action {
       case #selector(exportDocument), #selector(printDocument): reader.offersPrintAndExport
       case #selector(exportCurrentSection):
         reader.offersPrintAndExport && reader.exportableSection != nil
+      // As View ▸ Reading Mode: a document on screen, not one loading or failed.
+      case #selector(chooseReadingMode): reader.hasDocument
       default: true
       }
     }
@@ -430,6 +470,9 @@
         NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
         // Neither needs a document, so a window without one has both.
         return true
+      case NSToolbarItem.Identifier.rfcMore.rawValue:
+        // A draft's has its text's toggles (#728).
+        return id != nil || navigation.shownDraft != nil
       default:
         return id != nil
       }
@@ -446,11 +489,11 @@
 
     /// What an item of Cite, More or Add to Collection does.
     @objc private func performMenuAction(_ sender: NSMenuItem) {
-      guard let id else { return }
       switch sender.representedObject {
       case let action as DocumentMenus.Action:
         controller.perform(action)
       case let action as DocumentMenus.CollectionAction:
+        guard let id else { return }
         CollectionActionPerformer(
           document: id, library: library, navigation: navigation,
           undoManager: controller.window?.undoManager
@@ -462,15 +505,91 @@
 
     @objc private func newEmptyCollection() { controller.newCollection() }
 
+    @objc private func chooseReadingMode(_ sender: NSMenuItem) {
+      guard let mode = sender.representedObject as? ReadingMode else { return }
+      reader.choose(mode)
+    }
+
     @objc private func printDocument() { controller.output.printDocument() }
     @objc private func exportDocument() { controller.output.exportDocument() }
     @objc private func exportCurrentSection() { controller.output.exportCurrentSection() }
+
+    // MARK: - Tips (#782)
+
+    /// The items a tip points at, as they are made.
+    private var tipAnchors: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+    /// The tips TipKit has said are due, by the item each points at, whether on show
+    /// or waiting for the window to become key.
+    private var dueTips: [NSToolbarItem.Identifier: any HelpTip] = [:]
+    private var tipPopovers: [NSToolbarItem.Identifier: TipNSPopover] = [:]
+    private var tipObservations: [Task<Void, Never>] = []
+
+    /// Reading Mode's tip on More, Previews' on Back. TipKit's popover for AppKit,
+    /// since the toolbar's items are AppKit's own.
+    private func observeTips() {
+      tipObservations = [
+        observe(ReadingModeTip(), on: .rfcMore),
+        observe(PreviewTip(), on: .rfcBack),
+      ]
+    }
+
+    private func observe(
+      _ tip: some HelpTip, on anchor: NSToolbarItem.Identifier
+    ) -> Task<Void, Never> {
+      Task { [weak self] in
+        for await shouldDisplay in tip.shouldDisplayUpdates {
+          guard let self else { return }
+          if shouldDisplay {
+            dueTips[anchor] = tip
+          } else {
+            dueTips[anchor] = nil
+            tipPopovers.removeValue(forKey: anchor)?.close()
+          }
+          showDueTips()
+        }
+      }
+    }
+
+    /// Shows what is due, in the main window only, since TipKit says a tip is due to
+    /// every window at once, and only where what it teaches can be done: Reading
+    /// Mode with a document, Previews while Back has somewhere to go. Closes what no
+    /// longer is. Called as a tip falls due, and as the window's key status or its
+    /// document changes. The main window rather than the key one, which a tip's
+    /// popover becomes when clicked.
+    func showDueTips() {
+      for (anchor, tip) in dueTips {
+        let isOffered =
+          controller.window?.isMainWindow == true && id != nil
+          && (anchor != .rfcBack || navigation.canGoBack)
+        guard isOffered else {
+          tipPopovers.removeValue(forKey: anchor)?.close()
+          continue
+        }
+        // Shown again if its popover closed without TipKit ending the tip, as a click
+        // elsewhere may close it.
+        guard tipPopovers[anchor]?.isShown != true, let item = tipAnchors[anchor] else {
+          continue
+        }
+        let popover = TipNSPopover(tip) { _ in
+          // Learn More: the help at the tip's section, and the tip is done.
+          HelpWindow.show(at: tip.helpSection)
+          tip.invalidate(reason: .actionPerformed)
+        }
+        popover.show(relativeTo: item)
+        tipPopovers[anchor] = popover
+      }
+    }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {
+    /// The document the tab opened, a series as itself (#656), on the site Settings
+    /// chose (#712).
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
-      guard let id else { return [] }
-      return [RFCEditorEndpoints.infoPage(id)]
+      guard let opened = navigation.selection, id != nil else { return [] }
+      return [
+        DocumentActions.shareLink(
+          id: opened, site: ReaderSettings(defaults: .standard).linkSite)
+      ]
     }
   }
 #endif

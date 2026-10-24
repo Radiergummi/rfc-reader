@@ -108,8 +108,8 @@ struct UserDataMirrorsTests {
     let context = container.mainContext
     let place = ReadingPlace(anchor: "section-1", offset: 0)
     let saves = try recordingSaves(of: context) {
-      try ReadingPositionStore.save(place, for: .rfc(9110), in: context)
-      try ReadingPositionStore.save(place, for: .rfc(9110), in: context)
+      try ReadingPositionStore.save(place, for: .rfc(.rfc(9110)), in: context)
+      try ReadingPositionStore.save(place, for: .rfc(.rfc(9110)), in: context)
     }
     // The first save inserts the row and the second updates it.
     #expect(saves == [["ReadingPosition"], ["ReadingPosition"]])

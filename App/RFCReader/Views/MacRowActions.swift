@@ -13,6 +13,9 @@ import SwiftUI
     let navigation: NavigationModel
     let undoManager: UndoManager?
     let remove: (DocumentID) -> Void
+    /// Where Share links to (#712).
+    @AppStorage(ReaderPreferences.linkSiteKey) private var linkSite =
+      ReaderPreferences.defaultLinkSite
 
     func body(content: Content) -> some View {
       content.contextMenu {
@@ -67,7 +70,7 @@ import SwiftUI
           .labelStyle(.titleAndIcon)
       case .share:
         ShareLink(
-          item: RFCEditorEndpoints.infoPage(row.id),
+          item: DocumentActions.shareLink(id: row.id, site: linkSite),
           subject: Text(verbatim: "\(row.id.displayName): \(row.title)")
         )
         .labelStyle(.titleAndIcon)

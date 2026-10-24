@@ -73,26 +73,33 @@ public enum DocumentActions {
     metadata?.title ?? documentTitle
   }
 
-  /// The citation to put on the pasteboard.
-  ///
-  /// A section is part of the citation for every style but BibTeX, whose entry
-  /// describes the document as a whole: there is no field in it that says "and I
-  /// mean §4.2", so a section silently becomes part of the title or is dropped by
-  /// whoever renders the entry. Better to cite the document, which is what a
-  /// BibTeX key is for.
+  /// The citation to put on the pasteboard, linking to `site`: of `section` where
+  /// the style names one (`CitationStyle.citesSections`), and of the document
+  /// otherwise.
   public static func citation(
-    _ metadata: RFCMetadata,
+    _ cited: CitedDocument,
     section: String?,
-    style: CitationStyle
+    style: CitationStyle,
+    site: LinkSite = .rfcEditor
   ) -> String {
-    CitationFormatter.cite(metadata, section: style == .bibtex ? nil : section, style: style)
+    CitationFormatter.cite(
+      cited, section: style.citesSections ? section : nil, style: style, site: site)
+  }
+
+  /// What Share hands out for a document (#712): its page on `site`, a series as
+  /// itself, as the tab opened it (#656).
+  public static func shareLink(id: DocumentID, site: LinkSite) -> URL {
+    site.url(for: RFCLink(id: id))
   }
 
   /// The shareable link to the place being read, as a string for the pasteboard.
   ///
-  /// The web URL rather than the app's own `rfc://`: this is copied to be pasted
-  /// somewhere else, and the reader opens an rfc-editor.org link anyway.
-  public static func sectionLink(id: DocumentID, section: String?) -> String {
-    RFCLink(id: id, section: section).webURL.absoluteString
+  /// The link Settings chose, the web's by default rather than the app's own
+  /// `rfc://`: this is copied to be pasted somewhere else, and the reader opens an
+  /// rfc-editor.org link anyway.
+  public static func sectionLink(
+    id: DocumentID, section: String?, site: LinkSite = .rfcEditor
+  ) -> String {
+    site.url(for: RFCLink(id: id, section: section)).absoluteString
   }
 }
