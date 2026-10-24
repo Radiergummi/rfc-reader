@@ -74,4 +74,11 @@ struct DraftStatusTests {
     #expect(status.notice == nil)
     #expect(status.publishedAs == nil)
   }
+
+  /// What a revision can be compared with (#729): the ones before it.
+  @Test func `the revisions to compare with are the older ones, the nearest first`() {
+    let status = DraftStatus(
+      shown: Self.revision("02"), info: Self.info(newest: "03"), locale: .english)
+    #expect(status.olderChoices.map(\.draft) == ["01", "00"].map(Self.revision))
+  }
 }

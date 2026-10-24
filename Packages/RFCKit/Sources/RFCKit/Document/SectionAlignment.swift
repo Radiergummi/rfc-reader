@@ -143,6 +143,38 @@ public enum SectionAlignment {
     return pairs
   }
 
+  /// Two sections, one of each of two documents, and how alike they are.
+  public struct Candidate: Sendable, Hashable {
+    public var oldSection: String
+    public var newSection: String
+    public var score: Double
+  }
+
+  /// The pairs of `old`'s sections with `new`'s that clear `threshold`, each the best
+  /// match of one of its two sections, as `pairs(among:)` keeps them: for two
+  /// documents no header joins, such as two revisions of one draft, or a draft and the
+  /// RFC it became (#729). Not one to one; the best first.
+  public static func candidates(from old: RFCDocument, to new: RFCDocument) -> [Candidate] {
+    let oldProfiles = profiles(of: old)
+    let newProfiles = profiles(of: new)
+    let matrix = scores(old: oldProfiles, new: newProfiles)
+    var cells: Set<Cell> = []
+    for (newIndex, oldIndex) in matrix.bestForNew.enumerated() {
+      if let oldIndex { cells.insert(Cell(old: oldIndex, new: newIndex)) }
+    }
+    for (oldIndex, newIndex) in matrix.bestForOld.enumerated() {
+      if let newIndex { cells.insert(Cell(old: oldIndex, new: newIndex)) }
+    }
+    return cells.sorted().compactMap { cell -> Candidate? in
+      let score = matrix.values[cell.old][cell.new]
+      guard score >= threshold else { return nil }
+      return Candidate(
+        oldSection: oldProfiles[cell.old].anchor, newSection: newProfiles[cell.new].anchor,
+        score: score)
+    }
+    .sorted { $0.score > $1.score }
+  }
+
   private struct Edge {
     var old: DocumentID
     var new: DocumentID

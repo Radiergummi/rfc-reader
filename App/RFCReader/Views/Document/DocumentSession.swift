@@ -42,6 +42,9 @@ struct BuildInputs: Equatable {
   /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
+  /// The older document the build marks what changed since (#729): asked for, and
+  /// worked out. A redline is not translated.
+  let redline: ReadableDocument?
   /// Whether the document is built as its translation (#749): asked for, and made.
   /// A flag rather than the translation, which once made does not change, and which
   /// would be compared whole on every update pass.
@@ -58,7 +61,7 @@ struct BuildInputs: Equatable {
   init(
     hasDocument: Bool, settings: ReaderSettings, textSize: DynamicTypeSize,
     legibilityWeight: LegibilityWeight?, column: CGFloat?, choices: PresentationChoices,
-    errata: ErrataMarks = .none, translated: Bool = false,
+    errata: ErrataMarks = .none, translated: Bool = false, redline: ReadableDocument? = nil,
     hang: (ReadingStyle) -> CGFloat = { _ in 0 }
   ) {
     self.hasDocument = hasDocument
@@ -71,6 +74,7 @@ struct BuildInputs: Equatable {
     }
     self.choices = choices
     self.translated = translated
+    self.redline = redline
     self.errata = errata
   }
 }
@@ -162,6 +166,49 @@ final class DocumentSession {
     }
   }
 
+  /// What changed since an older document, once worked out (#729): the reader then
+  /// builds the redline. Nil until it is, and when nothing is compared.
+  private(set) var redline: (older: ReadableDocument, diff: RevisionDiff)?
+  @ObservationIgnored private var redlineLoad: Task<Void, Never>?
+  /// The older document a comparison could not be made with: it did not load.
+  private(set) var comparisonFailed: ReadableDocument?
+  /// The older document the build on screen is a redline of, nil for a build that
+  /// is none: the header's spinner goes once it is the one asked for.
+  private(set) var shownRedline: ReadableDocument?
+
+  /// Compares the document with `older`, or stops comparing for nil. Waits for the
+  /// document: asked before it is here, it is asked again once it is.
+  func compare(with older: ReadableDocument?, library: LibraryModel) {
+    guard let older else {
+      redlineLoad?.cancel()
+      redlineLoad = nil
+      redline = nil
+      return
+    }
+    guard redline?.older != older, let newer = state.document else { return }
+    redlineLoad?.cancel()
+    comparisonFailed = nil
+    redlineLoad = Task(name: "Compare revisions") { [weak self] in
+      do {
+        let old = try await library.document(for: older)
+        let diff = await Self.diff(from: old, to: newer)
+        guard let self, !Task.isCancelled else { return }
+        redline = (older, diff)
+      } catch {
+        guard let self, !Task.isCancelled else { return }
+        comparisonFailed = older
+        readerLog.failure(of: older, "comparing failed", error)
+      }
+    }
+  }
+
+  /// Off the main actor: every section of each is scored against every one of the
+  /// other.
+  @concurrent
+  private static func diff(from old: RFCDocument, to new: RFCDocument) async -> RevisionDiff {
+    RevisionDiff(from: old, to: new)
+  }
+
   /// Where a translation of the document stands (#749); see `translate(with:cache:)`.
   var translationPhase = TranslationPhase.idle
   /// Whether the reader shows the translation: the window's choice while the reader
@@ -221,6 +268,7 @@ final class DocumentSession {
     build?.cancel()
     originalTextLoad?.cancel()
     draftInfoLoad?.cancel()
+    redlineLoad?.cancel()
   }
 
   /// The index says the RFC is a scan, with no text to fetch (#207).
@@ -375,11 +423,21 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let translation = inputs.translated ? self?.translatedDocument : nil
+      let redline = inputs.redline.flatMap { older in
+        self?.redline.flatMap { $0.older == older ? $0.diff : nil }
+      }
+      let translation = inputs.translated && redline == nil ? self?.translatedDocument : nil
       let shown = translation?.document ?? document
-      let rebuilt = await Self.built(
-        document, style: style, choices: inputs.choices, errata: inputs.errata,
-        translation: translation)
+      let rebuilt =
+        if let redline {
+          await Self.built(
+            document, redline: redline, style: style, choices: inputs.choices,
+            errata: inputs.errata)
+        } else {
+          await Self.built(
+            document, style: style, choices: inputs.choices, errata: inputs.errata,
+            translation: translation)
+        }
       guard let self else { return }
       if Task.isCancelled {
         // Shown anyway while nothing is: the build that replaced it is under way,
@@ -393,6 +451,7 @@ final class DocumentSession {
       }
       state.install(rebuilt)
       builtInputs = inputs
+      shownRedline = redline == nil ? nil : inputs.redline
       reader {
         $0.sections = rebuilt.reachableSections(of: shown)
         $0.readsTranslation = rebuilt.isTranslation

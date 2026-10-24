@@ -67,6 +67,11 @@ public enum AccentContrast {
   /// on a white page.
   public static let readerLink = (light: SRGBColor(hex: 0x00_68DA), dark: SRGBColor(hex: 0x41_9CFF))
 
+  /// What a redline marks inserted (#729): a green that clears the minimum on the
+  /// page in either appearance, apart from the link's blue, so an inserted word does
+  /// not read as a link.
+  public static let inserted = (light: SRGBColor(hex: 0x00_7A33), dark: SRGBColor(hex: 0x4A_D07A))
+
   /// The link color on a card: an aside's, a table's or a figure's (#694). The
   /// reader's link in light, where it clears the cards as it does the page. In dark
   /// the reader's link falls below the minimum on the Mac's aside and only just
