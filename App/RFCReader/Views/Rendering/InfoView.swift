@@ -1,7 +1,6 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
-import UniformTypeIdentifiers
 import os
 
 /// The Info pane (#25): what the index knows about the document, from
@@ -403,7 +402,7 @@ private struct SectionRows: View {
     /// The file a format row's Download fetched, while Save to Files offers it: one
     /// exporter for the card rather than one a row, as SwiftUI presents only one of
     /// several sibling exporters reliably (#577).
-    @State private var downloaded: DownloadedFile?
+    @State private var downloaded: ExportedFile?
     /// Whether a row's Download is fetching or its Save to Files is up, so a second
     /// Download, from any row, does not present over the first.
     @State private var isDownloading = false
@@ -437,8 +436,8 @@ private struct SectionRows: View {
               }
             }),
           document: downloaded,
-          contentType: (downloaded?.format ?? .pdf).contentType,
-          defaultFilename: downloaded?.name
+          contentType: downloaded?.contentType ?? FileFormat.pdf.contentType,
+          defaultFilename: downloaded?.fileStem
         ) { result in
           if case .failure(let error) = result {
             readerLog.error(
@@ -587,7 +586,7 @@ private struct LinkRow: View {
   @State private var isOptionHeld = false
   #if !os(macOS)
     /// Where a Download hands the file it fetched, for the card's Save to Files.
-    @Binding var downloaded: DownloadedFile?
+    @Binding var downloaded: ExportedFile?
     /// The card's: whether a Download is fetching or its Save to Files is up.
     @Binding var isDownloading: Bool
   #endif
@@ -682,7 +681,8 @@ private struct LinkRow: View {
         do {
           let data = try await library.publishedFile(document, format: format)
           // The RFC Editor's own name, as the Mac saves it to Downloads.
-          downloaded = DownloadedFile(data: data, format: format, name: document.fileStem)
+          downloaded = ExportedFile(
+            data: data, contentType: format.contentType, fileStem: document.fileStem)
         } catch {
           isDownloading = false
           readerLog.failure(of: document, "downloading for Files failed", error)
@@ -721,34 +721,6 @@ private struct LinkRow: View {
     .contentShape(.rect)
   }
 }
-
-#if !os(macOS)
-  /// A published format a format row's Download fetched, for SwiftUI's `fileExporter`,
-  /// which saves a `FileDocument` (#577). Written only, as `ExportedFile` is.
-  nonisolated private struct DownloadedFile: FileDocument {
-    static var readableContentTypes: [UTType] { [] }
-    static var writableContentTypes: [UTType] { FileFormat.allCases.map(\.contentType) }
-
-    let data: Data
-    let format: FileFormat
-    /// The file's name without its extension, which Save to Files adds for the type.
-    let name: String
-
-    init(data: Data, format: FileFormat, name: String) {
-      self.data = data
-      self.format = format
-      self.name = name
-    }
-
-    init(configuration: ReadConfiguration) throws {
-      throw CocoaError(.fileReadUnsupportedScheme)
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-      FileWrapper(regularFileWithContents: data)
-    }
-  }
-#endif
 
 /// Whether the document is kept offline, and how much it takes: the one part of the
 /// pane that is the store's rather than the index's.
