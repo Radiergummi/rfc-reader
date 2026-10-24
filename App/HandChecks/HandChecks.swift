@@ -69,6 +69,31 @@ final class HandChecks: XCTestCase {
     screenshot("3 back from the deep link")
   }
 
+  // MARK: - Drafts (#728)
+
+  /// A draft opened over an RFC row stays on screen: it has no row, and the list
+  /// losing its selection must not take the reader back to the list. Screenshots 2
+  /// and 3 are where to look for a second, stale bottom bar under the draft's: one
+  /// was drawn there on 24 October 2026, never in the accessibility tree.
+  func testDraftOverAnRFCRow() throws {
+    launch(opening: "rfc://8174")
+    try skipUnlessCompact()
+    waitForReader("RFC 8174")
+    screenshot("1 RFC 8174")
+
+    open("rfc://draft-ietf-quic-http-34")
+    waitForReader("draft-ietf-quic-http-34")
+    screenshot("2 draft")
+    // Long enough for a pop the list's selection asked for to have run.
+    sleep(3)
+    XCTAssertTrue(app.navigationBars["draft-ietf-quic-http-34"].exists, "the draft was hidden")
+    screenshot("3 draft, still")
+
+    app.navigationBars["draft-ietf-quic-http-34"].buttons["BackButton"].tap()
+    XCTAssertTrue(app.navigationBars["All RFCs"].waitForExistence(timeout: 5))
+    screenshot("4 back to the list")
+  }
+
   // MARK: - What a headless launch cannot do
 
   /// A long press on a citation shows its preview, and letting go keeps the reader.

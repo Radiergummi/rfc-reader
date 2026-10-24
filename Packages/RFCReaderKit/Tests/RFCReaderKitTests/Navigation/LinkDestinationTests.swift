@@ -150,4 +150,17 @@ struct LinkDestinationTests {
     #expect(inDraft("rfc://9110") == .document(.rfc(RFCLink(id: current))))
     #expect(inDraft("\(ReaderLinkScheme.anchorScheme):section-4.2") == .jump("section-4.2"))
   }
+
+  /// A link to the draft by its name alone, from inside one of its revisions, is to
+  /// the text on screen, not a reason to ask Datatracker which is the newest.
+  @Test func `a section of the draft on screen named without a revision scrolls`() {
+    let destination = LinkDestination.resolve(
+      URL(string: "https://datatracker.ietf.org/doc/html/draft-ietf-quic-http#section-2")!,
+      from: .draft(draft), activation: .here)
+    #expect(destination == .jump("2"))
+    let other = LinkDestination.resolve(
+      URL(string: "rfc://draft-ietf-quic-http-33#section-2")!, from: .draft(draft),
+      activation: .here)
+    #expect(other == .document(.draft(DraftLink(id: draft.at(revision: "33")!, section: "2"))))
+  }
 }

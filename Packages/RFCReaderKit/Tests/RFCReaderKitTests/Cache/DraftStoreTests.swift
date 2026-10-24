@@ -179,4 +179,23 @@ struct DraftStoreTests {
     #expect(try await store.originalText(Self.revision("04"), client: network) == text)
     #expect(network.askedRevisions == [Self.revision("04")])
   }
+
+  /// Settings' Storage tab counts the revisions kept with the reading cache, and
+  /// Clear Cache removes them, since every one can be fetched again (#358).
+  @Test func `the revisions kept are counted, and cleared`() async throws {
+    let network = Network(newest: "04")
+    let store = DraftStore(directory: directory())
+    #expect(await store.storageUsage() == StorageUsage(documents: 0, bytes: 0))
+    _ = try await store.document(Self.name, client: network)
+    _ = try await store.document(Self.revision("03"), client: network)
+    let usage = await store.storageUsage()
+    #expect(usage.documents == 2)
+    #expect(usage.bytes > 0)
+
+    await store.clear()
+    #expect(await store.storageUsage() == StorageUsage(documents: 0, bytes: 0))
+    _ = try await store.document(Self.revision("03"), client: network)
+    #expect(
+      network.askedRevisions == [Self.revision("04"), Self.revision("03"), Self.revision("03")])
+  }
 }

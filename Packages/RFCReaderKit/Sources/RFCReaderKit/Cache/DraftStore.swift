@@ -168,6 +168,32 @@ public actor DraftStore {
     return RFCEditorClient.parseDraft(data, id: id)
   }
 
+  // MARK: - Storage (#358)
+
+  /// The revisions kept, and what they and Datatracker's descriptions take on the
+  /// disk, which Settings' Storage tab counts with the reading cache.
+  public func storageUsage() -> StorageUsage {
+    let files = keptFiles()
+    let bytes = files.reduce(0) { total, file in
+      total + ((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+    }
+    return StorageUsage(documents: files.filter { $0.pathExtension == "txt" }.count, bytes: bytes)
+  }
+
+  /// Removes every revision and description kept, as Settings' Clear Cache does:
+  /// each can be fetched again.
+  public func clear() {
+    for file in keptFiles() {
+      try? FileManager.default.removeItem(at: file)
+    }
+    parsed.removeAll { _ in true }
+  }
+
+  private func keptFiles() -> [URL] {
+    (try? FileManager.default.contentsOfDirectory(
+      at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+  }
+
   private func infoURL(for id: DraftID) -> URL {
     directory.appending(path: "\(id.name).json")
   }
