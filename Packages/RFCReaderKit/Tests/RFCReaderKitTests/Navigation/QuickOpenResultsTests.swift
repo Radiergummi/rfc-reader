@@ -366,7 +366,7 @@ struct QuickOpenResultsTests {
 
   // MARK: - Registries
 
-  private static let tooEarly = RegistryEntry(
+  static let tooEarly = RegistryEntry(
     registry: .httpStatusCodes, value: "425", name: "Too Early",
     references: [RFCLink(id: .rfc(8470))])
   private static let flowControl = RegistryEntry(
@@ -455,75 +455,61 @@ struct QuickOpenResultsTests {
   }
 }
 
-/// iOS's Go to RFC, beside a search field that already finds by keyword, takes an
-/// RFC number and nothing else, from the number pad (#579).
-@Suite("Quick open results: a number alone")
-struct QuickOpenNumberTests {
-  /// The number pad types digits only, but a paste or an iPad's keyboard does not.
-  @Test func `only the digits of what is typed are kept`() {
-    #expect(QuickOpenResults.digits(in: "9110") == "9110")
-    #expect(QuickOpenResults.digits(in: "RFC 9110") == "9110")
-    #expect(QuickOpenResults.digits(in: "http") == "")
-    #expect(QuickOpenResults.digits(in: "½") == "")
-  }
-
-  /// Only decimal digits: a footnote's superscript or a circled number is not one.
-  @Test func `a number that is not a decimal digit is dropped`() {
-    #expect(QuickOpenResults.digits(in: "9110²") == "9110")
-    #expect(QuickOpenResults.digits(in: "④") == "")
-  }
-
-  /// A pasted link is the RFC it names, not every digit in it run together.
-  @Test func `a pasted link keeps the number of its RFC`() {
-    #expect(
-      QuickOpenResults.digits(in: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1")
-        == "9110")
-  }
-
-  /// `BCP 14` is not RFC 14.
-  @Test func `a pasted series names no RFC`() {
-    #expect(QuickOpenResults.digits(in: "BCP 14") == "")
-  }
-
-  /// A paste that names no document keeps nothing, rather than run the digits of
-  /// several numbers together into one that names another RFC.
-  @Test func `a pasted text that names no document keeps nothing`() {
-    #expect(QuickOpenResults.digits(in: "RFC 9110, section 4") == "")
-    #expect(QuickOpenResults.digits(in: "www.rfc-editor.org/rfc/rfc9110#section-15.5.1") == "")
-    #expect(QuickOpenResults.digits(in: "HTTP status 425") == "")
-  }
-
-  /// One stray character, as a key of an iPad's keyboard types, is dropped, wherever
-  /// in the number it lands.
-  @Test func `a character typed into a number is dropped`() {
-    #expect(QuickOpenResults.digits(in: "9110a") == "9110")
-    #expect(QuickOpenResults.digits(in: "91a10") == "9110")
-    #expect(QuickOpenResults.digits(in: "a") == "")
-  }
-
-  /// A region whose number pad types Eastern Arabic digits types an RFC number all
-  /// the same.
-  @Test func `another script's digits are kept as ASCII`() {
-    #expect(QuickOpenResults.digits(in: "٩١١٠") == "9110")
-  }
-
-  /// The RFC with that number, and none of those whose numbers begin with it, nor a
-  /// registry value: `911` is RFC 911 alone.
+/// iOS's Go to RFC, beside a search field that already finds by keyword, takes what
+/// names a document and searches for nothing (#579): a number, a series, a draft or a
+/// link, read as the Mac's palette reads them.
+@Suite("Quick open results: without a search")
+struct QuickOpenWithoutSearchTests {
+  /// `911` is RFC 911 alone: neither the RFCs whose numbers begin with it nor a
+  /// registry value, which the search field beside it finds.
   @Test func `a number lists the RFC with that number alone`() {
-    #expect(QuickOpenResults.link(forNumber: "911") == RFCLink(id: .rfc(911)))
+    var results = QuickOpenResults(searches: false)
+    results.show(
+      query: "911", exact: RFCLink(id: .rfc(911)), registry: [QuickOpenResultsTests.tooEarly])
+    results.show(hits: [.rfc(9110)], for: "911")
+    #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(911))])
+    #expect(results.openable == RFCLink(id: .rfc(911)))
   }
 
-  @Test func `nothing typed lists nothing`() {
-    #expect(QuickOpenResults.link(forNumber: "") == nil)
+  /// `BCP 14` is its members, as on the Mac, and not RFC 14.
+  @Test func `a series lists its members`() {
+    var results = QuickOpenResults(searches: false)
+    results.show(
+      query: "BCP 14", exact: DocumentReference.link(from: "BCP 14"),
+      members: [.rfc(2119), .rfc(8174)])
+    #expect(results.rows.map(\.link.id) == [.rfc(2119), .rfc(8174)])
   }
 
-  /// Digits past any RFC's number name none, and nor does zero.
-  @Test func `a number no RFC can have lists nothing`() {
-    #expect(QuickOpenResults.link(forNumber: "99999999999999999999999") == nil)
-    #expect(QuickOpenResults.link(forNumber: "0") == nil)
+  /// There is no search to wait for: what is typed is answered on the keystroke.
+  @Test func `nothing is ever waiting for a search`() {
+    var results = QuickOpenResults(searches: false)
+    results.show(query: "http", exact: nil)
+    #expect(!results.isSearching)
+    #expect(results.activate(.here) == nil)
+    results.show(hits: [.rfc(9110)], for: "http")
+    #expect(results.rows.isEmpty)
   }
 
-  @Test func `the placeholder asks for a number`() {
-    #expect(QuickOpenResults.numberPlaceholder(locale: .english) == "RFC number")
+  /// What is typed names nothing it takes, whether or not the index has loaded: it
+  /// needs no index to say so.
+  @Test func `the message says that what is typed names nothing`() {
+    var results = QuickOpenResults(searches: false)
+    #expect(results.message(indexState: .loading, locale: .english) == nil)
+    results.show(query: "http", exact: nil)
+    let message = "“http” isn't an RFC number, a series or a link."
+    #expect(results.message(indexState: .loading, locale: .english) == message)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == message)
+    results.show(query: "9110", exact: RFCLink(id: .rfc(9110)))
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+  }
+
+  @Test func `the placeholder and the example name what it takes, and no title words`() {
+    #expect(
+      QuickOpenResults.identifierPlaceholder(locale: .english) == "RFC number, BCP 14, or a link")
+    let parts = QuickOpenResults.identifierExample.components(separatedBy: " · ")
+    #expect(parts.count == 3)
+    #expect(DocumentReference.link(from: parts[0])?.id == .rfc(9110))
+    #expect(DocumentReference.link(from: parts[1])?.id == DocumentID(series: .bcp, number: 14))
+    #expect(DocumentReference.link(from: parts[2])?.id == .rfc(9110))
   }
 }

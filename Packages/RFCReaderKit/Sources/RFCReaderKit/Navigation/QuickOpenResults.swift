@@ -14,53 +14,15 @@ public struct QuickOpenResults: Equatable, Sendable {
   public static let limit = 8
 
   /// The Mac's palette's placeholder (#761), which takes all four. iOS's sheet takes
-  /// a number alone (`numberPlaceholder`).
+  /// no title words (`identifierPlaceholder`).
   public static func placeholder(locale: Locale = .interface) -> String {
     String(kit: "RFC number, BCP 14, title words, or a link", locale: locale)
   }
 
-  /// iOS's field (#579): beside a search field that already finds by keyword, it
-  /// takes an RFC number alone.
-  public static func numberPlaceholder(locale: Locale = .interface) -> String {
-    String(kit: "RFC number", locale: locale)
-  }
-
-  /// The digits of what was typed into iOS's field, which is all it takes (#579):
-  /// the number pad types nothing else, but a paste or an iPad's keyboard can. As
-  /// ASCII, whatever digits the number pad types in the reader's region.
-  ///
-  /// A paste that names a document is the number of the RFC it names, the way the
-  /// Mac's palette reads it: a link's section is not part of the number, and a BCP
-  /// or an STD names no RFC by its own number, so it keeps nothing. One character
-  /// that is not a digit, such as a letter typed on an iPad's keyboard, is dropped.
-  /// Any other text keeps nothing: its digits run together would be a number it
-  /// never named.
-  public static func digits(in text: String) -> String {
-    let digits = text.compactMap(asciiDigit)
-    if digits.count == text.count {
-      return String(digits)
-    }
-    if let link = DocumentReference.link(from: text) {
-      return link.id.series == .rfc ? String(link.id.number) : ""
-    }
-    return text.count - digits.count == 1 ? String(digits) : ""
-  }
-
-  /// What iOS's field lists for the digits typed into it (#579): the RFC with that
-  /// number, and nothing else, so there is no search to wait for. Neither the RFCs
-  /// whose numbers begin with it nor a registry value: the search field beside it
-  /// finds those. Parsed as the Mac's palette parses a number, so no RFC 0.
-  public static func link(forNumber digits: String) -> RFCLink? {
-    DocumentID(parsing: digits).map { RFCLink(id: $0) }
-  }
-
-  /// A decimal digit, of any script, as ASCII: not a superscript, a circled number
-  /// or a numeral that is not a digit, which `Character.isNumber` takes too.
-  private static func asciiDigit(_ character: Character) -> Character? {
-    guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
-      scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue
-    else { return nil }
-    return Character(String(digit))
+  /// iOS's placeholder (#579): beside a search field that already finds by keyword,
+  /// its sheet searches for nothing, and takes what names a document.
+  public static func identifierPlaceholder(locale: Locale = .interface) -> String {
+    String(kit: "RFC number, BCP 14, or a link", locale: locale)
   }
 
   /// One of each of the four, shown under the field while it is empty. Not
@@ -68,6 +30,9 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// The link in full: one without its scheme is not taken for a link.
   public static let example =
     "9110 · bcp 14 · http semantics · https://www.rfc-editor.org/rfc/rfc9110"
+
+  /// The example less its title words, for iOS's sheet, which takes none (#579).
+  public static let identifierExample = "9110 · bcp 14 · https://www.rfc-editor.org/rfc/rfc9110"
 
   /// One row: what it opens, and the registry value it stands for, if it is one.
   ///
@@ -138,7 +103,15 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// opens what it selects when it lands, the way the key press asked for.
   private var pendingActivation: LinkActivation?
 
-  public init() {}
+  /// Whether what is typed is searched for, as well as resolved: on the Mac's
+  /// palette, and not on iOS's sheet, beside a search field that already finds by
+  /// keyword (#579). Without a search it lists what is typed resolved exactly, and
+  /// neither hits nor registry values.
+  public let searches: Bool
+
+  public init(searches: Bool = true) {
+    self.searches = searches
+  }
 
   /// The exact resolution first, then the registry values, then every hit the
   /// exact resolution does not already name.
@@ -159,18 +132,25 @@ public struct QuickOpenResults: Equatable, Sendable {
 
   /// Whether the hits on screen are still those of an earlier query.
   public var isSearching: Bool {
-    hitsQuery != query
+    searches && hitsQuery != query
   }
 
-  /// What the Mac's palette says in place of rows, once there is something
+  /// What the palette and the sheet say in place of rows, once there is something
   /// to say: not while nothing is typed, nor while a search is still running, so it
   /// does not flash on every keystroke.
   ///
   /// From `indexState`, not from whether there is an index, which an offline first
   /// launch leaves missing for good: the index has failed then, and saying it is
   /// loading promises what won't come.
+  ///
+  /// Without a search, only that what is typed names nothing the field takes, which
+  /// needs no index to know.
   public func message(indexState: IndexState, locale: Locale = .interface) -> String? {
     guard !query.isEmpty, !isSearching else { return nil }
+    guard searches else {
+      guard rows.isEmpty, draft == nil else { return nil }
+      return String(kit: "“\(query)” isn't an RFC number, a series or a link.", locale: locale)
+    }
     return switch indexState {
     case .idle, .loading: String(kit: "The RFC index is still loading.", locale: locale)
     case .failed:
@@ -226,7 +206,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     } else {
       rows = exact.map { [$0] } ?? []
     }
-    let registryRows = registry.compactMap { entry in
+    let registryRows = (searches ? registry : []).compactMap { entry in
       entry.reference(isObsolete: isObsolete).map { Row(link: $0, entry: entry) }
     }
     let isNew = rows != self.exact || registryRows != self.registry
@@ -246,7 +226,7 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// - Returns: What to open now, when ↵ was waiting for these hits.
   @discardableResult
   public mutating func show(hits: [DocumentID], for query: String) -> Opening? {
-    guard query == self.query else { return nil }
+    guard searches, query == self.query else { return nil }
     self.hits = hits
     hitsQuery = query
     keepSelection()
