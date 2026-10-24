@@ -67,6 +67,11 @@ public enum RFCColors {
     byAppearance(light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark)
   }
 
+  /// What a redline marks inserted (#729): `AccentContrast.inserted`.
+  public static var inserted: PlatformColor {
+    byAppearance(light: AccentContrast.inserted.light, dark: AccentContrast.inserted.dark)
+  }
+
   /// A link on a card, where `link` is the link color on the page: in dark,
   /// `AccentContrast.cardLink`, lighter than the reader's link (#694); in light,
   /// `link` itself, which clears the cards as it does the page, so that a card's

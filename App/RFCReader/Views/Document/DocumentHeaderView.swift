@@ -35,6 +35,10 @@ struct DocumentHeaderView: View {
     let moreRevisions: String?
     /// What the header says of a draft (#728), nil for an RFC.
     let draft: DraftStatus?
+    /// The draft an RFC was, which it can be compared with (#729).
+    let precedingDraft: DraftID?
+    /// What the text below is compared with, and whether its redline is built yet.
+    let comparison: Comparison?
     /// What the header says of a translation (#749), nil for the English.
     let translation: TranslationMark?
     /// The errata naming no section the document has (#387), which the chip by the
@@ -44,7 +48,8 @@ struct DocumentHeaderView: View {
     /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(
       header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil,
-      draft: DraftStatus? = nil, translation: TranslationMark? = nil,
+      draft: DraftStatus? = nil, comparison: Comparison? = nil,
+      translation: TranslationMark? = nil,
       documentErrata: [ErrataSummary.Item] = []
     ) {
       let summary = HeaderSummary(header: header, metadata: metadata)
@@ -56,9 +61,20 @@ struct DocumentHeaderView: View {
       revisionLines = revisions?.bannerLines ?? []
       moreRevisions = revisions?.moreText
       self.draft = draft
+      precedingDraft = draft == nil ? header.precedingDraft.flatMap(DraftLink.init(url:))?.id : nil
+      self.comparison = comparison
       self.translation = translation
       self.documentErrata = documentErrata
     }
+  }
+
+  /// What the reader compares the document with (#729).
+  struct Comparison: Equatable {
+    let older: ReadableDocument
+    /// Whether the redline is on screen, rather than still being worked out.
+    let isShown: Bool
+    /// Whether the older document failed to load, and nothing is coming.
+    let failed: Bool
   }
 
   /// The view renders from the identity rather than beside it, so the two cannot
@@ -119,6 +135,12 @@ struct DocumentHeaderView: View {
         AuthorChips(authors: identity.authors)
           .font(.subheadline)
       }
+      if let comparison = identity.comparison {
+        ComparisonNotice(comparison: comparison)
+          .padding(.top, 4)
+      } else if let precedingDraft = identity.precedingDraft {
+        PrecedingDraftComparison(draft: precedingDraft)
+      }
       if let translation = identity.translation {
         TranslationNotice(mark: translation)
           .padding(.top, 4)
@@ -148,6 +170,7 @@ private struct DraftBanner: View {
   /// guarantees gave it the environment.
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
+  @Environment(ReaderState.self) private var reader
   let status: DraftStatus
 
   var body: some View {
@@ -179,6 +202,22 @@ private struct DraftBanner: View {
       .fixedSize()
       .accessibilityLabel(Text("Revision"))
       .accessibilityValue(Text(verbatim: status.revisionLabel))
+      if !status.olderChoices.isEmpty {
+        Menu {
+          ForEach(status.olderChoices) { choice in
+            Button {
+              reader.comparedWith = .draft(choice.draft)
+            } label: {
+              Text(verbatim: choice.label)
+            }
+          }
+        } label: {
+          Text("Show Changes")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
+        .fixedSize()
+      }
       if let notice = status.notice {
         if let rfc = status.publishedAs {
           Button {
@@ -207,6 +246,50 @@ private struct DraftBanner: View {
   private func open(_ draft: DraftID) {
     library.open(
       .draft(DraftLink(id: draft)), activation: .current, in: navigation, arrival: .citation)
+  }
+}
+
+/// That the text below marks what changed since an older document (#729), with the
+/// way back to the text alone beside it.
+private struct ComparisonNotice: View {
+  /// Hosted outside the SwiftUI hierarchy, by a host that `ReaderEnvironment`
+  /// guarantees gave it the environment.
+  @Environment(ReaderState.self) private var reader
+  let comparison: DocumentHeaderView.Comparison
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Image(systemName: "arrow.left.arrow.right")
+      if comparison.failed {
+        Text("Couldn't load \(comparison.older.displayName) to compare")
+      } else {
+        Text("Changes since \(comparison.older.displayName)")
+      }
+      if !comparison.isShown, !comparison.failed {
+        ProgressView()
+          .controlSize(.small)
+      }
+      Button("Hide Changes") { reader.comparedWith = nil }
+        .buttonStyle(.borderless)
+    }
+    .font(.subheadline)
+    .foregroundStyle(.secondary)
+  }
+}
+
+/// An RFC's offer to mark what changed since the draft it was (#729).
+private struct PrecedingDraftComparison: View {
+  @Environment(ReaderState.self) private var reader
+  let draft: DraftID
+
+  var body: some View {
+    Button {
+      reader.comparedWith = .draft(draft)
+    } label: {
+      Label("Show Changes Since \(draft.displayName)", systemImage: "arrow.left.arrow.right")
+    }
+    .buttonStyle(.borderless)
+    .font(.subheadline)
   }
 }
 

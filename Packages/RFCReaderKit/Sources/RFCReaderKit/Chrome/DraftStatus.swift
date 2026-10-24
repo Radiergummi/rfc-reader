@@ -83,6 +83,13 @@ public struct DraftStatus: Equatable, Sendable {
     }
   }
 
+  /// The revisions before the one on screen, the nearest first: what it can be
+  /// compared with (#729).
+  public var olderChoices: [Choice] {
+    guard let shown = shown.revision else { return [] }
+    return choices.filter { ($0.draft.revision ?? "") < shown }
+  }
+
   private static func revisionLabel(_ revision: String, locale: Locale) -> String {
     String(kit: "Revision \(number(revision))", locale: locale)
   }

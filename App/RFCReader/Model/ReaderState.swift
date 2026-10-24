@@ -172,6 +172,10 @@ final class ReaderState {
   /// Whether the build on screen is the translation, which has no quote to copy:
   /// not until it is made, though `showTranslation` is on.
   var readsTranslation = false
+  /// The older document the reader marks what changed since (#729): another
+  /// revision of the draft on screen, or the draft the RFC on screen was. Set from
+  /// the header, read by the reader, which builds the redline once both are here.
+  var comparedWith: ReadableDocument?
 
   /// Why the RFC is read as its PDF or PostScript original, if it is (#207). Set by
   /// the reader as the load starts and ends, and again when the index arrives. A
@@ -319,6 +323,7 @@ final class ReaderState {
     hasSelection = false
     documentTitle = nil
     precedingDraft = nil
+    comparedWith = nil
   }
 }
 

@@ -203,6 +203,18 @@ extension DocumentSession {
     Requirements.extract(from: document)
   }
 
+  /// A redline's build (#729), off the main actor as `built` is.
+  @concurrent
+  static func built(
+    _ document: RFCDocument, redline: RevisionDiff, style: ReadingStyle,
+    choices: PresentationChoices, errata: ErrataMarks
+  ) async -> BuiltDocument {
+    signposter.withIntervalSignpost("Build redline", id: signposter.makeSignpostID()) {
+      DocumentTextBuilder.build(
+        document, redline: redline, style: style, choices: choices, errata: errata)
+    }
+  }
+
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
