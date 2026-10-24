@@ -15,8 +15,8 @@ import RFCReaderKit
 ///
 /// What each of those says is `PDFExport`, in RFCReaderKit. What is here is only
 /// measurement and PDFKit: where the laid-out text put a link's words and a
-/// section's heading, and the annotations, destinations and outline that point
-/// at them.
+/// section's heading, and the annotations and destinations that point at them;
+/// the outline, which the drawing writes, is `PDFExport.setOutline`.
 nonisolated extension DocumentPDF {
   /// The open document as a PDF to save. Always the rendered document, whatever the
   /// reader is showing: the published text is a format of its own (#377).
@@ -49,23 +49,23 @@ nonisolated extension DocumentPDF {
       Printed(document: document, choices: choices), style: layout.exportStyle,
       furniture: furniture, layout: layout
     ) { built, laidOut in
-      let pages = pdf(laidOut, layout: layout, furniture: furniture)
       let outline = PDFExport.outline(of: document, built: built)
       let marks = PDFMarks(
         laidOut, text: built.text, anchors: built.anchors, outline: outline,
         linking: linking, layout: layout)
+      let pages = pdf(laidOut, layout: layout, furniture: furniture) { context in
+        PDFExport.setOutline(outline, destinations: marks.destinations, in: context)
+      }
       return annotate(
-        pages, marks: marks, outline: outline,
-        info: PDFExport.Info(header: document.header, metadata: metadata))
+        pages, marks: marks, info: PDFExport.Info(header: document.header, metadata: metadata))
     }
   }
 
-  /// The rendered pages with their links, outline and info added, through PDFKit.
-  /// The pages as drawn if PDFKit cannot read them back, which it wrote itself a
-  /// moment ago: a file without links is still the document.
-  static func annotate(
-    _ data: Data, marks: PDFMarks, outline: [PDFExport.OutlineEntry], info: PDFExport.Info
-  ) -> Data {
+  /// The rendered pages with their links and info added, through PDFKit. Not the
+  /// outline, which PDFKit would drop when it writes the file: the drawing wrote
+  /// that (#990). The pages as drawn if PDFKit cannot read them back, which it
+  /// wrote itself a moment ago: a file without links is still the document.
+  static func annotate(_ data: Data, marks: PDFMarks, info: PDFExport.Info) -> Data {
     guard let document = PDFDocument(data: data) else { return data }
 
     func destination(_ anchor: String) -> PDFDestination? {
@@ -90,8 +90,6 @@ nonisolated extension DocumentPDF {
       annotation.border = border
       page.addAnnotation(annotation)
     }
-
-    PDFExport.setOutline(outline, destinations: marks.destinations, in: document)
 
     // Added to what the drawing wrote, its creation date and creator among them,
     // and only what the document has: no empty author on an RFC that names none.

@@ -356,8 +356,9 @@ struct ExportGeometryTests {
   }
 }
 
-/// The outline as it is in the file, read back from disk: PDFKit has dropped an
-/// outline it was given when it wrote the file, links and info intact (#990).
+/// The outline as it is in the file, read back from disk: PDFKit drops an outline
+/// it is given when it writes the file, links and info intact (#990), so the
+/// drawing writes it, and PDFKit's pass afterwards must keep it.
 @Suite("Export: the outline in the written file")
 struct ExportOutlineFileTests {
   private typealias Entry = PDFExport.OutlineEntry
@@ -404,8 +405,8 @@ struct ExportOutlineFileTests {
     #expect(document.page(at: 0)?.annotations.count == 1)
   }
 
-  /// `count` blank pages with the outline, as the export makes them: drawn, then
-  /// read by PDFKit, given a link and written again.
+  /// `count` blank pages with the outline, as the export makes them: drawn with
+  /// it, then read by PDFKit, given a link and written again.
   private func written(pages count: Int) throws -> Data {
     let data = NSMutableData()
     var mediaBox = CGRect(origin: .zero, size: PrintLayout.letter)
@@ -415,10 +416,10 @@ struct ExportOutlineFileTests {
       context.beginPDFPage(nil)
       context.endPDFPage()
     }
+    PDFExport.setOutline(outline, destinations: destinations, in: context)
     context.closePDF()
 
     let document = try #require(PDFDocument(data: data as Data))
-    PDFExport.setOutline(outline, destinations: destinations, in: document)
     let link = PDFAnnotation(
       bounds: CGRect(x: 54, y: 600, width: 100, height: 12), forType: .link, withProperties: nil)
     link.url = URL(string: "https://www.rfc-editor.org/")
