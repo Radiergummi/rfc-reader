@@ -69,6 +69,49 @@ final class HandChecks: XCTestCase {
     screenshot("3 back from the deep link")
   }
 
+  // MARK: - Drafts (#728)
+
+  /// A draft opened over an RFC row stays on screen, and so does an RFC opened over
+  /// the draft: a draft has no row, and the list losing its selection must not take
+  /// the reader back to the list. A draft opened from the list shows its reader as a
+  /// row does, and Back from it leads to the list.
+  ///
+  /// Screenshots 2, 3 and 4 are where to look for a second bottom bar above the
+  /// reader's, or an empty capsule, which the accessibility tree never shows: drawn
+  /// there while the list's selection was cleared and the reader popped and pushed
+  /// back at once (fixed 24 October 2026).
+  func testDraftOverAnRFCRow() throws {
+    launch(opening: "rfc://8174")
+    try skipUnlessCompact()
+    waitForReader("RFC 8174")
+    screenshot("1 RFC 8174")
+
+    open("rfc://draft-ietf-quic-http-34")
+    waitForReader("draft-ietf-quic-http-34")
+    screenshot("2 draft")
+    // Long enough for a pop the list's selection asked for to have run.
+    sleep(3)
+    XCTAssertTrue(app.navigationBars["draft-ietf-quic-http-34"].exists, "the draft was hidden")
+    screenshot("3 draft, still")
+
+    open("rfc://8174")
+    waitForReader("RFC 8174")
+    sleep(3)
+    XCTAssertTrue(app.navigationBars["RFC 8174"].exists, "the RFC was hidden")
+    XCTAssertFalse(app.navigationBars["draft-ietf-quic-http-34"].exists)
+    screenshot("4 RFC over the draft")
+
+    app.navigationBars["RFC 8174"].buttons["BackButton"].tap()
+    XCTAssertTrue(app.navigationBars["All RFCs"].waitForExistence(timeout: 5))
+    open("rfc://draft-ietf-quic-http-34")
+    waitForReader("draft-ietf-quic-http-34")
+    screenshot("5 draft from the list")
+
+    app.navigationBars["draft-ietf-quic-http-34"].buttons["BackButton"].tap()
+    XCTAssertTrue(app.navigationBars["All RFCs"].waitForExistence(timeout: 5))
+    screenshot("6 back to the list")
+  }
+
   // MARK: - What a headless launch cannot do
 
   /// A long press on a citation shows its preview, and letting go keeps the reader.

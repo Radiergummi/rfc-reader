@@ -45,12 +45,12 @@ extension DocumentSession {
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo(into: reader, library: library)
     // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
-    // the pack lists (#316), whose XML it left out.
-    let pointerInPack = library.pointersInPack.contains(id)
-    guard
-      PublishedOriginalPage.loadsText(
-        id, formats: library.metadata(id)?.formats, pointerInPack: pointerInPack)
-    else {
+    // the pack lists (#316), whose XML it left out. A draft always has a text.
+    if let rfc = id.rfc,
+      !PublishedOriginalPage.loadsText(
+        rfc, formats: library.metadata(rfc)?.formats,
+        pointerInPack: library.pointersInPack.contains(rfc))
+    {
       skipLoad()
       guard isShown else { return }
       reader.isLoading = false
@@ -59,9 +59,10 @@ extension DocumentSession {
       // Recorded as a loaded text would be: Recently Read lists a scan, and a
       // pointer with a pack or without. Here, so once per opening, like a load's.
       positions.markOpened()
-      Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
+      Task(name: "Mark opened") { [library] in await library.markOpened(rfc) }
       return
     }
+    startDraftInfoLoad(from: library)
     startLoad(from: library) {
       [reader, library, navigation, positions, id, identity, depth, isShown] loaded in
       // Here rather than on appearing: once per opening, since each is a view of
@@ -127,7 +128,8 @@ extension DocumentSession {
   /// work started for it, unless its reader is the one on screen. What is worked out
   /// off the main actor arrives only if it still is.
   private static func present(
-    _ loaded: RFCDocument, id: DocumentID, into reader: ReaderState.Writer, library: LibraryModel
+    _ loaded: RFCDocument, id: ReadableDocument, into reader: ReaderState.Writer,
+    library: LibraryModel
   ) {
     guard reader.isCurrent else { return }
     reader { reader in
@@ -164,19 +166,23 @@ extension DocumentSession {
   }
 
   private static func publishedOriginal(
-    _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
+    _ id: ReadableDocument, text document: RFCDocument?, in library: LibraryModel
   ) -> PublishedOriginalPage.Status? {
-    library.metadata(id).flatMap {
+    // A draft is never a scan.
+    guard let id = id.rfc else { return nil }
+    return library.metadata(id).flatMap {
       PublishedOriginalPage.Status(
         id, formats: $0.formats, text: document,
         pointerInPack: library.pointersInPack.contains(id))
     }
   }
 
+  /// None for a draft, which has no index entry (#728): its header says what it is.
   private static func info(
-    for id: DocumentID, authors: [Author]?, in library: LibraryModel
+    for id: ReadableDocument, authors: [Author]?, in library: LibraryModel
   ) -> DocumentInfo? {
-    library.metadata(id).map {
+    guard let id = id.rfc else { return nil }
+    return library.metadata(id).map {
       DocumentInfo(
         $0, authors: authors, in: library.index,
         revisions: library.revisionsSummary(for: $0.id))

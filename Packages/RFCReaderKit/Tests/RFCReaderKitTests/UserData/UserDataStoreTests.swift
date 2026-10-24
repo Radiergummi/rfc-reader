@@ -217,11 +217,11 @@ struct UserDataStoreTests {
     let context = container.mainContext
     let first = ReadingPlace(anchor: "section-1", offset: 0)
     let second = ReadingPlace(anchor: "section-4.2", offset: 0)
-    try ReadingPositionStore.save(first, for: .rfc(9110), in: context)
-    try ReadingPositionStore.save(second, for: .rfc(9110), in: context)
+    try ReadingPositionStore.save(first, for: .rfc(.rfc(9110)), in: context)
+    try ReadingPositionStore.save(second, for: .rfc(.rfc(9110)), in: context)
 
     #expect(try rowCount(ReadingPosition.self, in: context) == 1)
-    #expect(try ReadingPositionStore.position(for: .rfc(9110), in: context)?.place == second)
+    #expect(try ReadingPositionStore.position(for: .rfc(.rfc(9110)), in: context)?.place == second)
     #expect(!context.hasChanges)
   }
 
@@ -231,17 +231,18 @@ struct UserDataStoreTests {
     let place = ReadingPlace(anchor: "section-3", offset: 0)
     let left = Date(timeIntervalSince1970: 1_000)
     let opened = Date(timeIntervalSince1970: 2_000)
-    try ReadingPositionStore.save(place, for: .rfc(9110), at: left, in: context)
-    try ReadingPositionStore.markOpened(.rfc(9110), at: opened, in: context)
+    try ReadingPositionStore.save(place, for: .rfc(.rfc(9110)), at: left, in: context)
+    try ReadingPositionStore.markOpened(.rfc(.rfc(9110)), at: opened, in: context)
 
-    let position = try ReadingPositionStore.position(for: .rfc(9110), in: context)
+    let position = try ReadingPositionStore.position(for: .rfc(.rfc(9110)), in: context)
     #expect(position?.place == place)
     #expect(position?.updatedAt == opened)
   }
 
   @Test func `a document never opened has no position`() throws {
     let container = try makeContainer()
-    #expect(try ReadingPositionStore.position(for: .rfc(9110), in: container.mainContext) == nil)
+    #expect(
+      try ReadingPositionStore.position(for: .rfc(.rfc(9110)), in: container.mainContext) == nil)
   }
 
   /// RFC 1, BCP 1 and STD 1 share a number, not a position.
@@ -250,21 +251,40 @@ struct UserDataStoreTests {
     let context = container.mainContext
     let bcp = DocumentID(series: .bcp, number: 1)
     try ReadingPositionStore.save(
-      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(1), in: context)
+      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(.rfc(1)), in: context)
     try ReadingPositionStore.save(
-      ReadingPlace(anchor: "section-2", offset: 0), for: bcp, in: context)
+      ReadingPlace(anchor: "section-2", offset: 0), for: .rfc(bcp), in: context)
 
     #expect(
-      try ReadingPositionStore.position(for: .rfc(1), in: context)?.place?.anchor == "section-1")
-    #expect(try ReadingPositionStore.position(for: bcp, in: context)?.place?.anchor == "section-2")
+      try ReadingPositionStore.position(for: .rfc(.rfc(1)), in: context)?.place?.anchor
+        == "section-1")
+    #expect(
+      try ReadingPositionStore.position(for: .rfc(bcp), in: context)?.place?.anchor == "section-2")
+  }
+
+  /// Each revision of a draft keeps its own place (#728), and none of them is listed
+  /// as an RFC read.
+  @Test func `a draft's revision keeps a place, and is no RFC read`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let draft = ReadableDocument.draft(try #require(DraftID(parsing: "draft-ietf-quic-http-34")))
+    let place = ReadingPlace(anchor: "section-4", offset: 12)
+    try ReadingPositionStore.save(place, for: draft, in: context)
+
+    #expect(try ReadingPositionStore.position(for: draft, in: context)?.place == place)
+    #expect(
+      try ReadingPositionStore.position(for: draft, in: context)?.documentKey
+        == "draft-ietf-quic-http-34")
+    #expect(try ReadingPositionStore.recentlyRead(in: context).isEmpty)
+    #expect(try ReadingPositionStore.recentlyReadCount(in: context) == 0)
   }
 
   @Test func `a document opened for the first time has a row and no place`() throws {
     let container = try makeContainer()
     let context = container.mainContext
-    try ReadingPositionStore.markOpened(.rfc(2119), in: context)
+    try ReadingPositionStore.markOpened(.rfc(.rfc(2119)), in: context)
 
-    let position = try ReadingPositionStore.position(for: .rfc(2119), in: context)
+    let position = try ReadingPositionStore.position(for: .rfc(.rfc(2119)), in: context)
     #expect(position != nil)
     #expect(position?.place == nil)
   }
@@ -273,11 +293,11 @@ struct UserDataStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     try ReadingPositionStore.markOpened(
-      .rfc(1), at: Date(timeIntervalSince1970: 1_000), in: context)
+      .rfc(.rfc(1)), at: Date(timeIntervalSince1970: 1_000), in: context)
     try ReadingPositionStore.markOpened(
-      .rfc(3), at: Date(timeIntervalSince1970: 3_000), in: context)
+      .rfc(.rfc(3)), at: Date(timeIntervalSince1970: 3_000), in: context)
     try ReadingPositionStore.markOpened(
-      .rfc(2), at: Date(timeIntervalSince1970: 2_000), in: context)
+      .rfc(.rfc(2)), at: Date(timeIntervalSince1970: 2_000), in: context)
 
     #expect(try ReadingPositionStore.recentlyRead(in: context) == [.rfc(3), .rfc(2), .rfc(1)])
   }
@@ -286,9 +306,9 @@ struct UserDataStoreTests {
   @Test func `the recently read count is of every document recently read lists`() throws {
     let container = try makeContainer()
     let context = container.mainContext
-    try ReadingPositionStore.markOpened(.rfc(1), in: context)
-    try ReadingPositionStore.markOpened(.rfc(2), in: context)
-    try ReadingPositionStore.markOpened(DocumentID(series: .bcp, number: 14), in: context)
+    try ReadingPositionStore.markOpened(.rfc(.rfc(1)), in: context)
+    try ReadingPositionStore.markOpened(.rfc(.rfc(2)), in: context)
+    try ReadingPositionStore.markOpened(.rfc(DocumentID(series: .bcp, number: 14)), in: context)
 
     #expect(try ReadingPositionStore.recentlyReadCount(in: context) == 3)
   }
@@ -297,9 +317,9 @@ struct UserDataStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     try ReadingPositionStore.markOpened(
-      .rfc(1), at: Date(timeIntervalSince1970: 1_000), in: context)
+      .rfc(.rfc(1)), at: Date(timeIntervalSince1970: 1_000), in: context)
     try ReadingPositionStore.markOpened(
-      .rfc(2), at: Date(timeIntervalSince1970: 3_000), in: context)
+      .rfc(.rfc(2)), at: Date(timeIntervalSince1970: 3_000), in: context)
 
     let since = Date(timeIntervalSince1970: 2_000)
     #expect(try ReadingPositionStore.read(since: since, in: context) == [.rfc(2)])

@@ -33,6 +33,8 @@ struct DocumentHeaderView: View {
     /// it was made and so would never compare equal.
     let revisionLines: [RevisionsSummary.Line]
     let moreRevisions: String?
+    /// What the header says of a draft (#728), nil for an RFC.
+    let draft: DraftStatus?
     /// What the header says of a translation (#749), nil for the English.
     let translation: TranslationMark?
     /// The errata naming no section the document has (#387), which the chip by the
@@ -42,7 +44,7 @@ struct DocumentHeaderView: View {
     /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(
       header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil,
-      translation: TranslationMark? = nil,
+      draft: DraftStatus? = nil, translation: TranslationMark? = nil,
       documentErrata: [ErrataSummary.Item] = []
     ) {
       let summary = HeaderSummary(header: header, metadata: metadata)
@@ -53,6 +55,7 @@ struct DocumentHeaderView: View {
       self.metadata = metadata
       revisionLines = revisions?.bannerLines ?? []
       moreRevisions = revisions?.moreText
+      self.draft = draft
       self.translation = translation
       self.documentErrata = documentErrata
     }
@@ -78,6 +81,9 @@ struct DocumentHeaderView: View {
         } action: { bottom in
           reader.headingBottom = bottom
         }
+      if let draft = identity.draft {
+        DraftBanner(status: draft)
+      }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {
           GlossaryButton(term: .status(metadata.currentStatus), presentation: .scene(navigation)) {
@@ -131,6 +137,76 @@ struct DocumentHeaderView: View {
     // the column's leading edge, and by a distance that changes with the title's
     // length. Filling the column is the same instruction the body text gets.
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// That the text below is an Internet-Draft, not an RFC (#728): which revision it
+/// is, with a menu of the others, and where the draft has gone since, a newer
+/// revision or the RFC it became, which a button opens.
+private struct DraftBanner: View {
+  /// Hosted outside the SwiftUI hierarchy, by a host that `ReaderEnvironment`
+  /// guarantees gave it the environment.
+  @Environment(LibraryModel.self) private var library
+  @Environment(NavigationModel.self) private var navigation
+  let status: DraftStatus
+
+  var body: some View {
+    WrappingRowLayout(spacing: 8) {
+      Label {
+        Text(verbatim: status.mark)
+      } icon: {
+        Image(systemName: "doc.badge.clock")
+      }
+      .fontWeight(.medium)
+      Menu {
+        ForEach(status.choices) { choice in
+          Button {
+            open(choice.draft)
+          } label: {
+            if let date = choice.date {
+              Text(verbatim: "\(choice.label) · \(date)")
+            } else {
+              Text(verbatim: choice.label)
+            }
+          }
+          .disabled(choice.isShown)
+        }
+      } label: {
+        Text(verbatim: status.revisionLabel)
+      }
+      .menuStyle(.button)
+      .buttonStyle(.borderless)
+      .fixedSize()
+      .accessibilityLabel(Text("Revision"))
+      .accessibilityValue(Text(verbatim: status.revisionLabel))
+      if let notice = status.notice {
+        if let rfc = status.publishedAs {
+          Button {
+            library.open(rfc, activation: .current, in: navigation, arrival: .citation)
+          } label: {
+            Text(verbatim: notice)
+          }
+          .buttonStyle(.borderless)
+        } else if let newer = status.newer {
+          Button {
+            open(newer)
+          } label: {
+            Text(verbatim: notice)
+          }
+          .buttonStyle(.borderless)
+        } else {
+          Text(verbatim: notice)
+        }
+      }
+    }
+    .font(.subheadline)
+    .foregroundStyle(.secondary)
+  }
+
+  /// Another revision of the draft, in this tab, as a link followed in the reader.
+  private func open(_ draft: DraftID) {
+    library.open(
+      .draft(DraftLink(id: draft)), activation: .current, in: navigation, arrival: .citation)
   }
 }
 

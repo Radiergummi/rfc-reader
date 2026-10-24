@@ -112,7 +112,8 @@
     /// and picks exactly one to act on the link.
     func application(_ application: NSApplication, open urls: [URL]) {
       for url in urls {
-        guard let link = RFCLink(url: url) else { continue }
+        // An RFC, or a draft (#728).
+        guard let link = ReadableLink(url: url) else { continue }
         LibraryModel.shared.route(link)
       }
     }

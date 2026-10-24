@@ -21,6 +21,9 @@ public struct RevisionsSummary: Equatable, Sendable {
     public let title: String
     /// The draft's datatracker page.
     public let url: URL
+    /// The draft at the revision the line names, which the reader opens (#728); nil
+    /// for a name the file gives that is no draft's.
+    public let draft: DraftID?
     public let detail: String
     /// One sentence, "Being replaced by draft-…, revision 22, in the RFC Editor queue".
     public let accessibilityLabel: String
@@ -169,7 +172,8 @@ public struct RevisionsSummary: Equatable, Sendable {
       }
     return Line(
       relation: relation, title: "\(revision.draft)-\(revision.revision)",
-      url: RFCEditorEndpoints.datatrackerDraft(revision.draft), detail: detail,
+      url: RFCEditorEndpoints.datatrackerDraft(revision.draft),
+      draft: DraftID(name: revision.draft, revision: revision.revision), detail: detail,
       accessibilityLabel: dated(sentence))
   }
 

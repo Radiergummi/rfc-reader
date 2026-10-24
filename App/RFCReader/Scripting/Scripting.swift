@@ -479,7 +479,13 @@
       let reference =
         (directParameter as? String) ?? (directParameter as? NSNumber)?.stringValue ?? ""
       let section = evaluatedArguments?["section"] as? String
-      guard let link = DocumentReference.link(from: reference, section: section) else {
+      // An RFC, or an Internet-Draft by its name or a link to it (#728).
+      let link: ReadableLink
+      if let rfc = DocumentReference.link(from: reference, section: section) {
+        link = .rfc(rfc)
+      } else if let draft = DocumentReference.draft(from: reference, section: section) {
+        link = .draft(draft)
+      } else {
         ScriptError.report("“\(reference)” names no RFC.", in: self)
         return
       }
@@ -490,7 +496,20 @@
         case .newWindow: .newWindow
         case .frontTab, nil: .frontTab
         }
-      LibraryModel.shared.open(link, placement: placement)
+      guard case .draft(var draft) = link, draft.id.revision == nil else {
+        LibraryModel.shared.open(link, placement: placement)
+        return
+      }
+      // A draft without a revision opens once Datatracker has said which is the
+      // newest, so the command waits for that: a script's next command, such as
+      // `jump to section`, then finds the draft on screen.
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      Task {
+        draft.id = await LibraryModel.shared.revision(of: draft.id)
+        LibraryModel.shared.open(.draft(draft), placement: placement)
+        command.resumeExecution(withResult: nil)
+      }
     }
   }
 
@@ -520,7 +539,7 @@
         ScriptError.report("Which section?", in: self)
         return
       }
-      guard let window = targetWindow, window.navigation.selection != nil else {
+      guard let window = targetWindow, window.navigation.shownDocument != nil else {
         ScriptError.report("There is no RFC to jump in.", in: self)
         return
       }

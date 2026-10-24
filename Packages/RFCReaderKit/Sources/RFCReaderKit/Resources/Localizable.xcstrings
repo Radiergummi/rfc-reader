@@ -1818,6 +1818,16 @@
         }
       }
     },
+    "Internet-Draft, not an RFC" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet-Draft, kein RFC"
+          }
+        }
+      }
+    },
     "It asked for at least two independent, interoperable implementations. RFC 6410 removed the level in 2011, and a document still at it stays there until it is reclassified." : {
       "localizations" : {
         "de" : {
@@ -2578,6 +2588,16 @@
         }
       }
     },
+    "Published as %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veröffentlicht als %@"
+          }
+        }
+      }
+    },
     "Published before the RFC Editor recorded which stream a document came through." : {
       "localizations" : {
         "de" : {
@@ -2954,6 +2974,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Revision %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision %lld"
+          }
+        }
+      }
+    },
+    "Revision %lld is the newest" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revision %lld ist die neueste"
           }
         }
       }
@@ -3354,6 +3394,16 @@
         }
       }
     },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
+          }
+        }
+      }
+    },
     "Text" : {
       "localizations" : {
         "de" : {
@@ -3370,6 +3420,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die höchste Reifestufe der IETF: ein stabiler Standard, weit verbreitet implementiert und im Einsatz."
+          }
+        }
+      }
+    },
+    "The IETF's servers aren't responding right now. Try again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Server der IETF antworten gerade nicht. Versuche es später noch einmal."
           }
         }
       }
@@ -3720,6 +3780,16 @@
         }
       }
     },
+    "This draft couldn't be read. It may open on Datatracker." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Draft konnte nicht gelesen werden. Auf Datatracker lässt er sich vielleicht öffnen."
+          }
+        }
+      }
+    },
     "This section of %@ has no counterpart in %@" : {
       "localizations" : {
         "de" : {
@@ -3812,6 +3882,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versuche es erneut oder öffne das Dokument auf rfc-editor.org."
+          }
+        }
+      }
+    },
+    "Try again, or open the draft on Datatracker." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche es noch einmal, oder öffne den Draft auf Datatracker."
           }
         }
       }

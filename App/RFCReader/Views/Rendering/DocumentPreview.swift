@@ -84,7 +84,7 @@ struct DocumentPreview: View {
         built: loaded.built,
         bibliography: loaded.bibliography,
         measure: settings.measure,
-        documentID: id,
+        document: .rfc(id),
         commitsOnClick: commit,
         controller: controller,
         onLink: { _, _ in true },

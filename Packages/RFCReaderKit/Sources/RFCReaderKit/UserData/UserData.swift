@@ -410,8 +410,10 @@ public enum SchemaV6: VersionedSchema {
     public var offset: Int?
     public var updatedAt: Date = Date.distantPast
 
-    public init(document: DocumentID, place: ReadingPlace?, updatedAt: Date = .now) {
-      self.documentKey = document.fileStem
+    /// A row for `key`, a document's `ReadableDocument.userDataKey`: a draft's
+    /// revision has one too (#728).
+    public init(key: String, place: ReadingPlace?, updatedAt: Date = .now) {
+      self.documentKey = key
       self.anchor = place?.anchor
       self.offset = place?.offset
       self.updatedAt = updatedAt
