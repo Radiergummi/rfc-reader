@@ -23,8 +23,6 @@
     let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
     @State private var readingPathAfterPanel: ReadingPathRequest?
 
@@ -70,21 +68,7 @@
         // The original text has no reader to bring them back with a tap, and the
         // reader made afresh on the way back starts with them showing.
         .onChange(of: reader.showOriginal) { barsHidden = false }
-        // An overlay rather than an inset: it floats over the text and takes no
-        // layout, so it cannot disturb the column, which is derived from this
-        // view's frame.
-        .overlay(alignment: .bottom) {
-          returnButton.animation(.snappy, value: visibleReturn)
-        }
-        // Long enough to decide, without sitting over the text for good. Not under
-        // VoiceOver, where a control that leaves on a timer may be gone before it
-        // is reached: there it stays until the next navigation replaces it.
-        .task(id: visibleReturn) {
-          guard visibleReturn != nil, !voiceOverEnabled else { return }
-          try? await Task.sleep(for: .seconds(8))
-          guard !Task.isCancelled else { return }
-          navigation.settleReturnOffer()
-        }
+        .modifier(ReturnOfferOverlay(navigation: navigation, document: document))
         // In compact width the panel is a sheet, and a `.sheet` of our own rather
         // than the one `.inspector` turns itself into: that one, swiped away, set
         // the binding back to false but dropped the next request to show it, so the
@@ -138,6 +122,20 @@
       }
     }
 
+  }
+
+  /// "Back to § 4.2" after following a link within the document (#254), an RFC's or
+  /// a draft's (#728). In a single column there is no back/forward pair, and the
+  /// system back button leaves the document.
+  struct ReturnOfferOverlay: ViewModifier {
+    let navigation: NavigationModel
+    /// What the offer names its place in.
+    let document: RFCDocument?
+
+    @Environment(\.sceneChrome) private var chrome
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Where a tap on the return offer goes, while it is on show.
     ///
     /// In a single column only: beside other columns, the back/forward pair is in
@@ -146,9 +144,25 @@
       chrome.isCollapsed ? navigation.returnOffer : nil
     }
 
-    /// "Back to § 4.2" after following a link within the document (#254). In a
-    /// single column there is no back/forward pair, and the system back button
-    /// leaves the document.
+    func body(content: Content) -> some View {
+      content
+        // An overlay rather than an inset: it floats over the text and takes no
+        // layout, so it cannot disturb the column, which is derived from this
+        // view's frame.
+        .overlay(alignment: .bottom) {
+          returnButton.animation(.snappy, value: visibleReturn)
+        }
+        // Long enough to decide, without sitting over the text for good. Not under
+        // VoiceOver, where a control that leaves on a timer may be gone before it
+        // is reached: there it stays until the next navigation replaces it.
+        .task(id: visibleReturn) {
+          guard visibleReturn != nil, !voiceOverEnabled else { return }
+          try? await Task.sleep(for: .seconds(8))
+          guard !Task.isCancelled else { return }
+          navigation.settleReturnOffer()
+        }
+    }
+
     @ViewBuilder
     private var returnButton: some View {
       if let offer = visibleReturn {
@@ -176,6 +190,8 @@
   /// items, whose actions are an RFC's: the index lists it, and a draft is in no
   /// index.
   struct IOSDraftChrome: ViewModifier {
+    /// What the return offer names its place in.
+    let document: RFCDocument?
     let library: LibraryModel
     let navigation: NavigationModel
     let reader: ReaderState
@@ -192,6 +208,7 @@
     func body(content: Content) -> some View {
       content
         .navigationBarTitleDisplayMode(.inline)
+        .modifier(ReturnOfferOverlay(navigation: navigation, document: document))
         .toolbar {
           ToolbarItemGroup(placement: .bottomBar) {
             Button {
