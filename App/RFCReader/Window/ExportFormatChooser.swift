@@ -8,7 +8,11 @@
   ///
   /// It keeps the panel's file type and the name's extension in step with the
   /// format, keeping whatever the name was changed to, and remembers the last format
-  /// chosen for the next export.
+  /// chosen for the next export. Whether the whole document or the section on
+  /// screen is saved (#386) is chosen before the panel opens, by File > Export… or
+  /// Export Current Section…: the panel runs in a process of its own in the
+  /// sandbox, and a name given to it once it is open never reaches its field, so a
+  /// scope chosen in it could not name the file.
   final class ExportFormatChooser: NSObject {
     static let rememberedKey = "exportFormat"
 
@@ -16,10 +20,15 @@
     private(set) var format: ExportFormat
     private let panel: NSSavePanel
     private let popUp = NSPopUpButton()
-    /// The formats this document can be saved as (#185).
+    /// The formats this document can be saved as (#185), only those that take a
+    /// section when one is saved.
     private let offered: [ExportFormat]
 
-    init(panel: NSSavePanel, document: DocumentID, offered: [ExportFormat]) {
+    /// - Parameter section: the anchor of the section to save, which names the
+    ///   file; nil for the whole document.
+    init(
+      panel: NSSavePanel, document: DocumentID, offered: [ExportFormat], section: String?
+    ) {
       self.panel = panel
       self.offered = offered
       format = ExportFormat(
@@ -27,17 +36,17 @@
       popUp.addItems(withTitles: offered.map { $0.name() })
       popUp.selectItem(at: offered.firstIndex(of: format) ?? 0)
       let label = NSTextField(labelWithString: String(localized: "Format:"))
-      let row = NSStackView(views: [label, popUp])
-      row.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+      let stack = NSStackView(views: [label, popUp])
+      stack.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
       // The panel sizes its accessory by the view's frame, which a view made in
       // code starts without.
-      row.frame.size = row.fittingSize
-      view = row
+      stack.frame.size = stack.fittingSize
+      view = stack
       super.init()
       popUp.target = self
       popUp.action = #selector(choose)
       panel.allowedContentTypes = [format.contentType]
-      panel.nameFieldStringValue = format.fileName(for: document)
+      panel.nameFieldStringValue = format.fileName(for: document, section: section)
     }
 
     @objc private func choose() {

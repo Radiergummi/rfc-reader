@@ -25,9 +25,10 @@ public enum CacheEviction {
   }
 
   /// What eviction never removes: bookmarks, a bookmark being a promise to keep the
-  /// document offline; what was read since `readCutoff`; a document marked Keep
-  /// Offline, whose cached body waits for the keeper to move it (#358); and
-  /// whatever a window has open, which includes the document just fetched. A
+  /// document offline, and so is a document with annotations, which the Annotations
+  /// tab relocates against (#522); what was read since `readCutoff`; a document
+  /// marked Keep Offline, whose cached body waits for the keeper to move it (#358);
+  /// and whatever a window has open, which includes the document just fetched. A
   /// bookmarked, read or marked series stands for its members (`withMembers`,
   /// #656); what is open is the document a window shows, already a member.
   public static func pinned(
@@ -82,7 +83,8 @@ public enum CacheEviction {
   /// last opened. The store sets that date on every open; a body is otherwise
   /// never modified after it is written.
   ///
-  /// Only the files `DocumentCacheIndex` counts as bodies. An enumeration, so it is
+  /// Only the files `DocumentCacheIndex` counts as bodies, and their models (#606).
+  /// An enumeration, so it is
   /// asked once per download rather than per question.
   public static func entries(in directory: URL) -> [Entry] {
     let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
@@ -91,7 +93,7 @@ public enum CacheEviction {
         at: directory, includingPropertiesForKeys: keys)) ?? []
     var found: [DocumentID: (bytes: Int, date: Date)] = [:]
     for url in urls {
-      guard let id = DocumentCacheIndex.document(named: url.lastPathComponent),
+      guard let id = DocumentCacheIndex.owner(named: url.lastPathComponent),
         let values = try? url.resourceValues(forKeys: Set(keys))
       else {
         continue

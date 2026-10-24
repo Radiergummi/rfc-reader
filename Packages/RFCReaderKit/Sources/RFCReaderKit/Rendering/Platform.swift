@@ -114,6 +114,14 @@ public enum RFCColors {
       opacity: (light: tint.light.opacity, dark: tint.dark.opacity))
   }
 
+  /// A highlight's fill, or its underline's rule (#522): `HighlightColor.fill`.
+  public static func highlight(_ color: HighlightColor) -> PlatformColor {
+    let fill = color.fill
+    return byAppearance(
+      light: fill.light.color, dark: fill.dark.color,
+      opacity: (light: fill.light.opacity, dark: fill.dark.opacity))
+  }
+
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
   /// so it tints whatever the page is rather than assuming its color.
   private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {

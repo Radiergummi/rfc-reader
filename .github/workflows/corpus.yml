@@ -16,8 +16,12 @@ on:
         description: Attach packs to a GitHub release
         type: boolean
         default: false
+      publish_indexes:
+        description: Publish the indexes pack the app bundles as release indexes-<version> (version YYYY.MM.N)
+        type: boolean
+        default: false
 
-# Only the publish job writes, and it builds nothing.
+# Only the publish jobs write, and they build nothing.
 permissions:
   contents: read
 
@@ -43,6 +47,17 @@ jobs:
       VERSION: ${{ inputs.version }}
       LIMIT: ${{ inputs.limit }}
     steps:
+      # The app orders indexes packs by their version, number by number, so one to
+      # be published is dated and counted, 2026.10.1: refused before hours of build.
+      # The container's shell is sh, so grep rather than bash's [[ =~ ]].
+      - name: Check the indexes pack's version
+        if: ${{ inputs.publish_indexes }}
+        run: |
+          if ! printf '%s\n' "$VERSION" | grep -Eqx '[0-9]{4}\.[0-9]{2}\.[0-9]+'; then
+            echo "::error::The indexes pack's version is YYYY.MM.N, not $VERSION."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -197,9 +212,11 @@ jobs:
         with:
           name: corpus-${{ inputs.version }}-legacy
 
+      # Not the indexes pack, which is published as its own release, unarchived, for
+      # the app to bundle (publish-indexes).
       - name: Archive
         run: |
-          packs="modern-xml indexes"
+          packs="modern-xml"
           if [ "$LEGACY_PACK_CLEARED" = true ]; then packs="legacy-xml $packs"; fi
           for pack in $packs; do
             aa archive -a lzfse -d "packs/$pack" -o "$pack-$VERSION.aar"
@@ -246,6 +263,52 @@ jobs:
           fi
           gh release create "corpus-$VERSION" --target "$GITHUB_SHA" \
             "${legacy[@]}" packs/modern-xml-*.aar \
-            packs/indexes-*.aar \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."
+
+  # The indexes pack the app bundles (#738), as a release of its own, one per pack
+  # version: the repository's releases are immutable, so it is made a draft, given
+  # the pack's two files, and only then published, after which neither can change.
+  # App/indexes-pack.mk pins the tag and the files' SHA-256, which the run's summary
+  # prints for it. Like publish, it checks nothing out and runs only gh over the
+  # build job's artifact.
+  publish-indexes:
+    # Never a smoke run's: a release cannot be replaced, so a partial pack would use
+    # up its version.
+    if: ${{ inputs.publish_indexes && inputs.limit == '' }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # For `gh release`; actions: read to download this run's artifact.
+      contents: write
+      actions: read
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Publish release
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir corpus-artifact
+          cd corpus-artifact/packs/indexes
+          tag="indexes-$VERSION"
+          # A re-run after a failed upload finds its draft and uploads again. So does
+          # another dispatch of the version, whose draft may target another commit:
+          # publishing sets the target to the commit that built these files.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" \
+              --title "Indexes pack $VERSION" \
+              --notes "The corpus's index database the app bundles (#738). See docs/DATA_PIPELINE.md."
+          fi
+          gh release upload "$tag" indexes.sqlite manifest.json --clobber
+          gh release edit "$tag" --target "$GITHUB_SHA" --draft=false
+          {
+            echo "Pin it in App/indexes-pack.mk:"
+            echo
+            echo '```make'
+            echo "INDEXES_PACK_TAG := $tag"
+            echo "INDEXES_PACK_SQLITE_SHA256 := $(sha256sum indexes.sqlite | cut -d' ' -f1)"
+            echo "INDEXES_PACK_MANIFEST_SHA256 := $(sha256sum manifest.json | cut -d' ' -f1)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

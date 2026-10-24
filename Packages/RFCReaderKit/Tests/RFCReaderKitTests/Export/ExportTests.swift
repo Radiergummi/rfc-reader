@@ -63,6 +63,63 @@ struct ExportFormatTests {
     #expect(ExportFormat.pdf.name(in: .english) == "PDF")
   }
 
+  /// The published files are the RFC Editor's, and the rest are made from the
+  /// model; each is typed and named as its kind of file is (#377).
+  @Test func `each format has its source, type and extension`() {
+    #expect(ExportFormat.html.source == .rendered)
+    #expect(ExportFormat.html.contentType == .html)
+    #expect(ExportFormat.html.fileName(for: .rfc(9110)) == "RFC-9110.html")
+    #expect(ExportFormat.text.source == .published)
+    #expect(ExportFormat.text.contentType == .plainText)
+    #expect(ExportFormat.text.fileName(for: .rfc(9110)) == "RFC-9110.txt")
+    #expect(ExportFormat.xml.source == .published)
+    #expect(ExportFormat.xml.contentType == .xml)
+    #expect(ExportFormat.xml.fileName(for: .rfc(9110)) == "RFC-9110.xml")
+    #expect(ExportFormat.markdown.source == .rendered)
+    #expect(ExportFormat.markdown.contentType.conforms(to: .plainText))
+    #expect(ExportFormat.markdown.fileName(for: .rfc(9110)) == "RFC-9110.md")
+    #expect(ExportFormat.text.name(in: .english) == "Plain Text")
+  }
+
+  @Test func `every document offers every format but the grammar`() throws {
+    #expect(
+      ExportFormat.available(for: try Fixtures.rfc2119())
+        == [.pdf, .epub, .html, .markdown, .text, .xml])
+  }
+
+  /// The page and the Markdown are the serializers' (RFCKit pins what they write);
+  /// PDF and the published files are not made from the model here.
+  @Test func `the page and the Markdown are made from the document`() throws {
+    let document = try Fixtures.rfc8999()
+    #expect(ExportFormat.html.text(of: document) == RFCHTMLSerializer().page(document))
+    #expect(ExportFormat.markdown.text(of: document) == RFCMarkdownSerializer().serialize(document))
+    for format in [ExportFormat.pdf, .text, .xml] {
+      #expect(format.text(of: document) == nil, "\(format)")
+    }
+  }
+
+  /// The book is the EPUB writer's, typed and named as an EPUB (#408).
+  @Test func `the book is made from the document`() throws {
+    let document = try Fixtures.rfc8999()
+    #expect(ExportFormat.epub.source == .rendered)
+    #expect(ExportFormat.epub.contentType == .epub)
+    #expect(ExportFormat.epub.fileName(for: .rfc(9110)) == "RFC-9110.epub")
+    #expect(ExportFormat.epub.data(of: document) == RFCEPUBWriter().epub(document))
+    #expect(ExportFormat.epub.text(of: document) == nil)
+    #expect(ExportFormat.html.data(of: document) == Data(RFCHTMLSerializer().page(document).utf8))
+    #expect(ExportFormat.pdf.data(of: document) == nil)
+  }
+
+  /// A legacy RFC's XML says it is a conversion, and names the text it came from;
+  /// the XML parser reads it back.
+  @Test func `a legacy RFC's XML says it is the app's conversion`() throws {
+    let document = try Fixtures.rfc2119()
+    let xml = ExportFormat.convertedXML(of: document)
+    #expect(xml.contains("<!-- Converted by RFC Reader from the plain-text RFC"))
+    #expect(xml.contains("https://www.rfc-editor.org/rfc/rfc2119.txt"))
+    #expect(try RFCXMLParser.parse(Data(xml.utf8)).header.title == document.header.title)
+  }
+
   /// The Mac's pop-up remembers the last format by its raw value; one this build
   /// does not have, or none, falls back to the first rather than to nothing.
   @Test func `a remembered format falls back to the first`() {

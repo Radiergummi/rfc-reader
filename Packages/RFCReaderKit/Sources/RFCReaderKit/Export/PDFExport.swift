@@ -32,14 +32,30 @@ public enum PDFExport {
       return .anchor(anchor)
     }
     if let entry = ReaderLinkScheme.reference(from: url) {
-      guard let reference = references[entry] else { return nil }
-      if let url = reference.url, let target = followable(url) { return target }
-      return reference.documentID.map { .web(RFCLink(id: $0).webURL) }
+      return references[entry].flatMap(target(of:))
     }
     if let link = RFCLink(url: url) {
       return .web(link.webURL)
     }
     return followable(url)
+  }
+
+  /// Where a citation of `reference` goes: the address it gives, or the page of the
+  /// document it names.
+  private static func target(of reference: Reference) -> Target? {
+    if let url = reference.url, let target = followable(url) { return target }
+    return reference.documentID.map { .web(RFCLink(id: $0).webURL) }
+  }
+
+  /// Where a link to `anchor` goes when the file does not hold it, as a section
+  /// exported alone does not hold the rest of the document (#386): a citation where
+  /// the whole document's goes, by `references`, its bibliography; anything else to
+  /// the place in the document on rfc-editor.org. Nil for a document with no number.
+  public static func outside(
+    _ anchor: String, of id: DocumentID?, references: [String: Reference]
+  ) -> Target? {
+    if let reference = references[anchor], let target = target(of: reference) { return target }
+    return id.map { .web(RFCLink(id: $0, anchor: anchor).webURL) }
   }
 
   /// `url` as a link, when a PDF reader can follow it: the web, or mail.

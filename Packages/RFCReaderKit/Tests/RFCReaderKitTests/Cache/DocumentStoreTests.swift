@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import RFCKit
 import Synchronization
@@ -71,12 +72,17 @@ struct DocumentStoreTests {
 
     /// A store whose disk has `freeSpace` bytes left for each tier, or as much as
     /// the real volume has when that is nil, and which awaits `parsing` at the start
-    /// of each look at the disk for a body to parse.
+    /// of each look at the disk for a body to parse. It keeps parsed documents encoded
+    /// only when given a `build` to key them by, so no other test finds a file it did
+    /// not write (#606).
     func store(
       freeSpace: (@Sendable (StorageTier) -> Int?)? = nil,
-      parsing: (@Sendable () async -> Void)? = nil
+      parsing: (@Sendable () async -> Void)? = nil,
+      build: String? = nil
     ) -> DocumentStore {
-      DocumentStore(directory: directory, caches: caches, freeSpace: freeSpace, parsing: parsing)
+      DocumentStore(
+        directory: directory, caches: caches, freeSpace: freeSpace, parsing: parsing,
+        build: build)
     }
 
     /// Where the store keeps `id`'s body in `format`, in `tier`.
@@ -87,6 +93,12 @@ struct DocumentStoreTests {
         case .cache: caches.appending(path: "Documents", directoryHint: .isDirectory)
         }
       return folder.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
+    }
+
+    /// Where the store keeps `id`'s parsed document encoded, beside its body in `tier`.
+    func model(_ id: DocumentID, in tier: StorageTier = .cache) -> URL {
+      file(id, format: .xml, in: tier).deletingLastPathComponent()
+        .appending(path: DocumentCacheIndex.modelFileName(for: id))
     }
 
     func exists(_ id: DocumentID, format: FileFormat, in tier: StorageTier) -> Bool {
@@ -406,6 +418,39 @@ struct DocumentStoreTests {
 
     #expect(sandbox.exists(id, format: .text, in: .kept))
     #expect(!sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  /// An export of the text saves the RFC Editor's file as it is, pages and all,
+  /// where Original Text strips them (#377).
+  @Test func `the published text is the file as fetched`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(2119)
+
+    let text = try await store.publishedFile(id, format: .text, client: fetcher)
+
+    #expect(text == (try Fixtures.data("rfc2119.txt")))
+    #expect(sandbox.exists(id, format: .text, in: .cache))
+  }
+
+  /// The XML the reader fetched is the RFC Editor's, and an export saves it from
+  /// the disk without a second download.
+  @Test func `the published XML is the file on disk`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    await fetcher.gate.open()
+    let id = DocumentID.rfc(8999)
+    _ = try await store.document(id, formats: [.xml], client: fetcher)
+
+    let xml = try await store.publishedFile(id, format: .xml, client: fetcher)
+
+    #expect(xml == (try Fixtures.data("rfc8999.xml")))
+    #expect(fetcher.textFetches == 0)
   }
 
   @Test func `eviction never removes a kept body`() async throws {
@@ -923,6 +968,78 @@ struct DocumentStoreTests {
     #expect(try await first.value.source == .text)
     #expect(try await second.value.source == .text)
     #expect(try await store.document(id, formats: [.text], client: fetcher).source == .xml)
+  }
+
+  /// The app reads the `indexes` pack in its bundle until a later build is installed
+  /// beside it (#738); with neither, there is no citation index.
+  @Test func `the bundled indexes pack is read until a later one is installed`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    #expect(await store.citationIndexURL(bundled: nil, prefersInstalled: false) == nil)
+
+    let bundled = try Self.indexesPack(in: sandbox.root.appending(path: "Bundle"), "2026.10.1")
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: bundled))
+
+    let earlier = try Self.indexesPack(in: sandbox.root.appending(path: "Earlier"), "2026.09")
+    _ = try await store.installIndexesPack(from: earlier)
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: bundled))
+
+    let later = try Self.indexesPack(in: sandbox.root.appending(path: "Later"), "2026.10.2")
+    let installed = try await store.installIndexesPack(from: later)
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: false)
+        == Self.database(in: installed.directory))
+  }
+
+  /// A pack installed before an app update changed the schema is not read, however
+  /// late its version: the update's bundled pack is.
+  @Test func `an installed indexes pack of another schema gives way to the bundled one`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let bundled = try Self.indexesPack(in: sandbox.root.appending(path: "Bundle"), "2026.10.1")
+    let stale = try Self.indexesPack(
+      in: sandbox.root.appending(path: "Stale"), "dev", schema: "1")
+    _ = try await store.installIndexesPack(from: stale)
+    // As a Debug build, which reads an installed pack whatever its version.
+    #expect(
+      await store.citationIndexURL(bundled: bundled, prefersInstalled: true)
+        == Self.database(in: bundled))
+    #expect(await store.citationIndexURL(bundled: nil, prefersInstalled: true) == nil)
+  }
+
+  /// An `indexes` pack in `parent`: an empty database of `schema` and a manifest of
+  /// `version` listing it.
+  static func indexesPack(
+    in parent: URL, _ version: String, schema: String = String(IndexSchema.version)
+  ) throws -> URL {
+    let database = try CitationIndexTests.Database(schema: schema, documents: 0, rows: [])
+    defer { try? FileManager.default.removeItem(at: database.directory) }
+    let directory = parent.appending(path: IndexesPack.name, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let data = try Data(contentsOf: database.url)
+    try data.write(to: directory.appending(path: CitationIndex.fileName))
+    let manifest = Manifest(
+      version: version,
+      files: [
+        Manifest.Entry(
+          path: CitationIndex.fileName, bytes: data.count,
+          sha256: Manifest.hex(SHA256.hash(data: data)))
+      ])
+    try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
+    return directory
+  }
+
+  /// The database of the pack in `directory`, as the store names it.
+  static func database(in directory: URL) -> URL {
+    directory.appending(path: CitationIndex.fileName).standardizedFileURL
   }
 
   /// A legacy XML pack holding RFC 2119, converted from its committed text the way

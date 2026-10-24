@@ -39,7 +39,7 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 *Shipped. Items of later tiers that have shipped say so.*
 
 Browse and find
-- Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Not yet bundled with the app, so a first launch needs the network for it (#501).
+- Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. A release bundles the index current when it was built, so a first launch lists every RFC offline (#770).
 - Instant type-ahead search over number, title, keywords, authors, working group, abstract. Query grammar: `wg:httpbis` (or `wg:quic,tls`), `author:fielding`, `status:std`, `status:internet-standard`, `status:current`, `year:2020-2022`, `after:2023-06`, `before:2024`, `published:<90d`, `has:xml`, `is:bookmarked|read|offline`, `in:rfc9110`, `in:bcp14` or `in:"Some collection"`, `sort:newest|oldest|last-read`. A term this version doesn't know finds nothing rather than being searched as text (#355).
 - Sidebar: Bookmarks, Recently read, Available offline, All, Internet Standards, BCPs, streams, top working groups, "Just published" from the RFC Editor RSS feed.
 - Command-L "Go to RFC…" accepting a number, `BCP 14`, or any rfc-editor.org / datatracker URL.
@@ -67,7 +67,7 @@ Reference
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.
 - **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
-- **Highlights and notes**, synced, exportable as Markdown with citations attached.
+- **Highlights and notes**, synced, exportable as Markdown with citations attached. *Highlights shipped (#522); notes, export and sync to come.*
 - **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs *(shipped; sections are #178)*; Handoff between iPhone, iPad and Mac.
 - **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open in RFC Reader" and "Replace with RFC Link" on selected text) *(shipped)*, Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".

@@ -13,7 +13,7 @@ import RFCKit
 ///   to be immutable rather than merely unshared, because Foundation uniques equal
 ///   attribute dictionaries across every string in the process and two builds do
 ///   end up holding the same ones.
-/// - `AnchorIndex` and `FoldingIndex` are `Sendable` values.
+/// - `AnchorIndex`, `FoldingIndex` and `PositionMap` are `Sendable` values.
 ///
 /// Once handed over, a build may be installed more than once: a force-click
 /// preview keeps its builds, and a repeated preview installs the same one into a
@@ -53,6 +53,9 @@ public struct BuiltDocument: @unchecked Sendable {
   /// The labels a translated document's build was given (#749), nil for the
   /// original's.
   public let translation: DocumentLabels?
+  /// Which characters of `text` are which characters of the document's model text,
+  /// which annotations count in (#522). A translated document's is its translation's.
+  public let positions: PositionMap
   /// Whether this is a translated document's build, whose sentences are not the
   /// original's (`RequirementBands`).
   public var isTranslation: Bool { translation != nil }
@@ -63,7 +66,7 @@ public struct BuiltDocument: @unchecked Sendable {
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
     sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none,
-    translation: DocumentLabels? = nil
+    translation: DocumentLabels? = nil, positions: PositionMap
   ) {
     self.text = text
     self.anchors = anchors
@@ -73,6 +76,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.sectionNumberHang = sectionNumberHang
     self.translation = translation
     self.errata = errata
+    self.positions = positions
     foldingIndex = FoldingIndex(text: text, anchors: anchors)
   }
 

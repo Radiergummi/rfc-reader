@@ -402,6 +402,14 @@
       }
     }
 
+    /// File > Save as Collection… (#355), with the sidebar opened first, as
+    /// `newCollection()` does, so the collection is in view once made.
+    func saveAsCollection() {
+      revealSidebar { [navigation] in
+        navigation.saveAsCollection()
+      }
+    }
+
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
       splitController.openSidebar()
@@ -523,6 +531,13 @@
     func copyAsQuote() {
       let text = FirstResponderSearch.searchableText(in: quotedReaderView)
       (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
+    /// Edit ▸ Highlight (#522), handed to the reader's text as Copy as Quote is, and for
+    /// its reason.
+    func highlightSelection() {
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
+      (text as? ReaderTextView)?.highlightSelection(nil)
     }
 
     /// The reader whose selection Copy as Quote copies: the one beside a compared

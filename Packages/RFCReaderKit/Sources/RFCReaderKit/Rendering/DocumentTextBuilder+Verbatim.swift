@@ -84,6 +84,7 @@ extension DocumentTextBuilder {
       contentWidth.map { max(indent, (style.measure - $0) / 2) } ?? indent + inset
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
+    recordVerbatim(shown: text, model: content.text, at: bodyStart)
     append(
       body,
       [
@@ -145,6 +146,19 @@ extension DocumentTextBuilder {
     if case .styled(let tokens)? = rendition {
       highlight(tokens, from: bodyStart)
     }
+  }
+
+  /// Maps the block's text as shown, about to be appended at `storageStart`, to its
+  /// text as published, which is the model text (#522), and moves the cursor past it.
+  private func recordVerbatim(shown: String, model: String, at storageStart: Int) {
+    guard let modelStart = positions?.cursor, let firstRun = positions?.runCount else { return }
+    let modelLength = model.utf16.count
+    for run in PositionMap.alignment(of: Array(shown.utf16), to: Array(model.utf16)) {
+      positions?.map(
+        storage: storageStart + run.storage, model: modelStart + run.model, length: run.length)
+    }
+    positions?.hideUnmapped(in: modelStart..<modelStart + modelLength, since: firstRun)
+    positions?.cursor = modelStart + modelLength
   }
 
   /// A code block's language, a line of its own at the card's trailing edge, and on

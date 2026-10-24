@@ -62,6 +62,13 @@
       }
     }
 
+    /// `export` told to this RFC, its receiver: the command finds the RFC there, so
+    /// this only runs it.
+    @objc(handleExportCommand:)
+    func handleExportCommand(_ command: NSScriptCommand) -> Any? {
+      command.performDefaultImplementation()
+    }
+
     /// Where the object lives, which is how a script gets a reference it can use
     /// again: the application's `rfcs`, by number.
     nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
@@ -75,10 +82,145 @@
     }
   }
 
+  /// A collection the reader made, as a script sees it (#355), named by its
+  /// identifier. `make new collection` builds one with `init()`, sets the properties
+  /// it was given, and only then inserts it, which is when it is made in the store:
+  /// until then it holds what it was given.
+  @objc(ScriptableCollection)
+  final class ScriptableCollection: NSObject {
+    /// Nil until `make` has inserted it.
+    fileprivate(set) var identifier: UUID?
+    fileprivate var givenName: String?
+    fileprivate var givenQuery: String?
+
+    override init() {}
+
+    init(_ identifier: UUID) {
+      self.identifier = identifier
+    }
+
+    private var entry: CollectionSnapshot.Entry? {
+      identifier.flatMap { LibraryModel.shared.collections[$0] }
+    }
+
+    @objc var uniqueID: String { identifier?.uuidString ?? "" }
+
+    @objc var name: String {
+      get { entry?.name ?? givenName ?? "" }
+      set {
+        guard let entry else {
+          givenName = newValue
+          return
+        }
+        guard CollectionStore.isValidName(newValue) else {
+          ScriptError.report("A collection's name can't be empty.")
+          return
+        }
+        let saved = LibraryModel.shared.editCollections {
+          try CollectionStore.update(entry.id, name: newValue, color: entry.color, in: $0)
+        }
+        if !saved { ScriptError.report("The collection's name could not be saved.") }
+      }
+    }
+
+    @objc var query: String? {
+      get { identifier == nil ? givenQuery : entry?.query }
+      set {
+        guard let entry else {
+          givenQuery = newValue
+          return
+        }
+        // A collection's kind is fixed when it is made: its RFCs are chosen, or a
+        // query's.
+        guard entry.isDynamic else {
+          ScriptError.report("“\(entry.name)” holds RFCs chosen one by one, not a query.")
+          return
+        }
+        if let refusal = Self.refusal(of: newValue) {
+          ScriptError.report(refusal)
+          return
+        }
+        let saved = LibraryModel.shared.editCollections {
+          try CollectionStore.update(
+            entry.id, name: entry.name, color: entry.color, query: newValue, in: $0)
+        }
+        if !saved { ScriptError.report("The collection's query could not be saved.") }
+      }
+    }
+
+    /// Why the store would refuse `query` for a collection made from one, in a
+    /// script's words; nil when it takes it.
+    static func refusal(of query: String?) -> String? {
+      guard let query, !query.isUnsearchedQuery else {
+        return "A collection's query can't be empty."
+      }
+      guard CollectionStore.isValidQuery(query) else {
+        return "A collection's query can't name a section: its list shows RFCs, not sections."
+      }
+      return nil
+    }
+
+    /// The application's `scriptCollections`, by identifier.
+    nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
+      guard let application = NSScriptClassDescription(for: NSApplication.self) else { return nil }
+      let uniqueID = MainActor.assumeIsolated { self.uniqueID }
+      return NSUniqueIDSpecifier(
+        containerClassDescription: application,
+        containerSpecifier: nil,
+        key: "scriptCollections",
+        uniqueID: uniqueID
+      )
+    }
+  }
+
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
-      key == "rfcs" || key == "orderedWindows"
+      key == "rfcs" || key == "orderedWindows" || key == "scriptCollections"
+    }
+
+    /// Every collection, in the sidebar's order.
+    @objc var scriptCollections: [ScriptableCollection] {
+      LibraryModel.shared.collections.collections.map { ScriptableCollection($0.id) }
+    }
+
+    @objc(valueInScriptCollectionsWithUniqueID:)
+    func valueInScriptCollections(withUniqueID uniqueID: Any) -> ScriptableCollection? {
+      guard let string = uniqueID as? String, let identifier = UUID(uuidString: string),
+        LibraryModel.shared.collections[identifier] != nil
+      else { return nil }
+      return ScriptableCollection(identifier)
+    }
+
+    /// `make new collection`: made in the store from what it was given, at the end
+    /// of the sidebar, as New Collection makes one. With a query it is made from
+    /// that query; named, if it was given no name, by its query.
+    @objc(insertInScriptCollections:)
+    func insertInScriptCollections(_ collection: ScriptableCollection) {
+      if AppData.isStoredInMemory {
+        ScriptError.report(AppData.storeWarning.message)
+      }
+      let query = collection.givenQuery
+      let name = collection.givenName ?? query ?? ""
+      guard CollectionStore.isValidName(name) else {
+        ScriptError.report("A collection needs a name, or a query to be named by.")
+        return
+      }
+      if query != nil, let refusal = ScriptableCollection.refusal(of: query) {
+        ScriptError.report(refusal)
+        return
+      }
+      let saved = LibraryModel.shared.editCollections {
+        collection.identifier = try CollectionStore.create(
+          named: name, color: .default, query: query, in: $0
+        ).identifier
+      }
+      if !saved { ScriptError.report("The collection could not be made.") }
+    }
+
+    @objc(insertObject:inScriptCollectionsAtIndex:)
+    func insert(_ collection: ScriptableCollection, inScriptCollectionsAt index: Int) {
+      insertInScriptCollections(collection)
     }
 
     /// The application's `windows`, less any reader window that has closed but is
@@ -229,6 +371,7 @@
           case .contents: .contents
           case .references: .references
           case .requirements: .requirements
+          case .annotations: .annotations
           }
         return pane.code
       }
@@ -240,6 +383,7 @@
         case .contents: reader.tab = .contents
         case .references: reader.tab = .references
         case .requirements: reader.tab = .requirements
+        case .annotations: reader.tab = .annotations
         case .information: break
         }
       }
@@ -344,6 +488,70 @@
         }
         command.resumeExecution(withResult: nil)
       }
+    }
+  }
+
+  /// `export rfc id 9110 as PDF to file "…"` (#383): the file File > Export… writes,
+  /// made by the same `DocumentExport` and tagged as it tags it, without opening a
+  /// window. The command waits for it, so a script's next line finds the file
+  /// written.
+  @objc(RFCExportCommand)
+  nonisolated final class RFCExportCommand: RFCScriptCommand {
+    @MainActor override func perform() {
+      if evaluatedReceivers is [Any] {
+        ScriptError.report("Export one RFC at a time.", in: self)
+        return
+      }
+      guard let rfc = evaluatedReceivers as? ScriptableRFC else {
+        ScriptError.report("Which RFC? Name one as rfc id 9110.", in: self)
+        return
+      }
+      let code = (evaluatedArguments?["format"] as? NSNumber)?.uint32Value
+      guard let format = code.flatMap(ExportFormat.init(scriptCode:)) else {
+        ScriptError.report(
+          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML or ABNF.", in: self)
+        return
+      }
+      guard let file = evaluatedArguments?["file"] as? URL, file.isFileURL else {
+        ScriptError.report("Where to? Export to a file.", in: self)
+        return
+      }
+      // A folder would fail the write with Foundation's words, not ours.
+      if (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+        ScriptError.report(
+          "Name a file, not a folder: to file \"…/\(format.fileName(for: rfc.id))\".", in: self)
+        return
+      }
+      let id = rfc.id
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      Task {
+        do {
+          let data = try await DocumentExport.data(
+            for: id, as: format, paperSize: NSPrintInfo.shared.paperSize,
+            library: LibraryModel.shared)
+          try await Self.write(
+            data, to: file, tags: ExportFormat.tagNames(for: LibraryModel.shared.metadata(id)))
+        } catch is ExportFormat.NoGrammar {
+          ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
+        } catch let original as PublishedOriginalPage.NotExportable {
+          // In English, as a script reads whatever the interface's language.
+          ScriptError.report(original.message(in: .english), in: command)
+        } catch {
+          ScriptError.report(
+            "\(id.displayName) could not be exported as \(format.scriptName): \(error.localizedDescription)",
+            in: command)
+        }
+        command.resumeExecution(withResult: nil)
+      }
+    }
+
+    /// The file, written off the main actor, with the Finder tags File > Export…
+    /// gives it.
+    @concurrent
+    private static func write(_ data: Data, to file: URL, tags: [String]) async throws {
+      try data.write(to: file, options: .atomic)
+      try (file as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
     }
   }
 

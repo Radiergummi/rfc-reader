@@ -74,9 +74,7 @@ import SwiftUI
         }
         .searchSuggestions {
           if let index = library.index {
-            ForEach(
-              SearchQuery.suggestionsWhileTyping(for: text.wrappedValue, in: index), id: \.self
-            ) {
+            ForEach(suggestions(in: index), id: \.self) {
               suggestion in
               if suggestion.isUnknown {
                 Label("\(suggestion.word): searched as text", systemImage: "questionmark.circle")
@@ -87,6 +85,15 @@ import SwiftUI
             }
           }
         }
+    }
+
+    /// Every filter while the field is empty, which is where the syntax is taught
+    /// (#781), but not while it holds tokens and no text: the list would cover the
+    /// results after every filter that becomes one.
+    private func suggestions(in index: RFCIndex) -> [SearchQuery.Suggestion] {
+      let typed = text.wrappedValue
+      guard !typed.isEmpty || navigation.searchText.isEmpty else { return [] }
+      return SearchQuery.suggestionsWhileTyping(for: typed, in: index)
     }
 
     private var text: Binding<String> {

@@ -92,6 +92,11 @@ public struct XMLPatch: Sendable {
     guard let root = document.rootElement(), root.name == "diff" else {
       throw failure("the root element is not <diff>")
     }
+    // `corpus-build patch` writes one before each operation, for its reason (#742).
+    let comments = (try? root.nodes(forXPath: "//comment()")) ?? []
+    if comments.contains(where: { ($0.stringValue ?? "").contains("TODO:") }) {
+      throw failure("a comment still says TODO: give each operation its reason")
+    }
     for child in root.children ?? [] {
       switch child.kind {
       case .comment:
@@ -193,7 +198,12 @@ public struct XMLPatch: Sendable {
   }
 
   private static func isWhitespace(_ text: String?) -> Bool {
-    (text ?? "").allSatisfy { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" }
+    (text ?? "").allSatisfy(isWhitespace)
+  }
+
+  /// Whether `character` is whitespace as XML and XPath's `normalize-space()` see it.
+  static func isWhitespace(_ character: Character) -> Bool {
+    character == " " || character == "\t" || character == "\n" || character == "\r"
   }
 
   /// How many operations the patch holds.

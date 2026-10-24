@@ -40,6 +40,24 @@ struct LocalizationTests {
     #expect(notice?.body == "Ersetzt durch RFC 9991 und RFC 9992.")
   }
 
+  /// A key written as a `LocalizedStringResource`, for its translator's comment, is
+  /// looked up in RFCReaderKit's catalog all the same: a current draft's line, and a
+  /// dormant one's, which dates its revision.
+  @Test(arguments: [
+    (Date.now, "draft-example, Revision 7, "),
+    (Date(timeIntervalSince1970: 1_397_482_769), "draft-example, Revision 7 vom April 2014, "),
+  ])
+  func `a German draft line is worded in German`(published: Date, wording: String) throws {
+    let revision = RFCRevisions.Revision(
+      relation: .obsoletes, draft: "draft-example", revision: "07", published: published,
+      stream: "ietf", group: "example", intendedStatus: "Proposed Standard", stage: .inGroup)
+    let summary = RevisionsSummary(
+      RFCRevisions(generatedAt: .now, revisions: [9990: [revision]]), for: .rfc(9990), now: .now,
+      locale: .german, timeZone: .gmt)
+    let line = try #require(summary.bannerLines.first)
+    #expect(line.accessibilityLabel.contains(wording))
+  }
+
   /// A collection's name is the reader's own text: never looked up, even when it is
   /// a word the catalog translates.
   @Test func `a collection's name is never translated`() {
@@ -71,8 +89,14 @@ struct LocalizationTests {
 
   /// French first and German second: the catalog has German, so German it is, in
   /// the reader's region.
-  @Test func `a language the catalog lacks gives way to the catalog's, in the reader's region`() {
-    let interface = Locale.interface(localization: "de", current: Locale(identifier: "fr_FR"))
+  @Test func `a language the catalog lacks gives way to German, in the reader's region`() throws {
+    let localization = try #require(
+      Bundle.preferredLocalizations(
+        from: Bundle.kit.localizations, forPreferences: ["fr-FR", "de-DE"]
+      ).first)
+    #expect(localization == "de")
+    let interface = Locale.interface(
+      localization: localization, current: Locale(identifier: "fr_FR"))
     #expect(interface.language.languageCode?.identifier == "de")
     #expect(interface.region?.identifier == "FR")
   }

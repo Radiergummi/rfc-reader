@@ -13,6 +13,10 @@ public enum IndexState: Equatable, Sendable {
     if case .ready = self { true } else { false }
   }
 
+  public var isFailed: Bool {
+    if case .failed = self { true } else { false }
+  }
+
   public static func failed(_ error: any Error) -> IndexState {
     .failed(LoadFailure(error: error).kind, message: error.localizedDescription)
   }

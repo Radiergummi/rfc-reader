@@ -155,10 +155,17 @@ public struct RevisionsSummary: Equatable, Sendable {
     let sentence =
       if let dormant {
         String(
-          kit: "\(relation) \(revision.draft), revision \(number) from \(dormant), \(phrase)",
-          locale: locale)
+          localized: LocalizedStringResource(
+            "\(relation) \(revision.draft), revision \(number) from \(dormant), \(phrase)",
+            locale: locale, bundle: .kit,
+            comment:
+              "A draft's relation to the RFC, its name, its revision, its month and its stage"))
       } else {
-        String(kit: "\(relation) \(revision.draft), revision \(number), \(phrase)", locale: locale)
+        String(
+          localized: LocalizedStringResource(
+            "\(relation) \(revision.draft), revision \(number), \(phrase)",
+            locale: locale, bundle: .kit,
+            comment: "A draft's relation to the RFC, its name, its revision and its stage"))
       }
     return Line(
       relation: relation, title: "\(revision.draft)-\(revision.revision)",

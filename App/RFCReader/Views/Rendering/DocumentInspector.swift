@@ -8,6 +8,8 @@ enum InspectorTab: String, CaseIterable {
   case references
   /// Every BCP 14 requirement the document states (#180).
   case requirements
+  /// The reader's highlights in the document (#522).
+  case annotations
 
   /// Named once, for both platforms' tab bars (#258).
   var title: String {
@@ -15,6 +17,7 @@ enum InspectorTab: String, CaseIterable {
     case .contents: String(localized: "Contents")
     case .references: String(localized: "References")
     case .requirements: String(localized: "Requirements")
+    case .annotations: String(localized: "Annotations")
     }
   }
 
@@ -24,6 +27,7 @@ enum InspectorTab: String, CaseIterable {
     case .contents: String(localized: "No Contents")
     case .references: String(localized: "No References")
     case .requirements: String(localized: "No Requirements")
+    case .annotations: String(localized: "No Annotations")
     }
   }
 }
@@ -42,6 +46,8 @@ struct DocumentInspector: View {
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
+  /// Where the build on screen placed each highlight (#522).
+  let highlightStatuses: [UUID: HighlightPlacement.Status]?
   let info: DocumentInfo?
   /// Whether the body is here. Without it, a document the index describes still has
   /// its Info, and the navigation pane's lists say why they are empty (#325).
@@ -114,6 +120,33 @@ struct DocumentInspector: View {
   private var selectedTab: some View {
     let content = InspectorPane.navigationContent(
       hasBody: hasBody, isLoading: isLoading, readsAsOriginal: publishedOriginal != nil)
+    // The highlights are the reader's, not the document's: listed by their quotes
+    // whether or not the document is here to place them in.
+    if tab == .annotations, content != .loading {
+      annotations()
+    } else {
+      selectedTab(content)
+    }
+  }
+
+  /// Placed where the reader's text has placed them; otherwise their stored quotes,
+  /// and why they are not placed: the document is not here, or what is shown is not
+  /// its own text but the original or a translation.
+  private func annotations() -> some View {
+    let highlights = document.map { library.annotations.highlights(of: $0) } ?? []
+    let note: String? =
+      highlightStatuses != nil
+      ? nil
+      : hasBody && publishedOriginal == nil
+        ? String(localized: "Highlights are shown in the document's own text.")
+        : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
+    return AnnotationsView(
+      highlights: highlights, statuses: highlightStatuses, note: note, sections: sections,
+      library: library, select: selectSection)
+  }
+
+  @ViewBuilder
+  private func selectedTab(_ content: InspectorPane.NavigationContent) -> some View {
     switch content {
     case .lists:
       loadedTab
@@ -163,6 +196,8 @@ struct DocumentInspector: View {
         groups: groups, revealed: revealed, open: openDocument, menu: referenceMenu)
     case .requirements:
       RequirementsView(requirements: requirements, document: document, select: selectSection)
+    case .annotations:
+      annotations()
     }
   }
 
@@ -227,6 +262,7 @@ struct PanelHost: View {
         groups: FocusCitations.shown(
           reader.focusGroups, revealing: reader.revealedReference?.anchor) ?? reader.groups,
         requirements: reader.requirements,
+        highlightStatuses: reader.highlightStatuses,
         info: reader.info,
         hasBody: reader.hasDocument,
         isLoading: reader.isLoading,

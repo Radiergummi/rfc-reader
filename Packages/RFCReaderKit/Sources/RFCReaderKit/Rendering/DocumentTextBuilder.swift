@@ -26,6 +26,9 @@ public final class DocumentTextBuilder {
   var entries: [AnchorIndex.Entry] = []
   /// See `BuiltDocument.keepsWithNext`.
   var keepsWithNext: Set<Int> = []
+  /// Which storage characters are which model characters (#522), recorded as the
+  /// document is appended; nil until `appendDocument` starts it.
+  var positions: PositionMap.Recorder?
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -40,6 +43,10 @@ public final class DocumentTextBuilder {
     monospaceAdvances[style.bodySize] = advance
     return advance
   }
+
+  /// Whether a section, or the abstract, has been appended, so the next is joined
+  /// to it in the model text.
+  var hasModelUnit = false
 
   /// Serial number for the next chip, so no two chip runs carry the same value.
   /// See the chip case in `run(_:base:)`.
@@ -201,7 +208,8 @@ public final class DocumentTextBuilder {
         text: builder.output, anchors: AnchorIndex(builder.entries),
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
-        sectionNumberHang: builder.hang, errata: builder.errata, translation: translation)
+        sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
+        positions: builder.positions?.map ?? .empty)
     }
   }
 
@@ -225,6 +233,23 @@ public final class DocumentTextBuilder {
     output.append(NSAttributedString(string: string, attributes: attributes))
   }
 
+  /// Appends `runs`, whose text is the model text's next (#522): inline runs, whose
+  /// only characters of their own are a chip's attachment and word joiner.
+  func appendModel(_ runs: NSAttributedString) {
+    let start = output.length
+    output.append(runs)
+    positions?.advance(output.mutableString, range: NSRange(location: start, length: runs.length))
+  }
+
+  /// The join the model text has here, between two elements (`ModelText`).
+  func joinModel() {
+    positions?.join(storage: output.mutableString)
+  }
+
+  /// Model text this build does not show, at the cursor.
+  func skipModel(_ length: Int) {
+    positions?.skip(length)
+  }
   /// The width of `string` set as one line in `font`.
   func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
     lineWidth(NSAttributedString(string: string, attributes: [.font: font]))
@@ -293,6 +318,11 @@ extension DocumentTextBuilder {
 
   func appendDocument(_ document: RFCDocument) {
     documentID = document.header.id
+    // A translation's sentences are not the original's, so it places no highlight
+    // and records no map (#749, #522).
+    if givenBacklinks == nil {
+      positions = PositionMap.Recorder(model: ModelText(document))
+    }
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
@@ -327,6 +357,7 @@ extension DocumentTextBuilder {
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
     glossedInSection = []
+    hasModelUnit = true
     mark(Self.abstractAnchor)
     keepsWithNext.insert(output.length)
     append(labels.abstract + "\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
@@ -415,6 +446,14 @@ extension DocumentTextBuilder {
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
     glossedInSection = []
+    // The model text sets a section apart from what came before by a join that
+    // belongs to no anchor, and starts it where its span does: a build that drifted
+    // from the model text in the section before is back on it here.
+    if hasModelUnit { joinModel() }
+    hasModelUnit = true
+    if let start = positions?.model.span(of: section.anchor)?.range.lowerBound {
+      positions?.cursor = start
+    }
     let numberPrefix = numberPrefix(of: section)
     mark(
       section.anchor, heading: numberPrefix + section.headingWords.plainText, place: section.place,
@@ -432,21 +471,24 @@ extension DocumentTextBuilder {
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
       spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15,
       hangsNumber: hangingNumber != nil)
+    // The number and an appendix's qualifier are the reader's to compose; the
+    // model text of a heading is its title alone.
+    let qualifierWords =
+      section.qualifier == nil ? "" : Array(section.headingWords.prefix(1)).plainText
     if let hangingNumber {
       appendHangingNumber(
         hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
-      output.append(inlineRuns(section.headingWords, base: attributes))
-    } else {
-      let words = section.headingWords
-      let title: [Inline] =
-        numberPrefix.isEmpty
-        ? words : words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
-      output.append(inlineRuns(title, base: attributes))
     }
+    let lead = (hangingNumber == nil ? numberPrefix : "") + qualifierWords
+    if !lead.isEmpty {
+      output.append(inlineRuns([.text(lead)], base: attributes))
+    }
+    appendModel(inlineRuns(section.title, base: attributes))
     if let marked = errata.bySection[section.anchor], !marked.isEmpty {
       output.append(errataChip(section.anchor, items: marked, base: attributes))
     }
     append("\n", attributes)
+    joinModel()
     if let citing {
       output.append(backlinkCaption(section.anchor, count: citing.count))
     }
@@ -476,7 +518,12 @@ extension DocumentTextBuilder {
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {
+    var isFirst = true
     for block in blocks {
+      // A bibliography's list is no part of the model text, so no join comes before it.
+      if case .references = block { continue }
+      if !isFirst { joinModel() }
+      isFirst = false
       switch block {
       case .paragraph(let paragraph):
         appendParagraph(paragraph, indent: indent)
@@ -545,7 +592,7 @@ extension DocumentTextBuilder {
     if glossedInParagraph != nil, hasAbbreviations {
       expandedInParagraph = Abbreviation.shortForms(expandedIn: paragraph.plainText)
     }
-    output.append(inlineRuns(paragraph.inlines, base: attributes))
+    appendModel(inlineRuns(paragraph.inlines, base: attributes))
     glossedInParagraph = nil
     expandedInParagraph = []
     append("\n", attributes)

@@ -54,6 +54,10 @@ struct UserDataMirrorsTests {
     #expect(UserDataMirrors.changed(byEntities: ["OfflineMark"]) == .offlineMarks)
   }
 
+  @Test func `a highlight save refreshes only the annotations`() {
+    #expect(UserDataMirrors.changed(byEntities: ["Highlight"]) == .annotations)
+  }
+
   @Test func `a collection or an item in one refreshes only the collections`() {
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollection"]) == .collections)
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollectionItem"]) == .collections)
@@ -77,8 +81,8 @@ struct UserDataMirrorsTests {
   /// The names in the table are SwiftData's own, and a model added to the schema
   /// without a mirror for it fails here rather than going unrefreshed.
   @Test func `every entity of the schema feeds a mirror`() {
-    let entities = Schema(versionedSchema: SchemaV5.self).entities.map(\.name)
-    #expect(entities.count == SchemaV5.models.count)
+    let entities = Schema(versionedSchema: SchemaV6.self).entities.map(\.name)
+    #expect(entities.count == SchemaV6.models.count)
     for entity in entities {
       #expect(!UserDataMirrors.changed(byEntities: [entity]).isEmpty, "\(entity)")
     }

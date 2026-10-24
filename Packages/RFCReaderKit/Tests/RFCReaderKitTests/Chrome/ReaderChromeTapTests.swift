@@ -6,12 +6,14 @@ import Testing
 /// for something else (#598).
 @Suite("Reader chrome taps")
 struct ReaderChromeTapTests {
-  /// A text with a link at 10 and a heading that toggles at 20.
+  /// A text with a link at 10, a heading that toggles at 20, and a highlight from 30
+  /// to 40 with a link at 35.
   private static func action(for tap: ReaderChrome.Tap, discloses: Bool = true)
     -> ReaderChrome.TapAction
   {
     ReaderChrome.action(
-      for: tap, discloses: discloses, isLink: { $0 == 10 }, toggles: { $0 == 20 })
+      for: tap, discloses: discloses, isLink: { $0 == 10 || $0 == 35 }, toggles: { $0 == 20 },
+      isHighlighted: { (30..<40).contains($0) })
   }
 
   private static func tap(
@@ -33,6 +35,13 @@ struct ReaderChromeTapTests {
 
   @Test func `a tap on the header is the header's`() {
     #expect(Self.action(for: Self.tap(onHeader: true, character: 5)) == .nothing)
+  }
+
+  @Test func `a tap in a highlight shows its popover, but a link in it still opens`() {
+    #expect(Self.action(for: Self.tap(character: 32)) == .showHighlight(character: 32))
+    #expect(Self.action(for: Self.tap(character: 35)) == .nothing)
+    // A tap that only clears the selection shows nothing.
+    #expect(Self.action(for: Self.tap(clears: true, character: 32)) == .nothing)
   }
 
   @Test func `a tap on a link follows it`() {

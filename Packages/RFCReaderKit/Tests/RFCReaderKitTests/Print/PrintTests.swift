@@ -332,14 +332,27 @@ struct PrintFurnitureTests {
     #expect(PrintFurniture(header: header, metadata: metadata).headerTrailing == "June 2025")
   }
 
-  /// The job title, which the print panel's Save as PDF sheet offers as the file's
-  /// title: the designation and the title, as an exported PDF's title says it.
-  @Test func `a print job is titled with the designation and the whole title`() {
+  /// An exported PDF's title: the designation and the whole title.
+  @Test func `a document is titled with the designation and the whole title`() {
     #expect(
       PrintFurniture.documentTitle(id: .rfc(9999), title: "A Protocol for Examples")
         == "RFC 9999: A Protocol for Examples")
     #expect(PrintFurniture.documentTitle(id: nil, title: "A Protocol") == "A Protocol")
     #expect(PrintFurniture.documentTitle(id: .rfc(9999), title: nil) == "RFC 9999")
+  }
+
+  /// The job title, which Save as PDF offers as the file's name: no colon, which
+  /// the Finder shows as a slash and OneDrive, SMB shares and Windows refuse, and
+  /// no slash, which the save panel writes to the disk as a colon.
+  @Test func `a print job is named with a dash, never a colon or a slash`() {
+    #expect(
+      PrintFurniture.jobTitle(id: .rfc(9999), title: "A Protocol for Examples, § 4.2")
+        == "RFC 9999 – A Protocol for Examples, § 4.2")
+    #expect(PrintFurniture.jobTitle(id: nil, title: "A Protocol") == "A Protocol")
+    #expect(PrintFurniture.jobTitle(id: .rfc(9999), title: nil) == "RFC 9999")
+    #expect(
+      PrintFurniture.jobTitle(id: .rfc(9999), title: "Ports: A Survey of HTTP/1.1")
+        == "RFC 9999 – Ports – A Survey of HTTP-1.1")
   }
 
   @Test func `pages are numbered as an RFC numbers them`() {
