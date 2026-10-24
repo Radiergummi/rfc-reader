@@ -2718,12 +2718,12 @@
         }
       }
     },
-    "RFC number" : {
+    "RFC number, BCP 14, or a link" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RFC-Nummer"
+            "value" : "RFC-Nummer, BCP 14 oder ein Link"
           }
         }
       }
@@ -3414,22 +3414,22 @@
         }
       }
     },
-    "The IETF doesn't have this draft, or this revision of it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
-          }
-        }
-      }
-    },
     "Text" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Text"
+          }
+        }
+      }
+    },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
           }
         }
       }
@@ -4362,6 +4362,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "xml2rfc-Referenz"
+          }
+        }
+      }
+    },
+    "“%@” isn't an RFC number, a series or a link." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ ist keine RFC-Nummer, keine Serie und kein Link."
           }
         }
       }
