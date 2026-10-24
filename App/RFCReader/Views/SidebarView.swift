@@ -179,8 +179,13 @@ struct SidebarView: View {
     if !workingGroups.isEmpty {
       group("Working Groups", isExpanded: $workingGroupsExpanded) {
         ForEach(workingGroups, id: \.self) { group in
-          row(.workingGroup(group))
-            .contextMenu { FollowGroupButton(group: group) }
+          // No menu at all for the index's NON WORKING GROUP, which has nothing in it.
+          if WorkingGroupFollowing.canFollow(group) {
+            row(.workingGroup(group))
+              .contextMenu { FollowGroupButton(group: group) }
+          } else {
+            row(.workingGroup(group))
+          }
         }
       }
     }
