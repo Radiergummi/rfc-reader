@@ -612,10 +612,14 @@ struct ReferenceRow: View {
             button
               .contextMenu { menu.items(for: id) }
               .background(
-                ForceClickReader {
-                  isForceClick = true
-                  isPreviewing = true
-                }
+                ForceClickReader(
+                  // A new click is its own, whatever the last one left: a force
+                  // click whose release never reached the button included.
+                  pressed: { isForceClick = false },
+                  report: {
+                    isForceClick = true
+                    isPreviewing = true
+                  })
               )
               .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
                 // A click in it opens what the row does, as the prose's opens what

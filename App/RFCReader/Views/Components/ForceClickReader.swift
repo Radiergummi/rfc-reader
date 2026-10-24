@@ -1,5 +1,6 @@
 #if os(macOS)
   import AppKit
+  import RFCReaderKit
   import SwiftUI
 
   /// Tells a SwiftUI view about a force click on it, which SwiftUI has no gesture for:
@@ -8,11 +9,14 @@
   ///
   /// A background that takes no clicks of its own. It watches the window's pressure
   /// events through a local monitor, which sees them even while the row's button is
-  /// tracking the click, and reports when a click that began inside it presses
-  /// through to the second stage there. The button is left the click, so its action
-  /// can tell that the click that opened the preview is not also one that opens the
-  /// RFC.
+  /// tracking the click, and reports when a click begins inside it and when that
+  /// click presses through to the second stage there (`ForceClickTracker`). The
+  /// button is left the click, so its action can tell that the click that opened the
+  /// preview is not also one that opens the RFC.
   struct ForceClickReader: NSViewRepresentable {
+    /// A click began inside.
+    let pressed: () -> Void
+    /// That click pressed through.
     let report: () -> Void
 
     func makeNSView(context: Context) -> ReaderView {
@@ -20,6 +24,7 @@
     }
 
     func updateNSView(_ view: ReaderView, context: Context) {
+      view.pressed = pressed
       view.report = report
     }
 
@@ -30,14 +35,10 @@
     }
 
     final class ReaderView: NSView {
+      var pressed: () -> Void = {}
       var report: () -> Void = {}
       private var monitor: Any?
-      /// Whether the mouse went down inside, and is still down: a press dragged in
-      /// from elsewhere is not a click on this row.
-      private var isPressing = false
-      /// Whether this click has reported its force click already: stage 2 arrives
-      /// again with every change of pressure past it.
-      private var hasReported = false
+      private var tracker = ForceClickTracker()
 
       override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -67,17 +68,17 @@
         let isInside =
           event.window === window
           && visibleRect.contains(convert(event.locationInWindow, from: nil))
+        let tracked: ForceClickTracker.Event
         switch event.type {
-        case .leftMouseDown:
-          isPressing = isInside
-          hasReported = false
-        case .leftMouseUp:
-          isPressing = false
-        case .pressure where isPressing && isInside && event.stage >= 2 && !hasReported:
-          hasReported = true
-          report()
-        default:
-          break
+        case .leftMouseDown: tracked = .mouseDown(inside: isInside)
+        case .leftMouseUp: tracked = .mouseUp
+        case .pressure: tracked = .pressure(stage: event.stage, inside: isInside)
+        default: return
+        }
+        switch tracker.handle(tracked) {
+        case .pressBegan: pressed()
+        case .forceClick: report()
+        case nil: break
         }
       }
     }
