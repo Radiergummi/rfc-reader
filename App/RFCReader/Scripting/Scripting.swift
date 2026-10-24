@@ -173,6 +173,44 @@
     }
   }
 
+  extension NSApplication {
+    /// `collection "HTTP"`: the first of that name in the sidebar, in any case.
+    /// Evaluated here rather than by a `valueInScriptCollectionsWithName:` on the
+    /// delegate, which `delete` never asks: it wants an index, and only the
+    /// container is asked for one (#987). Deleting or renaming a built-in list's
+    /// name is refused in words; anything else Cocoa evaluates as it would without
+    /// this, and finds no such collection.
+    public nonisolated override func indicesOfObjects(
+      byEvaluatingObjectSpecifier specifier: NSScriptObjectSpecifier
+    ) -> [NSNumber]? {
+      guard specifier.key == "scriptCollections", let specifier = specifier as? NSNameSpecifier
+      else {
+        return nil
+      }
+      let name = specifier.name
+      return MainActor.assumeIsolated {
+        let collections = LibraryModel.shared.collections
+        let named = ScriptCollectionName(
+          name, collections: collections,
+          workingGroups: Set(AppDelegate.settledIndex?.rfcs.compactMap(\.workingGroup) ?? []))
+        let command = NSScriptCommand.current()
+        switch named {
+        case .collection(let identifier):
+          return collections.collections.firstIndex { $0.id == identifier }.map {
+            [NSNumber(value: $0)]
+          }
+        case .builtIn where command is NSDeleteCommand || command is NSSetCommand:
+          ScriptError.report(
+            "“\(name)” is a list RFC Reader keeps, not a collection you made, so it can't be changed or deleted."
+          )
+          return []
+        case .builtIn, nil:
+          return nil
+        }
+      }
+    }
+  }
+
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
@@ -190,26 +228,6 @@
         LibraryModel.shared.collections[identifier] != nil
       else { return nil }
       return ScriptableCollection(identifier)
-    }
-
-    /// `collection "HTTP"`: the first of that name in the sidebar, in any case. A
-    /// built-in list's name is refused in words (#987), since only the reader's
-    /// collections are elements and none of the commands can change a built-in one.
-    @objc(valueInScriptCollectionsWithName:)
-    func valueInScriptCollections(withName name: String) -> ScriptableCollection? {
-      let groups = Set(Self.settledIndex?.rfcs.compactMap(\.workingGroup) ?? [])
-      switch ScriptCollectionName(
-        name, collections: LibraryModel.shared.collections, workingGroups: groups)
-      {
-      case .collection(let identifier):
-        return ScriptableCollection(identifier)
-      case .builtIn:
-        ScriptError.report(
-          "“\(name)” is a list RFC Reader keeps, not a collection you made, so it can't be changed or deleted.")
-        return nil
-      case nil:
-        return nil
-      }
     }
 
     /// `make new collection`: made in the store from what it was given, at the end

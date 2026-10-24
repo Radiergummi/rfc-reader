@@ -118,6 +118,19 @@ struct ScriptCollectionNameTests {
     #expect(target("HTTPBIS") == .builtIn(.workingGroup("httpbis")))
   }
 
+  /// The app has to wait for its index to know the working groups.
+  @Test func `a collection's name does not ask for the working groups`() {
+    var asked = false
+    let named = ScriptCollectionName(
+      "HTTP/3", collections: CollectionSnapshot(collections: [http3]),
+      workingGroups: {
+        asked = true
+        return groups
+      }())
+    #expect(named == .collection(http3.id))
+    #expect(!asked)
+  }
+
   @Test func `anything else names nothing`() {
     #expect(target("QUIC") == nil)
     #expect(target("") == nil)

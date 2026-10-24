@@ -14,11 +14,16 @@ public enum ScriptCollectionName: Equatable, Sendable {
   /// Without regard to case, as `LibraryFilter(scriptName:)` names them. A
   /// collection the reader made wins a clash with a built-in name here, the other
   /// way round from a window's `collection`: only the reader's collections are
-  /// elements, so `collection "Bookmarks"` can only be one of them.
-  public init?(_ name: String, collections: CollectionSnapshot, workingGroups: Set<String>) {
+  /// elements, so `collection "Bookmarks"` can only be one of them. The working
+  /// groups are asked for only when no collection has the name, since the app has to
+  /// wait for its index to know them.
+  public init?(
+    _ name: String, collections: CollectionSnapshot,
+    workingGroups: @autoclosure () -> Set<String>
+  ) {
     if let entry = collections.collection(named: name) {
       self = .collection(entry.id)
-    } else if let filter = LibraryFilter(scriptName: name, workingGroups: workingGroups) {
+    } else if let filter = LibraryFilter(scriptName: name, workingGroups: workingGroups()) {
       self = .builtIn(filter)
     } else {
       return nil
