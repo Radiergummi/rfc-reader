@@ -245,6 +245,9 @@ final class RFCTextViewCoordinator: NSObject {
   var noteMarkers: [FragmentGeometry.NoteMarker] = []
   /// The notes' text when the markers were last titled.
   var noteMarkersBodies: [String] = []
+  /// The note the editor was opened on last, and its model: what it holds is newer
+  /// than `notes` until the store's change comes back.
+  var noteEditor: (note: UUID, model: NoteEditorModel)?
   #if canImport(UIKit)
     var noteMarkerViews: [UIView] = []
     /// The note editor's sheet, while it is up.

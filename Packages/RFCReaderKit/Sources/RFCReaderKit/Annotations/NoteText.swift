@@ -21,17 +21,17 @@ public enum NoteText {
 
   /// `body` as attributed text in `font`, the editor's body font.
   public static func attributed(_ body: NoteBody, font: PlatformFont) -> NSAttributedString {
-    var paragraphs: [NSAttributedString] = []
+    var paragraphs: [(text: NSAttributedString, style: NSParagraphStyle)] = []
     func add(_ spans: [NoteBody.Span], lists: [NSTextList]) {
       let line = NSMutableAttributedString()
       for span in spans {
         let text = span.text == "\n" ? "\u{2028}" : span.text
         line.append(NSAttributedString(string: text, attributes: attributes(span, font: font)))
       }
+      let style = paragraphStyle(lists: lists, font: font)
       line.addAttribute(
-        .paragraphStyle, value: paragraphStyle(lists: lists, font: font),
-        range: NSRange(location: 0, length: line.length))
-      paragraphs.append(line)
+        .paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
+      paragraphs.append((line, style))
     }
     func add(_ list: NoteBody.List, within lists: [NSTextList]) {
       let textList = newList(ordered: list.isOrdered, depth: lists.count)
@@ -49,18 +49,13 @@ public enum NoteText {
     let result = NSMutableAttributedString()
     for (index, paragraph) in paragraphs.enumerated() {
       if index > 0 {
-        let style = paragraph.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
-        var separator: [NSAttributedString.Key: Any] = [.font: font]
-        if let previous = paragraphs[index - 1].attribute(
-          .paragraphStyle, at: max(0, paragraphs[index - 1].length - 1), effectiveRange: nil)
-        {
-          separator[.paragraphStyle] = previous
-        } else if let style {
-          separator[.paragraphStyle] = style
-        }
-        result.append(NSAttributedString(string: "\n", attributes: separator))
+        // The line end is the paragraph's it ends, and holds its style: all an item
+        // has that only opens a deeper list, with no text of its own.
+        result.append(
+          NSAttributedString(
+            string: "\n", attributes: [.font: font, .paragraphStyle: paragraphs[index - 1].style]))
       }
-      result.append(paragraph)
+      result.append(paragraph.text)
     }
     return result
   }
@@ -370,6 +365,22 @@ public enum NoteText {
       location = NSMaxRange(paragraph)
     } while location < NSMaxRange(range) && location < string.length
     return result
+  }
+
+  // MARK: - Links
+
+  /// What the link field acts on: the selection, or with only the caret, the whole of
+  /// the link the caret is in, the end of the text counting as its last character.
+  public static func linkRange(_ selection: NSRange, in text: NSAttributedString) -> NSRange {
+    guard selection.length == 0, text.length > 0 else { return selection }
+    let location = min(selection.location, text.length - 1)
+    var link = NSRange()
+    guard
+      text.attribute(
+        .link, at: location, longestEffectiveRange: &link,
+        in: NSRange(location: 0, length: text.length)) != nil
+    else { return selection }
+    return link
   }
 
   // MARK: - Font traits

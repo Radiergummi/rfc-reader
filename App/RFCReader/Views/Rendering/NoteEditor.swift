@@ -36,6 +36,8 @@ final class NoteEditorModel {
   @ObservationIgnored let showInAnnotations: (() -> Void)?
   @ObservationIgnored private var pendingSave: Task<Void, Never>?
   @ObservationIgnored private var isClosed = false
+  /// What it saved last, which is what it holds once it has closed.
+  @ObservationIgnored private(set) var saved: String?
 
   /// How long typing waits before it is saved.
   private static let saveDelay: Duration = .seconds(1)
@@ -68,7 +70,9 @@ final class NoteEditorModel {
 
   private func saveNow() {
     guard !isClosed, let storage = textView?.noteStorage else { return }
-    save(NoteText.body(of: storage).markdown)
+    let markdown = NoteText.body(of: storage).markdown
+    saved = markdown
+    save(markdown)
   }
 
   /// The editor closes: what is typed is saved, and a note left empty is deleted.
@@ -134,7 +138,7 @@ final class NoteEditorModel {
   /// ⌘K: the link field, with the selection's link in it if it has one.
   func beginLink() {
     guard let textView, let storage = textView.noteStorage else { return }
-    let range = Self.linkRange(textView.noteSelection, in: storage)
+    let range = NoteText.linkRange(textView.noteSelection, in: storage)
     let existing =
       range.length > 0 && range.location < storage.length
       ? storage.attribute(.link, at: range.location, effectiveRange: nil) as? URL : nil
@@ -147,7 +151,7 @@ final class NoteEditorModel {
   /// nothing is selected; an empty field takes the link off the selection.
   func applyLink() {
     guard let textView, let storage = textView.noteStorage else { return }
-    let range = Self.linkRange(textView.noteSelection, in: storage)
+    let range = NoteText.linkRange(textView.noteSelection, in: storage)
     let typed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
     if typed.isEmpty {
       if range.length > 0 {
@@ -172,20 +176,6 @@ final class NoteEditorModel {
     }
     textChanged()
     endLink()
-  }
-
-  /// What the link field acts on: the selection, or with only the caret, the whole of
-  /// the link the caret is in.
-  private static func linkRange(_ selection: NSRange, in storage: NSTextStorage) -> NSRange {
-    guard selection.length == 0, storage.length > 0 else { return selection }
-    let location = min(selection.location, storage.length - 1)
-    var link = NSRange()
-    guard
-      storage.attribute(
-        .link, at: location, longestEffectiveRange: &link,
-        in: NSRange(location: 0, length: storage.length)) != nil
-    else { return selection }
-    return link
   }
 
   func endLink() {
