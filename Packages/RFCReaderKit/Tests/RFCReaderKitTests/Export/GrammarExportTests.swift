@@ -24,8 +24,8 @@ struct GrammarExportTests {
 
   @Test func `a document with no grammar has nothing to export`() throws {
     #expect(GrammarExport.text(for: try Fixtures.rfc8999()) == nil)
-    #expect(
-      ExportFormat.available(for: try Fixtures.rfc8999()) == ExportFormat.everyDocument + [.annotations])
+    let offered = ExportFormat.available(for: try Fixtures.rfc8999())
+    #expect(offered == ExportFormat.everyDocument + [.annotations])
   }
 
   /// A grammar in the bar dialect is not RFC 5234 ABNF, which a `.abnf` file is: a
@@ -45,8 +45,8 @@ struct GrammarExportTests {
   }
 
   @Test func `a document with a grammar offers it`() throws {
-    #expect(
-      ExportFormat.available(for: try Self.rfc9682()) == ExportFormat.everyDocument + [.abnf, .annotations])
+    let offered = ExportFormat.available(for: try Self.rfc9682())
+    #expect(offered == ExportFormat.everyDocument + [.abnf, .annotations])
   }
 
   /// Every grammar block, in document order, its rules starting at the column ABNF
