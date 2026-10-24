@@ -85,8 +85,9 @@ struct DocumentInspector: View {
       #else
         if isSheet {
           // No tabs to title the sheet with, and an empty bar would only push the
-          // pane down. Only in the sheet: beside the reader, `.inspector` would lift
-          // the column's visibility into the reader's bar, which the reader hides itself.
+          // pane down. Only in the sheet: beside the reader, `.inspector` lifts the
+          // column's toolbar into the reader's bar (#247), so a visibility set there
+          // could reach the reader's bar too (not measured on an iPad).
           infoView.toolbarVisibility(.hidden, for: .navigationBar)
         } else {
           infoView
