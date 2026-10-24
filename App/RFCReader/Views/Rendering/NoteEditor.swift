@@ -33,7 +33,7 @@ final class NoteEditorModel {
   @ObservationIgnored weak var textView: NoteTextView?
   @ObservationIgnored private let save: (String) -> Void
   @ObservationIgnored private let deleteNote: () -> Void
-  @ObservationIgnored let openLink: (URL) -> Void
+  @ObservationIgnored private let openLink: (URL) -> Void
   /// Shows the note in the Annotations tab, on the Mac.
   @ObservationIgnored let showInAnnotations: (() -> Void)?
   @ObservationIgnored private var pendingSave: Task<Void, Never>?
@@ -94,6 +94,13 @@ final class NoteEditorModel {
     pendingSave?.cancel()
     isClosed = true
     deleteNote()
+  }
+
+  /// A link in the note is followed, whatever it is: the note is saved and its editor
+  /// closes first.
+  func follow(_ url: URL) {
+    close()
+    openLink(url)
   }
 
   // MARK: - Formatting
@@ -412,7 +419,7 @@ struct NoteEditor: View {
         defaultAction: UIAction
       ) -> UIAction? {
         guard case .link(let url) = textItem.content else { return defaultAction }
-        return UIAction { [model] _ in model.openLink(url) }
+        return UIAction { [model] _ in model.follow(url) }
       }
     }
   }
@@ -562,7 +569,7 @@ struct NoteEditor: View {
       func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
         guard let url else { return false }
-        model.openLink(url)
+        model.follow(url)
         return true
       }
     }
