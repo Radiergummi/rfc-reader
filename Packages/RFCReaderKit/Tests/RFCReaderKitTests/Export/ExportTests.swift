@@ -130,6 +130,18 @@ struct ExportFormatTests {
   }
 }
 
+@Suite("Export: published formats")
+struct PublishedFormatTests {
+  /// A published file downloaded on iOS goes to Files by its type, which keeps a
+  /// name's extension only for a type that is the extension's own (#577).
+  @Test func `every published format is typed by its own extension`() {
+    for format in FileFormat.allCases {
+      #expect(!format.contentType.isDynamic, "\(format)")
+      #expect(format.contentType.preferredFilenameExtension == format.pathExtension, "\(format)")
+    }
+  }
+}
+
 @Suite("Export: links")
 @MainActor
 struct ExportLinkTests {
