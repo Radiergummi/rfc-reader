@@ -40,6 +40,14 @@ public struct DocumentCacheIndex: Sendable {
     "\(id.fileStem).\(format.pathExtension)"
   }
 
+  /// The name the store gives `id`'s parsed document, kept encoded beside its body
+  /// (#606), `rfc9110.model.json`. Not a body: a model alone is no cached document.
+  public static func modelFileName(for id: DocumentID) -> String {
+    "\(id.fileStem).\(modelSuffix)"
+  }
+
+  private static let modelSuffix = "model.json"
+
   /// Scans `directory` for the bodies the store has written there.
   ///
   /// A file counts only when its name is exactly what the store would have named
@@ -126,6 +134,13 @@ public struct DocumentCacheIndex: Sendable {
     }
     let stem = url.deletingPathExtension().lastPathComponent
     return DocumentID(fileStem: stem)
+  }
+
+  /// The document a file in the cache belongs to, a body of it or its model, or nil
+  /// when it is neither: what the cache's size counts.
+  public static func owner(named name: String) -> DocumentID? {
+    guard name.hasSuffix(".\(modelSuffix)") else { return document(named: name) }
+    return DocumentID(fileStem: String(name.dropLast(modelSuffix.count + 1)))
   }
 
   /// Asked of the file system on every call. `URL.resourceValues` may answer from

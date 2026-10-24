@@ -33,6 +33,7 @@ extension DocumentSession {
       // this one; `install()` reports the real anchor a moment later.
       reader.clear()
       reader.showOriginal = showsOriginal
+      reader.hasOriginalText = originalText != nil
       reader.showTranslation = false
       reader.isLoading = true
       // Its header is on its way until the reader reports, so the title stays out
@@ -94,6 +95,7 @@ extension DocumentSession {
     reader { reader in
       reader.clear()
       reader.showOriginal = showsOriginal
+      reader.hasOriginalText = originalText != nil
       reader.showTranslation = showsTranslation
       // The mode is the window's, and stays from one document to the next.
       reader.folding.expanded = folding.expanded

@@ -39,10 +39,25 @@ struct BookmarkEventsTests {
 
   private static func baseline(
     _ index: RFCIndex?, _ revisions: RFCRevisions? = nil, bookmarks: Set<DocumentID> = bookmarked,
-    after previous: BookmarkBaseline? = nil
+    groups: Set<String> = [], after previous: BookmarkBaseline? = nil
   ) -> BookmarkBaseline {
     BookmarkBaseline(
-      bookmarks: bookmarks, index: index, revisions: revisions, carryingOver: previous)
+      bookmarks: bookmarks, followedGroups: groups, index: index, revisions: revisions,
+      carryingOver: previous)
+  }
+
+  /// An index of a group's RFCs, numbered from 9000, and one from another group.
+  private static func groupIndex(_ numbers: [Int], group: String = "httpbis") -> RFCIndex {
+    RFCIndex(
+      rfcs: numbers.map { number in
+        RFCMetadata(
+          id: .rfc(number), title: "Group RFC \(number)",
+          date: PublicationDate(year: 2026, month: 1), workingGroup: group)
+      } + [
+        RFCMetadata(
+          id: .rfc(8999), title: "Elsewhere", date: PublicationDate(year: 2026, month: 1),
+          workingGroup: "quic")
+      ])
   }
 
   private static func events(
@@ -142,6 +157,75 @@ struct BookmarkEventsTests {
     #expect(Self.events(from: second, to: third).isEmpty)
   }
 
+  // MARK: - Followed groups (#731)
+
+  @Test func `an RFC newly listed under a followed group is an event`() {
+    let old = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["httpbis"])
+    let new = Self.baseline(Self.groupIndex([9001, 9002]), bookmarks: [], groups: ["httpbis"])
+    #expect(Self.events(from: old, to: new) == [.groupPublished(.rfc(9002), group: "httpbis")])
+  }
+
+  @Test func `an RFC of a group not followed is no event`() {
+    let old = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["quic"])
+    let new = Self.baseline(Self.groupIndex([9001, 9002]), bookmarks: [], groups: ["quic"])
+    #expect(Self.events(from: old, to: new).isEmpty)
+  }
+
+  @Test func `a newly followed group reports nothing from before it was followed`() {
+    let old = Self.baseline(Self.groupIndex([9001]), bookmarks: [])
+    let new = Self.baseline(Self.groupIndex([9001, 9002]), bookmarks: [], groups: ["httpbis"])
+    #expect(Self.events(from: old, to: new).isEmpty)
+  }
+
+  @Test func `a group unfollowed drops out of the baseline`() {
+    let first = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["httpbis"])
+    let second = Self.baseline(Self.groupIndex([9001]), bookmarks: [], after: first)
+    let third = Self.baseline(
+      Self.groupIndex([9001, 9002]), bookmarks: [], groups: ["httpbis"], after: second)
+    #expect(second.groups?.isEmpty == true)
+    #expect(Self.events(from: second, to: third).isEmpty)
+  }
+
+  @Test func `a comparison without an index keeps the groups it had`() {
+    let first = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["httpbis"])
+    let second = Self.baseline(nil, bookmarks: [], groups: ["httpbis"], after: first)
+    let third = Self.baseline(
+      Self.groupIndex([9001, 9002]), bookmarks: [], groups: ["httpbis"], after: second)
+    #expect(Self.events(from: first, to: second).isEmpty)
+    #expect(Self.events(from: second, to: third) == [.groupPublished(.rfc(9002), group: "httpbis")])
+  }
+
+  /// A baseline kept before #731 has no groups, and its first comparison after only
+  /// sets them.
+  @Test func `a baseline from before groups were compared decodes and reports nothing`() throws {
+    let kept = Data(#"{"index":[],"revisions":[]}"#.utf8)
+    let old = try BookmarkBaseline.decode(kept)
+    #expect(old.groups == nil)
+    let new = Self.baseline(Self.groupIndex([9001]), bookmarks: [], groups: ["httpbis"], after: old)
+    #expect(Self.events(from: old, to: new).isEmpty)
+  }
+
+  /// One notice, saying both, for an RFC both bookmarked and newly listed under a
+  /// followed group.
+  @Test func `an RFC bookmarked and published by a followed group is one notice`() {
+    let notices = BookmarkNotice.notices(
+      for: [.errataListed(.rfc(9002)), .groupPublished(.rfc(9002), group: "httpbis")],
+      index: Self.groupIndex([9002]), locale: .english)
+    #expect(notices.count == 1)
+    #expect(notices.first?.body == "Now has errata.\nPublished by the HTTPBIS working group.")
+  }
+
+  @Test func `a group's notice names the RFC and the group`() {
+    let notice = BookmarkNotice.notices(
+      for: [.groupPublished(.rfc(9002), group: "httpbis")], index: Self.groupIndex([9002]),
+      locale: .english
+    ).first
+    #expect(notice?.title == "RFC 9002")
+    #expect(notice?.subtitle == "Group RFC 9002")
+    #expect(notice?.body == "Published by the HTTPBIS working group.")
+    #expect(notice?.url == URL(string: "rfc://9002"))
+  }
+
   // MARK: - Data not there
 
   @Test func `a comparison without an index keeps the last index it had`() {
@@ -172,7 +256,8 @@ struct BookmarkEventsTests {
 
   @Test func `a baseline survives a round trip through JSON`() throws {
     let baseline = Self.baseline(
-      Self.index(obsoletedBy: [.rfc(9999)], errata: true), Self.revisions(["draft-a": .inGroup]))
+      Self.index(obsoletedBy: [.rfc(9999)], errata: true), Self.revisions(["draft-a": .inGroup]),
+      groups: ["httpbis"])
     let decoded = try BookmarkBaseline.decode(baseline.encoded())
     #expect(decoded == baseline)
   }

@@ -174,10 +174,18 @@ struct SidebarView: View {
         row(.stream(stream))
       }
     }
-    if !library.topWorkingGroups.isEmpty {
+    // The followed groups first, then the busiest of the rest (#731).
+    let workingGroups = library.sidebarWorkingGroups
+    if !workingGroups.isEmpty {
       group("Working Groups", isExpanded: $workingGroupsExpanded) {
-        ForEach(library.topWorkingGroups, id: \.self) { group in
-          row(.workingGroup(group))
+        ForEach(workingGroups, id: \.self) { group in
+          // No menu at all for the index's NON WORKING GROUP, which has nothing in it.
+          if WorkingGroupFollowing.canFollow(group) {
+            row(.workingGroup(group))
+              .contextMenu { FollowGroupButton(group: group) }
+          } else {
+            row(.workingGroup(group))
+          }
         }
       }
     }
@@ -395,6 +403,11 @@ struct SidebarView: View {
       .contextMenu {
         // The editor holds the name and the color both: one place to change either.
         Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
+        // Every RFC in it, into a folder named after it (#385).
+        Button("Export…") {
+          navigation.collectionExport = CollectionExportRequest(collection: entry.id)
+        }
+        .disabled(entry.rfcNumbers.isEmpty)
         Divider()
         Button("Delete…", role: .destructive) { deleting = entry }
       }

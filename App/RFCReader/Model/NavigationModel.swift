@@ -78,6 +78,8 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+  /// The collection export sheet on show, if any (#385), for the same reason.
+  var collectionExport: CollectionExportRequest?
 
   /// What Save as Collection… would keep (#355): the list on show as a query of the
   /// whole library (`LibraryList.savedQuery`). Nil, and the item disabled, while the

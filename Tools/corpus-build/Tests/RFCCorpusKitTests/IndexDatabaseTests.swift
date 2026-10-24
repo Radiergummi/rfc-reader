@@ -126,6 +126,40 @@ final class IndexDatabaseTests {
         == [["section-4.3.1", "GET"]])
   }
 
+  @Test func `amendments read back as they were written`() throws {
+    let amendments = [
+      Amendment(
+        amended: .rfc(2850), section: "1.2", amending: .rfc(9283), amendingSection: "intro"),
+      Amendment(amended: .rfc(2850), section: "2", amending: .rfc(9283), amendingSection: nil),
+    ]
+    let connection = try written { try $0.insert(amendments) }
+    defer { sqlite3_close(connection) }
+    #expect(
+      Self.rows(
+        "SELECT amended, section, amending, amending_section FROM amendments ORDER BY rowid",
+        in: connection)
+        == [
+          ["RFC2850", "1.2", "RFC9283", "intro"],
+          ["RFC2850", "2", "RFC9283", nil],
+        ])
+  }
+
+  /// What the table is for: which later documents amend the sections of one, which
+  /// the amended document cannot say (#179).
+  @Test func `the amendments of a document are a lookup`() throws {
+    let connection = try written { database in
+      try database.insert([
+        Amendment(amended: .rfc(2850), section: "2", amending: .rfc(9283), amendingSection: "a"),
+        Amendment(amended: .rfc(5246), section: "7.4", amending: .rfc(9601), amendingSection: "b"),
+      ])
+    }
+    defer { sqlite3_close(connection) }
+    #expect(
+      Self.rows(
+        "SELECT amending, section FROM amendments WHERE amended = 'RFC2850'", in: connection)
+        == [["RFC9283", "2"]])
+  }
+
   @Test func `the schema version and the build's metadata are kept`() throws {
     let connection = try written { try $0.setMeta("version", to: "2026.10") }
     defer { sqlite3_close(connection) }

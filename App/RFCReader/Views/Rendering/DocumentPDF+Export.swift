@@ -15,27 +15,33 @@ import RFCReaderKit
 ///
 /// What each of those says is `PDFExport`, in RFCReaderKit. What is here is only
 /// measurement and PDFKit: where the laid-out text put a link's words and a
-/// section's heading, and the annotations, destinations and outline that point
-/// at them.
+/// section's heading, and the annotations and destinations that point at them;
+/// the outline, which the drawing writes, is `PDFExport.setOutline`.
 nonisolated extension DocumentPDF {
   /// The open document as a PDF to save. Always the rendered document, whatever the
   /// reader is showing: the published text is a format of its own (#377).
+  ///
+  /// - Parameter section: the anchor of the one section to export, with its
+  ///   subsections (#386); nil for the whole document. A link to anything else
+  ///   goes to the document on rfc-editor.org.
   @MainActor
-  static func export(_ id: DocumentID, paperSize: CGSize, library: LibraryModel) async throws
-    -> Data
-  {
-    let document = try await library.document(for: id)
+  static func export(
+    _ id: DocumentID, section: String? = nil, paperSize: CGSize, library: LibraryModel
+  ) async throws -> Data {
+    let whole = try await library.document(for: id)
+    let part = try ExportedPart(of: whole, section: section)
     return await renderExport(
-      document, metadata: library.metadata(id),
+      part.document, metadata: library.metadata(id),
       choices: library.presentationChoices(
         for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
-      paperSize: paperSize)
+      paperSize: paperSize,
+      linking: PDFLinking(references: PDFExport.references(in: whole), outside: part.outside))
   }
 
   @concurrent
   static func renderExport(
     _ document: RFCDocument, metadata: RFCMetadata?, choices: PresentationChoices,
-    paperSize: CGSize
+    paperSize: CGSize, linking: PDFLinking
   ) async -> Data {
     let layout = PrintLayout(paperSize: paperSize)
     let furniture = PrintFurniture(header: document.header, metadata: metadata)
@@ -43,23 +49,23 @@ nonisolated extension DocumentPDF {
       Printed(document: document, choices: choices), style: layout.exportStyle,
       furniture: furniture, layout: layout
     ) { built, laidOut in
-      let pages = pdf(laidOut, layout: layout, furniture: furniture)
       let outline = PDFExport.outline(of: document, built: built)
       let marks = PDFMarks(
         laidOut, text: built.text, anchors: built.anchors, outline: outline,
-        references: PDFExport.references(in: document), layout: layout)
+        linking: linking, layout: layout)
+      let pages = pdf(laidOut, layout: layout, furniture: furniture) { context in
+        PDFExport.setOutline(outline, destinations: marks.destinations, in: context)
+      }
       return annotate(
-        pages, marks: marks, outline: outline,
-        info: PDFExport.Info(header: document.header, metadata: metadata))
+        pages, marks: marks, info: PDFExport.Info(header: document.header, metadata: metadata))
     }
   }
 
-  /// The rendered pages with their links, outline and info added, through PDFKit.
-  /// The pages as drawn if PDFKit cannot read them back, which it wrote itself a
-  /// moment ago: a file without links is still the document.
-  static func annotate(
-    _ data: Data, marks: PDFMarks, outline: [PDFExport.OutlineEntry], info: PDFExport.Info
-  ) -> Data {
+  /// The rendered pages with their links and info added, through PDFKit. Not the
+  /// outline, which PDFKit would drop when it writes the file: the drawing wrote
+  /// that (#990). The pages as drawn if PDFKit cannot read them back, which it
+  /// wrote itself a moment ago: a file without links is still the document.
+  static func annotate(_ data: Data, marks: PDFMarks, info: PDFExport.Info) -> Data {
     guard let document = PDFDocument(data: data) else { return data }
 
     func destination(_ anchor: String) -> PDFDestination? {
@@ -85,20 +91,6 @@ nonisolated extension DocumentPDF {
       page.addAnnotation(annotation)
     }
 
-    func add(_ entries: [PDFExport.OutlineEntry], to parent: PDFOutline) {
-      for entry in entries {
-        guard let destination = destination(entry.anchor) else { continue }
-        let item = PDFOutline()
-        item.label = entry.title
-        item.destination = destination
-        parent.insertChild(item, at: parent.numberOfChildren)
-        add(entry.children, to: item)
-      }
-    }
-    let root = PDFOutline()
-    add(outline, to: root)
-    document.outlineRoot = root
-
     // Added to what the drawing wrote, its creation date and creator among them,
     // and only what the document has: no empty author on an RFC that names none.
     var attributes = document.documentAttributes ?? [:]
@@ -115,6 +107,16 @@ nonisolated extension DocumentPDF {
     document.documentAttributes = attributes
     return document.dataRepresentation() ?? data
   }
+}
+
+/// What an exported PDF's links are resolved against.
+nonisolated struct PDFLinking: Sendable {
+  /// The bibliography the links name entries of: the whole document's, which a
+  /// section exported alone leaves out (#386).
+  let references: [String: Reference]
+  /// The document a link to an anchor the file does not hold goes to; nil for the
+  /// whole document, whose every place is in the file or nowhere.
+  let outside: DocumentID?
 }
 
 /// Where the laid-out text put what an export points at, in PDF page
@@ -135,7 +137,7 @@ nonisolated struct PDFMarks {
 
   init(
     _ laidOut: DocumentPDF.LaidOut, text: NSAttributedString, anchors: AnchorIndex,
-    outline: [PDFExport.OutlineEntry], references: [String: Reference], layout: PrintLayout
+    outline: [PDFExport.OutlineEntry], linking: PDFLinking, layout: PrintLayout
   ) {
     let manager = laidOut.manager
     let pages = laidOut.pages
@@ -144,7 +146,7 @@ nonisolated struct PDFMarks {
     text.enumerateAttribute(.rfcLinkTarget, in: NSRange(location: 0, length: text.length)) {
       value, range, _ in
       guard let url = value as? URL,
-        let target = PDFExport.target(of: url, references: references)
+        let target = PDFExport.target(of: url, references: linking.references)
       else { return }
       targets.append((range, target))
     }
@@ -175,8 +177,15 @@ nonisolated struct PDFMarks {
     }
 
     var links: [Link] = []
-    for (range, target) in targets {
-      if case .anchor(let anchor) = target, destinations[anchor] == nil { continue }
+    for (range, found) in targets {
+      var target = found
+      if case .anchor(let anchor) = target, destinations[anchor] == nil {
+        guard
+          let elsewhere = PDFExport.outside(
+            anchor, of: linking.outside, references: linking.references)
+        else { continue }
+        target = elsewhere
+      }
       guard let textRange = manager.textRange(for: range) else { continue }
       manager.enumerateTextSegments(in: textRange, type: .standard, options: []) {
         _, frame, _, _ in

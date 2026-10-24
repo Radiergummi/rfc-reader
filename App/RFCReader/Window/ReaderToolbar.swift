@@ -374,6 +374,11 @@
           title: String(localized: "Export…"), action: #selector(exportDocument), keyEquivalent: "")
         exportItem.target = self
         menu.addItem(exportItem)
+        let sectionItem = NSMenuItem(
+          title: String(localized: "Export Current Section…"),
+          action: #selector(exportCurrentSection), keyEquivalent: "")
+        sectionItem.target = self
+        menu.addItem(sectionItem)
         let printItem = NSMenuItem(
           title: String(localized: "Print…"), action: #selector(printDocument), keyEquivalent: "")
         printItem.target = self
@@ -407,6 +412,8 @@
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
       switch item.action {
       case #selector(exportDocument), #selector(printDocument): reader.offersPrintAndExport
+      case #selector(exportCurrentSection):
+        reader.offersPrintAndExport && reader.exportableSection != nil
       default: true
       }
     }
@@ -457,6 +464,7 @@
 
     @objc private func printDocument() { controller.output.printDocument() }
     @objc private func exportDocument() { controller.output.exportDocument() }
+    @objc private func exportCurrentSection() { controller.output.exportCurrentSection() }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {

@@ -558,6 +558,13 @@
       FirstResponderSearch.searchableText(in: quotedReaderView) as? ReaderTextView
     }
 
+    /// Edit ▸ Highlight (#522), handed to the reader's text as Copy as Quote is, and for
+    /// its reason.
+    func highlightSelection() {
+      let text = FirstResponderSearch.searchableText(in: quotedReaderView)
+      (text as? ReaderTextView)?.highlightSelection(nil)
+    }
+
     /// The reader whose selection Copy as Quote copies: the one beside a compared
     /// document (#187) when the selection in its text is the only one, or the focus is
     /// in it; the window's own otherwise.

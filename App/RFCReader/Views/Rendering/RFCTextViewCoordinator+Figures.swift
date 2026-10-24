@@ -4,8 +4,9 @@
 
   extension RFCTextViewCoordinator {
     /// The edit menu of a selection, after the standard actions: "Copy as Quote" for
-    /// any selection (#186), or "Copy as Text" where Copy copies a quote, and "Copy
-    /// Citation" (#712); and "Copy Figure" where it holds one figure (issue #15).
+    /// any selection (#186), or "Copy as Text" where Copy copies a quote, "Copy
+    /// Citation" (#712) and Highlight's colors (#522); and "Copy Figure" where it holds
+    /// one figure (issue #15).
     /// Nil keeps the standard menu where there is neither. Which figure and what it
     /// copies are `FigureCopy`'s, and the quote is `QuoteCitation`'s; macOS offers the
     /// same items from `ReaderTextView.menu(for:)`.
@@ -38,6 +39,7 @@
               reader.copyCitation(nil)
             })
         }
+        extra.append(highlightMenu(for: range))
       }
       if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(

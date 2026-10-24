@@ -66,6 +66,9 @@ extension NSAttributedString.Key {
   /// would otherwise be read out, carried by every character of the caption but its
   /// line break; an informative chip, said as "informative" and its label (#457,
   /// #862); and a code block's copy button, said as Copy Code (#760). A `String`.
+  /// Only macOS reads it: a `UITextView` has no per-range accessor, so the builder
+  /// tells iOS in a pronunciation instead, of a symbol as nothing and of an aside's
+  /// caption as its word (#872).
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it

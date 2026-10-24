@@ -94,6 +94,34 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
+  // A parsed document kept encoded, decoded instead of parsed again (#606): each
+  // document above, from JSON and from a binary property list, to set against its
+  // parse. A format is cached only where decoding is at least twice as fast.
+  let documents: [(name: String, parse: @Sendable (Data) throws -> RFCDocument)] = [
+    ("rfc9110.xml", { try RFCXMLParser.parse($0) }),
+    ("rfc9000.xml", { try RFCXMLParser.parse($0) }),
+    ("rfc5661.txt", { LegacyTextParser.parse($0) }),
+    ("rfc793.txt", { LegacyTextParser.parse($0) }),
+  ]
+  for (name, parse) in documents {
+    Benchmark("Decode JSON: \(name)") { benchmark, data in
+      try iterate(benchmark) {
+        blackHole(try JSONDecoder().decode(RFCDocument.self, from: data))
+      }
+    } setup: {
+      try JSONEncoder().encode(parse(corpus.data(name)))
+    }
+    Benchmark("Decode property list: \(name)") { benchmark, data in
+      try iterate(benchmark) {
+        blackHole(try PropertyListDecoder().decode(RFCDocument.self, from: data))
+      }
+    } setup: {
+      let encoder = PropertyListEncoder()
+      encoder.outputFormat = .binary
+      return try encoder.encode(parse(corpus.data(name)))
+    }
+  }
+
   // The reader's column, 712 pt, as #357 measured the builds. RFC 8927 and RFC 8727
   // are mostly source code, so they are what syntax highlighting is measured on;
   // RFC 8727 holds the corpus's largest JSON block, 53 KB.

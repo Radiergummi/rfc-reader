@@ -322,6 +322,30 @@ import RFCReaderKit
       Clipboard.copy(citation, announcing: .citation)
     }
 
+    /// Highlights a range of the text in a color, or in the one last used (#522),
+    /// through the coordinator.
+    var highlight: (NSRange, HighlightColor?) -> Void = { _, _ in }
+    /// The colors the context menu offers, the one last used first.
+    var highlightColors: () -> [HighlightColor] = { HighlightColor.allCases }
+    /// Told of a click that selected nothing and cleared no selection, which in a
+    /// highlight opens its popover.
+    var clickedText: (NSEvent) -> Void = { _ in }
+
+    /// Edit ▸ Highlight (⌃⌘H, Books' shortcut): the selection, in the color last used.
+    @objc func highlightSelection(_ sender: Any?) {
+      guard selectedRange().length > 0 else { return }
+      highlight(selectedRange(), nil)
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
+    /// The context menu's color, from its Highlight row.
+    @objc private func highlightItem(_ sender: NSMenuItem) {
+      guard let color = sender.representedObject as? HighlightColor, selectedRange().length > 0
+      else { return }
+      highlight(selectedRange(), color)
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
     /// Look Up. A gesture on a reference previews it, as a force click does (the
     /// coordinator's `quickLookReference(with:)`); anywhere else, and from the menu or
     /// the keyboard, which have no location to test, it is AppKit's own Look Up. A force
@@ -427,7 +451,10 @@ import RFCReaderKit
         // the text view, hung the app as a card once did (#396).
         trackReferenceClick(event, link: nil, at: nil)
       } else {
+        // A click that only clears a selection opens nothing (#522).
+        let hadSelection = selectedRange().length > 0
         super.mouseDown(with: event)
+        if !hadSelection, selectedRange().length == 0 { clickedText(event) }
       }
     }
 
@@ -627,6 +654,8 @@ import RFCReaderKit
           result.insertItem(item, at: index)
           index += 1
         }
+        // A highlight is made from a selection, as a quote is copied from one (#522).
+        result.insertItem(highlightMenuItem(), at: index)
       }
       if let box, figure != nil {
         let item = NSMenuItem(
@@ -659,6 +688,23 @@ import RFCReaderKit
         }
       }
       return result
+    }
+
+    /// Highlight, with a color each, the one last used first (#522).
+    private func highlightMenuItem() -> NSMenuItem {
+      let item = NSMenuItem(title: String(localized: "Highlight"), action: nil, keyEquivalent: "")
+      let colors = NSMenu(title: String(localized: "Highlight"))
+      for color in highlightColors() {
+        let choice = NSMenuItem(
+          title: color.title(), action: #selector(highlightItem(_:)), keyEquivalent: "")
+        choice.target = self
+        choice.representedObject = color
+        choice.image = HighlightSwatch.image(color)
+        choice.showsImageOnMacOS27()
+        colors.addItem(choice)
+      }
+      item.submenu = colors
+      return item
     }
 
     @objc private func copyCodeItem(_ sender: NSMenuItem) {

@@ -53,7 +53,9 @@
             navigation: navigation, reader: reader,
             isBookmarked: library.bookmarkedDocuments.contains(identity),
             showsInspector: $showsInspector,
-            exportDocument: { output.exportDocument(id, as: $0, library: library) },
+            exportDocument: {
+              output.exportDocument(id, as: $0, section: $1, library: library)
+            },
             printDocument: {
               output.printDocument(
                 id, original: reader.showOriginal,
@@ -108,7 +110,7 @@
             set: { if !$0 { output.finishExport() } }),
           document: output.exported,
           contentType: (output.exported?.format ?? .pdf).contentType,
-          defaultFilename: ExportFormat.fileStem(for: id)
+          defaultFilename: output.exported?.fileStem ?? ExportFormat.fileStem(for: id)
         ) { _ in
           output.finishExport()
         }

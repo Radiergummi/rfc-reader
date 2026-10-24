@@ -26,6 +26,7 @@ extension DocumentTextBuilder {
     mark(labeled.anchor)
     appendAsideCaption(
       labeled.caption == "Notes" ? labels.notes : labels.note, indent: indent + style.indentStep)
+    skipLabel(of: blocks, labeled: labeled)
     appendBlocks(labeled.blocks, indent: indent + style.indentStep)
     decorate(from: start, with: .aside)
     // As `decorate` does: a nested aside has claimed its own span already.
@@ -37,6 +38,23 @@ extension DocumentTextBuilder {
     for gap in gaps {
       output.addAttribute(.rfcAside, value: String(ordinal), range: gap)
     }
+  }
+
+  /// The model text keeps the label the caption took the place of (#522): the start
+  /// of the first paragraph, or all of it, and then the join after it.
+  private func skipLabel(of blocks: [Block], labeled: LabeledAside) {
+    guard case .paragraph(let original)? = blocks.first else { return }
+    let length = original.plainText.utf16.count
+    guard labeled.blocks.count == blocks.count else {
+      skipModel(length)
+      let isText = labeled.blocks.contains { block in
+        if case .references = block { false } else { true }
+      }
+      if isText { joinModel() }
+      return
+    }
+    guard case .paragraph(let rest)? = labeled.blocks.first else { return }
+    skipModel(length - rest.plainText.utf16.count)
   }
 
   /// The caption, a line of its own at the top of the card, small and tracked as a
@@ -55,6 +73,13 @@ extension DocumentTextBuilder {
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
     attributes[.kern] = style.codeLabelFont.pointSize * 0.08
     attributes[.rfcSpoken] = caption
+    #if canImport(UIKit)
+      // A `UITextView` reads no `.rfcSpoken`, so iOS is given the word as its
+      // pronunciation instead (#872). Only the reader has captions.
+      if let pronunciation = AccessibleReading.captionPronunciation(caption) {
+        attributes[.accessibilitySpeechIPANotation] = pronunciation
+      }
+    #endif
     output.append(NSAttributedString(string: caption.uppercased(), attributes: attributes))
     output.append(lineBreak)
   }

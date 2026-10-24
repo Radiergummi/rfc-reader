@@ -189,8 +189,9 @@ struct UserDataTests {
     #expect(try context.fetch(FetchDescriptor<OfflineMark>()).isEmpty)
   }
 
-  /// V5 to V6 only adds a collection's query (#355): every existing row survives,
-  /// and every existing collection is a manual one.
+  /// V5 to V6 only adds a collection's query (#355), the highlights' table (#522) and
+  /// the followed working groups' table (#731): every existing row survives, and every
+  /// existing collection is a manual one.
   @Test func `a version 5 store migrates to version 6 without losing a row`() throws {
     let url = try temporaryStore()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -201,6 +202,9 @@ struct UserDataTests {
         for: Schema(versionedSchema: SchemaV5.self), configurations: ModelConfiguration(url: url))
       let context = ModelContext(previous)
       context.insert(SchemaV5.Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+      context.insert(
+        SchemaV5.ReadingPosition(
+          document: .rfc(9110), place: ReadingPlace(anchor: "section-8.3", offset: 4)))
       let made = SchemaV5.DocumentCollection(name: "HTTP", color: .blue, position: 1)
       collection = made.identifier
       context.insert(made)
@@ -213,12 +217,42 @@ struct UserDataTests {
     let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
     let context = ModelContext(migrated)
     #expect(try context.fetch(FetchDescriptor<Bookmark>()).map(\.document) == [.rfc(9110)])
+    let positions = try context.fetch(FetchDescriptor<ReadingPosition>())
+    #expect(positions.map(\.place) == [ReadingPlace(anchor: "section-8.3", offset: 4)])
     let collections = try context.fetch(FetchDescriptor<DocumentCollection>())
     #expect(collections.map(\.identifier) == [collection])
     #expect(collections.map(\.query) == [nil])
     let items = try context.fetch(FetchDescriptor<DocumentCollectionItem>())
     #expect(items.map(\.document) == [.rfc(9110)])
     #expect(try context.fetch(FetchDescriptor<OfflineMark>()).map(\.document) == [.rfc(9110)])
+    #expect(try context.fetch(FetchDescriptor<FollowedGroup>()).isEmpty)
+    #expect(try context.fetch(FetchDescriptor<Highlight>()).isEmpty)
+    // And it keeps what is written to the new table.
+    context.insert(
+      Highlight(
+        document: .rfc(9110), start: Position(anchor: "section-1", offset: 2),
+        end: Position(anchor: "section-1", offset: 9),
+        quote: Quote(exact: "quoted", prefix: "", suffix: ""), color: .green))
+    try context.save()
+    let reopened = ModelContext(
+      try UserData.container(configurations: ModelConfiguration(url: url)))
+    let highlights = try reopened.fetch(FetchDescriptor<Highlight>())
+    #expect(highlights.map(\.colorName) == ["green"])
+    #expect(highlights.map(\.endOffset) == [9])
+  }
+
+  @Test func `a new store keeps a followed group`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    do {
+      let container = try UserData.container(configurations: ModelConfiguration(url: url))
+      let context = ModelContext(container)
+      context.insert(FollowedGroup(acronym: "httpbis"))
+      try context.save()
+    }
+    let reopened = try UserData.container(configurations: ModelConfiguration(url: url))
+    let groups = try ModelContext(reopened).fetch(FetchDescriptor<FollowedGroup>())
+    #expect(groups.map(\.acronym) == ["httpbis"])
   }
 
   /// A constant default would give every row one identifier.
