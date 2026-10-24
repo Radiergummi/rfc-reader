@@ -8,7 +8,8 @@ import RFCReaderKit
 
 /// Draws what attributed text cannot express: the card behind artwork and tables,
 /// the rule beside a block quote, the tint behind an aside, Implementer's band behind
-/// a requirement, a highlight's fill or underline (#522), and the reference chip.
+/// a requirement, a highlight's fill or underline (#522), the reference chip, and the
+/// ring around the link the keyboard's focus is on (#711).
 ///
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
@@ -84,6 +85,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
     for highlight in highlightRects {
       bounds = bounds.union(highlight.rect)
+    }
+    // Slack all round for the ring's width, which is centered on the rect's edge.
+    for ring in linkFocusRects {
+      bounds = bounds.union(ring.rect.insetBy(dx: -Self.focusRingWidth, dy: -Self.focusRingWidth))
     }
     if let disclosure {
       bounds = bounds.union(
@@ -203,6 +208,21 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       marks, in: text, lines: textLineFragments, fragment: range, origin: .zero)
   }
 
+  /// Where the ring around the focused link goes on this fragment's lines (#711): a
+  /// band's shape, which a chip's tint has too. Read at draw time, as the highlights
+  /// are: Tab moves it without changing the fragment's text.
+  private var linkFocusRects: [FragmentGeometry.BandRect] {
+    guard let range = documentRange,
+      let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
+      let link = folding.focusedLink(meeting: range),
+      let text = textLayoutManager?.attributedText
+    else { return [] }
+    return FragmentGeometry.bandRects(
+      [link], in: text, lines: textLineFragments, fragment: range, origin: .zero)
+  }
+
+  private static let focusRingWidth: CGFloat = 2
+
   /// Where this fragment sits in the column, for whatever is drawn around it.
   private func placement(at point: CGPoint, span: FragmentGeometry.DecorationSpan)
     -> FragmentGeometry.Placement
@@ -247,6 +267,29 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     drawStrokes(at: point, color: palette.stroke, in: context)
     super.draw(at: point, in: context)
     drawDisclosure(at: point, in: context)
+    drawLinkFocus(at: point, in: context)
+  }
+
+  /// The keyboard's focus ring around a link (#711), over the text, in the system's
+  /// accent color, as a focused control's ring is drawn.
+  private func drawLinkFocus(at point: CGPoint, in context: CGContext) {
+    let rings = linkFocusRects
+    guard !rings.isEmpty else { return }
+    context.saveGState()
+    #if canImport(UIKit)
+      context.setStrokeColor(UIColor.tintColor.cgColor)
+    #else
+      context.setStrokeColor(NSColor.keyboardFocusIndicatorColor.withAlphaComponent(1).cgColor)
+    #endif
+    context.setLineWidth(Self.focusRingWidth)
+    for ring in rings {
+      context.addPath(
+        FragmentGeometry.roundedPath(
+          in: ring.rect.offsetBy(dx: point.x, dy: point.y),
+          cornerRadius: FragmentGeometry.chipRadius, corners: ring.corners))
+    }
+    context.strokePath()
+    context.restoreGState()
   }
 
   /// Opaque lines rather than translucent fills, so where two fragments' pieces of

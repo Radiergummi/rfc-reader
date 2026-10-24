@@ -10,7 +10,7 @@ import SwiftUI
 ///
 /// Each setting is either build-time, part of the `ReadingStyle` `style(column:textSize:)`
 /// makes, and a change rebuilds the document; or draw-time, part of `palette`, and
-/// a change only redraws. See
+/// a change only redraws; or, like the original text and the keys, neither. See
 /// `docs/decisions/2026-10-03-reader-settings-are-a-build-time-style-and-a-draw-time-palette.md`.
 public struct ReaderSettings: Sendable, Hashable {
   /// The reader's body size, as it reads at the system's default text size. Always
@@ -26,6 +26,15 @@ public struct ReaderSettings: Sendable, Hashable {
   public var drawDiagrams: Bool
   public var syntaxTheme: SyntaxTheme
   public var palette: ReaderPalette
+  /// The vim-style keys in the reader (#711).
+  public var vimKeys: Bool
+  /// Tab and Shift-Tab through the reader's links (#711).
+  public var tabsThroughLinks: Bool
+
+  /// Which of the reader's keys are on.
+  public var keys: ReaderKeys.Options {
+    ReaderKeys.Options(vimKeys: vimKeys, tabsThroughLinks: tabsThroughLinks)
+  }
 
   public init(
     fontSize: Double = ReaderPreferences.defaultFontSize,
@@ -34,7 +43,9 @@ public struct ReaderSettings: Sendable, Hashable {
     preferOriginalText: Bool = ReaderPreferences.defaultPreferOriginalText,
     drawDiagrams: Bool = ReaderPreferences.defaultDrawDiagrams,
     syntaxTheme: SyntaxTheme = .standard,
-    palette: ReaderPalette = .automatic
+    palette: ReaderPalette = .automatic,
+    vimKeys: Bool = ReaderPreferences.defaultVimKeys,
+    tabsThroughLinks: Bool = ReaderPreferences.defaultTabsThroughLinks
   ) {
     self.fontSize = ReaderPreferences.clamped(fontSize)
     self.underlineLinks = underlineLinks
@@ -43,6 +54,8 @@ public struct ReaderSettings: Sendable, Hashable {
     self.drawDiagrams = drawDiagrams
     self.syntaxTheme = syntaxTheme
     self.palette = palette
+    self.vimKeys = vimKeys
+    self.tabsThroughLinks = tabsThroughLinks
   }
 
   /// What `defaults` holds, each setting falling back to its default where nothing
@@ -61,7 +74,10 @@ public struct ReaderSettings: Sendable, Hashable {
       drawDiagrams: defaults.object(forKey: Keys.drawDiagramsKey) as? Bool
         ?? Keys.defaultDrawDiagrams,
       syntaxTheme: .named(defaults.string(forKey: Keys.syntaxThemeKey)),
-      palette: .named(defaults.string(forKey: Keys.paletteKey))
+      palette: .named(defaults.string(forKey: Keys.paletteKey)),
+      vimKeys: defaults.object(forKey: Keys.vimKeysKey) as? Bool ?? Keys.defaultVimKeys,
+      tabsThroughLinks: defaults.object(forKey: Keys.tabsThroughLinksKey) as? Bool
+        ?? Keys.defaultTabsThroughLinks
     )
   }
 
@@ -85,6 +101,10 @@ public struct ReaderSettings: Sendable, Hashable {
       defaults.set(syntaxTheme.id, forKey: Keys.syntaxThemeKey)
     }
     if palette != old.palette { defaults.set(palette.id, forKey: Keys.paletteKey) }
+    if vimKeys != old.vimKeys { defaults.set(vimKeys, forKey: Keys.vimKeysKey) }
+    if tabsThroughLinks != old.tabsThroughLinks {
+      defaults.set(tabsThroughLinks, forKey: Keys.tabsThroughLinksKey)
+    }
   }
 
   /// The build-time half: what the builder sets a document in, for a column of
@@ -121,6 +141,8 @@ public struct ReaderSettingsValue: DynamicProperty {
   @AppStorage private var drawDiagrams: Bool
   @AppStorage private var syntaxTheme: String
   @AppStorage private var palette: String
+  @AppStorage private var vimKeys: Bool
+  @AppStorage private var tabsThroughLinks: Bool
   private let defaults: UserDefaults
 
   public init(store defaults: UserDefaults = .standard) {
@@ -138,6 +160,9 @@ public struct ReaderSettingsValue: DynamicProperty {
     _syntaxTheme = AppStorage(
       wrappedValue: Keys.defaultSyntaxTheme, Keys.syntaxThemeKey, store: defaults)
     _palette = AppStorage(wrappedValue: Keys.defaultPalette, Keys.paletteKey, store: defaults)
+    _vimKeys = AppStorage(wrappedValue: Keys.defaultVimKeys, Keys.vimKeysKey, store: defaults)
+    _tabsThroughLinks = AppStorage(
+      wrappedValue: Keys.defaultTabsThroughLinks, Keys.tabsThroughLinksKey, store: defaults)
   }
 
   /// The settings. Setting them writes what changed to user defaults.
@@ -146,7 +171,8 @@ public struct ReaderSettingsValue: DynamicProperty {
       ReaderSettings(
         fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
         preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
-        syntaxTheme: .named(syntaxTheme), palette: .named(palette))
+        syntaxTheme: .named(syntaxTheme), palette: .named(palette), vimKeys: vimKeys,
+        tabsThroughLinks: tabsThroughLinks)
     }
     nonmutating set {
       newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))

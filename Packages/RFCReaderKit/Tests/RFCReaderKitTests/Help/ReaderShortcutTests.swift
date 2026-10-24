@@ -63,6 +63,17 @@ struct ReaderShortcutTests {
       ])
   }
 
+  /// Next and Previous Section work in every reading mode now (#711), and Go to
+  /// Section takes ⌥⌘G on both platforms, as the maintainer chose.
+  @Test func `the section commands are listed under View`() {
+    for platform in ReaderShortcut.Platform.allCases {
+      let view = ReaderShortcut.rows(in: .view, on: platform, locale: .english)
+      #expect(view.first { $0.title == "Next Section" }?.chords.map(\.symbols) == ["⌥⌘↓"])
+      #expect(view.first { $0.title == "Previous Section" }?.chords.map(\.symbols) == ["⌥⌘↑"])
+      #expect(view.first { $0.title == "Go to Section" }?.chords.map(\.symbols) == ["⌥⌘G"])
+    }
+  }
+
   /// Written as a menu writes it: ⌃⌥⇧⌘, then the key.
   @Test func `a chord is written in the menu's order`() {
     #expect(ReaderShortcut.copyAsQuote.chord(on: .mac)?.symbols == "⌥⇧⌘C")

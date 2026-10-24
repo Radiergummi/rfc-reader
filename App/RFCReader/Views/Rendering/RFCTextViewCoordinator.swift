@@ -217,6 +217,10 @@ final class RFCTextViewCoordinator: NSObject {
   var highlightPlacement = HighlightPlacement.none
   /// Placing them, off the main actor.
   var highlightsTask: Task<Void, Never>?
+  /// The reader's keys (#711), holding the first key of a vim pair.
+  var keys = ReaderKeys()
+  /// The link the keyboard's focus is on (#711), which Return follows; nil for none.
+  var focusedLink: NSRange?
   #if !canImport(UIKit)
     /// A click in a highlight, waiting out the double-click interval before its
     /// popover opens, so it never opens on the way to a double-click.

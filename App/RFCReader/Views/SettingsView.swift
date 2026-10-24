@@ -17,8 +17,11 @@ struct SettingsView: View {
   var body: some View {
     TabView {
       Tab("Reading", systemImage: "textformat.size") {
-        Form { ReadingSettings() }
-          .formStyle(.grouped)
+        Form {
+          ReadingSettings()
+          Section("Keyboard") { KeyboardSettings() }
+        }
+        .formStyle(.grouped)
       }
       Tab("Appearance", systemImage: "paintpalette") {
         Form { AppearanceSettings() }
@@ -61,6 +64,7 @@ struct SettingsScreen: View {
     NavigationStack {
       Form {
         Section("Reading") { ReadingSettings() }
+        Section("Keyboard") { KeyboardSettings() }
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
         Section("Notifications") { NotificationSettings() }
@@ -114,6 +118,29 @@ private struct ReadingSettings: View {
       Text("Show Diagrams as Figures")
       Text(
         "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it."
+      )
+    }
+  }
+}
+
+/// The reader's keys (#711), with a hardware keyboard on iOS. Here until the
+/// registry of Advanced settings (#706) lands, which they move into.
+private struct KeyboardSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Toggle(isOn: $settings.tabsThroughLinks) {
+      Text("Move through links with Tab")
+      Text("Shift-Tab goes back. Return follows the link, and Space previews it.")
+    }
+    Toggle(isOn: $settings.vimKeys) {
+      Text("Use vim-style keys")
+      Text(
+        """
+        j and k scroll a line, d and u half a page, gg and G go to the top and the end, \
+        ]] and [[ to the next and previous section, ]r and [r to the next and previous link, \
+        / finds, and n and N go to the next and previous match.
+        """
       )
     }
   }
