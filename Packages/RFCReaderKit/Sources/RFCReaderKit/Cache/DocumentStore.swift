@@ -808,10 +808,15 @@ public actor DocumentStore {
       signpostID: signposter.makeSignpostID())?.parse.document
   }
 
-  /// Those of `ids` the installed legacy pack holds; none when no pack is installed.
-  public func inLegacyPack(_ ids: Set<DocumentID>) -> Set<DocumentID> {
+  /// Those of `ids` that are read from the installed legacy pack: the pack holds them,
+  /// and neither tier has their XML, which is read before it. None when no pack is
+  /// installed.
+  public func readFromLegacyPack(_ ids: Set<DocumentID>) -> Set<DocumentID> {
     guard let legacyPack else { return [] }
-    return ids.filter { legacyPack.file(for: $0) != nil }
+    return ids.filter { id in
+      legacyPack.file(for: id) != nil
+        && !fileURLs(id, format: .xml).contains { FileManager.default.fileExists(atPath: $0.path) }
+    }
   }
 
   /// `document(_:formats:entry:client:)`'s parse, before the entry is applied. The

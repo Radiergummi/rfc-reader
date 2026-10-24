@@ -317,4 +317,21 @@ extension AccessibleReading {
   /// icon, because it is the one character of the chip that says nothing of its
   /// own, and an IPA pronunciation can't be made of the label.
   static let informativePronunciation = "ɪnˈfɔɹmətɪv"
+
+  /// What an aside's caption, set in capitals, is pronounced as on iOS (#872): the
+  /// word its `.rfcSpoken` label is, as macOS says it. Only the English captions: a
+  /// translated document's (#749) has no IPA to give, and is read as drawn.
+  static func captionPronunciation(_ caption: String) -> String? {
+    switch caption {
+    case DocumentLabels.english.note: notePronunciation
+    case DocumentLabels.english.notes: notesPronunciation
+    default: nil
+    }
+  }
+
+  /// "Note" in IPA.
+  static let notePronunciation = "noʊt"
+
+  /// "Notes" in IPA.
+  static let notesPronunciation = "noʊts"
 }
