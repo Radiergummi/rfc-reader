@@ -62,6 +62,13 @@
       }
     }
 
+    /// `export` told to this RFC, its receiver: the command finds the RFC there, so
+    /// this only runs it.
+    @objc(handleExportCommand:)
+    func handleExportCommand(_ command: NSScriptCommand) -> Any? {
+      command.performDefaultImplementation()
+    }
+
     /// Where the object lives, which is how a script gets a reference it can use
     /// again: the application's `rfcs`, by number.
     nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
@@ -364,6 +371,7 @@
           case .contents: .contents
           case .references: .references
           case .requirements: .requirements
+          case .annotations: .annotations
           }
         return pane.code
       }
@@ -375,6 +383,7 @@
         case .contents: reader.tab = .contents
         case .references: reader.tab = .references
         case .requirements: reader.tab = .requirements
+        case .annotations: reader.tab = .annotations
         case .information: break
         }
       }
@@ -479,6 +488,70 @@
         }
         command.resumeExecution(withResult: nil)
       }
+    }
+  }
+
+  /// `export rfc id 9110 as PDF to file "…"` (#383): the file File > Export… writes,
+  /// made by the same `DocumentExport` and tagged as it tags it, without opening a
+  /// window. The command waits for it, so a script's next line finds the file
+  /// written.
+  @objc(RFCExportCommand)
+  nonisolated final class RFCExportCommand: RFCScriptCommand {
+    @MainActor override func perform() {
+      if evaluatedReceivers is [Any] {
+        ScriptError.report("Export one RFC at a time.", in: self)
+        return
+      }
+      guard let rfc = evaluatedReceivers as? ScriptableRFC else {
+        ScriptError.report("Which RFC? Name one as rfc id 9110.", in: self)
+        return
+      }
+      let code = (evaluatedArguments?["format"] as? NSNumber)?.uint32Value
+      guard let format = code.flatMap(ExportFormat.init(scriptCode:)) else {
+        ScriptError.report(
+          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML or ABNF.", in: self)
+        return
+      }
+      guard let file = evaluatedArguments?["file"] as? URL, file.isFileURL else {
+        ScriptError.report("Where to? Export to a file.", in: self)
+        return
+      }
+      // A folder would fail the write with Foundation's words, not ours.
+      if (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+        ScriptError.report(
+          "Name a file, not a folder: to file \"…/\(format.fileName(for: rfc.id))\".", in: self)
+        return
+      }
+      let id = rfc.id
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      Task {
+        do {
+          let data = try await DocumentExport.data(
+            for: id, as: format, paperSize: NSPrintInfo.shared.paperSize,
+            library: LibraryModel.shared)
+          try await Self.write(
+            data, to: file, tags: ExportFormat.tagNames(for: LibraryModel.shared.metadata(id)))
+        } catch is ExportFormat.NoGrammar {
+          ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
+        } catch let original as PublishedOriginalPage.NotExportable {
+          // In English, as a script reads whatever the interface's language.
+          ScriptError.report(original.message(in: .english), in: command)
+        } catch {
+          ScriptError.report(
+            "\(id.displayName) could not be exported as \(format.scriptName): \(error.localizedDescription)",
+            in: command)
+        }
+        command.resumeExecution(withResult: nil)
+      }
+    }
+
+    /// The file, written off the main actor, with the Finder tags File > Export…
+    /// gives it.
+    @concurrent
+    private static func write(_ data: Data, to file: URL, tags: [String]) async throws {
+      try data.write(to: file, options: .atomic)
+      try (file as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
     }
   }
 

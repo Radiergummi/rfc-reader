@@ -15,8 +15,8 @@ rfc-reader/
 │   │   ├── Registry/         IANARegistry and RegistryLookup: the IANA registries the app looks values up in (#175)
 │   │   ├── Corpus/           Manifest: a data pack's files, sizes and hashes, which corpus-build writes and the app verifies
 │   │   ├── Highlighting/     Lexer, Lexers, JSONLexer, XMLLexer, HTTPMessageHighlighter, SyntaxToken (syntax highlighting of JSON, XML and HTTP messages)
-│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section)
-│   ├── Sources/CSQLite/      the system's SQLite, a product of its own that corpus-build uses too
+│   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed), FullTextIndex (SQLite FTS5, one row per section), SQLiteDatabase (the one SQLite connection helper, which corpus-build's IndexDatabase and the app's CitationIndex use too)
+│   ├── Sources/CSQLite/      the system's SQLite, which `SQLiteDatabase` wraps; a product of its own for corpus-build's tests
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, DocumentStore (actor, disk cache), the stores and the SwiftData schema. Needs an Apple SDK.
 │   ├── Sources/RFCReaderKit/
@@ -112,7 +112,8 @@ Both XML parsers ignore a parser error reported *after* the root element has clo
 ```
 RFC Editor ──HTTP──▶ RFCEditorClient ──────────bytes──▶ DocumentStore (actor)
                                                           │  writes rfcNNNN.xml/.txt to Application Support
-                                                          │  parses on demand, memoizes RFCDocument
+                                                          │  parses on demand, memoizes RFCDocument,
+                                                          │  keeps it encoded beside its body for the next launch
                                                           ▼
                        LibraryModel (@Observable, one per process) ── index, search, lists, document cache, open tabs
                                                           ▼
@@ -203,10 +204,12 @@ is that way, and what was measured or tried first.
 - [A folded block is shown unfolded where it fits](decisions/2026-10-17-a-folded-block-is-shown-unfolded-where-it-fits.md)
 - [The Mac app is released from CI and updated by Sparkle](decisions/2026-10-17-the-mac-app-is-released-from-ci-and-updated-by-sparkle.md)
 - [A translated document is a second build of a translated model](decisions/2026-10-17-a-translated-document-is-a-second-build-of-a-translated-model.md)
+- [Highlights are anchored to the model text and drawn from the position map](decisions/2026-10-18-highlights-are-drawn-from-the-position-map.md)
+- [A parsed document is kept encoded beside its body](decisions/2026-10-18-a-parsed-document-is-kept-encoded-beside-its-body.md)
 
 ## Planned engines
 
-- **Search.** As [the search decision](decisions/2026-10-07-full-text-search-is-built-on-the-device-and-ranked-flat.md) says, SQLite FTS5 built on the device, through RFCKit's `CSQLite`, one row per section with snippets from `snippet()` (`FullTextIndex`, #37). `TextIndexer` (RFCReaderKit) keeps it to the bodies the store holds, and the search shows its section hits "In the Text" under the RFC rows. Index All RFCs (`TextIndexer.indexAll`, run by `IndexAllRun`) indexes every RFC without keeping its body, reading the legacy pack's XML where one is installed, and marks each *retained*, which is the one exception to the index following the store: a retained document stays when its body is evicted, until Remove Full-Text Index releases them. Metadata search moves into the same database.
+- **Search.** As [the search decision](decisions/2026-10-07-full-text-search-is-built-on-the-device-and-ranked-flat.md) says, SQLite FTS5 built on the device, through RFCKit's `SQLiteDatabase`, one row per section with snippets from `snippet()` (`FullTextIndex`, #37). `TextIndexer` (RFCReaderKit) keeps it to the bodies the store holds, and the search shows its section hits "In the Text" under the RFC rows. Index All RFCs (`TextIndexer.indexAll`, run by `IndexAllRun`) indexes every RFC without keeping its body, reading the legacy pack's XML where one is installed, and marks each *retained*, which is the one exception to the index following the store: a retained document stays when its body is evicted, until Remove Full-Text Index releases them. Metadata search moves into the same database.
 - **Highlighting.** Built for JSON, XML and HTTP messages on one regex lexer engine in RFCKit (`Lexer`, `Lexers`), [as decided](decisions/2026-10-02-syntax-highlighting-is-one-regex-lexer-engine.md); further languages are rule tables on it. ABNF's rule links come from the strict `ABNF` parser instead (#185), and untyped blocks are not guessed at.
 - **Diff.** Section alignment from `SectionAlignment` (title and prose, ties broken by position; the `successions` table for an obsoletes edge), LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
 - **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.

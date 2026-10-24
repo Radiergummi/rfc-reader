@@ -46,6 +46,14 @@ struct DocumentCommands: Commands {
         || reader?.sideBySide?.reader.hasSelection == true
     }
 
+    /// Whether Copy as Quote and Highlight have a selection of the RFC's own words: in
+    /// the reader's text or beside a compared document's, never the original text's
+    /// or a translation's.
+    private var hasQuotableSelection: Bool {
+      showsDocument && reader?.showOriginal != true && reader?.readsTranslation != true
+        && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
+    }
+
     /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
     private func paneTitle(_ pane: InspectorPane) -> String {
       InspectorPane.menuTitle(
@@ -103,9 +111,14 @@ struct DocumentCommands: Commands {
           active.controller?.copyAsQuote()
         }
         .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
-        .disabled(
-          !showsDocument || reader?.showOriginal == true || reader?.readsTranslation == true
-            || (reader?.hasSelection != true && reader?.sideBySide?.reader.hasSelection != true))
+        .disabled(!hasQuotableSelection)
+        // The selection, in the color last used (#522): Books' shortcut, and grayed out
+        // where Copy as Quote is, for the same reasons.
+        Button("Highlight") {
+          active.controller?.highlightSelection()
+        }
+        .keyboardShortcut(ReaderShortcut.highlight.keyboardShortcut)
+        .disabled(!hasQuotableSelection)
       #endif
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the
@@ -134,6 +147,14 @@ struct DocumentCommands: Commands {
       CommandGroup(replacing: .importExport) {
         Button("Export…") { active.controller?.output.exportDocument() }
           .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
+          .disabled(!offersPrintAndExport)
+        // Chosen here, not in the save panel, which cannot rename the file (#386).
+        Button("Export Current Section…") {
+          active.controller?.output.exportCurrentSection()
+        }
+        .disabled(!offersPrintAndExport || reader?.exportableSection == nil)
+        // The document as an EPUB, opened with Books, which imports it (#408).
+        Button("Send to Books") { active.controller?.output.sendToBooks() }
           .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }

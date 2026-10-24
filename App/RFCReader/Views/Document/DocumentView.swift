@@ -336,6 +336,9 @@ struct DocumentView: View {
       .onChange(of: controller.hasSelection) { _, hasSelection in
         writer.hasSelection = hasSelection
       }
+      .onChange(of: controller.highlightStatuses) { _, statuses in
+        writer.highlightStatuses = statuses
+      }
       // A section the text view opened or closed itself: a heading toggled, a jump
       // into folded text.
       .onChange(of: controller.foldingRequest) {
@@ -733,6 +736,7 @@ struct DocumentView: View {
       // searches the section tree depth first — 305 sections on RFC 9110 — and this
       // runs on every section crossing while scrolling.
       reader.currentSection = session.sectionPlaces[anchor]
+      reader.exportableSection = session.sectionAnchors.contains(anchor) ? anchor : nil
       // Recorded on the history entry when navigating away, so coming back returns
       // here rather than to the top of the document.
       navigation.visiblePosition = anchor
@@ -871,6 +875,8 @@ struct DocumentView: View {
     // The section it is in, which reinstating cleared, and which the controller
     // publishes only as it changes.
     if let anchor = controller.section { showSection(anchor) }
+    // Where its build placed the highlights, which reinstating cleared too (#522).
+    writer.highlightStatuses = controller.highlightStatuses
     updateFolding()
   }
 

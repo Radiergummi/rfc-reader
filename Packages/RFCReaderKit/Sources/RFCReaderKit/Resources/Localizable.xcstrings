@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ has no grammar to export." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat keine Grammatik zum Exportieren."
+          }
+        }
+      }
+    },
     "%@ is defined in %@." : {
       "localizations" : {
         "de" : {
@@ -978,6 +988,16 @@
         }
       }
     },
+    "Change Highlight Color" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Farbe der Markierung ändern"
+          }
+        }
+      }
+    },
     "Charter" : {
       "localizations" : {
         "de" : {
@@ -1118,12 +1138,32 @@
         }
       }
     },
+    "Current Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktueller Abschnitt"
+          }
+        }
+      }
+    },
     "Datatracker" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Datatracker"
+          }
+        }
+      }
+    },
+    "Delete Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung löschen"
           }
         }
       }
@@ -1524,6 +1564,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Info ausblenden"
+          }
+        }
+      }
+    },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markieren"
+          }
+        }
+      }
+    },
+    "Highlighted, blue" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, blau"
+          }
+        }
+      }
+    },
+    "Highlighted, green" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, grün"
+          }
+        }
+      }
+    },
+    "Highlighted, pink" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, rosa"
+          }
+        }
+      }
+    },
+    "Highlighted, purple" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, lila"
+          }
+        }
+      }
+    },
+    "Highlighted, yellow" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markiert, gelb"
           }
         }
       }
@@ -2314,6 +2414,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pink"
+          }
+        }
+      }
+    },
+    "Place Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung setzen"
           }
         }
       }
@@ -3304,6 +3414,16 @@
         }
       }
     },
+    "The section is no longer in the document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Abschnitt ist nicht mehr im Dokument."
+          }
+        }
+      }
+    },
     "The stream was created in 2022, by RFC 9280: its documents are written in the RFC Series Working Group and approved by the RFC Series Approval Board." : {
       "localizations" : {
         "de" : {
@@ -3586,6 +3706,26 @@
         }
       }
     },
+    "Underline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstreichen"
+          }
+        }
+      }
+    },
+    "Underlined" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstrichen"
+          }
+        }
+      }
+    },
     "Unfollow Working Group" : {
       "localizations" : {
         "de" : {
@@ -3742,6 +3882,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wenn die Gruppe das Dokument für fertig hält, bitten ihre Chairs die ganze Gruppe um letzte Kommentare. Gibt es Rough Consensus, bittet die Gruppe die IESG, es zu veröffentlichen."
+          }
+        }
+      }
+    },
+    "Whole Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganzes Dokument"
           }
         }
       }

@@ -33,6 +33,9 @@ struct ReaderScene: ViewModifier {
       .sheet(item: $navigation.collectionEditor) { mode in
         CollectionEditorSheet(mode: mode)
       }
+      .sheet(item: $navigation.collectionExport) { request in
+        CollectionExportSheet(request: request)
+      }
       .sheet(item: $navigation.readingPath) { request in
         ReadingPathSheet(root: request.root)
       }

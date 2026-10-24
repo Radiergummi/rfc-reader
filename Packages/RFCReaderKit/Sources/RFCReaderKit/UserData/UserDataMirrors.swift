@@ -4,13 +4,13 @@ import SwiftData
 /// The sets the app keeps read from the store, and which of them a save can have
 /// changed (#603).
 ///
-/// `UserDataMirror` keeps five: the bookmarked documents, the collections, the
-/// Recently Read count, the Keep Offline marks and the followed working groups. The
-/// app used to read all of them again on every save, and most saves only record a
-/// reading position, so the bookmark and collection fetches ran for nothing —
-/// `CollectionSnapshot.fetch` reads every collection and every item. A save's
-/// notification names the rows it inserted, updated and deleted, and each row's
-/// entity says which mirror it feeds.
+/// `UserDataMirror` keeps six: the bookmarked documents, the collections, the
+/// Recently Read count, the Keep Offline marks, the annotations and the followed
+/// working groups. The app used to read all of them again on every save, and most
+/// saves only record a reading position, so the bookmark and collection fetches ran
+/// for nothing — `CollectionSnapshot.fetch` reads every collection and every item. A
+/// save's notification names the rows it inserted, updated and deleted, and each
+/// row's entity says which mirror it feeds.
 struct UserDataMirrors: OptionSet, Sendable {
   let rawValue: Int
 
@@ -23,11 +23,14 @@ struct UserDataMirrors: OptionSet, Sendable {
   static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
   /// `OfflineMarkStore.markedDocuments`, read from `OfflineMark` rows alone (#358).
   static let offlineMarks = UserDataMirrors(rawValue: 1 << 3)
+  /// `AnnotationSnapshot.fetch`, read from `Highlight` rows (#522).
+  static let annotations = UserDataMirrors(rawValue: 1 << 4)
   /// `FollowedGroupStore.followedGroups`, read from `FollowedGroup` rows alone (#731).
-  static let followedGroups = UserDataMirrors(rawValue: 1 << 4)
+  static let followedGroups = UserDataMirrors(rawValue: 1 << 5)
 
   static let all: UserDataMirrors = [
-    .bookmarks, .collections, .recentlyReadCount, .offlineMarks, .followedGroups,
+    .bookmarks, .collections, .recentlyReadCount, .offlineMarks, .annotations,
+    .followedGroups,
   ]
 
   /// The mirrors a save of rows of these entities can have changed. Nil — the
@@ -51,6 +54,7 @@ struct UserDataMirrors: OptionSet, Sendable {
     String(describing: DocumentCollectionItem.self): .collections,
     String(describing: OfflineMark.self): .offlineMarks,
     String(describing: FollowedGroup.self): .followedGroups,
+    String(describing: Highlight.self): .annotations,
   ]
 
   /// The entity names of the rows a `ModelContext.didSave` notification says were

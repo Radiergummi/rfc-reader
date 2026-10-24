@@ -401,7 +401,7 @@ struct RFCListView: View {
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
-      .refreshable { await library.refreshIndex() }
+      .refreshable { await library.refreshIndexNow() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
       .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
       .sheet(isPresented: $showsHelp) { HelpSheet() }

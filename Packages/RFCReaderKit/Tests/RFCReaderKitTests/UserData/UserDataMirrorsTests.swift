@@ -54,6 +54,10 @@ struct UserDataMirrorsTests {
     #expect(UserDataMirrors.changed(byEntities: ["OfflineMark"]) == .offlineMarks)
   }
 
+  @Test func `a highlight save refreshes only the annotations`() {
+    #expect(UserDataMirrors.changed(byEntities: ["Highlight"]) == .annotations)
+  }
+
   @Test func `a collection or an item in one refreshes only the collections`() {
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollection"]) == .collections)
     #expect(UserDataMirrors.changed(byEntities: ["DocumentCollectionItem"]) == .collections)

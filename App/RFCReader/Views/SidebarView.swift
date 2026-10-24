@@ -398,6 +398,11 @@ struct SidebarView: View {
       .contextMenu {
         // The editor holds the name and the color both: one place to change either.
         Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
+        // Every RFC in it, into a folder named after it (#385).
+        Button("Export…") {
+          navigation.collectionExport = CollectionExportRequest(collection: entry.id)
+        }
+        .disabled(entry.rfcNumbers.isEmpty)
         Divider()
         Button("Delete…", role: .destructive) { deleting = entry }
       }

@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus test-corpus-app xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus test-corpus-app epubcheck xcodegen-install xcodeproj build-app ios-sim ios-app test-app-ios strings strings-check run-device run-device-check run-sim hand-check hand-check-check run install bundled-index indexes-pack appcast publish-feed trace benchmark benchmark-core benchmark-layout build-benchmarks corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-common-words corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -109,7 +109,10 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3261 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6455 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1136 rfc1140 rfc1142 rfc1178 rfc1195 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1716 rfc1958 rfc206 rfc2122 rfc2196 rfc2223 rfc2300 rfc2315 rfc2326 rfc2569 rfc2616 rfc2639 rfc270 rfc2814 rfc2818 rfc2910 rfc3075 rfc3116 rfc3261 rfc3275 rfc3407 rfc355 rfc4511 rfc5 rfc5126 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6455 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7322 rfc753 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc821 rfc822 rfc8259 rfc830 rfc9110
+# The text renderings RFCReaderKit's suites read beside their XML: an annotation made
+# in the legacy parse of an RFC relocates into its authored XML (#522).
+CORPUS_TEST_APP_TEXT_DOCUMENTS := rfc9110
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935 rfc9051 rfc9111 rfc9499 rfc9692
 
@@ -137,9 +140,22 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 ## Run RFCReaderKit's corpus-backed suites alone, fetching the RFCXML they read
 # On a Mac only, where the package builds; `test-corpus` runs it after the others.
 # CI's macOS job runs it on its own, since the Linux job has run the rest.
-test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
-	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
+test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) \
+  $(CORPUS_TEST_APP_TEXT_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
+	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
 	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked
+
+## Validate the EPUB export with epubcheck, over the committed fixtures
+# Not part of `check` or CI: epubcheck needs Java (`brew install epubcheck`). The
+# EPUB writer's tests write each fixture's book into .build/epub when
+# RFC_EPUB_OUTPUT names it, and epubcheck reads every one (#408).
+EPUB_OUTPUT := .build/epub
+epubcheck:
+	@command -v epubcheck >/dev/null || { echo "epubcheck is not installed: brew install epubcheck" >&2; exit 1; }
+	rm -rf $(EPUB_OUTPUT)
+	RFC_EPUB_OUTPUT=$(abspath $(EPUB_OUTPUT)) \
+	  swift test --package-path $(RFCKIT) $(RFCKIT_WARNINGS) --filter "write the book for epubcheck"
+	@status=0; for book in $(EPUB_OUTPUT)/*.epub; do epubcheck --quiet "$$book" || status=1; done; exit $$status
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
@@ -426,9 +442,45 @@ bundled-index:
 	$(CURL) --compressed -o $(BUNDLED_INDEX).part https://www.rfc-editor.org/rfc-index.xml && \
 	  mv $(BUNDLED_INDEX).part $(BUNDLED_INDEX)
 
+## Fetch the indexes pack the app bundles (#738)
+# The release App/indexes-pack.mk pins, into App/Resources/indexes, which git
+# ignores: its two files are downloaded beside it and moved in only once both match
+# the pinned SHA-256, and a pack already there that matches is kept; a pack of
+# another schema than IndexSchema.version, which the app would refuse, fails it.
+# project.yml's "Bundle the indexes pack" phase copies it into the app; a Release
+# build fails without it or with files other than the pinned ones, and a Debug build
+# bundles it only when it is there.
+# `install`, `trace` and the release script fetch it first.
+include App/indexes-pack.mk
+INDEXES_PACK := App/Resources/indexes
+INDEX_SCHEMA := Packages/RFCKit/Sources/RFCKit/Index/IndexSchema.swift
+INDEXES_PACK_URL ?= https://github.com/Radiergummi/rfc-reader/releases/download/$(INDEXES_PACK_TAG)
+define indexes_pack_digests
+printf '%s  indexes.sqlite\n%s  manifest.json\n' \
+  '$(INDEXES_PACK_SQLITE_SHA256)' '$(INDEXES_PACK_MANIFEST_SHA256)'
+endef
+indexes-pack:
+	@test -n '$(INDEXES_PACK_TAG)' || { echo "App/indexes-pack.mk pins no indexes pack yet"; exit 1; }
+	@if [ -d $(INDEXES_PACK) ] && \
+	  (cd $(INDEXES_PACK) && $(indexes_pack_digests) | shasum -a 256 -c -s -); then \
+	  echo "$(INDEXES_PACK) is $(INDEXES_PACK_TAG)"; \
+	else \
+	  rm -rf $(INDEXES_PACK).part && mkdir -p $(INDEXES_PACK).part && \
+	  for file in indexes.sqlite manifest.json; do \
+	    $(CURL) -L -o $(INDEXES_PACK).part/$$file $(INDEXES_PACK_URL)/$$file || exit 1; \
+	  done && \
+	  (cd $(INDEXES_PACK).part && $(indexes_pack_digests) | shasum -a 256 -c -) && \
+	  rm -rf $(INDEXES_PACK) && mv $(INDEXES_PACK).part $(INDEXES_PACK); \
+	fi
+	@schema=$$(sqlite3 -readonly $(INDEXES_PACK)/indexes.sqlite "SELECT value FROM meta WHERE key = 'schema'"); \
+	  expected=$$(sed -n 's/.*static let version = \([0-9]*\).*/\1/p' $(INDEX_SCHEMA)); \
+	  test "$$schema" = "$$expected" || { \
+	    echo "$(INDEXES_PACK_TAG) has schema $$schema, and the app reads $$expected: pin a pack built by this commit"; \
+	    exit 1; }
+
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
-install: bundled-index build-app
+install: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
@@ -466,7 +518,7 @@ publish-feed:
 TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
-trace: bundled-index build-app
+trace: bundled-index indexes-pack build-app
 	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
