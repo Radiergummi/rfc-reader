@@ -351,7 +351,7 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { reader?.findInteraction?.findPrevious() }
             .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
         }
-        .disabled(navigation?.selection == nil || reader?.hasDocument != true)
+        .disabled(navigation?.selection == nil || reader?.offersFind != true)
       }
     #endif
   }

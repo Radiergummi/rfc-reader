@@ -333,6 +333,9 @@ struct DocumentView: View {
       .onChange(of: controller.barsHidden) { _, hidden in
         setBarsHidden(hidden)
       }
+      .onChange(of: session.originalText != nil) { _, hasOriginalText in
+        writer.hasOriginalText = hasOriginalText
+      }
       .onChange(of: controller.hasSelection) { _, hasSelection in
         writer.hasSelection = hasSelection
       }

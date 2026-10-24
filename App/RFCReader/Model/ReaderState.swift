@@ -103,6 +103,10 @@ final class ReaderState {
   /// Whether the document's body is here: what the toolbar title, printing and
   /// export need. The panel asks `canDescribe` instead.
   var hasDocument = false
+  /// Whether the original text has loaded, so Original Text shows it rather than
+  /// progress or an error: what Find needs on iOS (#943). Written by `DocumentView`,
+  /// from `DocumentSession.originalText`.
+  var hasOriginalText = false
   /// Whether the body is still on its way, from `DocumentSession`'s load state:
   /// without it, the navigation pane shows progress while this holds and says the
   /// document has not loaded once it does not (#325).
@@ -257,6 +261,16 @@ final class ReaderState {
       return findTextView.findInteraction
     }
 
+    /// Whether a text view shows for Find to open over (#943): not a published
+    /// original's page, nor Original Text while it loads or after it failed to. From
+    /// what the reader shows, which the menus observe, rather than from
+    /// `findTextView`, which text views set as they update.
+    var offersFind: Bool {
+      ReaderFind.isAvailable(
+        hasDocument: hasDocument, publishedOriginal: publishedOriginal?.kind,
+        showsOriginal: showOriginal, hasOriginalText: hasOriginalText)
+    }
+
     func presentFind() {
       findInteraction?.presentFindNavigator(showingReplace: false)
     }
@@ -299,6 +313,7 @@ final class ReaderState {
     currentSection = nil
     exportableSection = nil
     hasDocument = false
+    hasOriginalText = false
     publishedOriginal = nil
     isLoading = false
     hasSelection = false

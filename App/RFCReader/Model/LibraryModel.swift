@@ -1641,23 +1641,19 @@ final class LibraryModel {
   /// Keeps nothing offline any more: removes every mark, on every device, since marks
   /// are synced, and turns off keeping this device's bookmarks. The bodies go back
   /// into the reading cache, as an unmarked one does, where eviction or Clear Cache
-  /// removes them. A removal that could not be saved is logged and changes nothing:
-  /// it is made in a context of its own, discarded with it, since rolling back the
-  /// app's context would discard whatever else waits there to be saved, such as a
-  /// bookmark whose save failed.
+  /// removes them. A removal that could not be saved is logged and changes nothing
+  /// (`UserDataMirror.removeAllOfflineMarks(first:)`).
   func removeAllOffline() {
+    let keptBookmarks = keepsBookmarksOffline
     do {
-      try OfflineMarkStore.removeAll(in: ModelContext(container))
+      // One reconciliation for both, without the bookmarks: the marks' report runs it.
+      try userData.removeAllOfflineMarks(first: { storeKeepsBookmarksOffline(false) })
     } catch {
+      // Nothing was reconciled, so restoring the setting is all there is to undo.
+      storeKeepsBookmarksOffline(keptBookmarks)
       libraryLog.error(
         "removing every Keep Offline mark failed: \(String(describing: error), privacy: .public)")
-      return
     }
-    storeKeepsBookmarksOffline(false)
-    // One reconciliation for both: the marks' refresh runs it when they changed.
-    let marks = offlineMarks
-    userData.refreshOfflineMarks()
-    if offlineMarks == marks { wantedOfflineChanged() }
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {

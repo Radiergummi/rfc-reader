@@ -239,7 +239,8 @@ struct BuilderChipTests {
 
     /// iOS VoiceOver says an informative chip's kind (#862): `UITextView` has no
     /// per-range accessor, so the build pronounces every informative chip's icon,
-    /// and nothing else, as "informative". A normative chip is pronounced as it reads.
+    /// and nothing else of a reference's chip, as "informative". A normative chip is
+    /// pronounced as it reads.
     @Test func `the build pronounces only an informative chip's icon`() throws {
       let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
       let chips = iconPronunciations(built)

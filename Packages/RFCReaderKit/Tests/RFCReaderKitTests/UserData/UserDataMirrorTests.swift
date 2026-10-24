@@ -112,6 +112,37 @@ struct UserDataMirrorTests {
     #expect(reports.offlineMarks == 2)
   }
 
+  /// Remove All Offline Documents also stops keeping the bookmarks offline (#917). The
+  /// marks are reported once, and only after that, so the one reconciliation the
+  /// report starts no longer wants the bookmarks.
+  @Test func `removing every mark reports them once, after what runs first`() throws {
+    let mirror = try makeMirror(reporting: Reports())
+    mirror.start()
+    try OfflineMarkStore.setMarked(.rfc(9110), true, in: mirror.container.mainContext)
+    var keepsBookmarks = true
+    var keepsBookmarksWhenReported: [Bool] = []
+    mirror.onOfflineMarksChanged = { keepsBookmarksWhenReported.append(keepsBookmarks) }
+
+    try mirror.removeAllOfflineMarks(first: { keepsBookmarks = false })
+
+    #expect(mirror.offlineMarks.isEmpty)
+    #expect(keepsBookmarksWhenReported == [false])
+  }
+
+  /// With no mark to remove the save changes no mark, and the report still comes, once:
+  /// what ran first may have changed what is wanted offline.
+  @Test func `removing every mark when there are none still reports once`() throws {
+    let mirror = try makeMirror(reporting: Reports())
+    mirror.start()
+    var keepsBookmarks = true
+    var keepsBookmarksWhenReported: [Bool] = []
+    mirror.onOfflineMarksChanged = { keepsBookmarksWhenReported.append(keepsBookmarks) }
+
+    try mirror.removeAllOfflineMarks(first: { keepsBookmarks = false })
+
+    #expect(keepsBookmarksWhenReported == [false])
+  }
+
   /// An unknown save reads every set again, and only what changed is reported.
   @Test func `a refresh that finds nothing new reports nothing`() throws {
     let reports = Reports()
