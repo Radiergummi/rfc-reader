@@ -1100,6 +1100,12 @@ final class LibraryModel {
     index?[id]
   }
 
+  /// What a citation of `id` is made from (#712): its entry in the index, or a
+  /// series' members'. Nil before the index names it.
+  func citedDocument(_ id: DocumentID) -> CitedDocument? {
+    index.flatMap { CitedDocument(id, in: $0) }
+  }
+
   /// "RFC 2119 and RFC 8174", the members of a series, for its reader's subtitle
   /// (#656); nil for an RFC, or before the index names them.
   func seriesMembers(_ id: DocumentID) -> String? {

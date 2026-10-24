@@ -58,26 +58,30 @@ struct DocumentActionsTests {
 
   @Test func `a citation carries the section being read`() {
     let cited = DocumentActions.citation(
-      metadata(title: "HTTP Semantics"), section: "4.2", style: .full)
+      .rfc(metadata(title: "HTTP Semantics")), section: "4.2", style: .full)
     #expect(cited.contains("4.2"))
   }
 
-  /// BibTeX has no field that says "and I mean §4.2", so a section passed through
-  /// would land in the title or be dropped by whoever renders the entry.
-  @Test func `bibtex cites the whole document even while a section is being read`() {
+  /// BibTeX and xml2rfc have no field that says "and I mean §4.2", so a section
+  /// passed through would land in the title or be dropped by whoever renders the
+  /// entry.
+  @Test(arguments: [CitationStyle.bibtex, .xml2rfc])
+  func `an entry cites the whole document even while a section is being read`(
+    style: CitationStyle
+  ) {
     let withSection = DocumentActions.citation(
-      metadata(title: "HTTP Semantics"), section: "4.2", style: .bibtex)
+      .rfc(metadata(title: "HTTP Semantics")), section: "4.2", style: style)
     let without = DocumentActions.citation(
-      metadata(title: "HTTP Semantics"), section: nil, style: .bibtex)
+      .rfc(metadata(title: "HTTP Semantics")), section: nil, style: style)
     #expect(withSection == without)
   }
 
   @Test func `every other style keeps the section`() {
-    for style in CitationStyle.allCases where style != .bibtex {
+    for style in CitationStyle.allCases where style.citesSections {
       let withSection = DocumentActions.citation(
-        metadata(title: "HTTP Semantics"), section: "4.2", style: style)
+        .rfc(metadata(title: "HTTP Semantics")), section: "4.2", style: style)
       let without = DocumentActions.citation(
-        metadata(title: "HTTP Semantics"), section: nil, style: style)
+        .rfc(metadata(title: "HTTP Semantics")), section: nil, style: style)
       #expect(withSection != without, "\(style) dropped the section")
     }
   }
@@ -90,13 +94,22 @@ struct DocumentActionsTests {
     #expect(link.contains("section-4.2"))
   }
 
+  /// On the site Settings chose (#712).
+  @Test func `the section link is on the chosen site`() {
+    #expect(
+      DocumentActions.sectionLink(id: id, section: "4.2", site: .datatracker)
+        == "https://datatracker.ietf.org/doc/html/rfc9110#section-4.2")
+    #expect(
+      DocumentActions.sectionLink(id: id, section: "4.2", site: .app) == "rfc://9110#section-4.2")
+  }
+
   /// Read inside an appendix numbered like a section, the place being read is the
   /// appendix's, not section 1's: the reader passes the section's `place` (#429).
   @Test func `a numbered appendix is cited and linked as an appendix`() {
     let appendix = Section(
       anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
     let citation = DocumentActions.citation(
-      metadata(title: "HTTP Semantics"), section: appendix.place, style: .short)
+      .rfc(metadata(title: "HTTP Semantics")), section: appendix.place, style: .short)
     #expect(citation == "RFC 9110, Appendix 1")
     let link = DocumentActions.sectionLink(id: id, section: appendix.place)
     #expect(link == "https://www.rfc-editor.org/rfc/rfc9110#appendix-1")

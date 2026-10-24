@@ -12,6 +12,8 @@ public enum DocumentMenus {
   /// What an item of Cite or More does.
   public enum Action: Hashable, Sendable {
     case copyCitation(CitationStyle)
+    /// Edit ▸ Copy Citation (#712): in the style Settings chose.
+    case copyPreferredCitation
     case copySectionLink
     case toggleOriginalText
     /// Shows the document translated into the reader's language, or the original
@@ -191,22 +193,33 @@ public enum DocumentMenus {
 }
 
 extension DocumentMenus.Action {
-  /// What this does for `id`, read at `section`: nil for a citation without the
-  /// document's metadata, which there is nothing to cite from.
+  /// What this does for `id`, the document on screen, read at `section`, citing
+  /// `cited`, and copying as `settings` say (#712): nil for a citation without the
+  /// index's entry, which there is nothing to cite from. `cited` is what the tab
+  /// opened, a series as itself rather than the RFC shown for it (#656).
   public func effect(
-    for id: DocumentID, metadata: RFCMetadata?, section: String?
+    for id: DocumentID, citing cited: CitedDocument?, section: String?,
+    settings: ReaderSettings = ReaderSettings()
   ) -> DocumentMenus.Effect? {
-    switch self {
-    case .copyCitation(let style):
-      metadata.map {
-        .copy(DocumentActions.citation($0, section: section, style: style), .citation)
+    func citation(_ style: CitationStyle) -> DocumentMenus.Effect? {
+      cited.map {
+        .copy(
+          DocumentActions.citation(
+            $0, section: section, style: style, site: settings.linkSite),
+          .citation)
       }
-    case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section), .link)
-    case .toggleOriginalText: .toggleOriginalText
-    case .toggleTranslation: .toggleTranslation
-    case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
-    case .openErrata(let url), .openPrecedingDraft(let url): .open(url)
-    case .openDatatracker: .open(RFCEditorEndpoints.datatracker(id))
+    }
+    switch self {
+    case .copyCitation(let style): return citation(style)
+    case .copyPreferredCitation: return citation(settings.citationStyle)
+    case .copySectionLink:
+      return .copy(
+        DocumentActions.sectionLink(id: id, section: section, site: settings.linkSite), .link)
+    case .toggleOriginalText: return .toggleOriginalText
+    case .toggleTranslation: return .toggleTranslation
+    case .openInfoPage: return .open(RFCEditorEndpoints.infoPage(id))
+    case .openErrata(let url), .openPrecedingDraft(let url): return .open(url)
+    case .openDatatracker: return .open(RFCEditorEndpoints.datatracker(id))
     }
   }
 }

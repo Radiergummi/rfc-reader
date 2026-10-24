@@ -479,9 +479,15 @@ extension DocumentTextBuilder {
       appendHangingNumber(
         hangingNumber, of: section.anchor, copiedAs: numberPrefix, attributes: attributes)
     }
-    let lead = (hangingNumber == nil ? numberPrefix : "") + qualifierWords
-    if !lead.isEmpty {
-      output.append(inlineRuns([.text(lead)], base: attributes))
+    // The number inline is marked as what it copies as too, so a copy can leave
+    // it out (#712), as it can the hung one.
+    if hangingNumber == nil, !numberPrefix.isEmpty {
+      var prefix = attributes
+      prefix[.rfcCopiedAs] = numberPrefix
+      output.append(inlineRuns([.text(numberPrefix)], base: prefix))
+    }
+    if !qualifierWords.isEmpty {
+      output.append(inlineRuns([.text(qualifierWords)], base: attributes))
     }
     appendModel(inlineRuns(section.title, base: attributes))
     if let marked = errata.bySection[section.anchor], !marked.isEmpty {

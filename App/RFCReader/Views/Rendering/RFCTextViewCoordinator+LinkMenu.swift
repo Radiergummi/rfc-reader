@@ -20,7 +20,8 @@
     ) -> UIMenu? {
       guard let documentID else { return defaultMenu }
       let items = LinkMenu.items(
-        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography,
+        site: ReaderSettings(defaults: .standard).linkSite)
       guard
         let actions = LinkMenu.actions(
           for: items, opensNewWindows: environment?.library.opensNewWindows == true, opens: opens)
@@ -134,7 +135,8 @@
       }
       guard let documentID, let url = link(at: characterIndex) else { return menu }
       let items = LinkMenu.items(
-        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography)
+        for: url, from: documentID, in: environment?.library.index, bibliography: bibliography,
+        site: ReaderSettings(defaults: .standard).linkSite)
       var added: [NSMenuItem] = []
       if items.opensInNewTab {
         added.append(item("Open in New Tab", #selector(openInNewTab(_:)), url))

@@ -28,6 +28,7 @@ struct SettingsView: View {
         Form {
           GeneralSettings()
           Section("Library") { LibrarySettingsSection() }
+          Section("Sharing") { SharingSettings() }
         }
         .formStyle(.grouped)
       }
@@ -70,6 +71,7 @@ struct SettingsScreen: View {
         Section("Reading") { ReadingSettings() }
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
+        Section("Sharing") { SharingSettings() }
         Section("Notifications") { NotificationSettings() }
         Section("Library") { LibrarySettingsSection() }
         Section("Storage") { StorageSettings(library: library) }
@@ -163,6 +165,35 @@ private struct GeneralSettings: View {
   }
 }
 
+/// What a copy cites in, where a shared link points and what Copy copies (#712).
+private struct SharingSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Picker(selection: $settings.citationStyle) {
+      ForEach(CitationStyle.allCases) { style in
+        Text(verbatim: style.title()).tag(style)
+      }
+    } label: {
+      Text("Citation Style")
+      Text("For Copy Citation, and the line after a quote.")
+    }
+    Picker(selection: $settings.linkSite) {
+      ForEach(LinkSite.allCases) { site in
+        Text(verbatim: site.title()).tag(site)
+      }
+    } label: {
+      Text("Links Point To")
+      Text("For Share, Copy Link and citations.")
+    }
+    Picker("Copy Selection As", selection: $settings.copyFormat) {
+      ForEach(CopyFormat.allCases) { format in
+        Text(verbatim: format.title()).tag(format)
+      }
+    }
+  }
+}
+
 /// What a new tab's lists and searches start with (#713). A tab's View Options
 /// change its own from there, and a changed setting reaches the tabs opened after it.
 private struct LibrarySettingsSection: View {
@@ -200,9 +231,11 @@ private struct LibrarySettingsSection: View {
   }
 }
 
-/// Settings few readers change (#705, #713).
+/// Settings few readers change (#705, #713), and how a copy treats a heading's
+/// number (#712).
 private struct AdvancedSettings: View {
   let library: LibraryModel
+  @ReaderSettingsValue private var settings
   @AppStorage(LibraryPreferences.showsStatusBadgesKey) private var showsStatusBadges =
     LibraryPreferences.defaultShowsStatusBadges
 
@@ -220,6 +253,10 @@ private struct AdvancedSettings: View {
     Toggle(isOn: $showsStatusBadges) {
       Text("Show status badges in lists")
       Text("Otherwise lists are denser, and the status is still read by VoiceOver.")
+    }
+    Toggle(isOn: $settings.copiesSectionNumbers) {
+      Text("Copy section numbers")
+      Text("A copied heading keeps its number, as in “4.2. Overview”.")
     }
   }
 }

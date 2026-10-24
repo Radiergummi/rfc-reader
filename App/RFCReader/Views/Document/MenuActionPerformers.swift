@@ -6,13 +6,19 @@ import RFCReaderKit
 /// `DocumentMenus.Action.effect`, and this copies, opens or toggles (#600). The
 /// Mac's toolbar opens with `NSWorkspace`, iOS's with the environment's `openURL`.
 struct DocumentActionPerformer {
+  /// The document on screen.
   let id: DocumentID
-  let metadata: RFCMetadata?
+  /// What a citation is made from: the document the tab opened, a series as itself
+  /// (#656), as `LibraryModel.citedDocument` has it.
+  let cited: CitedDocument?
   let reader: ReaderState
   let open: (URL) -> Void
 
   func perform(_ action: DocumentMenus.Action) {
-    switch action.effect(for: id, metadata: metadata, section: reader.currentSection) {
+    let effect = action.effect(
+      for: id, citing: cited, section: reader.currentSection,
+      settings: ReaderSettings(defaults: .standard))
+    switch effect {
     case .copy(let text, let feedback): Clipboard.copy(text, announcing: feedback)
     case .open(let url): open(url)
     case .toggleOriginalText: reader.showOriginal.toggle()

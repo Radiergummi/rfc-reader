@@ -2578,12 +2578,32 @@
         }
       }
     },
+    "Quote with Citation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zitat mit Quellenangabe"
+          }
+        }
+      }
+    },
     "RFC Editor" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFC Editor"
+          }
+        }
+      }
+    },
+    "RFC Reader (rfc://)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC Reader (rfc://)"
           }
         }
       }
@@ -3250,6 +3270,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Technisch"
+          }
+        }
+      }
+    },
+    "Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
           }
         }
       }
@@ -4132,6 +4162,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "in Prüfung"
+          }
+        }
+      }
+    },
+    "xml2rfc Reference" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xml2rfc-Referenz"
           }
         }
       }
