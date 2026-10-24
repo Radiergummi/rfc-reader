@@ -277,10 +277,9 @@ extension DocumentTextBuilder {
     #if canImport(UIKit)
       // Said as its words on iOS, as its label is on macOS (#872): a `UITextView`
       // reads no `.rfcSpoken`, so the icon is pronounced as nothing, as an
-      // informative chip's is pronounced as its kind.
-      if style.emitsLinks {
-        iconAttributes[.accessibilitySpeechIPANotation] = AccessibleReading.silence
-      }
+      // informative chip's is pronounced as its kind. Only a build for the reader
+      // is given errata, so only a build that VoiceOver reads.
+      iconAttributes[.accessibilitySpeechIPANotation] = AccessibleReading.silence
     #endif
     result.append(
       chipRun(

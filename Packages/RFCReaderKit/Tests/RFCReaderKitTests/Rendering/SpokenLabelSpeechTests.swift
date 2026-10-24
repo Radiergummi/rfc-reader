@@ -59,14 +59,9 @@ struct SpokenLabelSpeechTests {
         ],
         source: .xml)
       let built = DocumentTextBuilder.build(document, style: ReadingStyle())
-      var caption: NSRange?
-      built.text.enumerateAttribute(
-        .rfcBacklinks, in: NSRange(location: 0, length: built.text.length)
-      ) { value, range, _ in
-        if value != nil { caption = range }
-      }
-      let range = try #require(caption)
-      let pronounced = pronounced(in: range, of: built.text)
+      let heading = try Fixtures.offset(of: "2. Two\n", in: built.text)
+      let caption = try #require(built.text.backlinkCaption(at: heading + "2. Two\n".utf16.count))
+      let pronounced = pronounced(in: caption.range, of: built.text)
       #expect(pronounced.map(\.text) == ["\u{FFFC}"])
       #expect(pronounced.map(\.pronunciation) == [AccessibleReading.silence])
     }
@@ -86,13 +81,9 @@ struct SpokenLabelSpeechTests {
       let built = DocumentTextBuilder.build(
         document, style: ReadingStyle(),
         errata: ErrataMarks(errata: [erratum], document: document, locale: .english))
-      var chip: NSRange?
-      built.text.enumerateAttribute(.link, in: NSRange(location: 0, length: built.text.length)) {
-        value, range, _ in
-        if let url = value as? URL, ReaderLinkScheme.errata(from: url) != nil { chip = range }
-      }
-      let range = try #require(chip)
-      let pronounced = pronounced(in: range, of: built.text)
+      let heading = try Fixtures.offset(of: "1. One", in: built.text)
+      let chip = try #require(built.text.errataChip(at: heading + "1. One ".utf16.count))
+      let pronounced = pronounced(in: chip.range, of: built.text)
       #expect(pronounced.map(\.text) == ["\u{FFFC}"])
       #expect(pronounced.map(\.pronunciation) == [AccessibleReading.silence])
     }
