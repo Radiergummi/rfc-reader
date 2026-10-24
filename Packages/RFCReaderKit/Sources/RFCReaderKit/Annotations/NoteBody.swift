@@ -220,14 +220,20 @@ extension NoteBody {
     while !readsBack(spans) {
       let runs = styledRuns(spans).sorted { $0.length < $1.length }
       guard !runs.isEmpty else { return spans }
-      // The one whose removal makes it read back, or else the shortest, and on.
+      // The one whose removal makes it read back, or else the shortest, and on. Only
+      // the shortest few are tried, each a parse: trying every run on every pass took
+      // a paragraph of many crossings tens of seconds, on the main actor.
       let removed =
-        runs.lazy.map { tidied(removing($0, from: spans)) }.first(where: readsBack)
+        runs.prefix(triedRuns).lazy.map { tidied(removing($0, from: spans)) }
+        .first(where: readsBack)
         ?? tidied(removing(runs[0], from: spans))
       spans = removed
     }
     return spans
   }
+
+  /// How many runs a pass of `spelled` tries taking off before it takes the shortest.
+  private static let triedRuns = 4
 
   /// Whether the parser reads `spans`' Markdown back as them, a mail address's link
   /// aside, which no escape keeps from being one.

@@ -148,9 +148,25 @@ public struct NotePlacement: Sendable, Equatable {
     self.init(statuses: statuses, markers: markers, relocations: relocations, repoints: repoints)
   }
 
+  /// Whether `notes` are placed as `others` are: the same notes, on the same
+  /// highlights and targets. A note's text, which changes as it is typed, places
+  /// nothing.
+  public static func placesAlike(
+    _ notes: [AnnotationSnapshot.NoteEntry], _ others: [AnnotationSnapshot.NoteEntry]
+  ) -> Bool {
+    notes.map(\.placementKey) == others.map(\.placementKey)
+  }
+
   /// The highlight a note is on now: the one it names, or the one it was put on.
   public func highlight(of note: AnnotationSnapshot.NoteEntry) -> UUID? {
     if case .onHighlight(let highlight)? = statuses[note.id] { return highlight }
     return note.highlight
+  }
+}
+
+extension AnnotationSnapshot.NoteEntry {
+  /// What placing a note reads of it: not its text.
+  fileprivate var placementKey: [AnyHashable] {
+    [id, highlight as AnyHashable, target as AnyHashable, relocated as AnyHashable]
   }
 }

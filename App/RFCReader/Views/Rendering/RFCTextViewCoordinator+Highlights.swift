@@ -14,13 +14,6 @@ import SwiftUI
 // (`FoldingDelegate`), to VoiceOver and to the Annotations tab, and makes and changes
 // highlights through the library.
 
-extension AnnotationSnapshot.NoteEntry {
-  /// What placing a note reads of it: not its text.
-  fileprivate var placementKey: [AnyHashable] {
-    [id, highlight as AnyHashable, target as AnyHashable, relocated as AnyHashable]
-  }
-}
-
 extension RFCTextViewCoordinator {
   /// The document's highlights and notes (#523), as the library has them now: placed
   /// again when they changed.
@@ -31,7 +24,7 @@ extension RFCTextViewCoordinator {
     // Called on every update of the representable: most change nothing.
     guard entries != highlights || notes != self.notes else { return }
     // A note's text changes as it is typed; where it goes does not.
-    let moved = entries != highlights || notes.map(\.placementKey) != self.notes.map(\.placementKey)
+    let moved = entries != highlights || !NotePlacement.placesAlike(notes, self.notes)
     highlights = entries
     self.notes = notes
     // A note's text alone changed: its marker's title.
@@ -55,7 +48,7 @@ extension RFCTextViewCoordinator {
       let (placement, notePlacement) = await Self.place(entries, notes: notes, in: built)
       // A later build or set of annotations has started its own.
       guard !Task.isCancelled, self.built?.text === built.text, self.highlights == entries,
-        self.notes.map(\.placementKey) == notes.map(\.placementKey)
+        NotePlacement.placesAlike(self.notes, notes)
       else { return }
       highlightsTask = nil
       draw(placement, notes: placement.isPlaced ? notePlacement : nil)

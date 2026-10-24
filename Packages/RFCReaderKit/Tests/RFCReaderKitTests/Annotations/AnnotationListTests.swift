@@ -94,6 +94,24 @@ struct AnnotationListTests {
     #expect(rows[3].placement == .detached)
   }
 
+  @Test func `a relocated note's row goes to where relocation found it`() {
+    let quote = Quote(exact: "moved", prefix: "", suffix: "")
+    let made = note(
+      "Moved",
+      target: .range(
+        start: Position(anchor: "p-1", offset: 0), end: Position(anchor: "p-1", offset: 5),
+        quote: quote),
+      age: 1)
+    let found = Target.range(
+      start: Position(anchor: "p-7", offset: 2), end: Position(anchor: "p-7", offset: 7),
+      quote: quote)
+    let notes = NotePlacement(
+      statuses: [made.id: .placed(40..<45, section: "section-2")], markers: [],
+      relocations: [made.id: found], repoints: [:])
+    let rows = AnnotationList.rows([], notes: [made], statuses: [:], noteStatuses: notes)
+    #expect(rows.map(\.placement) == [.placed(anchor: "p-7", section: "section-2")])
+  }
+
   @Test func `the rotor says a highlight's color`() {
     let marks = HighlightMarks([
       HighlightMark(range: NSRange(location: 4, length: 3), color: .green, highlight: UUID())

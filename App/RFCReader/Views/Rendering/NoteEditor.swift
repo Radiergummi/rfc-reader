@@ -20,6 +20,8 @@ import SwiftUI
 final class NoteEditorModel {
   /// The text it opened with.
   @ObservationIgnored let initialText: NSAttributedString
+  /// The Markdown it opened with.
+  @ObservationIgnored let initialBody: String
   @ObservationIgnored let font: PlatformFont
 
   /// The link field ⌘K opens, and what is typed in it.
@@ -53,6 +55,7 @@ final class NoteEditorModel {
     text.addAttribute(
       .foregroundColor, value: RFCColors.label, range: NSRange(location: 0, length: text.length))
     initialText = text
+    initialBody = body
     self.save = save
     self.deleteNote = delete
     self.openLink = openLink
@@ -64,13 +67,18 @@ final class NoteEditorModel {
     pendingSave?.cancel()
     pendingSave = Task { [weak self] in
       guard await Debounce.outlasted(Self.saveDelay) else { return }
-      self?.saveNow()
+      self?.saveNow(closing: false)
     }
   }
 
-  private func saveNow() {
+  /// Saves what is typed. Emptied, it is deleted only as the editor closes: an
+  /// empty pause mid-edit, as between a cut and a paste, would make it again later,
+  /// as a new note.
+  private func saveNow(closing: Bool) {
     guard !isClosed, let storage = textView?.noteStorage else { return }
-    let markdown = NoteText.body(of: storage).markdown
+    let body = NoteText.body(of: storage)
+    guard closing || !body.isEmpty else { return }
+    let markdown = body.markdown
     saved = markdown
     save(markdown)
   }
@@ -78,7 +86,7 @@ final class NoteEditorModel {
   /// The editor closes: what is typed is saved, and a note left empty is deleted.
   func close() {
     pendingSave?.cancel()
-    saveNow()
+    saveNow(closing: true)
     isClosed = true
   }
 
@@ -335,6 +343,12 @@ struct NoteEditor: View {
       model?.beginLink()
     }
 
+    /// The rich text a paste reduces to the note's scope, as the Mac's takes RTF,
+    /// RTFD and HTML.
+    private static let richTypes: [(String, NSAttributedString.DocumentType)] = [
+      ("public.rtf", .rtf), ("com.apple.flat-rtfd", .rtfd), ("public.html", .html),
+    ]
+
     override func paste(_ sender: Any?) {
       let board = UIPasteboard.general
       guard let font = model?.font else { return super.paste(sender) }
@@ -342,9 +356,11 @@ struct NoteEditor: View {
         var attributes = typingAttributes
         attributes[.link] = url
         insertNoteText(NSAttributedString(string: string, attributes: attributes))
-      } else if let data = board.data(forPasteboardType: "public.rtf")
-        ?? board.data(forPasteboardType: "public.html"),
-        let rich = try? NSAttributedString(data: data, options: [:], documentAttributes: nil)
+      } else if let (data, type) = Self.richTypes.lazy.compactMap({ name, type in
+        board.data(forPasteboardType: name).map { ($0, type) }
+      }).first,
+        let rich = try? NSAttributedString(
+          data: data, options: [.documentType: type], documentAttributes: nil)
       {
         let reduced = NSMutableAttributedString(
           attributedString: NoteText.reduced(rich, font: font))

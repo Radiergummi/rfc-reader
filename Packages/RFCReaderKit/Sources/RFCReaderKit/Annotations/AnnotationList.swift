@@ -100,8 +100,9 @@ public enum AnnotationList {
     for note in ownNotes {
       switch noteStatuses?.statuses[note.id] {
       case .placed(let range, let section)?:
+        // Where relocation found it, which the store has not been told yet.
         let anchor: String =
-          switch note.current {
+          switch noteStatuses?.relocations[note.id] ?? note.current {
           case .range(let start, _, _)?: start.anchor
           case .section(let anchor)?: anchor
           case nil: section ?? ""
