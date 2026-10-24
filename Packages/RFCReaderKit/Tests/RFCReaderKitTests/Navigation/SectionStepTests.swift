@@ -20,9 +20,9 @@ struct SectionStepTests {
     return (entry.offset + end) / 2
   }
 
-  @Test func `next and previous go to the headings beside the line's section, at any depth`()
-    throws
-  {
+  /// From inside a section Previous goes back to its own heading, the nearest above
+  /// the line, as `[[` does in vim.
+  @Test func `next goes past the line's section and previous to the heading above it`() throws {
     let index = try Self.rfc8999().foldingIndex
     let entries = index.entries
     for position in entries.indices.dropFirst().dropLast() {
@@ -31,7 +31,7 @@ struct SectionStepTests {
         Folding().section(.next, fromLine: line, in: index) == entries[position + 1].anchor,
         "from \(entries[position].anchor)")
       #expect(
-        Folding().section(.previous, fromLine: line, in: index) == entries[position - 1].anchor,
+        Folding().section(.previous, fromLine: line, in: index) == entries[position].anchor,
         "from \(entries[position].anchor)")
     }
   }
@@ -61,9 +61,7 @@ struct SectionStepTests {
     let index = try Self.rfc8999().foldingIndex
     let entries = index.entries
     #expect(Folding().section(.next, fromLine: index.length, in: index) == nil)
-    #expect(
-      Folding().section(.previous, fromLine: index.length, in: index)
-        == entries[entries.count - 2].anchor)
+    #expect(Folding().section(.previous, fromLine: index.length, in: index) == entries.last?.anchor)
   }
 
   /// RFC 8999's Appendix A goes by an anchor of its own, `bad-assumptions`.
@@ -72,8 +70,7 @@ struct SectionStepTests {
     let index = built.foldingIndex
     let appendix = try #require(index.entries.firstIndex { $0.anchor == "bad-assumptions" })
     let line = Self.line(inside: appendix, of: index)
-    #expect(
-      Folding().section(.previous, fromLine: line, in: index) == index.entries[appendix - 1].anchor)
+    #expect(Folding().section(.previous, fromLine: line, in: index) == "bad-assumptions")
     #expect(
       Folding().section(.next, fromLine: line, in: index)
         == index.entries.dropFirst(appendix + 1).first?.anchor)

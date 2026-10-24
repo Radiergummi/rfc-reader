@@ -112,6 +112,24 @@ struct LinkFocusTests {
     #expect(shown.count < Self.links(in: built.text, hidden: HiddenText()).count)
   }
 
+  /// A heading's hung number (#433) links to its own heading: going there from the
+  /// heading is no stop to make.
+  @Test func `a heading's hung number is passed over`() throws {
+    var style = ReadingStyle()
+    style.sectionNumberHang = 30
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+    let text = built.text
+    var numbers = 0
+    text.enumerateAttribute(.rfcSectionNumber, in: NSRange(location: 0, length: text.length)) {
+      value, _, _ in
+      if value != nil { numbers += 1 }
+    }
+    #expect(numbers > 0)
+    for link in Self.links(in: text, hidden: HiddenText()) {
+      #expect(text.attribute(.rfcSectionNumber, at: link.location, effectiveRange: nil) == nil)
+    }
+  }
+
   /// Every link Tab stops at from the top of the text, in order.
   private static func links(in text: NSAttributedString, hidden: HiddenText) -> [NSRange] {
     let top = NSRange(location: 0, length: 0)

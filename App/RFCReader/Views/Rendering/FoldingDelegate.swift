@@ -79,6 +79,11 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
     state.withLock { $0.focusedLink = link }
   }
 
+  /// The link the keyboard's focus is on.
+  var focusedLink: NSRange? {
+    state.withLock { $0.focusedLink }
+  }
+
   /// The focused link, where it meets the document range `range`.
   func focusedLink(meeting range: NSRange) -> NSRange? {
     state.withLock { state in

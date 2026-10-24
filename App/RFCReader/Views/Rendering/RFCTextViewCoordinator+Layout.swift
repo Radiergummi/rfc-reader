@@ -37,7 +37,6 @@ extension RFCTextViewCoordinator {
     foldingDelegate.fold(built.foldingIndex, by: folding, bands: RequirementBands())
     // The marks are ranges of the build being replaced, and so is the focused link.
     forgetHighlights()
-    focusedLink = nil
     foldingDelegate.focus(link: nil)
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while

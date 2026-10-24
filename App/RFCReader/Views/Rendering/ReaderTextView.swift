@@ -86,14 +86,29 @@ import RFCReaderKit
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
       willHandleKey()
-      if presses.count == 1, let key = presses.first?.key,
+      if presses.count == 1, let press = presses.first, let key = press.key,
         let readerKey = ReaderKeys.Key(
           keyCode: key.keyCode, characters: key.characters, modifiers: key.modifierFlags),
         handleKey(readerKey)
       {
+        handledPresses.insert(ObjectIdentifier(press))
         return
       }
       super.pressesBegan(presses, with: event)
+    }
+
+    /// The presses `handleKey` took, whose end UIKit is not to see either: a press
+    /// whose begin it never saw (UIKit's own rule for overriding these).
+    private var handledPresses: Set<ObjectIdentifier> = []
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesEnded(unhandled, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesCancelled(unhandled, with: event) }
     }
 
     /// The quote for a range of the text, from the coordinator (#186).

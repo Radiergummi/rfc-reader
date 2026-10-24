@@ -220,7 +220,8 @@ final class RFCTextViewCoordinator: NSObject {
   /// The reader's keys (#711), holding the first key of a vim pair.
   var keys = ReaderKeys()
   /// The link the keyboard's focus is on (#711), which Return follows; nil for none.
-  var focusedLink: NSRange?
+  /// The ring's own, so the two cannot disagree.
+  var focusedLink: NSRange? { foldingDelegate.focusedLink }
   #if !canImport(UIKit)
     /// A click in a highlight, waiting out the double-click interval before its
     /// popover opens, so it never opens on the way to a double-click.

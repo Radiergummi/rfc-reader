@@ -192,14 +192,15 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// Where Next or Previous Section takes the reader whose line is at `line`, outside
-  /// Focus, which steps its focus instead (#711): the heading after or before the
-  /// section the line is in, at any depth, and from above the text, the header's
-  /// place, where `line` is nil, the first; in the outline, the row after or before it among those it shows. Nil in
-  /// Focus, and with nowhere to go.
+  /// Focus, which steps its focus instead (#711): the heading after the section the
+  /// line is in, or the nearest heading above the line, at any depth, which inside a
+  /// section is its own, as vim's `[[` goes; from above the text, the header's place,
+  /// where `line` is nil, Next goes to the first. In the outline, among the rows it
+  /// shows. Nil in Focus, and with nowhere to go.
   ///
-  /// The line's section is the last whose heading's paragraph starts at or before it,
-  /// so that from a heading a jump has just put on the line, Next goes on to the one
-  /// after it.
+  /// A heading's paragraph starting at the line counts as the line's section, so that
+  /// from a heading a jump has just put on the line, Next goes on to the one after it
+  /// and Previous to the one before.
   public func section(_ step: FocusStep, fromLine line: Int?, in index: FoldingIndex) -> String? {
     guard mode != .focus else { return nil }
     let rows =
@@ -212,8 +213,10 @@ public struct Folding: Sendable, Equatable {
       let next = current.map { $0 + 1 } ?? 0
       return next < rows.count ? rows[next].anchor : nil
     case .previous:
-      guard let current, current > 0 else { return nil }
-      return rows[current - 1].anchor
+      guard let line, let above = rows.lastIndex(where: { $0.paragraph < line }) else {
+        return nil
+      }
+      return rows[above].anchor
     }
   }
 

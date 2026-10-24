@@ -19,6 +19,13 @@ extension RFCTextViewCoordinator {
   func handleKey(_ key: ReaderKeys.Key) -> Bool {
     // A preview's clicks commit it, and its keys are nobody's.
     guard commitsOnClick == nil else { return false }
+    // A link scrolled away from, or folded away, has lost the focus: Space pages
+    // again, and Tab starts from what is on screen.
+    if let link = focusedLink,
+      foldingDelegate.hidden.contains(link.location) || visibleRange.intersection(link) == nil
+    {
+      focus(link: nil)
+    }
     let outcome = keys.press(
       key, at: ProcessInfo.processInfo.systemUptime,
       options: ReaderSettings(defaults: .standard).keys, focusesLink: focusedLink != nil)
@@ -40,7 +47,7 @@ extension RFCTextViewCoordinator {
       engine.scroll(toContainerY: textView.viewportTop + distance)
       reportVisibleAnchor()
     case .top:
-      textView.scroll(toY: 0)
+      engine.jumpToTop()
       reportVisibleAnchor()
     case .end:
       // As ⌘↓ does: through the engine's reveal, which lays out the way there.
@@ -57,8 +64,10 @@ extension RFCTextViewCoordinator {
       focus(link: nil)
       followLink(at: link.location)
     case .previewLink:
-      guard let link = focusedLink else { return false }
-      previewLink(at: link.location)
+      // A link with nothing to preview, a web page's, leaves Space its page.
+      guard let link = focusedLink, previewLink(at: link.location) else {
+        return perform(.scroll(.pageDown))
+      }
     case .leaveLink:
       focus(link: nil)
     }
@@ -90,13 +99,18 @@ extension RFCTextViewCoordinator {
     return line.typographicBounds.height
   }
 
-  /// The characters the viewport shows, where the focus starts when no link has it.
+  /// The characters on screen, from the layout fragment at the top of the visible
+  /// rect to the one at its bottom: where the focus starts when no link has it. Not
+  /// TextKit's viewport range, which reaches past both edges.
   private var visibleRange: NSRange {
-    guard let layout = textView?.textLayoutManager,
-      let viewport = layout.textViewportLayoutController.viewportRange
+    guard let textView, let layout = textView.textLayoutManager,
+      let top = layout.textLayoutFragment(for: CGPoint(x: 0, y: textView.viewportTop)),
+      let bottom = layout.textLayoutFragment(
+        for: CGPoint(x: 0, y: textView.viewportTop + textView.viewportHeight))
+        ?? layout.textLayoutFragment(for: layout.documentRange.endLocation)
     else { return NSRange(location: 0, length: 0) }
-    let start = layout.offset(of: viewport.location)
-    let end = layout.offset(of: viewport.endLocation)
+    let start = layout.offset(of: top.rangeInElement.location)
+    let end = layout.offset(of: bottom.rangeInElement.endLocation)
     return NSRange(location: max(0, start), length: max(0, end - start))
   }
 
@@ -118,7 +132,6 @@ extension RFCTextViewCoordinator {
   /// Rings `link`, or nothing, in place of the link ringed before.
   func focus(link: NSRange?) {
     guard link != focusedLink else { return }
-    focusedLink = link
     foldingDelegate.focus(link: link)
     // Drawn again, not laid out again: the ring changes no line.
     engine.redraw()
@@ -145,15 +158,21 @@ extension RFCTextViewCoordinator {
     /// The reference's card in a popover beside it, as a backlink caption's list is;
     /// a backlink caption and an errata chip show their lists, which is what they
     /// have to preview.
-    private func previewLink(at offset: Int) {
-      if backlinkCaption(at: offset) != nil { return showBacklinks(at: offset) }
-      if errataChip(at: offset) != nil { return showErrata(at: offset) }
+    private func previewLink(at offset: Int) -> Bool {
+      if backlinkCaption(at: offset) != nil {
+        showBacklinks(at: offset)
+        return true
+      }
+      if errataChip(at: offset) != nil {
+        showErrata(at: offset)
+        return true
+      }
       guard let textView, let environment, var presenter = textView.window?.rootViewController,
         let (box, range) = reference(at: offset), let preview = preview(for: box.reference),
         let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
         let end = textView.position(from: start, offset: range.length),
         let textRange = textView.textRange(from: start, to: end)
-      else { return }
+      else { return false }
       while let presented = presenter.presentedViewController { presenter = presented }
       let host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
       host.modalPresentationStyle = .popover
@@ -163,6 +182,7 @@ extension RFCTextViewCoordinator {
       host.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
       host.popoverPresentationController?.delegate = self
       presenter.present(host, animated: true)
+      return true
     }
   #else
     private func find(_ command: ReaderKeyCommand) {
@@ -186,16 +206,23 @@ extension RFCTextViewCoordinator {
 
     /// What the link menu's Preview shows: a reference's card or the document it
     /// names; a backlink caption and an errata chip show their lists.
-    private func previewLink(at offset: Int) {
-      if backlinkCaption(at: offset) != nil { return showBacklinks(at: offset) }
-      if errataChip(at: offset) != nil { return showErrata(at: offset) }
-      guard let forceClick = forceClick(at: offset) else { return }
+    private func previewLink(at offset: Int) -> Bool {
+      if backlinkCaption(at: offset) != nil {
+        showBacklinks(at: offset)
+        return true
+      }
+      if errataChip(at: offset) != nil {
+        showErrata(at: offset)
+        return true
+      }
+      guard let forceClick = forceClick(at: offset) else { return false }
       // A card stays, as the menu's does: no pointer is on the reference to leave it.
       if case .forceClickCard(let target) = forceClick {
         hover.send(.cardChosen(target))
       } else {
         hover.send(forceClick)
       }
+      return true
     }
   #endif
 }

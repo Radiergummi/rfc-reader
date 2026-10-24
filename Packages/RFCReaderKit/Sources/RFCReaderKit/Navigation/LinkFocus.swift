@@ -13,7 +13,8 @@ public enum LinkFocus {
   /// The link after `focused`, or before it, in `text`; with none focused, the first
   /// link on `screen`, or the last, so that the focus starts where the reader is. A
   /// link is a whole `.link` run, one the screen's edge cuts included, and one that
-  /// starts in text `hidden` folds is passed over. Nil with no link that way.
+  /// starts in text `hidden` folds is passed over, as is a heading's hung number
+  /// (#433), which links to the heading it hangs beside. Nil with no link that way.
   public static func link(
     _ step: Folding.FocusStep, from focused: NSRange?, on screen: NSRange,
     in text: NSAttributedString, hidden: HiddenText
@@ -31,7 +32,9 @@ public enum LinkFocus {
     text.enumerateAttribute(
       .link, in: searched, options: step == .previous ? .reverse : []
     ) { value, run, stop in
-      guard value != nil, !hidden.contains(run.location) else { return }
+      guard value != nil, !hidden.contains(run.location),
+        text.attribute(.rfcSectionNumber, at: run.location, effectiveRange: nil) == nil
+      else { return }
       found = run
       stop.pointee = true
     }
