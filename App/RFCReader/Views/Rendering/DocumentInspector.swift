@@ -581,6 +581,11 @@ struct ReferenceRow: View {
     /// does not open the RFC as well (`ForceClickReader`).
     @State private var isForceClick = false
     @State private var isPreviewing = false
+  #else
+    /// Handed to the preview, which UIKit hosts outside this environment, as the
+    /// prose's is: a lookup in it would trap.
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
   #endif
 
   var body: some View {
@@ -634,6 +639,8 @@ struct ReferenceRow: View {
               // background of its own, the Mac's popover supplying one.
               documentPreview(library: menu.library) {}
                 .background(Color(uiColor: .systemBackground))
+                .readerEnvironment(
+                  ReaderEnvironment(library: menu.library, navigation: navigation, reader: reader))
             }
           #endif
         } else {
