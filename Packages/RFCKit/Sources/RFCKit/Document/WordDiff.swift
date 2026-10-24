@@ -25,14 +25,7 @@ public enum WordDiff {
     let oldTokens = tokens(of: old)
     let newTokens = tokens(of: new)
     let difference = newTokens.map(\.key).difference(from: oldTokens.map(\.key))
-    var removed: Set<Int> = []
-    var inserted: Set<Int> = []
-    for change in difference {
-      switch change {
-      case .remove(let offset, _, _): removed.insert(offset)
-      case .insert(let offset, _, _): inserted.insert(offset)
-      }
-    }
+    let (removed, inserted) = difference.changedOffsets
     var runs: [Run] = []
     func add(_ run: Run) {
       switch (runs.last, run) {
@@ -135,5 +128,20 @@ public enum WordDiff {
     }
     if !current.isEmpty { tokens.append(Token(text: current)) }
     return tokens
+  }
+}
+
+extension CollectionDifference {
+  /// The offsets removed from the old collection, and inserted into the new one.
+  var changedOffsets: (removed: Set<Int>, inserted: Set<Int>) {
+    var removed: Set<Int> = []
+    var inserted: Set<Int> = []
+    for change in self {
+      switch change {
+      case .remove(let offset, _, _): removed.insert(offset)
+      case .insert(let offset, _, _): inserted.insert(offset)
+      }
+    }
+    return (removed, inserted)
   }
 }

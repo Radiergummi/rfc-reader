@@ -52,6 +52,18 @@ extension DocumentTextBuilder {
     asOlder { marking(.deleted) { appendBlocks(blocks, indent: 0) } }
   }
 
+  /// Takes the links to places in the document out of `range`, which is the older
+  /// revision's: they name its places, which the newer one, whose anchors are the
+  /// index, may number otherwise, as a text draft's section anchors are numbers.
+  private func unlinkPlaces(in range: NSRange) {
+    output.enumerateAttribute(.link, in: range) { value, run, _ in
+      guard let value, let url = ReaderLinkScheme.url(fromLink: value),
+        ReaderLinkScheme.anchor(from: url) != nil
+      else { return }
+      output.removeAttribute(.link, range: run)
+    }
+  }
+
   /// Where the older revision's ordinals start, past any the newer one's reach: a
   /// choice made in a struck figure's menu is its own, not the newer figure's.
   static let olderOrdinalBase = 1 << 30
@@ -181,6 +193,7 @@ extension DocumentTextBuilder {
         [.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: color], range: range)
     case .deleted:
       color = RFCColors.secondaryLabel
+      unlinkPlaces(in: range)
       output.addAttributes(
         [
           .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: color,

@@ -133,6 +133,45 @@ struct BuilderRedlineTests {
         < Fixtures.offset(of: "Two vendors", in: built.text))
   }
 
+  /// Its text is not the newer document's alone, so it places no highlight and
+  /// makes none (#522), as a translation does: a struck block's words, or a
+  /// reworded paragraph's, would map to the wrong place in the model text.
+  @Test func `a redline maps nothing to the model text`() throws {
+    let built = redline(
+      from: [section("intro", [paragraph("A client MAY retry."), paragraph(unchanged)])],
+      to: [section("intro", [paragraph(unchanged)])])
+    #expect(built.positions.runs.isEmpty)
+    let offset = try Fixtures.offset(of: "example", in: built.text)
+    #expect(built.positions.modelRange(forStorage: NSRange(location: offset, length: 7)) == nil)
+  }
+
+  /// A struck block's references to its own document name the older revision's
+  /// places, which the newer one may number otherwise: they are not links.
+  @Test func `a removed block's reference within its document is no link`() throws {
+    let reference = Block.paragraph(
+      Paragraph([
+        .text("Retries are bounded, see "),
+        .crossReference(CrossReference(target: .anchor("intro"), text: "the overview")),
+        .text("."),
+      ]))
+    let built = redline(
+      from: [section("intro", [paragraph(unchanged), reference])],
+      to: [section("intro", [paragraph(unchanged)])])
+    #expect(try attribute(.strikethroughStyle, at: "the overview", in: built) != nil)
+    #expect(try attribute(.link, at: "the overview", in: built) == nil)
+  }
+
+  /// An abstract the newer revision dropped is shown struck through, under the
+  /// abstract's heading.
+  @Test func `an abstract removed is struck through`() throws {
+    var older = document([section("intro", [paragraph(unchanged)])])
+    older.header.abstract = [paragraph("A summary the newer revision dropped.")]
+    let newer = document([section("intro", [paragraph(unchanged)])])
+    let built = DocumentTextBuilder.build(
+      newer, redline: RevisionDiff(from: older, to: newer), style: ReadingStyle())
+    #expect(try attribute(.strikethroughStyle, at: "summary", in: built) != nil)
+  }
+
   /// The redline is the reader's one text storage, held to its rules.
   @Test func `nothing in a redline becomes an attachment`() {
     let figure = Block.preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+"))
