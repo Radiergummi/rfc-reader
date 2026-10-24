@@ -171,22 +171,41 @@ public actor DraftStore {
   // MARK: - Storage (#358)
 
   /// The revisions kept, and what they and Datatracker's descriptions take on the
-  /// disk, which Settings' Storage tab counts with the reading cache.
-  public func storageUsage() -> StorageUsage {
+  /// disk, which Settings' Storage tab counts with the reading cache; and what of it
+  /// Clear Cache would remove, all but what `clear(sparing:)` spares of `open`.
+  public func storageUsage(sparing open: Set<DraftID>) -> (
+    cache: StorageUsage, clearable: StorageUsage
+  ) {
     let files = keptFiles()
+    return (Self.usage(of: files), Self.usage(of: files.filter { !Self.isSpared($0, open: open) }))
+  }
+
+  /// Removes every revision and description kept, as Settings' Clear Cache does,
+  /// since each can be fetched again, but for the drafts `open`, as an open RFC is
+  /// spared (`CacheEviction.spared`): the revision each names, and what Datatracker
+  /// said of it.
+  public func clear(sparing open: Set<DraftID>) {
+    for file in keptFiles() where !Self.isSpared(file, open: open) {
+      try? FileManager.default.removeItem(at: file)
+    }
+    parsed.removeAll { !open.contains($0) }
+  }
+
+  private static func usage(of files: [URL]) -> StorageUsage {
     let bytes = files.reduce(0) { total, file in
       total + ((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
     }
     return StorageUsage(documents: files.filter { $0.pathExtension == "txt" }.count, bytes: bytes)
   }
 
-  /// Removes every revision and description kept, as Settings' Clear Cache does:
-  /// each can be fetched again.
-  public func clear() {
-    for file in keptFiles() {
-      try? FileManager.default.removeItem(at: file)
+  /// Whether `file` is an `open` draft's revision or description.
+  private static func isSpared(_ file: URL, open: Set<DraftID>) -> Bool {
+    let stem = file.deletingPathExtension().lastPathComponent
+    return switch file.pathExtension {
+    case "txt": open.contains { $0.description == stem }
+    case "json": open.contains { $0.name == stem }
+    default: false
     }
-    parsed.removeAll { _ in true }
   }
 
   private func keptFiles() -> [URL] {

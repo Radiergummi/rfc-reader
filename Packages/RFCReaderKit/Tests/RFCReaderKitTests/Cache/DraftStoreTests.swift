@@ -185,17 +185,43 @@ struct DraftStoreTests {
   @Test func `the revisions kept are counted, and cleared`() async throws {
     let network = Network(newest: "04")
     let store = DraftStore(directory: directory())
-    #expect(await store.storageUsage() == StorageUsage(documents: 0, bytes: 0))
+    #expect(await store.storageUsage(sparing: []).cache == StorageUsage(documents: 0, bytes: 0))
     _ = try await store.document(Self.name, client: network)
     _ = try await store.document(Self.revision("03"), client: network)
-    let usage = await store.storageUsage()
-    #expect(usage.documents == 2)
-    #expect(usage.bytes > 0)
+    let usage = await store.storageUsage(sparing: [])
+    #expect(usage.cache.documents == 2)
+    #expect(usage.cache.bytes > 0)
+    #expect(usage.clearable == usage.cache)
 
-    await store.clear()
-    #expect(await store.storageUsage() == StorageUsage(documents: 0, bytes: 0))
+    await store.clear(sparing: [])
+    #expect(await store.storageUsage(sparing: []).cache == StorageUsage(documents: 0, bytes: 0))
     _ = try await store.document(Self.revision("03"), client: network)
     #expect(
       network.askedRevisions == [Self.revision("04"), Self.revision("03"), Self.revision("03")])
+  }
+
+  /// An open draft stays, as an open RFC does (`CacheEviction.spared`): its revision,
+  /// and what Datatracker said of it, which counts as in use rather than clearable.
+  @Test func `the revision open is spared by Clear Cache, and counted as in use`() async throws {
+    let network = Network(newest: "04")
+    let folder = directory()
+    let store = DraftStore(directory: folder)
+    _ = try await store.document(Self.name, client: network)
+    _ = try await store.document(Self.revision("03"), client: network)
+    let open: Set = [Self.revision("04")]
+
+    let usage = await store.storageUsage(sparing: open)
+    #expect(usage.cache.documents == 2)
+    #expect(usage.clearable.documents == 1)
+    #expect(usage.clearable.bytes < usage.cache.bytes)
+
+    await store.clear(sparing: open)
+    #expect(await store.storageUsage(sparing: []).cache.documents == 1)
+    // Offline, from the disk alone: the revision open, and which is the newest.
+    network.goDown()
+    _ = try await DraftStore(directory: folder).document(Self.name, client: network)
+    await #expect(throws: (any Error).self) {
+      try await DraftStore(directory: folder).document(Self.revision("03"), client: network)
+    }
   }
 }

@@ -135,7 +135,7 @@ struct RFCListView: View {
           showsYear: showsYear, filter: shown.filter, offline: offline
         ) { library.downloadNow(row.id) }
       }
-      .tag(row.id)
+      .tag(ReadableDocument.rfc(row.id))
       // A combined element with no trait has the role AXUnknown on macOS, which
       // says nothing of what it is (#300). Here, where the row selects rather
       // than presses: elsewhere `RFCRow` is a button's label, and is a button.
@@ -446,7 +446,7 @@ struct RFCListView: View {
   /// A linear scan, but only on the three changes above rather than per body pass,
   /// and it compares two `Int`s per row.
   private func selectedRow() -> Int? {
-    guard let selection = navigation.listSelection else { return nil }
+    guard let selection = navigation.listSelection?.rfc else { return nil }
     return rows.firstIndex { $0.id == selection }
   }
 }
