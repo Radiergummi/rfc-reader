@@ -129,6 +129,54 @@ final class HandChecks: XCTestCase {
     screenshot("5 still on")
   }
 
+  // MARK: - Find (#943)
+
+  /// More ▸ Find in Document is offered over a text and nowhere else: not over the
+  /// page of a scan or of a text that only points to its original, though the
+  /// pointer's Original Text is a text again.
+  func testFindOnlyOverAText() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    XCTAssertTrue(citation("RFC 2119").waitForExistence(timeout: 30))
+    XCTAssertTrue(findInDocument().isEnabled, "no Find over the rendered document")
+    screenshot("1 rendered document")
+    closeMenu()
+
+    open("rfc://8")
+    XCTAssertTrue(app.staticTexts["Published as PDF"].waitForExistence(timeout: 30))
+    XCTAssertFalse(findInDocument().isEnabled, "Find over a scan's page")
+    screenshot("2 scan")
+    closeMenu()
+
+    open("rfc://1119")
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Published as"))
+        .firstMatch.waitForExistence(timeout: 30))
+    XCTAssertFalse(findInDocument().isEnabled, "Find over a pointer's page")
+    screenshot("3 pointer")
+
+    app.buttons["Original Text"].tap()
+    XCTAssertTrue(app.textViews.firstMatch.waitForExistence(timeout: 30))
+    let find = findInDocument()
+    XCTAssertTrue(find.isEnabled, "no Find over the pointer's Original Text")
+    screenshot("4 pointer's original text")
+    find.tap()
+    screenshot("5 find over the original text")
+  }
+
+  /// Opens More and returns its Find in Document.
+  private func findInDocument() -> XCUIElement {
+    app.buttons["More"].firstMatch.tap()
+    let item = app.buttons["Find in Document"]
+    XCTAssertTrue(item.waitForExistence(timeout: 5), "no Find in Document in More")
+    return item
+  }
+
+  /// Dismisses an open menu with a tap outside it, at the top of the screen.
+  private func closeMenu() {
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+  }
+
   // MARK: - Steps
 
   /// Launches the app, waits for its index, and opens `url` in it.
