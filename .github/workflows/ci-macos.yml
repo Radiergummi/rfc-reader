@@ -148,6 +148,52 @@ jobs:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
 
+  # The app in Release, as the release workflow archives it, so that an
+  # optimizer-only crash or miscompile shows on the push that causes it rather than
+  # at `make install` or on a tag (#992). A job of its own rather than a step in the
+  # one above, whose builds and tests it would lengthen by a whole optimized build,
+  # and with a cache of its own, since a Release build hits no Debug entry. macOS
+  # only, the platform that is released.
+  app-build-release:
+    name: App build (macOS, Release)
+    if: ${{ !github.event.pull_request.draft }}
+    # The Xcode release.yml archives with.
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/compilation-cache.xcconfig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+      # The pinned release, as in the job above.
+      - name: Install XcodeGen
+        run: make xcodegen-install
+      # A month to a store, as in the job above.
+      - name: Name the cache's month
+        id: cache-month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - name: Restore the compilation cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-release-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
+          restore-keys: xcode-release-compilation-cache-${{ steps.cache-month.outputs.month }}-
+      # A Release build bundles the RFC index and the pinned indexes pack, and fails
+      # without them (project.yml).
+      - name: Fetch what a Release build bundles
+        run: make bundled-index indexes-pack
+      - name: Build for macOS in Release
+        run: make build-app CONFIGURATION=Release CODE_SIGNING_ALLOWED=NO
+      - name: Save the compilation cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-release-compilation-cache-${{ steps.cache-month.outputs.month }}-${{ github.sha }}
+
   app-build-xcode-27:
     name: App build (Xcode 27, preview)
     if: ${{ !github.event.pull_request.draft }}
@@ -199,7 +245,7 @@ jobs:
     # deleted. After the saves, and on main only, where the saves happen. ci.yml prunes
     # the Linux caches.
     if: ${{ !cancelled() && github.event_name == 'push' }}
-    needs: [rfckit-macos, app-build, app-build-xcode-27]
+    needs: [rfckit-macos, app-build, app-build-release, app-build-xcode-27]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -211,7 +257,7 @@ jobs:
     steps:
       - name: Keep the newest cache of each kind
         run: |
-          for prefix in xcode-compilation-cache- xcode27-compilation-cache- swiftpm-macos-; do
+          for prefix in xcode-compilation-cache- xcode-release-compilation-cache- xcode27-compilation-cache- swiftpm-macos-; do
             gh cache list --key "$prefix" --ref refs/heads/main --sort created_at --order desc \
               --limit 100 --json id --jq '.[1:][].id' |
               xargs -r -n1 gh cache delete
