@@ -372,7 +372,8 @@ public enum SchemaV5: VersionedSchema {
 
 /// V5, a collection's query (#355), the highlights (#522) and the followed working
 /// groups (#731). Its own copies of V5's models, identical to them but for
-/// `DocumentCollection.query`, for the reason V4 has its own of V3's.
+/// `DocumentCollection.query`, for the reason V4 has its own of V3's, and the two
+/// that V5 has not: `Highlight` and `FollowedGroup`.
 public enum SchemaV6: VersionedSchema {
   public static let versionIdentifier = Schema.Version(6, 0, 0)
   public static var models: [any PersistentModel.Type] {
