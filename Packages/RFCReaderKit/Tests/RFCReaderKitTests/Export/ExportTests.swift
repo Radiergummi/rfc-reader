@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import PDFKit
 import RFCKit
 import Testing
 import UniformTypeIdentifiers
@@ -352,5 +353,76 @@ struct ExportGeometryTests {
     #expect(PrintPagination.page(containing: 250, in: pages) == 2)
     #expect(PrintPagination.page(containing: -1, in: pages) == nil)
     #expect(PrintPagination.page(containing: 0, in: []) == nil)
+  }
+}
+
+/// The outline as it is in the file, read back from disk: PDFKit has dropped an
+/// outline it was given when it wrote the file, links and info intact (#990).
+@Suite("Export: the outline in the written file")
+struct ExportOutlineFileTests {
+  private typealias Entry = PDFExport.OutlineEntry
+
+  private let outline = [
+    Entry(
+      title: "Introduction", anchor: "section-1",
+      children: [Entry(title: "Terminology", anchor: "section-1.1", children: [])]),
+    Entry(
+      title: "Not in the file", anchor: "elsewhere",
+      children: [Entry(title: "Nor this", anchor: "section-1.2", children: [])]),
+    Entry(title: "Security Considerations", anchor: "section-2", children: []),
+  ]
+
+  private let destinations = [
+    "section-1": PDFExport.Place(page: 0, point: CGPoint(x: 54, y: 700)),
+    "section-1.1": PDFExport.Place(page: 1, point: CGPoint(x: 54, y: 500)),
+    "section-1.2": PDFExport.Place(page: 1, point: CGPoint(x: 54, y: 400)),
+    "section-2": PDFExport.Place(page: 2, point: CGPoint(x: 54, y: 300)),
+  ]
+
+  @Test func `the outline survives the file being written`() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).pdf")
+    defer { try? FileManager.default.removeItem(at: file) }
+    try written(pages: 3).write(to: file)
+    let document = try #require(PDFDocument(url: file))
+    let root = try #require(document.outlineRoot, "the written file has no outline")
+
+    func children(of item: PDFOutline) -> [PDFOutline] {
+      (0..<item.numberOfChildren).compactMap { item.child(at: $0) }
+    }
+    func place(of item: PDFOutline) -> PDFExport.Place? {
+      guard let destination = item.destination, let page = destination.page else { return nil }
+      return PDFExport.Place(page: document.index(for: page), point: destination.point)
+    }
+    // An entry with nowhere to go is left out, its subsections with it.
+    let top = children(of: root)
+    #expect(top.map(\.label) == ["Introduction", "Security Considerations"])
+    #expect(top.map(place(of:)) == [destinations["section-1"], destinations["section-2"]])
+    let nested = try #require(top.first.map(children(of:)))
+    #expect(nested.map(\.label) == ["Terminology"])
+    #expect(nested.map(place(of:)) == [destinations["section-1.1"]])
+    // What PDFKit adds to the drawing is still there.
+    #expect(document.page(at: 0)?.annotations.count == 1)
+  }
+
+  /// `count` blank pages with the outline, as the export makes them: drawn, then
+  /// read by PDFKit, given a link and written again.
+  private func written(pages count: Int) throws -> Data {
+    let data = NSMutableData()
+    var mediaBox = CGRect(origin: .zero, size: PrintLayout.letter)
+    let consumer = try #require(CGDataConsumer(data: data as CFMutableData))
+    let context = try #require(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
+    for _ in 0..<count {
+      context.beginPDFPage(nil)
+      context.endPDFPage()
+    }
+    context.closePDF()
+
+    let document = try #require(PDFDocument(data: data as Data))
+    PDFExport.setOutline(outline, destinations: destinations, in: document)
+    let link = PDFAnnotation(
+      bounds: CGRect(x: 54, y: 600, width: 100, height: 12), forType: .link, withProperties: nil)
+    link.url = URL(string: "https://www.rfc-editor.org/")
+    try #require(document.page(at: 0)).addAnnotation(link)
+    return try #require(document.dataRepresentation())
   }
 }

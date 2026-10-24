@@ -91,19 +91,7 @@ nonisolated extension DocumentPDF {
       page.addAnnotation(annotation)
     }
 
-    func add(_ entries: [PDFExport.OutlineEntry], to parent: PDFOutline) {
-      for entry in entries {
-        guard let destination = destination(entry.anchor) else { continue }
-        let item = PDFOutline()
-        item.label = entry.title
-        item.destination = destination
-        parent.insertChild(item, at: parent.numberOfChildren)
-        add(entry.children, to: item)
-      }
-    }
-    let root = PDFOutline()
-    add(outline, to: root)
-    document.outlineRoot = root
+    PDFExport.setOutline(outline, destinations: marks.destinations, in: document)
 
     // Added to what the drawing wrote, its creation date and creator among them,
     // and only what the document has: no empty author on an RFC that names none.
