@@ -38,7 +38,14 @@ final class NavigationModel: Identifiable {
   }
   /// What is typed into search. The list follows `appliedQuery`, not this.
   var searchText = "" {
-    didSet { followSearchText(pausing: true) }
+    didSet {
+      // A scope token removed lasts until the search is cleared (#713). The text,
+      // not the query applied: the iOS field shows the tokens as it is typed in.
+      if searchText.isUnsearchedQuery, !oldValue.isUnsearchedQuery {
+        listOptions.searchScope = seededSearchScope
+      }
+      followSearchText(pausing: true)
+    }
   }
   /// The search text, trimmed, once typing pauses (#124): what the list is asked to
   /// search for. Read only to make the list; views read `appliedQuery`.
@@ -70,8 +77,29 @@ final class NavigationModel: Identifiable {
   /// The query the list, its count and the sidebar's results are for: the one whose
   /// rows are on show.
   var appliedQuery: String { listed?.list.query ?? "" }
-  /// The iOS list's view options, for this tab (#348).
-  var listOptions = ListOptions()
+  /// The list's view options, for this tab (#348): what Settings says a new tab
+  /// starts with (#713), and changed from there by View Options for this tab only.
+  var listOptions: ListOptions {
+    didSet {
+      // What was read as of turning Hide Read on, not as of entering the filter;
+      // never in Recently Read, which Hide Read leaves alone and whose order is
+      // taken on entering it.
+      if listOptions.hidesRead, !oldValue.hidesRead, filter != .recent {
+        recentOrder = library.recentlyRead()
+      }
+    }
+  }
+  /// The search scope the tab started with, which clearing a search restores: a
+  /// changed setting reaches only the tabs opened after it.
+  @ObservationIgnored private let seededSearchScope: SearchScope
+
+  /// The tab's options as its list is made with them: with the library's April 1st
+  /// setting, which every tab follows as it changes (#713).
+  var listOptionsInForce: ListOptions {
+    var options = listOptions
+    options.showsAprilFirst = library.showsAprilFirst
+    return options
+  }
   var isShowingGoToSheet = false
   /// The collection sheet on show, if any: creating one — perhaps to add a document
   /// to — or editing one (#349). On the model rather than a view's state so the
@@ -128,6 +156,9 @@ final class NavigationModel: Identifiable {
   /// compared document (#187), which would otherwise list the library for nothing.
   init(library: LibraryModel, listsDocuments: Bool = true) {
     self.library = library
+    let settings = LibrarySettings(defaults: .standard)
+    listOptions = settings.listOptions
+    seededSearchScope = settings.searchScope
     if listsDocuments {
       followListInputs()
       followTextSearch()
@@ -161,6 +192,11 @@ final class NavigationModel: Identifiable {
   /// What the list lists: the last filter chosen, whether or not the sidebar still
   /// shows it as selected.
   var filter: LibraryFilter { filterChoice.value }
+
+  /// The list a search in this tab is shown in: All RFCs while a collapsed sidebar
+  /// is on screen in its place and searches the library (#345), as `listOnShow`
+  /// lists it, and otherwise the filter's.
+  var searchedFilter: LibraryFilter { sidebarSelection == nil ? .all : filter }
 
   /// The sidebar's `List(selection:)`, bound to directly.
   ///
@@ -309,6 +345,9 @@ final class NavigationModel: Identifiable {
       if let row, library.metadata(row)?.isObsolete == true {
         listOptions.showsObsolete = true
       }
+      if let row, listOptions.hidesRead, recentOrder.contains(row) {
+        listOptions.hidesRead = false
+      }
     } else if sidebarSelection != list.filter {
       // A collapsed sidebar pushes the list the row is on show in, and the reader.
       sidebarSelection = list.filter
@@ -421,7 +460,8 @@ final class NavigationModel: Identifiable {
   private func request() -> ListRequest? {
     guard library.index != nil else { return nil }
     return ListRequest(
-      list: LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self),
+      list: LibraryList.reading(
+        filter, query: requestedQuery, options: listOptionsInForce, from: self),
       indexVersion: library.indexVersion)
   }
 
@@ -651,5 +691,11 @@ extension NavigationModel: ListSources {
 
   func query(of collection: UUID) -> String? {
     library.collections[collection]?.query
+  }
+
+  /// The query `filter` lists, if it is a dynamic collection's (#355): what the
+  /// search field's scope tokens leave as its list does (#713).
+  func definition(of filter: LibraryFilter) -> String? {
+    if case .collection(let id) = filter { query(of: id) } else { nil }
   }
 }

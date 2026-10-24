@@ -1138,6 +1138,16 @@
         }
       }
     },
+    "Current Only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur aktuelle"
+          }
+        }
+      }
+    },
     "Current Section" : {
       "localizations" : {
         "de" : {
@@ -1414,6 +1424,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fokus"
+          }
+        }
+      }
+    },
+    "Follow Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group folgen"
           }
         }
       }
@@ -2504,6 +2524,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Veröffentlicht, bevor der RFC Editor festhielt, über welchen Stream ein Dokument kam."
+          }
+        }
+      }
+    },
+    "Published by the %@ working group." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von der Working Group %@ veröffentlicht."
           }
         }
       }
@@ -3702,6 +3732,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unterstrichen"
+          }
+        }
+      }
+    },
+    "Unfollow Working Group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working Group nicht mehr folgen"
           }
         }
       }

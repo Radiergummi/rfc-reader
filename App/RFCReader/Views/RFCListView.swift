@@ -28,7 +28,7 @@ struct RFCListView: View {
   /// the controls read the tab's.
   private var shown: LibraryList {
     navigation.listed?.list
-      ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
+      ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptionsInForce)
   }
 
   /// The full-text search for the rows on show (#37), once it has ended: the search
@@ -180,7 +180,7 @@ struct RFCListView: View {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
       if let acronym = workingGroupCardAcronym {
-        WorkingGroupCard(summary: library.workingGroupSummary(acronym))
+        WorkingGroupCard(group: acronym, summary: library.workingGroupSummary(acronym))
           .listRowSeparator(.hidden)
           .selectionDisabled()
       }
@@ -451,9 +451,9 @@ struct RFCListView: View {
   }
 }
 
-/// How a tab's list is shown (#348, #349): its order, or a collection's, and
-/// whether obsolete documents are in it. The iOS list's View Options menu and the
-/// Mac's View menu.
+/// How a tab's list is shown (#348, #349): its order, or a collection's, whether
+/// obsolete documents are in it, and whether what was read is (#713). The iOS
+/// list's View Options menu and the Mac's View menu.
 ///
 /// The one difference is each platform's convention for an order the list cannot
 /// take — a search, or a list not in order of publication: the Mac's menu bar keeps
@@ -484,7 +484,17 @@ struct ListViewOptions: View {
         if canReorder { orderPicker }
       #endif
     }
-    Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+    Toggle("Show Obsolete", isOn: showsObsolete)
+    Toggle("Hide Read", isOn: $navigation.listOptions.hidesRead)
+  }
+
+  /// A search and an unsearched list each have their own default in Settings, so
+  /// the toggle changes the one for what is on show (#713).
+  private var showsObsolete: Binding<Bool> {
+    let searching = !navigation.appliedQuery.isUnsearchedQuery
+    return Binding(
+      get: { navigation.listOptions.showsObsolete(searching: searching) },
+      set: { navigation.listOptions.setShowsObsolete($0, searching: searching) })
   }
 
   private var orderPicker: some View {
@@ -622,11 +632,15 @@ struct RFCRow: View {
   var offline: OfflineRowState?
   /// Download Now or Retry, beside `offline`: fetches on any path.
   var fetchNow: () -> Void = {}
+  /// Settings ▸ Advanced, for a denser list (#713). VoiceOver still reads the status.
+  @AppStorage(LibraryPreferences.showsStatusBadgesKey) private var showsStatusBadges =
+    LibraryPreferences.defaultShowsStatusBadges
 
   private var rfc: RFCMetadata? { row.rfc }
 
+  /// The badge's status: none where the list's filter fixes it, or badges are off.
   private var status: PublicationStatus? {
-    filter?.fixesStatus == true ? nil : rfc?.currentStatus
+    filter?.fixesStatus == true || !showsStatusBadges ? nil : rfc?.currentStatus
   }
   private var workingGroup: String? {
     filter?.fixesWorkingGroup == true ? nil : rfc?.workingGroup

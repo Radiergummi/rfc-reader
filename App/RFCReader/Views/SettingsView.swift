@@ -4,10 +4,10 @@ import SwiftUI
 
 /// The app's settings, tabbed the way a Mac app's are. A tab joins as a feature
 /// arrives that has something worth configuring, rather than ahead of it: Advanced
-/// arrives with the first setting that belongs there (#705).
+/// arrived with the April 1st RFCs and the status badges (#713).
 ///
 /// Reading and Appearance hold the standard settings, the ones a reader expects of
-/// Apple Books; Advanced will hold the rest, and never the quick panel (#702). The
+/// Apple Books; Advanced holds the rest, and never the quick panel (#702). The
 /// same sections make up `SettingsScreen`, iOS's, so the two cannot drift.
 struct SettingsView: View {
   /// Handed in rather than read from the environment: the Settings scene is a root of
@@ -25,8 +25,11 @@ struct SettingsView: View {
           .formStyle(.grouped)
       }
       Tab("General", systemImage: "gearshape") {
-        Form { GeneralSettings() }
-          .formStyle(.grouped)
+        Form {
+          GeneralSettings()
+          Section("Library") { LibrarySettingsSection() }
+        }
+        .formStyle(.grouped)
       }
       Tab("Notifications", systemImage: "bell") {
         Form {
@@ -36,6 +39,10 @@ struct SettingsView: View {
       }
       Tab("Storage", systemImage: "internaldrive") {
         Form { StorageSettings(library: library) }
+          .formStyle(.grouped)
+      }
+      Tab("Advanced", systemImage: "gearshape.2") {
+        Form { AdvancedSettings(library: library) }
           .formStyle(.grouped)
       }
     }
@@ -64,7 +71,9 @@ struct SettingsScreen: View {
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
         Section("Notifications") { NotificationSettings() }
+        Section("Library") { LibrarySettingsSection() }
         Section("Storage") { StorageSettings(library: library) }
+        Section("Advanced") { AdvancedSettings(library: library) }
       }
       .navigationTitle("Settings")
       #if !os(macOS)
@@ -154,6 +163,67 @@ private struct GeneralSettings: View {
   }
 }
 
+/// What a new tab's lists and searches start with (#713). A tab's View Options
+/// change its own from there, and a changed setting reaches the tabs opened after it.
+private struct LibrarySettingsSection: View {
+  @AppStorage(LibraryPreferences.showsObsoleteInListsKey) private var showsObsoleteInLists =
+    LibraryPreferences.defaultShowsObsolete
+  @AppStorage(LibraryPreferences.showsObsoleteInSearchKey) private var showsObsoleteInSearch =
+    LibraryPreferences.defaultShowsObsolete
+  @AppStorage(LibraryPreferences.orderKey) private var order = LibraryPreferences.defaultOrder
+  @AppStorage(LibraryPreferences.searchesCurrentOnlyKey) private var searchesCurrentOnly =
+    LibraryPreferences.defaultSearchesCurrentOnly
+  @AppStorage(LibraryPreferences.searchStreamKey) private var searchStream =
+    LibraryPreferences.defaultSearchStream
+
+  var body: some View {
+    Toggle("Show obsoleted documents in lists", isOn: $showsObsoleteInLists)
+    Toggle("Show obsoleted documents in search results", isOn: $showsObsoleteInSearch)
+    Picker("Sort lists", selection: $order) {
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text(verbatim: $0.title()) }
+    }
+    Picker(selection: $searchesCurrentOnly) {
+      Text("All documents").tag(false)
+      Text("Current documents only").tag(true)
+    } label: {
+      Text("Search")
+      Text(
+        "Current documents are neither obsoleted nor Historic. The search field shows the scope, and removing it there searches everything."
+      )
+    }
+    Picker("Search stream", selection: $searchStream) {
+      Text("All streams").tag("")
+      ForEach(PublicationStream.allCases, id: \.self) { stream in
+        Text(verbatim: stream.displayName).tag(stream.rawValue)
+      }
+    }
+  }
+}
+
+/// Settings few readers change (#705, #713).
+private struct AdvancedSettings: View {
+  let library: LibraryModel
+  @AppStorage(LibraryPreferences.showsStatusBadgesKey) private var showsStatusBadges =
+    LibraryPreferences.defaultShowsStatusBadges
+
+  private var showsAprilFirst: Binding<Bool> {
+    Binding(get: { library.showsAprilFirst }, set: { library.setShowsAprilFirst($0) })
+  }
+
+  var body: some View {
+    Toggle(isOn: showsAprilFirst) {
+      Text("Show April 1st RFCs")
+      Text(
+        "Otherwise the April Fools' Day RFCs are left out of lists, search and Just Published. A bookmark, a collection or a link still shows them."
+      )
+    }
+    Toggle(isOn: $showsStatusBadges) {
+      Text("Show status badges in lists")
+      Text("Otherwise lists are denser, and the status is still read by VoiceOver.")
+    }
+  }
+}
+
 extension ReaderPalette {
   /// What Settings calls it.
   fileprivate var title: String {
@@ -204,9 +274,12 @@ struct NotificationSettings: View {
 
   var body: some View {
     Toggle(isOn: toggle) {
-      Text("Notify me about bookmarked RFCs")
+      Text("Notify me about bookmarked RFCs and followed working groups")
       Text(
-        "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it."
+        """
+        When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor \
+        queue, or errata are listed for it; and when a working group you follow publishes an RFC.
+        """
       )
     }
     if wasRefused {

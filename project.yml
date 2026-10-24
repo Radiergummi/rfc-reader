@@ -149,6 +149,9 @@ targets:
         CFBundleVersion: &build $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.reference
         # The contact card an author chip opens can add the author to Contacts (#19).
+        # The card is drawn by a system process with Contacts access of its own, on
+        # both platforms, so the entitlements below have no address book one (#993;
+        # decision "An author's contact details are data, shown as a contact card").
         NSContactsUsageDescription: RFC Reader adds an RFC author to your contacts when you ask it to.
         # Read by macOS only; see App/RFCReader/Scripting.
         NSAppleScriptEnabled: true
