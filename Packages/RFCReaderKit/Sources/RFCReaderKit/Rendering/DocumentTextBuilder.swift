@@ -339,8 +339,9 @@ extension DocumentTextBuilder {
   func appendDocument(_ document: RFCDocument) {
     documentID = document.header.id
     // A translation's sentences are not the original's, so it places no highlight
-    // and records no map (#749, #522).
-    if givenBacklinks == nil {
+    // and records no map (#749, #522); nor does a redline, whose text holds the
+    // older revision's words as well (#729).
+    if givenBacklinks == nil, redline == nil {
       positions = PositionMap.Recorder(model: ModelText(document))
     }
     let bibliography = ReferenceGroup.groups(in: document)
@@ -376,7 +377,10 @@ extension DocumentTextBuilder {
   static let abstractAnchor = "abstract"
 
   private func appendAbstract(_ blocks: [Block]) {
-    guard !blocks.isEmpty else { return }
+    // A redline's abstract may be only the older revision's, removed (#729).
+    let removed = redline?.removedBlocks[
+      RevisionDiff.BlockKey(section: RevisionDiff.abstractKey, index: 0)]
+    guard !blocks.isEmpty || removed != nil else { return }
     glossedInSection = []
     hasModelUnit = true
     mark(Self.abstractAnchor)

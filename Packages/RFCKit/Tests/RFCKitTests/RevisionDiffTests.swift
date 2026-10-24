@@ -71,6 +71,37 @@ struct RevisionDiffTests {
     #expect(diff.blocks == [RevisionDiff.BlockKey(section: "s", index: 1): .replaced(old)])
   }
 
+  /// A diagram's spacing is what it draws: a field moved along a ruler is a change.
+  @Test func `a figure whose spacing changed is replaced`() {
+    let old = Block.preformatted(Preformatted(kind: .artwork, text: "|  A  |    B    |"))
+    let new = Block.preformatted(Preformatted(kind: .artwork, text: "|    A    |  B  |"))
+    let diff = RevisionDiff(
+      from: document([Section(anchor: "s", title: "Format", blocks: [old])]),
+      to: document([Section(anchor: "s", title: "Format", blocks: [new])]))
+    #expect(diff.blocks == [RevisionDiff.BlockKey(section: "s", index: 0): .replaced(old)])
+  }
+
+  /// A paragraph edited after a figure inserted before it is still reworded: the
+  /// figure is passed over to pair the paragraph with the next one.
+  @Test func `a paragraph edited behind a new figure is reworded`() {
+    let figure = Block.preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+"))
+    let old = Section(
+      anchor: "s", title: "Overview",
+      blocks: [paragraph(introduction), paragraph("A client MAY retry."), paragraph(terminology)])
+    let new = Section(
+      anchor: "s", title: "Overview",
+      blocks: [
+        paragraph(introduction), figure, paragraph("A client SHOULD retry."),
+        paragraph(terminology),
+      ])
+    let diff = RevisionDiff(from: document([old]), to: document([new]))
+    #expect(diff.removedBlocks.isEmpty)
+    #expect(diff.blocks[RevisionDiff.BlockKey(section: "s", index: 1)] == .inserted)
+    #expect(
+      diff.blocks[RevisionDiff.BlockKey(section: "s", index: 2)]
+        == .reworded([.same("A client "), .deleted("MAY"), .inserted("SHOULD"), .same(" retry.")]))
+  }
+
   @Test func `a section added and one removed are said where they stand`() {
     let intro = Section(anchor: "intro", title: "Introduction", blocks: [paragraph(introduction)])
     let terms = Section(anchor: "terms", title: "Terminology", blocks: [paragraph(terminology)])

@@ -188,14 +188,7 @@ public struct RevisionDiff: Sendable, Equatable {
     let oldKeys = old.map(Self.fingerprint)
     let newKeys = new.map(Self.fingerprint)
     let difference = newKeys.difference(from: oldKeys)
-    var removed: Set<Int> = []
-    var inserted: Set<Int> = []
-    for change in difference {
-      switch change {
-      case .remove(let offset, _, _): removed.insert(offset)
-      case .insert(let offset, _, _): inserted.insert(offset)
-      }
-    }
+    let (removed, inserted) = difference.changedOffsets
     // Walk both in order, a gap at a time: the unmatched old and new blocks between
     // two matched ones.
     var oldIndex = 0
@@ -236,11 +229,20 @@ public struct RevisionDiff: Sendable, Equatable {
     var leftOver: [Block] = []
     var remaining = came[...]
     for block in gone {
-      guard let index = remaining.first, Self.kind(of: new[index]) == Self.kind(of: block) else {
+      // The next newer block of its kind: those passed over are inserted.
+      guard
+        let position = remaining.firstIndex(where: {
+          Self.kind(of: new[$0]) == Self.kind(of: block)
+        })
+      else {
         leftOver.append(block)
         continue
       }
-      remaining = remaining.dropFirst()
+      for skipped in remaining[..<position] {
+        blocks[BlockKey(section: section, index: skipped)] = .inserted
+      }
+      let index = remaining[position]
+      remaining = remaining[(position + 1)...]
       let key = BlockKey(section: section, index: index)
       if case .paragraph(let oldParagraph) = block, case .paragraph(let newParagraph) = new[index] {
         blocks[key] = .reworded(
@@ -259,19 +261,29 @@ public struct RevisionDiff: Sendable, Equatable {
     }
   }
 
-  /// What a block is matched by: its text, whitespace as one space, with no anchor,
-  /// which a revision renumbers.
+  /// What a block is matched by: its text, with no anchor, which a revision
+  /// renumbers. Prose's whitespace counts as one space, so a paragraph rewrapped is
+  /// the same; preformatted text keeps its spacing, which is what a diagram draws,
+  /// and loses only the spaces that end its lines.
   static func fingerprint(_ block: Block) -> String {
     let parts = [block].flattened.flatMap { block -> [String] in
       switch block {
-      case .preformatted(let content): [content.text]
-      case .figure(let figure): [figure.title ?? ""]
-      default: block.proseRuns.map(\.plainText)
+      case .preformatted(let content):
+        [
+          content.text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in String(line.reversed().drop(while: \.isWhitespace).reversed()) }
+            .joined(separator: "\n")
+        ]
+      case .figure(let figure): [collapsingWhitespace(figure.title ?? "")]
+      default: block.proseRuns.map { collapsingWhitespace($0.plainText) }
       }
     }
-    return "\(kind(of: block))|"
-      + parts.joined(separator: "\u{1F}").split(whereSeparator: \.isWhitespace)
-      .joined(separator: " ")
+    return "\(kind(of: block))|" + parts.joined(separator: "\u{1F}")
+  }
+
+  /// `text` with each run of whitespace one space, and none at either end.
+  private static func collapsingWhitespace(_ text: String) -> String {
+    text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
   }
 
   private static func kind(of block: Block) -> Int {
