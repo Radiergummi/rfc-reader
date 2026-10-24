@@ -27,7 +27,7 @@ struct ReaderKeysTests {
     }
   }
 
-  @Test func `tab moves through links unless that is turned off`() {
+  @Test func `tab moves through links only when that is turned on`() {
     #expect(Self.outcomes([.tab], options: Self.standard) == [.command(.link(.next))])
     #expect(Self.outcomes([.shiftTab], options: Self.standard) == [.command(.link(.previous))])
     let off = ReaderKeys.Options(vimKeys: false, tabsThroughLinks: false)

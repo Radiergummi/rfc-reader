@@ -69,9 +69,10 @@ public enum ReaderPreferences {
   public static let defaultVimKeys = false
 
   /// Tab and Shift-Tab move a visible focus through the reader's links (#711), which
-  /// Return follows: on, as a keyboard's way to a link, unless turned off.
+  /// Return follows. Off until the reader turns it on: Tab leaves the reader for the
+  /// next key view, as it always has.
   public static let tabsThroughLinksKey = "readerTabsThroughLinks"
-  public static let defaultTabsThroughLinks = true
+  public static let defaultTabsThroughLinks = false
 
   /// Notify when a bookmarked RFC is obsoleted or updated, a draft starts to revise
   /// it or reaches the RFC Editor queue, or errata are listed for it (#191). Off

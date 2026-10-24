@@ -37,10 +37,10 @@ struct ReaderSettingsTests {
     #expect(settings.copiesSectionNumbers)
   }
 
-  /// The maintainer's answer on #711: Tab moves through links unless turned off, and
-  /// the vim keys are off until turned on.
-  @Test func `tab through links is on and the vim keys are off by default`() {
-    #expect(ReaderSettings().keys == ReaderKeys.Options(vimKeys: false, tabsThroughLinks: true))
+  /// The maintainer's ruling on #901: Tab leaves the reader as it did before, so
+  /// moving through links with it is off until turned on, as the vim keys are.
+  @Test func `tab through links and the vim keys are off by default`() {
+    #expect(ReaderSettings().keys == ReaderKeys.Options(vimKeys: false, tabsThroughLinks: false))
   }
 
   /// What a copy cites in, where it links and what Copy copies (#712).
@@ -73,7 +73,7 @@ struct ReaderSettingsTests {
       defaults.set(true, forKey: ReaderPreferences.preferOriginalTextKey)
       defaults.set(false, forKey: ReaderPreferences.drawDiagramsKey)
       defaults.set(true, forKey: ReaderPreferences.vimKeysKey)
-      defaults.set(false, forKey: ReaderPreferences.tabsThroughLinksKey)
+      defaults.set(true, forKey: ReaderPreferences.tabsThroughLinksKey)
 
       let settings = ReaderSettings(defaults: defaults)
       #expect(settings.fontSize == 21)
@@ -82,7 +82,7 @@ struct ReaderSettingsTests {
       #expect(settings.preferOriginalText)
       #expect(!settings.drawDiagrams)
       #expect(settings.vimKeys)
-      #expect(!settings.tabsThroughLinks)
+      #expect(settings.tabsThroughLinks)
     }
   }
 
@@ -120,7 +120,7 @@ struct ReaderSettingsTests {
       settings.preferOriginalText = true
       settings.drawDiagrams = false
       settings.vimKeys = true
-      settings.tabsThroughLinks = false
+      settings.tabsThroughLinks = true
       settings.citationStyle = .bibtex
       settings.linkSite = .app
       settings.copyFormat = .quote
