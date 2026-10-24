@@ -70,7 +70,7 @@
 
     <class-extension extends="application" description="RFC Reader's top-level scripting object.">
       <element type="rfc" access="r" description="Every RFC in the index; ask for one by its number, as in rfc id 9110."/>
-      <element type="collection" description="Every collection you made, in the sidebar's order; ask for one by name, as in collection “HTTP”.">
+      <element type="collection" description="Every collection you made, in the sidebar's order; ask for one by name, as in collection “HTTP”. Deleting one removes only the collection; its RFCs stay in the library. A built-in list, such as “Bookmarks”, a stream or a series, is not one of them, and can't be deleted; a collection you made with a built-in list's name is the one named here.">
         <cocoa key="scriptCollections"/>
       </element>
     </class-extension>
