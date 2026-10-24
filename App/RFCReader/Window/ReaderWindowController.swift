@@ -315,6 +315,8 @@
       toolbar?.showDocumentTitle(title.documentTitle, subtitle: title.documentSubtitle)
       toolbar?.showBookmarked(title.isBookmarked)
       window?.toolbar?.validateVisibleItems()
+      // Another document, or none, and Back with somewhere to go or not (#782).
+      toolbar?.showDueTips()
     }
 
     /// The title over the list names the list: the collection the sidebar chose and
@@ -639,6 +641,18 @@
     }
 
     // MARK: - Lifetime
+
+    /// A tip on show goes with the main window, to the one that takes it (#782). Not
+    /// the key window: a tip's own popover takes key when clicked, and closing the
+    /// tip then would take its Learn More and its close button away mid-click.
+    func windowDidResignMain(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
+
+    /// A tip due while another window was main (#782).
+    func windowDidBecomeMain(_ notification: Notification) {
+      toolbar?.showDueTips()
+    }
 
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)

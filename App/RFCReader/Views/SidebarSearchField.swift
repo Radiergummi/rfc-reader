@@ -105,7 +105,7 @@ import SwiftUI
         }
         textField.stringValue = suggestion.accepted
         navigation.searchText = textField.stringValue
-        navigation.applySearchWithoutPause()
+        navigation.commitSearch()
       }
 
       // MARK: Editing
@@ -122,7 +122,7 @@ import SwiftUI
         _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
       ) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-          navigation.applySearchWithoutPause()
+          navigation.commitSearch()
         }
         return false
       }

@@ -1,10 +1,10 @@
 import RFCReaderKit
 import SwiftUI
+import TipKit
 
 /// The Reading Mode menu (#698): View > Reading Mode on the Mac, and in the reader's
-/// More menu on iOS. Choosing a mode starts it with nothing expanded, but for Focus
-/// becoming the outline, which keeps its section open (`Folding.switching(to:in:)`);
-/// choosing the one in use leaves it as it is.
+/// More menu on iOS. The Mac's More menu has it too, as AppKit items
+/// (`ReaderToolbar`), both through `ReaderState.choose(_:)`.
 struct ReadingModePicker: View {
   let reader: ReaderState
 
@@ -13,21 +13,28 @@ struct ReadingModePicker: View {
       "Reading Mode",
       selection: Binding(
         get: { reader.folding.mode },
-        set: { mode in
-          guard mode != reader.folding.mode else { return }
-          // Focus starts on the section being read, which the text view knows, the
-          // abstract included.
-          // Focus is the one mode that keeps anything, and its folding index is there.
-          reader.folding =
-            reader.foldingIndex.map { reader.folding.switching(to: mode, in: $0) }
-            ?? Folding(mode: mode)
-        })
+        set: { reader.choose($0) })
     ) {
       ForEach(ReadingMode.allCases) { mode in
         Text(verbatim: mode.name()).tag(mode)
       }
     }
     .pickerStyle(.menu)
+  }
+}
+
+extension ReaderState {
+  /// Chooses a reading mode. It starts with nothing expanded, but for Focus becoming
+  /// the outline, which keeps its section open (`Folding.switching(to:in:)`);
+  /// choosing the one in use leaves it as it is. Either way the reader has found
+  /// the modes, so their tip has no more to say (#782).
+  func choose(_ mode: ReadingMode) {
+    ReadingModeTip().invalidate(reason: .actionPerformed)
+    guard mode != folding.mode else { return }
+    // Focus starts on the section being read, which the text view knows, the
+    // abstract included.
+    // Focus is the one mode that keeps anything, and its folding index is there.
+    folding = foldingIndex.map { folding.switching(to: mode, in: $0) } ?? Folding(mode: mode)
   }
 }
 

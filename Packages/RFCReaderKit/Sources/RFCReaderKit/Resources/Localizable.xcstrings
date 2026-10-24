@@ -1458,6 +1458,16 @@
         }
       }
     },
+    "Force-click a reference to read the RFC it names without leaving this one, or rest the pointer on it for its abstract." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicke kräftig auf einen Verweis, um den genannten RFC zu lesen, ohne diesen zu verlassen, oder lass den Zeiger darauf ruhen, um seine Zusammenfassung zu sehen."
+          }
+        }
+      }
+    },
     "Formats" : {
       "localizations" : {
         "de" : {
@@ -1514,6 +1524,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gehe zu RFC"
+          }
+        }
+      }
+    },
+    "Go to RFC opens it straight away, by its number or words from its title." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder Wörter aus seinem Titel."
           }
         }
       }
@@ -1894,6 +1914,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schlagwörter"
+          }
+        }
+      }
+    },
+    "Know Which RFC You Want?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du weißt, welchen RFC du suchst?"
+          }
+        }
+      }
+    },
+    "Learn More…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr erfahren …"
           }
         }
       }
@@ -2458,6 +2498,26 @@
         }
       }
     },
+    "Press %@ to go straight to it, by its number or words from its title." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drücke %@, um direkt zu ihm zu gehen, über seine Nummer oder Wörter aus seinem Titel."
+          }
+        }
+      }
+    },
+    "Preview Before You Go" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschau, bevor du gehst"
+          }
+        }
+      }
+    },
     "Previous Section, in Focus" : {
       "localizations" : {
         "de" : {
@@ -2734,6 +2794,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFCs, die du öffnest, erscheinen hier."
+          }
+        }
+      }
+    },
+    "Read an Outline, or One Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Gliederung lesen, oder Abschnitt für Abschnitt"
+          }
+        }
+      }
+    },
+    "Reading Mode, in this menu, folds the document to its headings, or shows one section at a time." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Lesemodus in diesem Menü klappt das Dokument auf seine Überschriften zusammen oder zeigt einen Abschnitt nach dem anderen."
           }
         }
       }
@@ -3692,6 +3772,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Berühre einen Verweis und halte ihn, um den genannten RFC an der genannten Stelle zu lesen, ohne die Seite zu verlassen. Tippe auf die Vorschau, um dorthin zu gehen."
+          }
+        }
+      }
+    },
+    "Touch and hold a reference to read the RFC it names without leaving this one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berühre einen Verweis und halte ihn, um den genannten RFC zu lesen, ohne diesen zu verlassen."
           }
         }
       }

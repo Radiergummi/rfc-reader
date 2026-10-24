@@ -50,6 +50,8 @@ import SwiftUI
 
       ToolbarItem(placement: .primaryAction) {
         moreMenu
+          // Reading Mode is in it, and nowhere else on screen (#782).
+          .helpTip(ReadingModeTip())
       }
 
       if showsBottomBar {
@@ -162,7 +164,10 @@ import SwiftUI
         Button("Print…", systemImage: "printer") { printDocument() }
           .disabled(!reader.offersPrintAndExport)
       } label: {
-        Label("More", systemImage: "ellipsis")
+        // An image, not a `Label`: with a label, iOS 26 never shows a toolbar
+        // item's popover tip (#782).
+        Image(systemName: "ellipsis")
+          .accessibilityLabel("More")
       }
     }
 

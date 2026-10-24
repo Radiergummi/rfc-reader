@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import TipKit
 
 // macOS has no `WindowGroup`, so nothing on that platform instantiates this view:
 // the window's content is an `NSSplitViewController` built by
@@ -205,6 +206,13 @@ import SwiftUI
         // Not again while it is on show: a new target would dismiss and present it.
         if helpTarget == nil { helpTarget = HelpTarget() }
       }
+      // A tip's Learn More (#782).
+      .environment(
+        \.showHelp,
+        ShowHelpAction { section in
+          helpTarget = HelpTarget(section: section)
+        }
+      )
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
       // Outermost, and it has to be: an environment value reaches what is *inside*
@@ -297,6 +305,8 @@ struct EmptyDetailView: View {
       }
       .onAppear {
         focused = true
+        // Found: its tip has no more to say (#782).
+        GoToRFCTip().invalidate(reason: .actionPerformed)
         // The check at launch alone goes stale in an app left open for weeks.
         library.refreshRegistriesIfDue()
       }

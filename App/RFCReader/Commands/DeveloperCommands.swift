@@ -13,6 +13,11 @@ import SwiftUI
     var body: some Commands {
       CommandMenu("Developer") {
         Button("Install Data Pack…") { Self.chooseAndInstall() }
+        // TipKit resets its store only before it is configured, which is at launch
+        // (#782).
+        Button("Reset Tips at Next Launch") {
+          UserDefaults.standard.set(true, forKey: ReaderTips.resetAtLaunchKey)
+        }
       }
     }
 
