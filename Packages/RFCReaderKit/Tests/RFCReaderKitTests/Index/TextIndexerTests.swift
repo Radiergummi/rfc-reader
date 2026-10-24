@@ -416,6 +416,37 @@ struct TextIndexerTests {
     #expect(try await indexer.search("interoperation").hits.map(\.document) == [.rfc(2119)])
   }
 
+  /// A legacy RFC indexed from its stored text has the anchors of the text's parse, and
+  /// the reader shows it from the pack once the pack is installed, while the text's
+  /// date stays as it was: installing the pack has the reconcile read it again, from
+  /// the pack. The pack here holds other XML under its name, so what is indexed says
+  /// which of the two was read.
+  @Test func `installing the legacy pack indexes a stored text body again from the pack`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try Fixtures.data("rfc2119.txt").write(to: sandbox.file(.rfc(2119), format: .text))
+    await indexer.reconcile()
+    #expect(try await indexer.search("interoperation").hits.map(\.document) == [.rfc(2119)])
+    let pack = try DataPackTests.makePack(
+      in: sandbox.root,
+      files: [
+        DocumentCacheIndex.fileName(for: .rfc(2119), format: .xml):
+          String(decoding: try Fixtures.data("rfc8999.xml"), as: UTF8.self)
+      ])
+    _ = try await store.installLegacyPack(from: pack)
+
+    await indexer.legacyPackInstalled()
+
+    #expect(try await indexer.search("interoperation").hits.isEmpty)
+    let found = try await indexer.search("intermediaries")
+    #expect(found.hits.map(\.document) == [.rfc(2119)])
+    #expect(found.hits.map(\.anchor) == ["connection-id"])
+  }
+
   @Test func `releasing what the whole-corpus run indexed gives back its disk`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
