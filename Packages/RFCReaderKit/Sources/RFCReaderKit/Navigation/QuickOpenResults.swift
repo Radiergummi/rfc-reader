@@ -13,10 +13,54 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// As many rows as a palette shows before it stops being a glance.
   public static let limit = 8
 
-  /// The field's placeholder, on the Mac's palette and iOS's sheet alike (#761):
-  /// both take all four.
+  /// The Mac's palette's placeholder (#761), which takes all four. iOS's sheet takes
+  /// a number alone (`numberPlaceholder`).
   public static func placeholder(locale: Locale = .interface) -> String {
     String(kit: "RFC number, BCP 14, title words, or a link", locale: locale)
+  }
+
+  /// iOS's field (#579): beside a search field that already finds by keyword, it
+  /// takes an RFC number alone.
+  public static func numberPlaceholder(locale: Locale = .interface) -> String {
+    String(kit: "RFC number", locale: locale)
+  }
+
+  /// The digits of what was typed into iOS's field, which is all it takes (#579):
+  /// the number pad types nothing else, but a paste or an iPad's keyboard can. As
+  /// ASCII, whatever digits the number pad types in the reader's region.
+  ///
+  /// A paste that names a document is the number of the RFC it names, the way the
+  /// Mac's palette reads it: a link's section is not part of the number, and a BCP
+  /// or an STD names no RFC by its own number, so it keeps nothing. One character
+  /// that is not a digit, such as a letter typed on an iPad's keyboard, is dropped.
+  /// Any other text keeps nothing: its digits run together would be a number it
+  /// never named.
+  public static func digits(in text: String) -> String {
+    let digits = text.compactMap(asciiDigit)
+    if digits.count == text.count {
+      return String(digits)
+    }
+    if let link = DocumentReference.link(from: text) {
+      return link.id.series == .rfc ? String(link.id.number) : ""
+    }
+    return text.count - digits.count == 1 ? String(digits) : ""
+  }
+
+  /// What iOS's field lists for the digits typed into it (#579): the RFC with that
+  /// number, and nothing else, so there is no search to wait for. Neither the RFCs
+  /// whose numbers begin with it nor a registry value: the search field beside it
+  /// finds those. Parsed as the Mac's palette parses a number, so no RFC 0.
+  public static func link(forNumber digits: String) -> RFCLink? {
+    DocumentID(parsing: digits).map { RFCLink(id: $0) }
+  }
+
+  /// A decimal digit, of any script, as ASCII: not a superscript, a circled number
+  /// or a numeral that is not a digit, which `Character.isNumber` takes too.
+  private static func asciiDigit(_ character: Character) -> Character? {
+    guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+      scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue
+    else { return nil }
+    return Character(String(digit))
   }
 
   /// One of each of the four, shown under the field while it is empty. Not
@@ -108,7 +152,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     hitsQuery != query
   }
 
-  /// What the sheet and the palette say in place of rows, once there is something
+  /// What the Mac's palette says in place of rows, once there is something
   /// to say: not while nothing is typed, nor while a search is still running, so it
   /// does not flash on every keystroke.
   ///

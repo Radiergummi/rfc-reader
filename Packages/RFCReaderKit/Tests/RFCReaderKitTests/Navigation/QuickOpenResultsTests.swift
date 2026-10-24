@@ -429,3 +429,76 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(9113))])
   }
 }
+
+/// iOS's Go to RFC, beside a search field that already finds by keyword, takes an
+/// RFC number and nothing else, from the number pad (#579).
+@Suite("Quick open results: a number alone")
+struct QuickOpenNumberTests {
+  /// The number pad types digits only, but a paste or an iPad's keyboard does not.
+  @Test func `only the digits of what is typed are kept`() {
+    #expect(QuickOpenResults.digits(in: "9110") == "9110")
+    #expect(QuickOpenResults.digits(in: "RFC 9110") == "9110")
+    #expect(QuickOpenResults.digits(in: "http") == "")
+    #expect(QuickOpenResults.digits(in: "½") == "")
+  }
+
+  /// Only decimal digits: a footnote's superscript or a circled number is not one.
+  @Test func `a number that is not a decimal digit is dropped`() {
+    #expect(QuickOpenResults.digits(in: "9110²") == "9110")
+    #expect(QuickOpenResults.digits(in: "④") == "")
+  }
+
+  /// A pasted link is the RFC it names, not every digit in it run together.
+  @Test func `a pasted link keeps the number of its RFC`() {
+    #expect(
+      QuickOpenResults.digits(in: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1")
+        == "9110")
+  }
+
+  /// `BCP 14` is not RFC 14.
+  @Test func `a pasted series names no RFC`() {
+    #expect(QuickOpenResults.digits(in: "BCP 14") == "")
+  }
+
+  /// A paste that names no document keeps nothing, rather than run the digits of
+  /// several numbers together into one that names another RFC.
+  @Test func `a pasted text that names no document keeps nothing`() {
+    #expect(QuickOpenResults.digits(in: "RFC 9110, section 4") == "")
+    #expect(QuickOpenResults.digits(in: "www.rfc-editor.org/rfc/rfc9110#section-15.5.1") == "")
+    #expect(QuickOpenResults.digits(in: "HTTP status 425") == "")
+  }
+
+  /// One stray character, as a key of an iPad's keyboard types, is dropped, wherever
+  /// in the number it lands.
+  @Test func `a character typed into a number is dropped`() {
+    #expect(QuickOpenResults.digits(in: "9110a") == "9110")
+    #expect(QuickOpenResults.digits(in: "91a10") == "9110")
+    #expect(QuickOpenResults.digits(in: "a") == "")
+  }
+
+  /// A region whose number pad types Eastern Arabic digits types an RFC number all
+  /// the same.
+  @Test func `another script's digits are kept as ASCII`() {
+    #expect(QuickOpenResults.digits(in: "٩١١٠") == "9110")
+  }
+
+  /// The RFC with that number, and none of those whose numbers begin with it, nor a
+  /// registry value: `911` is RFC 911 alone.
+  @Test func `a number lists the RFC with that number alone`() {
+    #expect(QuickOpenResults.link(forNumber: "911") == RFCLink(id: .rfc(911)))
+  }
+
+  @Test func `nothing typed lists nothing`() {
+    #expect(QuickOpenResults.link(forNumber: "") == nil)
+  }
+
+  /// Digits past any RFC's number name none, and nor does zero.
+  @Test func `a number no RFC can have lists nothing`() {
+    #expect(QuickOpenResults.link(forNumber: "99999999999999999999999") == nil)
+    #expect(QuickOpenResults.link(forNumber: "0") == nil)
+  }
+
+  @Test func `the placeholder asks for a number`() {
+    #expect(QuickOpenResults.numberPlaceholder(locale: .english) == "RFC number")
+  }
+}

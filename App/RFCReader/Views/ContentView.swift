@@ -238,135 +238,104 @@ struct EmptyDetailView: View {
 }
 
 #if !os(macOS)
-  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, words from a title, or any RFC
-  /// Editor / Datatracker URL.
+  /// Command-L style jump to an RFC by its number, typed on the number pad (#579):
+  /// the search field beside the button already finds by keyword, so this lists the
+  /// RFC with the number typed and nothing else, with no search to wait for.
   ///
-  /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
-  /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
+  /// iOS only. The Mac has `QuickOpenPalette`, which takes a series, title words and
+  /// links as well, because a form in a sheet is the right shape for a phone and the
+  /// wrong one for ⌘L on a desktop (#26).
   struct GoToDocumentSheet: View {
     let library: LibraryModel
-    @State private var controller: QuickOpenController
+    let navigation: NavigationModel
+    /// What the field shows: the digits of what was typed, written back when a
+    /// paste or an iPad's keyboard brings anything else, which a binding through a
+    /// filter would leave on screen when the digits did not change.
+    @State private var text = ""
+    /// Set by the first thing that closes the sheet, so a second tap during its
+    /// dismiss animation does not open the document again.
+    @State private var isClosing = false
     @FocusState private var focused: Bool
 
-    init(library: LibraryModel, navigation: NavigationModel) {
-      self.library = library
-      _controller = State(
-        initialValue: QuickOpenController(
-          library: library, navigation: navigation,
-          dismiss: { navigation.isShowingGoToSheet = false }))
-    }
-
-    private var results: QuickOpenResults { controller.results }
-
-    private var text: Binding<String> {
-      Binding {
-        controller.input
-      } set: {
-        controller.type($0)
-      }
-    }
+    /// The RFC with the number typed, if any.
+    private var link: RFCLink? { QuickOpenResults.link(forNumber: text) }
 
     var body: some View {
       NavigationStack {
         Form {
-          TextField(QuickOpenResults.placeholder(), text: text)
+          TextField(QuickOpenResults.numberPlaceholder(), text: $text)
             .focused($focused)
-            .onSubmit(controller.openSelection)
-            .textInputAutocapitalization(.never)
+            .keyboardType(.numberPad)
+            // An iPad's number pad is the full keyboard, whose corrections would
+            // rewrite a number before the digits are kept.
             .autocorrectionDisabled()
-          if results.rows.isEmpty {
-            status
-          } else {
+            // A hardware keyboard's Return; the number pad has none, and Open is
+            // in the bar.
+            .onSubmit(openSelection)
+          if let link {
             Section {
-              ForEach(results.rows, id: \.self) { row in
-                self.row(for: row)
-              }
+              row(for: link)
             }
           }
         }
         .navigationTitle("Go to RFC")
         .toolbar {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", action: controller.close)
+            Button("Cancel", action: close)
           }
           ToolbarItem(placement: .confirmationAction) {
-            Button("Open", action: controller.openSelection)
-              .disabled(results.openable == nil && !results.isSearching)
+            Button("Open", action: openSelection)
+              .disabled(link == nil)
           }
+        }
+      }
+      .onChange(of: text) {
+        let digits = QuickOpenResults.digits(in: text)
+        if digits != text {
+          text = digits
         }
       }
       .onAppear {
         focused = true
-        // The check at launch alone goes stale in an app left open for weeks.
+        // The check at launch alone goes stale in an app left open for weeks; the
+        // registries answer Look Up (`LookUpIdentifierIntent`).
         library.refreshRegistriesIfDue()
       }
-      // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { controller.resolve() }
-      .task(id: controller.searchKey) { await controller.search() }
     }
 
-    /// Said while nothing is listed: what the field takes, or why nothing matches,
-    /// the one line under the field that turns a blind text box into something that
-    /// tells the reader whether it understood them. Not while a search is still
-    /// running, so it does not flash on every keystroke.
-    @ViewBuilder
-    private var status: some View {
-      if controller.query.isEmpty {
-        // The same as the Mac's palette (#761).
-        Text(verbatim: QuickOpenResults.example)
-      } else if let message = controller.message {
-        HStack {
-          Text(verbatim: message)
-          if case .failed = library.indexState {
-            Button("Retry") { library.retryIndex() }
-          }
-        }
-      }
-    }
-
-    private func row(for row: QuickOpenResults.Row) -> some View {
+    private func row(for link: RFCLink) -> some View {
       let title = QuickOpenResults.title(
-        library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
+        library.metadata(link.id)?.title, isIndexLoaded: library.index != nil)
       return Button {
-        controller.open(row.link)
+        open(link)
       } label: {
         HStack(spacing: 12) {
-          if let entry = row.entry {
-            // What was looked up, then where it is defined, as the Mac's palette
-            // lists it: "HTTP status 425 · Too Early", RFC 8470.
-            Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
-              .fontWeight(.semibold)
-              .monospacedDigit()
-              .lineLimit(1)
-            if let name = entry.name {
-              Text(name)
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Text(row.link.id.displayName)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          } else {
-            Text(row.link.id.displayName)
-              .fontWeight(.semibold)
-              .monospacedDigit()
-            Text(title)
-              .lineLimit(1)
-              .foregroundStyle(.secondary)
-          }
-          if let section = row.link.section {
-            // A registry row already ends at the far edge.
-            if row.entry == nil {
-              Spacer(minLength: 0)
-            }
-            Text(PlaceName.abbreviated(section))
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          }
+          Text(link.id.displayName)
+            .fontWeight(.semibold)
+            .monospacedDigit()
+          Text(title)
+            .lineLimit(1)
+            .foregroundStyle(.secondary)
         }
       }
       .tint(.primary)
+    }
+
+    private func openSelection() {
+      if let link {
+        open(link)
+      }
+    }
+
+    private func open(_ link: RFCLink) {
+      guard !isClosing else { return }
+      library.open(link, activation: .current, in: navigation)
+      close()
+    }
+
+    private func close() {
+      isClosing = true
+      navigation.isShowingGoToSheet = false
     }
   }
 #endif
