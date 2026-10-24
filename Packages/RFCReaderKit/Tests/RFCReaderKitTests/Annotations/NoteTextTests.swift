@@ -110,6 +110,16 @@ struct NoteTextTests {
       NoteText.body(of: text).markdown == "-\n  - deep")
   }
 
+  /// The editor opens what it saved: an item with no text of its own, only a deeper
+  /// list, keeps its place in the list.
+  @Test func `an item that only opens a deeper list reads back as itself`() {
+    for markdown in ["-\n  - deep", "Before\n\n-\n  - deep"] {
+      let body = NoteBody(markdown: markdown)
+      #expect(body.markdown == markdown)
+      #expect(NoteText.body(of: NoteText.attributed(body, font: font)) == body)
+    }
+  }
+
   // MARK: - Formatting
 
   private func editable(_ body: NoteBody) -> NSMutableAttributedString {
@@ -204,5 +214,34 @@ struct NoteTextTests {
     #expect(style.textLists.count == 1)
     let off = NoteText.toggledTypingStyle(ordered: false, current: style, font: font)
     #expect(off.textLists.isEmpty)
+  }
+
+  // MARK: - Links
+
+  @Test func `the link field acts on the selection, or on the whole link the caret is in`() {
+    let url = URL(string: "https://example.com")!
+    let text = editable(
+      NoteBody([.paragraph([Span("see "), Span("this link", link: url), Span(" here")])]))
+    let link = NSRange(location: 4, length: 9)
+    #expect(NoteText.linkRange(NSRange(location: 6, length: 0), in: text) == link)
+    #expect(NoteText.linkRange(NSRange(location: 4, length: 0), in: text) == link)
+    // Just past it, the caret is in the text after it.
+    #expect(
+      NoteText.linkRange(NSRange(location: 13, length: 0), in: text)
+        == NSRange(location: 13, length: 0))
+    #expect(
+      NoteText.linkRange(NSRange(location: 0, length: 3), in: text)
+        == NSRange(location: 0, length: 3))
+  }
+
+  @Test func `a caret at the end of a note that ends in a link is in it`() {
+    let url = URL(string: "https://example.com")!
+    let text = editable(NoteBody([.paragraph([Span("see "), Span("this", link: url)])]))
+    #expect(
+      NoteText.linkRange(NSRange(location: 8, length: 0), in: text)
+        == NSRange(location: 4, length: 4))
+    #expect(
+      NoteText.linkRange(NSRange(location: 0, length: 0), in: NSAttributedString())
+        == NSRange(location: 0, length: 0))
   }
 }

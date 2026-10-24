@@ -159,7 +159,10 @@ struct AnnotationsView: View {
   private func menu(for row: AnnotationList.Row) -> some View {
     if row.isNote {
       if let note = row.notes.first {
-        Button("Edit Note") { openNote(.existing(note.id)) }
+        Button("Edit Note") {
+          if case .placed(let anchor, _) = row.placement { select(anchor) }
+          openNote(.existing(note.id))
+        }
         Button("Delete Note", role: .destructive) {
           library.deleteNote(note.id, undoManager: undoManager)
         }
@@ -173,8 +176,11 @@ struct AnnotationsView: View {
         }
         Divider()
       }
-      if case .placed = row.placement {
-        Button("Add Note") { openNote(.new(.highlight(row.id))) }
+      if case .placed(let anchor, _) = row.placement {
+        Button("Add Note") {
+          select(anchor)
+          openNote(.new(.highlight(row.id)))
+        }
       }
       Button("Delete Highlight", role: .destructive) {
         if row.notes.isEmpty {

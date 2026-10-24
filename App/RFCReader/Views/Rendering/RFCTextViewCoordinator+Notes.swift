@@ -115,6 +115,11 @@ extension RFCTextViewCoordinator {
   func openNote(_ request: NoteRequest, at range: NSRange?) {
     guard let built, !built.isTranslation, let documentID, let environment else { return }
     let library = environment.library
+    // The editor open now saves before another opens. Opened again on its own note,
+    // the next one starts from what it saved: the store's change has not reached
+    // `notes` yet, and the next editor's close would save the older text over it.
+    let open = noteEditor
+    open?.model.close()
     let identifier: UUID
     let owner: NoteOwner
     let body: String
@@ -128,7 +133,7 @@ extension RFCTextViewCoordinator {
       } else {
         owner = .target(note.target ?? .section(ModelText.abstractAnchor))
       }
-      body = note.body
+      body = (open?.note == id ? open?.model.saved : nil) ?? note.body
     case .new(let made):
       identifier = UUID()
       owner = made
@@ -158,6 +163,7 @@ extension RFCTextViewCoordinator {
         _ = self?.onLink(url, .current)
       },
       showInAnnotations: showInAnnotations)
+    noteEditor = (identifier, model)
     presentNoteEditor(model, at: place, environment: environment)
   }
 
@@ -367,10 +373,13 @@ extension Array {
       popover.contentViewController = host
       notePopover = popover
       let origin = textView.textContainerOrigin
+      let visible = textView.visibleRect
+      // Asked for from the panel, the place may be out of view still, the jump to it
+      // under way: the popover opens at the top of the view rather than off it.
+      let place = range.flatMap(referenceRect(for:))?.offsetBy(dx: origin.x, dy: origin.y)
       let rect =
-        range.flatMap(referenceRect(for:))?.offsetBy(dx: origin.x, dy: origin.y)
-        ?? CGRect(
-          x: textView.visibleRect.midX, y: textView.visibleRect.minY + 40, width: 1, height: 1)
+        place.flatMap { visible.intersects($0) ? $0 : nil }
+        ?? CGRect(x: visible.midX, y: visible.minY + 40, width: 1, height: 1)
       popover.show(relativeTo: rect, of: textView, preferredEdge: .maxY)
     }
 
