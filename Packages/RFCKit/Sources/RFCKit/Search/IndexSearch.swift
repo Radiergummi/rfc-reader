@@ -80,8 +80,9 @@ public struct SearchHit: Sendable, Identifiable {
 /// In-memory search over index metadata: number, title, keywords, authors, abstract.
 ///
 /// A scan of every entry per query, with no index: the "Search" benchmarks of
-/// `make benchmark` measure it over the real index. An index for the metadata waits
-/// for full-text search over document bodies, which will hold both (#37, #605).
+/// `make benchmark` measure it over the real index. It stays a scan rather than moving
+/// into the full-text index, which matches words where this matches substrings, and
+/// which the person can remove (decision "The metadata search stays a scan").
 public struct IndexSearch: Sendable {
   public let index: RFCIndex
 
