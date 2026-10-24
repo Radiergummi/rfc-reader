@@ -75,9 +75,9 @@ public enum AnnotationExport {
     }
 
     var parts = [frontMatter(document: document, id: id, exported: exported, timeZone: timeZone)]
-    // The section whose heading was written last: nil before any, and nil inside once
-    // an annotation in no section was.
-    var section: String??
+    // Whether an entry has been written, and the section of the last one.
+    var hasEntry = false
+    var section: String?
     // The annotations of one place in the order they were made, a section's own note
     // ahead of whatever starts with it.
     for item in placed.sorted(by: {
@@ -85,13 +85,14 @@ public enum AnnotationExport {
         $1.start, $1.isSectionNote ? 0 : 1, $1.createdAt
       )
     }) {
-      let heading = section != .some(item.section) ? writer.heading(of: item.section) : nil
+      let heading = !hasEntry || section != item.section ? writer.heading(of: item.section) : nil
       if let heading {
         parts.append(heading)
-      } else if section != nil {
+      } else if hasEntry {
         // After an entry, under no new heading: a section that has none, too.
         parts.append(Self.entryBreak)
       }
+      hasEntry = true
       section = item.section
       parts.append(item.text)
     }
@@ -136,7 +137,9 @@ public enum AnnotationExport {
         passages.append(Passage(text, isVerbatim: false))
       }
     }
-    for block in model.verbatim where block.overlaps(range) {
+    // The blocks are in order: from the first that ends past the range's start.
+    let first = model.verbatim.partitioningIndex { $0.upperBound > range.lowerBound }
+    for block in model.verbatim[first...] where block.overlaps(range) {
       prose(until: block.lowerBound)
       let end = min(block.upperBound, range.upperBound)
       passages.append(

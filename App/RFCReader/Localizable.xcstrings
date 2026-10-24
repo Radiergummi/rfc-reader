@@ -1937,6 +1937,16 @@
         }
       }
     },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
+          }
+        }
+      }
+    },
     "Highlights are shown in the document's own text." : {
       "localizations" : {
         "de" : {
