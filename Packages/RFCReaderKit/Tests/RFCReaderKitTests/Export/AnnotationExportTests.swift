@@ -312,6 +312,23 @@ struct AnnotationExportTests {
       in: markdown)
   }
 
+  /// As Copy as Quote splits a selection: the prose a highlight starts with is a
+  /// quote's paragraph ahead of the fence, not a line inside it.
+  @Test func `a highlight from prose into a figure fences only the figure`() throws {
+    // Some words of prose, then the figure's or code's lines.
+    let found = model.verbatim.first { block in
+      block.lowerBound >= 40 && !model.isVerbatim(block.lowerBound - 40..<block.lowerBound)
+        && model.text(in: block.lowerBound - 40..<block.lowerBound).contains { $0.isLetter }
+    }
+    let block = try #require(found, "no figure after prose")
+    let target = try #require(Target(covering: block.lowerBound - 40..<block.upperBound, in: model))
+    let lines = export([highlight(target)]).components(separatedBy: "\n")
+    let fence = try #require(lines.firstIndex(of: "> ```"))
+    let quote = try #require(lines.firstIndex { $0.hasPrefix("> ") })
+    #expect(quote < fence)
+    #expect(lines[quote..<fence].allSatisfy { $0 == ">" || $0.hasPrefix("> ") })
+  }
+
   @Test func `code is fenced though no line of the highlight is indented`() throws {
     let line = try verbatimLine { $0.first.map { $0 != " " } == true }
     let markdown = export([highlight(try #require(Target(covering: line.range, in: model)))])
@@ -368,6 +385,16 @@ struct AnnotationExportTests {
     #expect(notPlaced < quote)
     #expect(quote < note)
     #expect(!markdown.contains("— ["))
+  }
+
+  @Test func `a note placed nowhere is quoted from where it was found last`() throws {
+    let lostNote = AnnotationSnapshot.NoteEntry(
+      id: UUID(), document: id, highlight: nil, target: lost("Words it was made on."),
+      relocated: lost("Words it was found on since."), body: "Gone again.", createdAt: day,
+      modifiedAt: day)
+    let markdown = export([], notes: [lostNote])
+    _ = try line("> Words it was found on since.", in: markdown)
+    #expect(!markdown.contains("Words it was made on."))
   }
 
   @Test func `a section note whose section is gone comes last`() throws {
