@@ -166,13 +166,17 @@ public enum NoteText {
   }
 
   /// A list item's text without a marker its source wrote into it, as TextKit 1 and
-  /// pasted rich text do: `\t•\t`.
+  /// pasted rich text do: `\t•\t`. Only the list's own marker: text typed between
+  /// two tabs is the item's.
   private static func withoutMarker(_ spans: [NoteBody.Span], list: NSTextList)
     -> [NoteBody.Span]
   {
     guard var first = spans.first, first.text.hasPrefix("\t") else { return spans }
     let rest = first.text.dropFirst()
     guard let tab = rest.firstIndex(of: "\t") else { return spans }
+    let marker = String(rest[..<tab])
+    let number = Int(marker.filter(\.isNumber)) ?? 1
+    guard marker == list.marker(forItemNumber: number) else { return spans }
     first.text = String(rest[rest.index(after: tab)...])
     return [first] + spans.dropFirst()
   }

@@ -83,6 +83,29 @@ struct NoteTextTests {
     #expect(!colored)
   }
 
+  @Test(arguments: [NSTextList.MarkerFormat.disc, .decimal])
+  func `an item's own text between tabs is no marker, and is kept`(
+    format: NSTextList.MarkerFormat
+  ) {
+    let style = NSMutableParagraphStyle()
+    style.textLists = [NSTextList(markerFormat: format, options: 0)]
+    let typed = NSAttributedString(
+      string: "\tkey\tvalue", attributes: [.font: font, .paragraphStyle: style])
+    // The tab at the paragraph's edge goes, as white space there always does.
+    #expect(NoteText.body(of: typed).plainText == "key\tvalue")
+  }
+
+  @Test func `a number written into pasted numbered text is dropped`() {
+    let style = NSMutableParagraphStyle()
+    style.textLists = [NSTextList(markerFormat: .decimal, options: 0)]
+    let list = style.textLists[0]
+    let pasted = NSAttributedString(
+      string:
+        "\t\(list.marker(forItemNumber: 1))\tfirst\n\t\(list.marker(forItemNumber: 2))\tsecond",
+      attributes: [.font: font, .paragraphStyle: style])
+    #expect(NoteText.body(of: pasted).plainText == "first\nsecond")
+  }
+
   @Test func `a marker written into pasted list text is dropped`() {
     let list = NSTextList(markerFormat: .disc, options: 0)
     let style = NSMutableParagraphStyle()

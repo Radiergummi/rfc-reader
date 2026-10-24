@@ -42,6 +42,24 @@ struct NotePlacementTests {
     (built.text.string as NSString).substring(with: NSRange(location: location, length: length))
   }
 
+  @Test func `a note's text alone places it nowhere else`() throws {
+    let made = note(on: nil, target: try target("MUST send"))
+    func copy(
+      body: String = "x", highlight: UUID? = nil, target: Target? = nil,
+      relocated: Target? = nil
+    ) -> AnnotationSnapshot.NoteEntry {
+      AnnotationSnapshot.NoteEntry(
+        id: made.id, document: made.document, highlight: highlight ?? made.highlight,
+        target: target ?? made.target, relocated: relocated, body: body,
+        createdAt: made.createdAt, modifiedAt: .now)
+    }
+    #expect(NotePlacement.placesAlike([made], [copy(body: "*typed* since")]))
+    #expect(!NotePlacement.placesAlike([made], [copy(highlight: UUID())]))
+    #expect(!NotePlacement.placesAlike([made], [copy(target: try target("SHOULD"))]))
+    #expect(!NotePlacement.placesAlike([made], [copy(relocated: try target("SHOULD"))]))
+    #expect(!NotePlacement.placesAlike([made], [made, copy()]))
+  }
+
   @Test func `a note on a highlight stands at the highlight's start`() throws {
     let highlight = try highlight("MUST send")
     let note = note(on: highlight.id, target: highlight.target)

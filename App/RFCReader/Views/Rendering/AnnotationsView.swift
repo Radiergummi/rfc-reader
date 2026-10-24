@@ -146,7 +146,11 @@ struct AnnotationsView: View {
       guard let section else { return nil }
       if section == ModelText.abstractAnchor { return String(localized: "Abstract") }
       return sections.first { $0.anchor == section }?.displayTitle
-    case .ambiguous:
+    case .ambiguous(let places):
+      // A note's row offers no place to choose.
+      if places.isEmpty {
+        return String(localized: "This passage is in several places in this document.")
+      }
       return String(localized: "In several places: choose one, or delete it.")
     case .detached:
       return String(localized: "This passage no longer exists in this document.")

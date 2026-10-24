@@ -46,6 +46,21 @@ struct NoteMarkdownRoundTripTests {
     #expect(body.plainText == spans.map(\.text).joined())
   }
 
+  /// Each save normalizes the note on the main actor: a paragraph of many crossings
+  /// is not to take a parse for every style for every style it drops.
+  @Test(.timeLimit(.minutes(1)))
+  func `a paragraph of a hundred crossing styles is spelled in time`() {
+    let spans = (0..<100).flatMap { index in
+      [
+        Span("a\(index) ", style: .emphasis), Span("b ", style: [.emphasis, .strikethrough]),
+        Span("c ", style: .strikethrough), Span("d "),
+      ]
+    }
+    let body = NoteBody([.paragraph(spans)])
+    #expect(NoteBody(markdown: body.markdown) == body)
+    #expect(body.plainText == spans.map(\.text).joined().trimmingCharacters(in: .whitespaces))
+  }
+
   /// A few thousand bodies from a seeded generator: their parts are the scope's
   /// styles, links, line breaks and the characters a delimiter flanks by.
   @Test func `every canonical body reads back as itself, and keeps its text`() {

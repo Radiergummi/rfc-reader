@@ -116,8 +116,9 @@ extension RFCTextViewCoordinator {
     guard let built, !built.isTranslation, let documentID, let environment else { return }
     let library = environment.library
     // The editor open now saves before another opens. Opened again on its own note,
-    // the next one starts from what it saved: the store's change has not reached
-    // `notes` yet, and the next editor's close would save the older text over it.
+    // the next one starts from what it saved while the store's change has not reached
+    // `notes`, or the next editor's close would save the older text over it; once
+    // `notes` has changed since it opened, from that, which may be another window's.
     let open = noteEditor
     open?.model.close()
     let identifier: UUID
@@ -133,7 +134,13 @@ extension RFCTextViewCoordinator {
       } else {
         owner = .target(note.target ?? .section(ModelText.abstractAnchor))
       }
-      body = (open?.note == id ? open?.model.saved : nil) ?? note.body
+      if let open, open.note == id, note.body == open.model.initialBody,
+        let saved = open.model.saved
+      {
+        body = saved
+      } else {
+        body = note.body
+      }
     case .new(let made):
       identifier = UUID()
       owner = made

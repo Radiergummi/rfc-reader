@@ -4217,6 +4217,16 @@
         }
       }
     },
+    "This passage is in several places in this document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Stelle steht mehrmals in diesem Dokument."
+          }
+        }
+      }
+    },
     "This passage no longer exists in this document." : {
       "localizations" : {
         "de" : {
