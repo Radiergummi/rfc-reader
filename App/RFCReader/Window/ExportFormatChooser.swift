@@ -23,6 +23,8 @@
     /// The formats this document can be saved as (#185), only those that take a
     /// section when one is saved.
     private let offered: [ExportFormat]
+    private let document: DocumentID
+    private let section: String?
 
     /// - Parameter section: the anchor of the section to save, which names the
     ///   file; nil for the whole document.
@@ -31,6 +33,8 @@
     ) {
       self.panel = panel
       self.offered = offered
+      self.document = document
+      self.section = section
       format = ExportFormat(
         remembered: UserDefaults.standard.string(forKey: Self.rememberedKey), offered: offered)
       popUp.addItems(withTitles: offered.map { $0.name() })
@@ -50,12 +54,14 @@
     }
 
     @objc private func choose() {
+      let previous = format
       format = offered[popUp.indexOfSelectedItem]
       if format.isRemembered {
         UserDefaults.standard.set(format.rawValue, forKey: Self.rememberedKey)
       }
       panel.allowedContentTypes = [format.contentType]
-      panel.nameFieldStringValue = format.renaming(panel.nameFieldStringValue)
+      panel.nameFieldStringValue = format.renaming(
+        panel.nameFieldStringValue, from: previous, for: document, section: section)
     }
   }
 #endif

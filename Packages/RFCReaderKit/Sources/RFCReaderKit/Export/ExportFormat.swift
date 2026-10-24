@@ -107,14 +107,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     return (hasGrammar ? everyDocument + [.abnf] : everyDocument) + [.annotations]
   }
 
-  /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
-  /// name in Finder, rather than the RFC Editor's `rfc10042`.
-  public func fileName(for id: DocumentID) -> String {
-    "\(Self.fileStem(for: id)).\(pathExtension)"
-  }
-
-  /// `RFC-10042`: a file name without its extension, which iOS's Save to Files adds
-  /// for the format itself.
+  /// `RFC-10042`: the document as it is cited, which reads as a name in Finder,
+  /// rather than the RFC Editor's `rfc10042`. What every format's file is named
+  /// from (`fileName(for:section:locale:)`).
   public static func fileStem(for id: DocumentID) -> String {
     "\(id.series.rawValue)-\(id.number)"
   }
@@ -130,6 +125,18 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       || (UTType(filenameExtension: suffix).map { !$0.isDynamic } ?? false)
     let stem = isFileType ? (name as NSString).deletingPathExtension : name
     return "\(stem.isEmpty ? name : stem).\(pathExtension)"
+  }
+
+  /// What the save panel's name field becomes when the format changes from
+  /// `previous` to this one: this format's own name for the file while the field
+  /// still holds `previous`'s, which differ by more than the extension where one is
+  /// the highlights and notes, and `renaming(_:)` once the name was changed.
+  public func renaming(
+    _ name: String, from previous: ExportFormat, for id: DocumentID, section anchor: String?,
+    locale: Locale = .interface
+  ) -> String {
+    let untouched = previous.fileName(for: id, section: anchor, locale: locale)
+    return name == untouched ? fileName(for: id, section: anchor, locale: locale) : renaming(name)
   }
 
   /// The Finder tags an exported file is offered with (Mac): `RFC`, the working
