@@ -436,8 +436,9 @@
 
     // MARK: - Validation
 
-    /// More's Export and Print, for a document read as its text (#207); the rest of
-    /// what the toolbar's menus hold is always available.
+    /// More's Export and Print, for a document read as its text (#207), and its
+    /// Reading Mode, for a document on screen (#782); the rest of what the toolbar's
+    /// menus hold is always available.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
       switch item.action {
       case #selector(exportDocument), #selector(printDocument): reader.offersPrintAndExport
@@ -553,7 +554,11 @@
           tipPopovers.removeValue(forKey: anchor)?.close()
           continue
         }
-        guard tipPopovers[anchor] == nil, let item = tipAnchors[anchor] else { continue }
+        // Shown again if its popover closed without TipKit ending the tip, as a click
+        // elsewhere may close it.
+        guard tipPopovers[anchor]?.isShown != true, let item = tipAnchors[anchor] else {
+          continue
+        }
         let popover = TipNSPopover(tip) { _ in
           // Learn More: the help at the tip's section, and the tip is done.
           HelpWindow.show(at: tip.helpSection)
