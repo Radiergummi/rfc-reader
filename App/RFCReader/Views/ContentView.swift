@@ -265,11 +265,8 @@ struct EmptyDetailView: View {
     @State private var isClosing = false
     @FocusState private var focused: Bool
 
-    private var results: QuickOpenResults {
-      var results = QuickOpenResults()
-      results.show(number: text)
-      return results
-    }
+    /// The RFC with the number typed, if any.
+    private var link: RFCLink? { QuickOpenResults.link(forNumber: text) }
 
     var body: some View {
       NavigationStack {
@@ -283,11 +280,9 @@ struct EmptyDetailView: View {
             // A hardware keyboard's Return; the number pad has none, and Open is
             // in the bar.
             .onSubmit(openSelection)
-          if !results.rows.isEmpty {
+          if let link {
             Section {
-              ForEach(results.rows, id: \.self) { row in
-                self.row(for: row.link)
-              }
+              row(for: link)
             }
           }
         }
@@ -298,7 +293,7 @@ struct EmptyDetailView: View {
           }
           ToolbarItem(placement: .confirmationAction) {
             Button("Open", action: openSelection)
-              .disabled(results.openable == nil)
+              .disabled(link == nil)
           }
         }
       }
@@ -337,7 +332,7 @@ struct EmptyDetailView: View {
     }
 
     private func openSelection() {
-      if let link = results.openable {
+      if let link {
         open(link)
       }
     }
