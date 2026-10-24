@@ -44,15 +44,15 @@ public enum AnnotationExport {
           Placed(
             start: range.lowerBound, isSectionNote: false, createdAt: highlight.createdAt,
             section: section,
-            text: writer.highlight(passage(range, in: model), section: section, notes: itsNotes)))
+            text: writer.highlight(passages(range, in: model), section: section, notes: itsNotes)))
       case .ambiguous?:
         if !itsNotes.isEmpty {
           unplaced.append(
-            writer.highlight(Passage(highlight.quote.exact), section: nil, notes: itsNotes))
+            writer.highlight([Passage(highlight.quote.exact)], section: nil, notes: itsNotes))
         }
       case .detached?, nil:
         unplaced.append(
-          writer.highlight(Passage(highlight.quote.exact), section: nil, notes: itsNotes))
+          writer.highlight([Passage(highlight.quote.exact)], section: nil, notes: itsNotes))
       }
     }
     for note in ownNotes {
@@ -66,10 +66,11 @@ public enum AnnotationExport {
             section: section,
             text: isSection
               ? writer.body(of: note)
-              : writer.highlight(passage(range, in: model), section: section, notes: [note])))
+              : writer.highlight(passages(range, in: model), section: section, notes: [note])))
       } else {
-        let quote = if case .range(_, _, let quote)? = note.target { quote.exact } else { "" }
-        unplaced.append(writer.highlight(Passage(quote), section: nil, notes: [note]))
+        // Where it was found last, should it have been since it was made.
+        let quote = if case .range(_, _, let quote)? = note.current { quote.exact } else { "" }
+        unplaced.append(writer.highlight([Passage(quote)], section: nil, notes: [note]))
       }
     }
 
@@ -84,12 +85,14 @@ public enum AnnotationExport {
         $1.start, $1.isSectionNote ? 0 : 1, $1.createdAt
       )
     }) {
-      if section != .some(item.section) {
-        section = item.section
-        if let heading = writer.heading(of: item.section) { parts.append(heading) }
-      } else {
+      let heading = section != .some(item.section) ? writer.heading(of: item.section) : nil
+      if let heading {
+        parts.append(heading)
+      } else if section != nil {
+        // After an entry, under no new heading: a section that has none, too.
         parts.append(Self.entryBreak)
       }
+      section = item.section
       parts.append(item.text)
     }
     if !unplaced.isEmpty {
@@ -120,19 +123,42 @@ public enum AnnotationExport {
     }
   }
 
-  /// The passage at `range`: a figure's or code's from the start of its first line,
+  /// The passages at `range`, split as Copy as Quote splits a selection: prose apart
+  /// from a figure's or code's lines, which start from the start of their first line,
   /// whose indentation a highlight snapped to words leaves out.
-  private static func passage(_ range: Range<Int>, in model: ModelText) -> Passage {
-    guard model.isVerbatim(range) else { return Passage(model.text(in: range), isVerbatim: false) }
+  private static func passages(_ range: Range<Int>, in model: ModelText) -> [Passage] {
+    var passages: [Passage] = []
+    var start = range.lowerBound
+    func prose(until end: Int) {
+      guard start < end else { return }
+      let text = model.text(in: start..<end)
+      if text.contains(where: { !$0.isWhitespace }) {
+        passages.append(Passage(text, isVerbatim: false))
+      }
+    }
+    for block in model.verbatim where block.overlaps(range) {
+      prose(until: block.lowerBound)
+      let end = min(block.upperBound, range.upperBound)
+      passages.append(
+        Passage(
+          model.text(in: lineStart(max(block.lowerBound, start), in: model)..<end), isVerbatim: true
+        ))
+      start = end
+    }
+    prose(until: range.upperBound)
+    return passages
+  }
+
+  /// `offset`, or where its line starts when only spaces and tabs come before it there.
+  private static func lineStart(_ offset: Int, in model: ModelText) -> Int {
     let space: UInt16 = 0x20
     let tab: UInt16 = 0x09
     let newline: UInt16 = 0x0A
-    var start = range.lowerBound
+    var start = offset
     while start > 0, model.units[start - 1] == space || model.units[start - 1] == tab {
       start -= 1
     }
-    if start > 0, model.units[start - 1] != newline { start = range.lowerBound }
-    return Passage(model.text(in: start..<range.upperBound), isVerbatim: true)
+    return start > 0 && model.units[start - 1] != newline ? offset : start
   }
 
   /// One annotation placed in the document, as it is written.
@@ -185,12 +211,14 @@ public enum AnnotationExport {
       return document.section(anchor: anchor).map { "## " + Self.escaped($0.displayTitle) }
     }
 
-    /// A quote, cited from `section` when it has a place, then `notes`' bodies.
-    func highlight(_ quote: Passage, section: String?, notes: [AnnotationSnapshot.NoteEntry])
-      -> String
-    {
+    /// A quote of `passages`, cited from `section` when it has a place, then `notes`'
+    /// bodies.
+    func highlight(
+      _ passages: [Passage], section: String?, notes: [AnnotationSnapshot.NoteEntry]
+    ) -> String {
       var parts: [String] = []
-      if !quote.text.isEmpty { parts.append(Self.blockQuote(quote)) }
+      let quoted = passages.filter { !$0.text.isEmpty }.map(Self.blockQuote)
+      if !quoted.isEmpty { parts.append(quoted.joined(separator: "\n>\n")) }
       if let section { parts.append("— " + citation(of: section)) }
       if !notes.isEmpty {
         parts.append(
