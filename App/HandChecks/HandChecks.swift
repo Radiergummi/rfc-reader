@@ -129,6 +129,49 @@ final class HandChecks: XCTestCase {
     screenshot("5 still on")
   }
 
+  // MARK: - Page themes (#704)
+
+  /// A page theme chosen while a document is open recolors it in place, page and
+  /// text, and the appearance override with a dark theme darkens the whole app.
+  /// The screenshots are what to look at: the text is drawn, not read here.
+  func testPageThemeSwitchWhileReading() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    screenshot("1 automatic")
+
+    chooseInReadingSettings([("Light Theme", "Sepia")])
+    waitForReader("RFC 8174")
+    screenshot("2 sepia")
+
+    chooseInReadingSettings([("Appearance", "Dark"), ("Dark Theme", "Black")])
+    waitForReader("RFC 8174")
+    screenshot("3 dark, black")
+
+    chooseInReadingSettings([("Appearance", "System"), ("Light Theme", "Automatic")])
+    waitForReader("RFC 8174")
+    screenshot("4 back to automatic")
+  }
+
+  /// Opens Reading Settings from the reader, picks each picker's choice, and closes
+  /// it again.
+  private func chooseInReadingSettings(_ choices: [(picker: String, choice: String)]) {
+    app.buttons["Text Size"].tap()
+    app.buttons["Reading Settings…"].tap()
+    for (picker, choice) in choices {
+      // A menu picker's row is a button labeled with its title and its choice.
+      let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", picker))
+        .firstMatch
+      if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+      XCTAssertTrue(row.waitForExistence(timeout: 5), "no \(picker) picker")
+      row.tap()
+      let option = app.buttons[choice]
+      XCTAssertTrue(option.waitForExistence(timeout: 5), "no \(choice) in \(picker)")
+      option.tap()
+    }
+    screenshot("settings: " + choices.map(\.choice).joined(separator: ", "))
+    app.buttons["Done"].tap()
+  }
+
   // MARK: - Find (#943)
 
   /// More ▸ Find in Document is offered over a text and nowhere else: not over the

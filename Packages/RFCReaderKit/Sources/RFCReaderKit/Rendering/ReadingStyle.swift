@@ -53,6 +53,12 @@ public struct ReadingStyle: Sendable, Hashable {
   /// (`ReaderLayout.hangs`), and zero where it hangs nothing. Zero by default, and
   /// never used on paper, which has no gutter to hang it in and no link to make of it.
   public var sectionNumberHang: CGFloat = 0
+  /// Whether the text is stored in the colors of the page theme chosen
+  /// (`ReaderPalette.themedText`, #704), which follow a theme switch as they are
+  /// drawn, rather than the system's label colors. On by default, for the screen;
+  /// off for paper, which keeps the system's, resolved to a white page's by its
+  /// forced light appearance, whatever the screen's theme.
+  public var followsPageTheme = true
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.

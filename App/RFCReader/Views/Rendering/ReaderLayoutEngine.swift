@@ -119,30 +119,12 @@ final class ReaderLayoutEngine: PinSurface {
   /// Draws the fragments again without laying them out (#747): what a change only
   /// to what they draw needs, such as Implementer's bands.
   func redraw() {
-    guard let textView, let layout = textView.textLayoutManager else { return }
+    guard let textView else { return }
     let interval = signposter.beginInterval(
       "Redraw", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     defer { signposter.endInterval("Redraw", interval) }
-    layout.invalidateRenderingAttributes(for: layout.documentRange)
-    // The views TextKit draws the laid-out fragments in, which the text view's own
-    // display does not reach: a highlight made in view, or a band found, was drawn
-    // only once its paragraph was laid out again, as a run of the app showed (#522).
-    // Not the hosted header, which draws no text. Only those views are drawn again;
-    // nothing is laid out.
-    var views = textView.subviews.filter { $0 !== header }
-    while let view = views.popLast() {
-      #if canImport(UIKit)
-        view.setNeedsDisplay()
-      #else
-        view.needsDisplay = true
-      #endif
-      views += view.subviews
-    }
-    #if canImport(UIKit)
-      textView.setNeedsDisplay()
-    #else
-      textView.needsDisplay = true
-    #endif
+    // Not the hosted header, which draws no text.
+    textView.redrawLaidOutText(except: header)
   }
 
   /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
@@ -366,5 +348,34 @@ final class ReaderLayoutEngine: PinSurface {
       let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
     else { return }
     layout.ensureLayout(for: range)
+  }
+}
+
+extension PlatformTextView {
+  /// Draws the laid-out fragments again, without laying anything out: what a change
+  /// only to how they draw needs, a page theme's colors (#704) or Implementer's
+  /// bands (#747).
+  ///
+  /// The views TextKit draws the laid-out fragments in are drawn again, which the
+  /// text view's own display does not reach: a highlight made in view, or a band
+  /// found, was drawn only once its paragraph was laid out again, as a run of the
+  /// app showed (#522). `excluded` and what it holds are left alone.
+  func redrawLaidOutText(except excluded: AnyObject? = nil) {
+    guard let layout = textLayoutManager else { return }
+    layout.invalidateRenderingAttributes(for: layout.documentRange)
+    var views = subviews.filter { $0 !== excluded }
+    while let view = views.popLast() {
+      #if canImport(UIKit)
+        view.setNeedsDisplay()
+      #else
+        view.needsDisplay = true
+      #endif
+      views += view.subviews
+    }
+    #if canImport(UIKit)
+      setNeedsDisplay()
+    #else
+      needsDisplay = true
+    #endif
   }
 }

@@ -50,6 +50,8 @@ struct RFCReaderApp: App {
       // interface at all — so this cannot carry the link for a new tab.
       WindowGroup {
         ContentView(library: library)
+          // The appearance chosen in Settings, for every window (#704).
+          .modifier(AppAppearance())
           .task { await library.bootstrap() }
           // Here rather than in `init`, which is before the `.backgroundTask` below.
           .task { await BookmarkNotifications.scheduleRefreshUnlessPending() }

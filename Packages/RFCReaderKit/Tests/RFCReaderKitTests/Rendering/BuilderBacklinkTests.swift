@@ -61,7 +61,7 @@ struct BuilderBacklinkTests {
       let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
       #expect(font == style.backlinksFont)
       let color = built.text.attribute(.foregroundColor, at: offset, effectiveRange: nil)
-      #expect(color as? PlatformColor == RFCColors.secondaryLabel)
+      #expect(color as? PlatformColor == ReaderPalette.themedSecondaryText)
     }
     let link = built.text.attribute(.link, at: caption.range.location, effectiveRange: nil)
     let url = try #require(link as? URL)
