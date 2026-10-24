@@ -23,8 +23,6 @@
     let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
-    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
-    @State private var readingPathAfterPanel: ReadingPathRequest?
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { chrome.isCollapsed }
@@ -69,25 +67,11 @@
         // reader made afresh on the way back starts with them showing.
         .onChange(of: reader.showOriginal) { barsHidden = false }
         .modifier(ReturnOfferOverlay(navigation: navigation, document: document))
-        // In compact width the panel is a sheet, and a `.sheet` of our own rather
-        // than the one `.inspector` turns itself into: that one, swiped away, set
-        // the binding back to false but dropped the next request to show it, so the
-        // panel's buttons opened it only on every other tap. Beside other columns
-        // it is the tab's inspector (`ContentView`).
-        //
-        // The panel is the stack's, and only the reader on top presents it (#263):
-        // the readers below would present it too, out of sight.
-        .sheet(isPresented: isCompact && isShown ? $showsInspector : .constant(false)) {
-          guard let request = readingPathAfterPanel else { return }
-          readingPathAfterPanel = nil
-          navigation.readingPath = request
-        } content: {
-          PanelHost(
-            isPresented: $showsInspector, closesAfterChoice: true,
-            readingPathAfterClosing: $readingPathAfterPanel
-          )
-          .presentationDetents([.medium, .large])
-        }
+        .modifier(
+          PanelSheet(
+            navigation: navigation, showsInspector: $showsInspector,
+            isPresented: isCompact && isShown)
+        )
         .fileExporter(
           isPresented: Binding(
             get: { output.exported != nil },
@@ -122,6 +106,39 @@
       }
     }
 
+  }
+
+  /// The panel in compact width: a sheet, and a `.sheet` of our own rather than the
+  /// one `.inspector` turns itself into: that one, swiped away, set the binding back
+  /// to false but dropped the next request to show it, so the panel's buttons opened
+  /// it only on every other tap. Beside other columns it is the tab's inspector
+  /// (`ContentView`).
+  ///
+  /// The panel is the stack's, and only the reader on top presents it (#263): the
+  /// readers below would present it too, out of sight. An RFC's and a draft's (#728).
+  struct PanelSheet: ViewModifier {
+    let navigation: NavigationModel
+    @Binding var showsInspector: Bool
+    /// Whether this reader presents the panel as a sheet.
+    let isPresented: Bool
+
+    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
+    @State private var readingPathAfterPanel: ReadingPathRequest?
+
+    func body(content: Content) -> some View {
+      content
+        .sheet(isPresented: isPresented ? $showsInspector : .constant(false)) {
+          guard let request = readingPathAfterPanel else { return }
+          readingPathAfterPanel = nil
+          navigation.readingPath = request
+        } content: {
+          PanelHost(
+            isPresented: $showsInspector, closesAfterChoice: true,
+            readingPathAfterClosing: $readingPathAfterPanel
+          )
+          .presentationDetents([.medium, .large])
+        }
+    }
   }
 
   /// "Back to § 4.2" after following a link within the document (#254), an RFC's or
@@ -202,8 +219,6 @@
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.openURL) private var openURL
-    /// Asked for from the panel while it is a sheet, presented once that sheet is gone.
-    @State private var readingPathAfterPanel: ReadingPathRequest?
 
     func body(content: Content) -> some View {
       content
@@ -235,17 +250,10 @@
             }
           }
         }
-        .sheet(isPresented: chrome.isCollapsed && isShown ? $showsInspector : .constant(false)) {
-          guard let request = readingPathAfterPanel else { return }
-          readingPathAfterPanel = nil
-          navigation.readingPath = request
-        } content: {
-          PanelHost(
-            isPresented: $showsInspector, closesAfterChoice: true,
-            readingPathAfterClosing: $readingPathAfterPanel
-          )
-          .presentationDetents([.medium, .large])
-        }
+        .modifier(
+          PanelSheet(
+            navigation: navigation, showsInspector: $showsInspector,
+            isPresented: chrome.isCollapsed && isShown))
     }
   }
 #endif

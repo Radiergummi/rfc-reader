@@ -47,10 +47,20 @@ public enum LinkDestination: Equatable, Sendable {
     // A section of the document already on screen scrolls rather than re-opening
     // what is already open. Only when following in place: asked for a tab, a
     // section reference names something openable, unlike an anchor.
-    if activation == .here, link.document == currentDocument, let section = link.place {
+    if activation == .here, names(currentDocument, link.document), let section = link.place {
       return .jump(section)
     }
     return .document(link)
+  }
+
+  /// Whether a link to `linked` is to `current`: the same RFC or revision, or, from
+  /// inside a draft's revision, the draft by its name alone (#728).
+  private static func names(_ current: ReadableDocument, _ linked: ReadableDocument) -> Bool {
+    if linked == current { return true }
+    guard let draft = linked.draft, draft.revision == nil, let shown = current.draft else {
+      return false
+    }
+    return draft.name == shown.name
   }
 
   /// Where a jump to `place` in the document already open lands: the anchor it

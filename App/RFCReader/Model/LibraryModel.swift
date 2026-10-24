@@ -1668,21 +1668,24 @@ final class LibraryModel {
   /// Settings' Storage tab, once the keeper has made the moves asked of it so far; a
   /// fetch still running is counted when it lands. Nothing is clearable when what
   /// `sparedFromClearing` spares cannot be told, as Clear Cache then removes nothing.
+  /// The drafts read are counted with the cache, and are all clearable (#728).
   func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
-    guard let spared = sparedFromClearing() else {
-      var report = await store.storageUsage(sparing: [])
-      report.clearable = StorageUsage(documents: 0, bytes: 0)
-      return report
-    }
-    return await store.storageUsage(sparing: spared)
+    let spared = sparedFromClearing()
+    let draftUsage = await drafts.storageUsage()
+    var report = await store.storageUsage(sparing: spared ?? [])
+    report.cache = report.cache.adding(draftUsage)
+    report.clearable =
+      spared == nil ? StorageUsage(documents: 0, bytes: 0) : report.clearable.adding(draftUsage)
+    return report
   }
 
-  /// Empties the reading cache, but for what `sparedFromClearing` spares; when that
-  /// cannot be told, nothing is removed.
+  /// Empties the reading cache, but for what `sparedFromClearing` spares, and the
+  /// drafts read; when what to spare cannot be told, nothing is removed.
   func clearCache() async {
     guard let spared = sparedFromClearing() else { return }
     forgetPreviews(of: await store.clearCache(sparing: spared))
+    await drafts.clear()
   }
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
