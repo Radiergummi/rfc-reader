@@ -75,8 +75,9 @@ extension RFCTextViewCoordinator {
   }
 
   /// Next or Previous Section: in Focus the focus steps, and anywhere else the reader
-  /// goes to the heading `Folding.section(_:fromLine:in:)` names, as a link to it
-  /// goes, so Back returns.
+  /// goes to the heading `Folding.section(_:fromLine:in:)` names. A move within the
+  /// document, as a page is, so it scrolls as a restored place does and leaves no
+  /// entry for Back; Go to Section, a jump, leaves one.
   private func stepSection(_ step: Folding.FocusStep) -> Bool {
     if folding.mode == .focus {
       guard let reader = environment?.reader, reader.canStepFocus(step) else { return false }
@@ -84,10 +85,10 @@ extension RFCTextViewCoordinator {
       return true
     }
     guard let foldingIndex,
-      let anchor = folding.section(step, fromLine: engine.placeOffset, in: foldingIndex),
-      let url = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
+      let anchor = folding.section(step, fromLine: engine.placeOffset, in: foldingIndex)
     else { return false }
-    return onLink(url, .here)
+    scroll(to: anchor, offset: 0)
+    return true
   }
 
   /// The height of the line at the top of the viewport, which a page keeps in view.

@@ -64,19 +64,23 @@ struct OutlineSectionItems: View {
 /// or in the outline the row.
 struct SectionSteps: View {
   let reader: ReaderState
+  /// Whether the items carry their shortcuts. iOS's More menu shows them without, as
+  /// its Find in Document does: `DocumentCommands`' copies in the menu bar register
+  /// them, so each chord is registered once.
+  var showsShortcuts = true
 
   var body: some View {
     // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
     // its paragraphs' ends, and leave the two together alone.
     Button("Next Section", systemImage: "chevron.down") { reader.stepSection(.next) }
-      .keyboardShortcut(ReaderShortcut.nextSection.keyboardShortcut)
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.nextSection.keyboardShortcut : nil)
       .disabled(!reader.canStepSection(.next))
     Button("Previous Section", systemImage: "chevron.up") { reader.stepSection(.previous) }
-      .keyboardShortcut(ReaderShortcut.previousSection.keyboardShortcut)
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.previousSection.keyboardShortcut : nil)
       .disabled(!reader.canStepSection(.previous))
     // Over the original text too: it goes where the contents panel's rows go.
     Button("Go to Section…", systemImage: "number") { reader.isGoingToSection = true }
-      .keyboardShortcut(ReaderShortcut.goToSection.keyboardShortcut)
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.goToSection.keyboardShortcut : nil)
       .disabled(reader.sections.isEmpty)
   }
 }
