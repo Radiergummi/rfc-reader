@@ -22,7 +22,7 @@ struct TextLayoutOffsetTests {
       "First paragraph.\nA second, somewhat longer paragraph.\n\nFourth, after an empty one.\nLast")
 
   /// Lays `text` out. The storage is returned because the layout manager holds it
-  /// weakly. Written through `install`, never `attributedString`: see CLAUDE.md.
+  /// weakly. Written through `install`, never `attributedString`: see docs/ARCHITECTURE.md, "TextKit 2 traps".
   private func layOut() -> (NSTextContentStorage, NSTextLayoutManager) {
     let storage = NSTextContentStorage()
     storage.install(text)
