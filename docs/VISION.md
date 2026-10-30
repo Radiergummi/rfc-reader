@@ -67,7 +67,7 @@ Reference
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.
 - **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
-- **Highlights and notes**, synced, exportable as Markdown with citations attached. *Highlights (#522) and notes (#523) shipped; export and sync to come.*
+- **Highlights and notes**, synced, exportable as Markdown with citations attached. *Highlights (#522), notes (#523) and their Markdown export (#524) shipped; sync to come.*
 - **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs *(shipped; sections are #178)*; Handoff between iPhone, iPad and Mac.
 - **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open in RFC Reader" and "Replace with RFC Link" on selected text) *(shipped)*, Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".

@@ -21,6 +21,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   case xml
   /// The document's grammar collected into one file (#185), for a document with one.
   case abnf
+  /// The document's highlights and notes, with citations (#524): Markdown, made of
+  /// the reader's annotations rather than of the document alone.
+  case annotations
 
   /// Where the file comes from.
   public enum Source: Sendable {
@@ -42,12 +45,13 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     case .text: String(kit: "Plain Text", locale: locale)
     case .xml: "XML"
     case .abnf: String(kit: "ABNF Grammar", locale: locale)
+    case .annotations: String(kit: "Highlights and Notes", locale: locale)
     }
   }
 
   public var source: Source {
     switch self {
-    case .pdf, .epub, .html, .markdown, .abnf: .rendered
+    case .pdf, .epub, .html, .markdown, .abnf, .annotations: .rendered
     case .text, .xml: .published
     }
   }
@@ -58,7 +62,7 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     case .epub: .epub
     case .html: .html
     // Gruber's own identifier, which macOS declares; the extension where it is not.
-    case .markdown:
+    case .markdown, .annotations:
       UTType("net.daringfireball.markdown")
         ?? UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
     case .text: .plainText
@@ -74,20 +78,25 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     case .pdf: contentType.preferredFilenameExtension ?? rawValue
     case .epub: "epub"
     case .html: "html"
-    case .markdown: "md"
+    case .markdown, .annotations: "md"
     case .text: "txt"
     case .xml: "xml"
     case .abnf: "abnf"
     }
   }
 
+  /// Whether choosing it makes it the format the next export starts on (Mac). Not
+  /// the highlights and notes: they are an export of one document's reading, and
+  /// the next document's export would otherwise start on a file of its notes.
+  public var isRemembered: Bool { self != .annotations }
+
   /// The formats every document can be saved as.
   public static let everyDocument: [ExportFormat] = [
     .pdf, .epub, .html, .markdown, .text, .xml,
   ]
 
-  /// The formats `document` can be saved as: `everyDocument`, and its grammar where
-  /// it has one.
+  /// The formats `document` can be saved as: `everyDocument`, its grammar where it
+  /// has one, and its highlights and notes, which say so where there are none.
   public static func available(for document: RFCDocument, hints: ArtworkHints = .bundled)
     -> [ExportFormat]
   {
@@ -95,17 +104,12 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       ABNFPresentation.dialect(ofType: $0.content.type) == .rfc5234
         && ABNF.parse($0.content.text) != nil
     }
-    return hasGrammar ? everyDocument + [.abnf] : everyDocument
+    return (hasGrammar ? everyDocument + [.abnf] : everyDocument) + [.annotations]
   }
 
-  /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
-  /// name in Finder, rather than the RFC Editor's `rfc10042`.
-  public func fileName(for id: DocumentID) -> String {
-    "\(Self.fileStem(for: id)).\(pathExtension)"
-  }
-
-  /// `RFC-10042`: a file name without its extension, which iOS's Save to Files adds
-  /// for the format itself.
+  /// `RFC-10042`: the document as it is cited, which reads as a name in Finder,
+  /// rather than the RFC Editor's `rfc10042`. What every format's file is named
+  /// from (`fileName(for:section:locale:)`).
   public static func fileStem(for id: DocumentID) -> String {
     "\(id.series.rawValue)-\(id.number)"
   }
@@ -121,6 +125,18 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
       || (UTType(filenameExtension: suffix).map { !$0.isDynamic } ?? false)
     let stem = isFileType ? (name as NSString).deletingPathExtension : name
     return "\(stem.isEmpty ? name : stem).\(pathExtension)"
+  }
+
+  /// What the save panel's name field becomes when the format changes from
+  /// `previous` to this one: this format's own name for the file while the field
+  /// still holds `previous`'s, which differ by more than the extension where one is
+  /// the highlights and notes, and `renaming(_:)` once the name was changed.
+  public func renaming(
+    _ name: String, from previous: ExportFormat, for id: DocumentID, section anchor: String?,
+    locale: Locale = .interface
+  ) -> String {
+    let untouched = previous.fileName(for: id, section: anchor, locale: locale)
+    return name == untouched ? fileName(for: id, section: anchor, locale: locale) : renaming(name)
   }
 
   /// The Finder tags an exported file is offered with (Mac): `RFC`, the working
@@ -158,7 +174,8 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 extension ExportFormat {
   /// The file this format makes of `document` itself: the page, the Markdown or the
   /// grammar. Nil for PDF, which is laid out (`PDFExport`), for the EPUB, which is
-  /// an archive (`data(of:)`), for the RFC Editor's own files, and for a grammar
+  /// an archive (`data(of:)`), for the RFC Editor's own files, for the highlights
+  /// and notes, which are the reader's (`AnnotationExport`), and for a grammar
   /// `document` does not have.
   ///
   /// - Parameter outside: the document `document` is a part of (`ExportedPart`).
@@ -167,7 +184,7 @@ extension ExportFormat {
     case .html: RFCHTMLSerializer(outside: outside).page(document)
     case .markdown: RFCMarkdownSerializer(outside: outside).serialize(document)
     case .abnf: GrammarExport.text(for: document)
-    case .pdf, .epub, .text, .xml: nil
+    case .pdf, .epub, .text, .xml, .annotations: nil
     }
   }
 
