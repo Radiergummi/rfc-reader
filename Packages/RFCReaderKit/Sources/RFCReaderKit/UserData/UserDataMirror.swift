@@ -279,10 +279,9 @@ public final class UserDataMirror {
   }
 
   /// Adds the bookmark or removes it, on the main context, titled `title`. A failure
-  /// is logged rather than shown, as a collection's is (#125). A failed lookup
-  /// changes nothing; a failed save leaves the change pending in the context, saved
-  /// with the next save that succeeds. A removal registers its undo with
-  /// `undoManager` (#769), whose own failures are logged too.
+  /// is logged rather than shown, as a collection's is (#125). A failed lookup or save
+  /// changes nothing (#1002). A removal registers its undo with `undoManager` (#769),
+  /// whose own failures are logged too.
   public func toggleBookmark(_ id: DocumentID, title: String, undoManager: UndoManager? = nil) {
     do {
       try BookmarkStore.toggle(
@@ -301,15 +300,12 @@ public final class UserDataMirror {
   /// Removes every Keep Offline mark, on every device, since marks are synced, as
   /// Settings' Remove All Offline Documents does (#358), and reports the marks once.
   /// `first` runs before the removal, so what it changes is what that one report sees.
-  /// The removal is made in a context of its own, discarded with it when the save
-  /// fails, since rolling back the main context would discard whatever else waits
-  /// there to be saved, such as a bookmark whose save failed. A failure is thrown,
-  /// after `first` ran, and nothing is reported.
+  /// A failure is thrown, after `first` ran, and nothing is reported.
   public func removeAllOfflineMarks(first: () -> Void) throws {
     let marks = offlineMarks
     first()
     // The save's notification reads the marks again, and reports them when they changed.
-    try OfflineMarkStore.removeAll(in: ModelContext(container))
+    try OfflineMarkStore.removeAll(in: container.mainContext)
     refreshOfflineMarks()
     // When none were removed nothing changed, and what `first` changed is reported here.
     if offlineMarks == marks { onOfflineMarksChanged() }

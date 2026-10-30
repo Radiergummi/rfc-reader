@@ -74,7 +74,7 @@ public enum AnnotationStore {
     for absorbed in rows where plan.absorbed.contains(absorbed.identifier) {
       context.delete(absorbed)
     }
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [row.identifier], with: before, redo: [HighlightValues(row)],
       actionName: String(kit: "Highlight", locale: .interface), edit: edit)
@@ -89,7 +89,7 @@ public enum AnnotationStore {
     let before = HighlightValues(row)
     row.colorName = color.rawValue
     row.modifiedAt = .now
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
       actionName: String(kit: "Change Highlight Color", locale: .interface),
@@ -102,7 +102,7 @@ public enum AnnotationStore {
     guard let row = try highlight(identifier, in: context) else { return }
     let before = HighlightValues(row)
     context.delete(row)
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [], with: [before], redo: [],
       actionName: String(kit: "Delete Highlight", locale: .interface), edit: edit)
@@ -124,7 +124,7 @@ public enum AnnotationStore {
     row.setQuote(quote)
     row.clearRelocation()
     row.modifiedAt = .now
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
       actionName: String(kit: "Place Highlight", locale: .interface), edit: edit)
@@ -155,7 +155,7 @@ public enum AnnotationStore {
       row.relocatedEndAnchor = end.anchor
       row.relocatedEndOffset = end.offset
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// Every document with a highlight, for eviction (`CacheEviction.pinned`). Only the
@@ -213,7 +213,7 @@ public enum AnnotationStore {
         context.insert(row)
       }
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   // MARK: - Fetching

@@ -102,11 +102,11 @@ public enum BookmarkStore {
     guard try bookmarks(for: entry.document, in: context).isEmpty else { return }
     context.insert(
       Bookmark(document: entry.document, title: entry.title, createdAt: entry.createdAt))
+    try context.saveOrRollBack()
     undo.register(in: context) { context, undo in
       try remove(
         bookmarks(for: entry.document, in: context), putBack: entry, undo: undo, in: context)
     }
-    try context.save()
   }
 
   /// Removes `existing`, every row naming the document, since nothing stops there
@@ -116,16 +116,15 @@ public enum BookmarkStore {
   ) throws {
     guard !existing.isEmpty else { return }
     existing.forEach(context.delete)
-    // Registered before the save: a failed save leaves the removal pending in the
-    // context, saved with the next save that succeeds, and still undoable.
-    undo.register(in: context) { context, undo in
-      try put(entry, undo: undo, in: context)
-    }
     // Explicitly, rather than leaving it to autosave on one platform and not the
     // other: on macOS the sidebar's list and the reader's toolbar are separate
     // hosting roots reading the same store, and the glyph should not be able to
     // disagree with the list behind it while a save is still pending.
-    try context.save()
+    try context.saveOrRollBack()
+    // Registered once saved: a failed save discards the removal, leaving nothing to undo.
+    undo.register(in: context) { context, undo in
+      try put(entry, undo: undo, in: context)
+    }
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do

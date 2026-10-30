@@ -37,7 +37,7 @@ public enum OfflineMarkStore {
       // Every row naming the document, since nothing stops there being two.
       existing.forEach(context.delete)
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// Removes every mark, as Settings' Remove All Offline Documents does (#358), and
@@ -46,6 +46,6 @@ public enum OfflineMarkStore {
   /// that the save's notification, and so every other tab, reads.
   public static func removeAll(in context: ModelContext) throws {
     try context.fetch(FetchDescriptor<OfflineMark>()).forEach(context.delete)
-    try context.save()
+    try context.saveOrRollBack()
   }
 }

@@ -668,7 +668,7 @@ public enum UserData {
     let highlights = try context.fetch(
       FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
     removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
-    if context.hasChanges { try context.save() }
+    if context.hasChanges { try context.saveOrRollBack() }
   }
 
   /// Keeps the first row per key and deletes the rest, so `rows` come in the order
@@ -680,6 +680,22 @@ public enum UserData {
     var seen: Set<String> = []
     for row in rows where !seen.insert(key(row)).inserted {
       context.delete(row)
+    }
+  }
+}
+
+extension ModelContext {
+  /// Saves, and when the save fails, discards every unsaved change before rethrowing
+  /// (#1002). A change left pending would be committed by the next save that
+  /// succeeds, of anything, behind the reader's back, and a retry would find the row
+  /// it failed to save. Every store saves before it returns, so nothing else waits
+  /// unsaved in the context to be discarded with it.
+  func saveOrRollBack() throws {
+    do {
+      try save()
+    } catch {
+      rollback()
+      throw error
     }
   }
 }
