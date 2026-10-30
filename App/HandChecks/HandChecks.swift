@@ -259,6 +259,40 @@ final class HandChecks: XCTestCase {
     }
   }
 
+  // MARK: - Go to RFC (#579)
+
+  /// The library's # opens Go to RFC on a text keyboard; `BCP 14` lists its members
+  /// and not RFC 14, and Open opens the first.
+  func testGoToRFC() {
+    app.launch()
+    dismissStoreWarning()
+    waitForIndex()
+    // The bar's button, at the foot of the screen: the keyboard command of the same
+    // name is listed too, at the screen's middle.
+    let goTo = app.buttons.matching(identifier: "Go to RFC").allElementsBoundByIndex
+      .max { $0.frame.minY < $1.frame.minY }
+    goTo?.tap()
+
+    let field = app.textFields["RFC number, BCP 14, or a link"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "no Go to RFC sheet")
+    // A text keyboard: letters as well as digits.
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard")
+    XCTAssertTrue(app.keyboards.keys["q"].exists)
+    screenshot("1 keyboard")
+
+    field.typeText("BCP 14")
+    XCTAssertTrue(
+      app.buttons["RFC 2119"].waitForExistence(timeout: 5)
+        || app.staticTexts["RFC 2119"].waitForExistence(timeout: 1), "RFC 2119 not listed")
+    XCTAssertTrue(app.staticTexts["RFC 8174"].exists, "RFC 8174 not listed")
+    XCTAssertFalse(app.staticTexts["RFC 14"].exists, "BCP 14 listed RFC 14")
+    screenshot("2 typed BCP 14")
+
+    app.buttons["Open"].tap()
+    waitForReader("RFC 2119")
+    screenshot("3 opened")
+  }
+
   // MARK: - Steps
 
   /// Launches the app, waits for its index, and opens `url` in it.

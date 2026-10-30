@@ -43,7 +43,7 @@
           Divider()
           rows
         } else if controller.query.isEmpty {
-          // What the field takes, as iOS's sheet says it (#761).
+          // What the field takes (#761).
           Divider()
           Text(verbatim: QuickOpenResults.example)
             .foregroundStyle(.secondary)
