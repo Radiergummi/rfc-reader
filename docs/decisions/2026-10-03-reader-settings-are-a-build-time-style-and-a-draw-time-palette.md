@@ -28,3 +28,16 @@ A theme edited in place therefore needs a new identifier, as a reader's edited c
 Settings on iOS are a screen of the app's own, `SettingsScreen`, from the reader's text size menu and the library's menu, built from the same sections as the Mac's tabs.
 Not a settings bundle in the Settings app, which was weighed (#702): it can show no preview, no color picker and no list made at run time, such as a reader's own themes or the installed fonts, it validates nothing, and since iOS 18 it is a level deeper, under Apps.
 Apple keeps it for settings changed rarely; the Settings app will hold the system-level kind, such as downloads and network use, when there is one.
+
+## Amended: the text's colors (#704, October 2026)
+
+Page themes (#704) make the text's own colors draw-time too: body text, secondary text, links, the page and the selection.
+The plan was rendering attributes, set by an `NSTextLayoutManager` validator as each fragment is drawn, the path the card-link color takes.
+A probe on #704's branch (2026-10-19, on #702) showed they do not survive the reader's redraw: the validator runs once per fragment, and after `invalidateRenderingAttributes` (`ReaderLayoutEngine.redraw`, #747) the text drew in the stored colors again, while re-applying them over every fragment after each redraw cost about 0.35 s over RFC 9110 in a debug build, against 1.31 s for a rebuild.
+
+What was built instead, the maintainer's choice of 2026-10-19: the builder stores, in place of `RFCColors.label` and `.secondaryLabel`, `ReaderPalette.themedText` and `.themedSecondaryText`, dynamic colors whose provider returns the color of the theme chosen for the appearance they are resolved in.
+The light and the dark theme chosen are process-wide, behind a lock (`ReaderPalette.choose(light:dark:)`), which each reader sets from its settings before it redraws, so a theme switch costs what a switch to dark mode costs: a redraw, with no per-fragment work, and any later redraw keeps it.
+A rich copy maps them back to the system's label colors (`SelectionText.richCopy`), since the theme is the reader's, not the document's.
+Links keep the layout manager delegate's path (`LinkRendering`), which the same probe found holds at draw time; the page is the scroll view's background, and on macOS the selection is the text view's selected-text attributes.
+A print and an exported PDF build with the system's label colors (`ReadingStyle.followsPageTheme` off), so paper keeps the paper palette whatever the screen's theme.
+The syntax colors (#707) are to take the same path.
