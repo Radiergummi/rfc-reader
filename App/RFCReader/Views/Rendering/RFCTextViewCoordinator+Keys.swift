@@ -107,15 +107,16 @@ extension RFCTextViewCoordinator {
     }
     // Above the container is the header, where no fragment is: at the top of a
     // document the screen starts with the text's first line. Below the last line,
-    // it ends with the text.
+    // it ends with the text; with only the header on screen, it holds none.
     let top = max(0, textView.viewportTop)
+    let bottom = textView.viewportTop + textView.viewportHeight
     let start =
       layout.textLayoutFragment(for: CGPoint(x: 0, y: top))
       .map { layout.offset(of: $0.rangeInElement.location) } ?? 0
     let end =
-      layout.textLayoutFragment(for: CGPoint(x: 0, y: top + textView.viewportHeight))
+      layout.textLayoutFragment(for: CGPoint(x: 0, y: bottom))
       .map { layout.offset(of: $0.rangeInElement.endLocation) }
-      ?? layout.offset(of: layout.documentRange.endLocation)
+      ?? (bottom <= 0 ? start : layout.offset(of: layout.documentRange.endLocation))
     return NSRange(location: max(0, start), length: max(0, end - start))
   }
 
