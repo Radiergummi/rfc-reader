@@ -20,6 +20,16 @@ struct NoteTextTests {
     #expect(NoteText.body(of: NoteText.attributed(body, font: font)) == body)
   }
 
+  #if canImport(UIKit)
+    /// Bold Text in Accessibility makes the body font heavier: not every word bold.
+    @Test func `plain text in the Bold Text body font reads back as plain`() {
+      let font = UIFont.preferredFont(
+        forTextStyle: .body, compatibleWith: UITraitCollection(legibilityWeight: .bold))
+      let body = NoteBody(markdown: "plain and **strong**")
+      #expect(NoteText.body(of: NoteText.attributed(body, font: font)) == body)
+    }
+  #endif
+
   @Test func `a list item is a paragraph with its lists and no marker`() {
     let body = NoteBody([
       .list(
@@ -81,6 +91,20 @@ struct NoteTextTests {
       }
     }
     #expect(!colored)
+  }
+
+  @Test func `a pasted link a note does not follow, and an attachment, are left out`() {
+    let pasted = NSMutableAttributedString(
+      string: "an app", attributes: [.font: font, .link: URL(string: "file:///Applications")!])
+    pasted.append(NSAttributedString(attachment: NSTextAttachment()))
+    pasted.append(
+      NSAttributedString(
+        string: " and a page", attributes: [.font: font, .link: URL(string: "https://a.example")!]))
+    #expect(
+      NoteText.body(of: NoteText.reduced(pasted, font: font))
+        == NoteBody([
+          .paragraph([Span("an app"), Span(" and a page", link: URL(string: "https://a.example"))])
+        ]))
   }
 
   @Test(arguments: [NSTextList.MarkerFormat.disc, .decimal])
@@ -212,6 +236,22 @@ struct NoteTextTests {
     #expect(lists.count == 3)
     #expect(lists.allSatisfy { $0 === lists[0] })
     #expect(NoteText.body(of: text).markdown == "1. a\n2. b\n3. c")
+  }
+
+  @Test func `items and paragraphs made a list together are one list`() {
+    let text = editable(
+      NoteBody([
+        .list(NoteBody.List(isOrdered: false, items: [NoteBody.Item([Span("a")])])),
+        .paragraph([Span("b")]),
+      ]))
+    NoteText.toggleList(
+      ordered: true, in: text, range: NSRange(location: 0, length: text.length), font: font)
+    let lists = [0, 2].compactMap { index in
+      (text.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle)?
+        .textLists.last
+    }
+    #expect(lists.count == 2)
+    #expect(lists.allSatisfy { $0 === lists[0] })
   }
 
   @Test func `an item indented under one with a nested list joins it`() {

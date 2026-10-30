@@ -157,10 +157,15 @@ public enum NoteText {
         case let string as String: URL(string: string)
         default: nil
         }
+      // An attachment, as a pasted image, is no text a note keeps.
       let string = (text.string as NSString).substring(with: run)
         .replacingOccurrences(of: "\u{2028}", with: "\n")
         .replacingOccurrences(of: "\u{2029}", with: "\n")
-      spans.append(NoteBody.Span(string, style: style, link: link))
+        .replacingOccurrences(of: "\u{FFFC}", with: "")
+      guard !string.isEmpty else { return }
+      // Only a link the link field would make: a pasted `file:` or app link is text.
+      let kept = link.flatMap { NoteLink.follows($0) ? $0 : nil }
+      spans.append(NoteBody.Span(string, style: style, link: kept))
     }
     return spans
   }
@@ -268,22 +273,23 @@ public enum NoteText {
       guard first.location > 0 else { return nil }
       return textLists(of: text, at: NSRange(location: first.location - 1, length: 0)).first
     }
-    // One new list for each list replaced, and one for paragraphs in none.
+    // One new list for each nested list replaced, and one at the top for the
+    // paragraphs in none and the items of a list there, which become one list.
     var replaced: [ObjectIdentifier: NSTextList] = [:]
-    let fresh =
+    let top =
       before.flatMap { isOrdered($0) == ordered ? $0 : nil } ?? newList(ordered: ordered, depth: 0)
     for (paragraph, current) in zip(paragraphs, lists) {
       let next: [NSTextList]
       if isOn {
         next = Array(current.dropLast())
-      } else if let innermost = current.last {
+      } else if let innermost = current.last, current.count > 1 {
         let list =
           replaced[ObjectIdentifier(innermost)]
           ?? newList(ordered: ordered, depth: current.count - 1)
         replaced[ObjectIdentifier(innermost)] = list
         next = current.dropLast() + [list]
       } else {
-        next = [fresh]
+        next = [top]
       }
       setLists(next, in: text, paragraph: paragraph, font: font)
     }

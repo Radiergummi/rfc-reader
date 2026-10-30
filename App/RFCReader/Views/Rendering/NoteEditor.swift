@@ -401,6 +401,11 @@ struct NoteEditor: View {
 
     func updateUIView(_ textView: NoteTextView, context: Context) {}
 
+    /// Saved while the text is still here: `onDisappear` may come after the view is.
+    static func dismantleUIView(_ textView: NoteTextView, coordinator: Coordinator) {
+      coordinator.model.close()
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -548,8 +553,10 @@ struct NoteEditor: View {
     func updateNSView(_ scroll: NSScrollView, context: Context) {}
 
     /// Detached from its container, as every TextKit 2 text view here is, or what
-    /// AppKit keeps of it holds its text.
+    /// AppKit keeps of it holds its text. Saved first, while it still has its text:
+    /// `onDisappear` may come after this.
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+      coordinator.model.close()
       (scroll.documentView as? NSTextView)?.textContainer?.textView = nil
     }
 
