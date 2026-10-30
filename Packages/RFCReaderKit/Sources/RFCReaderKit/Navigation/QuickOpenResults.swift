@@ -20,7 +20,7 @@ public struct QuickOpenResults: Equatable, Sendable {
   }
 
   /// iOS's placeholder (#579): beside a search field that already finds by keyword,
-  /// its sheet searches for nothing, and takes what names a document.
+  /// its sheet searches no titles, and takes what names a document.
   public static func identifierPlaceholder(locale: Locale = .interface) -> String {
     String(kit: "RFC number, BCP 14, or a link", locale: locale)
   }
@@ -102,11 +102,15 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// ↵ was pressed while a search for what is typed was still running: the search
   /// opens what it selects when it lands, the way the key press asked for.
   private var pendingActivation: LinkActivation?
+  /// ↵ found nothing to open for what is typed, without a search to wait for. Only
+  /// then is it said that what is typed names nothing: while it is being typed, a
+  /// reference mostly is not one yet (`B`, `BC`, half a link).
+  private var isUnanswered = false
 
   /// Whether what is typed is searched for, as well as resolved: on the Mac's
   /// palette, and not on iOS's sheet, beside a search field that already finds by
-  /// keyword (#579). Without a search it lists what is typed resolved exactly, and
-  /// neither hits nor registry values.
+  /// keyword (#579). Without a search it lists what is typed resolved exactly and
+  /// the registry values it names, and no hits.
   public let searches: Bool
 
   public init(searches: Bool = true) {
@@ -144,11 +148,11 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// loading promises what won't come.
   ///
   /// Without a search, only that what is typed names nothing the field takes, which
-  /// needs no index to know.
+  /// needs no index to know, and only once ↵ found nothing.
   public func message(indexState: IndexState, locale: Locale = .interface) -> String? {
     guard !query.isEmpty, !isSearching else { return nil }
     guard searches else {
-      guard rows.isEmpty, draft == nil else { return nil }
+      guard isUnanswered, rows.isEmpty, draft == nil else { return nil }
       return String(kit: "“\(query)” isn't an RFC number, a series or a link.", locale: locale)
     }
     return switch indexState {
@@ -186,6 +190,9 @@ public struct QuickOpenResults: Equatable, Sendable {
     query: String, exact: RFCLink?, draft: DraftLink? = nil, members: [DocumentID] = [],
     registry: [RegistryEntry] = [], isObsolete: (DocumentID) -> Bool = { _ in false }
   ) {
+    if query != self.query {
+      isUnanswered = false
+    }
     self.query = query
     self.draft = draft
     // Typing on after ↵ is a change of mind.
@@ -206,7 +213,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     } else {
       rows = exact.map { [$0] } ?? []
     }
-    let registryRows = (searches ? registry : []).compactMap { entry in
+    let registryRows = registry.compactMap { entry in
       entry.reference(isObsolete: isObsolete).map { Row(link: $0, entry: entry) }
     }
     let isNew = rows != self.exact || registryRows != self.registry
@@ -247,6 +254,8 @@ public struct QuickOpenResults: Equatable, Sendable {
     }
     if isSearching {
       pendingActivation = activation
+    } else if !searches {
+      isUnanswered = true
     }
     return nil
   }

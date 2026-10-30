@@ -7,8 +7,8 @@ import RFCReaderKit
 /// their layouts (#769): what is typed, its exact resolution and the search for it,
 /// and opening what was chosen. The two had copied it and drifted: only the Mac
 /// listed registry values and marked obsolete documents. Only the Mac's palette
-/// searches: iOS's sheet sits beside a search field that already finds by keyword
-/// (#579).
+/// searches titles: iOS's sheet sits beside a search field that already finds by
+/// keyword (#579).
 @MainActor
 @Observable
 final class QuickOpenController {
@@ -64,7 +64,7 @@ final class QuickOpenController {
     results.show(
       query: query, exact: exact,
       draft: exact == nil ? DocumentReference.draft(from: query) : nil, members: members,
-      registry: results.searches ? library.registryMatches(for: query) : [],
+      registry: library.registryMatches(for: query),
       isObsolete: { [library] in library.metadata($0)?.isObsolete ?? false })
   }
 

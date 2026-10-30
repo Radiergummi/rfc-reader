@@ -456,22 +456,29 @@ struct QuickOpenResultsTests {
 }
 
 /// iOS's Go to RFC, beside a search field that already finds by keyword, takes what
-/// names a document and searches for nothing (#579): a number, a series, a draft or a
-/// link, read as the Mac's palette reads them.
+/// names a document and searches no titles (#579): a number, a series, a draft, a
+/// link or a registry value, read as the Mac's palette reads them.
 @Suite("Quick open results: without a search")
 struct QuickOpenWithoutSearchTests {
-  /// `911` is RFC 911 alone: neither the RFCs whose numbers begin with it nor a
-  /// registry value, which the search field beside it finds.
+  /// `911` is RFC 911 alone, not the RFCs whose numbers begin with it.
   @Test func `a number lists the RFC with that number alone`() {
     var results = QuickOpenResults(searches: false)
-    results.show(
-      query: "911", exact: RFCLink(id: .rfc(911)), registry: [QuickOpenResultsTests.tooEarly])
+    results.show(query: "911", exact: RFCLink(id: .rfc(911)))
     results.show(hits: [.rfc(9110)], for: "911")
     #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(911))])
     #expect(results.openable == RFCLink(id: .rfc(911)))
   }
 
-  /// `BCP 14` is its members, as on the Mac, and not RFC 14.
+  /// A registry value is listed as on the Mac (#769): it names a place exactly, and
+  /// is no title search.
+  @Test func `a registry value is listed after the exact row`() {
+    var results = QuickOpenResults(searches: false)
+    results.show(
+      query: "425", exact: RFCLink(id: .rfc(425)), registry: [QuickOpenResultsTests.tooEarly])
+    #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(425)), RFCLink(id: .rfc(8470))])
+    #expect(results.rows.map(\.entry) == [nil, QuickOpenResultsTests.tooEarly])
+  }
+
   @Test func `a series lists its members`() {
     var results = QuickOpenResults(searches: false)
     results.show(
@@ -490,17 +497,29 @@ struct QuickOpenWithoutSearchTests {
     #expect(results.rows.isEmpty)
   }
 
-  /// What is typed names nothing it takes, whether or not the index has loaded: it
-  /// needs no index to say so.
-  @Test func `the message says that what is typed names nothing`() {
+  /// While it is typed, a reference is mostly not one yet (`B`, `BC`, half a link):
+  /// nothing is said until ↵ finds nothing, whether or not the index has loaded, which
+  /// it needs no index to know. Typing on takes it back.
+  @Test func `the message says that what is typed names nothing once return finds nothing`() {
     var results = QuickOpenResults(searches: false)
     #expect(results.message(indexState: .loading, locale: .english) == nil)
-    results.show(query: "http", exact: nil)
-    let message = "“http” isn't an RFC number, a series or a link."
+    results.show(query: "BC", exact: nil)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+    #expect(results.activate(.here) == nil)
+    let message = "“BC” isn't an RFC number, a series or a link."
     #expect(results.message(indexState: .loading, locale: .english) == message)
     #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == message)
-    results.show(query: "9110", exact: RFCLink(id: .rfc(9110)))
+    results.show(query: "BCP", exact: nil)
     #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+  }
+
+  /// A resolve of the same text, as when the index loads, is no change of mind.
+  @Test func `the message stays while what is typed stays`() {
+    var results = QuickOpenResults(searches: false)
+    results.show(query: "http", exact: nil)
+    _ = results.activate(.here)
+    results.show(query: "http", exact: nil)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) != nil)
   }
 
   @Test func `the placeholder and the example name what it takes, and no title words`() {

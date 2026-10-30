@@ -246,11 +246,11 @@ struct EmptyDetailView: View {
 }
 
 #if !os(macOS)
-  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, a draft's name, or
-  /// any RFC Editor / Datatracker URL, read as the Mac's palette reads them. Not
-  /// words from a title (#579): the search field beside its button already finds
-  /// by keyword, so it lists what is typed resolved exactly, with no search to wait
-  /// for.
+  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, a draft's name, a
+  /// registry value, or any RFC Editor / Datatracker URL, read as the Mac's palette
+  /// reads them. Not words from a title (#579): the search field beside its button
+  /// already finds by keyword, so it lists what is typed resolved exactly, with no
+  /// search to wait for.
   ///
   /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
   /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
@@ -328,26 +328,25 @@ struct EmptyDetailView: View {
         focused = true
         // Found: its tip has no more to say (#782).
         GoToRFCTip().invalidate(reason: .actionPerformed)
-        // The check at launch alone goes stale in an app left open for weeks; the
-        // registries answer Look Up (`LookUpIdentifierIntent`).
+        // The check at launch alone goes stale in an app left open for weeks.
         library.refreshRegistriesIfDue()
       }
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { controller.resolve() }
     }
 
-    /// Said while nothing is listed: what the field takes, or why nothing matches,
-    /// the one line under the field that turns a blind text box into something that
-    /// tells the reader whether it understood them.
+    /// Said while nothing is listed: what the field takes, or, once ↵ found nothing,
+    /// that what is typed names nothing it takes, which no index changes. The one
+    /// line under the field that turns a blind text box into something that tells
+    /// the reader whether it understood them.
     @ViewBuilder
     private var status: some View {
-      if controller.query.isEmpty {
+      if let message = controller.message {
+        Text(verbatim: message)
+      } else {
         // The Mac's palette's, less the title words it takes and this does not
         // (#761).
         Text(verbatim: QuickOpenResults.identifierExample)
-      } else if let message = controller.message {
-        // That what is typed names nothing it takes, which no index changes.
-        Text(verbatim: message)
       }
     }
 
@@ -358,14 +357,35 @@ struct EmptyDetailView: View {
         controller.open(row.link)
       } label: {
         HStack(spacing: 12) {
-          Text(row.link.id.displayName)
-            .fontWeight(.semibold)
-            .monospacedDigit()
-          Text(title)
-            .lineLimit(1)
-            .foregroundStyle(.secondary)
-          if let section = row.link.section {
+          if let entry = row.entry {
+            // What was looked up, then where it is defined, as the Mac's palette
+            // lists it: "HTTP status 425 · Too Early", RFC 8470.
+            Text(verbatim: "\(entry.registry.displayName) \(entry.value)")
+              .fontWeight(.semibold)
+              .monospacedDigit()
+              .lineLimit(1)
+            if let name = entry.name {
+              Text(name)
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
+            Text(row.link.id.displayName)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          } else {
+            Text(row.link.id.displayName)
+              .fontWeight(.semibold)
+              .monospacedDigit()
+            Text(title)
+              .lineLimit(1)
+              .foregroundStyle(.secondary)
+          }
+          if let section = row.link.section {
+            // A registry row already ends at the far edge.
+            if row.entry == nil {
+              Spacer(minLength: 0)
+            }
             Text(PlaceName.abbreviated(section))
               .foregroundStyle(.secondary)
               .monospacedDigit()
