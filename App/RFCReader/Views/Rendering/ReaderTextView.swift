@@ -330,6 +330,22 @@ import RFCReaderKit
     /// Told of a click that selected nothing and cleared no selection, which in a
     /// highlight opens its popover.
     var clickedText: (NSEvent) -> Void = { _ in }
+    /// Add Note on a selection (#523): a highlight, and a note on it.
+    var addNote: (NSRange) -> Void = { _ in }
+    /// What a note from a block's menu at an offset would be on, and making it.
+    var noteBlock: (Int) -> NoteBlock? = { _ in nil }
+    var addNoteOnBlock: (NoteBlock, Int) -> Void = { _, _ in }
+
+    @objc private func addNoteItem(_ sender: Any?) {
+      guard selectedRange().length > 0 else { return }
+      addNote(selectedRange())
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
+    @objc private func addNoteOnBlockItem(_ sender: NSMenuItem) {
+      guard let (block, location) = sender.representedObject as? (NoteBlock, Int) else { return }
+      addNoteOnBlock(block, location)
+    }
 
     /// Edit ▸ Highlight (⌃⌘H, Books' shortcut): the selection, in the color last used.
     @objc func highlightSelection(_ sender: Any?) {
@@ -617,7 +633,9 @@ import RFCReaderKit
       let figure = box?.content
       let quotes = selectedRange().length > 0 && !isTranslation()
       let gloss = followGloss(event)
-      guard figure != nil || quotes || gloss != nil else { return standard }
+      // A note on the block clicked (#523), or on its section from a heading.
+      let block = isTranslation() ? nil : noteBlock(clicked)
+      guard figure != nil || quotes || gloss != nil || block != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
       if let gloss {
@@ -655,8 +673,23 @@ import RFCReaderKit
           result.insertItem(item, at: index)
           index += 1
         }
-        // A highlight is made from a selection, as a quote is copied from one (#522).
+        // A highlight is made from a selection, as a quote is copied from one (#522),
+        // and a note on it (#523).
         result.insertItem(highlightMenuItem(), at: index)
+        let note = NSMenuItem(
+          title: String(localized: "Add Note"), action: #selector(addNoteItem(_:)),
+          keyEquivalent: "")
+        note.target = self
+        result.insertItem(note, at: index + 1)
+      }
+      if let block {
+        let item = NSMenuItem(
+          title: RFCTextViewCoordinator.addNoteTitle(block),
+          action: #selector(addNoteOnBlockItem(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = (block, clicked)
+        if !result.items.isEmpty { result.addItem(.separator()) }
+        result.addItem(item)
       }
       if let box, figure != nil {
         let item = NSMenuItem(

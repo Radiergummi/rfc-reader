@@ -208,6 +208,7 @@ is that way, and what was measured or tried first.
 - [Highlights are anchored to the model text and drawn from the position map](decisions/2026-10-18-highlights-are-drawn-from-the-position-map.md)
 - [A parsed document is kept encoded beside its body](decisions/2026-10-18-a-parsed-document-is-kept-encoded-beside-its-body.md)
 - [A draft is a document of its own](decisions/2026-10-16-a-draft-is-a-document-of-its-own.md)
+- [A note is stored as Markdown](decisions/2026-10-19-a-note-is-stored-as-markdown.md)
 
 ## Planned engines
 
