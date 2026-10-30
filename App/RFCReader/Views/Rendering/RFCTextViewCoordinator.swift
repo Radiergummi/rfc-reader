@@ -66,7 +66,7 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// The colors this reader draws its page, links and decoration in: the page theme
   /// for the appearance it is drawn in (#703, #704). A box the fragments keep, so
-  /// that `apply(palette:outlinesEveryChip:)` recolors what is already laid out
+  /// that `apply(_:in:outlinesEveryChip:)` recolors what is already laid out
   /// rather than laying it out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
@@ -736,6 +736,7 @@ final class RFCTextViewCoordinator: NSObject {
       couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil
+      header = nil
     }
   }
 

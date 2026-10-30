@@ -82,9 +82,11 @@
       let traits = textView.traitCollection
       let renderer = UIGraphicsImageRenderer(
         size: bounds.size, format: UIGraphicsImageRendererFormat(for: traits))
+      // A page theme's page where it draws one (#704), as the text view does.
+      let page = paletteBox.palette.pageBackground ?? .systemBackground
       return renderer.image { context in
         traits.performAsCurrent {
-          UIColor.systemBackground.setFill()
+          page.setFill()
           context.fill(CGRect(origin: .zero, size: bounds.size))
           for fragment in fragments {
             let origin = fragment.layoutFragmentFrame.origin

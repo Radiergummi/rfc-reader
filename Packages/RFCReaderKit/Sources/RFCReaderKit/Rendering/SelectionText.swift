@@ -173,14 +173,13 @@ public enum SelectionText {
     }
     // The page theme is the reader's too (#704): the text goes in the system's
     // colors, as a print does, not the theme's resolved as it is copied.
-    for key in [NSAttributedString.Key.foregroundColor, .underlineColor] {
-      result.enumerateAttribute(key, in: whole) { value, range, _ in
-        guard let color = value as? PlatformColor else { return }
-        if color === ReaderPalette.themedText {
-          result.addAttribute(key, value: RFCColors.label, range: range)
-        } else if color === ReaderPalette.themedSecondaryText {
-          result.addAttribute(key, value: RFCColors.secondaryLabel, range: range)
-        }
+    // A gloss's underline, the one themed underline, is removed below.
+    result.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
+      guard let color = value as? PlatformColor else { return }
+      if color === ReaderPalette.themedText {
+        result.addAttribute(.foregroundColor, value: RFCColors.label, range: range)
+      } else if color === ReaderPalette.themedSecondaryText {
+        result.addAttribute(.foregroundColor, value: RFCColors.secondaryLabel, range: range)
       }
     }
     // A gloss's dotted underline is the reader's mark, not the document's (#396).

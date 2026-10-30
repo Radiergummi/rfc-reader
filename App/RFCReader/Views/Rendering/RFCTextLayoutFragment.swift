@@ -324,14 +324,13 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// The chip tint's opacity for `tint` as it resolves now, on the page or on
   /// `card` over it, and under a requirement band where the fragment has one:
   /// lighter than 15% where the link would not clear the minimum contrast on it
-  /// (#317). On a card the link is the card's link color (#694).
+  /// (#317). `link` is the color the chip's link is drawn in: the palette's, or on a
+  /// card its card link color (#694, #704).
   private static func chipTintOpacity(
-    of tint: PlatformColor, on card: PlatformColor?, over backdrop: SRGBColor?
+    of tint: PlatformColor, link: PlatformColor, over backdrop: SRGBColor?
   ) -> Double {
     guard let accent = SRGBColor(resolving: tint),
-      let link = SRGBColor(
-        resolving: card == nil
-          ? RFCColors.readerLink : RFCColors.cardLink(over: RFCColors.readerLink)),
+      let link = SRGBColor(resolving: link),
       let backdrop
     else { return AccentContrast.chipTint }
     return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
@@ -432,7 +431,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let chipTint = palette.chipTint
     let backdrop = Self.chipBackdrop(
       page: palette.pageBackground ?? RFCColors.page, on: card, banded: banded)
-    let opacity = Self.chipTintOpacity(of: chipTint, on: card, over: backdrop)
+    let opacity = Self.chipTintOpacity(
+      of: chipTint, link: card == nil ? palette.link : palette.cardLink, over: backdrop)
     let tint = chipTint.withAlphaComponent(opacity).cgColor
     let anyOutline = outlinesEveryChip || chips.contains { $0.isInformative }
     let outline = anyOutline ? Self.chipOutline(of: chipTint, over: backdrop) : nil
