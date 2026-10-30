@@ -29,6 +29,8 @@ public final class DocumentTextBuilder {
   /// Which storage characters are which model characters (#522), recorded as the
   /// document is appended; nil until `appendDocument` starts it.
   var positions: PositionMap.Recorder?
+  /// See `BuiltDocument.indexMap`.
+  var indexMap = IndexMap.empty
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -229,7 +231,7 @@ public final class DocumentTextBuilder {
         keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
         grammar: builder.grammar.withoutParsedBlocks,
         sectionNumberHang: builder.hang, errata: builder.errata, translation: translation,
-        positions: builder.positions?.map ?? .empty)
+        positions: builder.positions?.map ?? .empty, indexMap: builder.indexMap)
     }
   }
 
@@ -594,7 +596,7 @@ extension DocumentTextBuilder {
         // bibliography section would land here, and is still not body prose.
         continue
       case .index(let index):
-        appendBlocks(Self.plainBlocks(of: index), indent: indent)
+        appendIndex(index, indent: indent)
       }
     }
   }

@@ -87,9 +87,33 @@ import RFCReaderKit
     /// a side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// See the Mac's: hardware keyboards only; touch has the rail.
+    var typeSelect: (String, TimeInterval) -> Bool = { _, _ in false }
+    /// The presses type-select took, whose ends are not passed on either.
+    private var typeSelectedPresses: Set<UIPress> = []
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
       willHandleKey()
+      if presses.count == 1, let press = presses.first, let key = press.key,
+        key.modifierFlags.subtracting([.shift, .alphaShift]).isEmpty, !key.characters.isEmpty,
+        typeSelect(key.characters, press.timestamp)
+      {
+        typeSelectedPresses.insert(press)
+        return
+      }
       super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let rest = presses.subtracting(typeSelectedPresses)
+      typeSelectedPresses.subtract(presses)
+      if !rest.isEmpty { super.pressesEnded(rest, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let rest = presses.subtracting(typeSelectedPresses)
+      typeSelectedPresses.subtract(presses)
+      if !rest.isEmpty { super.pressesCancelled(rest, with: event) }
     }
 
     /// The quote for a range of the text, from the coordinator (#186).
@@ -274,8 +298,21 @@ import RFCReaderKit
     /// side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Characters typed while the index shows, and when; answers whether type-select
+    /// took them (`RFCTextViewCoordinator.typeSelect(_:at:)`).
+    var typeSelect: (String, TimeInterval) -> Bool = { _, _ in false }
+
+    /// An unmodified key goes to type-select first, Shift and Caps Lock aside; what
+    /// it does not take, a space that pages among them, goes on as before.
     override func keyDown(with event: NSEvent) {
       willHandleKey()
+      let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        .subtracting([.shift, .capsLock])
+      if modifiers.isEmpty, let characters = event.characters, !characters.isEmpty,
+        typeSelect(characters, event.timestamp)
+      {
+        return
+      }
       super.keyDown(with: event)
     }
 
