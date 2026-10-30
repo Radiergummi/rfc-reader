@@ -168,7 +168,13 @@ extension RFCTextViewCoordinator {
       },
       openLink: { [weak self] url in
         self?.closeNoteEditor()
-        _ = self?.onLink(url, .current)
+        // A web page or a mail address is the system's to open, as in the reader.
+        guard self?.onLink(url, .current) == false else { return }
+        #if canImport(UIKit)
+          UIApplication.shared.open(url)
+        #else
+          NSWorkspace.shared.open(url)
+        #endif
       },
       showInAnnotations: showInAnnotations)
     noteEditor = (identifier, model)
@@ -212,7 +218,8 @@ extension RFCTextViewCoordinator {
 
   /// What a block's context menu offers a note on, at storage offset `location`.
   func noteBlock(at location: Int) -> NoteBlock? {
-    guard let built else { return nil }
+    // None on a draft, which keeps no notes (#728).
+    guard let built, documentID != nil else { return nil }
     return NoteBlock(at: location, in: built)
   }
 

@@ -276,6 +276,25 @@ extension AnnotationStoreTests {
     #expect(try notes().first { $0.id == moved }?.highlight == first)
   }
 
+  @Test func `undoing and redoing a merge keeps what a note on it was edited to since`() throws {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let first = try highlight("quick brown")
+    let second = try highlight("lazy dog")
+    let moved = try note("as made", on: .highlight(second))
+    undoManager.beginUndoGrouping()
+    _ = try highlight("brown fox jumps over the lazy", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    try AnnotationStore.saveNote(
+      moved, on: .highlight(first), of: .rfc(9110), body: "edited since", context: context)
+    undoManager.undo()
+    #expect(try notes().first { $0.id == moved }?.highlight == second)
+    #expect(try notes().first { $0.id == moved }?.body == "edited since")
+    undoManager.redo()
+    #expect(try notes().first { $0.id == moved }?.highlight == first)
+    #expect(try notes().first { $0.id == moved }?.body == "edited since")
+  }
+
   @Test func `deleting a highlight deletes its notes, and undoing brings both back`() throws {
     let undoManager = UndoManager()
     undoManager.groupsByEvent = false

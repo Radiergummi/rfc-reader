@@ -340,7 +340,9 @@ public enum AnnotationStore {
     }
     for value in rows.notes {
       if let row = try note(value.identifier, in: context) {
-        value.apply(to: row)
+        // Where it is, and nothing of its text: no change undone here edits a note,
+        // and what it was edited to since is the editor's.
+        value.applyPlace(to: row)
       } else {
         let row = Note(identifier: value.identifier, document: .rfc(0), body: value.body)
         value.apply(to: row)
@@ -437,6 +439,16 @@ private struct NoteValues {
   func apply(to row: Note) {
     row.identifier = identifier
     row.documentKey = documentKey
+    applyPlace(to: row)
+    row.body = body
+    row.createdAt = createdAt
+    row.modifiedAt = modifiedAt
+  }
+
+  /// What it is on and where it was found, which a merge, a deletion and their undo
+  /// change, and not its text or when that was written.
+  @MainActor
+  func applyPlace(to row: Note) {
     row.highlightIdentifier = highlightIdentifier
     row.setTarget(target)
     if case .range(let start, let end, _)? = relocated {
@@ -445,9 +457,6 @@ private struct NoteValues {
       row.relocatedEndAnchor = end.anchor
       row.relocatedEndOffset = end.offset
     }
-    row.body = body
-    row.createdAt = createdAt
-    row.modifiedAt = modifiedAt
   }
 }
 

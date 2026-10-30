@@ -7,23 +7,34 @@ public enum NoteLink {
   /// The URL `typed` names: anything that names an RFC, such as `RFC 9110`,
   /// `RFC 9110 Section 4.2`, `9110#section-4.2` or an rfc-editor.org address, as the
   /// app's own `rfc://` link; otherwise a web or mail address, `https://` assumed
-  /// where none is given. Nil for anything else.
+  /// where none is given and `mailto:` for a bare mail address. Nil for anything else.
   public static func url(from typed: String) -> URL? {
     let trimmed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, !trimmed.contains(where: \.isNewline) else { return nil }
     if let link = rfcLink(from: trimmed) { return link.appURL }
-    if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(),
-      ["http", "https", "mailto"].contains(scheme)
+    if let url = URL(string: trimmed), follows(url) { return url }
+    guard !trimmed.contains(" "), trimmed.contains("."), !trimmed.hasPrefix(".") else {
+      return nil
+    }
+    // A bare mail address, as `a@example.org`: mail, not a web page with a user.
+    if !trimmed.contains("/"), let atSign = trimmed.firstIndex(of: "@"),
+      atSign != trimmed.startIndex,
+      trimmed[trimmed.index(after: atSign)...].contains("."),
+      let url = URL(string: "mailto:" + trimmed)
     {
       return url
     }
     // A bare host, as `example.org/page`: a word, a period, a word, and no space.
-    if !trimmed.contains(" "), trimmed.contains("."), !trimmed.hasPrefix("."),
-      let url = URL(string: "https://" + trimmed), url.host()?.contains(".") == true
-    {
+    if let url = URL(string: "https://" + trimmed), url.host()?.contains(".") == true {
       return url
     }
     return nil
+  }
+
+  /// Whether a note keeps `url` as a link: a web page, a mail address, or the app's
+  /// own `rfc://` link. Not a file, or another app's scheme.
+  public static func follows(_ url: URL) -> Bool {
+    ["http", "https", "mailto", "rfc"].contains(url.scheme?.lowercased() ?? "")
   }
 
   /// The link `text` is, when it is the whole of a paste: an `rfc://` link, or an

@@ -26,6 +26,10 @@ struct NoteLinkTests {
     #expect(NoteLink.url(from: "mailto:a@example.org")?.absoluteString == "mailto:a@example.org")
   }
 
+  @Test func `a bare mail address is a mail link, not a web page`() {
+    #expect(NoteLink.url(from: "a@example.org")?.absoluteString == "mailto:a@example.org")
+  }
+
   @Test func `anything else is no link`() {
     #expect(NoteLink.url(from: "") == nil)
     #expect(NoteLink.url(from: "just some words") == nil)

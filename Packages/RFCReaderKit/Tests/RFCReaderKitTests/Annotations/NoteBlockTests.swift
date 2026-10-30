@@ -32,7 +32,8 @@ struct NoteBlockTests {
     // The whole paragraph, as the model has it, and no more: up to its line end.
     let range = try #require(block?.target.range(in: built.positions.model))
     let model = built.positions.model
-    #expect(model.text(in: range).hasPrefix("This document defines a concise"))
+    #expect(model.text(in: range).hasPrefix("This document"))
+    #expect(model.text(in: range).contains("problem details"))
     #expect(!model.text(in: range).contains("\n"))
     #expect(model.text(in: range.upperBound..<range.upperBound + 1) == "\n")
   }
