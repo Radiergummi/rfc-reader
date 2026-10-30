@@ -59,22 +59,28 @@ struct OutlineSectionItems: View {
   }
 }
 
-/// Next Section and Previous Section, which move the focus in Focus (#699).
-struct FocusSteps: View {
+/// Next Section, Previous Section and Go to Section… (#711): in Focus the first two
+/// move the focus (#699); in any other mode they go to the next or previous heading,
+/// or in the outline the row.
+struct SectionSteps: View {
   let reader: ReaderState
+  /// Whether the items carry their shortcuts. iOS's More menu shows them without, as
+  /// its Find in Document does: `DocumentCommands`' copies in the menu bar register
+  /// them, so each chord is registered once.
+  var showsShortcuts = true
 
   var body: some View {
-    // Not over the original text, which nothing folds: there is no folding index
-    // then, so nowhere to step (`DocumentView.updateFolding`).
-    if reader.folding.mode == .focus {
-      // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
-      // its paragraphs' ends, and leave the two together alone.
-      Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
-        .keyboardShortcut(ReaderShortcut.nextSection.keyboardShortcut)
-        .disabled(!reader.canStepFocus(.next))
-      Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
-        .keyboardShortcut(ReaderShortcut.previousSection.keyboardShortcut)
-        .disabled(!reader.canStepFocus(.previous))
-    }
+    // ⌥⌘↓ and ⌥⌘↑: the text view's arrows take ⌘ to the document's ends and ⌥ to
+    // its paragraphs' ends, and leave the two together alone.
+    Button("Next Section", systemImage: "chevron.down") { reader.stepSection(.next) }
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.nextSection.keyboardShortcut : nil)
+      .disabled(!reader.canStepSection(.next))
+    Button("Previous Section", systemImage: "chevron.up") { reader.stepSection(.previous) }
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.previousSection.keyboardShortcut : nil)
+      .disabled(!reader.canStepSection(.previous))
+    // Over the original text too: it goes where the contents panel's rows go.
+    Button("Go to Section…", systemImage: "number") { reader.isGoingToSection = true }
+      .keyboardShortcut(showsShortcuts ? ReaderShortcut.goToSection.keyboardShortcut : nil)
+      .disabled(reader.sections.isEmpty)
   }
 }

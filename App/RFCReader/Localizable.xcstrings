@@ -1697,6 +1697,16 @@
         }
       }
     },
+    "Go to Section…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu Abschnitt …"
+          }
+        }
+      }
+    },
     "Goes back to the system's size" : {
       "localizations" : {
         "de" : {
@@ -2027,6 +2037,16 @@
         }
       }
     },
+    "Keyboard" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tastatur"
+          }
+        }
+      }
+    },
     "Library" : {
       "localizations" : {
         "de" : {
@@ -2163,6 +2183,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nach oben"
+          }
+        }
+      }
+    },
+    "Move through links with Tab" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Tabulator durch Links gehen"
           }
         }
       }
@@ -3237,6 +3267,16 @@
         }
       }
     },
+    "Section number, such as 4.2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnittsnummer, etwa 4.2"
+          }
+        }
+      }
+    },
     "See also" : {
       "localizations" : {
         "de" : {
@@ -3313,6 +3353,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Teilen"
+          }
+        }
+      }
+    },
+    "Shift-Tab goes back. Return follows the link, and Space previews it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umschalt-Tabulator geht zurück. Der Zeilenschalter folgt dem Link, die Leertaste zeigt seine Vorschau."
           }
         }
       }
@@ -3797,6 +3847,16 @@
         }
       }
     },
+    "This document has no section %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Dokument hat keinen Abschnitt %@."
+          }
+        }
+      }
+    },
     "This passage no longer exists in this document." : {
       "localizations" : {
         "de" : {
@@ -3898,6 +3958,16 @@
         }
       }
     },
+    "Use vim-style keys" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tasten wie in vim verwenden"
+          }
+        }
+      }
+    },
     "Value" : {
       "localizations" : {
         "de" : {
@@ -3974,6 +4044,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "und %lld weitere"
+          }
+        }
+      }
+    },
+    "j and k scroll a line, d and u half a page, gg and G go to the top and the end, ]] and [[ to the next and previous section, ]r and [r to the next and previous link, / finds, and n and N go to the next and previous match." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "j und k blättern eine Zeile, d und u eine halbe Seite, gg und G gehen an den Anfang und ans Ende, ]] und [[ zum nächsten und vorherigen Abschnitt, ]r und [r zum nächsten und vorherigen Link, / sucht, und n und N gehen zum nächsten und vorherigen Treffer."
           }
         }
       }

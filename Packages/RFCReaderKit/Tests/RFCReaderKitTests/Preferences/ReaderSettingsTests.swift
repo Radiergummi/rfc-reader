@@ -29,10 +29,18 @@ struct ReaderSettingsTests {
     #expect(settings.drawDiagrams == ReaderPreferences.defaultDrawDiagrams)
     #expect(settings.syntaxTheme.id == ReaderPreferences.defaultSyntaxTheme)
     #expect(settings.palette.id == ReaderPreferences.defaultPalette)
+    #expect(settings.vimKeys == ReaderPreferences.defaultVimKeys)
+    #expect(settings.tabsThroughLinks == ReaderPreferences.defaultTabsThroughLinks)
     #expect(settings.citationStyle == .markdown)
     #expect(settings.linkSite == .rfcEditor)
     #expect(settings.copyFormat == .text)
     #expect(settings.copiesSectionNumbers)
+  }
+
+  /// The maintainer's ruling on #901: Tab leaves the reader as it did before, so
+  /// moving through links with it is off until turned on, as the vim keys are.
+  @Test func `tab through links and the vim keys are off by default`() {
+    #expect(ReaderSettings().keys == ReaderKeys.Options(vimKeys: false, tabsThroughLinks: false))
   }
 
   /// What a copy cites in, where it links and what Copy copies (#712).
@@ -64,6 +72,8 @@ struct ReaderSettingsTests {
       defaults.set(MeasurePreference.fullWidth.rawValue, forKey: ReaderPreferences.measureKey)
       defaults.set(true, forKey: ReaderPreferences.preferOriginalTextKey)
       defaults.set(false, forKey: ReaderPreferences.drawDiagramsKey)
+      defaults.set(true, forKey: ReaderPreferences.vimKeysKey)
+      defaults.set(true, forKey: ReaderPreferences.tabsThroughLinksKey)
 
       let settings = ReaderSettings(defaults: defaults)
       #expect(settings.fontSize == 21)
@@ -71,6 +81,8 @@ struct ReaderSettingsTests {
       #expect(settings.measure == .fullWidth)
       #expect(settings.preferOriginalText)
       #expect(!settings.drawDiagrams)
+      #expect(settings.vimKeys)
+      #expect(settings.tabsThroughLinks)
     }
   }
 
@@ -107,6 +119,8 @@ struct ReaderSettingsTests {
       settings.measure = .fullWidth
       settings.preferOriginalText = true
       settings.drawDiagrams = false
+      settings.vimKeys = true
+      settings.tabsThroughLinks = true
       settings.citationStyle = .bibtex
       settings.linkSite = .app
       settings.copyFormat = .quote

@@ -49,6 +49,31 @@ final class ReaderState {
   /// (#699); nil out of Focus, and for a section that cites nothing.
   var focusGroups: [ReferenceGroup]?
 
+  /// The text view of the reader on screen, which Next and Previous Section act on
+  /// outside Focus (#711): it knows the reader's line. It sets itself as it is
+  /// updated, as Find's text view does; a preview's never does.
+  @ObservationIgnored weak var keyboardReader: RFCTextViewCoordinator?
+  /// Whether Go to Section's field shows (#711).
+  var isGoingToSection = false
+
+  /// Next Section and Previous Section (#711): in Focus the focus steps; in any other
+  /// mode the reader goes to the heading after or before the section it is in, or in
+  /// the outline the row.
+  func stepSection(_ step: Folding.FocusStep) {
+    if folding.mode == .focus {
+      stepFocus(step)
+    } else {
+      keyboardReader?.perform(.section(step))
+    }
+  }
+
+  /// Whether Next or Previous Section has somewhere to go. Outside Focus that depends
+  /// on the reader's line, which nothing observes, so the items are there whenever
+  /// the reader's text is.
+  func canStepSection(_ step: Folding.FocusStep) -> Bool {
+    folding.mode == .focus ? canStepFocus(step) : foldingIndex != nil
+  }
+
   /// Next Section and Previous Section, in Focus (#699). The reader's line goes to
   /// the new section's heading, which the text view does for any change of focus.
   func stepFocus(_ step: Folding.FocusStep) {

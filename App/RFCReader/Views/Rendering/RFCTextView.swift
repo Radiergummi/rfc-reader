@@ -298,6 +298,9 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      textView.handleKey = { [weak coordinator = context.coordinator] key in
+        coordinator?.handleKey(key) ?? false
+      }
       // After a jump TextKit estimates the rest of the document again, and the scroll
       // view moves its offset to keep what it shows: the title read then is read from
       // fragments that are only put where they are by the next viewport layout, which
@@ -337,6 +340,7 @@ struct ReaderInputs {
       // the reader on screen's.
       let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
       (textView as? ReaderTextView)?.findReader = findReader
+      findReader?.keyboardReader = context.coordinator
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -465,6 +469,9 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      textView.handleKey = { [weak coordinator = context.coordinator] key in
+        coordinator?.handleKey(key) ?? false
+      }
       textView.keepingPlace = { [weak coordinator = context.coordinator] scroll in
         guard let coordinator else { return scroll() }
         coordinator.engine.keepPlace(through: scroll)
@@ -515,6 +522,10 @@ struct ReaderInputs {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
       context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
       context.coordinator.setHighlights(highlights)
+      // Not a preview's: the menus' section commands are the reader on screen's.
+      if inputs.isShown, inputs.commitsOnClick == nil {
+        environment.reader.keyboardReader = context.coordinator
+      }
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

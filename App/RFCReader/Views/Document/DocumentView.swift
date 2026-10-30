@@ -476,9 +476,11 @@ struct DocumentView: View {
     } else {
       #if os(macOS)
         requestingContent.navigationTitle(identity.displayName)
+          .overlay(alignment: .top) { goToSectionAnchor.padding(.top, toolbarInset) }
       #else
         if let rfc = id.rfc, let rfcIdentity = identity.rfc {
           withReaderBeside
+            .overlay(alignment: .top) { goToSectionAnchor }
             .navigationTitle(identity.displayName)
             .modifier(
               IOSDocumentChrome(
@@ -490,6 +492,7 @@ struct DocumentView: View {
           // A draft (#728): none of an RFC's actions, which bookmark, keep, export
           // and print what the index lists.
           requestingContent
+            .overlay(alignment: .top) { goToSectionAnchor }
             .navigationTitle(identity.displayName)
             .modifier(
               IOSDraftChrome(
@@ -499,6 +502,30 @@ struct DocumentView: View {
         }
       #endif
     }
+  }
+
+  /// Where Go to Section's field points from (#711): the top of the reader, below the
+  /// bars, a point wide so its arrow points at the middle. The reader on screen's
+  /// alone, as the window's reader state is.
+  private var goToSectionAnchor: some View {
+    Color.clear
+      .frame(width: 1, height: 1)
+      .popover(
+        isPresented: Binding(
+          get: { showsReaderState && reader.isGoingToSection },
+          set: { reader.isGoingToSection = $0 }),
+        arrowEdge: .top
+      ) {
+        GoToSectionField(sections: reader.sections) { anchor in
+          navigation.jump(toSection: anchor)
+        }
+        // However it went: a document opened under it takes the popover with its
+        // view and never sets the binding, and the next would open it unasked.
+        .onDisappear { reader.isGoingToSection = false }
+        #if !os(macOS)
+          .presentationCompactAdaptation(.popover)
+        #endif
+      }
   }
 
   #if !os(macOS)

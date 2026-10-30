@@ -62,6 +62,18 @@ public enum ReaderPreferences {
   public static let drawDiagramsKey = "drawDiagrams"
   public static let defaultDrawDiagrams = true
 
+  /// The vim-style keys in the reader (#711): `j` and `k` for a line, `gg` and `G`
+  /// for the top and end, `]]` and `[[` for the sections, and the rest of
+  /// `ReaderKeys`. Off until turned on in Settings ▸ Reading.
+  public static let vimKeysKey = "readerVimKeys"
+  public static let defaultVimKeys = false
+
+  /// Tab and Shift-Tab move a visible focus through the reader's links (#711), which
+  /// Return follows. Off until the reader turns it on: Tab leaves the reader for the
+  /// next key view, as it always has.
+  public static let tabsThroughLinksKey = "readerTabsThroughLinks"
+  public static let defaultTabsThroughLinks = false
+
   /// Notify when a bookmarked RFC is obsoleted or updated, a draft starts to revise
   /// it or reaches the RFC Editor queue, or errata are listed for it (#191). Off
   /// until the reader turns it on, which is when permission is asked for.

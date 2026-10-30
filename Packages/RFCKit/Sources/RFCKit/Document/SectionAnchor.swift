@@ -1,3 +1,5 @@
+import Foundation
+
 /// The anchor a numbered section goes by where its source names none: `section-4.2`,
 /// and `appendix-A.1` for a number that starts with a letter, as an appendix's does.
 ///
@@ -61,5 +63,35 @@ enum SectionAnchor {
     }
     let rest = place.dropFirst()
     return first.isNumber || (first.isLetter && (rest.isEmpty || rest.first == "."))
+  }
+}
+
+/// What someone types to go to a section (#711): Go to Section… on the Mac and the
+/// iPad, and the iOS # jump (#579), which share it. A section number as a heading
+/// shows it, `4.2` or `A.1`, with or without a `§` before it or a dot after it, or
+/// an anchor as a link spells it, `section-4.2`.
+public enum SectionInput {
+  /// The section number or anchor `typed` names, or nil where it names neither:
+  /// `§ 4.2.` → `4.2`, `a.1` → `A.1`, `section-4.2` as it is.
+  public static func place(_ typed: String) -> String? {
+    var place = Substring(typed.trimmingCharacters(in: .whitespacesAndNewlines))
+    if place.first == "§" {
+      place = Substring(place.dropFirst().trimmingCharacters(in: .whitespaces))
+    }
+    if place.last == "." { place = place.dropLast() }
+    let text = String(place)
+    if SectionAnchor.sectionNumber(fromAnchor: text) != nil { return text }
+    guard SectionAnchor.isSectionNumber(text) else { return nil }
+    return text.prefix(1).uppercased() + text.dropFirst()
+  }
+
+  /// The anchor of the section among `sections`, or their subsections, that `typed`
+  /// names: by its number, which a section whose source gave it an anchor of its own
+  /// goes by too, or by its anchor. Nil where it names none of them.
+  public static func anchor(_ typed: String, in sections: [Section]) -> String? {
+    guard let place = place(typed) else { return nil }
+    let number = SectionAnchor.sectionNumber(fromAnchor: place) ?? place
+    return sections.lazy.flatMap(\.withSubsections)
+      .first { $0.anchor == place || $0.number == number }?.anchor
   }
 }
