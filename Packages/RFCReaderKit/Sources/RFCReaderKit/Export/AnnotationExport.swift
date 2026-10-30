@@ -45,10 +45,14 @@ public enum AnnotationExport {
             start: range.lowerBound, isSectionNote: false, createdAt: highlight.createdAt,
             section: section,
             text: writer.highlight(passages(range, in: model), section: section, notes: itsNotes)))
-      case .ambiguous?:
+      case .ambiguous(let places)?:
+        // Quoted from one of its places, which says whether it is a figure's or code's,
+        // and cited from none.
         if !itsNotes.isEmpty {
-          unplaced.append(
-            writer.highlight([Passage(highlight.quote.exact)], section: nil, notes: itsNotes))
+          let quoted =
+            places.first?.range(in: model).map { passages($0, in: model) }
+            ?? [Passage(highlight.quote.exact)]
+          unplaced.append(writer.highlight(quoted, section: nil, notes: itsNotes))
         }
       case .detached?, nil:
         unplaced.append(
@@ -245,7 +249,7 @@ public enum AnnotationExport {
     /// fenced, with its lines as they are, so Markdown neither reflows them nor reads
     /// them as its own; a stored quote alone is taken for one by an indented line.
     static func blockQuote(_ quote: Passage) -> String {
-      let lines = quote.text.components(separatedBy: "\n").map { $0.trimmingTrailingSpaces() }
+      let lines = quote.text.components(separatedBy: "\n").map { $0.trimmingTrailingWhitespace() }
       let isVerbatim =
         quote.isVerbatim ?? lines.contains { $0.first == " " || $0.first == "\t" }
       guard isVerbatim else {
