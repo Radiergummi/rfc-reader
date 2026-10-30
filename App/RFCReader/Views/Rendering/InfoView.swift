@@ -679,7 +679,7 @@ private struct LinkRow: View {
       isDownloading = true
       Task {
         do {
-          let data = try await library.publishedFile(document, format: format)
+          let data = try await library.publishedFile(for: document, format: format)
           // The RFC Editor's own name, as the Mac saves it to Downloads.
           downloaded = ExportedFile(
             data: data, contentType: format.contentType, fileStem: document.fileStem)
