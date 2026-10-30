@@ -386,7 +386,9 @@ extension Array {
           .readerEnvironment(environment))
       host.sizingOptions = .preferredContentSize
       popover.contentViewController = host
+      popover.delegate = self
       notePopover = popover
+      environment.reader.editsNote = true
       let origin = textView.textContainerOrigin
       let visible = textView.visibleRect
       // Asked for from the panel, the place may be out of view still, the jump to it
@@ -401,6 +403,17 @@ extension Array {
     func closeNoteEditor() {
       notePopover?.close()
       notePopover = nil
+      environment?.reader.editsNote = false
+    }
+  }
+
+  extension RFCTextViewCoordinator: NSPopoverDelegate {
+    /// A transient popover closes itself, on a click outside it. One replaced by the
+    /// next note's editor is not the open one, and leaves the flag to that one.
+    func popoverDidClose(_ notification: Notification) {
+      guard notification.object as? NSPopover === notePopover else { return }
+      notePopover = nil
+      environment?.reader.editsNote = false
     }
   }
 #endif
