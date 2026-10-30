@@ -71,7 +71,7 @@ import Synchronization
       guard let textView, let rect = referenceRect(for: range) else { return }
       let label = NSTextField(labelWithString: CopyFeedback.link.announcement())
       label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
-      label.textColor = RFCColors.label
+      label.textColor = ReaderPalette.themedText
       label.sizeToFit()
       let padding = CGSize(width: 8, height: 3)
       let size = CGSize(

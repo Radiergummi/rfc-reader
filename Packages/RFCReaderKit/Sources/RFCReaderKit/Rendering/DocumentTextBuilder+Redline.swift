@@ -159,7 +159,7 @@ extension DocumentTextBuilder {
         section.displayTitle + "\n",
         [
           .font: style.headingFont(depth: min(section.depth, 3)),
-          .foregroundColor: RFCColors.label,
+          .foregroundColor: labelColor,
           .paragraphStyle: paragraphStyle(
             spacingBefore: style.paragraphSpacing * 1.6, spacingAfter: style.paragraphSpacing * 0.15
           ),
@@ -192,7 +192,7 @@ extension DocumentTextBuilder {
       output.addAttributes(
         [.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: color], range: range)
     case .deleted:
-      color = RFCColors.secondaryLabel
+      color = secondaryLabelColor
       unlinkPlaces(in: range)
       output.addAttributes(
         [

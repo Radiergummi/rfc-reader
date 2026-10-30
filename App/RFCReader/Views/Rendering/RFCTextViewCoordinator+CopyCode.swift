@@ -142,13 +142,15 @@ import RFCReaderKit
       feedback.wantsLayer = true
       feedback.layer?.cornerRadius = cornerRadius
       feedback.layer?.masksToBounds = true
-      // Opaque, so what is under it does not show through: the page, and the card's
-      // tint over it, as the card draws.
+      // Opaque, so what is under it does not show through: the page, a page theme's
+      // where one draws it (#704), and the card's tint over it, as the card draws.
+      let palette = paletteBox.palette
       textView.effectiveAppearance.performAsCurrentDrawingAppearance {
-        feedback.layer?.backgroundColor = textView.backgroundColor.cgColor
+        feedback.layer?.backgroundColor =
+          (palette.pageBackground ?? textView.backgroundColor).cgColor
         let tint = CALayer()
         tint.frame = feedback.bounds
-        tint.backgroundColor = paletteBox.palette.cardFill.cgColor
+        tint.backgroundColor = palette.cardFill.cgColor
         feedback.layer?.addSublayer(tint)
       }
       feedback.addSubview(content)
