@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 
 /// The inspector's two panes, which share one slot beside the reader: the
 /// document's navigation (contents and references) and what is known about it.
@@ -67,5 +68,13 @@ public enum InspectorPane: String, Codable, Sendable {
     if readsAsOriginal { return .publishedOriginal }
     if hasBody { return .lists }
     return isLoading ? .loading : .notLoaded
+  }
+
+  /// The sections the Info pane finds an erratum's section in: none for an RFC that
+  /// `readsAsOriginal` (#938), whose loaded text, a pointer's, is not on screen, so
+  /// that every erratum is the whole document's, as the reader's marks
+  /// (`ErrataMarks`) and the navigation pane have it.
+  public static func infoSections(_ sections: [Section], readsAsOriginal: Bool) -> [Section] {
+    readsAsOriginal ? [] : sections
   }
 }
