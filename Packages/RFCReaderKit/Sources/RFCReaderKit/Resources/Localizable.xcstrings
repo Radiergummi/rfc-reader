@@ -1528,12 +1528,12 @@
         }
       }
     },
-    "Go to RFC opens it straight away, by its number or words from its title." : {
+    "Go to RFC opens it straight away, by its number or a link to it." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder Wörter aus seinem Titel."
+            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder einen Link darauf."
           }
         }
       }

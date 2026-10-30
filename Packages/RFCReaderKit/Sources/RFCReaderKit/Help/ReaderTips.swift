@@ -172,7 +172,7 @@ public struct GoToRFCTip: HelpTip {
       return TipWords(
         title: title,
         message: String(
-          kit: "Go to RFC opens it straight away, by its number or words from its title.",
+          kit: "Go to RFC opens it straight away, by its number or a link to it.",
           locale: locale))
     }
   }
