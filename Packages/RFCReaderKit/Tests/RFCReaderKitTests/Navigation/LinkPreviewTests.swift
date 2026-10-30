@@ -70,6 +70,22 @@ struct LinkPreviewTests {
       LinkPreview.resolve(reference, linkedTo: page, from: current, in: nil) == .card("FETCH"))
   }
 
+  /// A References panel row previews what a citation of its entry in the prose
+  /// does (#580): the RFC it names, from the top, or a series' first member. An
+  /// entry that names no RFC previews nothing: its card would say what its row says.
+  @Test func `a references panel entry previews what its citation does`() {
+    let index = RFCIndex(
+      rfcs: [], series: [SeriesEntry(id: bcp14, members: [.rfc(2119), .rfc(8174)])])
+    let rfc = Reference(
+      anchor: "RFC8446", title: "TLS 1.3", seriesInfo: [SeriesInfo(name: "RFC", value: "8446")])
+    let series = Reference(
+      anchor: "BCP14", title: "Key words", seriesInfo: [SeriesInfo(name: "BCP", value: "14")])
+    let elsewhere = Reference(anchor: "IEEE.802.3_2018", title: "Ethernet")
+    #expect(LinkPreview.resolve(rfc, in: index) == .document(other, place: nil))
+    #expect(LinkPreview.resolve(series, in: index) == .document(.rfc(2119), place: nil))
+    #expect(LinkPreview.resolve(elsewhere, in: index) == nil)
+  }
+
   /// macOS's popover gets the whole preview; a phone's context menu gets what its
   /// screen leaves beside the gutters, and room under it for the menu.
   @Test func `the document preview is its full size where it fits`() {
