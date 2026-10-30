@@ -295,8 +295,11 @@ struct AnnotationExportTests {
         start += length + 1
       }
     }
-    throw CancellationError()
+    Issue.record("No line of a figure or code has the shape asked for.")
+    throw NoSuchLine()
   }
+
+  private struct NoSuchLine: Error {}
 
   @Test func `a highlight snapped to a figure's words keeps its first line's indentation`()
     throws

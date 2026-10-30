@@ -233,7 +233,7 @@ public enum QuoteCitation {
 }
 
 extension String {
-  func trimmingTrailingSpaces() -> String {
+  fileprivate func trimmingTrailingSpaces() -> String {
     var result = self
     while result.last == " " || result.last == "\t" { result.removeLast() }
     return result

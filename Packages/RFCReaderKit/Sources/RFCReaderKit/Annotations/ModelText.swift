@@ -37,7 +37,7 @@ public struct ModelText: Sendable {
   public let spans: [Span]
   /// The text of every figure's artwork and every piece of code, in order: lines whose
   /// columns are their meaning (#524).
-  public let verbatim: [Range<Int>]
+  let verbatim: [Range<Int>]
   private let spanIndex: [String: Int]
 
   /// The abstract's anchor, as the builder marks it.
