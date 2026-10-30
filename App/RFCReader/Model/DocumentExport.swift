@@ -87,20 +87,24 @@ enum DocumentExport {
 }
 
 #if !os(macOS)
-  /// A finished export, for SwiftUI's `fileExporter`, which saves a `FileDocument`.
-  /// Written only: nothing is ever opened as one.
+  /// A finished export, or a published format an Info pane row downloaded (#577), for
+  /// SwiftUI's `fileExporter`, which saves a `FileDocument`. Written only: nothing is
+  /// ever opened as one.
   nonisolated struct ExportedFile: FileDocument {
     static var readableContentTypes: [UTType] { [] }
-    static var writableContentTypes: [UTType] { ExportFormat.allCases.map(\.contentType) }
+    static var writableContentTypes: [UTType] {
+      ExportFormat.allCases.map(\.contentType) + FileFormat.allCases.map(\.contentType)
+    }
 
     let data: Data
-    let format: ExportFormat
+    /// What Save to Files saves it as, which keeps the extension of this type only.
+    let contentType: UTType
     /// What Save to Files names it, without the extension it adds.
     let fileStem: String
 
-    init(data: Data, format: ExportFormat, fileStem: String) {
+    init(data: Data, contentType: UTType, fileStem: String) {
       self.data = data
-      self.format = format
+      self.contentType = contentType
       self.fileStem = fileStem
     }
 

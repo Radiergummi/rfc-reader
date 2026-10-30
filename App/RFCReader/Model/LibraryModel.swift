@@ -1611,8 +1611,9 @@ final class LibraryModel {
     return pack
   }
 
-  /// The RFC Editor's own file of `id` in `format`, byte for byte, for an export of
-  /// it (#377).
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, from the copy kept
+  /// on disk when there is one: for an export of it (#377), and what a format row's
+  /// Download saves, to Downloads on a Mac (#25) and to Files on iOS (#577).
   func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
     let data = try await store.publishedFile(id, format: format, client: client)
     await evictIfGrown()
@@ -1822,7 +1823,7 @@ final class LibraryModel {
     /// own name, or numbered when that is taken, and the Dock's Downloads stack told,
     /// so it bounces. What Option-clicking a format in the Info pane does (#25).
     func saveToDownloads(_ id: DocumentID, format: FileFormat) async throws {
-      let data = try await client.fetchDocumentData(id, format: format)
+      let data = try await publishedFile(for: id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
       // Not private API, but not documented either: the notification Safari posts,
