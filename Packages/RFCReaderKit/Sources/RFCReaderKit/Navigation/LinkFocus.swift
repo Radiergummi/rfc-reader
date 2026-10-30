@@ -46,4 +46,11 @@ public enum LinkFocus {
       in: NSRange(location: 0, length: text.length))
     return link
   }
+
+  /// Whether the focus stays on `link`: not once it is scrolled off `screen`, or
+  /// starts in text `hidden` folds, where Space pages again and Tab starts from what
+  /// is on screen. A link the screen's edge cuts keeps it.
+  public static func keeps(_ link: NSRange, on screen: NSRange, hidden: HiddenText) -> Bool {
+    !hidden.contains(link.location) && screen.intersection(link) != nil
+  }
 }

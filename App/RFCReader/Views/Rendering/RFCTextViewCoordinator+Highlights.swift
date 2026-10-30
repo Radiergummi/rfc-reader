@@ -146,14 +146,9 @@ extension RFCTextViewCoordinator {
   extension RFCTextViewCoordinator {
     /// A tap in a highlight, once a double tap has failed: its popover, pointing at it.
     func showHighlightPopover(at offset: Int) {
-      guard let textView, var presenter = textView.window?.rootViewController,
-        let mark = highlightPlacement.marks.highlight(at: offset),
-        let range = highlightRange(of: mark.highlight),
-        let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
-        let end = textView.position(from: start, offset: range.length),
-        let textRange = textView.textRange(from: start, to: end)
+      guard let mark = highlightPlacement.marks.highlight(at: offset),
+        let range = highlightRange(of: mark.highlight)
       else { return }
-      while let presented = presenter.presentedViewController { presenter = presented }
       let host = UIHostingController<HighlightPopover?>(rootView: nil)
       guard
         let popover = highlightPopover(
@@ -161,13 +156,7 @@ extension RFCTextViewCoordinator {
           dismiss: { [weak host] in host?.presentingViewController?.dismiss(animated: true) })
       else { return }
       host.rootView = popover
-      host.modalPresentationStyle = .popover
-      host.preferredContentSize = host.sizeThatFits(
-        in: CGSize(width: HighlightPopover.width, height: .greatestFiniteMagnitude))
-      host.popoverPresentationController?.sourceView = textView
-      host.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
-      host.popoverPresentationController?.delegate = self
-      presenter.present(host, animated: true)
+      presentPopover(host, width: HighlightPopover.width, pointingAt: range)
     }
 
     /// The edit menu's Highlight row: a palette of the colors, the one last used first.

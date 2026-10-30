@@ -14,15 +14,13 @@ import SwiftUI
 // carries it out.
 
 extension RFCTextViewCoordinator {
-  /// A key pressed in the reader's text, without ⌘, ⌃ or ⌥: true where it was the
+  /// A key pressed in the reader's text, without ⌘, ⌃ or a chord's ⌥: true where it was the
   /// reader's, and the text view is to do nothing more with it.
   func handleKey(_ key: ReaderKeys.Key) -> Bool {
     // A preview's clicks commit it, and its keys are nobody's.
     guard commitsOnClick == nil else { return false }
-    // A link scrolled away from, or folded away, has lost the focus: Space pages
-    // again, and Tab starts from what is on screen.
     if let link = focusedLink,
-      foldingDelegate.hidden.contains(link.location) || visibleRange.intersection(link) == nil
+      !LinkFocus.keeps(link, on: visibleRange, hidden: foldingDelegate.hidden)
     {
       focus(link: nil)
     }
@@ -93,9 +91,9 @@ extension RFCTextViewCoordinator {
 
   /// The height of the line at the top of the viewport, which a page keeps in view.
   private var lineHeight: CGFloat {
-    guard let layout = textView?.textLayoutManager,
-      let start = layout.textViewportLayoutController.viewportRange?.location,
-      let line = layout.textLayoutFragment(for: start)?.textLineFragments.first
+    guard let textView, let layout = textView.textLayoutManager,
+      let line = layout.textLayoutFragment(for: CGPoint(x: 0, y: max(0, textView.viewportTop)))?
+        .textLineFragments.first
     else { return 20 }
     return line.typographicBounds.height
   }
@@ -104,14 +102,20 @@ extension RFCTextViewCoordinator {
   /// rect to the one at its bottom: where the focus starts when no link has it. Not
   /// TextKit's viewport range, which reaches past both edges.
   private var visibleRange: NSRange {
-    guard let textView, let layout = textView.textLayoutManager,
-      let top = layout.textLayoutFragment(for: CGPoint(x: 0, y: textView.viewportTop)),
-      let bottom = layout.textLayoutFragment(
-        for: CGPoint(x: 0, y: textView.viewportTop + textView.viewportHeight))
-        ?? layout.textLayoutFragment(for: layout.documentRange.endLocation)
-    else { return NSRange(location: 0, length: 0) }
-    let start = layout.offset(of: top.rangeInElement.location)
-    let end = layout.offset(of: bottom.rangeInElement.endLocation)
+    guard let textView, let layout = textView.textLayoutManager else {
+      return NSRange(location: 0, length: 0)
+    }
+    // Above the container is the header, where no fragment is: at the top of a
+    // document the screen starts with the text's first line. Below the last line,
+    // it ends with the text.
+    let top = max(0, textView.viewportTop)
+    let start =
+      layout.textLayoutFragment(for: CGPoint(x: 0, y: top))
+      .map { layout.offset(of: $0.rangeInElement.location) } ?? 0
+    let end =
+      layout.textLayoutFragment(for: CGPoint(x: 0, y: top + textView.viewportHeight))
+      .map { layout.offset(of: $0.rangeInElement.endLocation) }
+      ?? layout.offset(of: layout.documentRange.endLocation)
     return NSRange(location: max(0, start), length: max(0, end - start))
   }
 
@@ -168,22 +172,11 @@ extension RFCTextViewCoordinator {
         showErrata(at: offset)
         return true
       }
-      guard let textView, let environment, var presenter = textView.window?.rootViewController,
-        let (box, range) = reference(at: offset), let preview = preview(for: box.reference),
-        let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
-        let end = textView.position(from: start, offset: range.length),
-        let textRange = textView.textRange(from: start, to: end)
+      guard let environment, let (box, range) = reference(at: offset),
+        let preview = preview(for: box.reference)
       else { return false }
-      while let presented = presenter.presentedViewController { presenter = presented }
       let host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
-      host.modalPresentationStyle = .popover
-      host.preferredContentSize = host.sizeThatFits(
-        in: CGSize(width: ReferencePreview.width, height: .greatestFiniteMagnitude))
-      host.popoverPresentationController?.sourceView = textView
-      host.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
-      host.popoverPresentationController?.delegate = self
-      presenter.present(host, animated: true)
-      return true
+      return presentPopover(host, width: ReferencePreview.width, pointingAt: range)
     }
   #else
     private func find(_ command: ReaderKeyCommand) {

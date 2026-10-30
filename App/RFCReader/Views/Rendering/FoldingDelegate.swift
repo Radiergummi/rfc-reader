@@ -15,8 +15,8 @@ import os
 /// It also holds what the fragments draw for the reading mode: the headings'
 /// disclosures, and Implementer's requirement bands (#700); and this text view's
 /// highlights (#522), and the link the keyboard's focus is on (#711), which are never
-/// in the storage, since a build is shared. A
-/// fragment finds it as its layout manager's content manager's delegate.
+/// in the storage, since a build is shared. A fragment finds it as its layout
+/// manager's content manager's delegate.
 ///
 /// Highlights are held here rather than as rendering attributes on the layout
 /// manager, which the design first chose: `invalidateRenderingAttributes(for:)`,

@@ -126,23 +126,55 @@ struct ReaderKeysTests {
   @Suite("Reader keys on the Mac")
   struct MacReaderKeysTests {
     @Test func `a key press is read as the reader's key`() {
-      #expect(ReaderKeys.Key(characters: " ", modifiers: []) == .space)
-      #expect(ReaderKeys.Key(characters: " ", modifiers: .shift) == .shiftSpace)
-      #expect(ReaderKeys.Key(characters: "\t", modifiers: []) == .tab)
-      #expect(ReaderKeys.Key(characters: "\u{19}", modifiers: .shift) == .shiftTab)
-      #expect(ReaderKeys.Key(characters: "\r", modifiers: []) == .returnKey)
-      #expect(ReaderKeys.Key(characters: "\u{1B}", modifiers: []) == .escape)
-      #expect(ReaderKeys.Key(characters: "G", modifiers: .shift) == .character("G"))
+      #expect(
+        ReaderKeys.Key(characters: " ", charactersIgnoringModifiers: " ", modifiers: []) == .space)
+      #expect(
+        ReaderKeys.Key(characters: " ", charactersIgnoringModifiers: " ", modifiers: .shift)
+          == .shiftSpace)
+      #expect(
+        ReaderKeys.Key(characters: "\t", charactersIgnoringModifiers: "\t", modifiers: []) == .tab)
+      #expect(
+        ReaderKeys.Key(
+          characters: "\u{19}", charactersIgnoringModifiers: "\u{19}", modifiers: .shift)
+          == .shiftTab)
+      #expect(
+        ReaderKeys.Key(characters: "\r", charactersIgnoringModifiers: "\r", modifiers: [])
+          == .returnKey)
+      #expect(
+        ReaderKeys.Key(characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}", modifiers: [])
+          == .escape)
+      #expect(
+        ReaderKeys.Key(characters: "G", charactersIgnoringModifiers: "g", modifiers: .shift)
+          == .character("G"))
       // Caps Lock and the function key, which an arrow carries, change nothing.
-      #expect(ReaderKeys.Key(characters: "j", modifiers: .capsLock) == .character("j"))
+      #expect(
+        ReaderKeys.Key(characters: "j", charactersIgnoringModifiers: "j", modifiers: .capsLock)
+          == .character("j"))
     }
 
     @Test func `a chord with command, control or option is not the reader's`() {
       for modifier: NSEvent.ModifierFlags in [.command, .control, .option] {
-        #expect(ReaderKeys.Key(characters: "j", modifiers: modifier) == nil)
+        #expect(
+          ReaderKeys.Key(characters: "j", charactersIgnoringModifiers: "j", modifiers: modifier)
+            == nil)
       }
-      #expect(ReaderKeys.Key(characters: nil, modifiers: []) == nil)
-      #expect(ReaderKeys.Key(characters: "", modifiers: []) == nil)
+      #expect(
+        ReaderKeys.Key(characters: nil, charactersIgnoringModifiers: nil, modifiers: []) == nil)
+      #expect(ReaderKeys.Key(characters: "", charactersIgnoringModifiers: "", modifiers: []) == nil)
+    }
+
+    @Test func `a character a layout types with option is read as it`() {
+      // A German Mac's [ and ] are ⌥5 and ⌥6.
+      #expect(
+        ReaderKeys.Key(characters: "[", charactersIgnoringModifiers: "5", modifiers: .option)
+          == .character("["))
+      // An option that changed nothing, or typed no single character, is a chord's.
+      #expect(
+        ReaderKeys.Key(characters: "\t", charactersIgnoringModifiers: "\t", modifiers: .option)
+          == nil)
+      #expect(
+        ReaderKeys.Key(characters: "\u{A0}", charactersIgnoringModifiers: " ", modifiers: .option)
+          != .space)
     }
   }
 #elseif canImport(UIKit)
@@ -152,24 +184,54 @@ struct ReaderKeysTests {
   @Suite("Reader keys on iOS")
   struct IOSReaderKeysTests {
     @Test func `a key press is read as the reader's key`() {
-      #expect(ReaderKeys.Key(keyCode: .keyboardSpacebar, characters: " ", modifiers: []) == .space)
       #expect(
-        ReaderKeys.Key(keyCode: .keyboardSpacebar, characters: " ", modifiers: .shift)
+        ReaderKeys.Key(
+          keyCode: .keyboardSpacebar, characters: " ", charactersIgnoringModifiers: " ",
+          modifiers: []) == .space)
+      #expect(
+        ReaderKeys.Key(
+          keyCode: .keyboardSpacebar, characters: " ", charactersIgnoringModifiers: " ",
+          modifiers: .shift)
           == .shiftSpace)
       #expect(
-        ReaderKeys.Key(keyCode: .keyboardTab, characters: "\t", modifiers: .shift) == .shiftTab)
+        ReaderKeys.Key(
+          keyCode: .keyboardTab, characters: "\t", charactersIgnoringModifiers: "\t",
+          modifiers: .shift) == .shiftTab)
       #expect(
-        ReaderKeys.Key(keyCode: .keyboardReturnOrEnter, characters: "\r", modifiers: [])
+        ReaderKeys.Key(
+          keyCode: .keyboardReturnOrEnter, characters: "\r", charactersIgnoringModifiers: "\r",
+          modifiers: [])
           == .returnKey)
-      #expect(ReaderKeys.Key(keyCode: .keyboardEscape, characters: "", modifiers: []) == .escape)
       #expect(
-        ReaderKeys.Key(keyCode: .keyboardG, characters: "G", modifiers: .shift) == .character("G"))
+        ReaderKeys.Key(
+          keyCode: .keyboardEscape, characters: "", charactersIgnoringModifiers: "", modifiers: [])
+          == .escape)
+      #expect(
+        ReaderKeys.Key(
+          keyCode: .keyboardG, characters: "G", charactersIgnoringModifiers: "g", modifiers: .shift)
+          == .character("G"))
     }
 
     @Test func `a chord with command, control or option is not the reader's`() {
       for modifier: UIKeyModifierFlags in [.command, .control, .alternate] {
-        #expect(ReaderKeys.Key(keyCode: .keyboardJ, characters: "j", modifiers: modifier) == nil)
+        #expect(
+          ReaderKeys.Key(
+            keyCode: .keyboardJ, characters: "j", charactersIgnoringModifiers: "j",
+            modifiers: modifier) == nil)
       }
+    }
+
+    @Test func `a character a layout types with option is read as it`() {
+      // A German keyboard's [ and ] are ⌥5 and ⌥6.
+      #expect(
+        ReaderKeys.Key(
+          keyCode: .keyboard5, characters: "[", charactersIgnoringModifiers: "5",
+          modifiers: .alternate) == .character("["))
+      // An option that changed nothing is a chord's, Space and Tab included.
+      #expect(
+        ReaderKeys.Key(
+          keyCode: .keyboardSpacebar, characters: " ", charactersIgnoringModifiers: " ",
+          modifiers: .alternate) == nil)
     }
   }
 #endif

@@ -130,6 +130,24 @@ struct LinkFocusTests {
     }
   }
 
+  /// A focused link scrolled off the screen, or folded away, loses the focus; one the
+  /// screen's edge cuts keeps it.
+  @Test func `the focus stays only on a link on screen and shown`() throws {
+    let built = try Self.rfc8999()
+    let outline = Folding(mode: .outline).hidden(in: built.foldingIndex)
+    let all = Self.links(in: built.text, hidden: HiddenText())
+    let link = try #require(all.dropFirst(all.count / 2).first)
+    let around = NSRange(location: link.location - 10, length: link.length + 20)
+    let cutting = NSRange(location: link.location + 1, length: 50)
+    let after = NSRange(location: NSMaxRange(link) + 1, length: 2_000)
+    #expect(LinkFocus.keeps(link, on: around, hidden: HiddenText()))
+    #expect(LinkFocus.keeps(link, on: cutting, hidden: HiddenText()))
+    #expect(!LinkFocus.keeps(link, on: after, hidden: HiddenText()))
+    let folded = try #require(all.first { outline.contains($0.location) })
+    let everything = NSRange(location: 0, length: built.text.length)
+    #expect(!LinkFocus.keeps(folded, on: everything, hidden: outline))
+  }
+
   /// Every link Tab stops at from the top of the text, in order.
   private static func links(in text: NSAttributedString, hidden: HiddenText) -> [NSRange] {
     let top = NSRange(location: 0, length: 0)

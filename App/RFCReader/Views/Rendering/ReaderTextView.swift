@@ -87,7 +87,7 @@ import RFCReaderKit
     /// a side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
-    /// Told of a key pressed without ⌘, ⌃ or ⌥ (#711): Space, Tab, Return and the
+    /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
     /// vim-style keys are the coordinator's, which answers whether it took the key.
     var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
 
@@ -95,7 +95,9 @@ import RFCReaderKit
       willHandleKey()
       if presses.count == 1, let press = presses.first, let key = press.key,
         let readerKey = ReaderKeys.Key(
-          keyCode: key.keyCode, characters: key.characters, modifiers: key.modifierFlags),
+          keyCode: key.keyCode, characters: key.characters,
+          charactersIgnoringModifiers: key.charactersIgnoringModifiers,
+          modifiers: key.modifierFlags),
         handleKey(readerKey)
       {
         handledPresses.insert(ObjectIdentifier(press))
@@ -300,7 +302,7 @@ import RFCReaderKit
     /// side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
-    /// Told of a key pressed without ⌘, ⌃ or ⌥ (#711): Space, Tab, Return and the
+    /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
     /// vim-style keys are the coordinator's, which answers whether it took the key.
     /// Only while this is first responder: a text field, the find bar's included,
     /// takes its own keys.
@@ -308,7 +310,10 @@ import RFCReaderKit
 
     override func keyDown(with event: NSEvent) {
       willHandleKey()
-      if let key = ReaderKeys.Key(characters: event.characters, modifiers: event.modifierFlags),
+      if let key = ReaderKeys.Key(
+        characters: event.characters,
+        charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+        modifiers: event.modifierFlags),
         handleKey(key)
       {
         return

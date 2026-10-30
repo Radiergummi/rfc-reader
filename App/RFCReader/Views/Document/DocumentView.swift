@@ -519,6 +519,9 @@ struct DocumentView: View {
         GoToSectionField(sections: reader.sections) { anchor in
           navigation.jump(toSection: anchor)
         }
+        // However it went: a document opened under it takes the popover with its
+        // view and never sets the binding, and the next would open it unasked.
+        .onDisappear { reader.isGoingToSection = false }
         #if !os(macOS)
           .presentationCompactAdaptation(.popover)
         #endif

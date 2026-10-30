@@ -51,8 +51,8 @@ public enum ReaderKeyCommand: Equatable, Sendable {
 /// commands, holding the first key of a vim pair, `gg`, `]]`, `[[`, `]r` or `[r`, until
 /// the second comes.
 ///
-/// Only keys pressed without ⌘, ⌃ or ⌥ come here: those are the menus' and the text
-/// view's own, as ⌘↑ and ⌘↓ go to the document's top and end. Nor do any while a
+/// Only keys pressed without ⌘, ⌃ or a chord's ⌥ come here: those are the menus' and
+/// the text view's own, as ⌘↑ and ⌘↓ go to the document's top and end. Nor do any while a
 /// text field has the focus, which the text view is not then.
 public struct ReaderKeys: Sendable {
   /// A key press, as far as the reader tells keys apart. A letter is the character
@@ -157,13 +157,23 @@ public struct ReaderKeys: Sendable {
   import AppKit
 
   extension ReaderKeys.Key {
-    /// The reader's key a key press on the Mac is, from its `characters` and its
-    /// modifier flags; nil for one with ⌘, ⌃ or ⌥ held, which is the menus' or the
-    /// text view's, and for one that types no single character.
-    public init?(characters: String?, modifiers: NSEvent.ModifierFlags) {
-      guard modifiers.isDisjoint(with: [.command, .control, .option]),
+    /// The reader's key a key press on the Mac is, from its `characters`, what they
+    /// would be without the modifiers, and its modifier flags; nil for one with ⌘ or
+    /// ⌃ held, which is the menus' or the text view's, and for one that types no
+    /// single character. With ⌥ held, only the character ⌥ typed, as a German Mac
+    /// types `[` and `]` with ⌥5 and ⌥6; a chord's ⌥ that changes nothing is nil.
+    public init?(
+      characters: String?, charactersIgnoringModifiers: String?,
+      modifiers: NSEvent.ModifierFlags
+    ) {
+      guard modifiers.isDisjoint(with: [.command, .control]),
         let characters, characters.count == 1, let character = characters.first
       else { return nil }
+      if modifiers.contains(.option) {
+        guard characters != charactersIgnoringModifiers else { return nil }
+        self = .character(character)
+        return
+      }
       let shift = modifiers.contains(.shift)
       switch character {
       case " ": self = shift ? .shiftSpace : .space
@@ -182,12 +192,23 @@ public struct ReaderKeys: Sendable {
 
   extension ReaderKeys.Key {
     /// The reader's key a hardware keyboard's key is, from its usage, the characters
-    /// it types and its modifier flags; nil for one with ⌘, ⌃ or ⌥ held, which is the
-    /// menus' or the text view's, and for one that types no single character.
+    /// it types, what they would be without the modifiers, and its modifier flags; nil
+    /// for one with ⌘ or ⌃ held, which is the menus' or the text view's, and for one
+    /// that types no single character. With ⌥ held, only the character ⌥ typed, as a
+    /// German keyboard types `[` and `]` with ⌥5 and ⌥6; a chord's ⌥ that changes
+    /// nothing is nil.
     public init?(
-      keyCode: UIKeyboardHIDUsage, characters: String, modifiers: UIKeyModifierFlags
+      keyCode: UIKeyboardHIDUsage, characters: String, charactersIgnoringModifiers: String,
+      modifiers: UIKeyModifierFlags
     ) {
-      guard modifiers.isDisjoint(with: [.command, .control, .alternate]) else { return nil }
+      guard modifiers.isDisjoint(with: [.command, .control]) else { return nil }
+      if modifiers.contains(.alternate) {
+        guard characters != charactersIgnoringModifiers, characters.count == 1,
+          let character = characters.first
+        else { return nil }
+        self = .character(character)
+        return
+      }
       let shift = modifiers.contains(.shift)
       switch keyCode {
       case .keyboardSpacebar: self = shift ? .shiftSpace : .space
