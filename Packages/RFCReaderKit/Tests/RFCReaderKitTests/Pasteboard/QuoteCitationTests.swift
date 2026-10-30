@@ -304,6 +304,41 @@ struct QuoteCitationTests {
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
+  /// A quoted line is the RFC's text, never markup: what would open a heading, a list
+  /// or a setext underline at its start, and emphasis, code, a link, an entity, an
+  /// escape or a table cell within it, is escaped as the Markdown export escapes it
+  /// (#1003). A `<` stays an entity.
+  @Test func `prose that reads as markdown is escaped`() {
+    let lines = [
+      "# not a heading", "- not an item", "+ nor this", "=====", "1. not a list", "2) nor this",
+      "*not emphasis* _nor this_ `not code` [not a link] &amp; back\\slash a|b",
+      "Send <field-name>",
+    ]
+    let quote = QuoteCitation.quote(
+      of: NSAttributedString(string: lines.joined(separator: "\n")), document: .rfc(9110),
+      section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        ##"""
+        > \# not a heading
+        >
+        > \- not an item
+        >
+        > \+ nor this
+        >
+        > \=====
+        >
+        > 1\. not a list
+        >
+        > 2\) nor this
+        >
+        > \*not emphasis\* \_nor this\_ \`not code\` \[not a link\] \&amp; back\\slash a\|b
+        >
+        > Send &lt;field-name\>
+
+        """##), "\(quote.markdown)")
+  }
+
   /// The plain text is the Markdown: a web page reads only plain text and HTML, so
   /// GitHub gets its `>` quote only from the plain text, and Slack and chat apps paste
   /// plain text too.
