@@ -131,6 +131,11 @@ final class ReaderState {
   /// `ReaderController.hasSelection`.
   var hasSelection = false
 
+  /// Whether a note's editor is open over the reader's text (#1007): on the Mac it
+  /// is a popover, its own key window, and the reader's Edit commands do nothing
+  /// there, so they are grayed out. Written by the coordinator that opened it.
+  var editsNote = false
+
   /// A document read beside this one, scrolling with it (#187); nil when it is
   /// read alone. Only the window's own reader has one: the reader beside it is
   /// `SideBySide`'s, and has only the coupling.
