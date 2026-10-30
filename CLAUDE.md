@@ -3,7 +3,7 @@
 ## Commands
 
 - `make check` is the gate before committing. Corpus-backed tests are not in it: run `make test-corpus` for those.
-- One test: `swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors --filter "<phrase from its name>"`. Keep the flag, or switching with `make test` rebuilds everything.
+- One test: `swift test --package-path Packages/RFCKit -Xswiftc -warnings-as-errors --filter "<phrase from its name>"`. Keep the flag, or switching with `make test` rebuilds everything. RFCReaderKit's tests need `--build-system swiftbuild`, as `make test-app` passes, or plurals do not resolve.
 - Without signing certificates, pass `CODE_SIGNING_ALLOWED=NO` to the app builds, as CI does.
 - `RFCReader.xcodeproj`, and the Info.plist and entitlements files, are generated from `project.yml` and gitignored. Edit `project.yml`.
 
@@ -21,19 +21,20 @@ Read `docs/ARCHITECTURE.md` (above all "TextKit 2 traps") and the records in `do
 - `safeAreaRegions = []` on the reader's hosted root and `ReaderScrollView` refusing the trailing inset are both needed; removing either re-wraps the document when the contents panel opens.
 - Anchors are stable strings, never indices: deep links, the table of contents and reading positions key off them.
 - Both XML parsers ignore a parser error reported after the root element closes (a swift-corelibs-foundation quirk). A test pins it; it is not a bug.
-- A comment that cites a cost names the benchmark or signpost that measures it, not the number (#607).
+- A comment that cites a cost names the benchmark or signpost that measures it, not the number (#607). The number goes in a decision record or the pull request.
 
 ## Tests and RFC text
 
 - **Never commit RFC text**: no new fixtures, no excerpts or trimmed copies of committed ones, no override snapshots. Licensing is open with the IETF Trust. A test may locate text with a few words (a rule name, a term), never a sentence. Anything else is fetched into the gitignored `corpus/` at run time.
 - A test that calls `parse` feeds it a real RFC: a fixture already committed in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` (through `Fixtures`) or a corpus document (through `CorpusText`). Only a guard-level test of a pure function may take hand-written lines, written in RFC shape, not quoted.
-- `LegacyTextParser` changes risk regressions across 8,457 documents. Write the test first: guard-level, then committed fixture, then a `Corpus-backed: <topic>` suite. A new corpus document goes in the Makefile's `CORPUS_TEST_DOCUMENTS` (or `CORPUS_TEST_XML_DOCUMENTS`).
+- `LegacyTextParser` changes risk regressions across 8,457 documents. Write the test first: guard-level, then committed fixture, then a corpus-backed suite: a `CorpusBacked…` type (`make test-corpus` filters on that) displayed as `Corpus-backed: <topic>`. A new corpus document goes in the Makefile's `CORPUS_TEST_DOCUMENTS`, `CORPUS_TEST_XML_DOCUMENTS` or, for RFCReaderKit, `CORPUS_TEST_APP_TEXT_DOCUMENTS`.
 - Fix the heuristic when a class of documents is wrong. When exactly one is, patch it in `corpus/overrides/rfcNNNN.xml` (rules in its README). For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` with the previous run.
 
 ## Localization
 
+- No text a user sees in the chrome is a plain `String`: it is a SwiftUI literal, a `LocalizedStringResource`, `String(localized:)`, or in RFCReaderKit `String(kit:locale:)`, never a literal put in a model's field or a notification. Interpolate a count (plurals live in the catalog), format a list with `.formatted(.list(type: .and))`, and never build a sentence from translated pieces. A `String` that is already resolved, or is not language, is shown with `Text(verbatim:)`.
 - The code is the source of the keys: change the string in Swift, run `make strings`, and commit the catalogs. Never add or remove a key in a `.xcstrings` by hand. Every new key needs its German translation, state `translated`, in the same change.
-- In RFCReaderKit, models take `locale: Locale = .interface` and use `String(kit:locale:)`; tests pass `locale: .english`.
+- In RFCReaderKit, models take `locale: Locale = .interface` and use `String(kit:locale:)`; tests pass `locale: .english`. A bare `String(localized:)`, or a `LocalizedStringResource` without `bundle: .kit`, looks in the app's catalog and stays English.
 - The reader body and its exports stay English (`DocumentTextBuilder`, `PDFExport`, `GrammarExport`, the requirements CSV, figure descriptions), as do RFCKit's designations and script-facing names.
-- The `localized_ui_string` lint rule misses `"""` literals, literals behind `?:` or `??`, and strings passed through a function. Check those by hand.
+- The `localized_ui_string` lint rule misses `"""` literals, an alert's `message:` on a line of its own, literals behind `?:` or `??`, and strings passed through a function. Check those by hand. A literal in an export, which stays English on purpose, disables the rule on its line.
 - `App/RFCReader/InfoPlist.xcstrings` is the exception: no build extracts Info.plist, so a new user-facing value in `project.yml`'s `info:` gets its key and English there by hand.

@@ -119,8 +119,11 @@ custom_rules:
     name: Install through the text storage
     included:
       - App/.*\.swift
-      - Packages/RFCReaderKit/Sources/.*\.swift
-    regex: '\.attributedString\s*='
+      - Packages/RFCReaderKit/.*\.swift
+      - Tools/benchmarks-layout/.*\.swift
+    excluded:
+      - Packages/RFCReaderKit/Tests/RFCReaderKitTests/Rendering/StorageInstallTests\.swift
+    regex: '\.attributedString\s*=(?!=)'
     excluded_match_kinds:
       - comment
       - doccomment
@@ -165,15 +168,16 @@ custom_rules:
     message: 'Move work off the main actor with an @concurrent function, not Task.detached.'
     severity: error
   # A test is named with a raw identifier that says what it pins,
-  # @Test func `a canonical label loses its brackets`(), not a display-name string.
+  # @Test func `a canonical label loses its brackets`(), not a display-name string
+  # and not a camel-cased sentence.
   test_raw_identifier_name:
     name: Test named by a raw identifier
     included:
       - Packages/.*/Tests/.*\.swift
       - Tools/.*/Tests/.*\.swift
-    regex: '@Test\(\s*"'
+    regex: '@Test(\(\s*"|(\([^()]*\))?\s+func\s+[A-Za-z_])'
     excluded_match_kinds:
       - comment
       - doccomment
-    message: 'Name the test with a raw identifier, @Test func `what it pins`(), not a display-name string.'
+    message: 'Name the test with a raw identifier, @Test func `what it pins`(), not a display-name string or a camel-cased name.'
     severity: error

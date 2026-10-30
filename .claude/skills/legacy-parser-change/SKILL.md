@@ -21,7 +21,7 @@ Watch the test fail before the fix. A test over a document that lacks the case i
 
 ## 2. Fix the class, not the document
 
-- A heuristic change is for a class of documents. When exactly one document is wrong, the correction waits for #197; do not commit an override.
+- A heuristic change is for a class of documents. When exactly one document is wrong, correct it with an RFC 5261 patch in `corpus/overrides/rfcNNNN.xml`, following its README; `make corpus-overrides-check` applies every patch. A shape that recurs in about three documents is a parser bug, not an override.
 - Find every caller of the function you change. A classifier shared between the body and the front-matter split (`heading(from:)`) is kept lax on purpose for one of them.
 
 ## 3. Measure before and after

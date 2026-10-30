@@ -17,7 +17,7 @@ What makes a finding worth the maintainer's time is its **effect**: what it make
 
 This repository writes down why it is the way it is. A review that has not read it re-proposes what was measured and rejected.
 
-- `CLAUDE.md`: the structural rule and the standing constraints.
+- `CLAUDE.md`: the invariants that are on purpose; the structural rule is in `docs/ARCHITECTURE.md` ("Shape of the code base"), and the rules a check enforces are the custom rules in `.swiftlint.yml`.
 - `docs/ARCHITECTURE.md` in full, `docs/VISION.md` (the feature tiers, the guiding principles and "What the experience should feel like", which the experience lenses hold the app to), `docs/DATA_PIPELINE.md`.
 - The title of every record in `docs/decisions/`, and the full text of each one whose subject an area touches. Give each subagent the list of records for its area. Several are about interaction (previews on hover and force-click, hiding the bars on iPhone, reading modes, backlink chips): the experience areas read those.
 - The open issues, so a finding cites the issue that already tracks it instead of rediscovering it: `gh issue list --state open --limit 500 --json number,title,labels` (in a cloud session, the GitHub MCP tools' `list_issues`). Write them to the scratchpad and hand the file to every subagent. Issues labeled `area: ux` and `area: accessibility` go to the experience areas in particular.

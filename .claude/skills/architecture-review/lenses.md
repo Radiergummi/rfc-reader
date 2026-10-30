@@ -75,7 +75,7 @@ For each home-grown candidate in the inventory (a lexer engine, an XML DOM, a ca
 
 - What in the area cannot be tested where it is, and why. Does it have to be there?
 - Tests that pin implementation (private shapes, exact attribute runs) where they could pin behavior, and so make every refactor a test rewrite.
-- Guards named in `CLAUDE.md` (`BuilderCompletenessTests`, `StorageInstallTests`, `BuilderHandoverTests`) that no longer cover what the rule says they guard.
+- Guards of the standing rules (`BuilderCompletenessTests`, `StorageInstallTests`, `BuilderHandoverTests`, and the custom rules in `.swiftlint.yml`) that no longer cover what the rule says they guard.
 - What catches a regression in the App target, which has no test bundle by design: no UI tests, no snapshot tests? Name the bugs of the last months (`git log`) that only a test of the running app would have caught, and what the cheapest such test would be.
 - A migration test from every shipped schema version to the current one, with a store written by the old version, not built in memory.
 
