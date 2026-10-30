@@ -52,6 +52,23 @@ struct FailedSaveTests {
     #expect(!undoManager.canUndo)
   }
 
+  @Test func `a collection's deletion whose save fails is not left pending`() throws {
+    var identifier: UUID?
+    let container = try makeReadOnlyContainer {
+      identifier = try CollectionStore.create(
+        named: "HTTP", color: .blue, documents: [.rfc(9110)], in: $0
+      ).identifier
+    }
+    let context = container.mainContext
+    let collection = try #require(identifier)
+    #expect(throws: (any Error).self) {
+      try CollectionStore.delete(collection, in: context)
+    }
+    #expect(!context.hasChanges)
+    #expect(
+      try context.fetch(FetchDescriptor<DocumentCollection>()).map(\.identifier) == [collection])
+  }
+
   @Test func `a Keep Offline mark whose save fails is not left pending`() throws {
     let container = try makeReadOnlyContainer()
     let context = container.mainContext
