@@ -46,6 +46,7 @@ extension RFCTextViewCoordinator {
     }
     reportSelection()
     engine.installed(built, document: document)
+    indexOverlay.installed(built) { [weak self] group in self?.jumpToIndexGroup(group) }
     reportVisibleAnchor()
     findBands()
     placeHighlights()
@@ -314,5 +315,6 @@ extension RFCTextViewCoordinator {
       // The gutter or the header moved the container in the view: the same line stays on top.
       engine.pin()
     }
+    updateIndexOverlay()
   }
 }
