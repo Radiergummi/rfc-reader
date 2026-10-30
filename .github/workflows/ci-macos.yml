@@ -131,9 +131,14 @@ jobs:
           test -n "$name"
           echo "Simulator: $name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+      # The hang guard's limit, a minute by default, is ten here (#985): on this
+      # runner's Simulator the whole run takes minutes, and a main-actor test's
+      # time counts its waits behind every other (the tests' HangGuard.swift).
+      # xcodebuild hands a TEST_RUNNER_ variable to the tests without the prefix.
       - name: Run RFCReaderKit's tests on the iOS Simulator
         env:
           IOS_SIMULATOR: ${{ steps.simulator.outputs.name }}
+          TEST_RUNNER_RFC_TEST_TIME_LIMIT_MINUTES: 10
         run: make test-app-ios CODE_SIGNING_ALLOWED=NO IOS_SIMULATOR="$IOS_SIMULATOR"
       # After both builds, whose records of the strings in the code it reads; the
       # builds it starts first have nothing left to do.

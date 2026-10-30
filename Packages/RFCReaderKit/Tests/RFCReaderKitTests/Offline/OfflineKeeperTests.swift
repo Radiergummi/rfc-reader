@@ -9,7 +9,7 @@ import Testing
 /// sequences (#358): moves without a fetch, fetches into the kept tier, and #116's
 /// rule for a fetch no longer wanted. Built on the store's tests' sandbox and gated
 /// fetcher.
-@Suite("Offline keeper", .timeLimit(.minutes(1)))
+@Suite("Offline keeper", .hangGuard)
 struct OfflineKeeperTests {
   private typealias Sandbox = DocumentStoreTests.Sandbox
   private typealias GatedFetcher = DocumentStoreTests.GatedFetcher

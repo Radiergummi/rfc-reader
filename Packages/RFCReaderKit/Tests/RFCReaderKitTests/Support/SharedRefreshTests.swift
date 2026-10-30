@@ -6,7 +6,7 @@ import Testing
 /// beside it (#595): the index's, the revisions, the working groups and the
 /// errata; and how a person's refresh replaces the index's automatic check (#983).
 @MainActor
-@Suite("Shared refresh", .timeLimit(.minutes(1)))
+@Suite("Shared refresh", .hangGuard)
 struct SharedRefreshTests {
   @Test func `a start while one is under way is the one under way`() async {
     let refresh = SharedRefresh(name: "Test")
