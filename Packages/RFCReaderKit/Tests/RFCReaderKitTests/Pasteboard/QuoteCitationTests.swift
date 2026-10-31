@@ -352,6 +352,10 @@ struct QuoteCitationTests {
     ("**strong**", ##"\*\*strong\*\*"##),
     ("1*DIGIT and 2*ALPHA", ##"1\*DIGIT and 2\*ALPHA"##),
     ("an _underlined_ word", ##"an \_underlined\_ word"##),
+    // A symbol is punctuation to CommonMark 0.31 but not to 0.29, which GitHub follows.
+    ("b*≤*", ##"b\*≤\*"##),
+    // Swift's whitespace but not CommonMark's.
+    ("x *\u{85}y*", "x \\*\u{85}y\\*"),
     ("~~gone~~", ##"\~\~gone\~\~"##),
     ("a `code` span", ##"a \`code\` span"##),
     ("``a ` b``", ##"\`\`a \` b\`\`"##),

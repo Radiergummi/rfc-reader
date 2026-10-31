@@ -35,7 +35,9 @@ extension QuoteCitation {
         result += "&lt;"
         continue
       }
-      if escaped.contains(index) { result.append("\\") }
+      if escaped.contains(index) {
+        result.append("\\")
+      }
       result.append(character)
     }
     return result
@@ -80,6 +82,10 @@ extension QuoteCitation {
   /// CommonMark's flanking rules: both runs of such a pair, every character of each.
   /// A `~` run closes only one as long as it. The rule of three is not applied, so a
   /// rare pair it rules out is escaped all the same.
+  ///
+  /// CommonMark 0.31 counts a symbol such as `≤` or `©` as punctuation, and 0.29,
+  /// which GitHub's cmark-gfm follows, does not, so a run opens or closes here where
+  /// it would under either.
   private static func emphasisDelimiters(in line: [Character]) -> Set<Int> {
     struct Run {
       var range: Range<Int>
@@ -87,29 +93,23 @@ extension QuoteCitation {
       var opens: Bool
       var closes: Bool
     }
-    func isSpace(_ character: Character?) -> Bool { character?.isWhitespace ?? true }
-    func isMark(_ character: Character?) -> Bool { character.map(isPunctuation) ?? false }
 
     var runs: [Run] = []
-    var start = 0
-    while start < line.count {
-      let character = line[start]
-      var end = start + 1
-      while end < line.count, line[end] == character { end += 1 }
-      if "*_~".contains(character), character != "~" || end - start <= 2 {
-        let before = start > 0 ? line[start - 1] : nil
-        let after = end < line.count ? line[end] : nil
-        let left = !isSpace(after) && (!isMark(after) || isSpace(before) || isMark(before))
-        let right = !isSpace(before) && (!isMark(before) || isSpace(after) || isMark(after))
-        // An `_` within a word is never emphasis.
-        let isUnderscore = character == "_"
-        runs.append(
-          Run(
-            range: start..<end, character: character,
-            opens: isUnderscore ? left && (!right || isMark(before)) : left,
-            closes: isUnderscore ? right && (!left || isMark(after)) : right))
+    for range in characterRuns(in: line) {
+      let character = line[range.lowerBound]
+      guard "*_~".contains(character), character != "~" || range.count <= 2 else {
+        continue
       }
-      start = end
+      let before = range.lowerBound > 0 ? line[range.lowerBound - 1] : nil
+      let after = range.upperBound < line.count ? line[range.upperBound] : nil
+      let flankings = [isPunctuation, isPunctuationInCommonMark029].map { isMark in
+        flanking(of: character, between: before, and: after, punctuation: isMark)
+      }
+      runs.append(
+        Run(
+          range: range, character: character,
+          opens: flankings.contains { $0.opens },
+          closes: flankings.contains { $0.closes }))
     }
 
     var escaped = Set<Int>()
@@ -126,20 +126,40 @@ extension QuoteCitation {
     return escaped
   }
 
+  /// Whether a run of `character` between `before` and `after` can open and close
+  /// emphasis, by CommonMark's flanking rules with `punctuation` as their punctuation.
+  private static func flanking(
+    of character: Character, between before: Character?, and after: Character?,
+    punctuation: (Character) -> Bool
+  ) -> (opens: Bool, closes: Bool) {
+    func isSpace(_ character: Character?) -> Bool {
+      guard let character else {
+        return true
+      }
+      return isUnicodeWhitespace(character)
+    }
+    func isMark(_ character: Character?) -> Bool {
+      character.map(punctuation) ?? false
+    }
+
+    let left = !isSpace(after) && (!isMark(after) || isSpace(before) || isMark(before))
+    let right = !isSpace(before) && (!isMark(before) || isSpace(after) || isMark(after))
+    // An `_` within a word is never emphasis.
+    if character == "_" {
+      return (left && (!right || isMark(before)), right && (!left || isMark(after)))
+    }
+    return (left, right)
+  }
+
   /// Every backtick in `line` when it has a code span, which it has when two runs of
   /// backticks are as long as each other, and none when it has none. All of them,
   /// because a backslash does not escape a backtick that closes a span an unescaped
   /// one opens: escaping only a span's own runs would leave one between them to open
   /// a span that an escaped one closes.
   private static func codeSpanDelimiters(in line: [Character]) -> Set<Int> {
-    var lengths: [Int] = []
-    var start = 0
-    while start < line.count {
-      var end = start + 1
-      while end < line.count, line[end] == line[start] { end += 1 }
-      if line[start] == "`" { lengths.append(end - start) }
-      start = end
-    }
+    let lengths = characterRuns(in: line)
+      .filter { line[$0.lowerBound] == "`" }
+      .map(\.count)
     guard Set(lengths).count < lengths.count else { return [] }
     return Set(line.indices.filter { line[$0] == "`" })
   }
@@ -172,7 +192,38 @@ extension QuoteCitation {
       of: /#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]{0,31};/) != nil
   }
 
+  /// The ranges of `line`'s runs of one character repeated, in order.
+  private static func characterRuns(in line: [Character]) -> [Range<Int>] {
+    var runs: [Range<Int>] = []
+    var start = 0
+    while start < line.count {
+      var end = start + 1
+      while end < line.count, line[end] == line[start] {
+        end += 1
+      }
+      runs.append(start..<end)
+      start = end
+    }
+    return runs
+  }
+
+  /// Punctuation as CommonMark 0.31 has it: any Unicode punctuation or symbol.
   private static func isPunctuation(_ character: Character) -> Bool {
     character.isPunctuation || character.isSymbol
+  }
+
+  /// Punctuation as CommonMark 0.29 has it: ASCII punctuation, and Unicode
+  /// punctuation but not symbols.
+  private static func isPunctuationInCommonMark029(_ character: Character) -> Bool {
+    character.isPunctuation || (character.isASCII && character.isSymbol)
+  }
+
+  /// Whitespace as CommonMark has it: a space separator, a tab, a line feed, a form
+  /// feed or a carriage return, which leaves out what else Swift counts as whitespace.
+  private static func isUnicodeWhitespace(_ character: Character) -> Bool {
+    if "\t\n\u{0C}\r".contains(character) {
+      return true
+    }
+    return character.unicodeScalars.first?.properties.generalCategory == .spaceSeparator
   }
 }
