@@ -314,7 +314,9 @@ struct QuoteCitationTests {
     let quote = QuoteCitation.quote(
       of: NSAttributedString(string: "# Not a heading\nas *stressed* in [RFC 9111]"),
       document: .rfc(9110), section: nil)
-    #expect(quote.markdown.hasPrefix(##"> \# Not a heading"## + "\n>\n" + ##"> as \*stressed\* in [RFC 9111]"##))
+    #expect(
+      quote.markdown.hasPrefix(
+        ##"> \# Not a heading"## + "\n>\n" + ##"> as \*stressed\* in [RFC 9111]"##))
   }
 
   /// A block marker at the start of a line: a heading, a list item, a nested quote, a
@@ -356,7 +358,10 @@ struct QuoteCitationTests {
     ("see [the page](https://example.com/)", ##"see \[the page](https://example.com/)"##),
     ("[text][label]", ##"\[text][label]"##),
     ("![figure](figure.png)", ##"!\[figure](figure.png)"##),
-    ("[outer [inner] text](https://example.com/)", ##"\[outer [inner] text](https://example.com/)"##),
+    (
+      "[outer [inner] text](https://example.com/)",
+      ##"\[outer [inner] text](https://example.com/)"##
+    ),
     ("&amp; &#38; &#x26;", ##"\&amp; \&#38; \&#x26;"##),
     (##"a \* b"##, ##"a \\* b"##),
     (##"a\*b and c*d"##, ##"a\\\*b and c\*d"##),

@@ -93,9 +93,8 @@ public enum QuoteCitation {
   ) -> Quote {
     let blocks = blocks(of: selection, keepingSectionNumbers: settings.copiesSectionNumbers)
     let quoted = blocks.map { block in
-      // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
-      // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
-      // it becomes HTML. A fence is taken literally, so its lines are left as drawn.
+      // Prose is escaped where it would render as markup (`escapedMarkdownLine`). A
+      // fence is taken literally, so its lines are left as drawn.
       let lines: [String]
       if let box = block.box {
         // Longer than any run of backticks in the block, or its own fence line would
