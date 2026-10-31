@@ -270,6 +270,25 @@ struct RFCListView: View {
           } description: {
             Text(verbatim: notice.description)
           }
+        } else if isUnsearched, workingGroupCardAcronym == nil,
+          let hidden = navigation.listed?.hidden, !hidden.isEmpty
+        {
+          // The list holds something the view options hide (#937): asked to fill it,
+          // the reader would make what they have.
+          ContentUnavailableView {
+            Label(hidden.title(), systemImage: "eye.slash")
+          } description: {
+            Text(verbatim: hidden.description())
+          } actions: {
+            if hidden.contains(.obsolete) {
+              Button("Show Obsolete") {
+                navigation.listOptions.setShowsObsolete(true, searching: false)
+              }
+            }
+            if hidden.contains(.read) {
+              Button("Show Read") { navigation.listOptions.hidesRead = false }
+            }
+          }
         } else if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")

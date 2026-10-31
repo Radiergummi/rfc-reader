@@ -213,11 +213,19 @@ public struct LibraryList: Hashable, Sendable {
   public func rows(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [LibraryRow] {
+    listing(in: index, search: search, hits: hits).rows
+  }
+
+  /// `rows(in:search:hits:)`, and when the options leave none of them on show,
+  /// which of the options hide them (`ListOptions.hiding`, #937).
+  public func listing(
+    in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
+  ) -> (rows: [LibraryRow], hidden: ListOptions.Hidden) {
     let parsed = IndexSearch.parseQuery(searchedQuery)
     // A query naming a section is about sections, which only the full-text search
     // has: it lists none of the index's rows (answered on #37, 2026-10-14).
     guard unknownTerms(of: parsed, in: index).isEmpty, parsed.filters.section == nil else {
-      return []
+      return ([], [])
     }
     // In the whole library the reader's data is the list (`narrowing`), so the
     // index's every row would be made only to be thrown away.
@@ -240,9 +248,16 @@ public struct LibraryList: Hashable, Sendable {
       // Its own `sort:` is kept as it is: View Options reverses only the default.
       if sort == nil { sort = .newest } else { options.order = .newestFirst }
     }
-    return options.apply(
-      to: sorted(base, by: sort), filter: listedFilter, query: query,
-      read: Set(recentlyRead), searching: isSearch, definition: definition)
+    let candidates = sorted(base, by: sort)
+    let read = Set(recentlyRead)
+    let rows = options.apply(
+      to: candidates, filter: listedFilter, query: query, read: read, searching: isSearch,
+      definition: definition)
+    guard rows.isEmpty else { return (rows, []) }
+    let hidden = options.hiding(
+      candidates, filter: listedFilter, query: query, read: read, searching: isSearch,
+      definition: definition)
+    return (rows, hidden)
   }
 
   /// `rows` in the order a query's `sort:` asks for, or as they are without one.

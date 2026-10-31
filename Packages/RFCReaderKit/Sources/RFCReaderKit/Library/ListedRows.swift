@@ -9,6 +9,9 @@ import RFCKit
 public struct ListedRows: Sendable {
   public let list: LibraryList
   public let rows: [LibraryRow]
+  /// Which of the options hide every row the list holds, when `rows` is empty
+  /// (`ListOptions.hiding`, #937).
+  public let hidden: ListOptions.Hidden
   /// The search's hits for `list.query`, best first, whatever the filter: empty for
   /// a list that is not searched. Kept so a change of filter or options lists again
   /// without searching again.
@@ -33,14 +36,14 @@ public struct ListedRows: Sendable {
     self.indexVersion = indexVersion
     self.index = index
     guard !list.searchedQuery.isEmpty, let search else {
-      rows = list.rows(in: index, search: search)
+      (rows, hidden) = list.listing(in: index, search: search)
       hits = []
       libraryHits = []
       return
     }
     let hits = known ?? list.hits(from: search)
     self.hits = hits
-    rows = list.rows(in: index, search: search, hits: hits)
+    (rows, hidden) = list.listing(in: index, search: search, hits: hits)
     libraryHits =
       list.definition == nil || list.query.isEmpty
       ? hits : LibraryList(filter: .all, query: list.query).hits(from: search)

@@ -140,6 +140,66 @@ public struct ListOptions: Hashable, Sendable {
     return shown.reversed()
   }
 
+  /// Which of the tab's own options hide every one of `rows`, when they leave none on
+  /// show (#937): what an empty list says in place of how to fill it. Empty when some
+  /// row is on show, when there is none to hide, or when something else hides them.
+  /// The parameters are `apply`'s.
+  public func hiding(
+    _ rows: [LibraryRow], filter: LibraryFilter, query: String, read: Set<DocumentID> = [],
+    searching: Bool? = nil, definition: String? = nil
+  ) -> Hidden {
+    func lists(_ options: ListOptions) -> Bool {
+      !options.apply(
+        to: rows, filter: filter, query: query, read: read, searching: searching,
+        definition: definition
+      ).isEmpty
+    }
+    guard !rows.isEmpty, !lists(self) else { return [] }
+    var showingObsolete = self
+    showingObsolete.setShowsObsolete(true, searching: searching ?? !query.isUnsearchedQuery)
+    var showingRead = self
+    showingRead.hidesRead = false
+    var hidden: Hidden = []
+    if lists(showingObsolete) { hidden.insert(.obsolete) }
+    if lists(showingRead) { hidden.insert(.read) }
+    // Neither alone shows a row, as when every one is both obsolete and read.
+    showingObsolete.hidesRead = false
+    if hidden.isEmpty, lists(showingObsolete) { hidden = [.obsolete, .read] }
+    return hidden
+  }
+
+  /// The tab's options that hide every row of a list (`hiding`), each of which an
+  /// empty list offers to turn back (#937).
+  public struct Hidden: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    /// Show Obsolete is off.
+    public static let obsolete = Hidden(rawValue: 1 << 0)
+    /// Hide Read is on.
+    public static let read = Hidden(rawValue: 1 << 1)
+
+    /// What the empty list says in place of its own empty title.
+    public func title(locale: Locale = .interface) -> String {
+      String(kit: "Hidden by View Options", locale: locale)
+    }
+
+    /// What hides the rows, under `title`.
+    public func description(locale: Locale = .interface) -> String {
+      switch self {
+      case .obsolete:
+        String(kit: "Every RFC in this list is obsolete, and Show Obsolete is off.", locale: locale)
+      case .read:
+        String(kit: "You have read every RFC in this list, and Hide Read is on.", locale: locale)
+      default:
+        String(
+          kit: "Show Obsolete is off and Hide Read is on, which hide every RFC in this list.",
+          locale: locale)
+      }
+    }
+  }
+
   /// Whether `filter`, under a query asking for `asked`, lists from the index rather
   /// than from what the reader keeps: where the April 1st RFCs are hidden. A bookmark,
   /// a collection, a document read or kept offline, and a query's `is:` or `in:`,

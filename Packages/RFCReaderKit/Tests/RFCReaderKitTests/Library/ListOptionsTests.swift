@@ -154,13 +154,15 @@ struct ListOptionsTests {
         == .obsolete)
   }
 
-  @Test(arguments: [
-    (
-      ListOptions.Hidden.obsolete, "Every RFC in this list is obsolete, and Show Obsolete is off."
-    ),
-    (.read, "You have read every RFC in this list, and Hide Read is on."),
-    ([.obsolete, .read], "Show Obsolete is off and Hide Read is on, which hide every RFC in this list."),
-  ])
+  @Test(
+    arguments: [
+      (.obsolete, "Every RFC in this list is obsolete, and Show Obsolete is off."),
+      (.read, "You have read every RFC in this list, and Hide Read is on."),
+      (
+        [.obsolete, .read],
+        "Show Obsolete is off and Hide Read is on, which hide every RFC in this list."
+      ),
+    ] as [(ListOptions.Hidden, String)])
   func `the empty state says what hides the rows`(hidden: ListOptions.Hidden, sentence: String) {
     #expect(hidden.title(locale: .english) == "Hidden by View Options")
     #expect(hidden.description(locale: .english) == sentence)
