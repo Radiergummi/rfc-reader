@@ -97,6 +97,80 @@ struct ListOptionsTests {
       ).count == 3)
   }
 
+  // MARK: - A list the options empty (#937)
+
+  /// The obsolete rows: 7231 and 2616, which 9110 obsoletes.
+  private var obsoleteRows: [LibraryRow] { Array(rows.dropFirst()) }
+
+  @Test func `a list with rows on show hides nothing`() {
+    let options = ListOptions(showsObsolete: false, hidesRead: true)
+    #expect(options.hiding(rows, filter: .bookmarks, query: "").isEmpty)
+  }
+
+  @Test func `an empty list is not hidden`() {
+    let options = ListOptions(showsObsolete: false, hidesRead: true)
+    #expect(options.hiding([], filter: .bookmarks, query: "").isEmpty)
+  }
+
+  @Test func `every row obsolete is hidden by show obsolete`() {
+    let options = ListOptions(showsObsolete: false)
+    #expect(options.hiding(obsoleteRows, filter: .bookmarks, query: "") == .obsolete)
+  }
+
+  @Test func `every row read is hidden by hide read`() {
+    let options = ListOptions(hidesRead: true)
+    let read = Set(rows.map(\.id))
+    #expect(options.hiding(rows, filter: .bookmarks, query: "", read: read) == .read)
+  }
+
+  /// Either option alone lists one of the rows, so each is a way to show them.
+  @Test func `rows hidden some by each option name both`() {
+    let options = ListOptions(showsObsolete: false, hidesRead: true)
+    let read: Set<DocumentID> = [.rfc(9110)]
+    #expect(options.hiding(rows, filter: .bookmarks, query: "", read: read) == [.obsolete, .read])
+  }
+
+  /// Neither option alone lists a row, so it takes both.
+  @Test func `rows hidden by both options at once name both`() {
+    let options = ListOptions(showsObsolete: false, hidesRead: true)
+    let read: Set<DocumentID> = [.rfc(7231), .rfc(2616)]
+    #expect(
+      options.hiding(obsoleteRows, filter: .bookmarks, query: "", read: read) == [.obsolete, .read])
+  }
+
+  /// Hide Read leaves Recently Read alone, so it is never what empties it.
+  @Test func `only an option in force is named`() {
+    let options = ListOptions(showsObsolete: false, hidesRead: true)
+    let read = Set(rows.map(\.id))
+    #expect(options.hiding(obsoleteRows, filter: .recent, query: "", read: read) == .obsolete)
+  }
+
+  /// A search shows the obsolete by its own option, which is the one to name.
+  @Test func `a search is hidden by its own obsolete option`() {
+    #expect(
+      ListOptions(showsObsolete: false).hiding(obsoleteRows, filter: .all, query: "http").isEmpty)
+    #expect(
+      ListOptions(showsObsoleteInSearch: false).hiding(obsoleteRows, filter: .all, query: "http")
+        == .obsolete)
+  }
+
+  @Test func `the empty state's title says the view options hide the rows`() {
+    #expect(ListOptions.Hidden.title(locale: .english) == "Hidden by View Options")
+  }
+
+  @Test(
+    arguments: [
+      (.obsolete, "Every RFC in this list is obsolete, and Show Obsolete is off."),
+      (.read, "You have read every RFC in this list, and Hide Read is on."),
+      (
+        [.obsolete, .read],
+        "Show Obsolete is off and Hide Read is on, which hide every RFC in this list."
+      ),
+    ] as [(ListOptions.Hidden, String)])
+  func `the empty state says what hides the rows`(hidden: ListOptions.Hidden, sentence: String) {
+    #expect(hidden.description(locale: .english) == sentence)
+  }
+
   // MARK: - April 1st RFCs (#713)
 
   private let jokes = [9110, 2549, 1149].map { LibraryRow.rfc(Fixtures.metadata($0)) }
