@@ -127,11 +127,10 @@ struct RFCListView: View {
     // platform's multi-select chord rather than ours to take.
     let window = rows.prefix(limit)
     let row = { (row: LibraryRow, showsYear: Bool) in
-      OfflineStated(document: row.id, isShown: showsOfflineState) { offline in
+      OfflineStated(document: row.id, isShown: showsOfflineState) { offline, isAvailableOffline in
         RFCRow(
           row: row, isBookmarked: bookmarked.contains(row.id),
-          // Available Offline's own rows say where their bodies stand instead.
-          isAvailableOffline: !showsOfflineState && library.isAvailableOffline(row.id),
+          isAvailableOffline: isAvailableOffline,
           showsYear: showsYear, filter: shown.filter, offline: offline
         ) { library.downloadNow(row.id) }
       }
@@ -601,16 +600,22 @@ struct IndexStatusView: View {
 }
 
 /// A row that reads where its document's body stands itself, so a fetch starting or
-/// ending redraws the rows rather than the whole list (#358). Reads nothing when not
-/// `isShown`, so the rows of other lists do not redraw at all.
+/// ending redraws the rows rather than the whole list (#358). When `isShown`, it hands
+/// over the state, in Available Offline; otherwise only whether the row marks the
+/// document as offline (#936), which a body landing changes and a fetch starting does
+/// not, so the rows of other lists redraw only then.
 private struct OfflineStated<Content: View>: View {
   @Environment(LibraryModel.self) private var library
   let document: DocumentID
   let isShown: Bool
-  @ViewBuilder let content: (OfflineRowState?) -> Content
+  @ViewBuilder let content: (_ state: OfflineRowState?, _ isAvailableOffline: Bool) -> Content
 
   var body: some View {
-    content(isShown ? library.offlineStatus.state(of: document) : nil)
+    if isShown {
+      content(library.offlineStatus.state(of: document), false)
+    } else {
+      content(nil, library.isAvailableOffline(document))
+    }
   }
 }
 
@@ -619,8 +624,8 @@ private struct OfflineStated<Content: View>: View {
 struct RFCRow: View {
   let row: LibraryRow
   let isBookmarked: Bool
-  /// Whether Available Offline lists it, marked beside the bookmark (#769): what the
-  /// reader asked to keep offline, whose body may still be on its way.
+  /// Whether Available Offline lists it and its body is on the device, marked beside
+  /// the bookmark (#769, #936).
   var isAvailableOffline = false
   /// False under a year's header, which already says it (#347).
   var showsYear = true
