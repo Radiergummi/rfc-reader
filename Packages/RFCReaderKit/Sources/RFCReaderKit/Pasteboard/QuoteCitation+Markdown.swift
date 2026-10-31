@@ -51,15 +51,15 @@ extension QuoteCitation {
       index == line.count || line[index] == " " || line[index] == "\t"
     }
     let run = line.prefix { $0 == first }.count
-    let visible = line.filter { $0 != " " && $0 != "\t" }
+    func isOnly(_ character: Character) -> Bool {
+      line.allSatisfy { $0 == character || $0 == " " || $0 == "\t" }
+    }
 
     if first == ">" { return [0] }
     if first == "#", run <= 6, endsMarker(run) { return [0] }
     if "-+*".contains(first), endsMarker(1) { return [0] }
-    if "-*_".contains(first), visible.count >= 3, visible.allSatisfy({ $0 == first }) {
-      return [0]
-    }
-    if first == "=", visible.allSatisfy({ $0 == "=" }) { return [0] }
+    if "-*_".contains(first), isOnly(first), line.count(where: { $0 == first }) >= 3 { return [0] }
+    if first == "=", isOnly("=") { return [0] }
     if "`~".contains(first), run >= 3 { return Set(0..<run) }
     if first == "[", let close = line.firstIndex(of: "]"), close + 1 < line.count,
       line[close + 1] == ":"
@@ -78,6 +78,8 @@ extension QuoteCitation {
   /// The runs of `*`, `_` and `~` (one or two of them, as GitHub strikes through)
   /// that could open emphasis with a run later in the line that could close it, by
   /// CommonMark's flanking rules: both runs of such a pair, every character of each.
+  /// A `~` run closes only one as long as it. The rule of three is not applied, so a
+  /// rare pair it rules out is escaped all the same.
   private static func emphasisDelimiters(in line: [Character]) -> Set<Int> {
     struct Run {
       var range: Range<Int>
@@ -114,6 +116,7 @@ extension QuoteCitation {
     for (index, opener) in runs.enumerated() where opener.opens {
       let closer = runs[(index + 1)...].first {
         $0.character == opener.character && $0.closes
+          && (opener.character != "~" || $0.range.count == opener.range.count)
       }
       if let closer {
         escaped.formUnion(opener.range)
@@ -168,9 +171,10 @@ extension QuoteCitation {
     return escaped
   }
 
-  /// Whether what follows an `&` makes it an entity or a numeric character reference.
+  /// Whether what follows an `&` makes it an entity or a numeric character reference,
+  /// which is at most 33 characters long.
   private static func opensEntity(_ rest: ArraySlice<Character>) -> Bool {
-    String(rest).prefixMatch(
+    String(rest.prefix(33)).prefixMatch(
       of: /#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]{0,31};/) != nil
   }
 

@@ -385,6 +385,7 @@ struct QuoteCitationTests {
     "a ` lone backtick",
     "~/.config",
     "a | b | c",
+    "~a~~ of unequal length",
     "a > b",
     "AT&T and &c",
     "#hashtag",
