@@ -28,6 +28,29 @@ struct ListedRowsTests {
         == list.rows(in: index, search: IndexSearch(index: index)).map(\.id.number))
   }
 
+  /// An empty list says whether the view options hide what it holds (#937): a
+  /// collection of only obsolete documents, with Show Obsolete off.
+  @Test func `an empty list says what the options hide`() {
+    let index = RFCIndex(
+      rfcs: [
+        Fixtures.metadata(1, title: "Host Software", obsoletedBy: [.rfc(2)]),
+        Fixtures.metadata(2, title: "Host Software Protocol"),
+      ], series: [])
+    let collection = UUID()
+    let hiding = LibraryList(
+      filter: .collection(collection), query: "", options: ListOptions(showsObsolete: false),
+      members: [1])
+    let showing = LibraryList(
+      filter: .collection(collection), query: "", members: [1])
+    let empty = LibraryList(
+      filter: .collection(collection), query: "", options: ListOptions(showsObsolete: false),
+      members: [])
+
+    #expect(ListedRows(hiding, in: index, indexVersion: 1, search: nil).hidden == .obsolete)
+    #expect(ListedRows(showing, in: index, indexVersion: 1, search: nil).hidden.isEmpty)
+    #expect(ListedRows(empty, in: index, indexVersion: 1, search: nil).hidden.isEmpty)
+  }
+
   @Test func `the library's results ignore the filter`() {
     let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2)])
     #expect(listed(list).rows.map(\.id.number) == [2])
