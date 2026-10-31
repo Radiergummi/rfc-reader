@@ -270,13 +270,14 @@ struct RFCListView: View {
           } description: {
             Text(verbatim: notice.description)
           }
-        } else if isUnsearched, workingGroupCardAcronym == nil,
-          let hidden = navigation.listed?.hidden, !hidden.isEmpty
+        } else if let hidden = navigation.listed?.hidden, !hidden.isEmpty,
+          workingGroupCardAcronym == nil
         {
           // The list holds something the view options hide (#937): asked to fill it,
-          // the reader would make what they have.
+          // the reader would make what they have. Not under a working group's card,
+          // which says what the group has.
           ContentUnavailableView {
-            Label(hidden.title(), systemImage: "eye.slash")
+            Label(ListOptions.Hidden.title(), systemImage: "eye.slash")
           } description: {
             Text(verbatim: hidden.description())
           } actions: {

@@ -216,8 +216,9 @@ public struct LibraryList: Hashable, Sendable {
     listing(in: index, search: search, hits: hits).rows
   }
 
-  /// `rows(in:search:hits:)`, and when the options leave none of them on show,
-  /// which of the options hide them (`ListOptions.hiding`, #937).
+  /// `rows(in:search:hits:)`, and when the options leave none of an unsearched
+  /// list's rows on show, which of them hide the rows (`ListOptions.hiding`, #937).
+  /// A search that finds nothing says so, whatever its options hide.
   public func listing(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> (rows: [LibraryRow], hidden: ListOptions.Hidden) {
@@ -253,7 +254,7 @@ public struct LibraryList: Hashable, Sendable {
     let rows = options.apply(
       to: candidates, filter: listedFilter, query: query, read: read, searching: isSearch,
       definition: definition)
-    guard rows.isEmpty else { return (rows, []) }
+    guard rows.isEmpty, !isSearch else { return (rows, []) }
     let hidden = options.hiding(
       candidates, filter: listedFilter, query: query, read: read, searching: isSearch,
       definition: definition)

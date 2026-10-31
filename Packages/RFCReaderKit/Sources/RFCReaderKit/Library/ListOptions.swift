@@ -181,11 +181,11 @@ public struct ListOptions: Hashable, Sendable {
     public static let read = Hidden(rawValue: 1 << 1)
 
     /// What the empty list says in place of its own empty title.
-    public func title(locale: Locale = .interface) -> String {
+    public static func title(locale: Locale = .interface) -> String {
       String(kit: "Hidden by View Options", locale: locale)
     }
 
-    /// What hides the rows, under `title`.
+    /// What hides the rows, under `title`: of a set that is not empty.
     public func description(locale: Locale = .interface) -> String {
       switch self {
       case .obsolete:

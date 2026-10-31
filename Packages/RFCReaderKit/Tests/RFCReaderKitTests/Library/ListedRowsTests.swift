@@ -51,6 +51,18 @@ struct ListedRowsTests {
     #expect(ListedRows(empty, in: index, indexVersion: 1, search: nil).hidden.isEmpty)
   }
 
+  /// A search that finds nothing says "No Results", whatever its options hide.
+  @Test func `a search names no option that hides its rows`() {
+    let index = RFCIndex(
+      rfcs: [Fixtures.metadata(1, title: "Host Software", obsoletedBy: [.rfc(2)])], series: [])
+    let list = LibraryList(
+      filter: .all, query: "host", options: ListOptions(showsObsoleteInSearch: false))
+    let listed = ListedRows(list, in: index, indexVersion: 1, search: IndexSearch(index: index))
+
+    #expect(listed.rows.isEmpty)
+    #expect(listed.hidden.isEmpty)
+  }
+
   @Test func `the library's results ignore the filter`() {
     let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2)])
     #expect(listed(list).rows.map(\.id.number) == [2])

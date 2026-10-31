@@ -154,6 +154,10 @@ struct ListOptionsTests {
         == .obsolete)
   }
 
+  @Test func `the empty state's title says the view options hide the rows`() {
+    #expect(ListOptions.Hidden.title(locale: .english) == "Hidden by View Options")
+  }
+
   @Test(
     arguments: [
       (.obsolete, "Every RFC in this list is obsolete, and Show Obsolete is off."),
@@ -164,7 +168,6 @@ struct ListOptionsTests {
       ),
     ] as [(ListOptions.Hidden, String)])
   func `the empty state says what hides the rows`(hidden: ListOptions.Hidden, sentence: String) {
-    #expect(hidden.title(locale: .english) == "Hidden by View Options")
     #expect(hidden.description(locale: .english) == sentence)
   }
 
