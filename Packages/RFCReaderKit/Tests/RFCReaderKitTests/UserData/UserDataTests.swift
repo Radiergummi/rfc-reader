@@ -189,9 +189,9 @@ struct UserDataTests {
     #expect(try context.fetch(FetchDescriptor<OfflineMark>()).isEmpty)
   }
 
-  /// V5 to V6 only adds a collection's query (#355), the highlights' table (#522) and
-  /// the followed working groups' table (#731): every existing row survives, and every
-  /// existing collection is a manual one.
+  /// V5 to V6 only adds a collection's query (#355), the highlights' table (#522), the
+  /// followed working groups' table (#731) and the notes' table (#523): every existing
+  /// row survives, and every existing collection is a manual one.
   @Test func `a version 5 store migrates to version 6 without losing a row`() throws {
     let url = try temporaryStore()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -227,18 +227,25 @@ struct UserDataTests {
     #expect(try context.fetch(FetchDescriptor<OfflineMark>()).map(\.document) == [.rfc(9110)])
     #expect(try context.fetch(FetchDescriptor<FollowedGroup>()).isEmpty)
     #expect(try context.fetch(FetchDescriptor<Highlight>()).isEmpty)
-    // And it keeps what is written to the new table.
-    context.insert(
-      Highlight(
-        document: .rfc(9110), start: Position(anchor: "section-1", offset: 2),
-        end: Position(anchor: "section-1", offset: 9),
-        quote: Quote(exact: "quoted", prefix: "", suffix: ""), color: .green))
+    #expect(try context.fetch(FetchDescriptor<Note>()).isEmpty)
+    // And it keeps what is written to the new tables.
+    let highlight = Highlight(
+      document: .rfc(9110), start: Position(anchor: "section-1", offset: 2),
+      end: Position(anchor: "section-1", offset: 9),
+      quote: Quote(exact: "quoted", prefix: "", suffix: ""), color: .green)
+    context.insert(highlight)
+    let note = Note(identifier: UUID(), document: .rfc(9110), body: "*Read* this.")
+    note.highlightIdentifier = highlight.identifier
+    context.insert(note)
     try context.save()
     let reopened = ModelContext(
       try UserData.container(configurations: ModelConfiguration(url: url)))
     let highlights = try reopened.fetch(FetchDescriptor<Highlight>())
     #expect(highlights.map(\.colorName) == ["green"])
     #expect(highlights.map(\.endOffset) == [9])
+    let notes = try reopened.fetch(FetchDescriptor<Note>())
+    #expect(notes.map(\.body) == ["*Read* this."])
+    #expect(notes.map(\.highlightIdentifier) == [highlight.identifier])
   }
 
   @Test func `a new store keeps a followed group`() throws {

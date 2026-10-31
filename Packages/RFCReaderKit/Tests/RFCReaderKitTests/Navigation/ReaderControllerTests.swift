@@ -11,6 +11,11 @@ struct ReaderControllerTests {
     var isInstalled = false
     var scrolls: [ReaderController.ScrollTarget] = []
     var headingMoves = 0
+    var notes: [NoteRequest] = []
+
+    func openNote(_ request: NoteRequest) {
+      notes.append(request)
+    }
 
     func scroll(to anchor: String, offset: Int) {
       scrolls.append(ReaderController.ScrollTarget(anchor: anchor, offset: offset))
@@ -226,5 +231,18 @@ struct ReaderControllerTests {
 
     #expect(controller.takeFolding() == folding)
     #expect(controller.takeFolding() == nil)
+  }
+
+  @Test func `a note asked for reaches the text view`() {
+    controller.driver = driver
+    controller.openNote(.new(.target(.section("section-2"))))
+    #expect(driver.notes == [.new(.target(.section("section-2")))])
+  }
+
+  @Test func `where the notes are is published after the hop`() async {
+    controller.reportNotes(NotePlacement.none)
+    #expect(controller.notePlacement == nil)
+    await hop()
+    #expect(controller.notePlacement == NotePlacement.none)
   }
 }

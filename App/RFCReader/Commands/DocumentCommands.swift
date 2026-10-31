@@ -58,7 +58,7 @@ struct DocumentCommands: Commands {
     /// the reader's text or beside a compared document's, never the original text's
     /// or a translation's.
     private var hasQuotableSelection: Bool {
-      showsRFC && reader?.showOriginal != true && reader?.readsTranslation != true
+      showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
         && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
     }
 
@@ -118,6 +118,12 @@ struct DocumentCommands: Commands {
     }
   #endif
 
+  /// Whether a note's editor is open over the reader, or over the one beside it: the
+  /// reader's Edit commands are not its, and are grayed out until it closes (#1007).
+  private var editsNote: Bool {
+    reader?.editsNote == true || reader?.sideBySide?.reader.editsNote == true
+  }
+
   var body: some Commands {
     CommandGroup(after: .newItem) {
       Button("Go to RFC…") { openDocument?() }
@@ -146,7 +152,7 @@ struct DocumentCommands: Commands {
           Button(CopyFormat.text.title()) {
             active.controller?.copyAsText()
           }
-          .disabled(!showsDocument || reader?.showOriginal == true || !hasSelection)
+          .disabled(!showsDocument || editsNote || reader?.showOriginal == true || !hasSelection)
           Button(CopyFormat.quote.title()) {
             active.controller?.copyAsQuote()
           }
@@ -165,7 +171,7 @@ struct DocumentCommands: Commands {
       // style Settings chose. A citation is made from the index's entry.
       Button("Copy Citation") { copyCitation() }
         .keyboardShortcut(ReaderShortcut.copyCitation.keyboardShortcut)
-        .disabled(citedDocument == nil || navigation?.shown == nil)
+        .disabled(citedDocument == nil || navigation?.shown == nil || editsNote)
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the
         // library's set of bookmarked documents, which the menu observes.

@@ -15,57 +15,74 @@ import SwiftUI
 // highlights through the library.
 
 extension RFCTextViewCoordinator {
-  /// The document's highlights, as the library has them now: placed again when they
-  /// changed.
-  func setHighlights(_ entries: [AnnotationSnapshot.HighlightEntry]) {
-    guard entries != highlights else { return }
+  /// The document's highlights and notes (#523), as the library has them now: placed
+  /// again when they changed.
+  func setAnnotations(
+    highlights entries: [AnnotationSnapshot.HighlightEntry],
+    notes: [AnnotationSnapshot.NoteEntry]
+  ) {
+    // Called on every update of the representable: most change nothing.
+    guard entries != highlights || notes != self.notes else { return }
+    // A note's text changes as it is typed; where it goes does not.
+    let moved = entries != highlights || !NotePlacement.placesAlike(notes, self.notes)
     highlights = entries
-    placeHighlights()
+    self.notes = notes
+    // A note's text alone changed: its marker's title.
+    if moved { placeHighlights() } else { layOutNoteMarkers() }
   }
 
-  /// Places the highlights in the installed build, off the main actor, and draws them
-  /// once placed. After every install, whose build has its own positions.
+  /// Places the highlights and notes in the installed build, off the main actor, and
+  /// draws them once placed. After every install, whose build has its own positions.
   func placeHighlights() {
     highlightsTask?.cancel()
     highlightsTask = nil
     guard let built else { return }
     let entries = highlights
-    guard !entries.isEmpty else {
-      draw(HighlightPlacement.none)
+    let notes = notes
+    guard !entries.isEmpty || !notes.isEmpty else {
+      // A translation's build places nothing, which says so even with nothing to place.
+      draw(HighlightPlacement([], in: built), notes: built.isTranslation ? nil : NotePlacement.none)
       return
     }
     highlightsTask = Task {
-      let placement = await Self.place(entries, in: built)
-      // A later build or set of highlights has started its own.
-      guard !Task.isCancelled, self.built?.text === built.text, self.highlights == entries
+      let (placement, notePlacement) = await Self.place(entries, notes: notes, in: built)
+      // A later build or set of annotations has started its own.
+      guard !Task.isCancelled, self.built?.text === built.text, self.highlights == entries,
+        NotePlacement.placesAlike(self.notes, notes)
       else { return }
       highlightsTask = nil
-      draw(placement)
+      draw(placement, notes: placement.isPlaced ? notePlacement : nil)
     }
   }
 
   @concurrent
   private static func place(
-    _ entries: [AnnotationSnapshot.HighlightEntry], in built: BuiltDocument
-  ) async -> HighlightPlacement {
-    HighlightPlacement(entries, in: built)
+    _ entries: [AnnotationSnapshot.HighlightEntry], notes: [AnnotationSnapshot.NoteEntry],
+    in built: BuiltDocument
+  ) async -> (HighlightPlacement, NotePlacement) {
+    let highlights = HighlightPlacement(entries, in: built)
+    return (highlights, NotePlacement(notes, highlights: highlights, in: built))
   }
 
-  /// Draws `placement`, says where each highlight is, and writes back where relocation
-  /// found one that moved.
-  private func draw(_ placement: HighlightPlacement) {
+  /// Draws `placement`, says where each highlight and note is, stands the notes'
+  /// markers by their lines, and writes back where relocation found one that moved.
+  private func draw(_ placement: HighlightPlacement, notes: NotePlacement?) {
     let changed = placement.marks != highlightPlacement.marks
     highlightPlacement = placement
+    notePlacement = notes ?? .none
     accessibilityHighlights = placement.marks.rotorItems()
     controller?.reportHighlights(placement.isPlaced ? placement.statuses : nil)
+    controller?.reportNotes(notes)
     if changed {
       foldingDelegate.highlight(placement.marks)
       // Drawn again, not laid out again: a highlight changes no line.
       engine.redraw()
     }
+    layOutNoteMarkers()
     if !placement.relocations.isEmpty {
       environment?.library.recordHighlightRelocations(placement.relocations)
     }
+    if let notes { environment?.library.recordNotePlacement(notes) }
   }
 
   /// Drops what was placed in the build being replaced.
@@ -73,8 +90,10 @@ extension RFCTextViewCoordinator {
     highlightsTask?.cancel()
     highlightsTask = nil
     highlightPlacement = .none
+    notePlacement = .none
     accessibilityHighlights = []
     foldingDelegate.highlight(HighlightMarks([]))
+    layOutNoteMarkers()
   }
 
   // MARK: - Making and changing
@@ -82,13 +101,14 @@ extension RFCTextViewCoordinator {
   /// Highlights `range` of the reader's text in `color`, or in the color last used,
   /// out to whole words. Nothing in a translation, whose sentences are not the
   /// original's (#749).
-  func highlight(_ range: NSRange, color: HighlightColor?) {
+  @discardableResult
+  func highlight(_ range: NSRange, color: HighlightColor?) -> UUID? {
     guard let built, !built.isTranslation, let documentID, let library = environment?.library,
       let text = textView?.textLayoutManager?.attributedText
-    else { return }
+    else { return nil }
     let snapped = WordSnap.snapped(range, in: text.string as NSString)
-    guard let model = built.positions.modelRange(forStorage: snapped) else { return }
-    library.highlight(
+    guard let model = built.positions.modelRange(forStorage: snapped) else { return nil }
+    return library.highlight(
       model, of: documentID, in: built.positions.model,
       color: color ?? library.lastHighlightColor, undoManager: undoManager)
   }
@@ -97,7 +117,7 @@ extension RFCTextViewCoordinator {
   /// bookmark's does, which Edit ▸ Undo reaches wherever the focus is. A read-only
   /// text view's own undo manager is not that one: a highlight registered there
   /// left Undo grayed out.
-  private var undoManager: UndoManager? {
+  var undoManager: UndoManager? {
     #if canImport(UIKit)
       textView?.undoManager
     #else
@@ -122,9 +142,14 @@ extension RFCTextViewCoordinator {
       let library = environment?.library, let range = highlightRange(of: mark.highlight)
     else { return nil }
     let identifier = mark.highlight
+    // A note opens beside the line clicked, as the popover does, not the whole
+    // highlight, which may run off the screen.
+    let line = NSRange(location: offset, length: 1)
     let undoManager = undoManager
+    let notes = notes.filter { notePlacement.highlight(of: $0) == identifier }
+      .map { AnnotationList.NoteLine(of: $0) }
     return HighlightPopover(
-      color: mark.color, colors: HighlightColor.allCases,
+      color: mark.color, colors: HighlightColor.allCases, notes: notes,
       choose: { color in
         library.setHighlightColor(color, of: identifier, undoManager: undoManager)
         dismiss()
@@ -138,6 +163,14 @@ extension RFCTextViewCoordinator {
       delete: {
         library.deleteHighlight(identifier, undoManager: undoManager)
         dismiss()
+      },
+      addNote: { [weak self] in
+        dismiss()
+        self?.openNote(.new(.highlight(identifier)), at: line)
+      },
+      openNote: { [weak self] note in
+        dismiss()
+        self?.openNote(.existing(note), at: line)
       })
   }
 }
@@ -156,6 +189,8 @@ extension RFCTextViewCoordinator {
           dismiss: { [weak host] in host?.presentingViewController?.dismiss(animated: true) })
       else { return }
       host.rootView = popover
+      // Its size follows its content: Delete asks first, in rows of its own.
+      host.sizingOptions = .preferredContentSize
       presentPopover(host, width: HighlightPopover.width, pointingAt: range)
     }
 

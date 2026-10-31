@@ -1178,6 +1178,16 @@
         }
       }
     },
+    "Delete Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz löschen"
+          }
+        }
+      }
+    },
     "Details" : {
       "localizations" : {
         "de" : {
