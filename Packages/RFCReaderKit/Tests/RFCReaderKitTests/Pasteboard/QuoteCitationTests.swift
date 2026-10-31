@@ -354,7 +354,10 @@ struct QuoteCitationTests {
     ("an _underlined_ word", ##"an \_underlined\_ word"##),
     ("~~gone~~", ##"\~\~gone\~\~"##),
     ("a `code` span", ##"a \`code\` span"##),
-    ("``a ` b``", ##"\`\`a ` b\`\`"##),
+    ("``a ` b``", ##"\`\`a \` b\`\`"##),
+    // A backslash does not escape a backtick that closes a span an unescaped one opens.
+    ("a ` b `` c ``", ##"a \` b \`\` c \`\`"##),
+    ("`a`` b ``c`", ##"\`a\`\` b \`\`c\`"##),
     ("see [the page](https://example.com/)", ##"see \[the page](https://example.com/)"##),
     ("[text][label]", ##"\[text][label]"##),
     ("![figure](figure.png)", ##"!\[figure](figure.png)"##),
@@ -362,6 +365,8 @@ struct QuoteCitationTests {
       "[outer [inner] text](https://example.com/)",
       ##"\[outer [inner] text](https://example.com/)"##
     ),
+    // An unclosed `[` before the link's would open it once that one is escaped.
+    ("[a [b](c)", ##"\[a \[b](c)"##),
     ("&amp; &#38; &#x26;", ##"\&amp; \&#38; \&#x26;"##),
     (##"a \* b"##, ##"a \\* b"##),
     (##"a\*b and c*d"##, ##"a\\\*b and c\*d"##),

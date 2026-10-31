@@ -126,35 +126,28 @@ extension QuoteCitation {
     return escaped
   }
 
-  /// The backticks of every code span in `line`: a run, and the next run as long as
-  /// it, which closes it. A run with none is literal.
+  /// Every backtick in `line` when it has a code span, which it has when two runs of
+  /// backticks are as long as each other, and none when it has none. All of them,
+  /// because a backslash does not escape a backtick that closes a span an unescaped
+  /// one opens: escaping only a span's own runs would leave one between them to open
+  /// a span that an escaped one closes.
   private static func codeSpanDelimiters(in line: [Character]) -> Set<Int> {
-    var runs: [Range<Int>] = []
+    var lengths: [Int] = []
     var start = 0
     while start < line.count {
       var end = start + 1
       while end < line.count, line[end] == line[start] { end += 1 }
-      if line[start] == "`" { runs.append(start..<end) }
+      if line[start] == "`" { lengths.append(end - start) }
       start = end
     }
-
-    var escaped = Set<Int>()
-    var index = 0
-    while index < runs.count {
-      let opener = runs[index]
-      if let closer = runs[(index + 1)...].firstIndex(where: { $0.count == opener.count }) {
-        escaped.formUnion(opener)
-        escaped.formUnion(runs[closer])
-        index = closer + 1
-      } else {
-        index += 1
-      }
-    }
-    return escaped
+    guard Set(lengths).count < lengths.count else { return [] }
+    return Set(line.indices.filter { line[$0] == "`" })
   }
 
   /// The `[` of every bracketed text a `(` or a `[` follows, which would make it a
-  /// link or an image. A bracketed text alone, a reference's label, is not one.
+  /// link or an image, and of every `[` still open before it, which its `]` would
+  /// close instead once that one is escaped. A bracketed text alone, a reference's
+  /// label, is not one.
   private static func linkOpeners(in line: [Character]) -> Set<Int> {
     var openers: [Int] = []
     var escaped = Set<Int>()
@@ -162,9 +155,10 @@ extension QuoteCitation {
       if character == "[" {
         openers.append(index)
       } else if character == "]" {
-        let opener = openers.popLast()
-        if let opener, index + 1 < line.count, "([".contains(line[index + 1]) {
+        guard let opener = openers.popLast() else { continue }
+        if index + 1 < line.count, "([".contains(line[index + 1]) {
           escaped.insert(opener)
+          escaped.formUnion(openers)
         }
       }
     }
