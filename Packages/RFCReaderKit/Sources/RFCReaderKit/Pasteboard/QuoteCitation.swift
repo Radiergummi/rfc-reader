@@ -93,11 +93,9 @@ public enum QuoteCitation {
   ) -> Quote {
     let blocks = blocks(of: selection, keepingSectionNumbers: settings.copiesSectionNumbers)
     let quoted = blocks.map { block in
-      // Prose is escaped as the Markdown export escapes it (#1003), but for a `<`,
-      // which is an entity: `\<` renders only where Markdown is CommonMark, an entity
-      // wherever it becomes HTML, and unescaped GitHub takes `<field-name>` for a tag
-      // and drops it. The escape puts a `\` before every `<`, so each `\<` is one.
-      // A fence is taken literally, so its lines are left as drawn.
+      // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
+      // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
+      // it becomes HTML. A fence is taken literally, so its lines are left as drawn.
       let lines: [String]
       if let box = block.box {
         // Longer than any run of backticks in the block, or its own fence line would
@@ -106,13 +104,7 @@ public enum QuoteCitation {
         let info = box.content.kind == .sourceCode ? box.content.type ?? "" : ""
         lines = [fence + info] + block.lines + [fence]
       } else {
-        lines = block.lines.map { line in
-          // A table row's line keeps the tab that leads to its first filled cell.
-          let indent = line.prefix { $0 == " " || $0 == "\t" }
-          return indent
-            + RFCMarkdownSerializer.escapedLine(String(line.dropFirst(indent.count)))
-            .replacingOccurrences(of: "\\<", with: "&lt;")
-        }
+        lines = block.lines.map(escapedMarkdownLine)
       }
       return lines.map { $0.isEmpty ? ">" : "> \($0)" }.joined(separator: "\n")
     }

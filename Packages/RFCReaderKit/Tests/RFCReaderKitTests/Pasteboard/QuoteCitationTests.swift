@@ -188,9 +188,10 @@ struct QuoteCitationTests {
     #expect(quote.markdown.hasPrefix("> first\n>\n> second\n"))
   }
 
-  /// Each of a row's lines loses its trailing tabs, as a row of one line does: a
-  /// cell whose line is empty leaves the tab that leads up to it.
-  @Test func `a table row's lines are quoted without trailing tabs`() throws {
+  /// Each of a row's lines loses its trailing tabs, as a row of one line does, and its
+  /// leading ones too, which Markdown reads as an indented code block from four
+  /// columns on (#1003).
+  @Test func `a table row's lines are quoted without leading or trailing tabs`() throws {
     let table = RFCKit.Table(
       title: nil, header: [],
       rows: [
@@ -205,7 +206,7 @@ struct QuoteCitationTests {
     let selection = built.text.attributedSubstring(
       from: NSRange(location: start, length: end - start))
     let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
-    #expect(quote.markdown.hasPrefix("> a1\tb1\n>\n> a2\n>\n> \tb3\n"))
+    #expect(quote.markdown.hasPrefix("> a1\tb1\n>\n> a2\n>\n> b3\n"))
   }
 
   /// The reader ends a paragraph with one line break and draws the gap between
@@ -279,10 +280,9 @@ struct QuoteCitationTests {
   }
 
   /// GitHub drops what reads as an HTML tag, a `<field-name>` among them, so the
-  /// Markdown writes a `<` in prose as an entity, where the rest of its markup is
-  /// escaped with a backslash. A fence takes its lines literally, and the rich flavor
-  /// is not Markdown, so neither is escaped.
-  @Test func `a less-than sign is an entity in prose and escaped nowhere else`() throws {
+  /// Markdown writes a `<` in prose as an entity. A fence takes its lines literally,
+  /// and the rich flavor is not Markdown, so neither is escaped.
+  @Test func `a less-than sign is escaped in prose and nowhere else`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
         .paragraph(Paragraph(text: "Send <field-name> & more > less.")),
@@ -294,50 +294,103 @@ struct QuoteCitationTests {
     let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
     #expect(
       quote.markdown.hasPrefix(
-        #"""
-        > Send &lt;field-name\> \& more \> less.
+        """
+        > Send &lt;field-name> & more > less.
         >
         > ```
         > <a> -> <b>
         > ```
 
-        """#))
+        """))
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
-  /// A quoted line is the RFC's text, never markup: what would open a heading, a list
-  /// or a setext underline at its start, and emphasis, code, a link, an entity, an
-  /// escape or a table cell within it, is escaped as the Markdown export escapes it
-  /// (#1003). A `<` stays an entity.
-  @Test func `prose that reads as markdown is escaped`() {
-    let lines = [
-      "# not a heading", "- not an item", "+ nor this", "=====", "1. not a list", "2) nor this",
-      "*not emphasis* _nor this_ `not code` [not a link] &amp; back\\slash a|b",
-      "Send <field-name>",
-    ]
-    let quote = QuoteCitation.quote(
-      of: NSAttributedString(string: lines.joined(separator: "\n")), document: .rfc(9110),
-      section: nil)
-    #expect(
-      quote.markdown.hasPrefix(
-        ##"""
-        > \# not a heading
-        >
-        > \- not an item
-        >
-        > \+ nor this
-        >
-        > \=====
-        >
-        > 1\. not a list
-        >
-        > 2\) nor this
-        >
-        > \*not emphasis\* \_nor this\_ \`not code\` \[not a link\] \&amp; back\\slash a\|b
-        >
-        > Send &lt;field-name\>
+  // MARK: Markdown escaping (#1003)
 
-        """##), "\(quote.markdown)")
+  /// A quoted line is the RFC's text, never markup, so the quote escapes what would
+  /// render as markup where it is pasted, and only that: its plain text is the
+  /// Markdown too, and chat apps show a backslash as it is.
+  @Test func `a quote's prose is escaped where it would render`() {
+    let quote = QuoteCitation.quote(
+      of: NSAttributedString(string: "# Not a heading\nas *stressed* in [RFC 9111]"),
+      document: .rfc(9110), section: nil)
+    #expect(quote.markdown.hasPrefix(##"> \# Not a heading"## + "\n>\n" + ##"> as \*stressed\* in [RFC 9111]"##))
+  }
+
+  /// A block marker at the start of a line: a heading, a list item, a nested quote, a
+  /// thematic break, a setext underline, a fence, or a link reference definition,
+  /// which would take the line out of the quote altogether.
+  @Test(arguments: [
+    ("# Heading", ##"\# Heading"##),
+    ("###### Six", "\\###### Six"),
+    ("- item", ##"\- item"##),
+    ("+ item", ##"\+ item"##),
+    ("* item", ##"\* item"##),
+    ("-", ##"\-"##),
+    ("> nested", ##"\> nested"##),
+    ("1. first", ##"1\. first"##),
+    ("12) twelfth", ##"12\) twelfth"##),
+    ("---", ##"\---"##),
+    ("* * *", ##"\* * *"##),
+    ("___", ##"\___"##),
+    ("=====", ##"\====="##),
+    ("```", ##"\`\`\`"##),
+    ("~~~ text", ##"\~\~\~ text"##),
+    ("[label]: https://example.com/", ##"\[label]: https://example.com/"##),
+    ("\t  - indented item", ##"\- indented item"##),
+  ])
+  func `a block marker at the start of a line is escaped`(line: String, escaped: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)
+  }
+
+  /// Emphasis, strikethrough and code take a pair, a link a destination or a label
+  /// after its text, and an `&` is an entity only when one follows it.
+  @Test(arguments: [
+    ("a *stressed* word", ##"a \*stressed\* word"##),
+    ("**strong**", ##"\*\*strong\*\*"##),
+    ("1*DIGIT and 2*ALPHA", ##"1\*DIGIT and 2\*ALPHA"##),
+    ("an _underlined_ word", ##"an \_underlined\_ word"##),
+    ("~~gone~~", ##"\~\~gone\~\~"##),
+    ("a `code` span", ##"a \`code\` span"##),
+    ("``a ` b``", ##"\`\`a ` b\`\`"##),
+    ("see [the page](https://example.com/)", ##"see \[the page](https://example.com/)"##),
+    ("[text][label]", ##"\[text][label]"##),
+    ("![figure](figure.png)", ##"!\[figure](figure.png)"##),
+    ("[outer [inner] text](https://example.com/)", ##"\[outer [inner] text](https://example.com/)"##),
+    ("&amp; &#38; &#x26;", ##"\&amp; \&#38; \&#x26;"##),
+    (##"a \* b"##, ##"a \\* b"##),
+    (##"a\*b and c*d"##, ##"a\\\*b and c\*d"##),
+    ("<field-name>", "&lt;field-name>"),
+  ])
+  func `inline markup is escaped where it renders`(line: String, escaped: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)
+  }
+
+  /// What Markdown leaves as it is stays unescaped: a reference's label, a lone
+  /// delimiter, an intraword underscore, a pipe (each quoted line is a paragraph of its
+  /// own, so it never opens a table), and a backslash before anything but punctuation.
+  @Test(arguments: [
+    "as defined in [RFC 9111]",
+    "[RFC 9110] [RFC 9111]",
+    "[RFC 9110], Section 8",
+    "a lone [ bracket",
+    "a field_name and another_one",
+    "1*DIGIT",
+    "1 * 2 = 2",
+    "a ` lone backtick",
+    "~/.config",
+    "a | b | c",
+    "a > b",
+    "AT&T and &c",
+    "#hashtag",
+    "####### Seven",
+    "-1 is negative",
+    "1.5 seconds",
+    "1234567890. ten digits",
+    ##"C:\path\to"##,
+  ])
+  func `what does not render is left alone`(line: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == line)
   }
 
   /// The plain text is the Markdown: a web page reads only plain text and HTML, so
@@ -431,7 +484,7 @@ struct QuoteCitationTests {
           .rfcReference: ReferenceBox(CrossReference(target: .document(.rfc(9111), section: nil)))
         ]))
     let quote = QuoteCitation.quote(of: text, document: .rfc(9110), section: "8.3")
-    #expect(quote.markdown.hasPrefix(#"> as defined in \[RFC 9111\]"# + "\n"))
+    #expect(quote.markdown.hasPrefix("> as defined in [RFC 9111]\n"))
   }
 
   /// Rich text has the quote as text and the citation as a real link, with none of the
