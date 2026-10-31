@@ -154,8 +154,8 @@ struct QuoteCitationTests {
     settings.copiesSectionNumbers = false
     let left = try #require(
       QuoteCitation.quote(of: range, in: built, document: .rfc(9110), settings: settings))
-    #expect(kept.markdown.hasPrefix("> 1. "))
-    #expect(!left.markdown.hasPrefix("> 1. "))
+    #expect(kept.markdown.hasPrefix(#"> 1\. "#))
+    #expect(!left.markdown.hasPrefix("> 1"))
   }
 
   // MARK: What goes on the pasteboard
@@ -279,9 +279,10 @@ struct QuoteCitationTests {
   }
 
   /// GitHub drops what reads as an HTML tag, a `<field-name>` among them, so the
-  /// Markdown writes a `<` in prose as an entity. A fence takes its lines literally,
-  /// and the rich flavor is not Markdown, so neither is escaped.
-  @Test func `a less-than sign is escaped in prose and nowhere else`() throws {
+  /// Markdown writes a `<` in prose as an entity, where the rest of its markup is
+  /// escaped with a backslash. A fence takes its lines literally, and the rich flavor
+  /// is not Markdown, so neither is escaped.
+  @Test func `a less-than sign is an entity in prose and escaped nowhere else`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
         .paragraph(Paragraph(text: "Send <field-name> & more > less.")),
@@ -293,14 +294,14 @@ struct QuoteCitationTests {
     let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
     #expect(
       quote.markdown.hasPrefix(
-        """
-        > Send &lt;field-name> & more > less.
+        #"""
+        > Send &lt;field-name\> \& more \> less.
         >
         > ```
         > <a> -> <b>
         > ```
 
-        """))
+        """#))
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
@@ -430,7 +431,7 @@ struct QuoteCitationTests {
           .rfcReference: ReferenceBox(CrossReference(target: .document(.rfc(9111), section: nil)))
         ]))
     let quote = QuoteCitation.quote(of: text, document: .rfc(9110), section: "8.3")
-    #expect(quote.markdown.hasPrefix("> as defined in [RFC 9111]\n"))
+    #expect(quote.markdown.hasPrefix(#"> as defined in \[RFC 9111\]"# + "\n"))
   }
 
   /// Rich text has the quote as text and the citation as a real link, with none of the

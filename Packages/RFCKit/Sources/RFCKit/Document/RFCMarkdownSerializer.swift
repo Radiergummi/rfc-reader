@@ -61,6 +61,16 @@ public struct RFCMarkdownSerializer: Sendable {
 }
 
 extension RFCMarkdownSerializer {
+  /// A line of plain text as the export writes a line of prose: every character
+  /// Markdown would read as markup escaped, and what would open a heading, a list or a
+  /// setext underline at its start, without the indentation that would make it code.
+  /// Copy as Quote writes its prose with it, so a quote and the export agree (#1003).
+  public static func escapedLine(_ line: String) -> String {
+    Writer.escapingLineStart(Writer.escaped(line))
+  }
+}
+
+extension RFCMarkdownSerializer {
   /// The walk over the model. Each block becomes lines; blocks are separated by a
   /// blank line, and a container indents what it holds.
   fileprivate struct Writer {
