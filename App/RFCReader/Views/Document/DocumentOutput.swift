@@ -56,7 +56,7 @@
             library: library)
           exported = ExportedFile(
             data: data, contentType: format.contentType,
-            fileStem: ExportFormat.fileStem(
+            fileStem: format.fileStem(
               for: id, section: ExportScope.currentSection.section(section, for: format)))
         } catch {
           isExporting = false

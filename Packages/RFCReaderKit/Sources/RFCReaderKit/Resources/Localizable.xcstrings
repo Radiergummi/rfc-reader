@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Markierungen und Notizen"
+          }
+        }
+      }
+    },
     "%@ has no grammar to export." : {
       "localizations" : {
         "de" : {
@@ -1674,6 +1684,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markiert, gelb"
+          }
+        }
+      }
+    },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
           }
         }
       }
@@ -3414,22 +3434,22 @@
         }
       }
     },
-    "The IETF doesn't have this draft, or this revision of it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
-          }
-        }
-      }
-    },
     "Text" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Text"
+          }
+        }
+      }
+    },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
           }
         }
       }
