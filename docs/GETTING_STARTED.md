@@ -8,7 +8,7 @@ make check      # lint, build and test the three Swift packages: the gate before
 make run        # generate the Xcode project, build the macOS app and launch it
 ```
 
-Everything goes through the `Makefile`; `CLAUDE.md` has the table of its targets — the app-side test suite (`make test-app`), the iOS builds, formatting, and the corpus pipeline. `RFCReader.xcodeproj` is generated from `project.yml` (`make xcodeproj`) and is not committed: edit `project.yml`, never the project.
+Everything goes through the `Makefile`, which says above each target what it does — the app-side test suite (`make test-app`), the iOS builds, formatting, and the corpus pipeline. `RFCReader.xcodeproj` is generated from `project.yml` (`make xcodeproj`) and is not committed: edit `project.yml`, never the project.
 
 `project.yml` signs with the maintainer's team, so outside it `make run` fails at signing. Either set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` there to your own, or build unsigned, as CI does: `make run CODE_SIGNING_ALLOWED=NO`.
 

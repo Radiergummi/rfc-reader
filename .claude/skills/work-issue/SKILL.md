@@ -83,7 +83,7 @@ Claim the issue before you read any further, so no other session takes it while 
 
 ## 3. Understand it before touching code
 
-Read the issue with its comments, and any issue or pull request it links. Read the sections of `docs/ARCHITECTURE.md`, `docs/DATA_PIPELINE.md` and `docs/VISION.md`, and the records in `docs/decisions/`, for the code it touches, and the code itself. `CLAUDE.md`'s standing constraints apply in full.
+Read the issue with its comments, and any issue or pull request it links. Read the sections of `docs/ARCHITECTURE.md`, `docs/DATA_PIPELINE.md` and `docs/VISION.md`, and the records in `docs/decisions/`, for the code it touches, and the code itself. `CLAUDE.md`'s invariants apply in full.
 
 **Ask whenever the answer is the maintainer's to give.** That means an issue that can be read two ways, a change to the document model or a standing constraint, a user-visible behavior the issue doesn't specify, or an expected result you can't pin down. It applies at this step and at any later one. Don't proceed on an assumption. To ask:
 
@@ -104,7 +104,7 @@ A bug that is clear gets no comment. Go straight on.
 
 ## 5. Fix
 
-Make the smallest change that makes the test pass and follows the architecture. Commit in steps that each make sense alone. Legacy-parser heuristics follow the workflow in `CLAUDE.md`: a class of documents is fixed in the heuristic; a correction to a single document waits for #197, so no new override is committed.
+Make the smallest change that makes the test pass and follows the architecture. Commit in steps that each make sense alone. Legacy-parser heuristics follow the workflow in `CLAUDE.md`: a class of documents is fixed in the heuristic; a correction to a single document is an RFC 5261 patch in `corpus/overrides/` (its README has the rules), which `make corpus-overrides-check` applies.
 
 ## 6. Verify
 
