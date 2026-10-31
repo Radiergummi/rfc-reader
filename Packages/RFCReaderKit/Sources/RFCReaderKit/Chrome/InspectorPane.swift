@@ -71,8 +71,9 @@ public enum InspectorPane: String, Codable, Sendable {
   }
 
   /// The sections the Info pane finds an erratum's section in: none for an RFC that
-  /// `readsAsOriginal` (#938), whose loaded text, a pointer's, is not on screen, so
-  /// that every erratum is the whole document's, as the reader's marks
+  /// `readsAsOriginal` (#938), whose loaded text, if any, is a pointer's that is
+  /// either not on screen or shown as the original text, which has no anchors to go
+  /// to; so every erratum is the whole document's, as the reader's marks
   /// (`ErrataMarks`) and the navigation pane have it.
   public static func infoSections(_ sections: [Section], readsAsOriginal: Bool) -> [Section] {
     readsAsOriginal ? [] : sections

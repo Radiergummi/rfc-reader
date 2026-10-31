@@ -87,7 +87,8 @@ struct InspectorPaneTests {
     func anchors(readsAsOriginal: Bool) -> [String?] {
       ErrataSummary(
         errata: [erratum],
-        sections: InspectorPane.infoSections(sections, readsAsOriginal: readsAsOriginal),
+        sections: ErrataMarks.drawn(
+          InspectorPane.infoSections(sections, readsAsOriginal: readsAsOriginal)),
         locale: .english
       ).items.map(\.anchor)
     }

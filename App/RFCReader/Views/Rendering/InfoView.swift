@@ -21,7 +21,7 @@ struct InfoView: View {
   let search: (String) -> Void
   let showReadingPath: (DocumentID) -> Void
   /// The body's sections, which an erratum's section is found in; empty before the
-  /// body has loaded.
+  /// body has loaded, and for an RFC read as its original (#938).
   let sections: [RFCKit.Section]
   /// Goes to a section of the document, by its anchor.
   let selectSection: (String) -> Void
