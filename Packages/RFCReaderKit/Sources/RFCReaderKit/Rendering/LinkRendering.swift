@@ -33,21 +33,28 @@ public enum LinkRendering {
   /// A heading's hung number (#433) is no link to look at, but the heading's own
   /// number: it keeps its quieter color, and comes up to the label's under the
   /// pointer, as `sectionNumber` says it is.
+  ///
+  /// Under a page theme (#704), `palette`, a link is drawn in the theme's link
+  /// color, or its card link color where the link is `onCard`, and a hovered
+  /// number in its text color. The automatic palette changes nothing.
   public static func attributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
-    caption: [NSAttributedString.Key: Any] = [:], sectionNumber: SectionNumberState? = nil
+    caption: [NSAttributedString.Key: Any] = [:], sectionNumber: SectionNumberState? = nil,
+    palette: ReaderPalette = .automatic, onCard: Bool = false
   ) -> [NSAttributedString.Key: Any] {
+    var attributes = defaults
     if let sectionNumber {
-      var attributes = defaults
-      attributes[.foregroundColor] = sectionNumber == .hovered ? RFCColors.label : nil
+      attributes[.foregroundColor] = sectionNumber == .hovered ? palette.text : nil
       return attributes
     }
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
     guard let url = link as? URL, url.scheme == ReaderLinkScheme.backlinksScheme else {
-      return defaults
+      if !palette.drawsSystemColors {
+        attributes[.foregroundColor] = onCard ? palette.cardLink : palette.link
+      }
+      return attributes
     }
-    var attributes = defaults
     attributes[.foregroundColor] = nil
     attributes.merge(caption) { _, caption in caption }
     return attributes

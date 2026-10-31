@@ -98,8 +98,16 @@ public enum ReaderPreferences {
   public static let syntaxThemeKey = "syntaxTheme"
   public static let defaultSyntaxTheme = SyntaxTheme.standard.id
 
-  /// The page palette's `ReaderPalette.id`.
-  public static let paletteKey = "readerPalette"
+  /// The app's appearance: an `AppearancePreference`'s raw value (#704).
+  public static let appearanceKey = "appearance"
+  public static let defaultAppearance = AppearancePreference.system
+
+  /// The page theme drawn while the app is light: a `ReaderPalette.id` offered in
+  /// light (#704).
+  public static let lightPaletteKey = "readerLightPalette"
+  /// The page theme drawn while the app is dark: a `ReaderPalette.id` offered in
+  /// dark.
+  public static let darkPaletteKey = "readerDarkPalette"
   public static let defaultPalette = ReaderPalette.automatic.id
 
   /// The style of Copy Citation, and of Copy as Quote's citation line (#712): a

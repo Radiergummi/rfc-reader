@@ -636,6 +636,16 @@
         }
       }
     },
+    "Automatic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch"
+          }
+        }
+      }
+    },
     "Available Offline" : {
       "localizations" : {
         "de" : {
@@ -682,6 +692,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Größer"
+          }
+        }
+      }
+    },
+    "Black" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schwarz"
           }
         }
       }
@@ -1216,6 +1236,26 @@
         }
       }
     },
+    "Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkel"
+          }
+        }
+      }
+    },
+    "Dark Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkles Thema"
+          }
+        }
+      }
+    },
     "Defined In" : {
       "localizations" : {
         "de" : {
@@ -1717,6 +1757,16 @@
         }
       }
     },
+    "Gray" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grau"
+          }
+        }
+      }
+    },
     "HTML" : {
       "localizations" : {
         "de" : {
@@ -1763,6 +1813,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenleiste ausblenden"
+          }
+        }
+      }
+    },
+    "High Contrast" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoher Kontrast"
           }
         }
       }
@@ -2057,6 +2117,26 @@
         }
       }
     },
+    "Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell"
+          }
+        }
+      }
+    },
+    "Light Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helles Thema"
+          }
+        }
+      }
+    },
     "Links Point To" : {
       "localizations" : {
         "de" : {
@@ -2263,6 +2343,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nächster Abschnitt"
+          }
+        }
+      }
+    },
+    "Night" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nacht"
           }
         }
       }
@@ -2737,16 +2827,6 @@
         }
       }
     },
-    "Page" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seite"
-          }
-        }
-      }
-    },
     "Page Setup…" : {
       "localizations" : {
         "de" : {
@@ -2763,6 +2843,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenbereich"
+          }
+        }
+      }
+    },
+    "Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier"
           }
         }
       }
@@ -3307,6 +3397,16 @@
         }
       }
     },
+    "Sepia" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sepia"
+          }
+        }
+      }
+    },
     "Settings" : {
       "localizations" : {
         "de" : {
@@ -3653,6 +3753,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speicher"
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
           }
         }
       }

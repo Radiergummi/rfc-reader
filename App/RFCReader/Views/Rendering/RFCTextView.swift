@@ -18,6 +18,8 @@ struct RFCTextView: View {
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
   @Environment(\.colorSchemeContrast) private var contrast
+  /// Which page theme is drawn: the light one or the dark one (#704).
+  @Environment(\.colorScheme) private var colorScheme
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -69,7 +71,8 @@ struct RFCTextView: View {
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
         // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
-        palette: settings.palette,
+        settings: settings,
+        appearance: PaletteAppearance(colorScheme),
         outlinesEveryChip: contrast == .increased,
         // Read here, where it is observed: a highlight made or changed draws again.
         // An RFC's only: a draft has none (#728).
@@ -146,6 +149,7 @@ struct ReaderInputs {
       coordinator.bars.setEnabled(hidesChrome)
     #endif
     coordinator.environment = environment
+    coordinator.header = header
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
     // this runs on every update pass — including one per section crossing while
@@ -231,7 +235,9 @@ struct ReaderInputs {
   private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
-    let palette: ReaderPalette
+    /// The page themes chosen, and which of them is drawn (#704).
+    let settings: ReaderSettings
+    let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
     /// The document's highlights (#522).
@@ -334,7 +340,8 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.apply(
+        settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
       context.coordinator.setHighlights(highlights)
       // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
       // the reader on screen's.
@@ -362,7 +369,9 @@ struct ReaderInputs {
   private struct Representable: NSViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
-    let palette: ReaderPalette
+    /// The page themes chosen, and which of them is drawn (#704).
+    let settings: ReaderSettings
+    let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
     /// The document's highlights (#522).
@@ -520,7 +529,8 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.apply(
+        settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
       context.coordinator.setHighlights(highlights)
       // Not a preview's: the menus' section commands are the reader on screen's.
       if inputs.isShown, inputs.commitsOnClick == nil {
