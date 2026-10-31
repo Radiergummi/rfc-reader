@@ -74,7 +74,7 @@ public enum AnnotationStore {
     for absorbed in rows where plan.absorbed.contains(absorbed.identifier) {
       context.delete(absorbed)
     }
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [row.identifier], with: before, redo: [HighlightValues(row)],
       actionName: String(kit: "Highlight", locale: .interface), edit: edit)
@@ -89,7 +89,7 @@ public enum AnnotationStore {
     let before = HighlightValues(row)
     row.colorName = color.rawValue
     row.modifiedAt = .now
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
       actionName: String(kit: "Change Highlight Color", locale: .interface),
@@ -102,7 +102,7 @@ public enum AnnotationStore {
     guard let row = try highlight(identifier, in: context) else { return }
     let before = HighlightValues(row)
     context.delete(row)
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [], with: [before], redo: [],
       actionName: String(kit: "Delete Highlight", locale: .interface), edit: edit)
@@ -124,7 +124,7 @@ public enum AnnotationStore {
     row.setQuote(quote)
     row.clearRelocation()
     row.modifiedAt = .now
-    try context.save()
+    try context.saveOrRollBack()
     registerUndo(
       replacing: [identifier], with: [before], redo: [HighlightValues(row)],
       actionName: String(kit: "Place Highlight", locale: .interface), edit: edit)
@@ -155,7 +155,7 @@ public enum AnnotationStore {
       row.relocatedEndAnchor = end.anchor
       row.relocatedEndOffset = end.offset
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// Every document with a highlight, for eviction (`CacheEviction.pinned`). Only the
@@ -198,22 +198,25 @@ public enum AnnotationStore {
     _ identifiers: [UUID], with values: [HighlightValues], in context: ModelContext
   ) throws {
     let kept = Set(values.map(\.identifier))
-    for identifier in identifiers where !kept.contains(identifier) {
-      if let row = try highlight(identifier, in: context) { context.delete(row) }
-    }
-    for value in values {
-      if let row = try highlight(value.identifier, in: context) {
-        value.apply(to: row)
-      } else {
-        let row = Highlight(
-          document: .rfc(0), start: value.start, end: value.end, quote: value.quote,
-          color: HighlightColor(name: value.colorName))
-        // Its key as it was, which may name no document this version knows.
-        value.apply(to: row)
-        context.insert(row)
+    // A fetch that fails partway rolls back what was changed before it (#1002).
+    try context.rollingBackOnFailure {
+      for identifier in identifiers where !kept.contains(identifier) {
+        if let row = try highlight(identifier, in: context) { context.delete(row) }
       }
+      for value in values {
+        if let row = try highlight(value.identifier, in: context) {
+          value.apply(to: row)
+        } else {
+          let row = Highlight(
+            document: .rfc(0), start: value.start, end: value.end, quote: value.quote,
+            color: HighlightColor(name: value.colorName))
+          // Its key as it was, which may name no document this version knows.
+          value.apply(to: row)
+          context.insert(row)
+        }
+      }
+      try context.save()
     }
-    try context.save()
   }
 
   // MARK: - Fetching

@@ -32,6 +32,6 @@ public enum FollowedGroupStore {
       // Every row naming the group, since nothing stops there being two.
       existing.forEach(context.delete)
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 }

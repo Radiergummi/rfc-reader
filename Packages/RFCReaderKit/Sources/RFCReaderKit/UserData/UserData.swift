@@ -642,33 +642,36 @@ public enum UserData {
   /// devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
-    let bookmarks = try context.fetch(
-      FetchDescriptor<Bookmark>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))
-    removeDuplicates(bookmarks, keyedBy: \.documentKey, in: context)
-    let positions = try context.fetch(
-      FetchDescriptor<ReadingPosition>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))
-    removeDuplicates(positions, keyedBy: \.documentKey, in: context)
-    // The earliest first, so the place the reader first gave a document survives.
-    // Items whose collection is not in the store are left alone: under sync they
-    // may have arrived before it (#349).
-    let items = try context.fetch(
-      FetchDescriptor<DocumentCollectionItem>(sortBy: [
-        SortDescriptor(\.addedAt), SortDescriptor(\.position),
-      ]))
-    removeDuplicates(
-      items, keyedBy: { "\($0.collectionIdentifier?.uuidString ?? "")/\($0.documentKey)" },
-      in: context)
-    let marks = try context.fetch(
-      FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
-    removeDuplicates(marks, keyedBy: \.documentKey, in: context)
-    let groups = try context.fetch(
-      FetchDescriptor<FollowedGroup>(sortBy: [SortDescriptor(\.followedAt)]))
-    removeDuplicates(groups, keyedBy: \.acronym, in: context)
-    // One row per highlight, the latest edit kept.
-    let highlights = try context.fetch(
-      FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
-    removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
-    if context.hasChanges { try context.save() }
+    // A fetch that fails partway rolls back what was removed before it (#1002).
+    try context.rollingBackOnFailure {
+      let bookmarks = try context.fetch(
+        FetchDescriptor<Bookmark>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))
+      removeDuplicates(bookmarks, keyedBy: \.documentKey, in: context)
+      let positions = try context.fetch(
+        FetchDescriptor<ReadingPosition>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))
+      removeDuplicates(positions, keyedBy: \.documentKey, in: context)
+      // The earliest first, so the place the reader first gave a document survives.
+      // Items whose collection is not in the store are left alone: under sync they
+      // may have arrived before it (#349).
+      let items = try context.fetch(
+        FetchDescriptor<DocumentCollectionItem>(sortBy: [
+          SortDescriptor(\.addedAt), SortDescriptor(\.position),
+        ]))
+      removeDuplicates(
+        items, keyedBy: { "\($0.collectionIdentifier?.uuidString ?? "")/\($0.documentKey)" },
+        in: context)
+      let marks = try context.fetch(
+        FetchDescriptor<OfflineMark>(sortBy: [SortDescriptor(\.markedAt)]))
+      removeDuplicates(marks, keyedBy: \.documentKey, in: context)
+      let groups = try context.fetch(
+        FetchDescriptor<FollowedGroup>(sortBy: [SortDescriptor(\.followedAt)]))
+      removeDuplicates(groups, keyedBy: \.acronym, in: context)
+      // One row per highlight, the latest edit kept.
+      let highlights = try context.fetch(
+        FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
+      removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
+      if context.hasChanges { try context.save() }
+    }
   }
 
   /// Keeps the first row per key and deletes the rest, so `rows` come in the order
@@ -680,6 +683,29 @@ public enum UserData {
     var seen: Set<String> = []
     for row in rows where !seen.insert(key(row)).inserted {
       context.delete(row)
+    }
+  }
+}
+
+extension ModelContext {
+  /// Saves, and when the save fails, discards every unsaved change before rethrowing
+  /// (#1002). A change left pending would be committed by the next save that
+  /// succeeds, of anything, behind the reader's back, and a retry would find the row
+  /// it failed to save. Every store saves before it returns, and one that can fail
+  /// between a change and its save rolls back there too (`rollingBackOnFailure`), so
+  /// nothing else waits unsaved in the context to be discarded with it.
+  func saveOrRollBack() throws {
+    try rollingBackOnFailure { try save() }
+  }
+
+  /// Runs `change`, and when it throws, discards every unsaved change before
+  /// rethrowing, as `saveOrRollBack` does.
+  func rollingBackOnFailure(_ change: () throws -> Void) throws {
+    do {
+      try change()
+    } catch {
+      rollback()
+      throw error
     }
   }
 }

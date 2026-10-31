@@ -32,7 +32,7 @@ public enum ReadingPositionStore {
     } else {
       context.insert(ReadingPosition(key: document.userDataKey, place: nil, updatedAt: date))
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// The place the reader left, dated as it is left.
@@ -46,7 +46,7 @@ public enum ReadingPositionStore {
     } else {
       context.insert(ReadingPosition(key: document.userDataKey, place: place, updatedAt: date))
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// Every document with a position, most recently opened or left first.

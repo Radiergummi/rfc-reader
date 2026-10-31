@@ -57,7 +57,7 @@ public enum CollectionStore {
           collection: collection.identifier, document: document, position: next))
       position = next
     }
-    try context.save()
+    try context.saveOrRollBack()
     return collection
   }
 
@@ -75,16 +75,17 @@ public enum CollectionStore {
     }
     collection.name = name
     collection.color = color
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// The collection and its items, in one save. The documents are untouched.
   public static func delete(_ identifier: UUID, in context: ModelContext) throws {
-    context.delete(try collection(identifier, in: context))
-    for item in try items(in: identifier, context: context) {
-      context.delete(item)
-    }
-    try context.save()
+    // Both fetched before anything is deleted, so a failed fetch leaves nothing pending.
+    let collection = try collection(identifier, in: context)
+    let items = try items(in: identifier, context: context)
+    context.delete(collection)
+    items.forEach(context.delete)
+    try context.saveOrRollBack()
   }
 
   /// Between the collections either side of the drop point in the sidebar.
@@ -100,7 +101,7 @@ public enum CollectionStore {
     moving.position = place(
       between: CollectionOrder.neighbors(above: above, below: below, in: rows.map(\.identifier)),
       in: rows, key: \.identifier, position: \.position)
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   // MARK: - Members
@@ -119,7 +120,7 @@ public enum CollectionStore {
       DocumentCollectionItem(
         collection: identifier, document: document,
         position: CollectionOrder.appending(after: items.last?.position)))
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   /// Every item naming the document, since nothing stops there being two. Undoing
@@ -139,7 +140,7 @@ public enum CollectionStore {
       document: document, collection: identifier, position: first.position,
       addedAt: first.addedAt)
     removed.forEach(context.delete)
-    try context.save()
+    try context.saveOrRollBack()
     undoManager?.registerUndo(withTarget: context) { context in
       // An undo manager runs what is registered on the thread that calls its undo()
       // or redo(). The App's come from SwiftUI's environment and are driven by the
@@ -185,7 +186,7 @@ public enum CollectionStore {
       DocumentCollectionItem(
         collection: identifier, document: document, position: removal.position,
         addedAt: removal.addedAt))
-    try context.save()
+    try context.saveOrRollBack()
     undoManager?.registerUndo(withTarget: context) { context in
       // On the main thread, for the reason `remove` gives.
       MainActor.assumeIsolated {
@@ -238,7 +239,7 @@ public enum CollectionStore {
     for item in moving {
       item.position = position
     }
-    try context.save()
+    try context.saveOrRollBack()
   }
 
   // MARK: - Helpers
