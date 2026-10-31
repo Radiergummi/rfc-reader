@@ -1353,7 +1353,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jedes RFC in dieser Liste ist veraltet, und „Veraltete zeigen“ ist aus."
+            "value" : "Jeder RFC in dieser Liste ist veraltet, und „Veraltete zeigen“ ist aus."
           }
         }
       }
@@ -3263,7 +3263,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„Veraltete zeigen“ ist aus und „Gelesene ausblenden“ ist an, was jedes RFC in dieser Liste ausblendet."
+            "value" : "„Veraltete zeigen“ ist aus und „Gelesene ausblenden“ ist an, was jeden RFC in dieser Liste ausblendet."
           }
         }
       }
@@ -4231,7 +4231,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Du hast jedes RFC in dieser Liste gelesen, und „Gelesene ausblenden“ ist an."
+            "value" : "Du hast jeden RFC in dieser Liste gelesen, und „Gelesene ausblenden“ ist an."
           }
         }
       }
