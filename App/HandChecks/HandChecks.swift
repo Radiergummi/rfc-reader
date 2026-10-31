@@ -220,6 +220,45 @@ final class HandChecks: XCTestCase {
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
   }
 
+  // MARK: - The Info pane (#577)
+
+  /// A long press on a format row offers Open, Share and Download; Download fetches
+  /// the file and offers it to Save to Files, and once that is done, a Download from
+  /// another row of the card offers its file in turn.
+  func testFormatRowDownload() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    app.buttons["Info"].tap()
+
+    // RFC 8174 is published as text and HTML only.
+    let text = app.buttons["Plain Text"].firstMatch
+    XCTAssertTrue(text.waitForExistence(timeout: 10), "no Plain Text row in the Info pane")
+    // The Formats card is below the medium sheet's fold.
+    for _ in 0..<5 where !text.isHittable {
+      app.swipeUp()
+    }
+    text.press(forDuration: 1.5)
+    XCTAssertTrue(app.buttons["Open"].waitForExistence(timeout: 5), "no menu")
+    XCTAssertTrue(app.buttons["Share…"].exists)
+    XCTAssertTrue(app.buttons["Download"].exists)
+    screenshot("1 long press")
+
+    for (step, row) in [(2, text), (4, app.buttons["HTML"].firstMatch)] {
+      if step > 2 {
+        row.press(forDuration: 1.5)
+        XCTAssertTrue(app.buttons["Download"].waitForExistence(timeout: 5), "no menu on HTML")
+      }
+      app.buttons["Download"].tap()
+      // Save to Files is the system's document picker, which saves with Save.
+      let save = app.buttons["Save"].firstMatch
+      XCTAssertTrue(save.waitForExistence(timeout: 30), "no Save to Files, step \(step)")
+      screenshot("\(step) Save to Files")
+      save.tap()
+      XCTAssertTrue(save.waitForNonExistence(timeout: 10), "Save to Files stayed, step \(step)")
+      screenshot("\(step + 1) saved")
+    }
+  }
+
   // MARK: - Steps
 
   /// Launches the app, waits for its index, and opens `url` in it.

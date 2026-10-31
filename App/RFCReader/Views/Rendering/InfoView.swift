@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import os
 
 /// The Info pane (#25): what the index knows about the document, from
 /// `DocumentInfo`, and whether it is kept offline.
@@ -40,9 +41,13 @@ struct InfoView: View {
           }
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
+              // One per document, so a row's download or outcome is never shown under
+              // another's.
               SectionRows(
                 section: section, library: library, open: open, openDraft: openDraft,
-                search: search)
+                search: search
+              )
+              .id(info.number)
             }
           }
           if let document, let errata = library.errata?[document], !errata.isEmpty {
@@ -393,6 +398,15 @@ private struct SectionRows: View {
   let open: (DocumentID) -> Void
   let openDraft: (DraftID) -> Void
   let search: (String) -> Void
+  #if !os(macOS)
+    /// The file a format row's Download fetched, while Save to Files offers it: one
+    /// exporter for the card rather than one a row, as SwiftUI presents only one of
+    /// several sibling exporters reliably (#577).
+    @State private var downloaded: ExportedFile?
+    /// Whether a row's Download is fetching or its Save to Files is up, so a second
+    /// Download, from any row, does not present over the first.
+    @State private var isDownloading = false
+  #endif
 
   var body: some View {
     switch section.style {
@@ -402,10 +416,35 @@ private struct SectionRows: View {
           if index > 0 {
             Divider().padding(.leading, 38)
           }
-          LinkRow(row: row, library: library)
+          #if os(macOS)
+            LinkRow(row: row, library: library)
+          #else
+            LinkRow(
+              row: row, library: library, downloaded: $downloaded, isDownloading: $isDownloading)
+          #endif
         }
       }
       .background(.fill.quaternary, in: .rect(cornerRadius: 10))
+      #if !os(macOS)
+        .fileExporter(
+          isPresented: Binding(
+            get: { downloaded != nil },
+            set: {
+              if !$0 {
+                downloaded = nil
+                isDownloading = false
+              }
+            }),
+          document: downloaded,
+          contentType: downloaded?.contentType ?? FileFormat.pdf.contentType,
+          defaultFilename: downloaded?.fileStem
+        ) { result in
+          if case .failure(let error) = result {
+            readerLog.error(
+              "saving a format to Files failed: \(String(describing: error), privacy: .public)")
+          }
+        }
+      #endif
     case .list:
       VStack(alignment: .leading, spacing: 10) {
         ForEach(Array(section.rows.enumerated()), id: \.offset) { _, row in
@@ -536,13 +575,21 @@ private struct KeywordTag: View {
 ///
 /// A file opens in the browser like a page, and on a Mac Option-click saves it to
 /// Downloads instead, as it does in Safari; while Option is held its arrow turns into
-/// a download, so the row says what a click will do.
+/// a download, so the row says what a click will do. iOS has no Option key, so a
+/// long press offers Open, Share and Download, which saves the file to Files (#577).
 private struct LinkRow: View {
   let row: DocumentInfo.Row
   let library: LibraryModel
-  /// A check for a moment after a copy or a download, a warning after a failed one.
+  /// A check for a moment after a copy or a download to the Mac's Downloads, a warning
+  /// after a failed one.
   @State private var outcome: Outcome?
   @State private var isOptionHeld = false
+  #if !os(macOS)
+    /// Where a Download hands the file it fetched, for the card's Save to Files.
+    @Binding var downloaded: ExportedFile?
+    /// The card's: whether a Download is fetching or its Save to Files is up.
+    @Binding var isDownloading: Bool
+  #endif
   @Environment(\.openURL) private var openURL
 
   private enum Outcome {
@@ -574,6 +621,12 @@ private struct LinkRow: View {
         .help("Open \(url.lastPathComponent) on rfc-editor.org. Option-click to download it.")
         .contextMenu {
           Button("Download") { save(document, format) }
+        }
+      #else
+        .contextMenu {
+          Button("Open", systemImage: "safari") { openURL(url) }
+          ShareLink(item: url)
+          Button("Download", systemImage: "arrow.down.circle") { save(document, format) }
         }
       #endif
       .resets($outcome, to: nil, after: .seconds(1.5))
@@ -618,6 +671,21 @@ private struct LinkRow: View {
           outcome = .done
         } catch {
           readerLog.failure(of: document, "saving to Downloads failed", error)
+          outcome = .failed
+        }
+      }
+    #else
+      guard !isDownloading else { return }
+      isDownloading = true
+      Task {
+        do {
+          let data = try await library.publishedFile(for: document, format: format)
+          // The RFC Editor's own name, as the Mac saves it to Downloads.
+          downloaded = ExportedFile(
+            data: data, contentType: format.contentType, fileStem: document.fileStem)
+        } catch {
+          isDownloading = false
+          readerLog.failure(of: document, "downloading for Files failed", error)
           outcome = .failed
         }
       }
