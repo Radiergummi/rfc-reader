@@ -1,3 +1,5 @@
+import Foundation
+import RFCKit
 import Testing
 
 @testable import RFCReaderKit
@@ -72,6 +74,25 @@ struct InspectorPaneTests {
         InspectorPane.navigationContent(
           hasBody: hasBody, isLoading: isLoading, readsAsOriginal: true) == .publishedOriginal)
     }
+  }
+
+  /// On an RFC read as its original, a pointer's loaded text is not on screen, so the
+  /// Info pane links an erratum to none of its sections (#938): every erratum is the
+  /// whole document's, as the reader's marks have it.
+  @Test func `an RFC read as its original gives the Info pane no sections`() {
+    let sections = [Section(anchor: "section-2", number: "2", title: [.text("Section")])]
+    let erratum = Erratum(
+      id: 1, document: .rfc(1119), status: .verified, type: .technical, section: "2",
+      original: "old", corrected: "new", notes: "", submitted: "2024-01-01")
+    func anchors(readsAsOriginal: Bool) -> [String?] {
+      ErrataSummary(
+        errata: [erratum],
+        sections: InspectorPane.infoSections(sections, readsAsOriginal: readsAsOriginal),
+        locale: .english
+      ).items.map(\.anchor)
+    }
+    #expect(anchors(readsAsOriginal: false) == ["section-2"])
+    #expect(anchors(readsAsOriginal: true) == [nil])
   }
 
   /// View ▸ Contents and Info say what they will do, as View ▸ Show Sidebar does
