@@ -390,6 +390,29 @@ struct OfflineKeeperTests {
     #expect(keeper.kept == [kept, fetched])
   }
 
+  /// A download that ends without a body, as a failed one does, redraws no row that
+  /// only marks it.
+  @MainActor @Test func `a failed fetch is not reported to who reads kept`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let changes = Mutex(0)
+    withObservationTracking {
+      _ = keeper.kept
+    } onChange: {
+      changes.withLock { $0 += 1 }
+    }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.state(of: id) == .failed)
+    #expect(changes.withLock { $0 } == 0)
+  }
+
   /// A failed fetch is not started again by the next run, whatever starts it: its
   /// row offers Retry, which fetches on any path.
   @MainActor @Test func `a failed fetch waits for Retry`() async throws {

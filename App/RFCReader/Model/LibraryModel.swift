@@ -310,8 +310,9 @@ final class LibraryModel {
 
   /// Whether Available Offline lists `id` and its body is on the device: what a
   /// library row marks as offline (#769). Not while the body waits, downloads or
-  /// failed, which only Available Offline's own rows say (#936). Only an RFC: the list
-  /// holds the RFCs a series names, not the series.
+  /// failed, which only Available Offline's own rows say (#936). Both, because `kept`
+  /// learns of an unmark only when the run it starts ends, and the list at once. Only
+  /// an RFC: the list holds the RFCs a series names, not the series.
   func isAvailableOffline(_ id: DocumentID) -> Bool {
     id.series == .rfc && availableOfflineNumbers.contains(id.number)
       && offlineKeeper.kept.contains(id)
