@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import RFCKit
 import Synchronization
 import Testing
@@ -330,6 +331,86 @@ struct OfflineKeeperTests {
 
     #expect(keeper.status.kept == [id])
     #expect(keeper.status.state(of: id) == nil)
+  }
+
+  /// What a library row marks as offline (#936): a body on the device, not one still
+  /// on its way, and not one released.
+  @MainActor @Test func `kept lists a document only while its body is in the kept tier`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = GatedFetcher()
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+
+    await keeper.reconcile(wanted: [id]).value
+    await untilWaiting(documents: 1, for: id, in: store)
+    #expect(keeper.kept.isEmpty)
+    await fetcher.gate.open()
+    await keeper.untilSettled(id)
+    #expect(keeper.kept == [id])
+    await keeper.reconcile(wanted: []).value
+
+    #expect(keeper.kept.isEmpty)
+  }
+
+  /// A row reads `kept` to mark itself, so a download starting or ending redraws
+  /// no row, and only a body landing does.
+  @MainActor @Test func `only a change to what is kept is reported to who reads kept`()
+    async throws
+  {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let opened = GatedFetcher()
+    await opened.gate.open()
+    let kept = DocumentID.rfc(8999)
+    try await store.keep(kept, formats: [.xml], client: opened)
+    let fetcher = GatedFetcher()
+    let fetched = DocumentID.rfc(9000)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    await keeper.reconcile(wanted: [kept]).value
+    let changes = Mutex(0)
+    withObservationTracking {
+      _ = keeper.kept
+    } onChange: {
+      changes.withLock { $0 += 1 }
+    }
+
+    await keeper.reconcile(wanted: [kept, fetched]).value
+    await untilWaiting(documents: 1, for: fetched, in: store)
+    #expect(keeper.status.state(of: fetched) == .downloading)
+    #expect(changes.withLock { $0 } == 0)
+    await fetcher.gate.open()
+    await keeper.untilSettled(fetched)
+
+    #expect(changes.withLock { $0 } == 1)
+    #expect(keeper.kept == [kept, fetched])
+  }
+
+  /// A download that ends without a body, as a failed one does, redraws no row that
+  /// only marks it.
+  @MainActor @Test func `a failed fetch is not reported to who reads kept`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let fetcher = FailingFetcher(failures: 1)
+    let id = DocumentID.rfc(8999)
+    let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
+    let changes = Mutex(0)
+    withObservationTracking {
+      _ = keeper.kept
+    } onChange: {
+      changes.withLock { $0 += 1 }
+    }
+
+    await keeper.reconcile(wanted: [id]).value
+    await keeper.untilSettled(id)
+
+    #expect(keeper.status.state(of: id) == .failed)
+    #expect(changes.withLock { $0 } == 0)
   }
 
   /// A failed fetch is not started again by the next run, whatever starts it: its
