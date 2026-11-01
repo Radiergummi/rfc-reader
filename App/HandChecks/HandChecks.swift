@@ -336,6 +336,31 @@ final class HandChecks: XCTestCase {
     screenshot("3 opened")
   }
 
+  // MARK: - The References panel (#580)
+
+  /// A long press on a References row shows its RFC's preview above the row's menu,
+  /// as a citation's in the prose does.
+  func testReferenceRowPreview() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    app.buttons["Contents"].firstMatch.tap()
+    let references = app.buttons["References"].firstMatch
+    XCTAssertTrue(references.waitForExistence(timeout: 10), "no References tab")
+    references.tap()
+
+    let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "RFC 2119"))
+      .firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 10), "no RFC 2119 row in References")
+    screenshot("1 references")
+    row.press(forDuration: 1.5)
+    XCTAssertTrue(app.buttons["Copy Link"].waitForExistence(timeout: 5), "no menu")
+    // The preview is RFC 2119's, whose title is there once it has loaded.
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Requirement Levels"))
+        .firstMatch.waitForExistence(timeout: 30), "no preview of RFC 2119")
+    screenshot("2 long press")
+  }
+
   // MARK: - Steps
 
   /// Launches the app, waits for its index, and opens `url` in it.
