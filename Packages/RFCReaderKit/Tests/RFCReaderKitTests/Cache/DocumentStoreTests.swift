@@ -12,7 +12,7 @@ import Testing
 /// Text's download (#324). Each test has directories of its own, and a fetcher
 /// that waits until the test lets it finish, so a test can act while one is in
 /// flight.
-@Suite("Document store", .timeLimit(.minutes(1)))
+@Suite("Document store", .hangGuard)
 struct DocumentStoreTests {
   /// Holds every fetch in flight until the test lets them finish.
   actor Gate {
