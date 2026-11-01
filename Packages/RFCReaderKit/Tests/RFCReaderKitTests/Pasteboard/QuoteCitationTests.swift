@@ -154,8 +154,8 @@ struct QuoteCitationTests {
     settings.copiesSectionNumbers = false
     let left = try #require(
       QuoteCitation.quote(of: range, in: built, document: .rfc(9110), settings: settings))
-    #expect(kept.markdown.hasPrefix("> 1. "))
-    #expect(!left.markdown.hasPrefix("> 1. "))
+    #expect(kept.markdown.hasPrefix(#"> 1\. "#))
+    #expect(!left.markdown.hasPrefix("> 1"))
   }
 
   // MARK: What goes on the pasteboard
@@ -188,9 +188,10 @@ struct QuoteCitationTests {
     #expect(quote.markdown.hasPrefix("> first\n>\n> second\n"))
   }
 
-  /// Each of a row's lines loses its trailing tabs, as a row of one line does: a
-  /// cell whose line is empty leaves the tab that leads up to it.
-  @Test func `a table row's lines are quoted without trailing tabs`() throws {
+  /// Each of a row's lines loses its trailing tabs, as a row of one line does, and its
+  /// leading ones too, which Markdown reads as an indented code block from four
+  /// columns on (#1003).
+  @Test func `a table row's lines are quoted without leading or trailing tabs`() throws {
     let table = RFCKit.Table(
       title: nil, header: [],
       rows: [
@@ -205,7 +206,7 @@ struct QuoteCitationTests {
     let selection = built.text.attributedSubstring(
       from: NSRange(location: start, length: end - start))
     let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
-    #expect(quote.markdown.hasPrefix("> a1\tb1\n>\n> a2\n>\n> \tb3\n"))
+    #expect(quote.markdown.hasPrefix("> a1\tb1\n>\n> a2\n>\n> b3\n"))
   }
 
   /// The reader ends a paragraph with one line break and draws the gap between
@@ -302,6 +303,109 @@ struct QuoteCitationTests {
 
         """))
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
+  }
+
+  // MARK: Markdown escaping (#1003)
+
+  /// A quoted line is the RFC's text, never markup, so the quote escapes what would
+  /// render as markup where it is pasted, and only that: its plain text is the
+  /// Markdown too, and chat apps show a backslash as it is.
+  @Test func `a quote's prose is escaped where it would render`() {
+    let quote = QuoteCitation.quote(
+      of: NSAttributedString(string: "# Not a heading\nas *stressed* in [RFC 9111]"),
+      document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        ##"> \# Not a heading"## + "\n>\n" + ##"> as \*stressed\* in [RFC 9111]"##))
+  }
+
+  /// A block marker at the start of a line: a heading, a list item, a nested quote, a
+  /// thematic break, a setext underline, a fence, or a link reference definition,
+  /// which would take the line out of the quote altogether.
+  @Test(arguments: [
+    ("# Heading", ##"\# Heading"##),
+    ("###### Six", "\\###### Six"),
+    ("- item", ##"\- item"##),
+    ("+ item", ##"\+ item"##),
+    ("* item", ##"\* item"##),
+    ("-", ##"\-"##),
+    ("> nested", ##"\> nested"##),
+    ("1. first", ##"1\. first"##),
+    ("12) twelfth", ##"12\) twelfth"##),
+    ("---", ##"\---"##),
+    ("* * *", ##"\* * *"##),
+    ("___", ##"\___"##),
+    ("=====", ##"\====="##),
+    ("```", ##"\`\`\`"##),
+    ("~~~ text", ##"\~\~\~ text"##),
+    ("[label]: https://example.com/", ##"\[label]: https://example.com/"##),
+    ("\t  - indented item", ##"\- indented item"##),
+  ])
+  func `a block marker at the start of a line is escaped`(line: String, escaped: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)
+  }
+
+  /// Emphasis, strikethrough and code take a pair, a link a destination or a label
+  /// after its text, and an `&` is an entity only when one follows it.
+  @Test(arguments: [
+    ("a *stressed* word", ##"a \*stressed\* word"##),
+    ("**strong**", ##"\*\*strong\*\*"##),
+    ("1*DIGIT and 2*ALPHA", ##"1\*DIGIT and 2\*ALPHA"##),
+    ("an _underlined_ word", ##"an \_underlined\_ word"##),
+    // A symbol is punctuation to CommonMark 0.31 but not to 0.29, which GitHub follows.
+    ("b*≤*", ##"b\*≤\*"##),
+    // Swift's whitespace but not CommonMark's.
+    ("x *\u{85}y*", "x \\*\u{85}y\\*"),
+    ("~~gone~~", ##"\~\~gone\~\~"##),
+    ("a `code` span", ##"a \`code\` span"##),
+    ("``a ` b``", ##"\`\`a \` b\`\`"##),
+    // A backslash does not escape a backtick that closes a span an unescaped one opens.
+    ("a ` b `` c ``", ##"a \` b \`\` c \`\`"##),
+    ("`a`` b ``c`", ##"\`a\`\` b \`\`c\`"##),
+    ("see [the page](https://example.com/)", ##"see \[the page](https://example.com/)"##),
+    ("[text][label]", ##"\[text][label]"##),
+    ("![figure](figure.png)", ##"!\[figure](figure.png)"##),
+    (
+      "[outer [inner] text](https://example.com/)",
+      ##"\[outer [inner] text](https://example.com/)"##
+    ),
+    // An unclosed `[` before the link's would open it once that one is escaped.
+    ("[a [b](c)", ##"\[a \[b](c)"##),
+    ("&amp; &#38; &#x26;", ##"\&amp; \&#38; \&#x26;"##),
+    (##"a \* b"##, ##"a \\* b"##),
+    (##"a\*b and c*d"##, ##"a\\\*b and c\*d"##),
+    ("<field-name>", "&lt;field-name>"),
+  ])
+  func `inline markup is escaped where it renders`(line: String, escaped: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)
+  }
+
+  /// What Markdown leaves as it is stays unescaped: a reference's label, a lone
+  /// delimiter, an intraword underscore, a pipe (each quoted line is a paragraph of its
+  /// own, so it never opens a table), and a backslash before anything but punctuation.
+  @Test(arguments: [
+    "as defined in [RFC 9111]",
+    "[RFC 9110] [RFC 9111]",
+    "[RFC 9110], Section 8",
+    "a lone [ bracket",
+    "a field_name and another_one",
+    "1*DIGIT",
+    "1 * 2 = 2",
+    "a ` lone backtick",
+    "~/.config",
+    "a | b | c",
+    "~a~~ of unequal length",
+    "a > b",
+    "AT&T and &c",
+    "#hashtag",
+    "####### Seven",
+    "-1 is negative",
+    "1.5 seconds",
+    "1234567890. ten digits",
+    ##"C:\path\to"##,
+  ])
+  func `what does not render is left alone`(line: String) {
+    #expect(QuoteCitation.escapedMarkdownLine(line) == line)
   }
 
   /// The plain text is the Markdown: a web page reads only plain text and HTML, so
