@@ -1368,6 +1368,16 @@
         }
       }
     },
+    "Every RFC in this list is obsolete, and Show Obsolete is off." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder RFC in dieser Liste ist veraltet, und „Veraltete zeigen“ ist aus."
+          }
+        }
+      }
+    },
     "Export" : {
       "localizations" : {
         "de" : {
@@ -1604,6 +1614,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Für die nächste Revision vorgemerkt"
+          }
+        }
+      }
+    },
+    "Hidden by View Options" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch Darstellungsoptionen ausgeblendet"
           }
         }
       }
@@ -3268,6 +3288,16 @@
         }
       }
     },
+    "Show Obsolete is off and Hide Read is on, which hide every RFC in this list." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Veraltete zeigen“ ist aus und „Gelesene ausblenden“ ist an, was jeden RFC in dieser Liste ausblendet."
+          }
+        }
+      }
+    },
     "Show as Figure" : {
       "localizations" : {
         "de" : {
@@ -4222,6 +4252,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gelb"
+          }
+        }
+      }
+    },
+    "You have read every RFC in this list, and Hide Read is on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast jeden RFC in dieser Liste gelesen, und „Gelesene ausblenden“ ist an."
           }
         }
       }
