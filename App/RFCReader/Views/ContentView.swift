@@ -246,8 +246,11 @@ struct EmptyDetailView: View {
 }
 
 #if !os(macOS)
-  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, words from a title, or any RFC
-  /// Editor / Datatracker URL.
+  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, a draft's name, a
+  /// registry value, or any RFC Editor / Datatracker URL, read as the Mac's palette
+  /// reads them. Not words from a title (#579): the search field beside its button
+  /// already finds by keyword, so it lists what is typed resolved exactly, with no
+  /// search to wait for.
   ///
   /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
   /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
@@ -260,7 +263,7 @@ struct EmptyDetailView: View {
       self.library = library
       _controller = State(
         initialValue: QuickOpenController(
-          library: library, navigation: navigation,
+          library: library, navigation: navigation, searches: false,
           dismiss: { navigation.isShowingGoToSheet = false }))
     }
 
@@ -277,7 +280,7 @@ struct EmptyDetailView: View {
     var body: some View {
       NavigationStack {
         Form {
-          TextField(QuickOpenResults.placeholder(), text: text)
+          TextField(QuickOpenResults.identifierPlaceholder(), text: text)
             .focused($focused)
             .onSubmit(controller.openSelection)
             .textInputAutocapitalization(.never)
@@ -317,7 +320,7 @@ struct EmptyDetailView: View {
           }
           ToolbarItem(placement: .confirmationAction) {
             Button("Open", action: controller.openSelection)
-              .disabled(results.openable == nil && !results.isSearching && results.draft == nil)
+              .disabled(results.openable == nil && results.draft == nil)
           }
         }
       }
@@ -330,25 +333,20 @@ struct EmptyDetailView: View {
       }
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { controller.resolve() }
-      .task(id: controller.searchKey) { await controller.search() }
     }
 
-    /// Said while nothing is listed: what the field takes, or why nothing matches,
-    /// the one line under the field that turns a blind text box into something that
-    /// tells the reader whether it understood them. Not while a search is still
-    /// running, so it does not flash on every keystroke.
+    /// Said while nothing is listed: what the field takes, or, once ↵ found nothing,
+    /// that what is typed names nothing it takes, which no index changes. The one
+    /// line under the field that turns a blind text box into something that tells
+    /// the reader whether it understood them.
     @ViewBuilder
     private var status: some View {
-      if controller.query.isEmpty {
-        // The same as the Mac's palette (#761).
-        Text(verbatim: QuickOpenResults.example)
-      } else if let message = controller.message {
-        HStack {
-          Text(verbatim: message)
-          if case .failed = library.indexState {
-            Button("Retry") { library.retryIndex() }
-          }
-        }
+      if let message = controller.message {
+        Text(verbatim: message)
+      } else {
+        // The Mac's palette's, less the title words it takes and this does not
+        // (#761).
+        Text(verbatim: QuickOpenResults.identifierExample)
       }
     }
 

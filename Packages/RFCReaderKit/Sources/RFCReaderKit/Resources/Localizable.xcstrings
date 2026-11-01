@@ -1548,12 +1548,12 @@
         }
       }
     },
-    "Go to RFC opens it straight away, by its number or words from its title." : {
+    "Go to RFC opens it straight away, by its number or a link to it." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder Wörter aus seinem Titel."
+            "value" : "„Gehe zu RFC“ öffnet ihn sofort, über seine Nummer oder einen Link darauf."
           }
         }
       }
@@ -2744,6 +2744,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RFC-Reihe"
+          }
+        }
+      }
+    },
+    "RFC number, BCP 14, or a link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFC-Nummer, BCP 14 oder ein Link"
           }
         }
       }
@@ -4382,6 +4392,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "xml2rfc-Referenz"
+          }
+        }
+      }
+    },
+    "“%@” isn't an RFC number, a series or a link." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ ist keine RFC-Nummer, keine Serie und kein Link."
           }
         }
       }
