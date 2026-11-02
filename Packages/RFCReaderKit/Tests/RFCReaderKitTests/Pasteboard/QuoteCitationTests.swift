@@ -340,6 +340,7 @@ struct QuoteCitationTests {
     ("~~~ text", ##"\~\~\~ text"##),
     ("[label]: https://example.com/", ##"\[label]: https://example.com/"##),
     ("\t  - indented item", ##"\- indented item"##),
+    (">\u{301} nested", "\\>\u{301} nested"),
   ])
   func `a block marker at the start of a line is escaped`(line: String, escaped: String) {
     #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)
@@ -356,6 +357,10 @@ struct QuoteCitationTests {
     ("b*≤*", ##"b\*≤\*"##),
     // Swift's whitespace but not CommonMark's.
     ("x *\u{85}y*", "x \\*\u{85}y\\*"),
+    // CommonMark reads code points, so a combining mark does not hide the mark before it.
+    ("*\u{301}a*", "\\*\u{301}a\\*"),
+    ("<\u{301}a>", "&lt;\u{301}a>"),
+    ("&amp;\u{301}", "\\&amp;\u{301}"),
     ("~~gone~~", ##"\~\~gone\~\~"##),
     ("a `code` span", ##"a \`code\` span"##),
     ("``a ` b``", ##"\`\`a \` b\`\`"##),
