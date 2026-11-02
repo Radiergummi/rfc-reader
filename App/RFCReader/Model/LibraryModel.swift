@@ -874,7 +874,7 @@ final class LibraryModel {
 
   private func loadRevisions() async {
     if revisions == nil, let cached = await store.cachedRevisions() {
-      revisions = cached
+      revisions = cached.value
       compareBookmarks()
     }
     guard DataFileCheck.isDue(fetchedAt: revisionsFetchedAt, now: .now) else { return }
@@ -1013,7 +1013,7 @@ final class LibraryModel {
 
   private func loadWorkingGroups() async {
     if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
-      workingGroups = cached
+      workingGroups = cached.value
     }
     guard DataFileCheck.isDue(fetchedAt: workingGroupsFetchedAt, now: .now) else { return }
     do {

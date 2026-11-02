@@ -16,6 +16,38 @@ struct KeptFilesTests {
       ofItemAtPath: sandbox.directory.appending(path: name).path)
   }
 
+  @Test func `kept revisions are read back with when they were kept`() async throws {
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let revisions = RFCRevisions(generatedAt: Date(timeIntervalSince1970: 1_000), revisions: [:])
+    #expect(await store.cachedRevisions() == nil)
+    try await store.storeRevisions(revisions.encoded())
+    try setModified("revisions.json", ago: 7_200)
+    let kept = try #require(await store.cachedRevisions())
+    #expect(kept.value == revisions)
+    #expect(abs(kept.keptAt.timeIntervalSinceNow + 7_200) < 1)
+  }
+
+  @Test func `kept working groups are read back with when they were kept`() async throws {
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let groups = WorkingGroups(generatedAt: Date(timeIntervalSince1970: 1_000), groups: [])
+    #expect(await store.cachedWorkingGroups() == nil)
+    try await store.storeWorkingGroups(groups.encoded())
+    try setModified("groups.json", ago: 7_200)
+    let kept = try #require(await store.cachedWorkingGroups())
+    #expect(kept.value == groups)
+    #expect(abs(kept.keptAt.timeIntervalSinceNow + 7_200) < 1)
+  }
+
+  /// So the next check takes it for none kept, and fetches on any network.
+  @Test func `a kept file that no longer decodes reads as none kept`() async throws {
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    try await store.storeRevisions(Data("not json".utf8))
+    #expect(await store.cachedRevisions() == nil)
+  }
+
   // MARK: - Registries
 
   private static let statusCodes = """

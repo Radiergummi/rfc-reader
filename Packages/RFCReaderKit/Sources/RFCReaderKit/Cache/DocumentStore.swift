@@ -357,47 +357,54 @@ public actor DocumentStore {
 
   // MARK: - Revisions
 
-  private var revisionsURL: URL { directory.appending(path: "revisions.json") }
+  private var revisionsFile: KeptFile<RFCRevisions> {
+    KeptFile(url: directory.appending(path: "revisions.json")) { try RFCRevisions.decode($0) }
+  }
 
-  /// The last good `revisions.json`. Nil when there is none, or it no longer decodes
-  /// (a newer version, after a downgrade).
-  public func cachedRevisions() -> RFCRevisions? {
-    guard let data = try? Data(contentsOf: revisionsURL) else { return nil }
-    return try? RFCRevisions.decode(data)
+  /// The last good `revisions.json`, and when it was kept, which is when it was
+  /// fetched (#758). Nil when there is none, or it no longer decodes (a newer
+  /// version, after a downgrade).
+  public func cachedRevisions() -> (value: RFCRevisions, keptAt: Date)? {
+    revisionsFile.read()
   }
 
   public func storeRevisions(_ data: Data) throws {
-    try data.write(to: revisionsURL, options: .atomic)
+    try revisionsFile.write(data)
   }
 
   // MARK: - Bookmark baseline
 
-  private var bookmarkBaselineURL: URL { directory.appending(path: "bookmark-baseline.json") }
+  private var bookmarkBaselineFile: KeptFile<BookmarkBaseline> {
+    KeptFile(url: directory.appending(path: "bookmark-baseline.json")) {
+      try BookmarkBaseline.decode($0)
+    }
+  }
 
   /// What the bookmarked RFCs looked like at the last comparison (#191). Nil when
   /// there is none, or it no longer decodes, which the next comparison takes as a
   /// first one: it reports nothing and starts again from what it sees.
   public func bookmarkBaseline() -> BookmarkBaseline? {
-    guard let data = try? Data(contentsOf: bookmarkBaselineURL) else { return nil }
-    return try? BookmarkBaseline.decode(data)
+    bookmarkBaselineFile.read()?.value
   }
 
   public func storeBookmarkBaseline(_ baseline: BookmarkBaseline) throws {
-    try baseline.encoded().write(to: bookmarkBaselineURL, options: .atomic)
+    try bookmarkBaselineFile.write(baseline.encoded())
   }
 
   // MARK: - Working groups
 
-  private var workingGroupsURL: URL { directory.appending(path: "groups.json") }
+  private var workingGroupsFile: KeptFile<WorkingGroups> {
+    KeptFile(url: directory.appending(path: "groups.json")) { try WorkingGroups.decode($0) }
+  }
 
-  /// The last good `groups.json` (#363), as `cachedRevisions()` keeps its file.
-  public func cachedWorkingGroups() -> WorkingGroups? {
-    guard let data = try? Data(contentsOf: workingGroupsURL) else { return nil }
-    return try? WorkingGroups.decode(data)
+  /// The last good `groups.json` (#363), and when it was kept, as `cachedRevisions()`
+  /// reads its file.
+  public func cachedWorkingGroups() -> (value: WorkingGroups, keptAt: Date)? {
+    workingGroupsFile.read()
   }
 
   public func storeWorkingGroups(_ data: Data) throws {
-    try data.write(to: workingGroupsURL, options: .atomic)
+    try workingGroupsFile.write(data)
   }
 
   // MARK: - Errata

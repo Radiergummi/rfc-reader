@@ -11,6 +11,31 @@ public enum DataFileCheck {
     return now.timeIntervalSince(fetchedAt) >= IndexCheck.interval
   }
 
+  /// Which networks a fetch of the revisions or the working groups may take, when
+  /// one is due (#758).
+  public enum Fetch: Sendable, Equatable {
+    /// Nothing is kept to show meanwhile, so the fetch takes any network.
+    case anyNetwork
+    /// A copy is kept and answers meanwhile, so nobody waits for the refresh, which
+    /// waits for a network that is neither metered nor in Low Data Mode (#314).
+    case cheapNetworks
+  }
+
+  /// Whether the revisions or the working groups are due a fetch at `now`, and on
+  /// which networks: once `IndexCheck.interval` has passed since the copy kept was
+  /// written, which a new launch remembers, and since this run last fetched it.
+  ///
+  /// - Parameters:
+  ///   - keptAt: When the copy kept was written, nil when none can be read.
+  ///   - fetchedAt: When this run last fetched it, nil when it has not: what stops a
+  ///     fetch whose copy could not be kept from being made at every activation.
+  public static func fetch(keptAt: Date?, fetchedAt: Date?, now: Date) -> Fetch? {
+    for date in [keptAt, fetchedAt].compactMap(\.self) where !isDue(fetchedAt: date, now: now) {
+      return nil
+    }
+    return keptAt == nil ? .anyNetwork : .cheapNetworks
+  }
+
   /// Whether the errata feed is due at `now`.
   ///
   /// - Parameters:
