@@ -15,8 +15,8 @@ public struct DocumentLabels: Sendable, Hashable {
   public var notes = "Notes"
   public var figure = "Figure"
   public var table = "Table"
-  public var appendix = "Appendix"
-  public var annex = "Annex"
+  /// What an appendix and an annex are named by, as `Section` takes them.
+  public var appendixLabels = Section.AppendixLabels.english
   public var oneBacklink = "One Backlink"
   public var twoBacklinks = "Two Backlinks"
   public var threeBacklinks = "Three Backlinks"
@@ -68,14 +68,9 @@ public struct DocumentLabels: Sendable, Hashable {
     threeBacklinks = word("Three Backlinks") ?? threeBacklinks
     figure = label("Figure 1", beside: "1") ?? figure
     table = label("Table 1", beside: "1") ?? table
-    appendix = label("Appendix A", beside: "A") ?? appendix
-    annex = label("Annex A", beside: "A") ?? annex
+    appendixLabels.appendix = label("Appendix A", beside: "A") ?? appendixLabels.appendix
+    appendixLabels.annex = label("Annex A", beside: "A") ?? appendixLabels.annex
     backlinks = label("4 Backlinks", beside: "4", numberFirst: true) ?? backlinks
-  }
-
-  /// The appendix and annex labels, as `Section` takes them to name an appendix by.
-  public var appendixLabels: Section.AppendixLabels {
-    Section.AppendixLabels(appendix: appendix, annex: annex)
   }
 
   /// What a backlink caption says, and VoiceOver says for it: the number of
