@@ -6,7 +6,9 @@ import Testing
 
 /// The legacy text renderings a corpus-backed suite reads, from the directory
 /// `RFC_CORPUS_TEXT` names: `make test-corpus-app` fetches the Makefile's
-/// `CORPUS_TEST_APP_TEXT_DOCUMENTS` there.
+/// `CORPUS_TEST_APP_TEXT_DOCUMENTS` there, and passes that list as
+/// `RFC_CORPUS_TEXT_DOCUMENTS`. A document not on it is refused, even where a local
+/// corpus holds it; where it is not set, nothing is refused.
 enum CorpusLegacyText {
   static var directory: URL? {
     guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_TEXT"], !path.isEmpty
@@ -14,9 +16,32 @@ enum CorpusLegacyText {
     return URL(fileURLWithPath: path, isDirectory: true)
   }
 
+  /// The stems `RFC_CORPUS_TEXT_DOCUMENTS` lists, separated by spaces, where it is set.
+  static var listedDocuments: Set<String>? {
+    guard let list = ProcessInfo.processInfo.environment["RFC_CORPUS_TEXT_DOCUMENTS"]
+    else { return nil }
+    return Set(list.split(separator: " ").map(String.init))
+  }
+
   static func document(_ stem: String) throws -> RFCDocument {
+    if let listedDocuments, !listedDocuments.contains(stem) {
+      throw CorpusLegacyTextError.notListed(stem)
+    }
     let file = try #require(directory).appendingPathComponent("\(stem).txt")
     return LegacyTextParser.parse(try Data(contentsOf: file))
+  }
+}
+
+enum CorpusLegacyTextError: Error, Equatable, CustomStringConvertible {
+  /// The document is not in `RFC_CORPUS_TEXT_DOCUMENTS`, the Makefile's
+  /// `CORPUS_TEST_APP_TEXT_DOCUMENTS`.
+  case notListed(String)
+
+  var description: String {
+    switch self {
+    case .notListed(let stem):
+      "\(stem) is read by a corpus-backed test but not listed: add it to CORPUS_TEST_APP_TEXT_DOCUMENTS"
+    }
   }
 }
 
@@ -27,6 +52,15 @@ enum CorpusLegacyText {
   "Corpus-backed: relocation",
   .enabled(if: CorpusXML.isAvailable && CorpusLegacyText.directory != nil))
 struct CorpusBackedRelocationTests {
+  /// A document fetched locally, by `make corpus`, but not on the Makefile's list is
+  /// refused (#986).
+  @Test(.enabled(if: CorpusLegacyText.listedDocuments != nil))
+  func `a legacy document not on the list is refused as not listed`() {
+    #expect(throws: CorpusLegacyTextError.notListed("rfc0")) {
+      try CorpusLegacyText.document("rfc0")
+    }
+  }
+
   @Test func `a passage of the legacy parse is found in the authored XML`() throws {
     let legacy = ModelText(try CorpusLegacyText.document("rfc9110"))
     let authored = ModelText(try CorpusXML.document("rfc9110"))
