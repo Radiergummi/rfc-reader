@@ -37,8 +37,8 @@ nonisolated enum AppearanceOption: String, AppEnum {
 extension AppearancePreference {
   /// What Settings and Shortcuts call it.
   nonisolated var title: LocalizedStringResource {
-    AppearanceOption.caseDisplayRepresentations[AppearanceOption(self)]?.title
-      ?? .verbatim(rawValue)
+    // Every case has one: the dictionary is the enum's, written out in full.
+    AppearanceOption.caseDisplayRepresentations[AppearanceOption(self)]!.title
   }
 }
 

@@ -28,11 +28,25 @@ public struct FocusOverride: Codable, Sendable, Hashable {
   /// Whether it overrides nothing, which is no Focus at all.
   public var isEmpty: Bool { self == FocusOverride() }
 
-  /// Sets `palette` in the slot or slots it belongs to, as `ReaderSettings.setTheme`
-  /// does.
+  /// Whether it sets the appearance or a theme, which Settings says under their
+  /// pickers. A theme it names that this version does not know sets nothing.
+  public var overridesAppearance: Bool {
+    appearance != nil || ownedPalette(lightPalette, in: .light) != nil
+      || ownedPalette(darkPalette, in: .dark) != nil
+  }
+
+  /// Whether it sets the text size, which Settings says under the slider.
+  public var overridesFontSize: Bool { fontSize != nil }
+
+  /// Sets `palette` in the slots `ReaderPalette.slots(for:)` gives, as
+  /// `ReaderSettings.setTheme` does.
   public mutating func setTheme(_ palette: ReaderPalette) {
-    if palette.appearances.contains(.light) { lightPalette = palette.id }
-    if palette.appearances.contains(.dark) { darkPalette = palette.id }
+    for slot in palette.slots(for: nil) {
+      switch slot {
+      case .light: lightPalette = palette.id
+      case .dark: darkPalette = palette.id
+      }
+    }
   }
 
   /// The override `defaults` holds, or nil while no Focus filter is active.
@@ -74,11 +88,14 @@ public struct FocusOverride: Codable, Sendable, Hashable {
       focus.appearance = settings.appearance
       own.appearance = stored.appearance
     }
-    if lightPalette != nil {
+    // A slot is the Focus's only where its theme resolves, as `overridden(by:)`
+    // draws it: under a theme this version does not know, the reader's own shows,
+    // and a change to it is the reader's.
+    if ownedPalette(lightPalette, in: .light) != nil {
       focus.lightPalette = settings.lightPalette.id
       own.lightPalette = stored.lightPalette
     }
-    if darkPalette != nil {
+    if ownedPalette(darkPalette, in: .dark) != nil {
       focus.darkPalette = settings.darkPalette.id
       own.darkPalette = stored.darkPalette
     }
@@ -98,21 +115,30 @@ extension ReaderSettings {
     guard let focus else { return self }
     var settings = self
     if let appearance = focus.appearance { settings.appearance = appearance }
-    if let id = focus.lightPalette, let palette = Self.palette(id, in: .light) {
+    if let palette = ownedPalette(focus.lightPalette, in: .light) {
       settings.lightPalette = palette
     }
-    if let id = focus.darkPalette, let palette = Self.palette(id, in: .dark) {
+    if let palette = ownedPalette(focus.darkPalette, in: .dark) {
       settings.darkPalette = palette
     }
     if let fontSize = focus.fontSize { settings.fontSize = fontSize }
     return settings
   }
 
-  /// Sets `palette` in the slot or slots it belongs to (#714): a light theme the
-  /// light one, a dark theme the dark one, and one of both appearances both.
-  public mutating func setTheme(_ palette: ReaderPalette) {
-    if palette.appearances.contains(.light) { lightPalette = palette }
-    if palette.appearances.contains(.dark) { darkPalette = palette }
+  /// Sets `palette` in the slots `ReaderPalette.slots(for:)` gives for `slot` (#714),
+  /// and returns them: empty when it is not offered in the slot asked for.
+  @discardableResult
+  public mutating func setTheme(
+    _ palette: ReaderPalette, for slot: PaletteAppearance? = nil
+  ) -> Set<PaletteAppearance> {
+    let slots = palette.slots(for: slot)
+    for slot in slots {
+      switch slot {
+      case .light: lightPalette = palette
+      case .dark: darkPalette = palette
+      }
+    }
+    return slots
   }
 
   /// The appearance `init(defaults:)` would decode, without decoding the rest: what
@@ -122,8 +148,23 @@ extension ReaderSettings {
       ?? defaults.string(forKey: ReaderPreferences.appearanceKey)
       .flatMap(AppearancePreference.init) ?? ReaderPreferences.defaultAppearance
   }
+}
 
-  private static func palette(_ id: String, in appearance: PaletteAppearance) -> ReaderPalette? {
-    ReaderPalette.offered(in: appearance).first { $0.id == id }
+extension ReaderPalette {
+  /// The slots, the light theme and the dark one, that setting it fills (#714): those
+  /// of the appearances it is made for, or, when `slot` is asked for, that one alone
+  /// if it is made for it. A theme of both appearances fills both unless asked for
+  /// one, which is how Get Reader Settings' two themes are set back.
+  public func slots(for slot: PaletteAppearance?) -> Set<PaletteAppearance> {
+    guard let slot else { return appearances }
+    return appearances.intersection([slot])
   }
+}
+
+/// The theme called `id` among those offered in `appearance`, or nil for no id or
+/// one this version does not know there: what decides whether a Focus's slot is
+/// drawn, and so whether it is the Focus's.
+private func ownedPalette(_ id: String?, in appearance: PaletteAppearance) -> ReaderPalette? {
+  guard let id else { return nil }
+  return ReaderPalette.offered(in: appearance).first { $0.id == id }
 }

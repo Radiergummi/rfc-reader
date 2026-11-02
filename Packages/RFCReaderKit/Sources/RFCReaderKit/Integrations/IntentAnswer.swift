@@ -57,6 +57,17 @@ public enum IntentAnswer {
     default: String(kit: "\(name) is now the light and the dark theme.", locale: locale)
     }
   }
+
+  /// `Sepia is not a dark theme.`: why Set Reader Theme set nothing, asked for a slot
+  /// the theme is not made for.
+  public static func theme(
+    _ name: String, notOfferedFor slot: PaletteAppearance, locale: Locale = .interface
+  ) -> String {
+    switch slot {
+    case .light: String(kit: "\(name) is not a light theme.", locale: locale)
+    case .dark: String(kit: "\(name) is not a dark theme.", locale: locale)
+    }
+  }
 }
 
 /// Something asked of the reader showing one document, which that reader takes once

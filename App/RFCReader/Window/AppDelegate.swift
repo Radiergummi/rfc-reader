@@ -43,6 +43,8 @@
       NSApp.servicesProvider = citationServices
       // Before the first window, so it is made in the appearance chosen (#704).
       AppAppearance.follow()
+      // A Focus filter's settings the app outlived the Focus of (#714).
+      ReaderFocusFilter.clearWhenEnded()
       // The scene's `.task` did this; there is no scene on macOS any more.
       // Immediate, so that the bootstrap has started reading the cached index by
       // the time the first window is made (#367), restored or not. A plain task

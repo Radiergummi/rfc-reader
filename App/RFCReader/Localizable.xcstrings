@@ -536,6 +536,16 @@
         }
       }
     },
+    "A Focus filter is setting this until the Focus ends." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Fokusfilter legt dies fest, bis der Fokus endet."
+          }
+        }
+      }
+    },
     "A copied heading keeps its number, as in “4.2. Overview”." : {
       "localizations" : {
         "de" : {
@@ -1867,6 +1877,16 @@
         }
       }
     },
+    "For" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für"
+          }
+        }
+      }
+    },
     "For Copy Citation, and the line after a quote." : {
       "localizations" : {
         "de" : {
@@ -2423,6 +2443,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Helles Thema"
+          }
+        }
+      }
+    },
+    "Light or Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell oder Dunkel"
           }
         }
       }
@@ -3817,12 +3847,12 @@
         }
       }
     },
-    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both." : {
+    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both. Choose Light or Dark to set only that one." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Legt das Seitenthema fest: ein helles Thema für die helle App, ein dunkles für die dunkle oder eines für beide."
+            "value" : "Legt das Seitenthema fest: ein helles Thema für die helle App, ein dunkles für die dunkle oder eines für beide. Wähle Hell oder Dunkel, um nur dieses festzulegen."
           }
         }
       }

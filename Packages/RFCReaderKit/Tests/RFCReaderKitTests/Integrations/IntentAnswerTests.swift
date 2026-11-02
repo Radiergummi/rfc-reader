@@ -53,6 +53,12 @@ struct IntentAnswerTests {
     #expect(
       IntentAnswer.theme("High Contrast", setFor: [.light, .dark], locale: .english)
         == "High Contrast is now the light and the dark theme.")
+    #expect(
+      IntentAnswer.theme("Sepia", notOfferedFor: .dark, locale: .english)
+        == "Sepia is not a dark theme.")
+    #expect(
+      IntentAnswer.theme("Night", notOfferedFor: .light, locale: .english)
+        == "Night is not a light theme.")
   }
 
   @Test func `a request is taken once, by its own document's reader`() {

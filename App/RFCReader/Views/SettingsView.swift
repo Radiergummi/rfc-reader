@@ -120,6 +120,12 @@ private struct ReadingSettings: View {
       Image(systemName: "textformat.size.larger")
     }
     .accessibilityValue(ReaderPreferences.percentage(of: settings.fontSize))
+    // A change made now lasts as long as the Focus does (#714).
+    if _settings.focus?.overridesFontSize == true {
+      Text("A Focus filter is setting this until the Focus ends.")
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
     Toggle(isOn: usesFullWidth) {
       Text("Use the full window width for text")
       Text("Otherwise lines stop at a comfortable reading length, and the text is centered.")
@@ -181,7 +187,7 @@ private struct AppearanceSettings: View {
     }
     // What the pickers show is the Focus's, and a change made now lasts as long as
     // it does (#714): without this, a choice that seems not to stick.
-    if _settings.isFocusActive {
+    if _settings.focus?.overridesAppearance == true {
       Text("A Focus filter is setting these until the Focus ends.")
         .font(.footnote)
         .foregroundStyle(.secondary)

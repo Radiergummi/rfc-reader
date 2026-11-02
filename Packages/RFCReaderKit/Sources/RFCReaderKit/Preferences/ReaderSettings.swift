@@ -285,10 +285,10 @@ public struct ReaderSettingsValue: DynamicProperty {
     _focusOverride = AppStorage(Keys.focusOverrideKey, store: defaults)
   }
 
-  /// Whether a Focus filter is setting some of the reader's settings, which Settings
-  /// says under the pickers it overrides (#714).
-  @MainActor public var isFocusActive: Bool {
-    FocusOverride.decoded(focusOverride) != nil
+  /// The active Focus filter's settings, or nil while none is: Settings says under
+  /// each control a Focus sets that it does (#714).
+  @MainActor public var focus: FocusOverride? {
+    FocusOverride.decoded(focusOverride)
   }
 
   /// The settings. Setting them writes what changed to user defaults.

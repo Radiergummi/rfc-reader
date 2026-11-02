@@ -74,6 +74,35 @@ struct FocusOverrideTests {
           lightPalette: ReaderPalette.automatic.id, darkPalette: ReaderPalette.automatic.id))
   }
 
+  /// Get Reader Settings returns two themes; setting each back in its own slot
+  /// must not touch the other, even for a theme made for both (#714).
+  @Test func `a theme asked for one slot sets that slot alone`() {
+    #expect(ReaderPalette.sepia.slots(for: nil) == [.light])
+    #expect(ReaderPalette.highContrast.slots(for: nil) == [.light, .dark])
+    #expect(ReaderPalette.automatic.slots(for: .dark) == [.dark])
+    #expect(ReaderPalette.sepia.slots(for: .dark).isEmpty)
+
+    var settings = ReaderSettings(lightPalette: .sepia, darkPalette: .night)
+    #expect(settings.setTheme(.automatic, for: .dark) == [.dark])
+    #expect(settings.lightPalette == .sepia)
+    #expect(settings.darkPalette == .automatic)
+    #expect(settings.setTheme(.highContrast, for: .light) == [.light])
+    #expect(settings.lightPalette == .highContrast)
+    #expect(settings.darkPalette == .automatic)
+    #expect(settings.setTheme(.paper, for: .dark).isEmpty)
+    #expect(settings.lightPalette == .highContrast)
+    #expect(settings.darkPalette == .automatic)
+  }
+
+  @Test func `the controls a Focus sets are the ones Settings marks`() {
+    #expect(FocusOverride(appearance: .dark).overridesAppearance)
+    #expect(FocusOverride(darkPalette: ReaderPalette.black.id).overridesAppearance)
+    #expect(!FocusOverride(darkPalette: "no-such-theme").overridesAppearance)
+    #expect(!FocusOverride(appearance: .dark).overridesFontSize)
+    #expect(FocusOverride(fontSize: 20).overridesFontSize)
+    #expect(!FocusOverride(fontSize: 20).overridesAppearance)
+  }
+
   @Test func `the settings read from defaults are the stored ones under the override`() throws {
     try withDefaults { defaults in
       defaults.set(20.0, forKey: ReaderPreferences.fontSizeKey)
@@ -160,6 +189,39 @@ struct FocusOverrideTests {
       #expect(after.appearance == .system)
       #expect(after.underlineLinks)
       #expect(after.lightPalette == .paper)
+    }
+  }
+
+  @Test func `a change to a theme the Focus sets goes to the Focus`() throws {
+    try withDefaults { defaults in
+      defaults.set(ReaderPalette.night.id, forKey: ReaderPreferences.darkPaletteKey)
+      FocusOverride(darkPalette: ReaderPalette.black.id).write(to: defaults)
+
+      ReaderSettings.change(in: defaults) { $0.setTheme(.highContrast) }
+
+      #expect(
+        FocusOverride.stored(in: defaults)
+          == FocusOverride(darkPalette: ReaderPalette.highContrast.id))
+      #expect(defaults.string(forKey: ReaderPreferences.darkPaletteKey) == ReaderPalette.night.id)
+      #expect(
+        defaults.string(forKey: ReaderPreferences.lightPaletteKey)
+          == ReaderPalette.highContrast.id)
+    }
+  }
+
+  /// A theme the Focus names that this version does not know is not drawn, so the
+  /// reader's own shows, and a change to it is the reader's, not the Focus's.
+  @Test func `a change to a slot whose Focus theme is unknown is the reader's`() throws {
+    try withDefaults { defaults in
+      FocusOverride(darkPalette: "no-such-theme", fontSize: 20).write(to: defaults)
+
+      ReaderSettings.change(in: defaults) { $0.setTheme(.black) }
+
+      #expect(defaults.string(forKey: ReaderPreferences.darkPaletteKey) == ReaderPalette.black.id)
+      #expect(
+        FocusOverride.stored(in: defaults)
+          == FocusOverride(darkPalette: "no-such-theme", fontSize: 20))
+      #expect(ReaderSettings(defaults: defaults).darkPalette == .black)
     }
   }
 

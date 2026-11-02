@@ -1,6 +1,12 @@
 import AppIntents
 import RFCReaderKit
 
+#if os(macOS)
+  import AppKit
+#else
+  import UIKit
+#endif
+
 // The reader's appearance from Shortcuts (#714). Each intent writes through
 // `ReaderSettings`, never to a user defaults key, so the open readers update as
 // they do for a change made in Settings, and a Focus filter's settings stay over
@@ -30,43 +36,73 @@ struct ThemeEntity: AppEntity {
   }
 }
 
-/// Every theme Settings offers, in its order.
+/// Every theme Settings offers, in its order; `EnumerableEntityQuery` suggests them
+/// from this.
 struct ThemeQuery: EnumerableEntityQuery {
   func allEntities() async throws -> [ThemeEntity] {
     ReaderPalette.all.map(ThemeEntity.init)
   }
 
+  /// Not derived from `allEntities()`, measured: the conformance fails without it.
   func entities(for identifiers: [ThemeEntity.ID]) async throws -> [ThemeEntity] {
     ReaderPalette.all.filter { identifiers.contains($0.id) }.map(ThemeEntity.init)
   }
+}
 
-  func suggestedEntities() async throws -> [ThemeEntity] {
-    try await allEntities()
+/// Which of the two themes Set Reader Theme sets: the one for when the app is light,
+/// or the one for when it is dark.
+enum ThemeSlot: String, AppEnum {
+  case light
+  case dark
+
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Light or Dark")
+
+  static let caseDisplayRepresentations: [ThemeSlot: DisplayRepresentation] = [
+    .light: "Light",
+    .dark: "Dark",
+  ]
+
+  var appearance: PaletteAppearance {
+    switch self {
+    case .light: .light
+    case .dark: .dark
+    }
   }
 }
 
 /// "Use the Black theme in RFC Reader": sets the light theme, the dark theme or
 /// both, by the appearances the theme is made for, as Settings' pickers do, and
-/// leaves the appearance alone.
+/// leaves the appearance alone. Asked for one slot, it sets that one alone, which is
+/// how the two themes Get Reader Settings returns are set back.
 struct SetReaderThemeIntent: AppIntent {
   static let title: LocalizedStringResource = "Set Reader Theme"
   static let description = IntentDescription(
-    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both."
+    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both. Choose Light or Dark to set only that one."
   )
   static let openAppWhenRun = false
 
   @Parameter(title: "Theme")
   var theme: ThemeEntity
 
+  /// Empty for the slots the theme is made for.
+  @Parameter(title: "For")
+  var slot: ThemeSlot?
+
   static var parameterSummary: some ParameterSummary {
-    Summary("Use the \(\.$theme) theme")
+    Summary("Use the \(\.$theme) theme") {
+      \.$slot
+    }
   }
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
     let palette = theme.palette
-    ReaderSettings.change { $0.setTheme(palette) }
-    let answer = IntentAnswer.theme(
-      String(localized: palette.title), setFor: palette.appearances)
+    let name = String(localized: palette.title)
+    let asked = slot?.appearance
+    if let asked, palette.slots(for: asked).isEmpty {
+      throw IntentFailure.themeNotOffered(IntentAnswer.theme(name, notOfferedFor: asked))
+    }
+    ReaderSettings.change { $0.setTheme(palette, for: asked) }
+    let answer = IntentAnswer.theme(name, setFor: palette.slots(for: asked))
     return .result(dialog: IntentDialog(.verbatim(answer)))
   }
 }
@@ -119,10 +155,11 @@ struct SetTextSizeIntent: AppIntent {
   @Parameter(title: "Change", default: .bigger)
   var change: TextSizeChange
 
-  /// The default is `ReaderPreferences.defaultFontSize`, and the range
-  /// `ReaderPreferences.fontSizes`: a parameter's are constants.
-  @Parameter(title: "Size", default: 17, inclusiveRange: (12, 28))
-  var size: Double
+  /// Asked for only for a change to a size, and with no default: an App Shortcut's
+  /// phrase is offered for each change, and "Make the text Size" must ask rather than
+  /// set one. The range is `ReaderPreferences.fontSizes`: a parameter's is a constant.
+  @Parameter(title: "Size", inclusiveRange: (12, 28))
+  var size: Double?
 
   static var parameterSummary: some ParameterSummary {
     When(\.$change, .equalTo, .size) {
@@ -134,10 +171,12 @@ struct SetTextSizeIntent: AppIntent {
 
   func perform() async throws -> some IntentResult & ReturnsValue<Double> {
     let change = change
-    let size = size
+    // Whole points, as the slider and Bigger and Smaller step.
+    let size = size?.rounded()
+    if change == .size, size == nil { throw $size.needsValueError() }
     ReaderSettings.change { settings in
       switch change {
-      case .size: settings.fontSize = size
+      case .size: if let size { settings.fontSize = size }
       case .bigger: settings.fontSize = ReaderPreferences.fontSize(steppingUp: settings.fontSize)
       case .smaller:
         settings.fontSize = ReaderPreferences.fontSize(steppingDown: settings.fontSize)
@@ -148,7 +187,9 @@ struct SetTextSizeIntent: AppIntent {
 }
 
 /// The reader's appearance, themes and text size, as Get Reader Settings returns
-/// them, so that a shortcut can hand each to the Set intents to restore it.
+/// them, so that a shortcut can hand each to the Set intents to restore it: the
+/// light theme to Set Reader Theme for Light, the dark theme for Dark, since a theme
+/// made for both would otherwise set both.
 struct ReaderSettingsEntity: TransientAppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation {
     TypeDisplayRepresentation(name: "Reader Settings")
@@ -235,10 +276,39 @@ struct ReaderFocusFilter: SetFocusFilterIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    var focus = FocusOverride(appearance: appearance?.preference, fontSize: textSize)
+    // Whole points, as the slider steps.
+    var focus = FocusOverride(
+      appearance: appearance?.preference, fontSize: textSize?.rounded())
     if let theme { focus.setTheme(theme.palette) }
     // An empty one removes the override: the Focus has ended.
     focus.write(to: .standard)
     return .result()
+  }
+
+  /// Clears an override the Focus has outlived: one left when the app was killed or
+  /// reinstalled while a Focus was on, whose end it never heard. Only ever clears,
+  /// never writes one: a Focus that is on performs the filter itself.
+  static func clearIfEnded() async {
+    guard FocusOverride.stored(in: .standard) != nil,
+      let current = try? await ReaderFocusFilter.current,
+      current.theme == nil, current.appearance == nil, current.textSize == nil
+    else { return }
+    FocusOverride.remove(from: .standard)
+  }
+
+  /// Checks once now and again whenever the app becomes active, for as long as it
+  /// runs: launch on the Mac, and every scene's activation on iOS.
+  static func clearWhenEnded() {
+    Task { await clearIfEnded() }
+    #if os(macOS)
+      let didBecomeActive = NSApplication.didBecomeActiveNotification
+    #else
+      let didBecomeActive = UIApplication.didBecomeActiveNotification
+    #endif
+    NotificationCenter.default.addObserver(
+      forName: didBecomeActive, object: nil, queue: .main
+    ) { _ in
+      Task { await clearIfEnded() }
+    }
   }
 }

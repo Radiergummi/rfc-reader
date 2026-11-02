@@ -114,6 +114,26 @@
         }
       }
     },
+    "%@ is not a dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist kein dunkles Thema."
+          }
+        }
+      }
+    },
+    "%@ is not a light theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist kein helles Thema."
+          }
+        }
+      }
+    },
     "%@ is now the dark theme." : {
       "localizations" : {
         "de" : {
