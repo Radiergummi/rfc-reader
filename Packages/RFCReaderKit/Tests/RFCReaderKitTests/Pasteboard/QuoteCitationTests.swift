@@ -295,7 +295,7 @@ struct QuoteCitationTests {
     #expect(
       quote.markdown.hasPrefix(
         """
-        > Send &lt;field-name> & more > less.
+        > Send &lt;field-name&gt; & more > less.
         >
         > ```
         > <a> -> <b>
@@ -359,7 +359,7 @@ struct QuoteCitationTests {
     ("x *\u{85}y*", "x \\*\u{85}y\\*"),
     // CommonMark reads code points, so a combining mark does not hide the mark before it.
     ("*\u{301}a*", "\\*\u{301}a\\*"),
-    ("<\u{301}a>", "&lt;\u{301}a>"),
+    ("<\u{301}a>", "&lt;\u{301}a&gt;"),
     ("&amp;\u{301}", "\\&amp;\u{301}"),
     ("~~gone~~", ##"\~\~gone\~\~"##),
     ("a `code` span", ##"a \`code\` span"##),
@@ -377,9 +377,17 @@ struct QuoteCitationTests {
     // An unclosed `[` before the link's would open it once that one is escaped.
     ("[a [b](c)", ##"\[a \[b](c)"##),
     ("&amp; &#38; &#x26;", ##"\&amp; \&#38; \&#x26;"##),
+    // GitHub's cmark-gfm reads up to eight digits.
+    ("&#x1234567; &#12345678;", ##"\&#x1234567; \&#12345678;"##),
     (##"a \* b"##, ##"a \\* b"##),
     (##"a\*b and c*d"##, ##"a\\\*b and c\*d"##),
-    ("<field-name>", "&lt;field-name>"),
+    ("<field-name>", "&lt;field-name&gt;"),
+    // The `>` that closes a `<` is an entity too, or GitHub links the address with it.
+    (
+      "see <https://www.rfc-editor.org/info/rfc9110>.",
+      "see &lt;https://www.rfc-editor.org/info/rfc9110&gt;."
+    ),
+    ("<a> -> <b>", "&lt;a&gt; -> &lt;b&gt;"),
   ])
   func `inline markup is escaped where it renders`(line: String, escaped: String) {
     #expect(QuoteCitation.escapedMarkdownLine(line) == escaped)

@@ -13,15 +13,17 @@ extension QuoteCitation {
   /// would make emphasis, strikethrough, a code span, a link, an entity or an escape
   /// within it. A `<` is an entity instead: `\<` renders only where Markdown is
   /// CommonMark, an entity wherever it becomes HTML, and unescaped, GitHub takes
-  /// `<field-name>` for a tag and drops it.
+  /// `<field-name>` for a tag and drops it. The `>` that closes it is an entity too, or
+  /// GitHub links `<https://example.com/>` to an address that ends in `>`.
   ///
   /// The line is read by its code points, as CommonMark reads it: a combining mark
   /// after a `*` or a `>` would hide it in a `Character`, but not from Markdown.
   static func escapedMarkdownLine(_ line: String) -> String {
     let characters = Array(line.unicodeScalars.drop { $0 == " " || $0 == "\t" })
+    let runs = characterRuns(in: characters)
     var escaped = blockMarker(in: characters)
-    escaped.formUnion(emphasisDelimiters(in: characters))
-    escaped.formUnion(codeSpanDelimiters(in: characters))
+    escaped.formUnion(emphasisDelimiters(in: characters, runs: runs))
+    escaped.formUnion(codeSpanDelimiters(in: characters, runs: runs))
     escaped.formUnion(linkOpeners(in: characters))
     for (index, character) in characters.enumerated() {
       let next = index + 1 < characters.count ? characters[index + 1] : nil
@@ -33,9 +35,16 @@ extension QuoteCitation {
     }
 
     var result = ""
+    var isInAngleBrackets = false
     for (index, character) in characters.enumerated() {
       if character == "<" {
         result += "&lt;"
+        isInAngleBrackets = true
+        continue
+      }
+      if character == ">", isInAngleBrackets {
+        result += "&gt;"
+        isInAngleBrackets = false
         continue
       }
       if escaped.contains(index) {
@@ -92,8 +101,10 @@ extension QuoteCitation {
   ///
   /// CommonMark 0.31 counts a symbol such as `≤` or `©` as punctuation, and 0.29,
   /// which GitHub's cmark-gfm follows, does not, so a run opens or closes here where
-  /// it would under either.
-  private static func emphasisDelimiters(in line: [Unicode.Scalar]) -> Set<Int> {
+  /// it would under either. `runs` are the line's `characterRuns(in:)`.
+  private static func emphasisDelimiters(
+    in line: [Unicode.Scalar], runs characterRuns: [Range<Int>]
+  ) -> Set<Int> {
     struct Run {
       var range: Range<Int>
       var character: Unicode.Scalar
@@ -102,7 +113,7 @@ extension QuoteCitation {
     }
 
     var runs: [Run] = []
-    for range in characterRuns(in: line) {
+    for range in characterRuns {
       let character = line[range.lowerBound]
       guard "*_~".unicodeScalars.contains(character), character != "~" || range.count <= 2 else {
         continue
@@ -162,9 +173,12 @@ extension QuoteCitation {
   /// backticks are as long as each other, and none when it has none. All of them,
   /// because a backslash does not escape a backtick that closes a span an unescaped
   /// one opens: escaping only a span's own runs would leave one between them to open
-  /// a span that an escaped one closes.
-  private static func codeSpanDelimiters(in line: [Unicode.Scalar]) -> Set<Int> {
-    let lengths = characterRuns(in: line)
+  /// a span that an escaped one closes. `runs` are the line's `characterRuns(in:)`.
+  private static func codeSpanDelimiters(
+    in line: [Unicode.Scalar], runs characterRuns: [Range<Int>]
+  ) -> Set<Int> {
+    let lengths =
+      characterRuns
       .filter { line[$0.lowerBound] == "`" }
       .map(\.count)
     guard Set(lengths).count < lengths.count else { return [] }
@@ -192,13 +206,21 @@ extension QuoteCitation {
     return escaped
   }
 
+  /// What follows the `&` of an entity or a numeric character reference: a name, or
+  /// up to eight digits, as GitHub's cmark-gfm reads them.
+  ///
+  /// `Regex` is not `Sendable`, but a literal that is only ever matched is safe to
+  /// share, as RFCKit's `Pattern` explains; that wrapper is internal to RFCKit.
+  nonisolated(unsafe) private static let entity =
+    /#[0-9]{1,8};|#[xX][0-9a-fA-F]{1,8};|[A-Za-z][A-Za-z0-9]{0,31};/
+    .matchingSemantics(.unicodeScalar)
+
   /// Whether what follows an `&` makes it an entity or a numeric character reference,
   /// which is at most 33 characters long.
   private static func opensEntity(_ rest: ArraySlice<Unicode.Scalar>) -> Bool {
     var text = ""
     text.unicodeScalars.append(contentsOf: rest.prefix(33))
-    let entity = /#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]{0,31};/
-    return text.prefixMatch(of: entity.matchingSemantics(.unicodeScalar)) != nil
+    return text.prefixMatch(of: entity) != nil
   }
 
   /// The ranges of `line`'s runs of one character repeated, in order.
