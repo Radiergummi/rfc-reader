@@ -114,6 +114,36 @@
         }
       }
     },
+    "%@ is now the dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das dunkle Thema."
+          }
+        }
+      }
+    },
+    "%@ is now the light and the dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das helle und das dunkle Thema."
+          }
+        }
+      }
+    },
+    "%@ is now the light theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das helle Thema."
+          }
+        }
+      }
+    },
     "%@ is published only as %@." : {
       "localizations" : {
         "de" : {

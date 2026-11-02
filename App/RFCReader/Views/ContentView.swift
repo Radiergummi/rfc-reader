@@ -38,9 +38,8 @@ import TipKit
     @State private var showsStoreWarning = false
     /// The help, while Help in the menu bar has it on show (#780).
     @State private var helpTarget: HelpTarget?
-    /// The reader's own text size, which ⌘= steps (#153).
-    @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-      .defaultFontSize
+    /// The reader's own text size, which ⌘= steps (#153), or a Focus filter's (#714).
+    @ReaderSettingsValue private var settings
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
@@ -193,11 +192,13 @@ import TipKit
       // reason as ⌘K's; on the Mac, SwiftUI left a hidden menu item out of the menu
       // with its shortcut, measured.
       .background {
-        Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-          .keyboardShortcut(ReaderShortcut.biggerAlternate.keyboardShortcut)
-          .opacity(0)
-          .allowsHitTesting(false)
-          .accessibilityHidden(true)
+        Button("Bigger") {
+          settings.fontSize = ReaderPreferences.fontSize(steppingUp: settings.fontSize)
+        }
+        .keyboardShortcut(ReaderShortcut.biggerAlternate.keyboardShortcut)
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
       }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true

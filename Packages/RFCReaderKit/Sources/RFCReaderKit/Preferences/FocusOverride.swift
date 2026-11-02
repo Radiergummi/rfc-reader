@@ -115,6 +115,14 @@ extension ReaderSettings {
     if palette.appearances.contains(.dark) { darkPalette = palette }
   }
 
+  /// The appearance `init(defaults:)` would decode, without decoding the rest: what
+  /// the macOS appearance observer reads on every write to user defaults.
+  public static func appearance(in defaults: UserDefaults) -> AppearancePreference {
+    FocusOverride.stored(in: defaults)?.appearance
+      ?? defaults.string(forKey: ReaderPreferences.appearanceKey)
+      .flatMap(AppearancePreference.init) ?? ReaderPreferences.defaultAppearance
+  }
+
   private static func palette(_ id: String, in appearance: PaletteAppearance) -> ReaderPalette? {
     ReaderPalette.offered(in: appearance).first { $0.id == id }
   }

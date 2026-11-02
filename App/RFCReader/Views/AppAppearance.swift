@@ -22,9 +22,9 @@ import SwiftUI
     }
 
     private static func apply() {
-      // The one key, not the whole settings: this runs on every write to defaults.
-      let stored = UserDefaults.standard.string(forKey: ReaderPreferences.appearanceKey)
-      let forced = stored.flatMap(AppearancePreference.init)?.forced
+      // The one setting, not the whole settings: this runs on every write to
+      // defaults. A Focus filter's appearance over the reader's own (#714).
+      let forced = ReaderSettings.appearance(in: .standard).forced
       let appearance: NSAppearance? =
         switch forced {
         case nil: nil
@@ -43,15 +43,15 @@ import SwiftUI
   /// its own: every window of every scene, not only the page. On iOS that is each
   /// window's interface style, which its sheets and popovers inherit.
   struct AppAppearance: ViewModifier {
-    @AppStorage(ReaderPreferences.appearanceKey) private var appearance =
-      ReaderPreferences.defaultAppearance
+    /// Through the settings, so a Focus filter's appearance applies (#714).
+    @ReaderSettingsValue private var settings
 
     func body(content: Content) -> some View {
       // Every scene's windows, since each scene's root applies it, and a scene made
       // after a change applies it as it appears.
-      content.onChange(of: appearance, initial: true) {
+      content.onChange(of: settings.appearance, initial: true) {
         let style: UIUserInterfaceStyle =
-          switch appearance.forced {
+          switch settings.appearance.forced {
           case nil: .unspecified
           case .light: .light
           case .dark: .dark

@@ -93,6 +93,18 @@ struct FocusOverrideTests {
     }
   }
 
+  @Test func `the appearance alone reads as the whole settings do`() throws {
+    try withDefaults { defaults in
+      #expect(ReaderSettings.appearance(in: defaults) == .system)
+      defaults.set(AppearancePreference.light.rawValue, forKey: ReaderPreferences.appearanceKey)
+      #expect(ReaderSettings.appearance(in: defaults) == .light)
+      FocusOverride(appearance: .dark).write(to: defaults)
+      #expect(ReaderSettings.appearance(in: defaults) == .dark)
+      FocusOverride(fontSize: 20).write(to: defaults)
+      #expect(ReaderSettings.appearance(in: defaults) == .light)
+    }
+  }
+
   @Test func `ending the Focus restores the stored settings exactly`() throws {
     try withDefaults { defaults in
       defaults.set(20.0, forKey: ReaderPreferences.fontSizeKey)
