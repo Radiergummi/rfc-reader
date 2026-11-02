@@ -229,7 +229,7 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
       appendix: AppendixWord.appendix.label, annex: AppendixWord.annex.label)
 
     /// The label for what an appendix's heading calls it.
-    public func label(for word: AppendixWord) -> String {
+    func label(for word: AppendixWord) -> String {
       switch word {
       case .appendix: appendix
       case .annex: annex
@@ -357,12 +357,8 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   }
 
   /// `displayTitle` with its links intact, for a reader that draws them.
-  public var displayTitleInlines: [Inline] { displayTitleInlines(appendixLabels: .english) }
-
-  /// `displayTitleInlines`, with an appendix named by `labels`.
-  public func displayTitleInlines(appendixLabels labels: AppendixLabels) -> [Inline] {
+  public var displayTitleInlines: [Inline] {
     let words = headingWords
-    let numberPrefix = numberPrefix(appendixLabels: labels)
     if numberPrefix.isEmpty { return words }
     return words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
   }

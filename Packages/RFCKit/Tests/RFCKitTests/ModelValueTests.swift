@@ -131,9 +131,6 @@ struct SectionHeadingTests {
     #expect(appendix.numberLabel(appendixLabels: Self.labels) == "Anhang A")
     #expect(appendix.numberPrefix(appendixLabels: Self.labels) == "Anhang A. ")
     #expect(appendix.displayTitle(appendixLabels: Self.labels) == "Anhang A. Examples")
-    #expect(
-      appendix.displayTitleInlines(appendixLabels: Self.labels)
-        == [.text("Anhang A. "), .text("Examples")])
     #expect(appendix.anchor == "appendix-A")
   }
 
@@ -145,7 +142,6 @@ struct SectionHeadingTests {
     let bare = Section(
       anchor: "appendix-C", number: "C", title: "", isAppendix: true, appendixWord: .annex)
     #expect(bare.displayTitle(appendixLabels: Self.labels) == "Anlage C")
-    #expect(bare.displayTitleInlines(appendixLabels: Self.labels) == [.text("Anlage C")])
   }
 
   @Test func `a section's number takes no label`() {
@@ -166,8 +162,6 @@ struct SectionHeadingTests {
       #expect(section.displayTitle == section.displayTitle(appendixLabels: .english))
       #expect(section.numberPrefix == section.numberPrefix(appendixLabels: .english))
       #expect(section.numberLabel == section.numberLabel(appendixLabels: .english))
-      #expect(
-        section.displayTitleInlines == section.displayTitleInlines(appendixLabels: .english))
     }
     #expect(Section.AppendixLabels.english.appendix == "Appendix")
     #expect(Section.AppendixLabels.english.annex == "Annex")
