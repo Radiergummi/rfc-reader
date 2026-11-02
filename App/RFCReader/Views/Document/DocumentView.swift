@@ -259,7 +259,9 @@ struct DocumentView: View {
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
+    // Not over a text the original-only page loaded but does not show (#1022).
     guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      PublishedOriginalPage.offersSections(kind: reader.publishedOriginal?.kind),
       let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
@@ -321,6 +323,8 @@ struct DocumentView: View {
         if showsReaderState { keptOriginal = reader.showOriginal }
         updateFolding()
       }
+      // The index may say the RFC is read as its original only after its text built.
+      .onChange(of: reader.publishedOriginal) { updateFolding() }
       .onChange(of: reader.showTranslation) {
         if showsReaderState { session.showsTranslation = reader.showTranslation }
         requestTranslation()
