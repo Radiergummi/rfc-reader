@@ -23,7 +23,7 @@ struct SectionLookupTests {
 
   @Test func `a number in any spelling names its section`() throws {
     let document = try Fixtures.document("rfc8999.xml")
-    for spelling in ["5.2", "Section 5.2", "section 5.2.", "§ 5.2", "sec. 5.2"] {
+    for spelling in ["5.2", "Section 5.2", "section 5.2.", "§ 5.2", "§5.2", "sec. 5.2", " Section 5.2 "] {
       #expect(
         SectionLookup.sections(matching: spelling, in: document).map(\.number) == ["5.2"],
         "\(spelling)")
