@@ -126,10 +126,11 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc
 # ...` name its suite displays.
 #
 # The lists above are kept by hand, and passed to the suites as
-# RFC_CORPUS_TEXT_DOCUMENTS and RFC_CORPUS_XML_DOCUMENTS. A test that reads a document
-# not on them fails saying so, from `CorpusText`, or in RFCReaderKit `CorpusXML` and
-# `CorpusLegacyText`, even where a local corpus holds it (#986). RFCReaderKit's suites run on a Mac only, where the package builds:
-# `test-corpus-app`.
+# RFC_CORPUS_TEXT_DOCUMENTS, RFC_CORPUS_XML_DOCUMENTS and, for RFCReaderKit,
+# RFC_CORPUS_APP_TEXT_DOCUMENTS. A test that reads a document not on them fails
+# saying so, from `CorpusText`, or in RFCReaderKit `CorpusXML` and
+# `CorpusLegacyText`, even where a local corpus holds it (#986). RFCReaderKit's
+# suites run on a Mac only, where the package builds: `test-corpus-app`.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
@@ -147,7 +148,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 test-corpus-app: $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) \
   $(CORPUS_TEST_APP_TEXT_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 	RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
-	  RFC_CORPUS_XML_DOCUMENTS="$(CORPUS_TEST_XML_DOCUMENTS)" RFC_CORPUS_TEXT_DOCUMENTS="$(CORPUS_TEST_APP_TEXT_DOCUMENTS)" \
+	  RFC_CORPUS_XML_DOCUMENTS="$(CORPUS_TEST_XML_DOCUMENTS)" RFC_CORPUS_APP_TEXT_DOCUMENTS="$(CORPUS_TEST_APP_TEXT_DOCUMENTS)" \
 	  swift test --package-path $(RFCREADERKIT) --build-system swiftbuild --filter CorpusBacked
 
 ## Validate the EPUB export with epubcheck, over the committed fixtures

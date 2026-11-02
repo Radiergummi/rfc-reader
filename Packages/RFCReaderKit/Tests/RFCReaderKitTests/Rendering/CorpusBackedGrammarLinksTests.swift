@@ -25,16 +25,18 @@ enum CorpusXML {
 
   static var isAvailable: Bool { directory != nil }
 
-  /// The stems `RFC_CORPUS_XML_DOCUMENTS` lists, separated by spaces, where it is set.
+  /// The stems `RFC_CORPUS_XML_DOCUMENTS` lists, where it is set.
   static var listedDocuments: Set<String>? {
-    guard let list = ProcessInfo.processInfo.environment["RFC_CORPUS_XML_DOCUMENTS"]
-    else { return nil }
-    return Set(list.split(separator: " ").map(String.init))
+    CorpusList.stems(in: "RFC_CORPUS_XML_DOCUMENTS")
   }
 
-  static func document(_ stem: String) throws -> RFCDocument {
+  /// `listed` is the list `stem` is checked against, the environment's unless a test
+  /// passes its own.
+  static func document(_ stem: String, listed: Set<String>? = listedDocuments) throws
+    -> RFCDocument
+  {
     guard let directory else { throw CorpusXMLError.notConfigured }
-    if let listedDocuments, !listedDocuments.contains(stem) {
+    if let listed, !listed.contains(stem) {
       throw CorpusXMLError.notListed(stem)
     }
     let file = directory.appendingPathComponent("\(stem).xml")
@@ -42,6 +44,17 @@ enum CorpusXML {
       throw CorpusXMLError.notFetched(stem)
     }
     return try RFCXMLParser.parse(try Data(contentsOf: file))
+  }
+}
+
+/// The Makefile's lists of the documents the corpus-backed suites read, as `make
+/// test-corpus-app` passes them in the environment.
+enum CorpusList {
+  /// The stems the environment variable `name` lists, separated by whitespace, or nil
+  /// where it is not set.
+  static func stems(in name: String) -> Set<String>? {
+    guard let list = ProcessInfo.processInfo.environment[name] else { return nil }
+    return Set(list.split(whereSeparator: \.isWhitespace).map(String.init))
   }
 }
 
@@ -101,6 +114,12 @@ struct CorpusBackedGrammarLinksTests {
   @Test(.enabled(if: CorpusXML.listedDocuments != nil))
   func `a document not on the list is refused as not listed`() {
     #expect(throws: CorpusXMLError.notListed("rfc0")) { try CorpusXML.document("rfc0") }
+  }
+
+  @Test func `a listed document that is not fetched is refused as not fetched`() {
+    #expect(throws: CorpusXMLError.notFetched("rfc0")) {
+      try CorpusXML.document("rfc0", listed: ["rfc0"])
+    }
   }
 
   @Test(arguments: ["rfc9110", "rfc9112"])

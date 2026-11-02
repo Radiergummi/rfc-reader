@@ -7,7 +7,7 @@ import Testing
 /// The legacy text renderings a corpus-backed suite reads, from the directory
 /// `RFC_CORPUS_TEXT` names: `make test-corpus-app` fetches the Makefile's
 /// `CORPUS_TEST_APP_TEXT_DOCUMENTS` there, and passes that list as
-/// `RFC_CORPUS_TEXT_DOCUMENTS`. A document not on it is refused, even where a local
+/// `RFC_CORPUS_APP_TEXT_DOCUMENTS`. A document not on it is refused, even where a local
 /// corpus holds it; where it is not set, nothing is refused.
 enum CorpusLegacyText {
   static var directory: URL? {
@@ -16,29 +16,41 @@ enum CorpusLegacyText {
     return URL(fileURLWithPath: path, isDirectory: true)
   }
 
-  /// The stems `RFC_CORPUS_TEXT_DOCUMENTS` lists, separated by spaces, where it is set.
+  /// The stems `RFC_CORPUS_APP_TEXT_DOCUMENTS` lists, where it is set. Not RFCKit's
+  /// `RFC_CORPUS_TEXT_DOCUMENTS`, so an environment copied from `make test-corpus`
+  /// cannot check this package against the wrong list.
   static var listedDocuments: Set<String>? {
-    guard let list = ProcessInfo.processInfo.environment["RFC_CORPUS_TEXT_DOCUMENTS"]
-    else { return nil }
-    return Set(list.split(separator: " ").map(String.init))
+    CorpusList.stems(in: "RFC_CORPUS_APP_TEXT_DOCUMENTS")
   }
 
-  static func document(_ stem: String) throws -> RFCDocument {
-    if let listedDocuments, !listedDocuments.contains(stem) {
+  /// `listed` is the list `stem` is checked against, the environment's unless a test
+  /// passes its own.
+  static func document(_ stem: String, listed: Set<String>? = listedDocuments) throws
+    -> RFCDocument
+  {
+    if let listed, !listed.contains(stem) {
       throw CorpusLegacyTextError.notListed(stem)
     }
     let file = try #require(directory).appendingPathComponent("\(stem).txt")
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      throw CorpusLegacyTextError.notFetched(stem)
+    }
     return LegacyTextParser.parse(try Data(contentsOf: file))
   }
 }
 
 enum CorpusLegacyTextError: Error, Equatable, CustomStringConvertible {
-  /// The document is not in `RFC_CORPUS_TEXT_DOCUMENTS`, the Makefile's
+  /// The document is not in the directory: `make test-corpus-app` fetches only the
+  /// documents listed in the Makefile's `CORPUS_TEST_APP_TEXT_DOCUMENTS`.
+  case notFetched(String)
+  /// The document is not in `RFC_CORPUS_APP_TEXT_DOCUMENTS`, the Makefile's
   /// `CORPUS_TEST_APP_TEXT_DOCUMENTS`.
   case notListed(String)
 
   var description: String {
     switch self {
+    case .notFetched(let stem):
+      "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_APP_TEXT_DOCUMENTS"
     case .notListed(let stem):
       "\(stem) is read by a corpus-backed test but not listed: add it to CORPUS_TEST_APP_TEXT_DOCUMENTS"
     }
@@ -58,6 +70,12 @@ struct CorpusBackedRelocationTests {
   func `a legacy document not on the list is refused as not listed`() {
     #expect(throws: CorpusLegacyTextError.notListed("rfc0")) {
       try CorpusLegacyText.document("rfc0")
+    }
+  }
+
+  @Test func `a listed legacy document that is not fetched is refused as not fetched`() {
+    #expect(throws: CorpusLegacyTextError.notFetched("rfc0")) {
+      try CorpusLegacyText.document("rfc0", listed: ["rfc0"])
     }
   }
 

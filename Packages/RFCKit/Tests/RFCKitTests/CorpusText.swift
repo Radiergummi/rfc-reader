@@ -35,10 +35,11 @@ enum CorpusText {
   }
 
   /// The document `stem` names, such as `rfc1178`, decoded as every reader of the
-  /// format decodes it, through `LegacyTextParser.text(decoding:)`.
-  static func text(_ stem: String) throws -> String {
+  /// format decodes it, through `LegacyTextParser.text(decoding:)`. `listed` is the
+  /// list it is checked against, the environment's unless a test passes its own.
+  static func text(_ stem: String, listed: Set<String>? = listedDocuments) throws -> String {
     guard let directory else { throw CorpusTextError.notConfigured }
-    if let listedDocuments, !listedDocuments.contains(stem) {
+    if let listed, !listed.contains(stem) {
       throw CorpusTextError.notListed(stem)
     }
     let file = directory.appendingPathComponent("\(stem).txt")
@@ -65,10 +66,11 @@ enum CorpusText {
     listed(in: "RFC_CORPUS_XML_DOCUMENTS")
   }
 
-  /// The RFCXML of the document `stem` names, such as `rfc9110`.
-  static func xml(_ stem: String) throws -> Data {
+  /// The RFCXML of the document `stem` names, such as `rfc9110`. `listed` is the list
+  /// it is checked against, the environment's unless a test passes its own.
+  static func xml(_ stem: String, listed: Set<String>? = listedXMLDocuments) throws -> Data {
     guard let xmlDirectory else { throw CorpusTextError.xmlNotConfigured }
-    if let listedXMLDocuments, !listedXMLDocuments.contains(stem) {
+    if let listed, !listed.contains(stem) {
       throw CorpusTextError.xmlNotListed(stem)
     }
     let file = xmlDirectory.appendingPathComponent("\(stem).xml")
@@ -78,11 +80,11 @@ enum CorpusText {
     return try Data(contentsOf: file)
   }
 
-  /// The stems the environment variable `name` lists, separated by spaces, or nil where
-  /// it is not set.
+  /// The stems the environment variable `name` lists, separated by whitespace, or nil
+  /// where it is not set.
   private static func listed(in name: String) -> Set<String>? {
     guard let list = ProcessInfo.processInfo.environment[name] else { return nil }
-    return Set(list.split(separator: " ").map(String.init))
+    return Set(list.split(whereSeparator: \.isWhitespace).map(String.init))
   }
 }
 

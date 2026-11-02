@@ -16,11 +16,11 @@ enum CorpusText {
 
   static var isAvailable: Bool { directory != nil }
 
-  /// The stems `RFC_CORPUS_TEXT_DOCUMENTS` lists, separated by spaces, where it is set.
+  /// The stems `RFC_CORPUS_TEXT_DOCUMENTS` lists, separated by whitespace, where it is set.
   static var listedDocuments: Set<String>? {
     guard let list = ProcessInfo.processInfo.environment["RFC_CORPUS_TEXT_DOCUMENTS"]
     else { return nil }
-    return Set(list.split(separator: " ").map(String.init))
+    return Set(list.split(whereSeparator: \.isWhitespace).map(String.init))
   }
 
   /// The RFC index, from `RFC_CORPUS_INDEX`, for a suite that converts as a corpus run
@@ -44,9 +44,11 @@ enum CorpusText {
   }
 
   /// The document `stem` names, such as `rfc570`, decoded as a convert run decodes it.
-  static func text(_ stem: String) throws -> String {
+  /// `listed` is the list it is checked against, the environment's unless a test passes
+  /// its own.
+  static func text(_ stem: String, listed: Set<String>? = listedDocuments) throws -> String {
     guard let directory else { throw CorpusTextError.notConfigured }
-    if let listedDocuments, !listedDocuments.contains(stem) {
+    if let listed, !listed.contains(stem) {
       throw CorpusTextError.notListed(stem)
     }
     let file = directory.appendingPathComponent("\(stem).txt")
@@ -57,7 +59,7 @@ enum CorpusText {
   }
 }
 
-enum CorpusTextError: Error, CustomStringConvertible {
+enum CorpusTextError: Error, Equatable, CustomStringConvertible {
   case notConfigured
   case indexNotConfigured
   case notFetched(String)
