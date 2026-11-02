@@ -157,7 +157,10 @@ final class LayoutInput: @unchecked Sendable {
   }
 
   /// Narrows the column by a step while a step stays above the narrowest, then widens
-  /// it back to the widest, so that every step is the same 8 pt.
+  /// it back to the widest, so that every step is the same 8 pt. As in the reader,
+  /// the pin lays out nothing of the viewport during the live resize
+  /// (`PinSurface.layOutViewport()`); the forced layout after it stands in for
+  /// AppKit's display pass at the end of the step.
   @MainActor
   @discardableResult
   func resizeStep() -> Int {
@@ -167,7 +170,7 @@ final class LayoutInput: @unchecked Sendable {
     width += narrowing ? -Self.resizeStep : Self.resizeStep
     current.layout.textContainer?.size = CGSize(width: width, height: 10_000_000)
     let passes = pinMiddle()
-    current.surface.displayPass()
+    current.surface.forceViewportLayout()
     return passes
   }
 
@@ -200,11 +203,9 @@ final class LayoutInput: @unchecked Sendable {
 
   @MainActor
   func layOutNextSlice() {
-    guard let current, let slice = slices?.nextSlice(),
-      let range = current.layout.textRange(
-        for: NSRange(location: 0, length: NSMaxRange(slice)))
-    else { preconditionFailure("prepareSlicing first") }
-    current.layout.ensureLayout(for: range)
+    guard let current, slices?.layOutNextSlice(in: current.layout) != nil else {
+      preconditionFailure("prepareSlicing first")
+    }
   }
 }
 
@@ -215,7 +216,7 @@ final class LayoutInput: @unchecked Sendable {
 struct Layout {
   let storage = NSTextContentStorage()
   let layout = NSTextLayoutManager()
-  let surface: BenchmarkSurface
+  let surface: HeadlessPinSurface
 
   init(_ text: NSAttributedString, width: CGFloat) {
     let container = NSTextContainer(size: CGSize(width: width, height: 10_000_000))
@@ -223,48 +224,7 @@ struct Layout {
     layout.textContainer = container
     storage.addTextLayoutManager(layout)
     storage.install(text)
-    surface = BenchmarkSurface(layout: layout)
-  }
-}
-
-/// A scroll view without a view: a top, and a viewport of a window's height that
-/// lays out what it covers, as `ReaderLayoutEngine` asks of a text view.
-@MainActor
-final class BenchmarkSurface: PinSurface {
-  private static let viewportHeight: CGFloat = 900
-  let layout: NSTextLayoutManager
-  var containerTop: CGFloat = 0
-
-  init(layout: NSTextLayoutManager) {
-    self.layout = layout
-  }
-
-  func scroll(toContainerY target: CGFloat) {
-    containerTop = max(0, target)
-  }
-
-  /// Set through a live resize. The reader's engine then lays out no viewport while
-  /// it pins the line, because forcing one on every step made `NSTextView` lay out a
-  /// large range of the document itself, and AppKit's display pass lays the viewport
-  /// out once the step is done (`ReaderLayoutEngine.layOutViewport`). A resize step
-  /// here does the same: `pin` lays out nothing of the viewport, and `displayPass()`
-  /// stands in for AppKit's pass after it.
-  var isInLiveResize = false
-
-  func layOutViewport() {
-    guard !isInLiveResize else { return }
-    displayPass()
-  }
-
-  /// Lays out what the viewport covers.
-  func displayPass() {
-    let top = containerTop
-    guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
-    layout.enumerateTextLayoutFragments(
-      from: first.rangeInElement.location, options: [.ensuresLayout]
-    ) { fragment in
-      fragment.layoutFragmentFrame.minY < top + Self.viewportHeight
-    }
+    surface = HeadlessPinSurface(layout: layout)
   }
 }
 

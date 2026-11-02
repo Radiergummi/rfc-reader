@@ -48,13 +48,9 @@ final class ReaderLayoutEngine: PinSurface {
   /// out what the folding shows. Until then the end is an estimate.
   private var knowsDocumentEnd = false
 
-  /// Not during a live resize: there AppKit's own display pass lays the viewport out.
-  /// Forced on every step, it made `NSTextView` lay out a large range of the document
-  /// itself (`textViewportLayoutControllerDidLayout:` → `ensureLayoutForRange:`):
-  /// 500–630 ms per step on RFC 5661, against under 1 ms without, and the reader's
-  /// line held all the same.
-  func layOutViewport() {
-    guard !isInLiveResize, let textView else { return }
+  /// What `layOutViewport()`, `PinSurface`'s, calls outside a live resize.
+  func forceViewportLayout() {
+    guard let textView else { return }
     textView.syncLayout()
     textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
   }
@@ -297,7 +293,7 @@ final class ReaderLayoutEngine: PinSurface {
         let clock = ContinuousClock()
         let turnStart = clock.now
         while !self.planner.isComplete, clock.now - turnStart < Self.turnBudget {
-          self.layOutSlice()
+          self.planner.layOutNextSlice(in: self.textView?.textLayoutManager)
         }
         self.didLayOut()
       }
@@ -325,7 +321,7 @@ final class ReaderLayoutEngine: PinSurface {
     if let completionInterval { signposter.endInterval("Lay out document", completionInterval) }
   }
 
-  private var isInLiveResize: Bool {
+  var isInLiveResize: Bool {
     #if canImport(UIKit)
       return false
     #else
@@ -347,14 +343,6 @@ final class ReaderLayoutEngine: PinSurface {
     #endif
   }
 
-  /// Takes the slice first, so the planner moves on even when there is nothing to
-  /// lay it out in, and the completion's loop cannot spin in place.
-  private func layOutSlice() {
-    guard let slice = planner.nextSlice(), let layout = textView?.textLayoutManager,
-      let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
-    else { return }
-    layout.ensureLayout(for: range)
-  }
 }
 
 extension PlatformTextView {

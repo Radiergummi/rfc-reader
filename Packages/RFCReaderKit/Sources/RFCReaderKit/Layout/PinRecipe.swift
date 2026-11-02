@@ -8,14 +8,34 @@ import Foundation
 #endif
 
 /// What the pin recipe needs of a scrolling text view: where the viewport's top is
-/// and a way to move it, both in text-container coordinates, and a way to lay out
-/// what the viewport now covers. The App's `ReaderLayoutEngine` is one, over
-/// `NSTextView` and `UITextView`; the tests have their own.
+/// and a way to move it, both in text-container coordinates, whether a live resize
+/// is under way, and a way to lay out what the viewport now covers. The App's
+/// `ReaderLayoutEngine` is one, over `NSTextView` and `UITextView`;
+/// `HeadlessPinSurface` is the tests' and the layout benchmarks'.
+///
+/// A conforming type implements `forceViewportLayout()` and never a
+/// `layOutViewport()` of its own: that is the extension below, which holds the
+/// live-resize gate, and one of the type's own would skip the gate wherever the
+/// type is called directly.
 @MainActor
 public protocol PinSurface: AnyObject {
   var containerTop: CGFloat { get }
+  var isInLiveResize: Bool { get }
   func scroll(toContainerY target: CGFloat)
-  func layOutViewport()
+  /// Lays out what the viewport covers, live resize or not.
+  func forceViewportLayout()
+}
+
+extension PinSurface {
+  /// Lays out what the viewport covers, except during a live resize, where AppKit's
+  /// own display pass lays it out once the step is done. Forced on every step, it
+  /// made `NSTextView` lay out a large range of the document itself
+  /// (`textViewportLayoutControllerDidLayout:` → `ensureLayoutForRange:`), measured by
+  /// the "Layout: resize step" benchmarks; see docs/ARCHITECTURE.md, "TextKit 2 traps".
+  public func layOutViewport() {
+    guard !isInLiveResize else { return }
+    forceViewportLayout()
+  }
 }
 
 /// The one way the reader's line is put at the top of the viewport, measured in
