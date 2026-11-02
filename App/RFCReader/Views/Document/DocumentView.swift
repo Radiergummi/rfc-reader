@@ -323,8 +323,6 @@ struct DocumentView: View {
         if showsReaderState { keptOriginal = reader.showOriginal }
         updateFolding()
       }
-      // The index may say the RFC is read as its original only after its text built.
-      .onChange(of: reader.publishedOriginal) { updateFolding() }
       .onChange(of: reader.showTranslation) {
         if showsReaderState { session.showsTranslation = reader.showTranslation }
         requestTranslation()
@@ -420,6 +418,9 @@ struct DocumentView: View {
       .onChange(of: library.pointersInPack) {
         session.markPublishedOriginal(into: writer, library: library)
       }
+      // Focus and the outline, off over a text the original-only page loaded but does
+      // not show, which the index may say only after the text built (#1022).
+      .onChange(of: reader.publishedOriginal) { updateFolding() }
       .onChange(of: library.revisions) {
         session.deriveInfo(into: writer, library: library)
       }
