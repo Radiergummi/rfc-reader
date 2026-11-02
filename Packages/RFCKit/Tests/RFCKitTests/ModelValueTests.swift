@@ -120,4 +120,56 @@ struct SectionHeadingTests {
       anchor: "section-2", number: "2", title: "Terms", appendixWord: .annex)
     #expect(section.displayTitle == "2. Terms", "the word is an appendix's alone")
   }
+
+  /// A translated document's reader names an appendix in its own words (#940); the
+  /// model only takes them.
+  static let labels = Section.AppendixLabels(appendix: "Anhang", annex: "Anlage")
+
+  @Test func `an appendix is named by the labels it is given`() {
+    let appendix = Section(
+      anchor: "appendix-A", number: "A", title: [.text("Examples")], isAppendix: true)
+    #expect(appendix.numberLabel(appendixLabels: Self.labels) == "Anhang A")
+    #expect(appendix.numberPrefix(appendixLabels: Self.labels) == "Anhang A. ")
+    #expect(appendix.displayTitle(appendixLabels: Self.labels) == "Anhang A. Examples")
+    #expect(
+      appendix.displayTitleInlines(appendixLabels: Self.labels)
+        == [.text("Anhang A. "), .text("Examples")])
+    #expect(appendix.anchor == "appendix-A")
+  }
+
+  @Test func `an annex is named by the annex label it is given`() {
+    let annex = Section(
+      anchor: "appendix-B", number: "B", title: "", isAppendix: true, appendixWord: .annex,
+      qualifier: .informative)
+    #expect(annex.displayTitle(appendixLabels: Self.labels) == "Anlage B. (Informative)")
+    let bare = Section(
+      anchor: "appendix-C", number: "C", title: "", isAppendix: true, appendixWord: .annex)
+    #expect(bare.displayTitle(appendixLabels: Self.labels) == "Anlage C")
+    #expect(bare.displayTitleInlines(appendixLabels: Self.labels) == [.text("Anlage C")])
+  }
+
+  @Test func `a section's number takes no label`() {
+    let section = Section(anchor: "section-4.2", number: "4.2", title: "Caching")
+    #expect(section.displayTitle(appendixLabels: Self.labels) == "4.2. Caching")
+    #expect(section.numberLabel(appendixLabels: Self.labels) == "4.2")
+  }
+
+  /// Every reader that passes no labels, the PDF outline and the App Intents among
+  /// them, names an appendix in English, as the reader body does.
+  @Test func `without labels an appendix is named in English`() {
+    let sections = [
+      Section(anchor: "appendix-A", number: "A", title: "Examples", isAppendix: true),
+      Section(
+        anchor: "appendix-B", number: "B", title: "", isAppendix: true, appendixWord: .annex),
+    ]
+    for section in sections {
+      #expect(section.displayTitle == section.displayTitle(appendixLabels: .english))
+      #expect(section.numberPrefix == section.numberPrefix(appendixLabels: .english))
+      #expect(section.numberLabel == section.numberLabel(appendixLabels: .english))
+      #expect(
+        section.displayTitleInlines == section.displayTitleInlines(appendixLabels: .english))
+    }
+    #expect(Section.AppendixLabels.english.appendix == "Appendix")
+    #expect(Section.AppendixLabels.english.annex == "Annex")
+  }
 }

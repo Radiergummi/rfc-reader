@@ -212,6 +212,31 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
     }
   }
 
+  /// The words an appendix and an annex are named by, ahead of their letter (#940):
+  /// `english` for every reader of the model, as the reader body is English. Only a
+  /// translated document's reader passes others, its translation's own; RFCKit only
+  /// takes them. They never reach an anchor, which is built from `number`.
+  public struct AppendixLabels: Sendable, Hashable {
+    public var appendix: String
+    public var annex: String
+
+    public init(appendix: String, annex: String) {
+      self.appendix = appendix
+      self.annex = annex
+    }
+
+    public static let english = AppendixLabels(
+      appendix: AppendixWord.appendix.label, annex: AppendixWord.annex.label)
+
+    /// The label for what an appendix's heading calls it.
+    public func label(for word: AppendixWord) -> String {
+      switch word {
+      case .appendix: appendix
+      case .annex: annex
+      }
+    }
+  }
+
   /// Whether an appendix binds the reader of the document, as its heading says.
   public enum Qualifier: String, Sendable, Hashable, Codable {
     case normative
@@ -294,8 +319,11 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   /// `4.2`, `Appendix A` or `Annex A`: the number as a heading names it, without the
   /// period that sets it off from the words. Nil when the section has no number.
-  public var numberLabel: String? {
-    number.map { isAppendix ? "\(appendixWord.label) \($0)" : $0 }
+  public var numberLabel: String? { numberLabel(appendixLabels: .english) }
+
+  /// `numberLabel`, with an appendix named by `labels`.
+  public func numberLabel(appendixLabels labels: AppendixLabels) -> String? {
+    number.map { isAppendix ? "\(labels.label(for: appendixWord)) \($0)" : $0 }
   }
 
   /// What a heading says after its number: an appendix's qualifier, as
@@ -311,18 +339,30 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// to compose: the number lives in `number`, not in the words.
   /// With no words after it, nothing follows the number (#683): a section is `4.`,
   /// and an appendix `Appendix A`, which its word already sets apart (#428).
-  public var numberPrefix: String {
-    guard let numberLabel else { return "" }
+  public var numberPrefix: String { numberPrefix(appendixLabels: .english) }
+
+  /// `numberPrefix`, with an appendix named by `labels`.
+  public func numberPrefix(appendixLabels labels: AppendixLabels) -> String {
+    guard let numberLabel = numberLabel(appendixLabels: labels) else { return "" }
     if titleText.isEmpty, qualifier == nil { return isAppendix ? numberLabel : numberLabel + "." }
     return numberLabel + ". "
   }
 
   /// `4.2. Title`, `Annex B. (Informative) Title`, or just the title.
-  public var displayTitle: String { numberPrefix + headingWords.plainText }
+  public var displayTitle: String { displayTitle(appendixLabels: .english) }
+
+  /// `displayTitle`, with an appendix named by `labels`.
+  public func displayTitle(appendixLabels labels: AppendixLabels) -> String {
+    numberPrefix(appendixLabels: labels) + headingWords.plainText
+  }
 
   /// `displayTitle` with its links intact, for a reader that draws them.
-  public var displayTitleInlines: [Inline] {
+  public var displayTitleInlines: [Inline] { displayTitleInlines(appendixLabels: .english) }
+
+  /// `displayTitleInlines`, with an appendix named by `labels`.
+  public func displayTitleInlines(appendixLabels labels: AppendixLabels) -> [Inline] {
     let words = headingWords
+    let numberPrefix = numberPrefix(appendixLabels: labels)
     if numberPrefix.isEmpty { return words }
     return words.plainText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + words
   }
