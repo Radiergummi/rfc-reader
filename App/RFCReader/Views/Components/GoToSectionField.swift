@@ -41,7 +41,7 @@ struct GoToSectionField: View {
           LinearKeyframe(0.0, duration: 0.05)
         }
       if let notFound, notFound == typed {
-        Text("This document has no section \(notFound).")
+        Text("This document has no section matching “\(notFound)”.")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
@@ -56,7 +56,7 @@ struct GoToSectionField: View {
       notFound = typed
       misses += 1
       AccessibilityNotification.Announcement(
-        String(localized: "This document has no section \(typed).")
+        String(localized: "This document has no section matching “\(typed)”.")
       ).post()
       return
     }
