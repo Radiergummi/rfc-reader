@@ -309,7 +309,8 @@ struct RFCListView: View {
               Text(verbatim: description)
             }
           }
-        } else {
+        } else if !isUnsearched {
+          // A search only: under a working group's card, the card says it.
           VStack {
             ContentUnavailableView.search(text: shown.query)
             if let searched {

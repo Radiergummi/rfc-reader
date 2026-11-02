@@ -256,8 +256,7 @@ public struct LibraryList: Hashable, Sendable {
       definition: definition)
     guard rows.isEmpty, !isSearch else { return (rows, []) }
     let hidden = options.hiding(
-      candidates, filter: listedFilter, query: query, read: read, searching: isSearch,
-      definition: definition)
+      candidates, filter: listedFilter, read: read, definition: definition)
     return (rows, hidden)
   }
 

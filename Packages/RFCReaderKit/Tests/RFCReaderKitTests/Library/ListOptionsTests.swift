@@ -104,30 +104,30 @@ struct ListOptionsTests {
 
   @Test func `a list with rows on show hides nothing`() {
     let options = ListOptions(showsObsolete: false, hidesRead: true)
-    #expect(options.hiding(rows, filter: .bookmarks, query: "").isEmpty)
+    #expect(options.hiding(rows, filter: .bookmarks).isEmpty)
   }
 
   @Test func `an empty list is not hidden`() {
     let options = ListOptions(showsObsolete: false, hidesRead: true)
-    #expect(options.hiding([], filter: .bookmarks, query: "").isEmpty)
+    #expect(options.hiding([], filter: .bookmarks).isEmpty)
   }
 
   @Test func `every row obsolete is hidden by show obsolete`() {
     let options = ListOptions(showsObsolete: false)
-    #expect(options.hiding(obsoleteRows, filter: .bookmarks, query: "") == .obsolete)
+    #expect(options.hiding(obsoleteRows, filter: .bookmarks) == .obsolete)
   }
 
   @Test func `every row read is hidden by hide read`() {
     let options = ListOptions(hidesRead: true)
     let read = Set(rows.map(\.id))
-    #expect(options.hiding(rows, filter: .bookmarks, query: "", read: read) == .read)
+    #expect(options.hiding(rows, filter: .bookmarks, read: read) == .read)
   }
 
   /// Either option alone lists one of the rows, so each is a way to show them.
   @Test func `rows hidden some by each option name both`() {
     let options = ListOptions(showsObsolete: false, hidesRead: true)
     let read: Set<DocumentID> = [.rfc(9110)]
-    #expect(options.hiding(rows, filter: .bookmarks, query: "", read: read) == [.obsolete, .read])
+    #expect(options.hiding(rows, filter: .bookmarks, read: read) == [.obsolete, .read])
   }
 
   /// Neither option alone lists a row, so it takes both.
@@ -135,23 +135,19 @@ struct ListOptionsTests {
     let options = ListOptions(showsObsolete: false, hidesRead: true)
     let read: Set<DocumentID> = [.rfc(7231), .rfc(2616)]
     #expect(
-      options.hiding(obsoleteRows, filter: .bookmarks, query: "", read: read) == [.obsolete, .read])
+      options.hiding(obsoleteRows, filter: .bookmarks, read: read) == [.obsolete, .read])
   }
 
   /// Hide Read leaves Recently Read alone, so it is never what empties it.
   @Test func `only an option in force is named`() {
     let options = ListOptions(showsObsolete: false, hidesRead: true)
     let read = Set(rows.map(\.id))
-    #expect(options.hiding(obsoleteRows, filter: .recent, query: "", read: read) == .obsolete)
+    #expect(options.hiding(obsoleteRows, filter: .recent, read: read) == .obsolete)
   }
 
-  /// A search shows the obsolete by its own option, which is the one to name.
-  @Test func `a search is hidden by its own obsolete option`() {
-    #expect(
-      ListOptions(showsObsolete: false).hiding(obsoleteRows, filter: .all, query: "http").isEmpty)
-    #expect(
-      ListOptions(showsObsoleteInSearch: false).hiding(obsoleteRows, filter: .all, query: "http")
-        == .obsolete)
+  /// A search's own Show Obsolete is not the unsearched list's, so it hides nothing.
+  @Test func `a search's obsolete option is not named`() {
+    #expect(ListOptions(showsObsoleteInSearch: false).hiding(obsoleteRows, filter: .all).isEmpty)
   }
 
   @Test func `the empty state's title says the view options hide the rows`() {

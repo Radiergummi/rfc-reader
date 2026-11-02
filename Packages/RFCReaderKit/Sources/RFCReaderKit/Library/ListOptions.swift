@@ -140,23 +140,23 @@ public struct ListOptions: Hashable, Sendable {
     return shown.reversed()
   }
 
-  /// Which of the tab's own options hide every one of `rows`, when they leave none on
-  /// show (#937): what an empty list says in place of how to fill it. Empty when some
-  /// row is on show, when there is none to hide, or when something else hides them.
-  /// The parameters are `apply`'s.
+  /// Which of the tab's own options hide every one of an unsearched list's `rows`,
+  /// when they leave none on show (#937): what an empty list says in place of how to
+  /// fill it. Empty when some row is on show, when there is none to hide, or when
+  /// something else hides them. The parameters are `apply`'s.
   public func hiding(
-    _ rows: [LibraryRow], filter: LibraryFilter, query: String, read: Set<DocumentID> = [],
-    searching: Bool? = nil, definition: String? = nil
+    _ rows: [LibraryRow], filter: LibraryFilter, read: Set<DocumentID> = [],
+    definition: String? = nil
   ) -> Hidden {
     func lists(_ options: ListOptions) -> Bool {
       !options.apply(
-        to: rows, filter: filter, query: query, read: read, searching: searching,
+        to: rows, filter: filter, query: "", read: read, searching: false,
         definition: definition
       ).isEmpty
     }
     guard !rows.isEmpty, !lists(self) else { return [] }
     var showingObsolete = self
-    showingObsolete.setShowsObsolete(true, searching: searching ?? !query.isUnsearchedQuery)
+    showingObsolete.showsObsolete = true
     var showingRead = self
     showingRead.hidesRead = false
     var hidden: Hidden = []
