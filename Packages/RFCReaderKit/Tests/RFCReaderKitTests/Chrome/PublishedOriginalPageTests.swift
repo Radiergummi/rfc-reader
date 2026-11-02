@@ -107,6 +107,27 @@ struct PublishedOriginalActionsTests {
     #expect(PublishedOriginalPage.offersSections(kind: nil))
   }
 
+  /// Next and Previous Section step through the body's sections in every reading
+  /// mode (#1032), not only where Focus and the outline keep a folding index: not
+  /// before the body is here, over the original text, for a document without
+  /// sections, or for an RFC read as its original (#1022).
+  @Test func `next and previous section are offered over the body's sections`() {
+    let pointerKind = PublishedOriginalPage.Status(
+      .rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)?.kind
+    #expect(
+      PublishedOriginalPage.offersSectionSteps(
+        showsBody: true, hasSections: true, kind: nil))
+    #expect(
+      !PublishedOriginalPage.offersSectionSteps(
+        showsBody: false, hasSections: true, kind: nil))
+    #expect(
+      !PublishedOriginalPage.offersSectionSteps(
+        showsBody: true, hasSections: false, kind: nil))
+    #expect(
+      !PublishedOriginalPage.offersSectionSteps(
+        showsBody: true, hasSections: true, kind: pointerKind))
+  }
+
   /// A script, a shortcut or a collection's export is refused what Print and Export
   /// do not offer (#383): a scan, and a pointer, in the words the panel says it with.
   @Test func `an RFC read as its original is not exported`() {
