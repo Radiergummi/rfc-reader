@@ -595,9 +595,10 @@ final class LibraryModel {
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,
-  /// `application/dns-message`.
+  /// `application/dns-message`, read as a pasted reference is: `425.` and `(425)`
+  /// name what `425` does.
   func registryMatches(for query: String) -> [RegistryEntry] {
-    RegistryLookup.matches(query, in: registryEntries)
+    DocumentReference.registryMatches(for: query, in: registryEntries)
   }
 
   /// Open once the registries are readable, for `loadedRegistryEntries()`: the
