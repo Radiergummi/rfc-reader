@@ -30,7 +30,8 @@ public enum ContentsOutline {
     public let anchor: String
     /// The title alone, or the number it is shown by for a section without words.
     public let title: String
-    /// `4.2` or `Appendix A`, set beside the title.
+    /// `4.2` or `Appendix A`, set beside the title, with an appendix named by the
+    /// labels the list was given: `Anhang A` in a German translation (#940).
     public let caption: String?
 
     public var id: String { anchor }
@@ -116,8 +117,9 @@ public enum ContentsOutline {
 
   /// Whether `section`, whose title is `title`, matches `text`: words anywhere in
   /// its title, or the start of its heading as the list shows it (`4.2.`,
-  /// `Appendix A`) or by its number alone (`A.`), ignoring case and diacritics, so
-  /// `4.2` does not find 14.2.
+  /// `Appendix A`, or with `appendixLabels` from a translation `Anhang A`), as the
+  /// English names it (`Appendix A`, which the RFC's own prose cites), or by its
+  /// number alone (`A.`), ignoring case and diacritics, so `4.2` does not find 14.2.
   private static func matches(
     _ section: Section, title: String, _ text: String, appendixLabels: Section.AppendixLabels
   ) -> Bool {
@@ -127,6 +129,7 @@ public enum ContentsOutline {
     return title.range(of: text, options: options) != nil
       || section.displayTitle(appendixLabels: appendixLabels).range(of: text, options: anchored)
         != nil
+      || section.displayTitle.range(of: text, options: anchored) != nil
       || section.number.map { "\($0)." }?.range(of: text, options: anchored) != nil
   }
 

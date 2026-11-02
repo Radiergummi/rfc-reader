@@ -212,6 +212,18 @@ struct ContentsOutlineAppendixLabelTests {
     #expect(entries.map(\.anchor) == ["appendix-B"])
   }
 
+  /// The English word still finds the row: it is what the RFC's prose cites.
+  @Test func `a filter still finds an appendix by its English word`() {
+    let rows = ContentsOutline.rows(
+      of: Self.sections, filter: "Appendix A", appendixLabels: Self.labels)
+    #expect(rows.map(\.anchor) == ["appendix-A"])
+    #expect(rows.map(\.title) == ["Anhang A. Collected ABNF"])
+    let entries = ContentsOutline.groups(
+      of: Self.sections, filter: "annex b", appendixLabels: Self.labels
+    ).flatMap(\.entries)
+    #expect(entries.map(\.anchor) == ["appendix-B"])
+  }
+
   @Test func `alphabetical order names an appendix by the labels, in its caption or its title`() {
     let entries = ContentsOutline.groups(
       of: Self.sections, filter: "", appendixLabels: Self.labels
