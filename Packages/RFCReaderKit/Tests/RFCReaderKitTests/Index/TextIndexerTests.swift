@@ -8,7 +8,7 @@ import Testing
 /// The full-text index kept to what the store holds (#37): a body stored is indexed,
 /// and one removed, evicted or purged leaves the index. Each test has a store and an
 /// index of its own.
-@Suite("Text indexer", .timeLimit(.minutes(1)))
+@Suite("Text indexer", .hangGuard)
 struct TextIndexerTests {
   typealias Sandbox = DocumentStoreTests.Sandbox
   typealias GatedFetcher = DocumentStoreTests.GatedFetcher

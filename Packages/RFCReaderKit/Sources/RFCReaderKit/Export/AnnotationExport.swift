@@ -211,11 +211,14 @@ public enum AnnotationExport {
     let id: DocumentID
 
     /// The heading of the section, or the abstract, whose anchor is `anchor`; nil for
-    /// none.
+    /// none. Its words are escaped as a quoted line is, so a title's `<artwork>` or
+    /// `*` reads as it is; its number has nothing to escape, and is left as it reads.
     func heading(of anchor: String?) -> String? {
       guard let anchor else { return nil }
       if anchor == ModelText.abstractAnchor { return "## Abstract" }
-      return document.section(anchor: anchor).map { "## " + Self.escaped($0.displayTitle) }
+      return document.section(anchor: anchor).map {
+        "## " + $0.numberPrefix + QuoteCitation.escapedMarkdownLine($0.headingWords.plainText)
+      }
     }
 
     /// A quote of `passages`, cited from `section` when it has a place, then `notes`'
@@ -243,8 +246,8 @@ public enum AnnotationExport {
       return CitationFormatter.cite(metadata, section: place, style: .markdown)
     }
 
-    /// The quote, as Copy as Quote writes one. Prose is a paragraph a line, with a
-    /// `<` as an entity, or a Markdown renderer takes `<field-name>` for a tag. A
+    /// The quote, as Copy as Quote writes one. Prose is a paragraph a line, escaped
+    /// where it would render as markup (`QuoteCitation.escapedMarkdownLine`). A
     /// figure's, code's or a grammar's, whose columns and lines are its meaning, is
     /// fenced, with its lines as they are, so Markdown neither reflows them nor reads
     /// them as its own; a stored quote alone is taken for one by an indented line.
@@ -254,7 +257,7 @@ public enum AnnotationExport {
         quote.isVerbatim ?? lines.contains { $0.first == " " || $0.first == "\t" }
       guard isVerbatim else {
         return lines.filter { !$0.isEmpty }
-          .map { "> " + escaped($0) }
+          .map { "> " + QuoteCitation.escapedMarkdownLine($0) }
           .joined(separator: "\n>\n")
       }
       // Longer than any run of backticks in it, or a line of it would close the fence.
@@ -262,11 +265,6 @@ public enum AnnotationExport {
         repeating: "`", count: max(3, QuoteCitation.longestBacktickRun(in: lines) + 1))
       return ([fence] + lines + [fence]).map { $0.isEmpty ? ">" : "> " + $0 }
         .joined(separator: "\n")
-    }
-
-    /// Prose with its `<` an entity.
-    private static func escaped(_ text: String) -> String {
-      text.replacingOccurrences(of: "<", with: "&lt;")
     }
 
     /// A note's Markdown, with its `rfc://` links made rfc-editor.org ones.
