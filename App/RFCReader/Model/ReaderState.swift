@@ -74,13 +74,13 @@ final class ReaderState {
 
   /// Whether Next or Previous Section has somewhere to go. Outside Focus that depends
   /// on the reader's line, which nothing observes, so the items are there whenever
-  /// the reader's text is: not `foldingIndex`, which only Focus and the outline keep
-  /// (#1032).
+  /// the reader's text with its sections is, in every mode: not `foldingIndex`, which
+  /// only Focus and the outline keep (#1032). Not while a note's editor is open, over
+  /// this reader or the one beside it, as the Edit commands are not (#1007).
   func canStepSection(_ step: Folding.FocusStep) -> Bool {
+    guard !editsNote, sideBySide?.reader.editsNote != true else { return false }
     guard folding.mode != .focus else { return canStepFocus(step) }
-    return PublishedOriginalPage.offersSectionSteps(
-      showsBody: hasDocument && !showOriginal, hasSections: !sections.isEmpty,
-      kind: publishedOriginal?.kind)
+    return hasDocument && !showOriginal && !sections.isEmpty && offersSections
   }
 
   /// Next Section and Previous Section, in Focus (#699). The reader's line goes to

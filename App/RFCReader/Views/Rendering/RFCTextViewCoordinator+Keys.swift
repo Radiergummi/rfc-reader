@@ -85,6 +85,8 @@ extension RFCTextViewCoordinator {
     guard let foldingIndex,
       let anchor = folding.section(step, fromLine: engine.placeOffset, in: foldingIndex)
     else { return false }
+    // From the menus too, this side leads a reading side by side, as it does for a key.
+    takeLead()
     scroll(to: anchor, offset: 0)
     return true
   }
