@@ -2,7 +2,8 @@ import RFCKit
 import SwiftUI
 
 /// Go to Section… (⌥⌘G, #711): a field that takes a section number or appendix
-/// letter, `4.2` or `A.1`, as a heading shows it, and goes there. A number the
+/// letter, `4.2` or `A.1`, as a heading shows it or as prose announces it,
+/// `Section 4.2` or `Appendix A` (#1015), and goes there. A number the
 /// document does not have shakes the field and says so; the field stays for another.
 struct GoToSectionField: View {
   /// The document's sections, which a number is looked up among.

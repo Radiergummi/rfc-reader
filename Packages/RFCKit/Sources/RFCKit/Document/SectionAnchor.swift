@@ -67,30 +67,20 @@ enum SectionAnchor {
 }
 
 /// What someone types to go to a section (#711): Go to Section… on the Mac and the
-/// iPad, and the iOS # jump (#579), which share it. A section number as a heading
-/// shows it, `4.2` or `A.1`, with or without a `§` before it or a dot after it, or
-/// an anchor as a link spells it, `section-4.2`.
+/// iPad, and the iOS # jump (#579), which share it. A section number, read as the
+/// App Intents read one (`SectionLookup.section(numbered:in:)`, #1015): `4.2`,
+/// `Section 4.2.`, `§4.2`, `Appendix A.1`; or an anchor as a link spells it,
+/// `section-4.2`.
 public enum SectionInput {
-  /// The section number or anchor `typed` names, or nil where it names neither:
-  /// `§ 4.2.` → `4.2`, `a.1` → `A.1`, `section-4.2` as it is.
-  public static func place(_ typed: String) -> String? {
-    var place = Substring(typed.trimmingCharacters(in: .whitespacesAndNewlines))
-    if place.first == "§" {
-      place = Substring(place.dropFirst().trimmingCharacters(in: .whitespaces))
-    }
-    if place.last == "." { place = place.dropLast() }
-    let text = String(place)
-    if SectionAnchor.sectionNumber(fromAnchor: text) != nil { return text }
-    guard SectionAnchor.isSectionNumber(text) else { return nil }
-    return text.prefix(1).uppercased() + text.dropFirst()
-  }
-
   /// The anchor of the section among `sections`, or their subsections, that `typed`
-  /// names: by its number, which a section whose source gave it an anchor of its own
-  /// goes by too, or by its anchor. Nil where it names none of them.
+  /// names: by its number, or by an anchor that spells one, which a section whose
+  /// source gave it an anchor of its own goes by too. Nil where it names none of them.
   public static func anchor(_ typed: String, in sections: [Section]) -> String? {
-    guard let place = place(typed) else { return nil }
-    let number = SectionAnchor.sectionNumber(fromAnchor: place) ?? place
+    if let numbered = SectionLookup.section(numbered: typed, in: sections) {
+      return numbered.anchor
+    }
+    let place = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let number = SectionAnchor.sectionNumber(fromAnchor: place) else { return nil }
     return sections.lazy.flatMap(\.withSubsections)
       .first { $0.anchor == place || $0.number == number }?.anchor
   }

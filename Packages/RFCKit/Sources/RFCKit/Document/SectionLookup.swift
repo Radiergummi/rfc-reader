@@ -35,22 +35,15 @@ public enum SectionLookup {
   private static let numberWords: Set<String> = ["section", "sec", "§", "appendix", "annex"]
 
   /// The sections `query` names, in document order: the one whose number it is,
-  /// however it is announced (`4.2`, `Section 4.2.`, `§ 4.2`, `Appendix A`, `Annex A`); else the
-  /// one whose anchor it is; else every section whose title holds all its words.
-  /// Nothing typed lists them all, as the contents do.
+  /// however it is announced (see `section(numbered:in:)`); else the one whose anchor
+  /// it is; else every section whose title holds all its words. Nothing typed lists
+  /// them all, as the contents do.
   public static func sections(matching query: String, in document: RFCDocument) -> [Section] {
     let all = document.allSections
     let words = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     guard !words.isEmpty else { return all }
-    let announcement = words.prefix { numberWords.contains($0.trimmingCharacters(in: ["."])) }
-    let number = words.dropFirst(announcement.count)
-      .joined(separator: " ").trimmingCharacters(in: ["."])
-    let numbered = all.filter { $0.number?.lowercased() == number }
-    // An appendix numbered like a section (#429) is named by its word, and the
-    // section of that number by its number alone.
-    let namesAppendix = announcement.contains { $0.hasPrefix("appendix") || $0.hasPrefix("annex") }
-    if let named = numbered.first(where: { $0.isAppendix == namesAppendix }) ?? numbered.first {
-      return [named]
+    if let numbered = section(numbered: query, in: document.sections) {
+      return [numbered]
     }
     if let anchored = document.section(anchor: query.trimmingCharacters(in: .whitespaces)) {
       return [anchored]
@@ -59,6 +52,25 @@ public enum SectionLookup {
       let title = section.titleText.lowercased()
       return words.allSatisfy(title.contains)
     }
+  }
+
+  /// The section among `sections`, or their subsections, whose number `query` is,
+  /// however it is announced: `4.2`, `Section 4.2.`, `§ 4.2`, `§4.2`, `Appendix A`,
+  /// `Annex A`, in either case. Nil where no section has that number. What the App
+  /// Intents and Go to Section… both read a number by (#1015).
+  public static func section(numbered query: String, in sections: [Section]) -> Section? {
+    let words = query.lowercased()
+      .replacingOccurrences(of: "§", with: "§ ")
+      .split(whereSeparator: \.isWhitespace).map(String.init)
+    let announcement = words.prefix { numberWords.contains($0.trimmingCharacters(in: ["."])) }
+    let number = words.dropFirst(announcement.count)
+      .joined(separator: " ").trimmingCharacters(in: ["."])
+    guard !number.isEmpty else { return nil }
+    let numbered = sections.flatMap(\.withSubsections).filter { $0.number?.lowercased() == number }
+    // An appendix numbered like a section (#429) is named by its word, and the
+    // section of that number by its number alone.
+    let namesAppendix = announcement.contains { $0.hasPrefix("appendix") || $0.hasPrefix("annex") }
+    return numbered.first { $0.isAppendix == namesAppendix } ?? numbered.first
   }
 }
 
