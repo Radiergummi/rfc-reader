@@ -852,20 +852,35 @@ final class LibraryModel {
 
   /// The indexing of sections for Spotlight under way (#178).
   @ObservationIgnored private var spotlightSectionIndexing: Task<Void, Never>?
+  /// Whether the full-text index changed since the indexing under way began.
+  @ObservationIgnored private var spotlightSectionsChanged = false
+  /// Whether the next indexing empties Spotlight's sections and indexes them all.
+  @ObservationIgnored private var spotlightSectionsRebuild = false
 
   /// Brings Spotlight's sections to what the full-text index holds from stored
   /// bodies, once both it and the index, which names each section's document, are
-  /// there. An indexing under way gives way at its next batch, and this one starts
-  /// once it has, so two never write the client state at once.
-  private func indexSectionsForSpotlight() {
-    guard let textIndexer, let index else { return }
-    let previous = spotlightSectionIndexing
-    previous?.cancel()
+  /// there. Coalesced: a change during an indexing runs one more once it is done,
+  /// so a batch is never thrown away and two never write the record at once.
+  /// `rebuilding`, for rows that changed under the dates they had.
+  private func indexSectionsForSpotlight(rebuilding: Bool = false) {
+    spotlightSectionsChanged = true
+    spotlightSectionsRebuild = spotlightSectionsRebuild || rebuilding
+    guard spotlightSectionIndexing == nil else { return }
     spotlightSectionIndexing = Task(name: "Index sections for Spotlight", priority: .utility) {
-      await previous?.value
-      guard !Task.isCancelled else { return }
-      await SpotlightIndexer.updateSections(from: textIndexer, rfcs: index.rfcs)
+      [weak self] in
+      await self?.indexSectionsWhileChanged()
     }
+  }
+
+  private func indexSectionsWhileChanged() async {
+    while spotlightSectionsChanged, let textIndexer, let index {
+      spotlightSectionsChanged = false
+      let rebuilding = spotlightSectionsRebuild
+      spotlightSectionsRebuild = false
+      await SpotlightIndexer.updateSections(
+        from: textIndexer, rfcs: index.rfcs, rebuilding: rebuilding)
+    }
+    spotlightSectionIndexing = nil
   }
 
   /// On activation: an app left running past its items' `lifetime` would otherwise
@@ -1646,6 +1661,9 @@ final class LibraryModel {
     await refreshPointersInPack()
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
     await textIndexer?.legacyPackInstalled(changed: changed)
+    // The RFCs read from the pack now are indexed again with its anchors, under the
+    // dates their bodies had: only a rebuild takes Spotlight's sections to them.
+    indexSectionsForSpotlight(rebuilding: true)
     return pack
   }
 

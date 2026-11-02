@@ -14,7 +14,7 @@ nonisolated private let spotlightLog = Logger(
 /// hands it to CoreSpotlight, with the RFC's `RFCEntity` (#192), so a result is the
 /// RFC Shortcuts and Siri act on.
 enum SpotlightIndexer {
-  /// Items per batch: enough that 9,842 RFCs are twenty batches, few enough that
+  /// RFC items per batch: enough that 9,842 RFCs are twenty batches, few enough that
   /// none holds much at once.
   nonisolated private static let batchSize = 500
 
@@ -56,24 +56,25 @@ enum SpotlightIndexer {
 
   /// Brings Spotlight's sections to the documents the full-text index holds from a
   /// stored body (`TextIndexer.spotlightDocuments`), as `SpotlightSection.Plan`
-  /// says: the documents gone or indexed again are deleted, then the new ones are
-  /// indexed from the full-text index's rows, a batch at a time, each batch recording
-  /// what the index then holds (`sectionRecordURL`, with its digest as the client
-  /// state). Cancelled, it stops at the next batch, and the next indexing does the
-  /// rest.
+  /// says: the documents gone or written again are deleted, then the new ones are
+  /// indexed from the full-text index's rows, in `SpotlightSection.Batches`, each
+  /// recording what the index then holds (`sectionRecordURL`, with its digest as the
+  /// client state). `rebuilding` empties the index and indexes everything, whatever
+  /// the record says.
   ///
-  /// On the main actor, as `SectionEntity` is, which each item carries: its rows are
-  /// read on the indexer's executor, and only the items are made here ("Make section
-  /// items" in Points of Interest measures it).
-  static func updateSections(from indexer: TextIndexer, rfcs: [RFCMetadata]) async {
-    guard CSSearchableIndex.isIndexingAvailable(),
+  /// Off the main actor but for making each batch's items (`submit`): they carry
+  /// `SectionEntity`, which is the main actor's.
+  @concurrent
+  static func updateSections(
+    from indexer: TextIndexer, rfcs: [RFCMetadata], rebuilding: Bool
+  ) async {
+    guard CSSearchableIndex.isIndexingAvailable(), let recordURL = sectionRecordURL,
       let held = await indexer.spotlightDocuments()
     else { return }
     let index = CSSearchableIndex(name: SpotlightSection.domain)
     do {
-      let recordURL = try sectionRecordURL
       let plan = SpotlightSection.Plan(
-        held: held, record: try? Data(contentsOf: recordURL),
+        held: held, record: rebuilding ? nil : try? Data(contentsOf: recordURL),
         clientState: try await index.fetchLastClientState())
       guard !plan.isEmpty else { return }
       let interval = signposter.beginInterval(
@@ -83,49 +84,45 @@ enum SpotlightIndexer {
       defer {
         signposter.endInterval("Index sections for Spotlight", interval, "\(sections) sections")
       }
-      var kept = plan.kept
-      // The record first: a batch that fails leaves one its state was not written
-      // for, which the next indexing does not trust.
-      var record = SpotlightSection.Plan.record(kept)
-      try record.write(to: recordURL, options: .atomic)
-      index.beginBatch()
-      delete(
-        domains: plan.removesEverything
-          ? [SpotlightSection.domain] : plan.removed.map(SpotlightSection.domain(of:)),
-        from: index)
-      try await index.endBatch(
-        withClientState: SpotlightSection.Plan.clientState(forRecord: record))
-
+      var batches = SpotlightSection.Batches(kept: plan.kept)
+      if plan.deletes {
+        // The record first, here as for every batch: a batch that fails leaves one
+        // its state was not written for, which the next indexing does not trust.
+        let record = batches.initialRecord
+        try record.write(to: recordURL, options: .atomic)
+        index.beginBatch()
+        delete(
+          domains: plan.removesEverything
+            ? [SpotlightSection.domain] : plan.removed.map(SpotlightSection.domain(of:)),
+          from: index)
+        try await index.endBatch(
+          withClientState: SpotlightSection.Plan.clientState(forRecord: record))
+      }
       let titles = Dictionary(
         rfcs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
-      var entries: [SpotlightSection] = []
-      var batched: [DocumentID] = []
-      for (position, id) in plan.indexed.enumerated() {
-        guard !Task.isCancelled else { break }
+      for id in plan.indexed {
+        guard let written = held[id] else { continue }
+        let rows: [FullTextIndex.Row]
         do {
-          let rows = try await indexer.indexedRows(of: id)
-          entries += SpotlightSection.entries(of: id, titled: titles[id], rows: rows)
-          batched.append(id)
+          rows = try await indexer.indexedRows(of: id)
         } catch {
-          // Left out of the state, so the next indexing tries it again.
+          // Left out of the record, so the next indexing tries it again.
           spotlightLog.error(
             "\(id.displayName, privacy: .public): sections not read for Spotlight: \(String(describing: error), privacy: .public)"
           )
+          continue
         }
-        guard entries.count >= batchSize || position == plan.indexed.count - 1 else { continue }
-        let making = signposter.beginInterval("Make section items")
-        let items = entries.map(sectionItem)
-        signposter.endInterval("Make section items", making, "\(items.count) items")
-        for id in batched { kept[id] = held[id] }
-        record = SpotlightSection.Plan.record(kept)
-        try record.write(to: recordURL, options: .atomic)
-        index.beginBatch()
-        add(items, to: index)
-        try await index.endBatch(
-          withClientState: SpotlightSection.Plan.clientState(forRecord: record))
-        sections += entries.count
-        entries = []
-        batched = []
+        let entries = SpotlightSection.entries(of: id, titled: titles[id], rows: rows)
+        for batch in batches.add(entries, of: id, written: written) {
+          try batch.record.write(to: recordURL, options: .atomic)
+          try await submit(batch)
+          sections += batch.sections.count
+        }
+      }
+      if let batch = batches.finish() {
+        try batch.record.write(to: recordURL, options: .atomic)
+        try await submit(batch)
+        sections += batch.sections.count
       }
       spotlightLog.debug("indexed \(sections) sections for Spotlight")
     } catch {
@@ -134,15 +131,34 @@ enum SpotlightIndexer {
     }
   }
 
-  /// What Spotlight holds of sections, beside the full-text index it follows, and
-  /// like it excluded from backups: a restored record would name sections Spotlight
-  /// does not hold, which its client state catches all the same.
-  private static var sectionRecordURL: URL {
-    get throws {
-      try TextIndexer.defaultURL.deletingLastPathComponent()
-        .appending(path: "spotlight-sections.json")
+  /// Makes `batch`'s items and sends them, with the client state its record was
+  /// written for.
+  private static func submit(_ batch: SpotlightSection.Batch) async throws {
+    let making = signposter.beginInterval("Make section items")
+    let items = batch.sections.map(sectionItem)
+    signposter.endInterval("Make section items", making, "\(items.count) items")
+    let index = CSSearchableIndex(name: SpotlightSection.domain)
+    index.beginBatch()
+    add(items, to: index)
+    do {
+      try await index.endBatch(withClientState: batch.clientState)
+    } catch {
+      // The next indexing starts over, as the record and the state no longer match:
+      // a batch that fails every time would do so at each change to the index.
+      spotlightLog.error(
+        "a batch of \(items.count) sections was refused: \(String(describing: error), privacy: .public)"
+      )
+      throw error
     }
   }
+
+  /// What Spotlight holds of sections, beside the full-text index it follows, and
+  /// like it excluded from backups: a restored record would name sections Spotlight
+  /// does not hold, which its client state catches all the same. Nil when its folder
+  /// cannot be made; worked out once.
+  nonisolated private static let sectionRecordURL: URL? = try? TextIndexer.defaultURL
+    .deletingLastPathComponent()
+    .appending(path: "spotlight-sections.json")
 
   /// Synchronous inside a batch, as `add` is.
   nonisolated private static func delete(domains: [String], from index: CSSearchableIndex) {

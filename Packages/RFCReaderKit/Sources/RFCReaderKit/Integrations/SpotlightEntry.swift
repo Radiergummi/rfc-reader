@@ -91,14 +91,15 @@ public struct SpotlightEntry: Sendable {
   }
 
   /// Where a chosen Spotlight result opens: an RFC (`identifier`) at its top, a
-  /// section (`SpotlightSection`) at its anchor. Nil for an activity that is not a
-  /// chosen result, or an identifier this app did not index.
+  /// section (`SpotlightSection`) by its number, or its anchor where it has none.
+  /// Nil for an activity that is not a chosen result, or an identifier this app did
+  /// not index.
   public static func link(from activity: NSUserActivity) -> RFCLink? {
     guard activity.activityType == CSSearchableItemActionType,
       let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String
     else { return nil }
     if let section = SectionIdentifier(identifier) {
-      return RFCLink(id: section.document, anchor: section.anchor)
+      return RFCLink(section)
     }
     return DocumentID(fileStem: identifier).map { RFCLink(id: $0) }
   }

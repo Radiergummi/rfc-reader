@@ -87,4 +87,13 @@ extension RFCLink {
     let place = section.place
     self.init(id: document, section: place, anchor: place == nil ? section.anchor : nil)
   }
+
+  /// The link a section named across documents opens: by its number where the anchor
+  /// spells one, as `rfc://9110#section-4.2` does, else by the anchor. What a section
+  /// chosen in Spotlight opens (#178), which comes back as its identifier alone.
+  public init(_ identifier: SectionIdentifier) {
+    let section = SectionAnchor.sectionNumber(fromAnchor: identifier.anchor)
+    self.init(
+      id: identifier.document, section: section, anchor: section == nil ? identifier.anchor : nil)
+  }
 }

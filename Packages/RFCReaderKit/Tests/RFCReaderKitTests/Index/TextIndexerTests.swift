@@ -290,6 +290,27 @@ struct TextIndexerTests {
     #expect(try await indexer.indexedRows(of: id).contains { $0.anchor == "connection-id" })
   }
 
+  /// A retained document stays indexed when its body goes, but leaves Spotlight's
+  /// documents: the reconcile says so, for Spotlight to follow (#178).
+  @Test func `a retained document's body leaving is a change`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id]) { try fetch($0) }
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    #expect(await store.evict(pinned: [], bound: 0) == [id])
+
+    let changes = Mutex(0)
+    await indexer.reconcile { changes.withLock { $0 += 1 } }
+
+    #expect(changes.withLock { $0 } > 0)
+    #expect(try #require(await indexer.spotlightDocuments()).isEmpty)
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
+  }
+
   /// Its documents have no body in the store, which a reconcile would otherwise read
   /// as a body removed.
   @Test func `what Index All RFCs indexed stays at reconcile`() async throws {

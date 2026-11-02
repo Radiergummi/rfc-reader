@@ -33,6 +33,11 @@ public actor TextIndexer {
   /// the store would parse them again. A body removed or written again is tried again.
   private var unindexable: [DocumentID: Date] = [:]
 
+  /// The documents the store held a body of at the last reconcile, so one whose body
+  /// went while the index keeps it, retained, still counts as a change: Spotlight
+  /// indexes the sections of stored bodies only (#178).
+  private var lastStored: Set<DocumentID> = []
+
   /// How many documents a long reconcile indexes between the calls of its `changed`,
   /// so a search on show fills in while the first pass works through every body.
   private static let progressInterval = 25
@@ -92,7 +97,8 @@ public actor TextIndexer {
     let stored = await store.storedBodies()
     unindexable = unindexable.filter { stored[$0.key] == $0.value }
     guard let before = indexedDocuments() else { return }
-    var unannounced = 0
+    var unannounced = lastStored.count { stored[$0] == nil && retained.contains($0) }
+    lastStored = Set(stored.keys)
     for id in before.keys where stored[id] == nil && !retained.contains(id) {
       do {
         try index.remove(id)
