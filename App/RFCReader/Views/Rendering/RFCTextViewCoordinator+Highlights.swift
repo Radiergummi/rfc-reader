@@ -109,7 +109,7 @@ extension RFCTextViewCoordinator {
   /// original's (#749).
   @discardableResult
   func highlight(_ range: NSRange, color: HighlightColor?) -> UUID? {
-    guard let built, !built.isTranslation, let documentID, let library = environment?.library,
+    guard offersHighlight, let built, let documentID, let library = environment?.library,
       let text = textView?.textLayoutManager?.attributedText
     else { return nil }
     let snapped = WordSnap.snapped(range, in: text.string as NSString)
