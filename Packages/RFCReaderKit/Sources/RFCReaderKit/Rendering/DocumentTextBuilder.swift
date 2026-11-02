@@ -473,15 +473,6 @@ extension DocumentTextBuilder {
     body()
   }
 
-  /// `Section.numberPrefix`, with an appendix's word in the labels' language.
-  private func numberPrefix(of section: Section) -> String {
-    let prefix = section.numberPrefix
-    let english = section.appendixWord.label
-    guard section.isAppendix, prefix.hasPrefix(english) else { return prefix }
-    let word = section.appendixWord == .annex ? labels.annex : labels.appendix
-    return word + prefix.dropFirst(english.count)
-  }
-
   private func appendSection(_ section: Section, depth: Int) {
     // The bibliography is not part of the reading flow: every citation in the
     // prose already links straight to the document it names, so the section is
@@ -498,10 +489,12 @@ extension DocumentTextBuilder {
     if let start = positions?.model.span(of: section.anchor)?.range.lowerBound {
       positions?.cursor = start
     }
-    let numberPrefix = numberPrefix(of: section)
+    // An appendix is named in the labels' language.
+    let appendixLabels = labels.appendixLabels
+    let numberPrefix = section.numberPrefix(appendixLabels: appendixLabels)
     mark(
-      section.anchor, heading: numberPrefix + section.headingWords.plainText, place: section.place,
-      depth: depth)
+      section.anchor, heading: section.displayTitle(appendixLabels: appendixLabels),
+      place: section.place, depth: depth)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs

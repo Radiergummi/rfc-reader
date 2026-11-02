@@ -47,7 +47,11 @@ public enum ContentsOutline {
 
   /// `sections`, which are flat and in document order, narrowed by `filter`: each
   /// match after those of its ancestors not already listed, which are context.
-  public static func rows(of sections: [Section], filter: String) -> [Row] {
+  /// - Parameter appendixLabels: what an appendix is named by, as the body beside the
+  ///   list names it: a translated document's labels (#940), or English.
+  public static func rows(
+    of sections: [Section], filter: String, appendixLabels: Section.AppendixLabels = .english
+  ) -> [Row] {
     let text = trimmed(filter)
     var rows: [Row] = []
     // The open path to the current section.
@@ -56,18 +60,22 @@ public enum ContentsOutline {
       let depth = section.depth
       while let last = path.last, last.section.depth >= depth { path.removeLast() }
       // The heading's words, an appendix's qualifier among them (#428).
-      let isMatch = matches(section, title: section.headingWords.plainText, text)
+      let isMatch = matches(
+        section, title: section.headingWords.plainText, text, appendixLabels: appendixLabels)
       if isMatch {
         for index in path.indices where !path[index].isListed {
           let ancestor = path[index]
           rows.append(
             Row(
-              anchor: ancestor.section.anchor, title: ancestor.section.displayTitle,
+              anchor: ancestor.section.anchor,
+              title: ancestor.section.displayTitle(appendixLabels: appendixLabels),
               depth: ancestor.section.depth, isContext: true))
           path[index].isListed = true
         }
         rows.append(
-          Row(anchor: section.anchor, title: section.displayTitle, depth: depth, isContext: false))
+          Row(
+            anchor: section.anchor, title: section.displayTitle(appendixLabels: appendixLabels),
+            depth: depth, isContext: false))
       }
       path.append(PathStep(section: section, isListed: isMatch))
     }
@@ -81,19 +89,24 @@ public enum ContentsOutline {
   }
 
   /// The matches of `filter` among `sections` by title, under `A` to `Z` and then
-  /// `#`. Equal titles keep the document's order.
-  public static func groups(of sections: [Section], filter: String) -> [Group] {
+  /// `#`. Equal titles keep the document's order. An appendix is named by
+  /// `appendixLabels`, as in `rows`.
+  public static func groups(
+    of sections: [Section], filter: String, appendixLabels: Section.AppendixLabels = .english
+  ) -> [Group] {
     let text = trimmed(filter)
     var byLabel: [String: [(key: String, entry: Entry)]] = [:]
     for section in sections {
       let title = section.titleText
-      guard matches(section, title: title, text) else { continue }
+      guard matches(section, title: title, text, appendixLabels: appendixLabels) else { continue }
       // A title sorts from its first letter or digit; one with no words in it sorts
       // by the number it is shown by, under `#`, whether a section's or an appendix's.
       let words = title.drop { !$0.isLetter && !$0.isNumber }
-      let key = words.isEmpty ? section.displayTitle : String(words)
+      let key =
+        words.isEmpty ? section.displayTitle(appendixLabels: appendixLabels) : String(words)
       let label = words.isEmpty ? "#" : groupLabel(key)
-      byLabel[label, default: []].append((key, entry(section, title: title)))
+      byLabel[label, default: []].append(
+        (key, entry(section, title: title, appendixLabels: appendixLabels)))
     }
     let letters = byLabel.keys.filter { $0 != "#" }.sorted()
     return (letters + ["#"]).compactMap { label in
@@ -105,12 +118,15 @@ public enum ContentsOutline {
   /// its title, or the start of its heading as the list shows it (`4.2.`,
   /// `Appendix A`) or by its number alone (`A.`), ignoring case and diacritics, so
   /// `4.2` does not find 14.2.
-  private static func matches(_ section: Section, title: String, _ text: String) -> Bool {
+  private static func matches(
+    _ section: Section, title: String, _ text: String, appendixLabels: Section.AppendixLabels
+  ) -> Bool {
     if text.isEmpty { return true }
     let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
     let anchored = options.union(.anchored)
     return title.range(of: text, options: options) != nil
-      || section.displayTitle.range(of: text, options: anchored) != nil
+      || section.displayTitle(appendixLabels: appendixLabels).range(of: text, options: anchored)
+        != nil
       || section.number.map { "\($0)." }?.range(of: text, options: anchored) != nil
   }
 
@@ -118,11 +134,17 @@ public enum ContentsOutline {
     filter.trimmingCharacters(in: .whitespaces)
   }
 
-  private static func entry(_ section: Section, title: String) -> Entry {
+  private static func entry(
+    _ section: Section, title: String, appendixLabels: Section.AppendixLabels
+  ) -> Entry {
     if title.isEmpty {
-      return Entry(anchor: section.anchor, title: section.displayTitle, caption: nil)
+      return Entry(
+        anchor: section.anchor, title: section.displayTitle(appendixLabels: appendixLabels),
+        caption: nil)
     }
-    return Entry(anchor: section.anchor, title: title, caption: section.numberLabel)
+    return Entry(
+      anchor: section.anchor, title: title,
+      caption: section.numberLabel(appendixLabels: appendixLabels))
   }
 
   /// `A` to `Z` for a key that starts with a Latin letter, diacritics folded, and `#`

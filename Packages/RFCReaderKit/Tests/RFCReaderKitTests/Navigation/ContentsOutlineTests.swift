@@ -183,3 +183,40 @@ struct ContentsOutlineTests {
     #expect(Self.alphabetical(Self.sections, "zzz").isEmpty)
   }
 }
+
+/// A translated document's contents name an appendix in the translation's words, as
+/// its body does (#940), and are found by them.
+@Suite("Contents outline: a translation's appendix labels")
+struct ContentsOutlineAppendixLabelTests {
+  static let labels = Section.AppendixLabels(appendix: "Anhang", annex: "Anlage")
+  static let sections = [
+    Section(anchor: "section-1", number: "1", title: "Introduction"),
+    Section(anchor: "appendix-A", number: "A", title: "Collected ABNF", isAppendix: true),
+    Section(
+      anchor: "appendix-B", number: "B", title: "", isAppendix: true, appendixWord: .annex),
+  ]
+
+  @Test func `document order names an appendix by the labels`() {
+    let rows = ContentsOutline.rows(of: Self.sections, filter: "", appendixLabels: Self.labels)
+    #expect(rows.map(\.title) == ["1. Introduction", "Anhang A. Collected ABNF", "Anlage B"])
+    #expect(rows.map(\.anchor) == Self.sections.map(\.anchor))
+  }
+
+  @Test func `a filter finds an appendix by the labels`() {
+    let rows = ContentsOutline.rows(
+      of: Self.sections, filter: "anhang a", appendixLabels: Self.labels)
+    #expect(rows.map(\.anchor) == ["appendix-A"])
+    let entries = ContentsOutline.groups(
+      of: Self.sections, filter: "Anlage", appendixLabels: Self.labels
+    ).flatMap(\.entries)
+    #expect(entries.map(\.anchor) == ["appendix-B"])
+  }
+
+  @Test func `A–Z names an appendix by the labels, in its caption or its title`() {
+    let entries = ContentsOutline.groups(
+      of: Self.sections, filter: "", appendixLabels: Self.labels
+    ).flatMap(\.entries)
+    #expect(entries.map(\.title) == ["Collected ABNF", "Introduction", "Anlage B"])
+    #expect(entries.map(\.caption) == ["Anhang A", "1", nil])
+  }
+}

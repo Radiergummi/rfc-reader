@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 
 /// The words the builder writes into the body itself, rather than taking from the
 /// document: the abstract's heading, an aside's caption, a figure's and a table's,
@@ -70,6 +71,11 @@ public struct DocumentLabels: Sendable, Hashable {
     appendix = label("Appendix A", beside: "A") ?? appendix
     annex = label("Annex A", beside: "A") ?? annex
     backlinks = label("4 Backlinks", beside: "4", numberFirst: true) ?? backlinks
+  }
+
+  /// The appendix and annex labels, as `Section` takes them to name an appendix by.
+  public var appendixLabels: Section.AppendixLabels {
+    Section.AppendixLabels(appendix: appendix, annex: annex)
   }
 
   /// What a backlink caption says, and VoiceOver says for it: the number of
