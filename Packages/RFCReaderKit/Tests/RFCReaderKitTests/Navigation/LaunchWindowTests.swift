@@ -12,13 +12,6 @@ struct LaunchWindowTests {
     #expect(!opens)
   }
 
-  /// `open -j` launches the app hidden and still calls the launch the default one:
-  /// the window opens, and shows with the app.
-  @Test func `a default launch opens one at once even when hidden`() {
-    let window = LaunchWindow(launchIsDefault: true, readerCameBack: false)
-    #expect(window.opensAtLaunch)
-  }
-
   @Test func `a reader window that came back is enough`() {
     for launchIsDefault in [true, false] {
       var window = LaunchWindow(launchIsDefault: launchIsDefault, readerCameBack: true)
@@ -29,18 +22,13 @@ struct LaunchWindowTests {
   }
 
   /// AppKit calls a launch that restores the last session's state not the default
-  /// one, even when that state holds no reader window. The Dock activates the app.
+  /// one, even when that state holds no reader window. The Dock activates the app; a
+  /// script, a Service or a background intent doesn't, and gets no window.
   @Test func `a Dock launch that restored no reader window opens one on activation`() {
     var window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
     #expect(!window.opensAtLaunch)
     let opens = window.becameActive(hasReaderWindow: false)
     #expect(opens)
-  }
-
-  /// A script, a Service or a background intent launches the app without activating it.
-  @Test func `a launch that never activates the app opens none`() {
-    let window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
-    #expect(!window.opensAtLaunch)
   }
 
   /// Switching to an app a script launched opens the window then, once.

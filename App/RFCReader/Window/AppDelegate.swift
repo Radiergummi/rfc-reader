@@ -114,6 +114,9 @@
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
       let readers = controllers.compactMap(\.window)
       let states = readers.map { window -> DockReopen.Reader in
+        if let selected = window.tabGroup?.selectedWindow, selected !== window {
+          return .unselectedTab
+        }
         if window.isMiniaturized {
           return .minimized
         }
