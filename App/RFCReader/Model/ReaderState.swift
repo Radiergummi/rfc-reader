@@ -74,9 +74,13 @@ final class ReaderState {
 
   /// Whether Next or Previous Section has somewhere to go. Outside Focus that depends
   /// on the reader's line, which nothing observes, so the items are there whenever
-  /// the reader's text is.
+  /// the reader's text is: not `foldingIndex`, which only Focus and the outline keep
+  /// (#1032).
   func canStepSection(_ step: Folding.FocusStep) -> Bool {
-    folding.mode == .focus ? canStepFocus(step) : foldingIndex != nil
+    guard folding.mode != .focus else { return canStepFocus(step) }
+    return PublishedOriginalPage.offersSectionSteps(
+      showsBody: hasDocument && !showOriginal, hasSections: !sections.isEmpty,
+      kind: publishedOriginal?.kind)
   }
 
   /// Next Section and Previous Section, in Focus (#699). The reader's line goes to

@@ -145,6 +145,16 @@ public struct PublishedOriginalPage: Hashable, Sendable {
     kind == nil
   }
 
+  /// Whether Next and Previous Section are offered outside Focus, which steps
+  /// through its own folding index: whenever the body is on screen, read as its text,
+  /// with sections, in every reading mode (#1032). Whether there is a section after
+  /// or before the reader's line, which nothing observes, is not asked.
+  public static func offersSectionSteps(showsBody: Bool, hasSections: Bool, kind: Kind?)
+    -> Bool
+  {
+    showsBody && hasSections && offersSections(kind: kind)
+  }
+
   /// Whether Print and Export offer the document: one on screen and read as its
   /// text. A pointer's text is not the RFC, so printing it would print a line
   /// saying where the RFC is.
