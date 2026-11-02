@@ -8,7 +8,8 @@ extension RFCMetadata {
   /// VoiceOver read the row's number, year, title, status and group as separate
   /// stops (#156), so the row hides its children and speaks this instead.
   ///
-  /// `isAvailableOffline` is whether Available Offline lists it, which the row marks.
+  /// `isAvailableOffline` is whether Available Offline lists it and its body is on the
+  /// device, which the row marks.
   public func accessibilityLabel(
     isBookmarked: Bool, isAvailableOffline: Bool = false, locale: Locale = .interface
   ) -> String {

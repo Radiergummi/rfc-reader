@@ -755,9 +755,9 @@ private struct OfflineSection: View {
     document.series == .rfc && library.offlineMarks.contains(document)
   }
 
-  /// Whether Available Offline lists it, which the status says as a row's mark does
-  /// (#769): kept by its mark, or as a bookmark while bookmarks are kept. The control
-  /// stays the mark's.
+  /// Whether Available Offline lists it and its body is on the device, which the
+  /// status says as a row's mark does (#769, #936): kept by its mark, or as a bookmark
+  /// while bookmarks are kept. The control stays the mark's.
   private var isAvailable: Bool {
     library.isAvailableOffline(document)
   }
