@@ -67,9 +67,15 @@ struct DataFileCheckTests {
     #expect(DataFileCheck.fetch(keptAt: nil, fetchedAt: now - 60, now: now) == nil)
   }
 
-  @Test func `a file neither kept nor fetched within the day is fetched`() {
+  /// A fetch whose copy could not be kept still answers from memory.
+  @Test func `a file neither kept nor fetched within the day is refreshed on a cheap network`() {
     let dayAgo = now - IndexCheck.interval - 60
-    #expect(DataFileCheck.fetch(keptAt: nil, fetchedAt: dayAgo, now: now) == .anyNetwork)
+    #expect(DataFileCheck.fetch(keptAt: nil, fetchedAt: dayAgo, now: now) == .cheapNetworks)
     #expect(DataFileCheck.fetch(keptAt: dayAgo, fetchedAt: dayAgo, now: now) == .cheapNetworks)
+  }
+
+  /// A clock set ahead, or a file restored, would otherwise keep it fresh until then.
+  @Test func `a file kept after now is refreshed`() {
+    #expect(DataFileCheck.fetch(keptAt: now + 3_600, fetchedAt: nil, now: now) == .cheapNetworks)
   }
 }

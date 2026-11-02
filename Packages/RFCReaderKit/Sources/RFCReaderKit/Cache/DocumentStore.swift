@@ -366,7 +366,7 @@ public actor DocumentStore {
     }
   }
 
-  private static func modificationDate(of url: URL) -> Date? {
+  static func modificationDate(of url: URL) -> Date? {
     try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
   }
 

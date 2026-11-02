@@ -12,9 +12,7 @@ struct KeptFile<Value> {
     guard let data = try? Data(contentsOf: url), let value = try? decode(data) else {
       return nil
     }
-    let keptAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-      .contentModificationDate
-    return (value, keptAt ?? .distantPast)
+    return (value, DocumentStore.modificationDate(of: url) ?? .distantPast)
   }
 
   func write(_ data: Data) throws {
