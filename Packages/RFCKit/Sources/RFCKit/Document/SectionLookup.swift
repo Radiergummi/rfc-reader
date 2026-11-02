@@ -68,9 +68,14 @@ public enum SectionLookup {
     guard !number.isEmpty else { return nil }
     let numbered = sections.flatMap(\.withSubsections).filter { $0.number?.lowercased() == number }
     // An appendix numbered like a section (#429) is named by its word, and the
-    // section of that number by its number alone.
+    // section of that number by its number alone. The word names no section, so
+    // "Appendix 4.2" is nothing where no appendix has that number.
     let namesAppendix = announcement.contains { $0.hasPrefix("appendix") || $0.hasPrefix("annex") }
-    return numbered.first { $0.isAppendix == namesAppendix } ?? numbered.first
+    if let named = numbered.first(where: { $0.isAppendix == namesAppendix }) {
+      return named
+    }
+    if namesAppendix, number.first?.isNumber == true { return nil }
+    return numbered.first
   }
 }
 

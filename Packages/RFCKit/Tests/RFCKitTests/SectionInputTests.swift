@@ -2,9 +2,8 @@ import Testing
 
 @testable import RFCKit
 
-/// What someone types to go to a section (#711): Go to Section… on the Mac and the
-/// iPad, and the iOS # jump (#579), which share the parser. It reads a number as the
-/// App Intents' section lookup does (#1015).
+/// What someone types to go to a section (#711) in Go to Section… on the Mac and the
+/// iPad. It reads a number as the App Intents' section lookup does (#1015).
 @Suite("Section input")
 struct SectionInputTests {
   private static let sections = [
@@ -36,6 +35,7 @@ struct SectionInputTests {
     ("1.1", "section-1.1"),
     ("§2", "author-anchor"),
     ("section-2", "author-anchor"),
+    ("section-4.2.", "section-4.2"),
     ("a", "bad-assumptions"),
     ("Appendix A", "bad-assumptions"),
     ("appendix a", "bad-assumptions"),
@@ -52,7 +52,7 @@ struct SectionInputTests {
 
   @Test(arguments: [
     "", "  ", "§", ".", "Section", "intro", "Two", "acknowledgments", "4.2-3", "AB.1",
-    "page-12", "3", "B", "Appendix B", "1.2", "Section 9", "section-9",
+    "page-12", "3", "B", "Appendix B", "Appendix 4.2", "1.2", "Section 9", "section-9",
   ])
   func `what names no section of the document is nowhere`(_ typed: String) {
     #expect(SectionInput.anchor(typed, in: Self.sections) == nil)

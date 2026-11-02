@@ -66,11 +66,10 @@ enum SectionAnchor {
   }
 }
 
-/// What someone types to go to a section (#711): Go to Section… on the Mac and the
-/// iPad, and the iOS # jump (#579), which share it. A section number, read as the
-/// App Intents read one (`SectionLookup.section(numbered:in:)`, #1015): `4.2`,
-/// `Section 4.2.`, `§4.2`, `Appendix A.1`; or an anchor as a link spells it,
-/// `section-4.2`.
+/// What someone types to go to a section (#711) in Go to Section… on the Mac and the
+/// iPad. A section number, read as the App Intents read one
+/// (`SectionLookup.section(numbered:in:)`, #1015): `4.2`, `Section 4.2.`, `§4.2`,
+/// `Appendix A.1`; or an anchor as a link spells it, `section-4.2`.
 public enum SectionInput {
   /// The anchor of the section among `sections`, or their subsections, that `typed`
   /// names: by its number, or by an anchor that spells one, which a section whose
@@ -79,7 +78,8 @@ public enum SectionInput {
     if let numbered = SectionLookup.section(numbered: typed, in: sections) {
       return numbered.anchor
     }
-    let place = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+    var place = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+    if place.hasSuffix(".") { place.removeLast() }
     guard let number = SectionAnchor.sectionNumber(fromAnchor: place) else { return nil }
     return sections.lazy.flatMap(\.withSubsections)
       .first { $0.anchor == place || $0.number == number }?.anchor
