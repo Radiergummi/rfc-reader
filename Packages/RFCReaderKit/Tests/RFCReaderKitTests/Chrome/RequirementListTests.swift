@@ -83,6 +83,19 @@ struct RequirementListTests {
     #expect(markdown.contains("[RFC 9110, Appendix A.1]"))
   }
 
+  /// A sentence is written as it reads, not as markup: a `<field-name>`, an
+  /// `*emphasis*`, a link, a code span or an entity in it is escaped (#1023).
+  @Test func `the Markdown checklist escapes what would render as markup`() {
+    let markup = Self.requirement(
+      "A <field-name> MUST be *quoted*, as `a` or [b](c) &amp; d.", [.must],
+      section: "section-4", number: "4")
+    let markdown = RequirementList.markdownChecklist([markup], document: .rfc(9110))
+    #expect(
+      markdown.contains(
+        #"- [ ] **MUST** A &lt;field-name&gt; MUST be \*quoted\*, as \`a\` or \[b](c) \&amp; d. ([RFC 9110, Section 4](rfc://9110#section-4))"#
+      ))
+  }
+
   /// A field holding a comma or a quote is quoted, its quotes doubled.
   @Test func `the checklist in CSV quotes every field`() {
     let csv = RequirementList.csvChecklist(
