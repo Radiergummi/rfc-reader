@@ -470,10 +470,13 @@ public actor DocumentStore {
 
   /// Every cached registry's entries, and which registries are due a fetch: never
   /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
-  /// entries are still returned, to use until the fetch succeeds.
+  /// entries are still returned, to use until the fetch succeeds. The "Read cached
+  /// registries" signpost measures it.
   public func cachedRegistries(maximumAge: TimeInterval) -> (
     entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
   ) {
+    let interval = signposter.beginInterval("Read cached registries")
+    defer { signposter.endInterval("Read cached registries", interval) }
     var entries: [IANARegistry: [RegistryEntry]] = [:]
     var stale: [IANARegistry] = []
     for registry in IANARegistry.allCases {
