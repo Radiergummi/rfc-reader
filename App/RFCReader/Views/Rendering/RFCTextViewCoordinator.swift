@@ -161,6 +161,9 @@ final class RFCTextViewCoordinator: NSObject {
   var documentID: DocumentID? { document?.rfc }
   /// What a copy cites; see `ReaderInputs.citing`.
   var citing: DocumentID?
+  /// Whether a selection is offered Copy as Quote, or Copy as Text beside a Copy
+  /// that quotes: not on a draft, which has nothing to cite (#728).
+  var offersQuote: Bool { citing != nil && built != nil }
   /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
   /// or nil when nothing is selected (#186); see `QuoteCitation`. Cited as Settings
   /// say (#712).
