@@ -17,8 +17,11 @@ struct SettingsView: View {
   var body: some View {
     TabView {
       Tab("Reading", systemImage: "textformat.size") {
-        Form { ReadingSettings() }
-          .formStyle(.grouped)
+        Form {
+          ReadingSettings()
+          Section("Keyboard") { KeyboardSettings() }
+        }
+        .formStyle(.grouped)
       }
       Tab("Appearance", systemImage: "paintpalette") {
         Form { AppearanceSettings() }
@@ -69,6 +72,7 @@ struct SettingsScreen: View {
     NavigationStack {
       Form {
         Section("Reading") { ReadingSettings() }
+        Section("Keyboard") { KeyboardSettings() }
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
         Section("Sharing") { SharingSettings() }
@@ -130,15 +134,48 @@ private struct ReadingSettings: View {
   }
 }
 
-/// The colors: the page's, which only redraw, and the code's. Each picker lists
-/// what the reader offers, one choice each until page themes (#704) and syntax
-/// themes (#707) add theirs.
+/// The reader's keys (#711), with a hardware keyboard on iOS. Here until the
+/// registry of Advanced settings (#706) lands, which they move into.
+private struct KeyboardSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Toggle(isOn: $settings.tabsThroughLinks) {
+      Text("Move through links with Tab")
+      Text("Shift-Tab goes back. Return follows the link, and Space previews it.")
+    }
+    Toggle(isOn: $settings.vimKeys) {
+      Text("Use vim-style keys")
+      Text(
+        """
+        j and k scroll a line, d and u half a page, gg and G go to the top and the end, \
+        ]] and [[ to the next and previous section, ]r and [r to the next and previous link, \
+        / finds, and n and N go to the next and previous match.
+        """
+      )
+    }
+  }
+}
+
+/// The colors: the app's appearance, the page themes for light and dark, which only
+/// redraw (#704), and the code's. The appearance picks which of the two themes is
+/// drawn, and is the whole app's, as Apple Books' is.
 private struct AppearanceSettings: View {
   @ReaderSettingsValue private var settings
 
   var body: some View {
-    Picker("Page", selection: $settings.palette) {
-      ForEach(ReaderPalette.all) { palette in
+    Picker("Appearance", selection: $settings.appearance) {
+      ForEach(AppearancePreference.allCases, id: \.self) { appearance in
+        Text(appearance.title).tag(appearance)
+      }
+    }
+    Picker("Light Theme", selection: $settings.lightPalette) {
+      ForEach(ReaderPalette.offered(in: .light)) { palette in
+        Text(palette.title).tag(palette)
+      }
+    }
+    Picker("Dark Theme", selection: $settings.darkPalette) {
+      ForEach(ReaderPalette.offered(in: .dark)) { palette in
         Text(palette.title).tag(palette)
       }
     }
@@ -261,12 +298,28 @@ private struct AdvancedSettings: View {
   }
 }
 
+extension AppearancePreference {
+  /// What Settings calls it.
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .system: "System"
+    case .light: "Light"
+    case .dark: "Dark"
+    }
+  }
+}
+
 extension ReaderPalette {
   /// What Settings calls it.
-  fileprivate var title: String {
+  fileprivate var title: LocalizedStringResource {
     switch id {
-    case ReaderPalette.automatic.id: "Automatic"
-    default: id.capitalized
+    case ReaderPalette.paper.id: "Paper"
+    case ReaderPalette.sepia.id: "Sepia"
+    case ReaderPalette.gray.id: "Gray"
+    case ReaderPalette.night.id: "Night"
+    case ReaderPalette.black.id: "Black"
+    case ReaderPalette.highContrast.id: "High Contrast"
+    default: "Automatic"
     }
   }
 }

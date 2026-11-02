@@ -87,9 +87,37 @@ import RFCReaderKit
     /// a side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
+    /// vim-style keys are the coordinator's, which answers whether it took the key.
+    var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
       willHandleKey()
+      if presses.count == 1, let press = presses.first, let key = press.key,
+        let readerKey = ReaderKeys.Key(
+          keyCode: key.keyCode, characters: key.characters,
+          charactersIgnoringModifiers: key.charactersIgnoringModifiers,
+          modifiers: key.modifierFlags),
+        handleKey(readerKey)
+      {
+        handledPresses.insert(ObjectIdentifier(press))
+        return
+      }
       super.pressesBegan(presses, with: event)
+    }
+
+    /// The presses `handleKey` took, whose end UIKit is not to see either: a press
+    /// whose begin it never saw (UIKit's own rule for overriding these).
+    private var handledPresses: Set<ObjectIdentifier> = []
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesEnded(unhandled, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      let unhandled = presses.filter { handledPresses.remove(ObjectIdentifier($0)) == nil }
+      if !unhandled.isEmpty { super.pressesCancelled(unhandled, with: event) }
     }
 
     /// The quote for a range of the text, from the coordinator (#186).
@@ -274,8 +302,22 @@ import RFCReaderKit
     /// side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
+    /// vim-style keys are the coordinator's, which answers whether it took the key.
+    /// Only while this is first responder: a text field, the find bar's included,
+    /// takes its own keys.
+    var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
+
     override func keyDown(with event: NSEvent) {
       willHandleKey()
+      if let key = ReaderKeys.Key(
+        characters: event.characters,
+        charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+        modifiers: event.modifierFlags),
+        handleKey(key)
+      {
+        return
+      }
       super.keyDown(with: event)
     }
 
@@ -330,6 +372,22 @@ import RFCReaderKit
     /// Told of a click that selected nothing and cleared no selection, which in a
     /// highlight opens its popover.
     var clickedText: (NSEvent) -> Void = { _ in }
+    /// Add Note on a selection (#523): a highlight, and a note on it.
+    var addNote: (NSRange) -> Void = { _ in }
+    /// What a note from a block's menu at an offset would be on, and making it.
+    var noteBlock: (Int) -> NoteBlock? = { _ in nil }
+    var addNoteOnBlock: (NoteBlock, Int) -> Void = { _, _ in }
+
+    @objc private func addNoteItem(_ sender: Any?) {
+      guard selectedRange().length > 0 else { return }
+      addNote(selectedRange())
+      setSelectedRange(NSRange(location: NSMaxRange(selectedRange()), length: 0))
+    }
+
+    @objc private func addNoteOnBlockItem(_ sender: NSMenuItem) {
+      guard let (block, location) = sender.representedObject as? (NoteBlock, Int) else { return }
+      addNoteOnBlock(block, location)
+    }
 
     /// Edit ▸ Highlight (⌃⌘H, Books' shortcut): the selection, in the color last used.
     @objc func highlightSelection(_ sender: Any?) {
@@ -617,7 +675,9 @@ import RFCReaderKit
       let figure = box?.content
       let quotes = selectedRange().length > 0 && !isTranslation()
       let gloss = followGloss(event)
-      guard figure != nil || quotes || gloss != nil else { return standard }
+      // A note on the block clicked (#523), or on its section from a heading.
+      let block = isTranslation() ? nil : noteBlock(clicked)
+      guard figure != nil || quotes || gloss != nil || block != nil else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
       if let gloss {
@@ -655,8 +715,23 @@ import RFCReaderKit
           result.insertItem(item, at: index)
           index += 1
         }
-        // A highlight is made from a selection, as a quote is copied from one (#522).
+        // A highlight is made from a selection, as a quote is copied from one (#522),
+        // and a note on it (#523).
         result.insertItem(highlightMenuItem(), at: index)
+        let note = NSMenuItem(
+          title: String(localized: "Add Note"), action: #selector(addNoteItem(_:)),
+          keyEquivalent: "")
+        note.target = self
+        result.insertItem(note, at: index + 1)
+      }
+      if let block {
+        let item = NSMenuItem(
+          title: RFCTextViewCoordinator.addNoteTitle(block),
+          action: #selector(addNoteOnBlockItem(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = (block, clicked)
+        if !result.items.isEmpty { result.addItem(.separator()) }
+        result.addItem(item)
       }
       if let box, figure != nil {
         let item = NSMenuItem(

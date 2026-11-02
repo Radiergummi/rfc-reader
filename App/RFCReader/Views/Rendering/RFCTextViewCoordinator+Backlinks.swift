@@ -38,13 +38,7 @@ extension RFCTextViewCoordinator {
     /// A popover pointing at the caption, on iPad as on iPhone, where it would
     /// otherwise become a sheet for a list of a few rows.
     func showBacklinks(at offset: Int) {
-      guard let textView, var presenter = textView.window?.rootViewController,
-        let (anchor, range) = backlinkCaption(at: offset),
-        let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
-        let end = textView.position(from: start, offset: range.length),
-        let textRange = textView.textRange(from: start, to: end)
-      else { return }
-      while let presented = presenter.presentedViewController { presenter = presented }
+      guard let (anchor, range) = backlinkCaption(at: offset) else { return }
       let host = UIHostingController<BacklinksList?>(rootView: nil)
       guard
         let list = backlinksList(
@@ -55,13 +49,29 @@ extension RFCTextViewCoordinator {
           })
       else { return }
       host.rootView = list
+      presentPopover(host, width: BacklinksList.width, pointingAt: range)
+    }
+
+    /// Presents `host` as a popover `width` wide pointing at `range` of the text, over
+    /// whatever is presented already; false where the text has no such range.
+    @discardableResult
+    func presentPopover<Content: View>(
+      _ host: UIHostingController<Content>, width: CGFloat, pointingAt range: NSRange
+    ) -> Bool {
+      guard let textView, var presenter = textView.window?.rootViewController,
+        let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+        let end = textView.position(from: start, offset: range.length),
+        let textRange = textView.textRange(from: start, to: end)
+      else { return false }
+      while let presented = presenter.presentedViewController { presenter = presented }
       host.modalPresentationStyle = .popover
       host.preferredContentSize = host.sizeThatFits(
-        in: CGSize(width: BacklinksList.width, height: .greatestFiniteMagnitude))
+        in: CGSize(width: width, height: .greatestFiniteMagnitude))
       host.popoverPresentationController?.sourceView = textView
       host.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
       host.popoverPresentationController?.delegate = self
       presenter.present(host, animated: true)
+      return true
     }
 
     func adaptivePresentationStyle(

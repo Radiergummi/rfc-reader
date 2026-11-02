@@ -37,6 +37,8 @@
       // Before any window, whose toolbar observes its tips (#782).
       ReaderTips.configure()
       NSApp.servicesProvider = citationServices
+      // Before the first window, so it is made in the appearance chosen (#704).
+      AppAppearance.follow()
       // The scene's `.task` did this; there is no scene on macOS any more.
       // Immediate, so that the bootstrap has started reading the cached index by
       // the time the first window is made (#367), restored or not. A plain task

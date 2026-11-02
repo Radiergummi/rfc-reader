@@ -52,6 +52,22 @@ struct BuilderRedlineTests {
     #expect(try attribute(.strikethroughStyle, at: "example", in: built) == nil)
   }
 
+  /// What went is drawn in the page theme's quieter color, as the rest of the text
+  /// is in its own (#704).
+  @Test func `what went is in the page theme's secondary color`() throws {
+    let intro = section("intro", [paragraph(unchanged), paragraph("A client MAY retry.")])
+    let gone = Section(
+      anchor: "history", number: "2", title: "History",
+      blocks: [paragraph("Earlier versions of this protocol were never deployed widely.")])
+    let built = redline(
+      from: [intro, gone],
+      to: [section("intro", [paragraph(unchanged), paragraph("A client SHOULD retry.")])])
+    for needle in ["MAY", "History", "never deployed"] {
+      let color = try attribute(.foregroundColor, at: needle, in: built) as? PlatformColor
+      #expect(color === ReaderPalette.themedSecondaryText, "\(needle)")
+    }
+  }
+
   /// Copy gives the newer text: what was deleted is the reader's to show.
   @Test func `a copy of a redline is the newer text`() {
     let built = redline(

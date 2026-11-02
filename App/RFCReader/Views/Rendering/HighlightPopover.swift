@@ -8,17 +8,26 @@ import SwiftUI
 #endif
 
 /// What a click or a tap in a highlight offers (#522): its color, Copy as Quote and
-/// Delete. Its actions are closures the coordinator gives it, so it reads nothing from
-/// the environment, which a popover's hosted root is outside of.
+/// Delete, and its notes, with Add Note (#523). Its actions are closures the
+/// coordinator gives it, so it reads nothing from the environment, which a popover's
+/// hosted root is outside of.
 struct HighlightPopover: View {
-  /// The width it is measured at on iOS, where the popover is sized before it shows.
+  /// Its width on iOS, where the popover takes its height from it, again when the
+  /// delete confirmation adds its rows.
   static let width: CGFloat = 260
 
   let color: HighlightColor
   let colors: [HighlightColor]
+  /// The notes on it, by their first lines.
+  let notes: [AnnotationList.NoteLine]
   let choose: (HighlightColor) -> Void
   let copyAsQuote: () -> Void
   let delete: () -> Void
+  let addNote: () -> Void
+  let openNote: (UUID) -> Void
+
+  /// Deleting a highlight with notes deletes them too, so it asks first.
+  @State private var confirmsDelete = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -34,13 +43,46 @@ struct HighlightPopover: View {
           .accessibilityAddTraits(option == color ? .isSelected : [])
         }
       }
+      if !notes.isEmpty {
+        Divider()
+        ForEach(notes) { note in
+          Button {
+            openNote(note.id)
+          } label: {
+            Label {
+              Text(verbatim: note.firstLine).lineLimit(2)
+            } icon: {
+              Image(systemName: "note.text")
+            }
+          }
+          .buttonStyle(.borderless)
+        }
+      }
       Divider()
+      Button("Add Note", systemImage: "square.and.pencil", action: addNote)
+        .buttonStyle(.borderless)
       Button("Copy as Quote", systemImage: "text.quote", action: copyAsQuote)
         .buttonStyle(.borderless)
-      Button("Delete Highlight", systemImage: "trash", role: .destructive, action: delete)
+      if confirmsDelete {
+        Text("Its notes are deleted with it.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        HStack {
+          Button("Delete Highlight and Notes", role: .destructive, action: delete)
+          Button("Cancel") { confirmsDelete = false }
+        }
         .buttonStyle(.borderless)
+      } else {
+        Button("Delete Highlight", systemImage: "trash", role: .destructive) {
+          if notes.isEmpty { delete() } else { confirmsDelete = true }
+        }
+        .buttonStyle(.borderless)
+      }
     }
     .padding(12)
+    #if canImport(UIKit)
+      .frame(width: Self.width, alignment: .leading)
+    #endif
   }
 }
 

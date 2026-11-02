@@ -170,7 +170,7 @@ extension DocumentTextBuilder {
   ) {
     let attributes: [NSAttributedString.Key: Any] = [
       .font: style.codeLabelFont,
-      .foregroundColor: RFCColors.secondaryLabel,
+      .foregroundColor: secondaryLabelColor,
       .paragraphStyle: paragraphStyle(
         indent: indent + inset, spacingBefore: FragmentGeometry.cardPadding / 2,
         spacingAfter: 0, alignment: .right, trailingIndent: inset),
@@ -239,7 +239,7 @@ extension DocumentTextBuilder {
     output.addAttribute(
       .rfcStrokes, value: StrokeBox(decorated.strokes, lineStarts: lineStarts), range: body)
     for (ranges, color) in [
-      (decorated.secondary, RFCColors.secondaryLabel), (decorated.hidden, Self.hiddenColor),
+      (decorated.secondary, secondaryLabelColor), (decorated.hidden, Self.hiddenColor),
     ] {
       for range in ranges {
         output.addAttribute(

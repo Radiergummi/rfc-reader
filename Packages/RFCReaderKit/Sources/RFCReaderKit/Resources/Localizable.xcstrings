@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Markierungen und Notizen"
+          }
+        }
+      }
+    },
     "%@ has no grammar to export." : {
       "localizations" : {
         "de" : {
@@ -1178,6 +1188,16 @@
         }
       }
     },
+    "Delete Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz löschen"
+          }
+        }
+      }
+    },
     "Details" : {
       "localizations" : {
         "de" : {
@@ -1538,6 +1558,16 @@
         }
       }
     },
+    "Go to Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu Abschnitt"
+          }
+        }
+      }
+    },
     "Gray" : {
       "localizations" : {
         "de" : {
@@ -1654,6 +1684,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markiert, gelb"
+          }
+        }
+      }
+    },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
           }
         }
       }
@@ -2088,12 +2128,12 @@
         }
       }
     },
-    "Next Section, in Focus" : {
+    "Next Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nächster Abschnitt, im Fokus"
+            "value" : "Nächster Abschnitt"
           }
         }
       }
@@ -2528,12 +2568,12 @@
         }
       }
     },
-    "Previous Section, in Focus" : {
+    "Previous Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vorheriger Abschnitt, im Fokus"
+            "value" : "Vorheriger Abschnitt"
           }
         }
       }
@@ -3394,22 +3434,22 @@
         }
       }
     },
-    "The IETF doesn't have this draft, or this revision of it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
-          }
-        }
-      }
-    },
     "Text" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Text"
+          }
+        }
+      }
+    },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
           }
         }
       }

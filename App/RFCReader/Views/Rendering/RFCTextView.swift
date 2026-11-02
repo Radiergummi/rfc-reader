@@ -18,6 +18,8 @@ struct RFCTextView: View {
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
   @Environment(\.colorSchemeContrast) private var contrast
+  /// Which page theme is drawn: the light one or the dark one (#704).
+  @Environment(\.colorScheme) private var colorScheme
   /// For the palette, the draw-time half of the settings, which reaches the text
   /// view on every update and only redraws.
   @ReaderSettingsValue private var settings
@@ -69,11 +71,13 @@ struct RFCTextView: View {
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
         // Increase Contrast outlines every chip (#457): a redraw, never a rebuild.
-        palette: settings.palette,
+        settings: settings,
+        appearance: PaletteAppearance(colorScheme),
         outlinesEveryChip: contrast == .increased,
         // Read here, where it is observed: a highlight made or changed draws again.
         // An RFC's only: a draft has none (#728).
         highlights: inputs.document.rfc.map(library.annotations.highlights(of:)) ?? [],
+        notes: inputs.document.rfc.map(library.annotations.notes(of:)) ?? [],
         width: geometry.size.width)
     }
   }
@@ -146,6 +150,7 @@ struct ReaderInputs {
       coordinator.bars.setEnabled(hidesChrome)
     #endif
     coordinator.environment = environment
+    coordinator.header = header
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
     // this runs on every update pass — including one per section crossing while
@@ -231,11 +236,14 @@ struct ReaderInputs {
   private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
-    let palette: ReaderPalette
+    /// The page themes chosen, and which of them is drawn (#704).
+    let settings: ReaderSettings
+    let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
-    /// The document's highlights (#522).
+    /// The document's highlights (#522) and notes (#523).
     let highlights: [AnnotationSnapshot.HighlightEntry]
+    let notes: [AnnotationSnapshot.NoteEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -298,6 +306,9 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      textView.handleKey = { [weak coordinator = context.coordinator] key in
+        coordinator?.handleKey(key) ?? false
+      }
       // After a jump TextKit estimates the rest of the document again, and the scroll
       // view moves its offset to keep what it shows: the title read then is read from
       // fragments that are only put where they are by the next viewport layout, which
@@ -331,12 +342,14 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
-      context.coordinator.setHighlights(highlights)
+      context.coordinator.apply(
+        settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.setAnnotations(highlights: highlights, notes: notes)
       // Not a preview's, nor a reader the stack keeps below its top (#263): Find is
       // the reader on screen's.
       let findReader = inputs.isShown && inputs.commitsOnClick == nil ? environment.reader : nil
       (textView as? ReaderTextView)?.findReader = findReader
+      findReader?.keyboardReader = context.coordinator
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -358,11 +371,14 @@ struct ReaderInputs {
   private struct Representable: NSViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
-    let palette: ReaderPalette
+    /// The page themes chosen, and which of them is drawn (#704).
+    let settings: ReaderSettings
+    let appearance: PaletteAppearance
     /// Increase Contrast, which outlines every chip (#457).
     let outlinesEveryChip: Bool
-    /// The document's highlights (#522).
+    /// The document's highlights (#522) and notes (#523).
     let highlights: [AnnotationSnapshot.HighlightEntry]
+    let notes: [AnnotationSnapshot.NoteEntry]
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -465,6 +481,9 @@ struct ReaderInputs {
       textView.willHandleKey = { [weak coordinator = context.coordinator] in
         coordinator?.takeLead()
       }
+      textView.handleKey = { [weak coordinator = context.coordinator] key in
+        coordinator?.handleKey(key) ?? false
+      }
       textView.keepingPlace = { [weak coordinator = context.coordinator] scroll in
         guard let coordinator else { return scroll() }
         coordinator.engine.keepPlace(through: scroll)
@@ -480,6 +499,15 @@ struct ReaderInputs {
       }
       textView.clickedText = { [weak coordinator = context.coordinator] event in
         coordinator?.clickedText(event)
+      }
+      textView.addNote = { [weak coordinator = context.coordinator] range in
+        coordinator?.addNote(onSelection: range)
+      }
+      textView.noteBlock = { [weak coordinator = context.coordinator] location in
+        coordinator?.noteBlock(at: location)
+      }
+      textView.addNoteOnBlock = { [weak coordinator = context.coordinator] block, location in
+        coordinator?.addNote(on: block, at: location)
       }
 
       let host = NSHostingController(
@@ -513,8 +541,13 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
-      context.coordinator.apply(palette: palette, outlinesEveryChip: outlinesEveryChip)
-      context.coordinator.setHighlights(highlights)
+      context.coordinator.apply(
+        settings, in: appearance, outlinesEveryChip: outlinesEveryChip)
+      context.coordinator.setAnnotations(highlights: highlights, notes: notes)
+      // Not a preview's: the menus' section commands are the reader on screen's.
+      if inputs.isShown, inputs.commitsOnClick == nil {
+        environment.reader.keyboardReader = context.coordinator
+      }
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

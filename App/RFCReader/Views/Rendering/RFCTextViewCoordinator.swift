@@ -26,6 +26,7 @@ final class RFCTextViewCoordinator: NSObject {
   weak var textView: PlatformTextView? {
     didSet {
       engine.textView = textView
+      engine.didLayOut = { [weak self] in self?.layOutNoteMarkers() }
       #if canImport(UIKit)
         // The reader's link color, which `makeUIView` sets in place of the system
         // tint (#317).
@@ -40,9 +41,18 @@ final class RFCTextViewCoordinator: NSObject {
           attributes: textView?.linkTextAttributes ?? [:], caption: [.cursor: NSCursor.arrow])
       #endif
       linkAttributes.withLock { $0 = attributes }
+      #if !canImport(UIKit)
+        systemSelection = textView?.selectedTextAttributes ?? [:]
+      #endif
       setUpAccessibilityRotors()
     }
   }
+
+  #if !canImport(UIKit)
+    /// The text view's own selection attributes, which a page theme's selection
+    /// color replaces the background of, and the automatic palette restores.
+    private var systemSelection: [NSAttributedString.Key: Any] = [:]
+  #endif
 
   /// The text view's own link attributes, taken when it is handed over, after it is
   /// configured. A layout manager whose delegate answers for a link's rendering
@@ -55,19 +65,51 @@ final class RFCTextViewCoordinator: NSObject {
   /// lights up. Behind a lock for the reason `linkAttributes` is.
   nonisolated let hoveredSectionNumber = Mutex<NSRange?>(nil)
 
-  /// The colors this reader's fragments draw their decoration in: the reader's
-  /// palette setting (#703). A box the fragments keep, so that `apply(palette:outlinesEveryChip:)`
-  /// recolors the ones already laid out rather than laying them out again.
+  /// The colors this reader draws its page, links and decoration in: the page theme
+  /// for the appearance it is drawn in (#703, #704). A box the fragments keep, so
+  /// that `apply(_:in:outlinesEveryChip:)` recolors what is already laid out
+  /// rather than laying it out again.
   nonisolated let paletteBox = ReaderPaletteBox()
 
-  /// Draws the decoration in `palette` from now on, and redraws what is on screen
-  /// if it changed. Never a layout: a palette is the draw-time half of the settings,
-  /// and costs neither a rebuild nor the reader's place. So is Increase Contrast,
-  /// which outlines every chip (#457).
-  func apply(palette: ReaderPalette, outlinesEveryChip: Bool) {
-    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip) else { return }
-    // The laid-out fragments are rendered again, which reads the box.
+  /// Draws the page, the text and the decoration in the theme `settings` choose for
+  /// `appearance` from now on, and redraws what is on screen if it changed. Never a
+  /// layout: a palette is the draw-time half of the settings, and costs neither a
+  /// rebuild nor the reader's place. So is Increase Contrast, which outlines every
+  /// chip (#457).
+  func apply(
+    _ settings: ReaderSettings, in appearance: PaletteAppearance, outlinesEveryChip: Bool
+  ) {
+    // Before the redraw, which resolves the text's colors to the themes chosen.
+    ReaderPalette.choose(light: settings.lightPalette, dark: settings.darkPalette)
+    let palette = settings.palette(for: appearance)
+    guard paletteBox.replace(with: palette, outlinesEveryChip: outlinesEveryChip), let textView
+    else { return }
+    // The laid-out fragments are rendered again, which reads the box, and their
+    // text resolves its colors again, to the theme chosen
+    // (`ReaderPalette.themedText`).
     engine.redraw()
+    drawPage(palette, in: textView)
+    if let header, let environment {
+      headerHost?.rootView = hostedHeader(header, in: environment)
+    }
+  }
+
+  /// The page behind the text, and on macOS the selection, in `palette`'s colors:
+  /// none and the system's under the automatic palette, as the reader always had.
+  private func drawPage(_ palette: ReaderPalette, in textView: PlatformTextView) {
+    #if canImport(UIKit)
+      textView.backgroundColor = palette.pageBackground ?? .clear
+    #else
+      // The scroll view rather than the text view, which is only as tall as the
+      // text and stops short of a short document's end.
+      if let scroll = textView.enclosingScrollView {
+        scroll.backgroundColor = palette.pageBackground ?? .clear
+        scroll.drawsBackground = palette.pageBackground != nil
+      }
+      var selection = systemSelection
+      if let highlight = palette.selection { selection[.backgroundColor] = highlight }
+      textView.selectedTextAttributes = selection
+    #endif
   }
 
   /// A text view's link attributes, the same for a link on a card (#694), and what
@@ -95,6 +137,8 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// What the hosted header currently displays; see `ReaderInputs.apply`.
   var headerIdentity: DocumentHeaderView.Identity?
+  /// The header last handed over, hosted again when the palette changes.
+  var header: AnyView?
 
   /// Retained for the same reason as `headerHost`: the iOS long-press preview's
   /// hosting controller — a card's or a document's — must outlive the
@@ -237,8 +281,32 @@ final class RFCTextViewCoordinator: NSObject {
   var highlights: [AnnotationSnapshot.HighlightEntry] = []
   /// Where they are in the installed build.
   var highlightPlacement = HighlightPlacement.none
+  /// The document's notes (#523), and where the installed build places them.
+  var notes: [AnnotationSnapshot.NoteEntry] = []
+  var notePlacement = NotePlacement.none
+  /// The gutter markers standing now, and their views, one each.
+  var noteMarkers: [FragmentGeometry.NoteMarker] = []
+  /// The notes' text when the markers were last titled.
+  var noteMarkersBodies: [String] = []
+  /// The note the editor was opened on last, and its model: what it holds is newer
+  /// than `notes` until the store's change comes back.
+  var noteEditor: (note: UUID, model: NoteEditorModel)?
+  #if canImport(UIKit)
+    var noteMarkerViews: [UIView] = []
+    /// The note editor's sheet, while it is up.
+    var noteEditorHost: UIViewController?
+  #else
+    var noteMarkerViews: [NSView] = []
+    /// The note editor's popover, while it is open.
+    var notePopover: NSPopover?
+  #endif
   /// Placing them, off the main actor.
   var highlightsTask: Task<Void, Never>?
+  /// The reader's keys (#711), holding the first key of a vim pair.
+  var keys = ReaderKeys()
+  /// The link the keyboard's focus is on (#711), which Return follows; nil for none.
+  /// The ring's own, so the two cannot disagree.
+  var focusedLink: NSRange? { foldingDelegate.focusedLink }
   #if !canImport(UIKit)
     /// A click in a highlight, waiting out the double-click interval before its
     /// popover opens, so it never opens on the way to a double-click.
@@ -257,17 +325,18 @@ final class RFCTextViewCoordinator: NSObject {
   /// (`ReaderLayout.containerReach`), which moves the column when it changes.
   var laidOutReach: CGFloat?
 
-  /// The header as hosted: given `environment`, and on iOS with a tap on its blank
-  /// space for the bars.
+  /// The header as hosted: given `environment`, in the page theme's text and link
+  /// colors (#704), and on iOS with a tap on its blank space for the bars.
   func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
+    let themed = AnyView(header.readerPalette(paletteBox.palette))
     #if canImport(UIKit)
-      AnyView(
-        header
+      return AnyView(
+        themed
           .contentShape(.rect)
           .onTapGesture { [weak self] in self?.bars.tappedHeader() }
           .readerEnvironment(environment))
     #else
-      AnyView(header.readerEnvironment(environment))
+      return AnyView(themed.readerEnvironment(environment))
     #endif
   }
 
@@ -684,6 +753,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// the next reader already owns. And what it said of the title goes with it: its
     /// header is gone, and only the next reader, or a mode without one, says more.
     func releaseDocument() {
+      // What the note's editor holds is saved before the window lets it go, its
+      // popover's disappearing not waited for.
+      noteEditor?.model.close()
+      closeNoteEditor()
       engine.stop()
       NotificationCenter.default.removeObserver(
         self, name: NSView.boundsDidChangeNotification, object: nil)
@@ -692,6 +765,7 @@ final class RFCTextViewCoordinator: NSObject {
       couple(to: nil, installed: false)
       // The window's models, which nothing that outlives the window should hold.
       environment = nil
+      header = nil
     }
   }
 
@@ -723,11 +797,13 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
+    let onCard = textLayoutManager.drawsCard(at: location)
     return LinkRendering.attributes(
       for: link,
-      defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
+      defaults: onCard ? textView.card : textView.attributes,
       caption: textView.caption,
       sectionNumber: textLayoutManager.sectionNumberState(
-        at: location, hovered: hoveredSectionNumber.withLock { $0 }))
+        at: location, hovered: hoveredSectionNumber.withLock { $0 }),
+      palette: paletteBox.palette, onCard: onCard)
   }
 }

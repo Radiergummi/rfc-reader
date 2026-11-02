@@ -36,7 +36,7 @@ extension DocumentTextBuilder {
     // markerColumn, so the tab advances to it and a wrapped item lines up
     // under its own text rather than under the bullet.
     var markerAttributes = attributes
-    markerAttributes[.foregroundColor] = RFCColors.secondaryLabel
+    markerAttributes[.foregroundColor] = secondaryLabelColor
 
     for (index, item) in list.items.enumerated() {
       if index > 0 { joinModel() }

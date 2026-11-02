@@ -3,7 +3,8 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 
-// Highlights (#522), made and changed on the main context through `AnnotationStore`,
+// Highlights (#522) and notes (#523), made and changed on the main context through
+// `AnnotationStore`,
 // which decides what each change does; a failure is logged, as a collection's is.
 
 extension LibraryModel {
@@ -28,15 +29,19 @@ extension LibraryModel {
   }
 
   /// Highlights `range` of `document`'s model text, merging it with what it overlaps.
+  /// Answers the highlight, or nil when none was made.
+  @discardableResult
   func highlight(
     _ range: Range<Int>, of document: DocumentID, in model: ModelText, color: HighlightColor,
     undoManager: UndoManager?
-  ) {
+  ) -> UUID? {
     lastHighlightColor = color
+    var made: UUID?
     editAnnotations { context in
-      try AnnotationStore.highlight(
+      made = try AnnotationStore.highlight(
         range, of: document, in: model, color: color, edit: Self.edit(context, undoManager))
     }
+    return made
   }
 
   func setHighlightColor(_ color: HighlightColor, of identifier: UUID, undoManager: UndoManager?) {
@@ -68,6 +73,36 @@ extension LibraryModel {
     editAnnotations { context in
       for (identifier, target) in relocations {
         try AnnotationStore.recordRelocation(of: identifier, at: target, context: context)
+      }
+    }
+  }
+
+  // MARK: - Notes
+
+  /// Saves a note's text: made the first time it has some, deleted when it has none.
+  func saveNote(_ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String) {
+    editAnnotations { context in
+      try AnnotationStore.saveNote(
+        identifier, on: owner, of: document, body: body, context: context)
+    }
+  }
+
+  func deleteNote(_ identifier: UUID, undoManager: UndoManager?) {
+    editAnnotations { context in
+      try AnnotationStore.deleteNote(identifier, edit: Self.edit(context, undoManager))
+    }
+  }
+
+  /// What a reader's build found of notes: own ranges that moved, and notes whose
+  /// highlight is gone, put on the highlight that covers them.
+  func recordNotePlacement(_ placement: NotePlacement) {
+    guard !placement.relocations.isEmpty || !placement.repoints.isEmpty else { return }
+    editAnnotations { context in
+      for (identifier, target) in placement.relocations {
+        try AnnotationStore.recordNoteRelocation(of: identifier, at: target, context: context)
+      }
+      for (identifier, highlight) in placement.repoints {
+        try AnnotationStore.repointNote(identifier, to: highlight, context: context)
       }
     }
   }

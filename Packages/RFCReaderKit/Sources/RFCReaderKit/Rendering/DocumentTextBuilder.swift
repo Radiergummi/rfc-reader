@@ -21,7 +21,7 @@ public final class DocumentTextBuilder {
   /// set quieter than the body around it — see `emitting(in:color:)`.
   private(set) var style: ReadingStyle
   /// The color ordinary prose is emitted in, for the same reason.
-  private(set) var bodyColor: PlatformColor = RFCColors.label
+  private(set) var bodyColor: PlatformColor
   let output = NSMutableAttributedString()
   var entries: [AnchorIndex.Entry] = []
   /// See `BuiltDocument.keepsWithNext`.
@@ -147,6 +147,21 @@ public final class DocumentTextBuilder {
     self.choices = choices
     self.hints = hints
     self.labels = labels
+    bodyColor = Self.labelColor(in: style)
+  }
+
+  /// Body text's color: the page theme's on screen, the system's on paper
+  /// (`ReadingStyle.followsPageTheme`). The builder's every label-colored run is
+  /// this, never `RFCColors.label` directly.
+  var labelColor: PlatformColor { Self.labelColor(in: style) }
+
+  private static func labelColor(in style: ReadingStyle) -> PlatformColor {
+    style.followsPageTheme ? ReaderPalette.themedText : RFCColors.label
+  }
+
+  /// Quieter text's color, as `labelColor` is body text's.
+  var secondaryLabelColor: PlatformColor {
+    style.followsPageTheme ? ReaderPalette.themedSecondaryText : RFCColors.secondaryLabel
   }
 
   /// - Parameter title: a title block to open the text with. The reader has none —
@@ -319,7 +334,7 @@ extension DocumentTextBuilder {
       title.title + "\n",
       [
         .font: PlatformFont.systemFont(ofSize: style.bodySize * Self.titleScale, weight: .semibold),
-        .foregroundColor: RFCColors.label,
+        .foregroundColor: labelColor,
         .paragraphStyle: paragraphStyle(
           spacingAfter: style.paragraphSpacing * (details.isEmpty ? 2 : 0.6),
           lineHeightMultiple: 1),
@@ -330,7 +345,7 @@ extension DocumentTextBuilder {
         detail + "\n",
         [
           .font: style.captionFont,
-          .foregroundColor: RFCColors.secondaryLabel,
+          .foregroundColor: secondaryLabelColor,
           .paragraphStyle: paragraphStyle(spacingAfter: isLast ? style.paragraphSpacing * 2 : 0),
         ])
     }
@@ -391,7 +406,7 @@ extension DocumentTextBuilder {
     // ones to step back — and anything the builder *measures* against the style
     // (artwork's `monospaceScale`, a table's column widths) would be measured at
     // full size and shrunk afterwards, which is a different answer.
-    emitting(in: style.scaled(by: Self.abstractScale), color: RFCColors.secondaryLabel) {
+    emitting(in: style.scaled(by: Self.abstractScale), color: secondaryLabelColor) {
       if let redline {
         appendRedline(blocks, of: RevisionDiff.abstractKey, in: redline)
       } else {
@@ -424,7 +439,7 @@ extension DocumentTextBuilder {
       : paragraphStyle(spacingBefore: spacingBefore, spacingAfter: spacingAfter)
     return [
       .font: style.headingFont(depth: depth),
-      .foregroundColor: RFCColors.label,
+      .foregroundColor: labelColor,
       .rfcAnchor: anchor,
       .paragraphStyle: paragraphStyle,
     ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
@@ -557,7 +572,7 @@ extension DocumentTextBuilder {
     var tab = attributes
     tab[.rfcCopiedAs] = copiedAs
     var numberAttributes = tab
-    numberAttributes[.foregroundColor] = RFCColors.secondaryLabel
+    numberAttributes[.foregroundColor] = secondaryLabelColor
     numberAttributes[.rfcSectionNumber] = anchor
     numberAttributes[.link] = ReaderLinkScheme.url(anchor, scheme: ReaderLinkScheme.anchorScheme)
     append("\t", tab)
@@ -661,7 +676,7 @@ extension DocumentTextBuilder {
   func captionAttributes(_ paragraphStyle: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
     [
       .font: style.captionFont,
-      .foregroundColor: RFCColors.secondaryLabel,
+      .foregroundColor: secondaryLabelColor,
       .paragraphStyle: paragraphStyle,
     ]
   }

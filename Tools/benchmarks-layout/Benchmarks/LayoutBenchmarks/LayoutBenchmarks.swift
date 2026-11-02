@@ -210,7 +210,7 @@ final class LayoutInput: @unchecked Sendable {
 
 /// A text laid out headless at a column: the content storage, kept because the
 /// layout manager holds it weakly, the layout manager and a surface over it.
-/// Installed through `install`, never `attributedString` (CLAUDE.md).
+/// Installed through `install`, never `attributedString` (docs/ARCHITECTURE.md, "TextKit 2 traps").
 @MainActor
 struct Layout {
   let storage = NSTextContentStorage()

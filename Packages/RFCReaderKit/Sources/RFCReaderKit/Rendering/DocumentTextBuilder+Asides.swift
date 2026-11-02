@@ -64,7 +64,7 @@ extension DocumentTextBuilder {
   private func appendAsideCaption(_ caption: String, indent: CGFloat) {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: style.codeLabelFont,
-      .foregroundColor: RFCColors.secondaryLabel,
+      .foregroundColor: secondaryLabelColor,
       // Set solid: the body's line height would add leading above one short line.
       .paragraphStyle: paragraphStyle(
         indent: indent, spacingAfter: style.paragraphSpacing * 0.4, lineHeightMultiple: 1),
