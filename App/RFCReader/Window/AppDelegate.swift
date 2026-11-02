@@ -47,13 +47,16 @@
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-      // A window of its own only when none came back from the last session, and only
-      // for a launch from the Finder or the Dock (#762): a script, a Shortcut or an
-      // intent that launched the app to ask it something left a window behind. A
-      // link that launched it makes the window it needs (`LibraryModel.route(_:)`).
-      let isDefaultLaunch =
-        notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
-      if controllers.isEmpty, isDefaultLaunch {
+      // A window of its own only when none came back from the last session, and not
+      // for a script that launched the app, hidden, to ask it something (#762, #939):
+      // `LaunchWindow` says why AppKit's default launch is not the test. A link that
+      // launched it makes the window it needs (`LibraryModel.route(_:)`).
+      let opensWindow = LaunchWindow.opens(
+        readerCameBack: !controllers.isEmpty,
+        launchIsDefault: notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey]
+          as? Bool ?? true,
+        launchedHidden: NSApp.isHidden)
+      if opensWindow {
         openWindow(tabbedWith: nil, inBackground: false)
         signposter.emitEvent("First window made")
       }
