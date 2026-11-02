@@ -7,22 +7,22 @@ import Foundation
 #endif
 
 extension SlicePlanner {
-  /// Lays out the next slice of background completion: from the document's start
-  /// through the slice's end, since TextKit's positions are exact only once
-  /// everything above them is laid out. What the reader's engine and the layout
-  /// benchmarks both run, so the benchmarks measure the engine's own slice.
+  /// Lays out `slice` of background completion, as `nextSlice()` hands it out: from
+  /// the document's start through the slice's end, since TextKit's positions are
+  /// exact only once everything above them is laid out. What the reader's engine and
+  /// the layout benchmarks both run, so the benchmarks measure the engine's own slice.
   ///
-  /// Takes the slice first, so the planner moves on even when there is no layout to
-  /// lay it out in, and a completion's loop cannot spin in place. Answers the slice,
-  /// or nil once the document is laid out.
+  /// A function of the slice, not of the planner, so the caller takes the slice first
+  /// and the planner moves on even when there is no layout to lay it out in. Answers
+  /// whether anything was laid out: false without a layout, or when the slice is
+  /// outside its text.
   @MainActor
   @discardableResult
-  public mutating func layOutNextSlice(in layout: NSTextLayoutManager?) -> NSRange? {
-    guard let slice = nextSlice() else { return nil }
+  public static func layOut(_ slice: NSRange, in layout: NSTextLayoutManager?) -> Bool {
     guard let layout,
       let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
-    else { return slice }
+    else { return false }
     layout.ensureLayout(for: range)
-    return slice
+    return true
   }
 }

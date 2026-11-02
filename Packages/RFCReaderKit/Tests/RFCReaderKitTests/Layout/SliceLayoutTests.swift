@@ -18,9 +18,13 @@ struct SliceLayoutTests {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
     var planner = SlicePlanner(length: built.text.length)
-    let laidOut = planner.layOutNextSlice(in: fixture.layout)
-    let slice = try #require(laidOut)
+    let first = planner.nextSlice()
+    let second = planner.nextSlice()
+    let slice = try #require(first)
+    let next = try #require(second)
+    #expect(SlicePlanner.layOut(slice, in: fixture.layout))
     #expect(try state(at: NSMaxRange(slice) - 1, in: fixture) == .layoutAvailable)
+    #expect(try state(at: NSMaxRange(next) - 1, in: fixture) != .layoutAvailable)
     #expect(try state(at: built.text.length - 1, in: fixture) != .layoutAvailable)
   }
 
@@ -28,18 +32,26 @@ struct SliceLayoutTests {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
     var planner = SlicePlanner(length: built.text.length)
-    while planner.layOutNextSlice(in: fixture.layout) != nil {}
-    #expect(planner.isComplete)
+    while let slice = planner.nextSlice() { SlicePlanner.layOut(slice, in: fixture.layout) }
     #expect(try state(at: built.text.length - 1, in: fixture) == .layoutAvailable)
   }
 
   /// The text view can go while the completion runs; its loop must still end.
-  @Test func `without a layout the planner still moves on`() {
-    var planner = SlicePlanner(length: 20_000)
+  @Test func `without a layout nothing is laid out and the planner still moves on`() {
+    let length = SlicePlanner.sliceLength * 3 + 1
+    var planner = SlicePlanner(length: length)
     var slices = 0
-    while planner.layOutNextSlice(in: nil) != nil { slices += 1 }
+    while let slice = planner.nextSlice() {
+      #expect(!SlicePlanner.layOut(slice, in: nil))
+      slices += 1
+    }
     #expect(planner.isComplete)
-    #expect(slices == 4)
+    #expect(slices == (length + SlicePlanner.sliceLength - 1) / SlicePlanner.sliceLength)
+  }
+
+  @Test func `a slice outside the text lays out nothing`() {
+    let fixture = LayoutFixture(text: NSAttributedString(string: "short"), width: 712)
+    #expect(!SlicePlanner.layOut(NSRange(location: 0, length: 6_000), in: fixture.layout))
   }
 
   private func state(

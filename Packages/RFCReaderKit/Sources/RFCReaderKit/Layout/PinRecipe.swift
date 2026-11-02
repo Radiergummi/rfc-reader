@@ -30,8 +30,9 @@ extension PinSurface {
   /// Lays out what the viewport covers, except during a live resize, where AppKit's
   /// own display pass lays it out once the step is done. Forced on every step, it
   /// made `NSTextView` lay out a large range of the document itself
-  /// (`textViewportLayoutControllerDidLayout:` → `ensureLayoutForRange:`), measured by
-  /// the "Layout: resize step" benchmarks; see docs/ARCHITECTURE.md, "TextKit 2 traps".
+  /// (`textViewportLayoutControllerDidLayout:` → `ensureLayoutForRange:`), as a sample
+  /// of the app showed; see docs/ARCHITECTURE.md, "TextKit 2 traps", and
+  /// docs/decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md.
   public func layOutViewport() {
     guard !isInLiveResize else { return }
     forceViewportLayout()

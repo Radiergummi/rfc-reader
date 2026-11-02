@@ -203,8 +203,11 @@ final class LayoutInput: @unchecked Sendable {
 
   @MainActor
   func layOutNextSlice() {
-    guard let current, slices?.layOutNextSlice(in: current.layout) != nil else {
+    guard let current, let slice = slices?.nextSlice() else {
       preconditionFailure("prepareSlicing first")
+    }
+    guard SlicePlanner.layOut(slice, in: current.layout) else {
+      preconditionFailure("slice \(slice) is outside the text")
     }
   }
 }

@@ -292,8 +292,8 @@ final class ReaderLayoutEngine: PinSurface {
         }
         let clock = ContinuousClock()
         let turnStart = clock.now
-        while !self.planner.isComplete, clock.now - turnStart < Self.turnBudget {
-          self.planner.layOutNextSlice(in: self.textView?.textLayoutManager)
+        while clock.now - turnStart < Self.turnBudget, let slice = self.planner.nextSlice() {
+          SlicePlanner.layOut(slice, in: self.textView?.textLayoutManager)
         }
         self.didLayOut()
       }
@@ -342,7 +342,6 @@ final class ReaderLayoutEngine: PinSurface {
       for await _ in ends { break }
     #endif
   }
-
 }
 
 extension PlatformTextView {
