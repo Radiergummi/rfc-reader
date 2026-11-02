@@ -187,7 +187,8 @@ struct DocumentInspector: View {
         : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
     return AnnotationsView(
       highlights: highlights, notes: notes, statuses: highlightStatuses,
-      notePlacement: notePlacement, note: note, sections: sections, library: library,
+      notePlacement: notePlacement, note: note, sections: sections,
+      appendixLabels: appendixLabels, library: library,
       select: selectSection, openNote: openNote)
   }
 
