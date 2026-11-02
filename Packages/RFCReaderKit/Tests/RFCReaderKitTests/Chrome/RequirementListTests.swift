@@ -96,6 +96,18 @@ struct RequirementListTests {
       ))
   }
 
+  /// In the middle of a line, a block marker's escape shows as nothing, and a `[`
+  /// left open or a lone `*` stays as it is: the citation after it closes neither.
+  @Test func `a sentence in the middle of the checklist's line stays text`() {
+    let open = Self.requirement(
+      "1. A sender MUST list values as [a, b, or *", [.must], section: "section-4", number: "4")
+    let markdown = RequirementList.markdownChecklist([open], document: .rfc(9110))
+    #expect(
+      markdown.contains(
+        #"- [ ] **MUST** 1\. A sender MUST list values as [a, b, or * ([RFC 9110, Section 4](rfc://9110#section-4))"#
+      ))
+  }
+
   /// A field holding a comma or a quote is quoted, its quotes doubled.
   @Test func `the checklist in CSV quotes every field`() {
     let csv = RequirementList.csvChecklist(

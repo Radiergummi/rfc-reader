@@ -81,6 +81,9 @@ public enum RequirementList {
   /// line on its own, and is as safe in the middle of this one: the sentence is a
   /// single line, a space stands on either side of it as at a line's ends, and a
   /// backslash before a block marker it escapes at its start shows as nothing.
+  /// Nothing after it holds a `*`, `_`, `~` or backtick that a run it leaves
+  /// unescaped could pair with, and the citation's link makes inactive a `[` it
+  /// leaves open. A change to what follows the sentence must keep both true.
   public static func markdownChecklist(_ requirements: [Requirement], document: DocumentID)
     -> String
   {

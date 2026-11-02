@@ -18,6 +18,8 @@ extension QuoteCitation {
   ///
   /// The line is read by its code points, as CommonMark reads it: a combining mark
   /// after a `*` or a `>` would hide it in a `Character`, but not from Markdown.
+  ///
+  /// `RequirementList.markdownChecklist` writes it in the middle of a line, too.
   static func escapedMarkdownLine(_ line: String) -> String {
     let characters = Array(line.unicodeScalars.drop { $0 == " " || $0 == "\t" })
     let runs = characterRuns(in: characters)
