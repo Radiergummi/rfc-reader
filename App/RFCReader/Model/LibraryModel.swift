@@ -778,6 +778,7 @@ final class LibraryModel {
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
+    indexSectionsForSpotlight()
     settleIndex()
     compareBookmarks()
     // What waited for the formats the index lists.
@@ -846,6 +847,24 @@ final class LibraryModel {
     spotlightCheckedAt = .now
     spotlightIndexing = Task(name: "Index for Spotlight") {
       await SpotlightIndexer.update(rfcs)
+    }
+  }
+
+  /// The indexing of sections for Spotlight under way (#178).
+  @ObservationIgnored private var spotlightSectionIndexing: Task<Void, Never>?
+
+  /// Brings Spotlight's sections to what the full-text index holds from stored
+  /// bodies, once both it and the index, which names each section's document, are
+  /// there. An indexing under way gives way at its next batch, and this one starts
+  /// once it has, so two never write the client state at once.
+  private func indexSectionsForSpotlight() {
+    guard let textIndexer, let index else { return }
+    let previous = spotlightSectionIndexing
+    previous?.cancel()
+    spotlightSectionIndexing = Task(name: "Index sections for Spotlight", priority: .utility) {
+      await previous?.value
+      guard !Task.isCancelled else { return }
+      await SpotlightIndexer.updateSections(from: textIndexer, rfcs: index.rfcs)
     }
   }
 
@@ -1192,6 +1211,7 @@ final class LibraryModel {
 
   private func textIndexChanged() {
     textIndexVersion += 1
+    indexSectionsForSpotlight()
   }
 
   /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,

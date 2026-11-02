@@ -9,7 +9,8 @@ nonisolated private let spotlightLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "spotlight")
 
 /// Keeps every RFC in the index in Spotlight (#178), so system search finds one by
-/// number, title or abstract. What an item says is `SpotlightEntry`'s; this only
+/// number, title or abstract, and the sections of the documents the app holds, so it
+/// finds a passage. What an item says is `SpotlightEntry`'s; this only
 /// hands it to CoreSpotlight, with the RFC's `RFCEntity` (#192), so a result is the
 /// RFC Shortcuts and Siri act on.
 enum SpotlightIndexer {
@@ -53,6 +54,97 @@ enum SpotlightIndexer {
     }
   }
 
+  /// Brings Spotlight's sections to the documents the full-text index holds from a
+  /// stored body (`TextIndexer.spotlightDocuments`), as `SpotlightSection.Plan`
+  /// says: the documents gone or indexed again are deleted, then the new ones are
+  /// indexed from the full-text index's rows, a batch at a time, each batch writing
+  /// what the index then holds as its client state. Cancelled, it stops at the next
+  /// batch, and the next indexing does the rest.
+  ///
+  /// On the main actor, as `SectionEntity` is, which each item carries: its rows are
+  /// read on the indexer's executor, and only the items are made here ("Make section
+  /// items" in Points of Interest measures it).
+  static func updateSections(from indexer: TextIndexer, rfcs: [RFCMetadata]) async {
+    guard CSSearchableIndex.isIndexingAvailable(),
+      let held = await indexer.spotlightDocuments()
+    else { return }
+    let index = CSSearchableIndex(name: SpotlightSection.domain)
+    do {
+      let plan = SpotlightSection.Plan(
+        held: held, clientState: try await index.fetchLastClientState())
+      guard !plan.isEmpty else { return }
+      let interval = signposter.beginInterval(
+        "Index sections for Spotlight", id: signposter.makeSignpostID(),
+        "\(plan.indexed.count) documents")
+      var sections = 0
+      defer {
+        signposter.endInterval("Index sections for Spotlight", interval, "\(sections) sections")
+      }
+      var kept = plan.kept
+      index.beginBatch()
+      delete(
+        domains: plan.removesEverything
+          ? [SpotlightSection.domain] : plan.removed.map(SpotlightSection.domain(of:)),
+        from: index)
+      try await index.endBatch(withClientState: SpotlightSection.Plan.clientState(kept))
+
+      let titles = Dictionary(rfcs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+      var entries: [SpotlightSection] = []
+      var batched: [DocumentID] = []
+      for (position, id) in plan.indexed.enumerated() {
+        guard !Task.isCancelled else { break }
+        do {
+          let rows = try await indexer.indexedRows(of: id)
+          entries += SpotlightSection.entries(of: id, titled: titles[id], rows: rows)
+          batched.append(id)
+        } catch {
+          // Left out of the state, so the next indexing tries it again.
+          spotlightLog.error(
+            "\(id.displayName, privacy: .public): sections not read for Spotlight: \(String(describing: error), privacy: .public)"
+          )
+        }
+        guard entries.count >= batchSize || position == plan.indexed.count - 1 else { continue }
+        let making = signposter.beginInterval("Make section items")
+        let items = entries.map(sectionItem)
+        signposter.endInterval("Make section items", making, "\(items.count) items")
+        index.beginBatch()
+        add(items, to: index)
+        for id in batched { kept[id] = held[id] }
+        try await index.endBatch(withClientState: SpotlightSection.Plan.clientState(kept))
+        sections += entries.count
+        entries = []
+        batched = []
+      }
+      spotlightLog.debug("indexed \(sections) sections for Spotlight")
+    } catch {
+      spotlightLog.error(
+        "indexing sections for Spotlight failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// Synchronous inside a batch, as `add` is.
+  nonisolated private static func delete(domains: [String], from index: CSSearchableIndex) {
+    guard !domains.isEmpty else { return }
+    index.deleteSearchableItems(withDomainIdentifiers: domains, completionHandler: nil)
+  }
+
+  /// Without an expiry: a section stays as long as its document's body, and leaves
+  /// Spotlight with it, by the plan, rather than when CoreSpotlight's default runs
+  /// out.
+  private static func sectionItem(_ entry: SpotlightSection) -> CSSearchableItem {
+    let attributes = CSSearchableItemAttributeSet(contentType: .text)
+    attributes.title = entry.title
+    attributes.contentDescription = entry.description
+    attributes.textContent = entry.text
+    attributes.keywords = entry.keywords
+    let item = CSSearchableItem(
+      uniqueIdentifier: entry.identifier.description, domainIdentifier: entry.domainIdentifier,
+      attributeSet: attributes)
+    item.expirationDate = .distantFuture
+    item.associateAppEntity(SectionEntity(entry))
+    return item
+  }
+
   /// No completion to wait for inside a batch: `endBatch` reports the outcome. Not
   /// the async variant, which waits for one; synchronous, so the compiler doesn't
   /// suggest it.
@@ -75,3 +167,6 @@ enum SpotlightIndexer {
     return item
   }
 }
+
+/// So a section in Spotlight is the section Shortcuts and Siri act on (#178).
+extension SectionEntity: IndexedEntity {}
