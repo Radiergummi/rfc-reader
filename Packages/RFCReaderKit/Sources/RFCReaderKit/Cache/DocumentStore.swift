@@ -55,10 +55,10 @@ public actor DocumentStore {
     let entry: RFCMetadata?
   }
 
-  /// The app's build, which keys the parses kept encoded beside their bodies (#606):
-  /// a model written by another build is parsed again, whatever in the model or a
-  /// parser changed between them. Nil keeps none, as in tests that do not ask for them.
-  /// See `appBuild`.
+  /// The app's build, which keys the parses kept encoded beside their bodies (#606)
+  /// and the index snapshot (#758): a model or a snapshot written by another build is
+  /// parsed again, whatever in the model or a parser changed between them. Nil keeps
+  /// none, as in tests that do not ask for them. See `appBuild`.
   private let build: String?
 
   /// The last model write, which the next one waits for, as snapshots do.
@@ -114,8 +114,9 @@ public actor DocumentStore {
   private let bodiesChangedContinuation: AsyncStream<Void>.Continuation
 
   /// Where the index snapshot lives: in Caches, because it is made again from one
-  /// parse, so it stays out of backups.
-  private let snapshotURL: URL
+  /// parse, so it stays out of backups. Named for the build, which reads only its own
+  /// (`IndexSnapshot.fileName(build:)`); nil without a build, which keeps none.
+  private let snapshotURL: URL?
 
   /// The last snapshot write, which the next one waits for, so a snapshot of an
   /// older index never lands after a newer one.
@@ -205,7 +206,7 @@ public actor DocumentStore {
     }
     try? Self.createFolder(keptDirectory, for: .kept)
     try? Self.createFolder(cacheDirectory, for: .cache)
-    snapshotURL = caches.appending(path: "rfc-index.json")
+    snapshotURL = build.map { caches.appending(path: IndexSnapshot.fileName(build: $0)) }
   }
 
   /// What the volume holding `folder` has free: for important usage for the kept
@@ -268,12 +269,12 @@ public actor DocumentStore {
     } else {
       return nil
     }
-    let isCurrent = IndexSnapshot.isCurrent(
-      written: Self.modificationDate(of: snapshotURL),
-      index: Self.modificationDate(of: url) ?? .distantFuture,
-      app: Bundle.main.executableURL.flatMap(Self.modificationDate(of:)) ?? .distantFuture
-    )
-    return CachedIndex(url: url, updatedAt: updatedAt, snapshot: isCurrent ? snapshotURL : nil)
+    let snapshot = snapshotURL.flatMap { snapshot in
+      IndexSnapshot.isCurrent(
+        written: Self.modificationDate(of: snapshot),
+        index: Self.modificationDate(of: url) ?? .distantFuture) ? snapshot : nil
+    }
+    return CachedIndex(url: url, updatedAt: updatedAt, snapshot: snapshot)
   }
 
   /// Keeps a refreshed index, its snapshot made from the same parse, and what
@@ -333,10 +334,16 @@ public actor DocumentStore {
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   public func writeSnapshot(of index: RFCIndex) {
-    snapshotWrite = Task(name: "Write index snapshot") { [snapshotURL, snapshotWrite] in
+    guard let snapshotURL else { return }
+    snapshotWrite = Task(name: "Write index snapshot") { [snapshotWrite] in
       await snapshotWrite?.value
       await Self.write(index, to: snapshotURL)
     }
+  }
+
+  /// Waits for the snapshot being written, for a test to read it.
+  func untilSnapshotWritten() async {
+    await snapshotWrite?.value
   }
 
   @concurrent
@@ -348,6 +355,14 @@ public actor DocumentStore {
     } catch {
       storeLog.error(
         "writing the index snapshot failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    // Another build's snapshot is never read again, and is the size of the index.
+    let folder = url.deletingLastPathComponent()
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+    for name in names
+    where name != url.lastPathComponent && IndexSnapshot.isSnapshot(fileName: name) {
+      try? FileManager.default.removeItem(at: folder.appending(path: name))
     }
   }
 
