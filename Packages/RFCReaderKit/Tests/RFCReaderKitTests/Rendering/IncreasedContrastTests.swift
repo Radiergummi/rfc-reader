@@ -42,12 +42,9 @@ struct IncreasedContrastTests {
   #else
     /// iOS can make the traits Increase Contrast draws in, so the colors themselves
     /// are resolved in them.
-    @Test(arguments: [false, true])
+    @Test(arguments: [false, true]) @MainActor
     func `the cards resolve to High Contrast's under Increase Contrast`(dark: Bool) {
-      let traits = UITraitCollection { traits in
-        traits.userInterfaceStyle = dark ? .dark : .light
-        traits.accessibilityContrast = .high
-      }
+      let traits = Self.traits(dark: dark, increasedContrast: true)
       let expected = dark ? PaletteColors.highContrast.dark : PaletteColors.highContrast.light
       var alpha: CGFloat = -1
       _ = RFCColors.cardFill.resolvedColor(with: traits).getRed(
@@ -56,16 +53,23 @@ struct IncreasedContrastTests {
     }
 
     /// A page theme's colors are its own: Increase Contrast leaves them.
-    @Test(arguments: [false, true])
+    @Test(arguments: [false, true]) @MainActor
     func `a theme's colors are the same under Increase Contrast`(dark: Bool) {
-      let style: UIUserInterfaceStyle = dark ? .dark : .light
-      let standard = UITraitCollection { $0.userInterfaceStyle = style }
-      let increased = UITraitCollection { traits in
-        traits.userInterfaceStyle = style
-        traits.accessibilityContrast = .high
-      }
+      let standard = Self.traits(dark: dark, increasedContrast: false)
+      let increased = Self.traits(dark: dark, increasedContrast: true)
       let color = ReaderPalette.highContrast.link
       #expect(color.resolvedColor(with: standard) == color.resolvedColor(with: increased))
+    }
+
+    /// Traits for a light or dark appearance, under Increase Contrast or not. On the
+    /// main actor, which the mutations run on: `UIMutableTraits`' setters are
+    /// main-actor isolated in the iOS 26 SDK CI builds with.
+    @MainActor
+    private static func traits(dark: Bool, increasedContrast: Bool) -> UITraitCollection {
+      UITraitCollection { traits in
+        traits.userInterfaceStyle = dark ? .dark : .light
+        traits.accessibilityContrast = increasedContrast ? .high : .normal
+      }
     }
   #endif
 
