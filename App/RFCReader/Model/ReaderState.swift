@@ -227,6 +227,12 @@ final class ReaderState {
       hasDocument: hasDocument, kind: publishedOriginal?.kind)
   }
 
+  /// Whether Go to Section, Focus and the outline offer the loaded text's sections:
+  /// not for an RFC read as its original (#1022).
+  var offersSections: Bool {
+    PublishedOriginalPage.offersSections(kind: publishedOriginal?.kind)
+  }
+
   /// Who says how far the title has come into the toolbar, and the one place its
   /// state is pushed from (#281); see `ToolbarTitleOwnership`.
   @ObservationIgnored private var titleOwnership = ToolbarTitleOwnership() {
