@@ -49,24 +49,36 @@ public struct SyntaxTheme: Sendable, Hashable, Identifiable {
   /// Restrained, for a reader where code supports the prose: names, strings and
   /// literals in three quiet hues, punctuation and comments in gray. The system's
   /// secondary label color, about 4:1 on the card, is too faint for them.
-  public static let standard: SyntaxTheme = {
-    let muted = color(light: 0x6E6E73, dark: 0xA1A1A6)
-    let literal = color(light: 0x8A3FB0, dark: 0xD9A6F5)
-    return SyntaxTheme(
-      id: "standard",
-      [
-        .punctuation: muted,
-        .comment: muted,
-        .name: color(light: 0x3A3AB8, dark: 0xA9A9FF),
-        .string: color(light: 0x1F7A3A, dark: 0x7BD88F),
-        .keyword: literal,
-        .number: literal,
-        .attribute: literal,
-      ])
+  public static let standard = SyntaxTheme(
+    id: "standard", standardColors.mapValues { RFCColors.dynamic($0.map(PlatformColor.init)) })
+
+  /// `standard`'s colors as the sRGB values their contrast is measured on: 4.5:1 on
+  /// the card, and under Increase Contrast 7:1 on High Contrast's (#867), darker in
+  /// light and lighter in dark.
+  static let standardColors: [TokenKind: AppearanceVariants<SRGBColor>] = {
+    let muted = color(
+      light: 0x6E6E73, dark: 0xA1A1A6, increasedLight: 0x48484D, increasedDark: 0xD2D2D6)
+    let literal = color(
+      light: 0x8A3FB0, dark: 0xD9A6F5, increasedLight: 0x6E2A92, increasedDark: 0xE8C4FA)
+    return [
+      .punctuation: muted,
+      .comment: muted,
+      .name: color(
+        light: 0x3A3AB8, dark: 0xA9A9FF, increasedLight: 0x2E2EA0, increasedDark: 0xCECEFF),
+      .string: color(
+        light: 0x1F7A3A, dark: 0x7BD88F, increasedLight: 0x0E5626, increasedDark: 0x9BE8A9),
+      .keyword: literal,
+      .number: literal,
+      .attribute: literal,
+    ]
   }()
 
-  /// A color for each appearance, as sRGB hex, resolved when it is drawn.
-  static func color(light: UInt32, dark: UInt32) -> PlatformColor {
-    RFCColors.byAppearance(light: SRGBColor(hex: light), dark: SRGBColor(hex: dark))
+  /// A color for each appearance, as sRGB hex.
+  private static func color(
+    light: UInt32, dark: UInt32, increasedLight: UInt32, increasedDark: UInt32
+  ) -> AppearanceVariants<SRGBColor> {
+    AppearanceVariants(
+      light: SRGBColor(hex: light), dark: SRGBColor(hex: dark),
+      increasedLight: SRGBColor(hex: increasedLight), increasedDark: SRGBColor(hex: increasedDark))
   }
 }

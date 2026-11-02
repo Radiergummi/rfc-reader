@@ -204,14 +204,8 @@ public struct ReaderPalette: Sendable, Hashable, Identifiable {
   /// or more on the page and on the cards.
   public static let highContrast = ReaderPalette(
     id: "high-contrast",
-    light: PaletteColors(
-      page: SRGBColor(hex: 0xFF_FFFF), text: SRGBColor(hex: 0x00_0000),
-      secondaryText: SRGBColor(hex: 0x33_3333), link: SRGBColor(hex: 0x00_40A8),
-      cardTint: SRGBColor(hex: 0x00_0000), cardOpacity: 0.05, asideOpacity: 0.07),
-    dark: PaletteColors(
-      page: SRGBColor(hex: 0x00_0000), text: SRGBColor(hex: 0xFF_FFFF),
-      secondaryText: SRGBColor(hex: 0xD0_D0D0), link: SRGBColor(hex: 0x80_BDFF),
-      cardTint: SRGBColor(hex: 0xFF_FFFF), cardOpacity: 0.10, asideOpacity: 0.14))
+    light: PaletteColors.highContrast.light,
+    dark: PaletteColors.highContrast.dark)
 
   /// Every palette the reader offers, the automatic one first.
   public static let all: [ReaderPalette] = [
@@ -304,6 +298,20 @@ public struct PaletteColors: Sendable, Hashable {
 
   /// How strongly the rule beside a quote draws the secondary text's color.
   static let ruleOpacity = 0.35
+
+  /// The High Contrast theme's colors, which the automatic palette's own colors
+  /// take as well under the system's Increase Contrast (#867): its cards, strokes
+  /// and links.
+  public static let highContrast = (
+    light: PaletteColors(
+      page: SRGBColor(hex: 0xFF_FFFF), text: SRGBColor(hex: 0x00_0000),
+      secondaryText: SRGBColor(hex: 0x33_3333), link: SRGBColor(hex: 0x00_40A8),
+      cardTint: SRGBColor(hex: 0x00_0000), cardOpacity: 0.05, asideOpacity: 0.07),
+    dark: PaletteColors(
+      page: SRGBColor(hex: 0x00_0000), text: SRGBColor(hex: 0xFF_FFFF),
+      secondaryText: SRGBColor(hex: 0xD0_D0D0), link: SRGBColor(hex: 0x80_BDFF),
+      cardTint: SRGBColor(hex: 0xFF_FFFF), cardOpacity: 0.10, asideOpacity: 0.14)
+  )
 
   public init(
     page: SRGBColor, text: SRGBColor, secondaryText: SRGBColor, link: SRGBColor,
