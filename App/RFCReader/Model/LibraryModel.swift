@@ -526,7 +526,15 @@ final class LibraryModel {
 
   /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
   /// the palette asks on each keystroke, and nothing on screen lists them.
-  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+  /// `registriesVersion` tells it when they change.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = [] {
+    didSet { registriesVersion += 1 }
+  }
+
+  /// Counts the changes to the registry values, observed, so that Go to RFC lists
+  /// those that arrive while it is open: on iOS, its first open is what reads them
+  /// (#579).
+  private(set) var registriesVersion = 0
 
   /// When the registries were last checked, nil until they first are.
   @ObservationIgnored private var registriesCheckedAt: Date?

@@ -263,15 +263,16 @@ final class HandChecks: XCTestCase {
 
   /// The library's # opens Go to RFC on a text keyboard; `BCP 14` lists its members
   /// and not RFC 14, and Open opens the first.
-  func testGoToRFC() {
+  func testGoToRFC() throws {
     app.launch()
     dismissStoreWarning()
     waitForIndex()
     // The bar's button, at the foot of the screen: the keyboard command of the same
     // name is listed too, at the screen's middle.
-    let goTo = app.buttons.matching(identifier: "Go to RFC").allElementsBoundByIndex
-      .max { $0.frame.minY < $1.frame.minY }
-    goTo?.tap()
+    let goTo = try XCTUnwrap(
+      app.buttons.matching(identifier: "Go to RFC").allElementsBoundByIndex
+        .max { $0.frame.minY < $1.frame.minY }, "no Go to RFC button")
+    goTo.tap()
 
     let field = app.textFields["RFC number, BCP 14, or a link"]
     XCTAssertTrue(field.waitForExistence(timeout: 5), "no Go to RFC sheet")

@@ -53,6 +53,26 @@ struct DocumentReferenceTests {
         == "draft-ietf-quic-http-34")
   }
 
+  /// The punctuation inside the brackets goes too, and a quotation's marks.
+  @Test func `a pasted reference keeps none of the punctuation or quotes around it`() {
+    #expect(DocumentReference.link(from: "(RFC 9110.)") == RFCLink(id: .rfc(9110)))
+    #expect(DocumentReference.link(from: "“RFC 9110”") == RFCLink(id: .rfc(9110)))
+    #expect(DocumentReference.link(from: "“RFC 9110,”") == RFCLink(id: .rfc(9110)))
+    #expect(
+      DocumentReference.link(from: "\"BCP 14\"")?.id == DocumentID(series: .bcp, number: 14))
+    #expect(DocumentReference.link(from: "\"") == nil)
+  }
+
+  /// A registry value is read as pasted too: `425.` and `(425)` are `425`.
+  @Test func `a pasted registry value names what it does typed`() {
+    let tooEarly = RegistryEntry(
+      registry: .httpStatusCodes, value: "425", name: "Too Early",
+      references: [RFCLink(id: .rfc(8470))])
+    for pasted in ["425", "425.", "(425)", "(425.)", "“425”"] {
+      #expect(DocumentReference.registryMatches(for: pasted, in: [tooEarly]) == [tooEarly])
+    }
+  }
+
   /// Only what is around it: a reference among other words names nothing.
   @Test func `a pasted sentence is nothing`() {
     #expect(DocumentReference.link(from: "RFC 9110, section 4") == nil)

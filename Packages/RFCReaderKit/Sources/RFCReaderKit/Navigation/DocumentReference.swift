@@ -46,20 +46,35 @@ public enum DocumentReference {
     return link
   }
 
+  /// The registry values `reference` names (#175), read as a pasted reference is:
+  /// `425.` and `(425)` name what `425` does.
+  public static func registryMatches(
+    for reference: String, in entries: [RegistryEntry]
+  ) -> [RegistryEntry] {
+    RegistryLookup.matches(pasted(reference), in: entries)
+  }
+
   /// A reference less what a paste brings with it from the text around it (#579):
   /// the spaces, the punctuation that ended its sentence, then one pair of the
-  /// brackets a citation (`[RFC9110]`), an aside (`(BCP 14)`) or a link
-  /// (`<https://…>`) is written in.
+  /// brackets or quotes a citation (`[RFC9110]`), an aside (`(BCP 14)`), a link
+  /// (`<https://…>`) or a quotation (`“RFC 9110”`) is written in, and the punctuation
+  /// inside them (`(RFC 9110.)`).
   private static func pasted(_ reference: String) -> String {
-    var text = Substring(reference.trimmingCharacters(in: .whitespacesAndNewlines))
+    var text = withoutTrailingPunctuation(Substring(reference))
+    for (open, close) in [("[", "]"), ("(", ")"), ("<", ">"), ("“", "”"), ("\"", "\"")]
+    where text.hasPrefix(open) && text.hasSuffix(close) {
+      text = withoutTrailingPunctuation(text.dropFirst().dropLast())
+      break
+    }
+    return String(text)
+  }
+
+  /// `text` less the spaces around it and the punctuation that ends it.
+  private static func withoutTrailingPunctuation(_ text: Substring) -> Substring {
+    var text = Substring(text.trimmingCharacters(in: .whitespacesAndNewlines))
     while let last = text.last, ".,;:".contains(last) {
       text = text.dropLast()
     }
-    for (open, close) in [("[", "]"), ("(", ")"), ("<", ">")]
-    where text.hasPrefix(open) && text.hasSuffix(close) {
-      text = text.dropFirst().dropLast()
-      break
-    }
-    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return Substring(text.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 }

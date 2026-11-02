@@ -522,6 +522,20 @@ struct QuickOpenWithoutSearchTests {
     #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) != nil)
   }
 
+  /// iOS reads the registries as the sheet first opens (#579): the same query
+  /// resolved again once they arrive lists the registry value, selects it, and no
+  /// longer says that it names nothing.
+  @Test func `a registry value that arrives after return is listed and openable`() {
+    var results = QuickOpenResults(searches: false)
+    results.show(query: "too early", exact: nil)
+    #expect(results.activate(.here) == nil)
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) != nil)
+    results.show(query: "too early", exact: nil, registry: [QuickOpenResultsTests.tooEarly])
+    #expect(results.rows.map(\.entry) == [QuickOpenResultsTests.tooEarly])
+    #expect(results.openable == RFCLink(id: .rfc(8470)))
+    #expect(results.message(indexState: .ready(updatedAt: .now), locale: .english) == nil)
+  }
+
   @Test func `the placeholder and the example name what it takes, and no title words`() {
     #expect(
       QuickOpenResults.identifierPlaceholder(locale: .english) == "RFC number, BCP 14, or a link")

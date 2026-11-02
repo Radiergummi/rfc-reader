@@ -333,6 +333,8 @@ struct EmptyDetailView: View {
       }
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { controller.resolve() }
+      // So do registry values that arrive while it is open: its first open reads them.
+      .onChange(of: library.registriesVersion) { controller.resolve() }
     }
 
     /// Said while nothing is listed: what the field takes, or, once ↵ found nothing,
