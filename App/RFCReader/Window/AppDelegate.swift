@@ -20,6 +20,10 @@
 
     private(set) var controllers: [ReaderWindowController] = []
 
+    /// Whether the window of its own a launch may open is still to come: see
+    /// `LaunchWindow`. Nil until launch finishes.
+    private var launchWindow: LaunchWindow?
+
     /// The Services' provider (#195), kept here because `NSApp.servicesProvider` does
     /// not retain it.
     private let citationServices = CitationServices()
@@ -47,23 +51,40 @@
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-      // A window of its own only when none came back from the last session, and not
-      // for a script that launched the app, hidden, to ask it something (#762, #939):
-      // `LaunchWindow` says why AppKit's default launch is not the test. A link that
-      // launched it makes the window it needs (`LibraryModel.route(_:)`).
-      let opensWindow = LaunchWindow.opens(
-        readerCameBack: !controllers.isEmpty,
+      // A window of its own only when none came back from the last session, and only
+      // for a launch the user sees (#762, #939): a script, a Service or an intent that
+      // launched the app to ask it something left a window behind. `LaunchWindow`
+      // says when. A link that launched it makes the window it needs
+      // (`LibraryModel.route(_:)`).
+      let launchWindow = LaunchWindow(
         launchIsDefault: notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey]
           as? Bool ?? true,
-        launchedHidden: NSApp.isHidden)
-      if opensWindow {
+        readerCameBack: !controllers.isEmpty)
+      self.launchWindow = launchWindow
+      if launchWindow.opensAtLaunch {
         openWindow(tabbedWith: nil, inBackground: false)
         signposter.emitEvent("First window made")
+      } else if NSApp.isActive {
+        // Activated before launch finished, so `applicationDidBecomeActive` came too
+        // early to count.
+        openLaunchWindowOnActivation()
       }
       warnIfTheStoreDidNotOpen()
       // Made by the menu's commands as a rule, which come first; made here if not, so
       // the scheduled checks never wait on the menu.
       _ = Updater.shared
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+      openLaunchWindowOnActivation()
+    }
+
+    private func openLaunchWindowOnActivation() {
+      guard launchWindow?.becameActive(hasReaderWindow: !controllers.isEmpty) == true else {
+        return
+      }
+      openWindow(tabbedWith: nil, inBackground: false)
+      signposter.emitEvent("First window made")
     }
 
     /// Once, at launch, when the bookmarks store fell back to memory (#152):

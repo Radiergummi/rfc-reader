@@ -2,29 +2,62 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// Whether the Mac app opens a reader window of its own at launch (#762, #939).
+/// When the Mac app opens a reader window of its own after launching (#762, #939).
 @Suite("Launch window")
 struct LaunchWindowTests {
-  @Test func `a launch from the Finder or the Dock opens one`() {
-    #expect(LaunchWindow.opens(readerCameBack: false, launchIsDefault: true, launchedHidden: false))
+  @Test func `a default launch opens one at once`() {
+    var window = LaunchWindow(launchIsDefault: true, readerCameBack: false)
+    #expect(window.opensAtLaunch)
+    let opens = window.becameActive(hasReaderWindow: true)
+    #expect(!opens)
+  }
+
+  /// `open -j` launches the app hidden and still calls the launch the default one:
+  /// the window opens, and shows with the app.
+  @Test func `a default launch opens one at once even when hidden`() {
+    let window = LaunchWindow(launchIsDefault: true, readerCameBack: false)
+    #expect(window.opensAtLaunch)
   }
 
   @Test func `a reader window that came back is enough`() {
-    #expect(
-      !LaunchWindow.opens(readerCameBack: true, launchIsDefault: false, launchedHidden: false))
+    for launchIsDefault in [true, false] {
+      var window = LaunchWindow(launchIsDefault: launchIsDefault, readerCameBack: true)
+      #expect(!window.opensAtLaunch)
+      let opens = window.becameActive(hasReaderWindow: true)
+      #expect(!opens)
+    }
   }
 
-  /// A script launches the app hidden, to ask it something, and a window made then is
-  /// left behind.
-  @Test func `a script's launch opens none`() {
-    #expect(
-      !LaunchWindow.opens(readerCameBack: false, launchIsDefault: false, launchedHidden: true))
+  /// AppKit calls a launch that restores the last session's state not the default
+  /// one, even when that state holds no reader window. The Dock activates the app.
+  @Test func `a Dock launch that restored no reader window opens one on activation`() {
+    var window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
+    #expect(!window.opensAtLaunch)
+    let opens = window.becameActive(hasReaderWindow: false)
+    #expect(opens)
   }
 
-  /// AppKit calls a launch that restores the last session's state not the default one,
-  /// even when that state holds no reader window: the settings alone, or nothing.
-  @Test func `a launch that restored no reader window opens one`() {
-    #expect(
-      LaunchWindow.opens(readerCameBack: false, launchIsDefault: false, launchedHidden: false))
+  /// A script, a Service or a background intent launches the app without activating it.
+  @Test func `a launch that never activates the app opens none`() {
+    let window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
+    #expect(!window.opensAtLaunch)
+  }
+
+  /// Switching to an app a script launched opens the window then, once.
+  @Test func `only the first activation opens one`() {
+    var window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
+    let first = window.becameActive(hasReaderWindow: false)
+    #expect(first)
+    let second = window.becameActive(hasReaderWindow: false)
+    #expect(!second)
+  }
+
+  /// A link that launched the app made a window for itself first.
+  @Test func `a window made since launch is enough`() {
+    var window = LaunchWindow(launchIsDefault: false, readerCameBack: false)
+    let first = window.becameActive(hasReaderWindow: true)
+    #expect(!first)
+    let second = window.becameActive(hasReaderWindow: false)
+    #expect(!second)
   }
 }
