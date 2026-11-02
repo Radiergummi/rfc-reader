@@ -228,3 +228,49 @@ extension DocumentHeader {
     return header
   }
 }
+
+/// The contents panel beside a translated document names an appendix as its body
+/// does (#940), and beside the original as the English body does.
+@Suite("Document translation: appendix labels")
+struct TranslatedAppendixLabelTests {
+  /// Each contents row against the heading the body's text has at its anchor.
+  private static func expectContentsMatchHeadings(
+    _ built: BuiltDocument, _ shown: RFCDocument
+  ) throws {
+    let sections = built.reachableSections(of: shown)
+    let rows = ContentsOutline.rows(
+      of: sections, filter: "", appendixLabels: built.appendixLabels)
+    try #require(!rows.isEmpty)
+    let text = built.text.string as NSString
+    for row in rows {
+      let offset = try #require(built.anchors.offset(of: row.anchor))
+      let length = min((row.title as NSString).length, text.length - offset)
+      let heading = text.substring(with: NSRange(location: offset, length: length))
+      #expect(heading == row.title, "\(row.anchor)")
+    }
+  }
+
+  @Test func `a translated build and its contents name an appendix alike`() throws {
+    let document = try Fixtures.rfc8999()
+    try #require(document.allSections.contains { $0.isAppendix && $0.number != nil })
+    let sources = DocumentTranslation.missing(in: document, known: [:])
+    var translations = Dictionary(uniqueKeysWithValues: sources.map { ($0, $0) })
+    translations["Appendix A"] = "Anhang A"
+    let translated = TranslatedDocument(document, translations)
+    let built = DocumentTextBuilder.build(translated, style: ReadingStyle())
+    #expect(built.appendixLabels.appendix == "Anhang")
+    try Self.expectContentsMatchHeadings(built, translated.document)
+    let rows = ContentsOutline.rows(
+      of: built.reachableSections(of: translated.document), filter: "",
+      appendixLabels: built.appendixLabels)
+    #expect(rows.contains { $0.title.hasPrefix("Anhang A. ") })
+    #expect(!rows.contains { $0.title.hasPrefix("Appendix ") })
+  }
+
+  @Test func `the original's build and its contents name an appendix in English`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    #expect(built.appendixLabels == .english)
+    try Self.expectContentsMatchHeadings(built, document)
+  }
+}

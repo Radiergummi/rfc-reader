@@ -207,6 +207,9 @@ final class ReaderState {
   /// Whether the build on screen is the translation, which has no quote to copy:
   /// not until it is made, though `showTranslation` is on.
   var readsTranslation = false
+  /// What the build on screen named an appendix by (#940), which the contents name
+  /// it by too: a translation's labels, or English.
+  var appendixLabels = RFCKit.Section.AppendixLabels.english
   /// The older document the reader marks what changed since (#729): another
   /// revision of the draft on screen, or the draft the RFC on screen was. Set from
   /// the header, read by the reader, which builds the redline once both are here.
@@ -348,6 +351,7 @@ final class ReaderState {
     titleOwnership.close()
     sections = []
     readsTranslation = false
+    appendixLabels = .english
     groups = []
     requirements = nil
     highlightStatuses = nil

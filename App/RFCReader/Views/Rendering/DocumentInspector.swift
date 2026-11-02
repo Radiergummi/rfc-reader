@@ -44,6 +44,8 @@ struct DocumentInspector: View {
   /// Both are derived once per document by `DocumentView` rather than here, where
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
+  /// What the body names an appendix by, which the contents name it by too (#940).
+  let appendixLabels: RFCKit.Section.AppendixLabels
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
   /// Where the build on screen placed each highlight (#522) and note (#523).
@@ -185,7 +187,8 @@ struct DocumentInspector: View {
         : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
     return AnnotationsView(
       highlights: highlights, notes: notes, statuses: highlightStatuses,
-      notePlacement: notePlacement, note: note, sections: sections, library: library,
+      notePlacement: notePlacement, note: note, sections: sections,
+      appendixLabels: appendixLabels, library: library,
       select: selectSection, openNote: openNote)
   }
 
@@ -220,7 +223,8 @@ struct DocumentInspector: View {
       // RFC, the top of the list is a long way from where the reader is.
       ScrollViewReader { proxy in
         TableOfContentsView(
-          sections: sections, current: current, select: selectSection,
+          sections: sections, appendixLabels: appendixLabels, current: current,
+          select: selectSection,
           addNote: highlightStatuses == nil
             ? nil : { openNote(.new(.target(.section($0)))) }
         )
@@ -327,6 +331,7 @@ struct PanelHost: View {
     if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
+        appendixLabels: reader.appendixLabels,
         // In Focus, what the focused section cites, pinned beside it (#699); the whole
         // bibliography for an entry asked for that the section does not cite.
         groups: FocusCitations.shown(

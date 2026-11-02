@@ -22,6 +22,9 @@ struct AnnotationsView: View {
   let note: String?
   /// The sections the body holds, which name a row's section.
   let sections: [RFCKit.Section]
+  /// What the body names an appendix by, which a row's section is named by too
+  /// (#940): a translation's labels, or English.
+  let appendixLabels: RFCKit.Section.AppendixLabels
   let library: LibraryModel
   /// Goes to an anchor, the way a Contents row goes to its section.
   let select: (String) -> Void
@@ -145,7 +148,7 @@ struct AnnotationsView: View {
     case .placed(_, let section):
       guard let section else { return nil }
       if section == ModelText.abstractAnchor { return String(localized: "Abstract") }
-      return sections.first { $0.anchor == section }?.displayTitle
+      return sections.first { $0.anchor == section }?.displayTitle(appendixLabels: appendixLabels)
     case .ambiguous(let places):
       // A note's row offers no place to choose.
       if places.isEmpty {

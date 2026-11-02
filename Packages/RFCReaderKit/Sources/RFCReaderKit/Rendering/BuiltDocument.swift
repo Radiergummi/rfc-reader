@@ -59,6 +59,11 @@ public struct BuiltDocument: @unchecked Sendable {
   /// Whether this is a translated document's build, whose sentences are not the
   /// original's (`RequirementBands`).
   public var isTranslation: Bool { translation != nil }
+  /// What the build named an appendix by (#940), which the contents beside it name
+  /// it by too: the translation's labels, or English.
+  public var appendixLabels: Section.AppendixLabels {
+    translation?.appendixLabels ?? .english
+  }
 
   /// Internal, so that only `DocumentTextBuilder.build` makes one, off the main actor:
   /// it makes the folding index too (#723).

@@ -9,6 +9,8 @@ import SwiftUI
 struct TableOfContentsView: View {
   /// Only the sections the storage holds; see `DocumentView.rebuild()`.
   let sections: [RFCKit.Section]
+  /// What the body names an appendix by: a translation's labels (#940), or English.
+  let appendixLabels: RFCKit.Section.AppendixLabels
   let current: String?
   let select: (String) -> Void
   /// A note on a section (#523), from its row's menu; nil where none can be made, as
@@ -23,11 +25,13 @@ struct TableOfContentsView: View {
       controls
       switch order {
       case .document:
-        let rows = ContentsOutline.rows(of: sections, filter: filter)
+        let rows = ContentsOutline.rows(
+          of: sections, filter: filter, appendixLabels: appendixLabels)
         documentList(rows)
           .overlay { noResults(when: rows.isEmpty) }
       case .alphabetical:
-        let groups = ContentsOutline.groups(of: sections, filter: filter)
+        let groups = ContentsOutline.groups(
+          of: sections, filter: filter, appendixLabels: appendixLabels)
         alphabeticalList(groups)
           .overlay { noResults(when: groups.isEmpty) }
       }
