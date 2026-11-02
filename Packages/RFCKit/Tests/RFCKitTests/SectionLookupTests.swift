@@ -23,7 +23,9 @@ struct SectionLookupTests {
 
   @Test func `a number in any spelling names its section`() throws {
     let document = try Fixtures.document("rfc8999.xml")
-    for spelling in ["5.2", "Section 5.2", "section 5.2.", "§ 5.2", "sec. 5.2"] {
+    for spelling in [
+      "5.2", "Section 5.2", "section 5.2.", "§ 5.2", "§5.2", "sec. 5.2", " Section 5.2 ",
+    ] {
       #expect(
         SectionLookup.sections(matching: spelling, in: document).map(\.number) == ["5.2"],
         "\(spelling)")
@@ -52,6 +54,22 @@ struct SectionLookupTests {
     #expect(SectionLookup.sections(matching: "1", in: document).map(\.anchor) == ["section-1"])
     #expect(
       SectionLookup.sections(matching: "Section 1", in: document).map(\.anchor) == ["section-1"])
+  }
+
+  /// An appendix's word names an appendix: where the document has no appendix of a
+  /// section's number, "Appendix 4.2" is not the section 4.2 (#1015), while an
+  /// appendix numbered like a section is still found by it (#429).
+  @Test func `an appendix's word does not name a section of the same number`() {
+    let sections = [
+      Section(
+        anchor: "section-4", number: "4", title: "Four",
+        subsections: [Section(anchor: "section-4.2", number: "4.2", title: "Four two")]),
+      Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true),
+    ]
+    #expect(SectionLookup.section(numbered: "Appendix 4.2", in: sections) == nil)
+    #expect(SectionLookup.section(numbered: "Annex 4", in: sections) == nil)
+    #expect(SectionLookup.section(numbered: "Appendix 1", in: sections)?.anchor == "appendix-1")
+    #expect(SectionLookup.section(numbered: "4.2", in: sections)?.anchor == "section-4.2")
   }
 
   /// An annex is named by the word its heading reads with (#428), `Annex B`, and one
