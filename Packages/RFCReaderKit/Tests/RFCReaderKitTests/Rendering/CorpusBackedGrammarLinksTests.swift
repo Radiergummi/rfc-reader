@@ -12,7 +12,10 @@ import Testing
 
 /// The RFCs authored in RFCXML that a corpus-backed suite reads, from the directory
 /// `RFC_CORPUS_XML` names, as RFCKit's `CorpusText` reads them: `make test-corpus`
-/// fetches them and points it there, on a Mac, where this package builds.
+/// fetches them and points it there, on a Mac, where this package builds. It passes
+/// the Makefile's `CORPUS_TEST_XML_DOCUMENTS` as `RFC_CORPUS_XML_DOCUMENTS`, and a
+/// document not on it is refused, even where a local corpus holds it; where it is not
+/// set, nothing is refused.
 enum CorpusXML {
   static var directory: URL? {
     guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_XML"], !path.isEmpty
@@ -22,13 +25,36 @@ enum CorpusXML {
 
   static var isAvailable: Bool { directory != nil }
 
-  static func document(_ stem: String) throws -> RFCDocument {
+  /// The stems `RFC_CORPUS_XML_DOCUMENTS` lists, where it is set.
+  static var listedDocuments: Set<String>? {
+    CorpusList.stems(in: "RFC_CORPUS_XML_DOCUMENTS")
+  }
+
+  /// `listed` is the list `stem` is checked against, the environment's unless a test
+  /// passes its own.
+  static func document(_ stem: String, listed: Set<String>? = listedDocuments) throws
+    -> RFCDocument
+  {
     guard let directory else { throw CorpusXMLError.notConfigured }
+    if let listed, !listed.contains(stem) {
+      throw CorpusXMLError.notListed(stem)
+    }
     let file = directory.appendingPathComponent("\(stem).xml")
     guard FileManager.default.fileExists(atPath: file.path) else {
       throw CorpusXMLError.notFetched(stem)
     }
     return try RFCXMLParser.parse(try Data(contentsOf: file))
+  }
+}
+
+/// The Makefile's lists of the documents the corpus-backed suites read, as `make
+/// test-corpus-app` passes them in the environment.
+enum CorpusList {
+  /// The stems the environment variable `name` lists, separated by whitespace, or nil
+  /// where it is not set.
+  static func stems(in name: String) -> Set<String>? {
+    guard let list = ProcessInfo.processInfo.environment[name] else { return nil }
+    return Set(list.split(whereSeparator: \.isWhitespace).map(String.init))
   }
 }
 
@@ -38,6 +64,9 @@ enum CorpusXMLError: Error, Equatable {
   /// The document is not in the directory: `make test-corpus` and `make test-corpus-app`
   /// fetch only the documents listed in the Makefile's `CORPUS_TEST_XML_DOCUMENTS`.
   case notFetched(String)
+  /// The document is not in `RFC_CORPUS_XML_DOCUMENTS`, the Makefile's
+  /// `CORPUS_TEST_XML_DOCUMENTS`.
+  case notListed(String)
 }
 
 extension CorpusXMLError: CustomStringConvertible {
@@ -47,6 +76,8 @@ extension CorpusXMLError: CustomStringConvertible {
       "RFC_CORPUS_XML is not set"
     case .notFetched(let stem):
       "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_XML_DOCUMENTS"
+    case .notListed(let stem):
+      "\(stem) is read by a corpus-backed test but not listed: add it to CORPUS_TEST_XML_DOCUMENTS"
     }
   }
 }
@@ -78,8 +109,17 @@ struct CorpusBackedGrammarLinksTests {
     #expect(unresolved.isEmpty, "\(unresolved.prefix(10))")
   }
 
-  @Test func `a document not fetched is refused as not fetched`() {
-    #expect(throws: CorpusXMLError.notFetched("rfc0")) { try CorpusXML.document("rfc0") }
+  /// A document fetched locally, by `make corpus`, but not on the Makefile's list is
+  /// refused before its file is looked for: CI fetches only the listed ones (#986).
+  @Test(.enabled(if: CorpusXML.listedDocuments != nil))
+  func `a document not on the list is refused as not listed`() {
+    #expect(throws: CorpusXMLError.notListed("rfc0")) { try CorpusXML.document("rfc0") }
+  }
+
+  @Test func `a listed document that is not fetched is refused as not fetched`() {
+    #expect(throws: CorpusXMLError.notFetched("rfc0")) {
+      try CorpusXML.document("rfc0", listed: ["rfc0"])
+    }
   }
 
   @Test(arguments: ["rfc9110", "rfc9112"])
