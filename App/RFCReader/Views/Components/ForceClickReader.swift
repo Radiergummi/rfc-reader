@@ -9,36 +9,35 @@
   ///
   /// A background that takes no clicks of its own. It watches the window's pressure
   /// events through a local monitor, which sees them even while the row's button is
-  /// tracking the click, and reports when a click begins inside it and when that
-  /// click presses through to the second stage there (`ForceClickTracker`). The
-  /// button is left the click, so its action can tell that the click that opened the
-  /// preview is not also one that opens the RFC.
+  /// tracking the click, and reports when a click that began inside it presses
+  /// through to the second stage there. The button is left the click, and asks the
+  /// same `ForceClickTracker` whether its release opens the RFC: not the release of
+  /// the click that opened the preview.
   struct ForceClickReader: NSViewRepresentable {
-    /// A click began inside.
-    let pressed: () -> Void
-    /// That click pressed through.
+    /// The row's, which its button asks too.
+    let tracker: ForceClickTracker
+    /// A click pressed through.
     let report: () -> Void
 
-    func makeNSView(context: Context) -> ReaderView {
-      ReaderView()
+    func makeNSView(context: Context) -> MonitorView {
+      MonitorView()
     }
 
-    func updateNSView(_ view: ReaderView, context: Context) {
-      view.pressed = pressed
+    func updateNSView(_ view: MonitorView, context: Context) {
+      view.tracker = tracker
       view.report = report
     }
 
     /// A view freed with its window never moves out of it, and its monitor would
     /// outlive it.
-    static func dismantleNSView(_ view: ReaderView, coordinator: ()) {
+    static func dismantleNSView(_ view: MonitorView, coordinator: ()) {
       view.stopWatching()
     }
 
-    final class ReaderView: NSView {
-      var pressed: () -> Void = {}
+    final class MonitorView: NSView {
+      var tracker: ForceClickTracker?
       var report: () -> Void = {}
       private var monitor: Any?
-      private var tracker = ForceClickTracker()
 
       override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -64,9 +63,13 @@
 
       private func handle(_ event: NSEvent) {
         // The part of the row on screen: a row scrolled out of the list is still in
-        // the window, under the panel's titlebar or past its end.
+        // the window, under the panel's titlebar or past its end. Below the toolbar
+        // too: the window's content runs under it (`.fullSizeContentView`), so a row
+        // scrolled up there is "visible" beneath a toolbar item's click.
+        guard let window, let tracker else { return }
         let isInside =
           event.window === window
+          && window.contentLayoutRect.contains(event.locationInWindow)
           && visibleRect.contains(convert(event.locationInWindow, from: nil))
         let tracked: ForceClickTracker.Event
         switch event.type {
@@ -75,10 +78,8 @@
         case .pressure: tracked = .pressure(stage: event.stage, inside: isInside)
         default: return
         }
-        switch tracker.handle(tracked) {
-        case .pressBegan: pressed()
-        case .forceClick: report()
-        case nil: break
+        if tracker.handle(tracked) {
+          report()
         }
       }
     }

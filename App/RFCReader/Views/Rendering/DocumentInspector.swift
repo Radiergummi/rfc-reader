@@ -492,7 +492,7 @@ struct ReferencesView: View {
   @State private var highlighted: ReaderState.RevealedReference?
   #if canImport(UIKit)
     /// The window, which a row's long-press preview is measured against.
-    @State private var window = WindowSizeReader()
+    @State private var windowSize = WindowSizeReader()
   #endif
 
   var body: some View {
@@ -518,7 +518,7 @@ struct ReferencesView: View {
         }
         .listStyle(.sidebar)
         #if canImport(UIKit)
-          .reading(window)
+          .reading(windowSize)
         #endif
         // A sidebar list is announced as "Sidebar", which is the window's own (#300).
         .accessibilityLabel("References")
@@ -541,10 +541,9 @@ struct ReferencesView: View {
   /// window as the reader's are, and the popover's full size on the Mac.
   private func previewSize() -> CGSize {
     #if canImport(UIKit)
-      window.size.map(LinkPreview.documentSize(fitting:)) ?? LinkPreview.documentSize
-    #else
-      LinkPreview.documentSize
+      if let size = windowSize.size { return LinkPreview.documentSize(fitting: size) }
     #endif
+    return LinkPreview.documentSize
   }
 }
 
@@ -577,9 +576,9 @@ struct ReferenceRow: View {
   var previewSize: () -> CGSize = { LinkPreview.documentSize }
 
   #if os(macOS)
-    /// Whether the click under way pressed through to the preview, so its release
-    /// does not open the RFC as well (`ForceClickReader`).
-    @State private var isForceClick = false
+    /// Whether a click pressed through to the preview, so its release does not open
+    /// the RFC as well (`ForceClickReader`).
+    @State private var forceClick = ForceClickTracker()
     @State private var isPreviewing = false
   #else
     /// Handed to the preview, which UIKit hosts outside this environment, as the
@@ -596,11 +595,8 @@ struct ReferenceRow: View {
       if let id = entry.documentID {
         let button = Button {
           #if os(macOS)
-            // The release of the click that pressed through to the preview.
-            if isForceClick {
-              isForceClick = false
-              return
-            }
+            // Not the release of the click that pressed through to the preview.
+            guard forceClick.opensOnRelease() else { return }
           #endif
           open(id)
         } label: {
@@ -612,14 +608,7 @@ struct ReferenceRow: View {
             button
               .contextMenu { menu.items(for: id) }
               .background(
-                ForceClickReader(
-                  // A new click is its own, whatever the last one left: a force
-                  // click whose release never reached the button included.
-                  pressed: { isForceClick = false },
-                  report: {
-                    isForceClick = true
-                    isPreviewing = true
-                  })
+                ForceClickReader(tracker: forceClick, report: { isPreviewing = true })
               )
               .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
                 // A click in it opens what the row does, as the prose's opens what
@@ -628,10 +617,6 @@ struct ReferenceRow: View {
                   isPreviewing = false
                   open(id)
                 }
-              }
-              // Whatever ended the preview, the next press of the button is its own.
-              .onChange(of: isPreviewing) {
-                if !isPreviewing { isForceClick = false }
               }
           #else
             // UIKit's tap on a SwiftUI menu's preview closes it and commits nothing:
