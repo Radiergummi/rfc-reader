@@ -888,15 +888,16 @@ struct DocumentView: View {
   /// An anchor the body does not hold scrolls nowhere: a document already open stays
   /// where the reader is, and one just opened stays at its top (#276). In a document
   /// already open, a place naming a bibliography entry shows it; see
-  /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
+  /// `LinkDestination.landing(at:in:bibliography:anchors:)`. On an RFC read as its
+  /// original, no place is shown, so none scrolls (#1031).
   private func jump(toSection section: String?, revealingReferences: Bool = false) {
     guard let section else { return }
-    switch landing(at: section) {
-    case .reference(let anchor) where revealingReferences:
+    switch landing(at: section, in: places) {
+    case .inText(.reference(let anchor)) where revealingReferences:
       reader.reveal(reference: anchor)
-    case .reference(let anchor), .jump(let anchor):
+    case .inText(.reference(let anchor)), .inText(.jump(let anchor)):
       controller.scroll(to: anchor)
-    case .document, .unhandled, nil:
+    case .inText(.document), .inText(.unhandled), .notShown, nil:
       break
     }
   }
@@ -905,24 +906,29 @@ struct DocumentView: View {
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
   /// leaves the history as it is. Nil while there is no build to look in, and
-  /// otherwise whether the place was one the document holds (#762).
+  /// otherwise whether the place was one the document holds (#762), or one in a
+  /// text the reader does not show, as on a pointer's original-only page (#1031).
   @discardableResult
   private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
-    guard isShown, let document = session.state.document,
-      let built = session.state.built
-    else { return nil }
-    switch landing(at: place) {
-    case .jump(let anchor):
-      navigation.recordJump(
-        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+    guard isShown else { return nil }
+    let places = self.places
+    switch landing(at: place, in: places) {
+    case .inText(.jump(let anchor)):
+      // Landing in the text needs its build, so it is here.
+      guard let places else { return nil }
+      navigation.recordJump(to: anchor, in: places)
       return .landed
-    case .reference(let anchor):
+    case .inText(.reference(let anchor)):
       reader.reveal(reference: anchor)
       return .landed
-    case .document, .unhandled, nil:
+    case .notShown:
+      return .notShown
+    case .inText(.document), .inText(.unhandled):
       return .noSuchPlace
+    case nil:
+      return nil
     }
   }
 
@@ -999,13 +1005,20 @@ struct DocumentView: View {
     return DraftStatus(shown: shown, info: session.draftInfo)
   }
 
-  /// Nil while there is no build to find the place in.
-  private func landing(at place: String) -> LinkDestination? {
+  /// The places of the build; nil while there is none.
+  private var places: DocumentPlaces? {
     guard let document = session.state.document, let built = session.state.built else {
       return nil
     }
-    return LinkDestination.landing(
-      at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
+    return DocumentPlaces(document: document, anchors: built.anchors)
+  }
+
+  /// Nil while the text a place would be found in has no build (`places`). On an RFC
+  /// read as its original, no place is shown, build or none (#1031).
+  private func landing(at place: String, in places: DocumentPlaces?) -> PlaceLanding? {
+    PlaceLanding.landing(
+      at: place, in: places, bibliography: reader.groups,
+      readAsOriginal: reader.publishedOriginal?.kind)
   }
 
   /// Cross references arrive as URLs from the attributed text, through the text
