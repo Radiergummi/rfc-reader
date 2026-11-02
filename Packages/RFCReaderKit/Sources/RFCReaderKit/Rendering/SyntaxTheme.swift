@@ -57,14 +57,14 @@ public struct SyntaxTheme: Sendable, Hashable, Identifiable {
   /// light and lighter in dark.
   static let standardColors: [TokenKind: AppearanceVariants<SRGBColor>] = {
     let muted = color(
-      light: 0x6E6E73, dark: 0xA1A1A6, increasedLight: 0x48484D, increasedDark: 0xC8C8CC)
+      light: 0x6E6E73, dark: 0xA1A1A6, increasedLight: 0x48484D, increasedDark: 0xD2D2D6)
     let literal = color(
       light: 0x8A3FB0, dark: 0xD9A6F5, increasedLight: 0x6E2A92, increasedDark: 0xE8C4FA)
     return [
       .punctuation: muted,
       .comment: muted,
       .name: color(
-        light: 0x3A3AB8, dark: 0xA9A9FF, increasedLight: 0x2E2EA0, increasedDark: 0xC4C4FF),
+        light: 0x3A3AB8, dark: 0xA9A9FF, increasedLight: 0x2E2EA0, increasedDark: 0xCECEFF),
       .string: color(
         light: 0x1F7A3A, dark: 0x7BD88F, increasedLight: 0x0E5626, increasedDark: 0x9BE8A9),
       .keyword: literal,

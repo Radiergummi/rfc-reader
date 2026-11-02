@@ -86,12 +86,11 @@ public enum AccentContrast {
     light: PaletteColors.highContrast.light.link, dark: PaletteColors.highContrast.dark.link
   )
 
-  /// The link color on a card under Increase Contrast, as ``cardLink`` is on one at
-  /// the standard contrast: the page's in light; in dark, lightened to clear 7:1 on
-  /// the Mac's aside, whose page is lighter than High Contrast's black.
-  public static let increasedContrastCardLink = (
-    light: increasedContrastReaderLink.light, dark: SRGBColor(hex: 0xB0_D6FF)
-  )
+  /// The link color on a card in dark under Increase Contrast, as ``cardLink``'s
+  /// dark is at the standard contrast: lightened to clear 7:1 on the Mac's aside and
+  /// iOS's elevated one, whose pages are lighter than High Contrast's black. In
+  /// light a card's link is the page's.
+  public static let increasedContrastDarkCardLink = SRGBColor(hex: 0xC0_DFFF)
 
   /// The status banner's row symbols, stated as `StatusPalette`'s colors are.
   public enum BannerSymbol: Sendable, CaseIterable {

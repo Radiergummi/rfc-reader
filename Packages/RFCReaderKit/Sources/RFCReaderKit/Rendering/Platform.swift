@@ -61,18 +61,16 @@ public enum RFCColors {
   }
 
   /// The reader's links and the status banner's (#317): `AccentContrast.readerLink`,
-  /// which on macOS is the system's own link color and on iOS replaces the system
-  /// tint, 3.52:1 on a white page; under Increase Contrast,
-  /// `AccentContrast.increasedContrastReaderLink` (#867).
-  public static var readerLink: PlatformColor {
-    let standard = AccentContrast.readerLink
-    let increased = AccentContrast.increasedContrastReaderLink
-    return dynamic(
-      AppearanceVariants(
-        light: standard.light, dark: standard.dark,
-        increasedLight: increased.light, increasedDark: increased.dark
-      ).map(PlatformColor.init))
-  }
+  /// at the standard contrast macOS's own link color, which on iOS replaces the
+  /// system tint, 3.52:1 on a white page. Under Increase Contrast,
+  /// `AccentContrast.increasedContrastReaderLink` (#867), High Contrast's link
+  /// rather than the system's.
+  public static let readerLink = dynamic(
+    AppearanceVariants(
+      light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark,
+      increasedLight: AccentContrast.increasedContrastReaderLink.light,
+      increasedDark: AccentContrast.increasedContrastReaderLink.dark
+    ).map(PlatformColor.init))
 
   /// What a redline marks inserted (#729): `AccentContrast.inserted`.
   public static var inserted: PlatformColor {
@@ -81,15 +79,15 @@ public enum RFCColors {
 
   /// A link on a card, where `link` is the link color on the page: in dark,
   /// `AccentContrast.cardLink`, lighter than the reader's link (#694), or under
-  /// Increase Contrast `AccentContrast.increasedContrastCardLink` (#867); in light,
-  /// `link` itself, which clears the cards as it does the page, so that a card's
-  /// links and the page's stay one color whatever the system makes of it.
+  /// Increase Contrast `AccentContrast.increasedContrastDarkCardLink` (#867); in
+  /// light, `link` itself, which clears the cards as it does the page, so that a
+  /// card's links and the page's stay one color whatever the system makes of it.
   public static func cardLink(over link: PlatformColor) -> PlatformColor {
     dynamic(
       AppearanceVariants(
         light: link, dark: PlatformColor(AccentContrast.cardLink.dark),
         increasedLight: link,
-        increasedDark: PlatformColor(AccentContrast.increasedContrastCardLink.dark)))
+        increasedDark: PlatformColor(AccentContrast.increasedContrastDarkCardLink)))
   }
 
   /// The page the reader's text is drawn on, which a chip's tint is drawn over.
@@ -106,12 +104,12 @@ public enum RFCColors {
   /// black one to 22, about 3% towards black and 9% towards white. A system fill
   /// forced to a fixed opacity read far darker than that in light and far lighter
   /// in dark. Under Increase Contrast, High Contrast's card (#867).
-  public static var cardFill: PlatformColor { dynamic(cardFillVariants) }
+  public static let cardFill = dynamic(cardFillVariants)
 
   static let cardFillVariants = pageTint(light: 0.03, dark: 0.085) { $0.cardOpacity }
 
   /// An aside's card, a step stronger than a figure's.
-  public static var asideFill: PlatformColor { dynamic(asideFillVariants) }
+  public static let asideFill = dynamic(asideFillVariants)
 
   static let asideFillVariants = pageTint(light: 0.045, dark: 0.12) { $0.asideOpacity }
 
@@ -162,35 +160,34 @@ public enum RFCColors {
       }
     #else
       NSColor(name: nil) { appearance in
-        let match = appearance.bestMatch(from: AppearanceVariants<PlatformColor>.names)
+        let match = appearance.bestMatch(from: matchedAppearances)
         return variants.value(matching: match)
       }
     #endif
   }
 
+  #if !canImport(UIKit)
+    /// What `dynamic` matches an appearance against. macOS draws in a
+    /// high-contrast variant of the light or dark appearance under Increase
+    /// Contrast, which only `bestMatch(from:)` tells apart: `NSAppearance(named:)`
+    /// makes none of them.
+    static let matchedAppearances: [NSAppearance.Name] = [
+      .aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua,
+    ]
+  #endif
+
   /// `light` in light appearance and `dark` in dark, drawn as exactly those sRGB
   /// values, at `opacity` in each, and resolved when drawn: for colors whose
-  /// contrast is measured.
+  /// contrast is measured. The same under Increase Contrast: a page theme's colors
+  /// are its own, and a highlight's or a band's are fills the system's setting
+  /// leaves.
   public static func byAppearance(
     light: SRGBColor, dark: SRGBColor, opacity: (light: CGFloat, dark: CGFloat) = (1, 1)
   ) -> PlatformColor {
-    #if canImport(UIKit)
-      UIColor { traits in
-        let isDark = traits.userInterfaceStyle == .dark
-        let color = isDark ? dark : light
-        return UIColor(
-          red: color.red, green: color.green, blue: color.blue,
-          alpha: isDark ? opacity.dark : opacity.light)
-      }
-    #else
-      NSColor(name: nil) { appearance in
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let color = isDark ? dark : light
-        return NSColor(
-          srgbRed: color.red, green: color.green, blue: color.blue,
-          alpha: isDark ? opacity.dark : opacity.light)
-      }
-    #endif
+    let light = PlatformColor(light).withAlphaComponent(opacity.light)
+    let dark = PlatformColor(dark).withAlphaComponent(opacity.dark)
+    return dynamic(
+      AppearanceVariants(light: light, dark: dark, increasedLight: light, increasedDark: dark))
   }
 
   /// The rule beside a quote or aside: a line, not a fill. macOS's
@@ -247,14 +244,8 @@ struct AppearanceVariants<Value: Sendable>: Sendable {
   }
 
   #if !canImport(UIKit)
-    /// What an appearance is matched against. macOS draws in a high-contrast
-    /// variant of the light or dark appearance under Increase Contrast, which only
-    /// `bestMatch(from:)` tells apart: `NSAppearance(named:)` makes none of them.
-    static var names: [NSAppearance.Name] {
-      [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua]
-    }
-
-    /// The value for the appearance `bestMatch(from: names)` matched: light where it
+    /// The value for the appearance `bestMatch(from: RFCColors.matchedAppearances)`
+    /// matched: light where it
     /// matched none, as the reader's colors always took it.
     func value(matching name: NSAppearance.Name?) -> Value {
       value(

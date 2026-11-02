@@ -54,6 +54,19 @@ struct IncreasedContrastTests {
         nil, green: nil, blue: nil, alpha: &alpha)
       #expect(abs(Double(alpha) - expected.cardOpacity) < 0.001)
     }
+
+    /// A page theme's colors are its own: Increase Contrast leaves them.
+    @Test(arguments: [false, true])
+    func `a theme's colors are the same under Increase Contrast`(dark: Bool) {
+      let style: UIUserInterfaceStyle = dark ? .dark : .light
+      let standard = UITraitCollection { $0.userInterfaceStyle = style }
+      let increased = UITraitCollection { traits in
+        traits.userInterfaceStyle = style
+        traits.accessibilityContrast = .high
+      }
+      let color = ReaderPalette.highContrast.link
+      #expect(color.resolvedColor(with: standard) == color.resolvedColor(with: increased))
+    }
   #endif
 
   /// The cards are High Contrast's, a stronger tint than at the standard contrast,
@@ -74,16 +87,20 @@ struct IncreasedContrastTests {
     #expect(RFCColors.strokeVariants.increasedDark == PlatformColor(increased.dark.secondaryText))
   }
 
-  /// The pages the reader draws on with no theme chosen: white in light; black
-  /// (iOS) and macOS's dark text background in dark.
+  /// The pages the reader draws on with no theme chosen: white in light; in dark,
+  /// black (iOS), macOS's dark text background, and iOS's elevated background, as
+  /// in an iPad's Slide Over, at the standard contrast and under Increase Contrast.
   static let pages: [(dark: Bool, page: SRGBColor)] = [
     (false, .white),
     (true, SRGBColor(red: 0, green: 0, blue: 0)),
     (true, SRGBColor(hex: 0x1E_1E1E)),
+    (true, SRGBColor(hex: 0x1C_1C1E)),
+    (true, SRGBColor(hex: 0x24_2426)),
   ]
 
   /// The reader's links clear 7:1 on the page and on both High Contrast cards, as
-  /// High Contrast's own do on its page (#704).
+  /// High Contrast's own do on its page (#704). On a card, the link drawn: the
+  /// page's in light, where `cardLink(over:)` keeps it.
   @Test(arguments: pages)
   func `the links clear 7 to 1`(dark: Bool, page: SRGBColor) {
     let increased = dark ? PaletteColors.highContrast.dark : PaletteColors.highContrast.light
@@ -91,10 +108,7 @@ struct IncreasedContrastTests {
       dark
       ? AccentContrast.increasedContrastReaderLink.dark
       : AccentContrast.increasedContrastReaderLink.light
-    let cardLink =
-      dark
-      ? AccentContrast.increasedContrastCardLink.dark
-      : AccentContrast.increasedContrastCardLink.light
+    let cardLink = dark ? AccentContrast.increasedContrastDarkCardLink : link
     let pairs: KeyValuePairs<String, (color: SRGBColor, background: SRGBColor)> = [
       "a link on the page": (link, page),
       "a link on a card": (cardLink, Self.card(increased.cardOpacity, of: increased, over: page)),
