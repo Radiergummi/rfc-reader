@@ -554,7 +554,8 @@
         case .noSuchPlace:
           ScriptError.report("The RFC has no section “\(section)”.", in: command)
         case .notShown:
-          ScriptError.report("The RFC could not be shown to jump in.", in: command)
+          ScriptError.report(
+            "The RFC's text isn't shown, so there is nothing to jump in.", in: command)
         case .interrupted:
           ScriptError.report(
             "The jump to section “\(section)” was interrupted before it was made.", in: command)

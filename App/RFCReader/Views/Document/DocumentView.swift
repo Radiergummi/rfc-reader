@@ -420,9 +420,14 @@ struct DocumentView: View {
       }
       // Focus and the outline, off over a text the original-only page loaded but does
       // not show, which the index may say only after the text built (#1022). So is Go
-      // to Section's field, if it was opened before.
+      // to Section's field, if it was opened before. And a jump that waited for the
+      // text is settled as not shown (#1031): known a pointer only once its text
+      // loaded, the page shows no text view whose arrival would follow it.
       .onChange(of: reader.publishedOriginal) {
-        if !reader.offersSections { reader.isGoingToSection = false }
+        if !reader.offersSections {
+          reader.isGoingToSection = false
+          if let request = navigation.scrollRequest, request.isUnrecorded { follow(request) }
+        }
         updateFolding()
       }
       .onChange(of: library.revisions) {
@@ -916,8 +921,8 @@ struct DocumentView: View {
     let places = self.places
     switch landing(at: place, in: places) {
     case .inText(.jump(let anchor)):
-      // Landing in the text needs its build, so it is here.
-      guard let places else { return nil }
+      // `PlaceLanding` lands in the text only with its build.
+      guard let places else { preconditionFailure("Landed in a text with no build") }
       navigation.recordJump(to: anchor, in: places)
       return .landed
     case .inText(.reference(let anchor)):
