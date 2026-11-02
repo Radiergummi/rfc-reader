@@ -212,7 +212,7 @@ struct ContentsOutlineAppendixLabelTests {
     #expect(entries.map(\.anchor) == ["appendix-B"])
   }
 
-  @Test func `A–Z names an appendix by the labels, in its caption or its title`() {
+  @Test func `alphabetical order names an appendix by the labels, in its caption or its title`() {
     let entries = ContentsOutline.groups(
       of: Self.sections, filter: "", appendixLabels: Self.labels
     ).flatMap(\.entries)
