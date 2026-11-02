@@ -494,6 +494,12 @@ struct ReaderInputs {
       textView.highlight = { [weak coordinator = context.coordinator] range, color in
         coordinator?.highlight(range, color: color)
       }
+      textView.offersQuote = { [weak coordinator = context.coordinator] in
+        coordinator?.offersQuote ?? false
+      }
+      textView.offersHighlight = { [weak coordinator = context.coordinator] in
+        coordinator?.offersHighlight ?? false
+      }
       textView.highlightColors = { [weak coordinator = context.coordinator] in
         coordinator?.highlightColors ?? HighlightColor.allCases
       }

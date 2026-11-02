@@ -22,7 +22,7 @@ struct InfoView: View {
   let search: (String) -> Void
   let showReadingPath: (DocumentID) -> Void
   /// The body's sections, which an erratum's section is found in; empty before the
-  /// body has loaded.
+  /// body has loaded, and for an RFC read as its original (#938).
   let sections: [RFCKit.Section]
   /// Goes to a section of the document, by its anchor.
   let selectSection: (String) -> Void
@@ -755,9 +755,9 @@ private struct OfflineSection: View {
     document.series == .rfc && library.offlineMarks.contains(document)
   }
 
-  /// Whether Available Offline lists it, which the status says as a row's mark does
-  /// (#769): kept by its mark, or as a bookmark while bookmarks are kept. The control
-  /// stays the mark's.
+  /// Whether Available Offline lists it and its body is on the device, which the
+  /// status says as a row's mark does (#769, #936): kept by its mark, or as a bookmark
+  /// while bookmarks are kept. The control stays the mark's.
   private var isAvailable: Bool {
     library.isAvailableOffline(document)
   }

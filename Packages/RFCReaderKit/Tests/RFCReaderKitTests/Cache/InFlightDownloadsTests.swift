@@ -237,7 +237,7 @@ struct InFlightDownloadsTests {
 
   /// A reader who leaves is done waiting then, not when the download it left ends
   /// for the reader who stayed: the gate is still shut when the first returns.
-  @Test(.timeLimit(.minutes(1)))
+  @Test(.hangGuard)
   func `a canceled reader returns while the download goes on`() async throws {
     let store = Store()
     let gate = Gate()

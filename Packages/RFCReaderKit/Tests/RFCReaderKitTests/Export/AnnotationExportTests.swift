@@ -355,7 +355,18 @@ struct AnnotationExportTests {
             body: "On it.", createdAt: day, modifiedAt: day)
         ]),
       exported: day, timeZone: .gmt)
-    #expect(markdown.contains("## 1. The &lt;artwork> Element"))
+    #expect(markdown.contains("## 1. The &lt;artwork&gt; Element"))
+  }
+
+  /// A highlight is quoted as Copy as Quote quotes it (#1003): what would render as
+  /// markup is escaped, and a reference's label is left as it reads.
+  @Test func `a highlight's prose is escaped where it would render`() {
+    let markdown = export([
+      highlight(lost("# Not a heading\nas *stressed* in [RFC 9111]"))
+    ])
+    #expect(
+      markdown.contains(
+        ##"> \# Not a heading"## + "\n>\n" + ##"> as \*stressed\* in [RFC 9111]"##))
   }
 
   // MARK: What is placed nowhere

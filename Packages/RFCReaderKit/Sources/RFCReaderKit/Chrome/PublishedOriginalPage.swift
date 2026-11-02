@@ -137,6 +137,14 @@ public struct PublishedOriginalPage: Hashable, Sendable {
       && PublishedOriginal(pointer: id, formats: formats) != nil
   }
 
+  /// Whether the reader offers the loaded text's sections: Go to Section's list, and
+  /// Focus and the outline, which step through them (#1022). Not for an RFC read as
+  /// its original: a pointer's loaded text is not the RFC, and its original-only page
+  /// does not show it, nor does the contents panel list its sections.
+  public static func offersSections(kind: Kind?) -> Bool {
+    kind == nil
+  }
+
   /// Whether Print and Export offer the document: one on screen and read as its
   /// text. A pointer's text is not the RFC, so printing it would print a line
   /// saying where the RFC is.

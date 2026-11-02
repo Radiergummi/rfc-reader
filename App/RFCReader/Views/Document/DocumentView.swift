@@ -259,7 +259,9 @@ struct DocumentView: View {
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
+    // Not over a text the original-only page loaded but does not show (#1022).
     guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      reader.offersSections,
       let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
@@ -415,6 +417,13 @@ struct DocumentView: View {
       // A pack installed while the document is open can make it a pointer (#316).
       .onChange(of: library.pointersInPack) {
         session.markPublishedOriginal(into: writer, library: library)
+      }
+      // Focus and the outline, off over a text the original-only page loaded but does
+      // not show, which the index may say only after the text built (#1022). So is Go
+      // to Section's field, if it was opened before.
+      .onChange(of: reader.publishedOriginal) {
+        if !reader.offersSections { reader.isGoingToSection = false }
+        updateFolding()
       }
       .onChange(of: library.revisions) {
         session.deriveInfo(into: writer, library: library)
