@@ -59,6 +59,19 @@ struct RFCListView: View {
     return acronym
   }
 
+  /// The buttons that turn back each of the options hiding every row (#937).
+  @ViewBuilder
+  private func hiddenActions(_ hidden: ListOptions.Hidden) -> some View {
+    if hidden.contains(.obsolete) {
+      Button("Show Obsolete") {
+        navigation.listOptions.setShowsObsolete(true, searching: false)
+      }
+    }
+    if hidden.contains(.read) {
+      Button("Show Read") { navigation.listOptions.hidesRead = false }
+    }
+  }
+
   /// A drag in the visible rows, resolved by their documents rather than their
   /// offsets: the rows on screen may hide obsolete documents or be only the first
   /// pages (`CollectionOrder.neighbors`).
@@ -183,6 +196,26 @@ struct RFCListView: View {
         WorkingGroupCard(group: acronym, summary: library.workingGroupSummary(acronym))
           .listRowSeparator(.hidden)
           .selectionDisabled()
+        // Under the card rather than over it, where the overlay would be: what the
+        // view options hide of the group's RFCs (#937).
+        if let hidden = navigation.listed?.hidden, !hidden.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            Label(ListOptions.Hidden.title(), systemImage: "eye.slash")
+              .font(.headline)
+            Text(verbatim: hidden.description())
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            HStack {
+              hiddenActions(hidden)
+            }
+            // Each its own tap target in the list's row: a row of plain ones fires
+            // them all on iOS.
+            .buttonStyle(.borderless)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+        }
       }
       #if os(macOS)
         unsectioned
@@ -274,21 +307,14 @@ struct RFCListView: View {
           workingGroupCardAcronym == nil
         {
           // The list holds something the view options hide (#937): asked to fill it,
-          // the reader would make what they have. Not under a working group's card,
-          // which says what the group has.
+          // the reader would make what they have. Under a working group's card, a row
+          // below the card says it instead.
           ContentUnavailableView {
             Label(ListOptions.Hidden.title(), systemImage: "eye.slash")
           } description: {
             Text(verbatim: hidden.description())
           } actions: {
-            if hidden.contains(.obsolete) {
-              Button("Show Obsolete") {
-                navigation.listOptions.setShowsObsolete(true, searching: false)
-              }
-            }
-            if hidden.contains(.read) {
-              Button("Show Read") { navigation.listOptions.hidesRead = false }
-            }
+            hiddenActions(hidden)
           }
         } else if isUnsearched, let collection {
           ContentUnavailableView {

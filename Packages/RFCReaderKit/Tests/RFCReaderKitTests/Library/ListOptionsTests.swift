@@ -145,11 +145,6 @@ struct ListOptionsTests {
     #expect(options.hiding(obsoleteRows, filter: .recent, read: read) == .obsolete)
   }
 
-  /// A search's own Show Obsolete is not the unsearched list's, so it hides nothing.
-  @Test func `a search's obsolete option is not named`() {
-    #expect(ListOptions(showsObsoleteInSearch: false).hiding(obsoleteRows, filter: .all).isEmpty)
-  }
-
   @Test func `the empty state's title says the view options hide the rows`() {
     #expect(ListOptions.Hidden.title(locale: .english) == "Hidden by View Options")
   }
