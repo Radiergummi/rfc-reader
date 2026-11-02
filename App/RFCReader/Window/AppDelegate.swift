@@ -109,40 +109,33 @@
       }
     }
 
-    /// The dock icon, with every window closed, or every reader window: the primer's
-    /// window or the settings left open alone do not count as one (#365). AppKit
-    /// brings back a minimized window only when no window at all is visible, so with
-    /// one of those open a minimized reader is brought back here.
-    ///
-    /// A script launches the app hidden, and with it the windows the last session left
-    /// (#939). Unhiding it brings them back, which is all the reopen asks for when one
-    /// of them is a reader: a new window beside them would be one too many. Activating
-    /// the app unhides it as well, but nothing promises that the Dock's activation
-    /// arrives before its reopen event. Without activating it here: the Dock does, and
-    /// `open -g` would rather not.
+    /// The dock icon, with every window closed, or every reader window (#365), or with
+    /// the app hidden, as a script launches it (#939). `DockReopen` decides.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-      if NSApp.isHidden {
-        NSApp.unhideWithoutActivation()
-        // Not visible again until a later turn of the run loop, so neither the
-        // windows nor `hasVisibleWindows` can say yet what came back. False, so that
-        // AppKit doesn't act on that either.
-        if controllers.contains(where: { $0.window?.isMiniaturized == false }) {
-          return false
+      let readers = controllers.compactMap(\.window)
+      let states = readers.map { window -> DockReopen.Reader in
+        if window.isMiniaturized {
+          return .minimized
         }
+        return window.isVisible ? .visible : .notShown
       }
-      if !hasVisibleWindows {
+      let appIsHidden = sender.isHidden
+      if appIsHidden {
+        // Not activating it: the Dock does, and `open -g` would rather it didn't.
+        sender.unhideWithoutActivation()
+      }
+      switch DockReopen.action(appIsHidden: appIsHidden, readers: states) {
+      case .nothing:
+        return false
+      case .appKitActs:
+        return true
+      case .deminiaturize:
+        readers.first(where: \.isMiniaturized)?.deminiaturize(nil)
+        return false
+      case .openWindow:
         openWindow(tabbedWith: nil, inBackground: false)
-      } else {
-        let readers = controllers.compactMap(\.window)
-        if !readers.contains(where: \.isVisible) {
-          if let minimized = readers.first(where: \.isMiniaturized) {
-            minimized.deminiaturize(nil)
-          } else {
-            openWindow(tabbedWith: nil, inBackground: false)
-          }
-        }
+        return false
       }
-      return true
     }
 
     /// `rfc://9110#section-4.2`, plus rfc-editor.org and datatracker links handed over
