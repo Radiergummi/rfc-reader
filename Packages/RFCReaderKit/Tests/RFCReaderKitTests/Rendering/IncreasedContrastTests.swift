@@ -50,7 +50,8 @@ struct IncreasedContrastTests {
       }
       let expected = dark ? PaletteColors.highContrast.dark : PaletteColors.highContrast.light
       var alpha: CGFloat = -1
-      _ = RFCColors.cardFill.resolvedColor(with: traits).getWhite(nil, alpha: &alpha)
+      _ = RFCColors.cardFill.resolvedColor(with: traits).getRed(
+        nil, green: nil, blue: nil, alpha: &alpha)
       #expect(abs(Double(alpha) - expected.cardOpacity) < 0.001)
     }
   #endif
@@ -63,11 +64,11 @@ struct IncreasedContrastTests {
       (RFCColors.cardFillVariants, \PaletteColors.cardOpacity),
       (RFCColors.asideFillVariants, \PaletteColors.asideOpacity),
     ] {
-      #expect(variants.increasedLight.alphaComponent > variants.light.alphaComponent)
-      #expect(variants.increasedDark.alphaComponent > variants.dark.alphaComponent)
+      #expect(variants.increasedLight.cgColor.alpha > variants.light.cgColor.alpha)
+      #expect(variants.increasedDark.cgColor.alpha > variants.dark.cgColor.alpha)
       #expect(
-        abs(variants.increasedLight.alphaComponent - increased.light[keyPath: opacity]) < 0.001)
-      #expect(abs(variants.increasedDark.alphaComponent - increased.dark[keyPath: opacity]) < 0.001)
+        abs(variants.increasedLight.cgColor.alpha - increased.light[keyPath: opacity]) < 0.001)
+      #expect(abs(variants.increasedDark.cgColor.alpha - increased.dark[keyPath: opacity]) < 0.001)
     }
     #expect(RFCColors.strokeVariants.increasedLight == PlatformColor(increased.light.secondaryText))
     #expect(RFCColors.strokeVariants.increasedDark == PlatformColor(increased.dark.secondaryText))
