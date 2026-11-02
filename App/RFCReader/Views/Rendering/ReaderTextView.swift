@@ -367,6 +367,9 @@ import RFCReaderKit
     /// Highlights a range of the text in a color, or in the one last used (#522),
     /// through the coordinator.
     var highlight: (NSRange, HighlightColor?) -> Void = { _, _ in }
+    /// Whether the context menu offers Copy as Quote, or Copy as Text, for a
+    /// selection, from the coordinator: not on a draft (#728).
+    var offersQuote: () -> Bool = { false }
     /// Whether the context menu offers Highlight and Add Note for a selection, from
     /// the coordinator: not on a draft (#728).
     var offersHighlight: () -> Bool = { false }
@@ -666,7 +669,8 @@ import RFCReaderKit
     /// "Copy Figure" for the figure under the click, or else the one the selection
     /// holds (issue #15). First in the menu, because on a figure it is what the
     /// menu was opened for. Which figure and what it copies are `FigureCopy`'s.
-    /// "Copy as Quote" right after Copy where there is a selection (#186). "Go to
+    /// "Copy as Quote" right after Copy where there is a selection of an RFC (#186),
+    /// and Highlight (#522) and Add Note (#523) on an RFC. "Go to
     /// Definition" first on a defined term's gloss (#396), and "Go to Expansion" on an
     /// abbreviation's (#67), which is what that menu was opened for.
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -695,16 +699,19 @@ import RFCReaderKit
       }
       if quotes {
         // The format Copy does not copy, and the citation (#712). Copy copies a
-        // selection of several ranges as text whatever it is set to.
-        let other =
-          ReaderSettings(defaults: .standard).copyFormat == .quote && selectedRanges.count == 1
-          ? NSMenuItem(
-            title: String(localized: "Copy as Text"), action: #selector(copyAsText(_:)),
-            keyEquivalent: "")
-          : NSMenuItem(
-            title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
-            keyEquivalent: "")
-        var items = [other]
+        // selection of several ranges as text whatever it is set to, and a draft's,
+        // which has no quote to offer.
+        var items: [NSMenuItem] = []
+        if offersQuote() {
+          items.append(
+            ReaderSettings(defaults: .standard).copyFormat == .quote && selectedRanges.count == 1
+              ? NSMenuItem(
+                title: String(localized: "Copy as Text"), action: #selector(copyAsText(_:)),
+                keyEquivalent: "")
+              : NSMenuItem(
+                title: String(localized: "Copy as Quote"), action: #selector(copyAsQuote(_:)),
+                keyEquivalent: ""))
+        }
         if citeSelection(selectedRange()) != nil {
           items.append(
             NSMenuItem(

@@ -4,9 +4,9 @@
 
   extension RFCTextViewCoordinator {
     /// The edit menu of a selection, after the standard actions: "Copy as Quote" for
-    /// any selection (#186), or "Copy as Text" where Copy copies a quote, "Copy
-    /// Citation" (#712) and Highlight's colors (#522); and "Copy Figure" where it holds
-    /// one figure (issue #15).
+    /// any selection of an RFC (#186), or "Copy as Text" where Copy copies a quote,
+    /// "Copy Citation" (#712), and Highlight's colors (#522) and Add Note (#523) on an
+    /// RFC; and "Copy Figure" where it holds one figure (issue #15).
     /// Nil keeps the standard menu where there is neither. Which figure and what it
     /// copies are `FigureCopy`'s, and the quote is `QuoteCitation`'s; macOS offers the
     /// same items from `ReaderTextView.menu(for:)`.
@@ -15,20 +15,24 @@
     ) -> UIMenu? {
       var extra: [UIMenuElement] = []
       if range.length > 0, let reader = textView as? ReaderTextView, !reader.isTranslation() {
-        if ReaderSettings(defaults: .standard).copyFormat == .quote {
-          extra.append(
-            UIAction(
-              title: String(localized: "Copy as Text"), image: UIImage(systemName: "doc.on.doc")
-            ) { _ in
-              reader.copyAsText()
-            })
-        } else {
-          extra.append(
-            UIAction(
-              title: String(localized: "Copy as Quote"), image: UIImage(systemName: "text.quote")
-            ) { _ in
-              reader.copyAsQuote()
-            })
+        // On a draft Copy copies text, and there is no quote to offer instead.
+        if offersQuote {
+          if ReaderSettings(defaults: .standard).copyFormat == .quote {
+            extra.append(
+              UIAction(
+                title: String(localized: "Copy as Text"), image: UIImage(systemName: "doc.on.doc")
+              ) { _ in
+                reader.copyAsText()
+              })
+          } else {
+            extra.append(
+              UIAction(
+                title: String(localized: "Copy as Quote"),
+                image: UIImage(systemName: "text.quote")
+              ) { _ in
+                reader.copyAsQuote()
+              })
+          }
         }
         if reader.citeSelection(range) != nil {
           extra.append(
