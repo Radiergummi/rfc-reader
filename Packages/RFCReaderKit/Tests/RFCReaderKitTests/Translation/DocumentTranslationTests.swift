@@ -233,13 +233,20 @@ extension DocumentHeader {
 /// does (#940), and beside the original as the English body does.
 @Suite("Document translation: appendix labels")
 struct TranslatedAppendixLabelTests {
-  /// Every heading the body has an anchor for, against the contents row for it.
-  private static func expectContentsMatchHeadings(_ built: BuiltDocument, _ shown: RFCDocument) {
+  /// Each contents row against the heading the body's text has at its anchor.
+  private static func expectContentsMatchHeadings(
+    _ built: BuiltDocument, _ shown: RFCDocument
+  ) throws {
     let sections = built.reachableSections(of: shown)
     let rows = ContentsOutline.rows(
       of: sections, filter: "", appendixLabels: built.appendixLabels)
+    try #require(!rows.isEmpty)
+    let text = built.text.string as NSString
     for row in rows {
-      #expect(row.title == built.anchors.heading(of: row.anchor), "\(row.anchor)")
+      let offset = try #require(built.anchors.offset(of: row.anchor))
+      let length = min((row.title as NSString).length, text.length - offset)
+      let heading = text.substring(with: NSRange(location: offset, length: length))
+      #expect(heading == row.title, "\(row.anchor)")
     }
   }
 
@@ -252,7 +259,7 @@ struct TranslatedAppendixLabelTests {
     let translated = TranslatedDocument(document, translations)
     let built = DocumentTextBuilder.build(translated, style: ReadingStyle())
     #expect(built.appendixLabels.appendix == "Anhang")
-    Self.expectContentsMatchHeadings(built, translated.document)
+    try Self.expectContentsMatchHeadings(built, translated.document)
     let rows = ContentsOutline.rows(
       of: built.reachableSections(of: translated.document), filter: "",
       appendixLabels: built.appendixLabels)
@@ -264,6 +271,6 @@ struct TranslatedAppendixLabelTests {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: ReadingStyle())
     #expect(built.appendixLabels == .english)
-    Self.expectContentsMatchHeadings(built, document)
+    try Self.expectContentsMatchHeadings(built, document)
   }
 }
