@@ -273,6 +273,23 @@ struct TextIndexerTests {
     #expect(found.searched == 2)
   }
 
+  /// Spotlight indexes the sections of what the app holds (#178): a document Index
+  /// All RFCs indexed without keeping its body is searched in the app, not there.
+  @Test func `Spotlight gets the documents indexed from a stored body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) }
+
+    let documents = try #require(await indexer.spotlightDocuments())
+    #expect(Set(documents.keys) == [id])
+    #expect(try await indexer.indexedRows(of: id).contains { $0.anchor == "connection-id" })
+  }
+
   /// Its documents have no body in the store, which a reconcile would otherwise read
   /// as a body removed.
   @Test func `what Index All RFCs indexed stays at reconcile`() async throws {

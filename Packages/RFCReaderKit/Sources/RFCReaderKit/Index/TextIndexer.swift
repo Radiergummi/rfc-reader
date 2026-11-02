@@ -310,6 +310,23 @@ public actor TextIndexer {
     return ids.count { indexed[$0] == nil }
   }
 
+  // MARK: - Spotlight
+
+  /// The documents whose sections Spotlight indexes (#178): those indexed from a body
+  /// the store holds, with when each was indexed. Not one Index All RFCs indexed
+  /// without keeping its body: those the app searches, Spotlight does not. Nil when
+  /// what is indexed cannot be read, which is not the same as nothing.
+  public func spotlightDocuments() async -> [DocumentID: Date]? {
+    let stored = await store.storedBodies()
+    return indexedDocuments()?.filter { stored[$0.key] != nil }
+  }
+
+  /// What is indexed of `id`, for Spotlight to index its sections without parsing
+  /// its body again.
+  public func indexedRows(of id: DocumentID) throws -> [FullTextIndex.Row] {
+    try index.indexedRows(of: id)
+  }
+
   /// What the index holds, for Settings.
   public struct Usage: Sendable, Equatable {
     /// How many documents are indexed, and how much of the disk the index takes,

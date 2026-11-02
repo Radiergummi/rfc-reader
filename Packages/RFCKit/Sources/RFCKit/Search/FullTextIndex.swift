@@ -221,12 +221,38 @@ public final class FullTextIndex {
     try database.run("DELETE FROM documents WHERE document = ?", id.fileStem)
   }
 
-  /// One row of `sections`, before it is written.
-  struct Row: Equatable {
-    var anchor: String
-    var number: String?
-    var heading: String
-    var body: String
+  /// One row of `sections`: a section's anchor, number, heading and own text.
+  public struct Row: Equatable, Sendable {
+    public var anchor: String
+    public var number: String?
+    public var heading: String
+    public var body: String
+
+    public init(anchor: String, number: String?, heading: String, body: String) {
+      self.anchor = anchor
+      self.number = number
+      self.heading = heading
+      self.body = body
+    }
+  }
+
+  /// What is indexed of `id`, in the order it was written: what Spotlight indexes of
+  /// it (#178), with no body to parse again. None for a document not indexed.
+  public func indexedRows(of id: DocumentID) throws -> [Row] {
+    let statement = try database.prepare(
+      """
+      SELECT anchor, number, heading, body FROM sections
+      WHERE rowid IN (SELECT row FROM section_rows WHERE document = ?) ORDER BY rowid
+      """)
+    try statement.bind(id.fileStem, at: 1)
+    var rows: [Row] = []
+    while try statement.step() {
+      rows.append(
+        Row(
+          anchor: statement.text(at: 0) ?? "", number: statement.text(at: 1),
+          heading: statement.text(at: 2) ?? "", body: statement.text(at: 3) ?? ""))
+    }
+    return rows
   }
 
   /// What is indexed of `document`: the abstract, unless a section of the body is

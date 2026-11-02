@@ -374,6 +374,18 @@ final class FullTextIndexTests {
     #expect(try Set(index.indexed().keys) == [.rfc(2119)])
   }
 
+  /// Spotlight indexes a document's sections from what the index holds of it (#178),
+  /// rather than parsing its body again.
+  @Test func `a document's rows are read back as they were written`() throws {
+    let index = try index()
+    let document = try Fixtures.document("rfc8999.xml")
+    try index.add(document)
+    try index.add(Fixtures.document("rfc2119.txt"))
+
+    #expect(try index.indexedRows(of: .rfc(8999)) == FullTextIndex.rows(of: document))
+    #expect(try index.indexedRows(of: .rfc(9110)).isEmpty)
+  }
+
   /// Remove Full-Text Index removes nearly the whole index: the file has to shrink
   /// with it, or Settings goes on showing its old size. Documents that differ, since
   /// what FTS5 leaves of a removed row is its own postings.
