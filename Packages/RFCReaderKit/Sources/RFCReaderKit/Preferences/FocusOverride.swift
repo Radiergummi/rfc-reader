@@ -76,6 +76,14 @@ public struct FocusOverride: Codable, Sendable, Hashable {
     defaults.removeObject(forKey: ReaderPreferences.focusOverrideKey)
   }
 
+  /// Ends the Focus's settings only if `defaults` still holds `expected`: for a check
+  /// that read the override, then waited, during which a Focus may have started or
+  /// the reader stepped its size, neither of which it may wipe.
+  public static func remove(from defaults: UserDefaults, ifStill expected: FocusOverride) {
+    guard stored(in: defaults) == expected else { return }
+    remove(from: defaults)
+  }
+
   /// `settings`, a change made while the Focus is on, split between the two layers:
   /// what the Focus overrides goes into the Focus, and the rest is the reader's own,
   /// whose overridden settings stay what `stored` holds.

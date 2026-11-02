@@ -148,6 +148,19 @@ struct FocusOverrideTests {
     }
   }
 
+  @Test func `an override changed since it was read is not removed`() throws {
+    try withDefaults { defaults in
+      let read = FocusOverride(fontSize: 20)
+      read.write(to: defaults)
+      FocusOverride(fontSize: 21).write(to: defaults)
+      FocusOverride.remove(from: defaults, ifStill: read)
+      #expect(FocusOverride.stored(in: defaults) == FocusOverride(fontSize: 21))
+
+      FocusOverride.remove(from: defaults, ifStill: FocusOverride(fontSize: 21))
+      #expect(FocusOverride.stored(in: defaults) == nil)
+    }
+  }
+
   @Test func `an empty override is no Focus`() throws {
     try withDefaults { defaults in
       FocusOverride().write(to: defaults)

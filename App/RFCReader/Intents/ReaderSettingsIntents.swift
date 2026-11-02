@@ -289,11 +289,13 @@ struct ReaderFocusFilter: SetFocusFilterIntent {
   /// reinstalled while a Focus was on, whose end it never heard. Only ever clears,
   /// never writes one: a Focus that is on performs the filter itself.
   static func clearIfEnded() async {
-    guard FocusOverride.stored(in: .standard) != nil,
+    guard let read = FocusOverride.stored(in: .standard),
       let current = try? await ReaderFocusFilter.current,
       current.theme == nil, current.appearance == nil, current.textSize == nil
     else { return }
-    FocusOverride.remove(from: .standard)
+    // Only what was read: a Focus that started during the wait, or a size the
+    // reader stepped, is kept.
+    FocusOverride.remove(from: .standard, ifStill: read)
   }
 
   /// Checks once now and again whenever the app becomes active, for as long as it
