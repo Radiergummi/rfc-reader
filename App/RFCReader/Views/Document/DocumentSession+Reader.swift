@@ -118,6 +118,7 @@ extension DocumentSession {
         let shown = built.isTranslation ? translatedDocument?.document : nil
         reader.sections = built.reachableSections(of: shown ?? document)
         reader.readsTranslation = built.isTranslation
+        reader.appendixLabels = built.appendixLabels
       }
     case .failed:
       reader { $0.documentFailedToLoad() }
