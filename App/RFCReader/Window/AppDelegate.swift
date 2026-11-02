@@ -20,6 +20,10 @@
 
     private(set) var controllers: [ReaderWindowController] = []
 
+    /// Whether the window of its own a launch may open is still to come: see
+    /// `LaunchWindow`. Nil until launch finishes.
+    private var launchWindow: LaunchWindow?
+
     /// The Services' provider (#195), kept here because `NSApp.servicesProvider` does
     /// not retain it.
     private let citationServices = CitationServices()
@@ -48,19 +52,39 @@
 
     func applicationDidFinishLaunching(_ notification: Notification) {
       // A window of its own only when none came back from the last session, and only
-      // for a launch from the Finder or the Dock (#762): a script, a Shortcut or an
-      // intent that launched the app to ask it something left a window behind. A
-      // link that launched it makes the window it needs (`LibraryModel.route(_:)`).
-      let isDefaultLaunch =
-        notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
-      if controllers.isEmpty, isDefaultLaunch {
+      // for a launch the user sees (#762, #939): a script, a Service or an intent that
+      // launched the app to ask it something left a window behind. `LaunchWindow`
+      // says when. A link that launched it makes the window it needs
+      // (`LibraryModel.route(_:)`).
+      let launchWindow = LaunchWindow(
+        launchIsDefault: notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey]
+          as? Bool ?? true,
+        readerCameBack: !controllers.isEmpty)
+      self.launchWindow = launchWindow
+      if launchWindow.opensAtLaunch {
         openWindow(tabbedWith: nil, inBackground: false)
         signposter.emitEvent("First window made")
+      } else if NSApp.isActive {
+        // Activated before launch finished, so `applicationDidBecomeActive` came too
+        // early to count.
+        openLaunchWindowOnActivation()
       }
       warnIfTheStoreDidNotOpen()
       // Made by the menu's commands as a rule, which come first; made here if not, so
       // the scheduled checks never wait on the menu.
       _ = Updater.shared
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+      openLaunchWindowOnActivation()
+    }
+
+    private func openLaunchWindowOnActivation() {
+      guard launchWindow?.becameActive(hasReaderWindow: !controllers.isEmpty) == true else {
+        return
+      }
+      openWindow(tabbedWith: nil, inBackground: false)
+      signposter.emitEvent("First window made")
     }
 
     /// Once, at launch, when the bookmarks store fell back to memory (#152):
@@ -85,24 +109,36 @@
       }
     }
 
-    /// The dock icon, with every window closed, or every reader window: the primer's
-    /// window or the settings left open alone do not count as one (#365). AppKit
-    /// brings back a minimized window only when no window at all is visible, so with
-    /// one of those open a minimized reader is brought back here.
+    /// The dock icon, with every window closed, or every reader window (#365), or with
+    /// the app hidden, as a script launches it (#939). `DockReopen` decides.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-      if !hasVisibleWindows {
-        openWindow(tabbedWith: nil, inBackground: false)
-      } else {
-        let readers = controllers.compactMap(\.window)
-        if !readers.contains(where: \.isVisible) {
-          if let minimized = readers.first(where: \.isMiniaturized) {
-            minimized.deminiaturize(nil)
-          } else {
-            openWindow(tabbedWith: nil, inBackground: false)
-          }
+      let readers = controllers.compactMap(\.window)
+      let states = readers.map { window -> DockReopen.Reader in
+        if let selected = window.tabGroup?.selectedWindow, selected !== window {
+          return .unselectedTab
         }
+        if window.isMiniaturized {
+          return .minimized
+        }
+        return window.isVisible ? .visible : .notShown
       }
-      return true
+      let appIsHidden = sender.isHidden
+      if appIsHidden {
+        // Not activating it: the Dock does, and `open -g` would rather it didn't.
+        sender.unhideWithoutActivation()
+      }
+      switch DockReopen.action(appIsHidden: appIsHidden, readers: states) {
+      case .nothing:
+        return false
+      case .appKitActs:
+        return true
+      case .deminiaturize:
+        readers.first(where: \.isMiniaturized)?.deminiaturize(nil)
+        return false
+      case .openWindow:
+        openWindow(tabbedWith: nil, inBackground: false)
+        return false
+      }
     }
 
     /// `rfc://9110#section-4.2`, plus rfc-editor.org and datatracker links handed over
