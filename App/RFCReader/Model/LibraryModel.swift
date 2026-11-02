@@ -510,8 +510,9 @@ final class LibraryModel {
       self?.textIndexChanged()
       await indexer.run(changed: changed)
     }
-    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
-    // fetch them for nothing.
+    // On the Mac at launch, where ⌘L may come first thing. iOS reads them as its Go
+    // to RFC sheet opens (`refreshRegistriesIfDue()`): most launches of an iPhone
+    // never open it.
     #if os(macOS)
       // Unless an intent has read them already (#192). Immediate, as the intent's is,
       // so the check is marked before either can look.
@@ -527,16 +528,21 @@ final class LibraryModel {
   /// the palette asks on each keystroke, and nothing on screen lists them.
   @ObservationIgnored private var registryEntries: [RegistryEntry] = []
 
-  /// When the registries were last checked, nil until launch first checks them.
+  /// When the registries were last checked, nil until they first are.
   @ObservationIgnored private var registriesCheckedAt: Date?
 
   /// Checks the registries again if the last check is older than
   /// `RegistryRefresh.maximumAge`: the palette asks as it opens, since the app may
-  /// stay open for weeks after the check at launch.
+  /// stay open for weeks after the check at launch. Reads them first when nothing
+  /// has: iOS does not at launch, and its Go to RFC sheet lists registry values too
+  /// (#769, #579).
   func refreshRegistriesIfDue() {
-    guard let checked = registriesCheckedAt,
-      RegistryRefresh.isDue(checkedAt: checked, now: .now)
-    else { return }
+    guard let checked = registriesCheckedAt else {
+      // Immediate, so the check is marked before an intent asking meanwhile looks.
+      Task.immediate(name: "Load registries") { await refreshRegistries() }
+      return
+    }
+    guard RegistryRefresh.isDue(checkedAt: checked, now: .now) else { return }
     Task(name: "Refresh registries") { await refreshRegistries() }
   }
 
