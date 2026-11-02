@@ -47,6 +47,27 @@
         }
       }
     },
+    "Make the text ${change} in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Make the text ${change} in ${applicationName}"
+            ]
+          }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mach den Text in ${applicationName} ${change}"
+            ]
+          }
+        }
+      }
+    },
     "Open ${target} in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -90,6 +111,52 @@
             "state" : "new",
             "values" : [
               "Open a section of an RFC in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Switch ${applicationName} to ${appearance}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Switch ${applicationName} to ${appearance}",
+              "Change the appearance of ${applicationName}"
+            ]
+          }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Stelle ${applicationName} auf ${appearance}",
+              "Ändere die Darstellung von ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Use the ${theme} theme in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Use the ${theme} theme in ${applicationName}",
+              "Change the theme in ${applicationName}"
+            ]
+          }
+        },
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Verwende das Thema ${theme} in ${applicationName}",
+              "Ändere das Thema in ${applicationName}"
             ]
           }
         }

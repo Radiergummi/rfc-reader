@@ -396,6 +396,16 @@
         }
       }
     },
+    "%lld pt" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pt"
+          }
+        }
+      }
+    },
     "%lld sections" : {
       "localizations" : {
         "de" : {
@@ -429,6 +439,46 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld sections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld themes" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Thema"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Themen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld theme"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld themes"
                 }
               }
             }
@@ -472,6 +522,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "A Focus filter is setting these until the Focus ends." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Fokusfilter legt diese fest, bis der Fokus endet."
           }
         }
       }
@@ -872,6 +932,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorsitz: %@"
+          }
+        }
+      }
+    },
+    "Change" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderung"
           }
         }
       }
@@ -1867,6 +1937,26 @@
         }
       }
     },
+    "Get Reader Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen abrufen"
+          }
+        }
+      }
+    },
+    "Gets the reader's appearance, light and dark themes and text size, as they are now." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruft die Darstellung, das helle und das dunkle Thema und die Textgröße des Readers ab, wie sie gerade sind."
+          }
+        }
+      }
+    },
     "Go to %@" : {
       "localizations" : {
         "de" : {
@@ -2433,6 +2523,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maschinell aus dem Englischen übersetzt"
+          }
+        }
+      }
+    },
+    "Make the text ${change}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text ${change} machen"
           }
         }
       }
@@ -3217,6 +3317,26 @@
         }
       }
     },
+    "Reader Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung beim Lesen"
+          }
+        }
+      }
+    },
+    "Reader Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen"
+          }
+        }
+      }
+    },
     "Reading" : {
       "localizations" : {
         "de" : {
@@ -3637,6 +3757,96 @@
         }
       }
     },
+    "Set Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung festlegen"
+          }
+        }
+      }
+    },
+    "Set Reader Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesethema festlegen"
+          }
+        }
+      }
+    },
+    "Set Text Size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textgröße festlegen"
+          }
+        }
+      }
+    },
+    "Set the appearance to ${appearance}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung auf ${appearance} festlegen"
+          }
+        }
+      }
+    },
+    "Set the text ${change} to ${size}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${change} des Texts auf ${size} festlegen"
+          }
+        }
+      }
+    },
+    "Sets the app's appearance: the system's, or always light or dark." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt die Darstellung der App fest: die des Systems oder immer hell oder dunkel."
+          }
+        }
+      }
+    },
+    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt das Seitenthema fest: ein helles Thema für die helle App, ein dunkles für die dunkle oder eines für beide."
+          }
+        }
+      }
+    },
+    "Sets the reader's text size, in points from 12 to 28, or makes it a step bigger or smaller." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt die Textgröße des Readers in Punkt von 12 bis 28 fest oder macht sie eine Stufe größer oder kleiner."
+          }
+        }
+      }
+    },
+    "Sets the reader's theme, appearance and text size while the Focus is on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt Thema, Darstellung und Textgröße des Readers fest, solange der Fokus aktiv ist."
+          }
+        }
+      }
+    },
     "Settings" : {
       "localizations" : {
         "de" : {
@@ -3903,6 +4113,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenleiste"
+          }
+        }
+      }
+    },
+    "Size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Größe"
           }
         }
       }
@@ -4197,6 +4417,16 @@
         }
       }
     },
+    "Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thema"
+          }
+        }
+      }
+    },
     "These RFCs were not exported:" : {
       "localizations" : {
         "de" : {
@@ -4344,6 +4574,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Größe des Systems verwenden"
+          }
+        }
+      }
+    },
+    "Use the ${theme} theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thema ${theme} verwenden"
           }
         }
       }

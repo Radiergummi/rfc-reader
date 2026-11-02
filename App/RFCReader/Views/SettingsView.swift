@@ -179,6 +179,13 @@ private struct AppearanceSettings: View {
         Text(palette.title).tag(palette)
       }
     }
+    // What the pickers show is the Focus's, and a change made now lasts as long as
+    // it does (#714): without this, a choice that seems not to stick.
+    if _settings.isFocusActive {
+      Text("A Focus filter is setting these until the Focus ends.")
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
     Picker("Code", selection: $settings.syntaxTheme) {
       ForEach(SyntaxTheme.all) { theme in
         Text(theme.title).tag(theme)
@@ -294,32 +301,6 @@ private struct AdvancedSettings: View {
     Toggle(isOn: $settings.copiesSectionNumbers) {
       Text("Copy section numbers")
       Text("A copied heading keeps its number, as in “4.2. Overview”.")
-    }
-  }
-}
-
-extension AppearancePreference {
-  /// What Settings calls it.
-  fileprivate var title: LocalizedStringResource {
-    switch self {
-    case .system: "System"
-    case .light: "Light"
-    case .dark: "Dark"
-    }
-  }
-}
-
-extension ReaderPalette {
-  /// What Settings calls it.
-  fileprivate var title: LocalizedStringResource {
-    switch id {
-    case ReaderPalette.paper.id: "Paper"
-    case ReaderPalette.sepia.id: "Sepia"
-    case ReaderPalette.gray.id: "Gray"
-    case ReaderPalette.night.id: "Night"
-    case ReaderPalette.black.id: "Black"
-    case ReaderPalette.highContrast.id: "High Contrast"
-    default: "Automatic"
     }
   }
 }
