@@ -91,7 +91,8 @@ struct DocumentInspector: View {
       let infoView = InfoView(
         info: info, document: document, library: library, open: openDocument,
         openDraft: openDraft, search: search, showReadingPath: showReadingPath,
-        sections: sections, selectSection: selectSection)
+        sections: InspectorPane.infoSections(sections, readsAsOriginal: publishedOriginal != nil),
+        selectSection: selectSection)
       #if os(macOS)
         infoView
       #else
