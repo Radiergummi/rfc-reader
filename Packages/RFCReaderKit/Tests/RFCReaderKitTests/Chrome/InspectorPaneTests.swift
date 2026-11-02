@@ -78,7 +78,7 @@ struct InspectorPaneTests {
 
   /// On an RFC read as its original, a pointer's loaded text is not on screen, so the
   /// Info pane links an erratum to none of its sections (#938): every erratum is the
-  /// whole document's, as the reader's marks have it.
+  /// whole document's, as the original-only page's header has it.
   @Test func `an RFC read as its original gives the Info pane no sections`() {
     let sections = [Section(anchor: "section-2", number: "2", title: [.text("Section")])]
     let erratum = Erratum(
