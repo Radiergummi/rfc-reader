@@ -314,8 +314,12 @@ final class LibraryModel {
   /// learns of an unmark only once the run it starts has read the disk, and the list
   /// at once. Only an RFC: the list holds the RFCs a series names, not the series.
   func isAvailableOffline(_ id: DocumentID) -> Bool {
+    isWantedOffline(id) && offlineKeeper.kept.contains(id)
+  }
+
+  /// Whether Available Offline lists `id`.
+  private func isWantedOffline(_ id: DocumentID) -> Bool {
     id.series == .rfc && availableOfflineNumbers.contains(id.number)
-      && offlineKeeper.kept.contains(id)
   }
 
   /// Lists what is wanted offline, and brings the disk in line with it.
@@ -1574,15 +1578,18 @@ final class LibraryModel {
     let entry = index?[id]
     let document = try await store.document(
       id, formats: entry?.formats ?? [], entry: entry, client: client)
-    // A load of a document wanted offline writes its body into the kept tier, which
-    // the keeper, and so the row's mark, learns of only by running again (#936).
-    if id.series == .rfc, availableOfflineNumbers.contains(id.number),
-      !offlineKeeper.kept.contains(id)
-    {
-      reconcileOffline()
-    }
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return document
+  }
+
+  /// A load of a document wanted offline writes its body into the kept tier, which
+  /// the keeper, and so the row's mark, learns of only by running again (#936). Only
+  /// when the body is kept now: a load that wrote nothing does not start a run.
+  private func reconcileIfBodyKept(_ id: DocumentID) async {
+    guard isWantedOffline(id), !offlineKeeper.kept.contains(id) else { return }
+    guard await store.isKept(id) else { return }
+    reconcileOffline()
   }
 
   /// An RFC as `document(for:)` reads it, or a draft's revision (#728): the newest
@@ -1626,12 +1633,14 @@ final class LibraryModel {
   /// it (#377).
   func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
     let data = try await store.publishedFile(id, format: format, client: client)
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return data
   }
 
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return text
   }

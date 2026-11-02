@@ -372,22 +372,37 @@ struct OfflineKeeperTests {
     let fetched = DocumentID.rfc(9000)
     let keeper = OfflineKeeper(store: store, client: fetcher) { _ in [.xml] }
     await keeper.reconcile(wanted: [kept]).value
-    let changes = Mutex(0)
-    withObservationTracking {
-      _ = keeper.kept
-    } onChange: {
-      changes.withLock { $0 += 1 }
-    }
+    let changes = KeptChanges()
+    changes.track(keeper)
 
     await keeper.reconcile(wanted: [kept, fetched]).value
     await untilWaiting(documents: 1, for: fetched, in: store)
     #expect(keeper.status.state(of: fetched) == .downloading)
-    #expect(changes.withLock { $0 } == 0)
+    #expect(changes.count == 0)
     await fetcher.gate.open()
     await keeper.untilSettled(fetched)
+    await keeper.untilRunsEnd()
 
-    #expect(changes.withLock { $0 } == 1)
+    // Once: the landing, and not the fetch ending after it.
+    #expect(changes.count == 1)
     #expect(keeper.kept == [kept, fetched])
+  }
+
+  /// Counts every change to a keeper's `kept`, tracking it again after each as a
+  /// view does, where one `withObservationTracking` hears only the first.
+  @MainActor private final class KeptChanges {
+    private(set) var count = 0
+
+    func track(_ keeper: OfflineKeeper) {
+      withObservationTracking {
+        _ = keeper.kept
+      } onChange: {
+        MainActor.assumeIsolated {
+          self.count += 1
+          self.track(keeper)
+        }
+      }
+    }
   }
 
   /// A download that ends without a body, as a failed one does, redraws no row that
