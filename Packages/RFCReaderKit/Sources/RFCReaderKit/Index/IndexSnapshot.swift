@@ -31,10 +31,10 @@ public enum IndexSnapshot {
   /// The name of the snapshot `build` writes and reads, `DocumentStore`'s build: a
   /// snapshot is the model as the build that wrote it coded it, and a build that adds
   /// a field would otherwise decode another's snapshot without complaint and show the
-  /// field empty until the index next changed. Its own name rather than a comparison
-  /// of dates, which trusted a snapshot newer than the app's executable, and an
-  /// install whose executable keeps an older build date than that (#758). A new build
-  /// costs one parse, the first time it launches.
+  /// field empty until the index next changed. A name of its own rather than a
+  /// comparison of dates: a snapshot newer than the app's executable used to count as
+  /// current, so an install whose executable kept an older build date read another
+  /// build's snapshot (#758). A new build costs one parse, the first time it launches.
   public static func fileName(build: String) -> String {
     let safe = String(build.map { $0.isLetter || $0.isNumber || $0 == "." ? $0 : "-" })
     return "\(prefix)\(safe).json"

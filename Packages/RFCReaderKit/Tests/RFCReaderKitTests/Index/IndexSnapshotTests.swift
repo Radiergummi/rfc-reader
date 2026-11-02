@@ -92,6 +92,15 @@ struct IndexSnapshotTests {
     _ = try await storeWithSnapshot(in: sandbox, build: "1 100")
     let store = sandbox.store()
     #expect(store.cachedIndexLocation(bundled: nil)?.snapshot == nil)
+
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(id: .rfc(9000), title: "Another", date: PublicationDate(year: 2021))
+    ])
+    try await store.storeIndex(Data("<rfc-index/>".utf8), parsed: index, validators: nil)
+    await store.untilSnapshotWritten()
+    let names = try FileManager.default.contentsOfDirectory(atPath: sandbox.caches.path)
+      .filter { IndexSnapshot.isSnapshot(fileName: $0) }
+    #expect(names == [IndexSnapshot.fileName(build: "1 100")])
   }
 
   @Test func `a build's snapshot replaces the ones other builds wrote`() async throws {

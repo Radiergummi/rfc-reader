@@ -172,12 +172,13 @@ public actor DocumentStore {
 
   /// The app's build number, `CFBundleVersion`, and when its executable was built:
   /// every local build is build 1 (`project.yml`), and a parser changed in one must
-  /// still reach the documents an earlier one parsed.
+  /// still reach the documents an earlier one parsed. Nil, which keeps no parse and no
+  /// snapshot, when either cannot be read: the number alone is every local build's.
   private static var appBuild: String? {
-    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+      let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
     else { return nil }
-    let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
-    return built.map { "\(number) \($0.timeIntervalSinceReferenceDate)" } ?? number
+    return "\(number) \(built.timeIntervalSinceReferenceDate)"
   }
 
   /// The store above, with `parsing` awaited at the start of each look at the disk
