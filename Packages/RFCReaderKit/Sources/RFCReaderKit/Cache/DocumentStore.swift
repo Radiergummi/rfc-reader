@@ -472,26 +472,46 @@ public actor DocumentStore {
   /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
   /// entries are still returned, to use until the fetch succeeds. The "Read cached
   /// registries" signpost measures it.
-  public func cachedRegistries(maximumAge: TimeInterval) -> (
+  ///
+  /// The files are read on this actor and parsed off it, as `parseCached` parses
+  /// bodies: parsed here, a document opened meanwhile, a restored tab or an `rfc://`
+  /// link, waited behind the parse (#758).
+  public func cachedRegistries(maximumAge: TimeInterval) async -> (
     entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
   ) {
     let interval = signposter.beginInterval("Read cached registries")
     defer { signposter.endInterval("Read cached registries", interval) }
+    let kept = IANARegistry.allCases.map { registry in
+      let url = registryURL(registry)
+      return KeptRegistry(
+        registry: registry, data: try? Data(contentsOf: url),
+        keptAt: Self.modificationDate(of: url))
+    }
+    return await Self.parseRegistries(kept, maximumAge: maximumAge, now: .now)
+  }
+
+  /// A registry's file as read from the disk: nil data when there is none.
+  private struct KeptRegistry: Sendable {
+    let registry: IANARegistry
+    let data: Data?
+    let keptAt: Date?
+  }
+
+  @concurrent
+  private static func parseRegistries(
+    _ kept: [KeptRegistry], maximumAge: TimeInterval, now: Date
+  ) async -> (entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]) {
     var entries: [IANARegistry: [RegistryEntry]] = [:]
     var stale: [IANARegistry] = []
-    for registry in IANARegistry.allCases {
-      let url = registryURL(registry)
-      guard let data = try? Data(contentsOf: url),
-        let parsed = try? IANARegistry.parse(data, as: registry)
+    for file in kept {
+      guard let data = file.data, let parsed = try? IANARegistry.parse(data, as: file.registry)
       else {
-        stale.append(registry)
+        stale.append(file.registry)
         continue
       }
-      entries[registry] = parsed
-      let fetched = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-        .contentModificationDate
-      if (fetched ?? .distantPast).timeIntervalSinceNow < -maximumAge {
-        stale.append(registry)
+      entries[file.registry] = parsed
+      if now.timeIntervalSince(file.keptAt ?? .distantPast) > maximumAge {
+        stale.append(file.registry)
       }
     }
     return (entries, stale)
