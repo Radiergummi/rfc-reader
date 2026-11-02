@@ -85,10 +85,16 @@ public struct ReaderSettings: Sendable, Hashable {
     self.copiesSectionNumbers = copiesSectionNumbers
   }
 
-  /// What `defaults` holds, each setting falling back to its default where nothing
-  /// is stored, or something of the wrong type, or a theme this version does not
-  /// know.
+  /// The settings the reader draws: what `defaults` holds, under the active Focus
+  /// filter's `FocusOverride` if there is one (#714).
   public init(defaults: UserDefaults) {
+    self = ReaderSettings(storedIn: defaults).overridden(by: FocusOverride.stored(in: defaults))
+  }
+
+  /// The reader's own settings, as `defaults` holds them, whatever a Focus filter
+  /// overrides: each setting falling back to its default where nothing is stored, or
+  /// something of the wrong type, or a theme this version does not know.
+  public init(storedIn defaults: UserDefaults) {
     typealias Keys = ReaderPreferences
     self.init(
       fontSize: defaults.object(forKey: Keys.fontSizeKey) as? Double ?? Keys.defaultFontSize,
@@ -122,7 +128,33 @@ public struct ReaderSettings: Sendable, Hashable {
   /// Writes to `defaults` the settings that differ from `old`, and only those, so
   /// that a setting the reader never touched stays unstored and follows its default
   /// if that changes.
+  ///
+  /// While a Focus filter is active, a setting it overrides is changed in the Focus's
+  /// override, and the reader's own stays as it was, to be drawn again when the Focus
+  /// ends (#714).
   public func write(to defaults: UserDefaults, replacing old: ReaderSettings) {
+    guard let focus = FocusOverride.stored(in: defaults) else {
+      writeStored(to: defaults, replacing: old)
+      return
+    }
+    let stored = ReaderSettings(storedIn: defaults)
+    let split = focus.absorbing(self, over: stored)
+    split.stored.writeStored(to: defaults, replacing: stored)
+    if split.focus != focus { split.focus.write(to: defaults) }
+  }
+
+  /// Reads the settings from `defaults`, lets `change` change them, and writes what
+  /// changed: for what has no `@ReaderSettingsValue`, such as an App Intent (#714).
+  public static func change(
+    in defaults: UserDefaults = .standard, _ change: (inout ReaderSettings) -> Void
+  ) {
+    let old = ReaderSettings(defaults: defaults)
+    var new = old
+    change(&new)
+    new.write(to: defaults, replacing: old)
+  }
+
+  private func writeStored(to defaults: UserDefaults, replacing old: ReaderSettings) {
     typealias Keys = ReaderPreferences
     if fontSize != old.fontSize { defaults.set(fontSize, forKey: Keys.fontSizeKey) }
     if underlineLinks != old.underlineLinks {
@@ -214,6 +246,9 @@ public struct ReaderSettingsValue: DynamicProperty {
   @AppStorage private var linkSite: LinkSite
   @AppStorage private var copyFormat: CopyFormat
   @AppStorage private var copiesSectionNumbers: Bool
+  /// The active Focus filter's settings (#714), so that a Focus starting or ending
+  /// updates the view as a change to a setting does.
+  @AppStorage private var focusOverride: Data?
   private let defaults: UserDefaults
 
   public init(store defaults: UserDefaults = .standard) {
@@ -247,6 +282,13 @@ public struct ReaderSettingsValue: DynamicProperty {
     _copiesSectionNumbers = AppStorage(
       wrappedValue: Keys.defaultCopiesSectionNumbers, Keys.copiesSectionNumbersKey,
       store: defaults)
+    _focusOverride = AppStorage(Keys.focusOverrideKey, store: defaults)
+  }
+
+  /// Whether a Focus filter is setting some of the reader's settings, which Settings
+  /// says under the pickers it overrides (#714).
+  @MainActor public var isFocusActive: Bool {
+    FocusOverride.decoded(focusOverride) != nil
   }
 
   /// The settings. Setting them writes what changed to user defaults.
@@ -259,7 +301,9 @@ public struct ReaderSettingsValue: DynamicProperty {
         lightPalette: .named(lightPalette, in: .light),
         darkPalette: .named(darkPalette, in: .dark), vimKeys: vimKeys,
         tabsThroughLinks: tabsThroughLinks, citationStyle: citationStyle, linkSite: linkSite,
-        copyFormat: copyFormat, copiesSectionNumbers: copiesSectionNumbers)
+        copyFormat: copyFormat, copiesSectionNumbers: copiesSectionNumbers
+      )
+      .overridden(by: FocusOverride.decoded(focusOverride))
     }
     nonmutating set {
       newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))

@@ -41,6 +41,22 @@ public enum IntentAnswer {
     }
     return String(kit: "\(named) is defined in \(definedIn).", locale: locale)
   }
+
+  /// `Black is now the dark theme.`: what Set Reader Theme says (#714), naming the
+  /// slot, since a dark theme set while the app is light shows nothing yet.
+  ///
+  /// - Parameters:
+  ///   - name: The theme, as Settings calls it.
+  ///   - appearances: The slots it was set in: `ReaderPalette.appearances`.
+  public static func theme(
+    _ name: String, setFor appearances: Set<PaletteAppearance>, locale: Locale = .interface
+  ) -> String {
+    switch (appearances.contains(.light), appearances.contains(.dark)) {
+    case (true, false): String(kit: "\(name) is now the light theme.", locale: locale)
+    case (false, true): String(kit: "\(name) is now the dark theme.", locale: locale)
+    default: String(kit: "\(name) is now the light and the dark theme.", locale: locale)
+    }
+  }
 }
 
 /// Something asked of the reader showing one document, which that reader takes once
