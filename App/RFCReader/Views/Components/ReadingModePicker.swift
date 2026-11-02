@@ -81,8 +81,6 @@ struct SectionSteps: View {
     // Over the original text too: it goes where the contents panel's rows go.
     Button("Go to Section…", systemImage: "number") { reader.isGoingToSection = true }
       .keyboardShortcut(showsShortcuts ? ReaderShortcut.goToSection.keyboardShortcut : nil)
-      .disabled(
-        reader.sections.isEmpty
-          || !PublishedOriginalPage.offersSections(kind: reader.publishedOriginal?.kind))
+      .disabled(reader.sections.isEmpty || !reader.offersSections)
   }
 }
