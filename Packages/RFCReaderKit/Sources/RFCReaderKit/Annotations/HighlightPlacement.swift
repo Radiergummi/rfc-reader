@@ -48,14 +48,27 @@ public struct HighlightPlacement: Sendable, Equatable {
       self.init(marks: HighlightMarks([]), statuses: [:], relocations: [:], isPlaced: false)
       return
     }
+    let placed = HighlightPlacement(highlights, in: built.positions.model)
+    let text = built.text.string as NSString
+    var marks: [HighlightMark] = []
+    for entry in highlights {
+      guard case .placed(let range, _, _)? = placed.statuses[entry.id] else { continue }
+      for drawn in built.positions.drawnRanges(forModel: range, in: text) {
+        marks.append(HighlightMark(range: drawn, color: entry.color, highlight: entry.id))
+      }
+    }
+    self.init(
+      marks: HighlightMarks(marks), statuses: placed.statuses, relocations: placed.relocations)
+  }
+
+  /// `highlights` in the model text alone, drawn nowhere: where they are in the
+  /// document, without a build to show them, as an export places them (#524).
+  public init(_ highlights: [AnnotationSnapshot.HighlightEntry], in model: ModelText) {
     guard !highlights.isEmpty else {
       self = .none
       return
     }
-    let model = built.positions.model
     let relocator = Relocator(model)
-    let text = built.text.string as NSString
-    var marks: [HighlightMark] = []
     var statuses: [UUID: Status] = [:]
     var relocations: [UUID: Target] = [:]
     for entry in highlights {
@@ -72,11 +85,8 @@ public struct HighlightPlacement: Sendable, Equatable {
       statuses[entry.id] = .placed(
         range, target, section: model.section(containing: range.lowerBound)?.anchor)
       if target != entry.current { relocations[entry.id] = target }
-      for drawn in built.positions.drawnRanges(forModel: range, in: text) {
-        marks.append(HighlightMark(range: drawn, color: entry.color, highlight: entry.id))
-      }
     }
-    self.init(marks: HighlightMarks(marks), statuses: statuses, relocations: relocations)
+    self.init(marks: HighlightMarks([]), statuses: statuses, relocations: relocations)
   }
 }
 

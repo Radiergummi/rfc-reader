@@ -141,7 +141,7 @@ struct SectionNumberHangTests {
     let link = try #require(built.text.attribute(.link, at: number, effectiveRange: nil) as? URL)
     #expect(ReaderLinkScheme.anchor(from: link) == "section-1.1")
     let color = built.text.attribute(.foregroundColor, at: number, effectiveRange: nil)
-    #expect(color as? PlatformColor == RFCColors.secondaryLabel)
+    #expect(color as? PlatformColor == ReaderPalette.themedSecondaryText)
     var range = NSRange()
     let marked = built.text.attribute(.rfcSectionNumber, at: number, effectiveRange: &range)
     #expect(marked as? String == "section-1.1")
@@ -150,7 +150,7 @@ struct SectionNumberHangTests {
     let title = heading + "\t1.1\t".utf16.count
     #expect(built.text.attribute(.link, at: title, effectiveRange: nil) == nil)
     let titleColor = built.text.attribute(.foregroundColor, at: title, effectiveRange: nil)
-    #expect(titleColor as? PlatformColor == RFCColors.label)
+    #expect(titleColor as? PlatformColor == ReaderPalette.themedText)
   }
 
   @Test func `the number under an offset is found with its heading and its extent`() throws {

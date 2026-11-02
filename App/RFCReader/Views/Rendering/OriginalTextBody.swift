@@ -17,6 +17,10 @@ import SwiftUI
 struct OriginalTextBody {
   let text: String
   let fontSize: Double
+  /// The page themes chosen (#704), and which of them is drawn: its page, and its
+  /// text through `ReaderPalette.themedText`, which a change only redraws.
+  let settings: ReaderSettings
+  let appearance: PaletteAppearance
   #if canImport(UIKit)
     /// The window's reader state, which Find is installed in (#763): nil for a
     /// reader the stack keeps below its top.
@@ -30,13 +34,26 @@ struct OriginalTextBody {
   }
 
   fileprivate var attributed: NSAttributedString {
-    NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: RFCColors.label])
+    NSAttributedString(
+      string: text, attributes: [.font: font, .foregroundColor: ReaderPalette.themedText])
   }
 
   /// What the storage last received, so an update pass that changes neither does
   /// not rewrite a whole RFC's text.
   final class Coordinator {
     var shown: (text: String, fontSize: Double)?
+    /// The page theme last drawn, so only a change of it redraws.
+    var palette = ReaderPalette.automatic
+  }
+
+  /// The theme drawn, once the themes chosen are the text's
+  /// (`ReaderPalette.choose(light:dark:)`), or nil if it is the one last drawn.
+  fileprivate func changedPalette(_ coordinator: Coordinator) -> ReaderPalette? {
+    ReaderPalette.choose(light: settings.lightPalette, dark: settings.darkPalette)
+    let palette = settings.palette(for: appearance)
+    guard coordinator.palette != palette else { return nil }
+    coordinator.palette = palette
+    return palette
   }
 
   func makeCoordinator() -> Coordinator { Coordinator() }
@@ -72,8 +89,13 @@ struct OriginalTextBody {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-      if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
       guard let textView = scrollView.documentView as? NSTextView else { return }
+      if let palette = changedPalette(context.coordinator) {
+        scrollView.backgroundColor = palette.pageBackground ?? .clear
+        scrollView.drawsBackground = palette.pageBackground != nil
+        textView.redrawLaidOutText()
+      }
+      if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
       // Through the text storage, never the content storage's `attributedString`,
       // which silently discards the backing store; see `NSTextContentStorage.install(_:)`.
       textView.textStorage?.setAttributedString(attributed)
@@ -120,6 +142,10 @@ struct OriginalTextBody {
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
       textView.findReader = reader
+      if let palette = changedPalette(context.coordinator) {
+        textView.backgroundColor = palette.pageBackground ?? .clear
+        textView.redrawLaidOutText()
+      }
       let previous = context.coordinator.shown
       if let previous, previous == (text, fontSize) { return }
       let offset = textView.contentOffset.x

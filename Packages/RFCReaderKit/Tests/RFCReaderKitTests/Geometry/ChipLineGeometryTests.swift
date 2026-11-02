@@ -36,7 +36,7 @@ struct ChipLineGeometryTests {
 
   /// Lays text out in a container of this width. The storage is returned because
   /// the layout manager holds it weakly. Written through `textStorage`, never
-  /// `attributedString`, which discards the backing storage: see CLAUDE.md.
+  /// `attributedString`, which discards the backing storage: see docs/ARCHITECTURE.md, "TextKit 2 traps".
   private func layOut(_ text: NSAttributedString, width: CGFloat) -> (
     NSTextContentStorage, NSTextLayoutManager
   ) {

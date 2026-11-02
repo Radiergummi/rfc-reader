@@ -157,15 +157,25 @@ private struct KeyboardSettings: View {
   }
 }
 
-/// The colors: the page's, which only redraw, and the code's. Each picker lists
-/// what the reader offers, one choice each until page themes (#704) and syntax
-/// themes (#707) add theirs.
+/// The colors: the app's appearance, the page themes for light and dark, which only
+/// redraw (#704), and the code's. The appearance picks which of the two themes is
+/// drawn, and is the whole app's, as Apple Books' is.
 private struct AppearanceSettings: View {
   @ReaderSettingsValue private var settings
 
   var body: some View {
-    Picker("Page", selection: $settings.palette) {
-      ForEach(ReaderPalette.all) { palette in
+    Picker("Appearance", selection: $settings.appearance) {
+      ForEach(AppearancePreference.allCases, id: \.self) { appearance in
+        Text(appearance.title).tag(appearance)
+      }
+    }
+    Picker("Light Theme", selection: $settings.lightPalette) {
+      ForEach(ReaderPalette.offered(in: .light)) { palette in
+        Text(palette.title).tag(palette)
+      }
+    }
+    Picker("Dark Theme", selection: $settings.darkPalette) {
+      ForEach(ReaderPalette.offered(in: .dark)) { palette in
         Text(palette.title).tag(palette)
       }
     }
@@ -288,12 +298,28 @@ private struct AdvancedSettings: View {
   }
 }
 
+extension AppearancePreference {
+  /// What Settings calls it.
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .system: "System"
+    case .light: "Light"
+    case .dark: "Dark"
+    }
+  }
+}
+
 extension ReaderPalette {
   /// What Settings calls it.
-  fileprivate var title: String {
+  fileprivate var title: LocalizedStringResource {
     switch id {
-    case ReaderPalette.automatic.id: "Automatic"
-    default: id.capitalized
+    case ReaderPalette.paper.id: "Paper"
+    case ReaderPalette.sepia.id: "Sepia"
+    case ReaderPalette.gray.id: "Gray"
+    case ReaderPalette.night.id: "Night"
+    case ReaderPalette.black.id: "Black"
+    case ReaderPalette.highContrast.id: "High Contrast"
+    default: "Automatic"
     }
   }
 }

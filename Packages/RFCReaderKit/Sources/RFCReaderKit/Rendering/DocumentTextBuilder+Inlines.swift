@@ -140,7 +140,7 @@ extension DocumentTextBuilder {
       var gloss: [NSAttributedString.Key: Any] = [
         .rfcGloss: GlossBox(use.gloss),
         .underlineStyle: NSUnderlineStyle.single.union(.patternDot).rawValue,
-        .underlineColor: RFCColors.secondaryLabel,
+        .underlineColor: secondaryLabelColor,
       ]
       #if canImport(UIKit)
         // An item for its long press, as a figure is: what makes the press reach the
@@ -299,7 +299,7 @@ extension DocumentTextBuilder {
   func backlinkCaption(_ anchor: String, count: Int) -> NSAttributedString {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: style.backlinksFont,
-      .foregroundColor: RFCColors.secondaryLabel,
+      .foregroundColor: secondaryLabelColor,
       // Set solid: the body's line height would add leading above one short line,
       // between the caption and its heading.
       .paragraphStyle: paragraphStyle(
@@ -324,7 +324,7 @@ extension DocumentTextBuilder {
     // A few points under the words' size: a diagonal arrow fills its whole square,
     // and at the words' size it outweighs them.
     if let symbol = chipSymbolRun(
-      "arrow.down.backward", color: RFCColors.secondaryLabel,
+      "arrow.down.backward", color: secondaryLabelColor,
       pointSize: style.backlinksFont.pointSize - 4, attributes: arrowAttributes)
     {
       result.append(symbol)

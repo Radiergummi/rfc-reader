@@ -77,7 +77,7 @@
             get: { output.exported != nil },
             set: { if !$0 { output.finishExport() } }),
           document: output.exported,
-          contentType: (output.exported?.format ?? .pdf).contentType,
+          contentType: output.exported?.contentType ?? ExportFormat.pdf.contentType,
           defaultFilename: output.exported?.fileStem ?? ExportFormat.fileStem(for: id)
         ) { _ in
           output.finishExport()

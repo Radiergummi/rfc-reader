@@ -116,6 +116,46 @@
         }
       }
     },
+    "%lld Notes" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notiz"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Note"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld RFCs" : {
       "localizations" : {
         "de" : {
@@ -516,6 +556,56 @@
         }
       }
     },
+    "Add Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Figure" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zur Abbildung hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Paragraph" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zum Absatz hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zum Abschnitt hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Table" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zur Tabelle hinzufügen"
+          }
+        }
+      }
+    },
     "Add RFCs from the reader, from any list, or here." : {
       "localizations" : {
         "de" : {
@@ -636,6 +726,16 @@
         }
       }
     },
+    "Automatic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch"
+          }
+        }
+      }
+    },
     "Available Offline" : {
       "localizations" : {
         "de" : {
@@ -686,6 +786,26 @@
         }
       }
     },
+    "Black" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schwarz"
+          }
+        }
+      }
+    },
+    "Bold" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fett"
+          }
+        }
+      }
+    },
     "Bookmark" : {
       "localizations" : {
         "de" : {
@@ -722,6 +842,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stöbere in der Seitenleiste, suche oder springe direkt zu einer Nummer."
+          }
+        }
+      }
+    },
+    "Bulleted List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzählung"
           }
         }
       }
@@ -1216,6 +1346,36 @@
         }
       }
     },
+    "Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkel"
+          }
+        }
+      }
+    },
+    "Dark Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkles Thema"
+          }
+        }
+      }
+    },
+    "Decrease Indent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einzug verkleinern"
+          }
+        }
+      }
+    },
     "Defined In" : {
       "localizations" : {
         "de" : {
@@ -1252,6 +1412,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markierung löschen"
+          }
+        }
+      }
+    },
+    "Delete Highlight and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung und Notizen löschen"
+          }
+        }
+      }
+    },
+    "Delete Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz löschen"
+          }
+        }
+      }
+    },
+    "Delete the highlight and its notes?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markierung und ihre Notizen löschen?"
           }
         }
       }
@@ -1373,6 +1563,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sammlung bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz bearbeiten"
           }
         }
       }
@@ -1717,6 +1917,16 @@
         }
       }
     },
+    "Gray" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grau"
+          }
+        }
+      }
+    },
     "HTML" : {
       "localizations" : {
         "de" : {
@@ -1767,6 +1977,16 @@
         }
       }
     },
+    "High Contrast" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoher Kontrast"
+          }
+        }
+      }
+    },
     "Highlight" : {
       "localizations" : {
         "de" : {
@@ -1783,6 +2003,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markierungen"
+          }
+        }
+      }
+    },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
           }
         }
       }
@@ -1833,6 +2063,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Im Text"
+          }
+        }
+      }
+    },
+    "Increase Indent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einzug vergrößern"
           }
         }
       }
@@ -1987,6 +2227,26 @@
         }
       }
     },
+    "Italic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kursiv"
+          }
+        }
+      }
+    },
+    "Its notes are deleted with it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ihre Notizen werden mit ihr gelöscht."
+          }
+        }
+      }
+    },
     "Jump to Selection" : {
       "localizations" : {
         "de" : {
@@ -2053,6 +2313,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bibliothek"
+          }
+        }
+      }
+    },
+    "Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell"
+          }
+        }
+      }
+    },
+    "Light Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helles Thema"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
           }
         }
       }
@@ -2267,6 +2557,16 @@
         }
       }
     },
+    "Night" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nacht"
+          }
+        }
+      }
+    },
     "No Annotations" : {
       "localizations" : {
         "de" : {
@@ -2387,6 +2687,16 @@
         }
       }
     },
+    "Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz"
+          }
+        }
+      }
+    },
     "Notes" : {
       "localizations" : {
         "de" : {
@@ -2433,6 +2743,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nummer"
+          }
+        }
+      }
+    },
+    "Numbered List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nummerierte Liste"
           }
         }
       }
@@ -2737,16 +3057,6 @@
         }
       }
     },
-    "Page" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seite"
-          }
-        }
-      }
-    },
     "Page Setup…" : {
       "localizations" : {
         "de" : {
@@ -2763,6 +3073,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenbereich"
+          }
+        }
+      }
+    },
+    "Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier"
           }
         }
       }
@@ -3287,12 +3607,12 @@
         }
       }
     },
-    "Select text in the document and choose Highlight." : {
+    "Select text in the document and choose Highlight or Add Note." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle Text im Dokument aus und dann „Markieren“."
+            "value" : "Wähle Text im Dokument aus und dann „Markieren“ oder „Notiz hinzufügen“."
           }
         }
       }
@@ -3303,6 +3623,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An Bücher senden"
+          }
+        }
+      }
+    },
+    "Sepia" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sepia"
           }
         }
       }
@@ -3473,6 +3803,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontaktdaten zeigen"
+          }
+        }
+      }
+    },
+    "Show in Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Anmerkungen zeigen"
           }
         }
       }
@@ -3657,6 +3997,26 @@
         }
       }
     },
+    "Strikethrough" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchgestrichen"
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
+    },
     "Tab" : {
       "localizations" : {
         "de" : {
@@ -3683,6 +4043,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße: %lld"
+          }
+        }
+      }
+    },
+    "That is neither an address nor an RFC." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist weder eine Adresse noch ein RFC."
           }
         }
       }
@@ -3857,6 +4227,16 @@
         }
       }
     },
+    "This passage is in several places in this document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Stelle steht mehrmals in diesem Dokument."
+          }
+        }
+      }
+    },
     "This passage no longer exists in this document." : {
       "localizations" : {
         "de" : {
@@ -3894,6 +4274,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erneut versuchen"
+          }
+        }
+      }
+    },
+    "URL or RFC, as RFC 9110 Section 4.2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL oder RFC, etwa RFC 9110 Section 4.2"
           }
         }
       }

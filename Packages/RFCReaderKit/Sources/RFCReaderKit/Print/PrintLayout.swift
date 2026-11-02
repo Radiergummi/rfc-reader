@@ -100,13 +100,16 @@ public struct PrintLayout: Sendable, Equatable {
 
   /// The style a document is built in for this paper: the print body size, set to
   /// the page's column, with no links, since paper cannot follow one, and its
-  /// references as ordinary text rather than chips. The system's
+  /// references as ordinary text rather than chips, and its text in the system's
+  /// colors rather than the page theme's. The system's
   /// text size is left at its default: it is a setting for the screen, and paper
   /// has one size.
   public var style: ReadingStyle {
-    ReadingStyle(
+    var style = ReadingStyle(
       bodySize: Self.bodySize, measure: contentRect.width, lineHeightMultiple: 1.2,
       emitsLinks: false, references: .plainText)
+    style.followsPageTheme = false
+    return style
   }
 
   /// The style an exported PDF is built in (#376): the print's, but read on screen,

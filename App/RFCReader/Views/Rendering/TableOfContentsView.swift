@@ -11,6 +11,9 @@ struct TableOfContentsView: View {
   let sections: [RFCKit.Section]
   let current: String?
   let select: (String) -> Void
+  /// A note on a section (#523), from its row's menu; nil where none can be made, as
+  /// while the original text or a translation is shown.
+  var addNote: ((String) -> Void)?
 
   @State private var filter = ""
   @AppStorage(ReaderPreferences.contentsOrderKey) private var order = ContentsOutline.Order.document
@@ -132,6 +135,14 @@ struct TableOfContentsView: View {
     // Dimming alone sets an ancestor apart from a match only for someone who can
     // see it, as weight does the current section.
     .accessibilityHint(isContext ? Text("Contains a match") : Text(verbatim: ""))
+    .contextMenu {
+      if let addNote {
+        Button("Add Note to Section", systemImage: "square.and.pencil") {
+          select(anchor)
+          addNote(anchor)
+        }
+      }
+    }
     .id(anchor)
   }
 }
