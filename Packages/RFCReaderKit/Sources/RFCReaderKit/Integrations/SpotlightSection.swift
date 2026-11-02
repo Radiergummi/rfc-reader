@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import RFCKit
 
@@ -56,14 +57,17 @@ public struct SpotlightSection: Sendable, Equatable {
   }
 
   /// What to change in Spotlight for it to hold the sections of `held`, the documents
-  /// the app holds with when each was indexed, given the index's client state, which
-  /// records what it holds the same way.
+  /// the app holds with when each was indexed, given the record of what it holds.
   ///
-  /// The client state is written with each batch, so an indexing cut short leaves a
-  /// state that says what was done, and the next one does the rest.
+  /// The record is the app's, in a file, written before each batch: Spotlight keeps a
+  /// client state of no more than about a kilobyte, too little for a cache's worth of
+  /// documents. The client state written with the batch is the record's digest, so a
+  /// record whose batch failed does not match it, and Spotlight is made again from
+  /// nothing rather than trusted to hold what the record says. An indexing cut short
+  /// between batches leaves a record that says what was done, and the next one does
+  /// the rest.
   public struct Plan: Sendable, Equatable {
-    /// Whether the index is to be emptied first: it has no state, or one in another
-    /// format, so what it holds is not known.
+    /// Whether the index is to be emptied first: what it holds is not known.
     public var removesEverything: Bool
     /// The documents whose items go: gone from the app, or indexed again since.
     public var removed: [DocumentID]
@@ -72,8 +76,10 @@ public struct SpotlightSection: Sendable, Equatable {
     /// What Spotlight holds once `removed` are gone, which each batch adds to.
     public var kept: [DocumentID: Date]
 
-    public init(held: [DocumentID: Date], clientState: Data?) {
-      let donated = Self.documents(fromClientState: clientState)
+    /// `record` and `clientState` are what the last indexing wrote: the record file's
+    /// contents and Spotlight's client state, either nil if there is none.
+    public init(held: [DocumentID: Date], record: Data?, clientState: Data?) {
+      let donated = Self.documents(fromRecord: record, clientState: clientState)
       removesEverything = donated == nil
       let recorded = donated ?? [:]
       removed = recorded.filter { held[$0.key] != $0.value }.keys.sorted()
@@ -89,36 +95,46 @@ public struct SpotlightSection: Sendable, Equatable {
     /// made again.
     static let format = "sections-1"
 
-    private struct State: Codable {
-      var format: String
-      /// File stems, with when each was indexed, in seconds since the reference date.
-      var documents: [String: Double]
-    }
-
-    /// The client state recording that Spotlight holds `documents`' sections.
-    public static func clientState(_ documents: [DocumentID: Date]) -> Data {
-      let state = State(
+    /// The record of Spotlight holding `documents`' sections.
+    public static func record(_ documents: [DocumentID: Date]) -> Data {
+      let record = SpotlightSectionRecord(
         format: format,
         documents: Dictionary(
           uniqueKeysWithValues: documents.map {
             ($0.key.fileStem, $0.value.timeIntervalSinceReferenceDate)
           }))
+      let encoder = JSONEncoder()
+      // The same documents always make the same record, and so the same digest.
+      encoder.outputFormatting = .sortedKeys
       // Encoding a string-keyed dictionary of numbers cannot fail.
-      return (try? JSONEncoder().encode(state)) ?? Data()
+      return (try? encoder.encode(record)) ?? Data()
     }
 
-    /// The documents `clientState` records, or nil when it records none in this
-    /// format.
-    static func documents(fromClientState data: Data?) -> [DocumentID: Date]? {
-      guard let data, let state = try? JSONDecoder().decode(State.self, from: data),
-        state.format == format
+    /// The client state written with `record`: its digest.
+    public static func clientState(forRecord record: Data) -> Data {
+      Data(SHA256.hash(data: record))
+    }
+
+    /// The documents `record` names, or nil when there is none, it is in another
+    /// format, or `clientState` was not written with it.
+    static func documents(fromRecord record: Data?, clientState: Data?) -> [DocumentID: Date]? {
+      guard let record, let clientState, clientState == Self.clientState(forRecord: record),
+        let decoded = try? JSONDecoder().decode(SpotlightSectionRecord.self, from: record),
+        decoded.format == format
       else { return nil }
       var documents: [DocumentID: Date] = [:]
-      for (stem, seconds) in state.documents {
+      for (stem, seconds) in decoded.documents {
         guard let id = DocumentID(fileStem: stem) else { continue }
         documents[id] = Date(timeIntervalSinceReferenceDate: seconds)
       }
       return documents
     }
   }
+}
+
+/// `SpotlightSection.Plan`'s record, as it is written to its file.
+private struct SpotlightSectionRecord: Codable {
+  var format: String
+  /// File stems, with when each was indexed, in seconds since the reference date.
+  var documents: [String: Double]
 }

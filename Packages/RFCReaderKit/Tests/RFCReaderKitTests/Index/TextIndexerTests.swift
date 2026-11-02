@@ -275,7 +275,7 @@ struct TextIndexerTests {
 
   /// Spotlight indexes the sections of what the app holds (#178): a document Index
   /// All RFCs indexed without keeping its body is searched in the app, not there.
-  @Test func `Spotlight gets the documents indexed from a stored body`() async throws {
+  @Test func `the documents for Spotlight are those indexed from a stored body`() async throws {
     let sandbox = Sandbox()
     defer { sandbox.remove() }
     let store = sandbox.store()

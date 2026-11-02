@@ -67,14 +67,20 @@ struct SpotlightSectionTests {
   private static let earlier = Date(timeIntervalSinceReferenceDate: 800_000_000)
   private static let later = Date(timeIntervalSinceReferenceDate: 800_086_400)
 
-  private static func state(_ documents: [DocumentID: Date]) -> Data {
-    SpotlightSection.Plan.clientState(documents)
+  /// What the last indexing left: its record, and the client state written with it.
+  private static func plan(
+    held: [DocumentID: Date], recorded documents: [DocumentID: Date]
+  ) -> SpotlightSection.Plan {
+    let record = SpotlightSection.Plan.record(documents)
+    return SpotlightSection.Plan(
+      held: held, record: record,
+      clientState: SpotlightSection.Plan.clientState(forRecord: record))
   }
 
   @Test func `a document new to the app is indexed`() {
-    let plan = SpotlightSection.Plan(
+    let plan = Self.plan(
       held: [.rfc(9110): Self.earlier, .rfc(1): Self.earlier],
-      clientState: Self.state([.rfc(1): Self.earlier]))
+      recorded: [.rfc(1): Self.earlier])
     #expect(!plan.removesEverything)
     #expect(plan.removed.isEmpty)
     #expect(plan.indexed == [.rfc(9110)])
@@ -82,9 +88,9 @@ struct SpotlightSectionTests {
   }
 
   @Test func `a document the app no longer holds is removed`() {
-    let plan = SpotlightSection.Plan(
+    let plan = Self.plan(
       held: [.rfc(1): Self.earlier],
-      clientState: Self.state([.rfc(1): Self.earlier, .rfc(9110): Self.earlier]))
+      recorded: [.rfc(1): Self.earlier, .rfc(9110): Self.earlier])
     #expect(plan.removed == [.rfc(9110)])
     #expect(plan.indexed.isEmpty)
     #expect(plan.kept == [.rfc(1): Self.earlier])
@@ -93,8 +99,7 @@ struct SpotlightSectionTests {
   /// A body written again may have other sections: the old ones go before the new
   /// are indexed, so none is left behind under an anchor that went away.
   @Test func `a document indexed again is removed and indexed`() {
-    let plan = SpotlightSection.Plan(
-      held: [.rfc(9110): Self.later], clientState: Self.state([.rfc(9110): Self.earlier]))
+    let plan = Self.plan(held: [.rfc(9110): Self.later], recorded: [.rfc(9110): Self.earlier])
     #expect(plan.removed == [.rfc(9110)])
     #expect(plan.indexed == [.rfc(9110)])
     #expect(plan.kept.isEmpty)
@@ -102,30 +107,53 @@ struct SpotlightSectionTests {
 
   @Test func `nothing changed is nothing to do`() {
     let held: [DocumentID: Date] = [.rfc(9110): Self.earlier]
-    let plan = SpotlightSection.Plan(held: held, clientState: Self.state(held))
-    #expect(plan.isEmpty)
+    #expect(Self.plan(held: held, recorded: held).isEmpty)
   }
 
-  /// No state is an index never written, or one written in another format: what is
-  /// in it is not known, so it is emptied and every document indexed.
-  @Test func `no state, or another format, starts over`() {
+  /// No state is an index never written; a record without one is not known to be what
+  /// Spotlight holds. Either way it is emptied and every document indexed.
+  @Test func `no record or no state starts over`() {
     let held: [DocumentID: Date] = [.rfc(9110): Self.earlier]
-    for state in [nil, Data(), Data("other".utf8)] {
-      let plan = SpotlightSection.Plan(held: held, clientState: state)
+    let record = SpotlightSection.Plan.record(held)
+    let state = SpotlightSection.Plan.clientState(forRecord: record)
+    for (record, state) in [(nil, nil), (record, nil), (nil, state), (record, Data())] {
+      let plan = SpotlightSection.Plan(held: held, record: record, clientState: state)
       #expect(plan.removesEverything)
       #expect(plan.indexed == [.rfc(9110)])
       #expect(plan.kept.isEmpty)
     }
   }
 
+  /// The record is written before each batch and the state with it: a batch that
+  /// failed leaves a record its state does not match, and Spotlight's contents are
+  /// not known.
+  @Test func `a record the state was not written for starts over`() {
+    let held: [DocumentID: Date] = [.rfc(9110): Self.earlier]
+    let before = SpotlightSection.Plan.record([:])
+    let plan = SpotlightSection.Plan(
+      held: held, record: SpotlightSection.Plan.record(held),
+      clientState: SpotlightSection.Plan.clientState(forRecord: before))
+    #expect(plan.removesEverything)
+  }
+
+  /// Spotlight refuses a client state of more than about a kilobyte, so the state is
+  /// a digest, however many documents the record names.
+  @Test func `the client state stays small`() {
+    let many = Dictionary(
+      uniqueKeysWithValues: (1...2000).map { (DocumentID.rfc($0), Self.earlier) })
+    let state = SpotlightSection.Plan.clientState(
+      forRecord: SpotlightSection.Plan.record(many))
+    #expect(state.count <= 64)
+  }
+
   /// A date is written and read back to the same instant, so a document is not
   /// indexed again at every launch.
-  @Test func `the state reads back what it was written from`() {
+  @Test func `the record reads back what it was written from`() {
     let documents: [DocumentID: Date] = [
       .rfc(9110): Date(timeIntervalSinceReferenceDate: 812_345_678.123_456),
       .rfc(1): .distantPast,
     ]
-    #expect(SpotlightSection.Plan.documents(fromClientState: Self.state(documents)) == documents)
+    #expect(Self.plan(held: documents, recorded: documents).kept == documents)
   }
 
   // MARK: - A chosen result

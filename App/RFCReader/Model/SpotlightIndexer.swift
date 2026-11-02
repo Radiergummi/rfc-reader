@@ -57,9 +57,10 @@ enum SpotlightIndexer {
   /// Brings Spotlight's sections to the documents the full-text index holds from a
   /// stored body (`TextIndexer.spotlightDocuments`), as `SpotlightSection.Plan`
   /// says: the documents gone or indexed again are deleted, then the new ones are
-  /// indexed from the full-text index's rows, a batch at a time, each batch writing
-  /// what the index then holds as its client state. Cancelled, it stops at the next
-  /// batch, and the next indexing does the rest.
+  /// indexed from the full-text index's rows, a batch at a time, each batch recording
+  /// what the index then holds (`sectionRecordURL`, with its digest as the client
+  /// state). Cancelled, it stops at the next batch, and the next indexing does the
+  /// rest.
   ///
   /// On the main actor, as `SectionEntity` is, which each item carries: its rows are
   /// read on the indexer's executor, and only the items are made here ("Make section
@@ -70,8 +71,10 @@ enum SpotlightIndexer {
     else { return }
     let index = CSSearchableIndex(name: SpotlightSection.domain)
     do {
+      let recordURL = try sectionRecordURL
       let plan = SpotlightSection.Plan(
-        held: held, clientState: try await index.fetchLastClientState())
+        held: held, record: try? Data(contentsOf: recordURL),
+        clientState: try await index.fetchLastClientState())
       guard !plan.isEmpty else { return }
       let interval = signposter.beginInterval(
         "Index sections for Spotlight", id: signposter.makeSignpostID(),
@@ -81,14 +84,20 @@ enum SpotlightIndexer {
         signposter.endInterval("Index sections for Spotlight", interval, "\(sections) sections")
       }
       var kept = plan.kept
+      // The record first: a batch that fails leaves one its state was not written
+      // for, which the next indexing does not trust.
+      var record = SpotlightSection.Plan.record(kept)
+      try record.write(to: recordURL, options: .atomic)
       index.beginBatch()
       delete(
         domains: plan.removesEverything
           ? [SpotlightSection.domain] : plan.removed.map(SpotlightSection.domain(of:)),
         from: index)
-      try await index.endBatch(withClientState: SpotlightSection.Plan.clientState(kept))
+      try await index.endBatch(
+        withClientState: SpotlightSection.Plan.clientState(forRecord: record))
 
-      let titles = Dictionary(rfcs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+      let titles = Dictionary(
+        rfcs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
       var entries: [SpotlightSection] = []
       var batched: [DocumentID] = []
       for (position, id) in plan.indexed.enumerated() {
@@ -107,10 +116,13 @@ enum SpotlightIndexer {
         let making = signposter.beginInterval("Make section items")
         let items = entries.map(sectionItem)
         signposter.endInterval("Make section items", making, "\(items.count) items")
+        for id in batched { kept[id] = held[id] }
+        record = SpotlightSection.Plan.record(kept)
+        try record.write(to: recordURL, options: .atomic)
         index.beginBatch()
         add(items, to: index)
-        for id in batched { kept[id] = held[id] }
-        try await index.endBatch(withClientState: SpotlightSection.Plan.clientState(kept))
+        try await index.endBatch(
+          withClientState: SpotlightSection.Plan.clientState(forRecord: record))
         sections += entries.count
         entries = []
         batched = []
@@ -119,6 +131,16 @@ enum SpotlightIndexer {
     } catch {
       spotlightLog.error(
         "indexing sections for Spotlight failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// What Spotlight holds of sections, beside the full-text index it follows, and
+  /// like it excluded from backups: a restored record would name sections Spotlight
+  /// does not hold, which its client state catches all the same.
+  private static var sectionRecordURL: URL {
+    get throws {
+      try TextIndexer.defaultURL.deletingLastPathComponent()
+        .appending(path: "spotlight-sections.json")
     }
   }
 
