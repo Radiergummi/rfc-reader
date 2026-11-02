@@ -98,6 +98,12 @@ extension RFCTextViewCoordinator {
 
   // MARK: - Making and changing
 
+  /// Whether a selection is offered Highlight and Add Note: an RFC's only, as a
+  /// draft keeps no highlights (#728), and never a translation's (#749).
+  var offersHighlight: Bool {
+    documentID != nil && built?.isTranslation == false
+  }
+
   /// Highlights `range` of the reader's text in `color`, or in the color last used,
   /// out to whole words. Nothing in a translation, whose sentences are not the
   /// original's (#749).

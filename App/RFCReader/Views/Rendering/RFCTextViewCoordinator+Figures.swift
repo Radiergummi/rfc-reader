@@ -39,14 +39,16 @@
               reader.copyCitation(nil)
             })
         }
-        extra.append(highlightMenu(for: range))
-        // A highlight and a note on it (#523), as Books makes one.
-        extra.append(
-          UIAction(
-            title: String(localized: "Add Note"), image: UIImage(systemName: "square.and.pencil")
-          ) { [weak self] _ in
-            self?.addNote(onSelection: range)
-          })
+        if offersHighlight {
+          extra.append(highlightMenu(for: range))
+          // A highlight and a note on it (#523), as Books makes one.
+          extra.append(
+            UIAction(
+              title: String(localized: "Add Note"), image: UIImage(systemName: "square.and.pencil")
+            ) { [weak self] _ in
+              self?.addNote(onSelection: range)
+            })
+        }
         // A note on the block the selection starts in, or on its section from a
         // heading: iOS has no context menu on unselected text to offer it from.
         if let block = noteBlock(at: range.location) {

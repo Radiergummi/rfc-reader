@@ -367,6 +367,9 @@ import RFCReaderKit
     /// Highlights a range of the text in a color, or in the one last used (#522),
     /// through the coordinator.
     var highlight: (NSRange, HighlightColor?) -> Void = { _, _ in }
+    /// Whether the context menu offers Highlight and Add Note for a selection, from
+    /// the coordinator: not on a draft (#728).
+    var offersHighlight: () -> Bool = { false }
     /// The colors the context menu offers, the one last used first.
     var highlightColors: () -> [HighlightColor] = { HighlightColor.allCases }
     /// Told of a click that selected nothing and cleared no selection, which in a
@@ -717,12 +720,14 @@ import RFCReaderKit
         }
         // A highlight is made from a selection, as a quote is copied from one (#522),
         // and a note on it (#523).
-        result.insertItem(highlightMenuItem(), at: index)
-        let note = NSMenuItem(
-          title: String(localized: "Add Note"), action: #selector(addNoteItem(_:)),
-          keyEquivalent: "")
-        note.target = self
-        result.insertItem(note, at: index + 1)
+        if offersHighlight() {
+          result.insertItem(highlightMenuItem(), at: index)
+          let note = NSMenuItem(
+            title: String(localized: "Add Note"), action: #selector(addNoteItem(_:)),
+            keyEquivalent: "")
+          note.target = self
+          result.insertItem(note, at: index + 1)
+        }
       }
       if let block {
         let item = NSMenuItem(
