@@ -48,7 +48,7 @@ struct NoteMarkdownRoundTripTests {
 
   /// Each save normalizes the note on the main actor: a paragraph of many crossings
   /// is not to take a parse for every style for every style it drops.
-  @Test(.timeLimit(.minutes(1)))
+  @Test(.hangGuard)
   func `a paragraph of a hundred crossing styles is spelled in time`() {
     let spans = (0..<100).flatMap { index in
       [
