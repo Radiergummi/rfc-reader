@@ -121,6 +121,34 @@ struct LinkDestinationTests {
     #expect(landing(at: place) == .unhandled)
   }
 
+  private func landing(
+    at place: String, readAsOriginal kind: PublishedOriginalPage.Kind?, built: Bool = true
+  ) -> PlaceLanding? {
+    PlaceLanding.landing(
+      at: place, in: built ? DocumentPlaces(document: document, anchors: anchors) : nil,
+      bibliography: bibliography, readAsOriginal: kind)
+  }
+
+  /// An RFC read as its original shows no text whose places a deep link, Back or
+  /// Forward could go to (#1031): a pointer's loaded text holds them, but is not the
+  /// RFC, and its page does not show it. That needs no build to say, so a script's
+  /// jump does not wait for one that page never shows.
+  @Test(arguments: ["1", "section-1-2", "RFC3986", "page-12"])
+  func `a place in an RFC read as its original is not shown`(place: String) {
+    #expect(landing(at: place, readAsOriginal: .pointer) == .notShown)
+    #expect(landing(at: place, readAsOriginal: .pointer, built: false) == .notShown)
+    #expect(landing(at: place, readAsOriginal: .scan, built: false) == .notShown)
+  }
+
+  /// An RFC read as its text lands where the build puts the place, in either mode,
+  /// and waits for its build to say.
+  @Test func `a place in an RFC read as its text lands in it`() {
+    #expect(landing(at: "1", readAsOriginal: nil) == .inText(.jump("section-1")))
+    #expect(landing(at: "RFC3986", readAsOriginal: nil) == .inText(.reference("RFC3986")))
+    #expect(landing(at: "page-12", readAsOriginal: nil) == .inText(.unhandled))
+    #expect(landing(at: "1", readAsOriginal: nil, built: false) == nil)
+  }
+
   // MARK: - Not ours
 
   @Test(
