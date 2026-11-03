@@ -234,11 +234,11 @@ import TipKit
           helpTarget = HelpTarget(section: section)
         }
       )
-      .focusedSceneValue(\.navigationModel, navigation)
-      .focusedSceneValue(\.readerState, reader)
-      .focusedSceneValue(\.showsInspector, $showsInspector)
-      .focusedSceneValue(\.searchLibraryAction, searchLibrary)
-      .focusedSceneValue(\.showSidebarAction, showSidebar)
+      .modifier(
+        SceneMenuTargets(
+          navigation: navigation, reader: reader, showsInspector: $showsInspector,
+          searchLibrary: searchLibrary, showSidebar: showSidebar)
+      )
       // Outermost, and it has to be: an environment value reaches what is *inside*
       // the modifier that sets it, and a presentation is the content of the
       // modifier that presents it. Written on the split view, this covered the
@@ -249,6 +249,26 @@ import TipKit
       .readerEnvironment(
         ReaderEnvironment(
           library: library, navigation: navigation, reader: reader))
+    }
+  }
+
+  /// The scene's state and actions that the menu bar acts on, published to
+  /// `DocumentCommands`. A modifier of its own so that `ContentView.body`'s chain
+  /// stays short enough for CI's compiler to type-check in reasonable time.
+  private struct SceneMenuTargets: ViewModifier {
+    let navigation: NavigationModel
+    let reader: ReaderState
+    let showsInspector: Binding<Bool>
+    let searchLibrary: (() -> Void)?
+    let showSidebar: (() -> Void)?
+
+    func body(content: Content) -> some View {
+      content
+        .focusedSceneValue(\.navigationModel, navigation)
+        .focusedSceneValue(\.readerState, reader)
+        .focusedSceneValue(\.showsInspector, showsInspector)
+        .focusedSceneValue(\.searchLibraryAction, searchLibrary)
+        .focusedSceneValue(\.showSidebarAction, showSidebar)
     }
   }
 #endif
