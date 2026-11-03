@@ -45,8 +45,8 @@ public enum StorageTier: Sendable, Hashable {
 /// What keeping documents offline still owes, given the marks and what is on disk
 /// (#358).
 ///
-/// The App target runs it again whenever a mark changes, the network path changes or
-/// Low Power Mode does, and carries out its plan. Pure, and here rather than in the
+/// `DocumentRepository` runs it again, through `OfflineKeeper`, whenever a mark
+/// changes, the network path changes or Low Power Mode does, and carries out its plan. Pure, and here rather than in the
 /// App target, because the App target has no test bundle.
 ///
 /// The fetches it starts are its own waiters on the store's downloads, as a reader's

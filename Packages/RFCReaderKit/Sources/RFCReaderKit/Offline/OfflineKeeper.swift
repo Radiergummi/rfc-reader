@@ -15,8 +15,8 @@ private let offlineLog = Logger(
 /// download only when nobody else waits for it (#116).
 ///
 /// Here rather than in the App target for its tests, which run it against the
-/// store's own sequences. The App target runs it whenever what is wanted changes,
-/// and whenever the network path or Low Power Mode does.
+/// store's own sequences. `DocumentRepository` runs it whenever what is wanted
+/// changes, and whenever the network path or Low Power Mode does.
 @MainActor @Observable
 public final class OfflineKeeper {
   /// Where each wanted document stands, for Available Offline's rows: as the last
