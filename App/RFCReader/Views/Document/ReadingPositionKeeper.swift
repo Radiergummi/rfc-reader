@@ -1,6 +1,5 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import os
 
 /// Where a document was left, kept in the user's data: marked read when it opens,
@@ -8,18 +7,16 @@ import os
 /// back (#599). A failure is logged and otherwise dropped: the reader then opens at
 /// the top, as it does for a document never read.
 ///
-/// Each write is made in a context of its own, thrown away when its save fails, as
-/// `UserDataMirror` makes every change (#1002): left pending on `context`, the next
-/// save of anything there would commit it.
+/// The store's part, each write in a context of its own that a failed save throws
+/// away (#1002), is `UserDataMirror`'s.
 struct ReadingPositionKeeper {
   /// An RFC, or a draft's revision (#728).
   let id: ReadableDocument
-  /// Where the stored place is read.
-  let context: ModelContext
+  let userData: UserDataMirror
 
   func markOpened() {
     do {
-      try ReadingPositionStore.markOpened(id, in: ModelContext(context.container))
+      try userData.markOpened(id)
     } catch {
       readerLog.error(
         "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
@@ -34,9 +31,8 @@ struct ReadingPositionKeeper {
   func save(_ reader: ReaderController) {
     guard let anchor = reader.anchor else { return }
     do {
-      try ReadingPositionStore.save(
-        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id,
-        in: ModelContext(context.container))
+      try userData.saveReadingPlace(
+        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id)
     } catch {
       readerLog.error(
         "saving the position failed: \(String(describing: error), privacy: .public)")
@@ -45,7 +41,7 @@ struct ReadingPositionKeeper {
 
   func stored() -> ReadingPosition? {
     do {
-      return try ReadingPositionStore.position(for: id, in: context)
+      return try userData.readingPosition(for: id)
     } catch {
       readerLog.error(
         "reading the position failed: \(String(describing: error), privacy: .public)")

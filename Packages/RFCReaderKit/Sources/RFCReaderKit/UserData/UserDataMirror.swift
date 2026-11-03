@@ -318,6 +318,26 @@ public final class UserDataMirror {
     try FollowedGroupStore.setFollowed(group, isFollowed, in: changeContext())
   }
 
+  /// Dates the document's reading position as it opens, listing it as read
+  /// (`ReadingPositionStore.markOpened`), in a context of its own. A failure is thrown
+  /// for the caller to log, and changes nothing.
+  public func markOpened(_ document: ReadableDocument) throws {
+    try ReadingPositionStore.markOpened(document, in: changeContext())
+  }
+
+  /// Saves the place the reader left (#599), in a context of its own. A failure is
+  /// thrown for the caller to log, and changes nothing: the place is dropped, and the
+  /// next save, on the next scroll, starts again from what the store holds.
+  public func saveReadingPlace(_ place: ReadingPlace, for document: ReadableDocument) throws {
+    try ReadingPositionStore.save(place, for: document, in: changeContext())
+  }
+
+  /// The document's stored reading position, read on the main context, which every
+  /// change's save reaches.
+  public func readingPosition(for document: ReadableDocument) throws -> ReadingPosition? {
+    try ReadingPositionStore.position(for: document, in: container.mainContext)
+  }
+
   /// Removes every Keep Offline mark, on every device, since marks are synced, as
   /// Settings' Remove All Offline Documents does (#358), and reports the marks once.
   /// `first` runs before the removal, so what it changes is what that one report sees.

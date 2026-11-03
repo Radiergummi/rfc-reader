@@ -120,9 +120,9 @@ final class LibraryModel {
     name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
-  /// The sets read from the user's data, and where a bookmark or a collection is
-  /// changed (#595).
-  @ObservationIgnored private let userData: UserDataMirror
+  /// The sets read from the user's data, and where a bookmark, a collection or a
+  /// reading position is changed (#595).
+  @ObservationIgnored let userData: UserDataMirror
 
   /// `UserDataMirror.bookmarkedDocuments`.
   var bookmarkedDocuments: Set<DocumentID> { userData.bookmarkedDocuments }

@@ -1,6 +1,5 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import SwiftUI
 import Translation
 
@@ -11,7 +10,6 @@ struct DocumentView: View {
   /// Shared with the window's toolbar and its contents panel, which on macOS are
   /// not inside this view any more.
   @Environment(ReaderState.self) private var reader
-  @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -222,7 +220,7 @@ struct DocumentView: View {
   private var metadata: RFCMetadata? { id.rfc.flatMap(library.metadata) }
 
   private var positions: ReadingPositionKeeper {
-    ReadingPositionKeeper(id: identity, context: modelContext)
+    ReadingPositionKeeper(id: identity, userData: library.userData)
   }
 
   /// The document's verified and held errata, where the reader marks them (#387):
