@@ -149,7 +149,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .backArrow: mac ? Chord(.leftArrow) : nil
     case .forwardArrow: mac ? Chord(.rightArrow) : nil
     case .bookmark: Chord("d")
-    case .newCollection: mac ? Chord("n", [.command, .shift]) : nil
+    case .newCollection: Chord("n", [.command, .shift])
     case .copyAsQuote: Chord("c", [.command, .option, .shift])
     case .highlight: mac ? Chord("h", [.command, .control]) : nil
     // Edit ▸ Copy Citation (#712), on an iPad's keyboard too.

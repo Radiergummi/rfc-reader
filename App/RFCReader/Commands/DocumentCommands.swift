@@ -58,6 +58,8 @@ struct DocumentCommands: Commands {
     private func printDocument() { active.controller?.output.printDocument() }
 
     private func copyCitation() { active.controller?.copyCitation() }
+    private func newCollection() { active.controller?.newCollection() }
+    private func saveAsCollection() { active.controller?.saveAsCollection() }
     private func copyAsText() { active.controller?.copyAsText() }
     private func copyAsQuote() { active.controller?.copyAsQuote() }
   #else
@@ -110,6 +112,12 @@ struct DocumentCommands: Commands {
     private var citedDocument: CitedDocument? {
       navigation?.selection.flatMap(library.citedDocument)
     }
+
+    /// File ▸ New Collection… and Save as Collection… (#764): the editor, which the
+    /// scene presents. The sidebar, which lists the collection made, is beside the
+    /// reader or, in a single column, where Back leads.
+    private func newCollection() { navigation?.collectionEditor = .create(adding: nil) }
+    private func saveAsCollection() { navigation?.saveAsCollection() }
 
     /// Edit ▸ Copy As (#764), sent to the first responder: the reader's text that
     /// holds the selection, the one beside a compared document's included.
@@ -183,14 +191,13 @@ struct DocumentCommands: Commands {
       Button("Go to RFC…") { openDocument?() }
         .keyboardShortcut(ReaderShortcut.goToRFC.keyboardShortcut)
         .disabled(openDocument == nil)
-      #if os(macOS)
-        Button("New Collection…") { active.controller?.newCollection() }
-          .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
-          .disabled(navigation == nil)
-        // The search on show, kept as a collection made from a query (#355).
-        Button("Save as Collection…") { active.controller?.saveAsCollection() }
-          .disabled(navigation?.savedQuery == nil)
-      #endif
+      // On the iPad too, with ⇧⌘N (#764).
+      Button("New Collection…") { newCollection() }
+        .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
+        .disabled(navigation == nil)
+      // The search on show, kept as a collection made from a query (#355).
+      Button("Save as Collection…") { saveAsCollection() }
+        .disabled(navigation?.savedQuery == nil)
     }
     // The Mac's toolbar buttons are AppKit's, so their keyboard shortcuts have to be
     // menu items: an `NSToolbarItem` carries no key equivalent of its own. ⌘D is one
