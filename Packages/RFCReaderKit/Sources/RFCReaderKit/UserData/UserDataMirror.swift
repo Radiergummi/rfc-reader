@@ -298,6 +298,18 @@ public final class UserDataMirror {
     }
   }
 
+  /// Marks the document Keep Offline, or removes its mark (#358). A failure is thrown
+  /// for the caller to log.
+  public func setMarked(_ id: DocumentID, _ isMarked: Bool) throws {
+    try OfflineMarkStore.setMarked(id, isMarked, in: container.mainContext)
+  }
+
+  /// Follows the working group, or stops following it (#731). A failure is thrown for
+  /// the caller to log.
+  public func setFollowed(_ group: String, _ isFollowed: Bool) throws {
+    try FollowedGroupStore.setFollowed(group, isFollowed, in: container.mainContext)
+  }
+
   /// Removes every Keep Offline mark, on every device, since marks are synced, as
   /// Settings' Remove All Offline Documents does (#358), and reports the marks once.
   /// `first` runs before the removal, so what it changes is what that one report sees.
