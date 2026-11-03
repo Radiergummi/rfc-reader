@@ -105,20 +105,26 @@ public enum CollectionStore {
 
   // MARK: - Members
 
-  /// At the end. A document already in the collection stays where it is, and one
-  /// that is not an RFC is not added: collections list RFCs, and a drop can carry
-  /// any text that happens to read as a document.
+  /// At the end, in their order, in one save: a drop of several rows is one change,
+  /// so a failed save adds none of them (#1051). A document already in the
+  /// collection stays where it is, and one that is not an RFC is not added:
+  /// collections list RFCs, and a drop can carry any text that happens to read as a
+  /// document.
   public static func add(
-    _ document: DocumentID, to identifier: UUID, in context: ModelContext
+    _ documents: [DocumentID], to identifier: UUID, in context: ModelContext
   ) throws {
     guard try collection(identifier, in: context).query == nil else { throw Failure.dynamic }
-    guard document.series == .rfc else { return }
     let items = try items(in: identifier, context: context)
-    guard !items.contains(where: { $0.documentKey == document.fileStem }) else { return }
-    context.insert(
-      DocumentCollectionItem(
-        collection: identifier, document: document,
-        position: CollectionOrder.appending(after: items.last?.position)))
+    var present = Set(items.map(\.documentKey))
+    var position = items.last?.position
+    for document in documents
+    where document.series == .rfc && present.insert(document.fileStem).inserted {
+      let next = CollectionOrder.appending(after: position)
+      context.insert(
+        DocumentCollectionItem(collection: identifier, document: document, position: next))
+      position = next
+    }
+    guard context.hasChanges else { return }
     try context.save()
   }
 
@@ -217,7 +223,7 @@ public enum CollectionStore {
         document, from: identifier, undoManager: undoManager, onUndoFailure: onUndoFailure,
         in: context)
     } else {
-      try add(document, to: identifier, in: context)
+      try add([document], to: identifier, in: context)
     }
     return !isIn
   }
