@@ -87,26 +87,35 @@ import RFCReaderKit
     /// a side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// See the Mac's: hardware keyboards only; touch has the rail.
+    var typeSelect: (String, TimeInterval) -> Bool = { _, _ in false }
+
     /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
     /// vim-style keys are the coordinator's, which answers whether it took the key.
     var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
 
+    /// See the Mac's: type-select first, then the reader's keys.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
       willHandleKey()
-      if presses.count == 1, let press = presses.first, let key = press.key,
-        let readerKey = ReaderKeys.Key(
-          keyCode: key.keyCode, characters: key.characters,
-          charactersIgnoringModifiers: key.charactersIgnoringModifiers,
-          modifiers: key.modifierFlags),
-        handleKey(readerKey)
-      {
-        handledPresses.insert(ObjectIdentifier(press))
-        return
+      if presses.count == 1, let press = presses.first, let key = press.key {
+        let typeSelected =
+          key.modifierFlags.subtracting([.shift, .alphaShift]).isEmpty
+          && !key.characters.isEmpty && typeSelect(key.characters, press.timestamp)
+        if typeSelected
+          || ReaderKeys.Key(
+            keyCode: key.keyCode, characters: key.characters,
+            charactersIgnoringModifiers: key.charactersIgnoringModifiers,
+            modifiers: key.modifierFlags
+          ).map(handleKey) == true
+        {
+          handledPresses.insert(ObjectIdentifier(press))
+          return
+        }
       }
       super.pressesBegan(presses, with: event)
     }
 
-    /// The presses `handleKey` took, whose end UIKit is not to see either: a press
+    /// The presses type-select or `handleKey` took, whose end UIKit is not to see either: a press
     /// whose begin it never saw (UIKit's own rule for overriding these).
     private var handledPresses: Set<ObjectIdentifier> = []
 
@@ -302,14 +311,28 @@ import RFCReaderKit
     /// side-by-side reading, that side leads (#187).
     var willHandleKey: () -> Void = {}
 
+    /// Characters typed while the index shows, and when; answers whether type-select
+    /// took them (`RFCTextViewCoordinator.typeSelect(_:at:)`).
+    var typeSelect: (String, TimeInterval) -> Bool = { _, _ in false }
+
     /// Told of a key pressed without ⌘, ⌃ or a chord's ⌥ (#711): Space, Tab, Return and the
     /// vim-style keys are the coordinator's, which answers whether it took the key.
     /// Only while this is first responder: a text field, the find bar's included,
     /// takes its own keys.
     var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
 
+    /// An unmodified key goes to type-select first, Shift and Caps Lock aside; what it
+    /// does not take, a space with nothing typed, or every key while the vim-style keys
+    /// are on, goes to the reader's keys.
     override func keyDown(with event: NSEvent) {
       willHandleKey()
+      let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        .subtracting([.shift, .capsLock])
+      if modifiers.isEmpty, let characters = event.characters, !characters.isEmpty,
+        typeSelect(characters, event.timestamp)
+      {
+        return
+      }
       if let key = ReaderKeys.Key(
         characters: event.characters,
         charactersIgnoringModifiers: event.charactersIgnoringModifiers,

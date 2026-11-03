@@ -59,6 +59,9 @@ public struct BuiltDocument: @unchecked Sendable {
   /// Whether this is a translated document's build, whose sentences are not the
   /// original's (`RequirementBands`).
   public var isTranslation: Bool { translation != nil }
+  /// Where the document's index is, for the overlays over it; empty without one.
+  public let indexMap: IndexMap
+
   /// What the build named an appendix by (#940), which the contents beside it name
   /// it by too: the translation's labels, or English.
   public var appendixLabels: Section.AppendixLabels {
@@ -71,7 +74,8 @@ public struct BuiltDocument: @unchecked Sendable {
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
     backlinks: [String: [Backlink]] = [:], grammar: DocumentGrammar = DocumentGrammar(),
     sectionNumberHang: CGFloat = 0, errata: ErrataMarks = .none,
-    translation: DocumentLabels? = nil, positions: PositionMap
+    translation: DocumentLabels? = nil, positions: PositionMap,
+    indexMap: IndexMap = .empty
   ) {
     self.text = text
     self.anchors = anchors
@@ -82,6 +86,7 @@ public struct BuiltDocument: @unchecked Sendable {
     self.translation = translation
     self.errata = errata
     self.positions = positions
+    self.indexMap = indexMap
     foldingIndex = FoldingIndex(text: text, anchors: anchors)
   }
 

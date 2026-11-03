@@ -18,10 +18,13 @@ public enum NoteBlock: Sendable, Equatable {
   }
 
   /// The block at storage offset `location` of `built`. Nil where nothing of the
-  /// model is, as on a chip's character alone, and in a translation's build.
+  /// model is, as on a chip's character alone, in a translation's build, and in an
+  /// index, whose letters carry their group's anchor as a heading does.
   public init?(at location: Int, in built: BuiltDocument) {
     let text = built.text
-    guard !built.isTranslation, location >= 0, location < text.length else { return nil }
+    guard !built.isTranslation, location >= 0, location < text.length,
+      !NSLocationInRange(location, built.indexMap.range)
+    else { return nil }
     if let anchor = text.attribute(.rfcAnchor, at: location, effectiveRange: nil) as? String,
       built.positions.model.span(of: anchor) != nil
     {

@@ -215,6 +215,10 @@ struct ReaderInputs {
     /// otherwise turns off.
     override static var isCompatibleWithResponsiveScrolling: Bool { true }
 
+    /// The width of the contents panel over the trailing edge, which the text keeps
+    /// running under but a control laid over the reader must stay clear of.
+    var trailingCover: CGFloat { super.safeAreaInsets.right }
+
     override var safeAreaInsets: NSEdgeInsets {
       var insets = super.safeAreaInsets
       insets.right = 0
@@ -275,6 +279,9 @@ struct ReaderInputs {
       (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
         context.coordinator.foldingDelegate
       textView.delegate = context.coordinator
+      textView.typeSelect = { [weak coordinator = context.coordinator] characters, time in
+        coordinator?.typeSelect(characters, at: time) ?? false
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
@@ -443,6 +450,9 @@ struct ReaderInputs {
       textView.arrowCursorRects = { [weak coordinator = context.coordinator] in
         guard let coordinator else { return [] }
         return coordinator.disclosureCursorRects() + coordinator.copyButtonCursorRects()
+      }
+      textView.typeSelect = { [weak coordinator = context.coordinator] characters, time in
+        coordinator?.typeSelect(characters, at: time) ?? false
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)

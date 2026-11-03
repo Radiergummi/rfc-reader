@@ -69,6 +69,7 @@ extension RFCTextViewCoordinator: ReaderTextDriving {
     // jumps, restored places — which is every time the title's position can move,
     // and the notes' markers come into view.
     updateToolbarTitle()
+    updateIndexOverlay()
     layOutNoteMarkers()
     #if !canImport(UIKit)
       // The arrows are cursor rects over the viewport's copy buttons, and its headings
