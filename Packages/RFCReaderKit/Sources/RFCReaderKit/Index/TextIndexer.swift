@@ -319,7 +319,8 @@ public actor TextIndexer {
   // MARK: - Spotlight
 
   /// The documents whose sections Spotlight indexes (#178): those indexed from a body
-  /// the store holds, with when each was indexed. Not one Index All RFCs indexed
+  /// the store holds, each with when the body it was indexed from was written, as the
+  /// index records it. Not one Index All RFCs indexed
   /// without keeping its body: those the app searches, Spotlight does not. Nil when
   /// what is indexed cannot be read, which is not the same as nothing.
   public func spotlightDocuments() async -> [DocumentID: Date]? {
