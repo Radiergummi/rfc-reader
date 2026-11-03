@@ -20,6 +20,10 @@ import SwiftUI
     typealias Value = ReaderState
   }
 
+  struct ShowsInspectorKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+  }
+
   extension FocusedValues {
     var openDocumentAction: OpenDocumentActionKey.Value? {
       get { self[OpenDocumentActionKey.self] }
@@ -40,6 +44,13 @@ import SwiftUI
     var readerState: ReaderState? {
       get { self[ReaderStateKey.self] }
       set { self[ReaderStateKey.self] = newValue }
+    }
+
+    /// Whether the scene's panel is open, for View ▸ Show Contents and Show Info
+    /// (#764).
+    var showsInspector: ShowsInspectorKey.Value? {
+      get { self[ShowsInspectorKey.self] }
+      set { self[ShowsInspectorKey.self] = newValue }
     }
   }
 #endif

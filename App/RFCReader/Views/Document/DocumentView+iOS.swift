@@ -234,7 +234,6 @@
             } label: {
               Label("Contents", systemImage: "list.bullet.rectangle.portrait")
             }
-            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
             TextSizeButton(library: library)
             Menu {
               MenuSections(

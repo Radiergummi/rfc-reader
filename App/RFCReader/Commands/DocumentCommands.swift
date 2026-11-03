@@ -69,6 +69,8 @@ struct DocumentCommands: Commands {
         pane, isOpen: active.isPanelOpen, showing: active.controller?.reader.pane ?? .navigation)
     }
 
+    private func press(_ pane: InspectorPane) { active.controller?.press(pane) }
+
     /// What an item of the Document menu does, as the toolbar's Cite and More do it.
     private func perform(_ action: DocumentMenus.Action) {
       active.controller?.perform(action)
@@ -91,6 +93,23 @@ struct DocumentCommands: Commands {
     @FocusedValue(\.navigationModel) private var navigation
     /// The focused scene's reader, for the title a new bookmark is filed under.
     @FocusedValue(\.readerState) private var reader
+    /// The focused scene's panel, which View ▸ Show Contents and Show Info open and
+    /// close (#764).
+    @FocusedBinding(\.showsInspector) private var showsInspector
+
+    /// View ▸ Show or Hide Contents and Info: what the item will do, as on the Mac.
+    private func paneTitle(_ pane: InspectorPane) -> String {
+      InspectorPane.menuTitle(
+        pane, isOpen: showsInspector == true, showing: reader?.pane ?? .navigation)
+    }
+
+    /// As the bottom bar's buttons do (`DocumentToolbar.press`).
+    private func press(_ pane: InspectorPane) {
+      guard let reader, let isOpen = showsInspector else { return }
+      let result = InspectorPane.pressing(pane, isOpen: isOpen, showing: reader.pane)
+      reader.pane = result.pane
+      withAnimation(.snappy) { showsInspector = result.isOpen }
+    }
 
     private var isBookmarked: Bool {
       navigation?.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
@@ -337,23 +356,22 @@ struct DocumentCommands: Commands {
         .disabled(active.controller == nil)
       #endif
       Section {
-        #if os(macOS)
-          // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
-          // which every tabbed Mac app gives to reopening the last closed tab
-          // (#157).
-          Button(paneTitle(.navigation)) { active.controller?.press(.navigation) }
-            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
-            // As the toolbar's button is: on whatever the index describes, a
-            // document still loading or one that failed to included (#325), and
-            // nothing else, where the panel is an empty strip. Not `showsDocument`,
-            // which also needs a selection: the chord has to be able to close a
-            // panel that is still open.
-            .disabled(reader?.canDescribe != true)
-          // ⌘I, Get Info in Finder and Preview.
-          Button(paneTitle(.info)) { active.controller?.press(.info) }
-            .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
-            .disabled(reader?.canDescribe != true)
-        #endif
+        // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
+        // which every tabbed Mac app gives to reopening the last closed tab
+        // (#157). On the iPad too, where the bottom bar's buttons had it, and lost
+        // it with the bar while reading on (#764).
+        Button(paneTitle(.navigation)) { press(.navigation) }
+          .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
+          // As the toolbar's button is: on whatever the index describes, a
+          // document still loading or one that failed to included (#325), and
+          // nothing else, where the panel is an empty strip. Not `showsDocument`,
+          // which also needs a selection: the chord has to be able to close a
+          // panel that is still open.
+          .disabled(reader?.canDescribe != true)
+        // ⌘I, Get Info in Finder and Preview.
+        Button(paneTitle(.info)) { press(.info) }
+          .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
+          .disabled(reader?.canDescribe != true)
         // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
         // the arrows: AppKit gives a menu item its key before a text field, and ⌘←
         // and ⌘→ are a field's line start and end. The reader window answers them

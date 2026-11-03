@@ -61,15 +61,14 @@ import SwiftUI
           } label: {
             Label("Contents", systemImage: "list.bullet.rectangle.portrait")
           }
-          // The same chord as the Mac's (#157).
-          .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
+          // ⌥⌘I and ⌘I are View ▸ Show Contents' and Show Info's, which stay with
+          // the bar put away (#764).
 
           Button {
             press(.info)
           } label: {
             Label("Info", systemImage: "info.circle")
           }
-          .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
 
           TextSizeButton(library: library)
         }
