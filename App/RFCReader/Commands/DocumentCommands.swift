@@ -72,6 +72,7 @@ struct DocumentCommands: Commands {
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
     @FocusedValue(\.searchLibraryAction) private var searchLibrary
+    @FocusedValue(\.showSidebarAction) private var showSidebar
     /// The reader on screen's Export and Print (#764), nil with none.
     @FocusedValue(\.exportDocumentAction) private var exportDocumentAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
@@ -129,10 +130,18 @@ struct DocumentCommands: Commands {
     }
 
     /// File ▸ New Collection… and Save as Collection… (#764): the editor, which the
-    /// scene presents. The sidebar, which lists the collection made, is beside the
-    /// reader or, in a single column, where Back leads.
-    private func newCollection() { navigation?.collectionEditor = .create(adding: nil) }
-    private func saveAsCollection() { navigation?.saveAsCollection() }
+    /// scene presents. The sidebar, which lists the collection made, is shown first
+    /// beside the other columns, as on the Mac (#1063), or, in a single column, is
+    /// where Back leads.
+    private func newCollection() {
+      showSidebar?()
+      navigation?.collectionEditor = .create(adding: nil)
+    }
+
+    private func saveAsCollection() {
+      showSidebar?()
+      navigation?.saveAsCollection()
+    }
 
     /// Edit ▸ Copy As (#764), sent to the first responder: the reader's text that
     /// holds the selection, the one beside a compared document's included.
