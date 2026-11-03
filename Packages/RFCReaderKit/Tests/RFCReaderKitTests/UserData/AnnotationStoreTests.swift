@@ -217,7 +217,7 @@ extension AnnotationStoreTests {
   private func note(_ body: String, on owner: NoteOwner) throws -> UUID {
     let identifier = UUID()
     try AnnotationStore.saveNote(
-      identifier, on: owner, of: .rfc(9110), body: body, context: context)
+      identifier, on: owner, of: .rfc(9110), body: body, edit: edit(nil))
     return identifier
   }
 
@@ -234,13 +234,13 @@ extension AnnotationStoreTests {
   @Test func `a note is made only once it has text, and goes when its text does`() throws {
     let identifier = UUID()
     try AnnotationStore.saveNote(
-      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "  ", context: context)
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "  ", edit: edit(nil))
     #expect(try notes().isEmpty)
     try AnnotationStore.saveNote(
-      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Text", context: context)
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Text", edit: edit(nil))
     #expect(try notes().map(\.target) == [.section("p-1")])
     try AnnotationStore.saveNote(
-      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "", context: context)
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "", edit: edit(nil))
     #expect(try notes().isEmpty)
   }
 
@@ -248,7 +248,7 @@ extension AnnotationStoreTests {
     let identifier = try note("First", on: .target(.section("p-1")))
     let made = try #require(try notes().first)
     try AnnotationStore.saveNote(
-      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Second", context: context)
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "Second", edit: edit(nil))
     let edited = try #require(try notes().first)
     #expect(edited.body == "Second")
     #expect(edited.createdAt == made.createdAt)
@@ -286,7 +286,7 @@ extension AnnotationStoreTests {
     _ = try highlight("brown fox jumps over the lazy", undoManager: undoManager)
     undoManager.endUndoGrouping()
     try AnnotationStore.saveNote(
-      moved, on: .highlight(first), of: .rfc(9110), body: "edited since", context: context)
+      moved, on: .highlight(first), of: .rfc(9110), body: "edited since", edit: edit(nil))
     undoManager.undo()
     #expect(try notes().first { $0.id == moved }?.highlight == second)
     #expect(try notes().first { $0.id == moved }?.body == "edited since")
@@ -325,7 +325,7 @@ extension AnnotationStoreTests {
     undoManager.undo()
     try AnnotationStore.saveNote(
       identifier, on: .highlight(highlight), of: .rfc(9110), body: "edited since",
-      context: context)
+      edit: edit(nil))
     undoManager.redo()
     #expect(try notes().isEmpty)
     undoManager.undo()
@@ -375,7 +375,7 @@ extension AnnotationStoreTests {
     undoManager.undo()
     try AnnotationStore.saveNote(
       identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "edited since",
-      context: context)
+      edit: edit(nil))
     undoManager.redo()
     #expect(try notes().isEmpty)
     undoManager.undo()
@@ -395,11 +395,44 @@ extension AnnotationStoreTests {
     undoManager.redo()
     try AnnotationStore.saveNote(
       identifier, on: .highlight(highlight), of: .rfc(9110), body: "edited since",
-      context: context)
+      edit: edit(nil))
     undoManager.undo()
     #expect(try notes().isEmpty)
     undoManager.redo()
     #expect(try notes().map(\.body) == ["edited since"])
+  }
+
+  @Test func `a note emptied on a redone highlight is deleted undoably, and stays gone after`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    undoManager.beginUndoGrouping()
+    let highlight = try highlight("brown fox", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    let identifier = try note("as made", on: .highlight(highlight))
+    undoManager.undo()
+    undoManager.redo()
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.saveNote(
+      identifier, on: .highlight(highlight), of: .rfc(9110), body: "",
+      edit: edit(undoManager))
+    undoManager.endUndoGrouping()
+    #expect(try notes().isEmpty)
+    // Emptying it is undone first, as a deletion is.
+    undoManager.undo()
+    #expect(try snapshot().map(\.id) == [highlight])
+    #expect(try notes().map(\.body) == ["as made"])
+    undoManager.redo()
+    #expect(try notes().isEmpty)
+    // Undoing and redoing the highlight around it brings the emptied note back nowhere.
+    undoManager.undo()
+    undoManager.undo()
+    #expect(try snapshot().isEmpty)
+    undoManager.redo()
+    undoManager.redo()
+    #expect(try snapshot().map(\.id) == [highlight])
+    #expect(try notes().isEmpty)
   }
 
   @Test func `a note is put on another highlight without being edited`() throws {

@@ -190,8 +190,9 @@ public enum AnnotationStore {
   /// kept. The editor's own undo covers its text; nothing is registered here.
   public static func saveNote(
     _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
-    context: ModelContext
+    edit: Edit
   ) throws {
+    let context = edit.context
     let existing = try note(identifier, in: context)
     guard !NoteBody(markdown: body).isEmpty else {
       if let existing {

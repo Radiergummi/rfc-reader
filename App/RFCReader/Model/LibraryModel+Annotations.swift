@@ -83,7 +83,7 @@ extension LibraryModel {
   func saveNote(_ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String) {
     editAnnotations { context in
       try AnnotationStore.saveNote(
-        identifier, on: owner, of: document, body: body, context: context)
+        identifier, on: owner, of: document, body: body, edit: Self.edit(context, nil))
     }
   }
 
