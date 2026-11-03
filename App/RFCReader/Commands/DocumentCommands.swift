@@ -46,6 +46,12 @@ struct DocumentCommands: Commands {
 
     private func press(_ pane: InspectorPane) { active.controller?.press(pane) }
 
+    /// As the toolbar's button is: on whatever the index describes, a document still
+    /// loading or one that failed to included (#325), and nothing else, where the
+    /// panel is an empty strip. Not `showsDocument`, which also needs a selection:
+    /// the chord has to be able to close a panel that is still open.
+    private func offersPane(_ pane: InspectorPane) -> Bool { reader?.canDescribe == true }
+
     /// What an item of the Document menu does, as the toolbar's Cite and More do it.
     private func perform(_ action: DocumentMenus.Action) {
       active.controller?.perform(action)
@@ -97,6 +103,15 @@ struct DocumentCommands: Commands {
       let result = InspectorPane.pressing(pane, isOpen: isOpen, showing: reader.pane)
       reader.pane = result.pane
       withAnimation(.snappy) { showsInspector = result.isOpen }
+    }
+
+    /// As the bottom bars offer them: over a document on screen, which `canDescribe`
+    /// outlives, and Info over an RFC's only, as a draft's bar has none. Wherever the
+    /// panel is open too, so the chord can close it.
+    private func offersPane(_ pane: InspectorPane) -> Bool {
+      guard reader?.canDescribe == true else { return false }
+      if showsInspector == true { return true }
+      return pane == .info ? navigation?.selection != nil : navigation?.shownDocument != nil
     }
 
     private var isBookmarked: Bool {
@@ -410,16 +425,11 @@ struct DocumentCommands: Commands {
         // it with the bar while reading on (#764).
         Button(paneTitle(.navigation)) { press(.navigation) }
           .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
-          // As the toolbar's button is: on whatever the index describes, a
-          // document still loading or one that failed to included (#325), and
-          // nothing else, where the panel is an empty strip. Not `showsDocument`,
-          // which also needs a selection: the chord has to be able to close a
-          // panel that is still open.
-          .disabled(reader?.canDescribe != true)
+          .disabled(!offersPane(.navigation))
         // ⌘I, Get Info in Finder and Preview.
         Button(paneTitle(.info)) { press(.info) }
           .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
-          .disabled(reader?.canDescribe != true)
+          .disabled(!offersPane(.info))
         // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
         // the arrows: AppKit gives a menu item its key before a text field, and ⌘←
         // and ⌘→ are a field's line start and end. The reader window answers them
