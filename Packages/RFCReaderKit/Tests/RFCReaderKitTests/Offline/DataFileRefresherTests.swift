@@ -1,0 +1,205 @@
+import Foundation
+import RFCKit
+import Testing
+
+@testable import RFCReaderKit
+
+/// The data files beside the index (#595, #758): the revisions and the working groups
+/// fetched once a day by the copy kept, which a new launch remembers, on any network
+/// when nothing is kept and on a cheap one when a copy is.
+@Suite("Data file refresher")
+@MainActor
+struct DataFileRefresherTests {
+  private let sandbox = DocumentStoreTests.Sandbox()
+
+  nonisolated private static let revisions = RFCRevisions(
+    generatedAt: Date(timeIntervalSince1970: 1_000), revisions: [:])
+  nonisolated private static let newerRevisions = RFCRevisions(
+    generatedAt: Date(timeIntervalSince1970: 2_000), revisions: [:])
+  nonisolated private static let groups = WorkingGroups(
+    generatedAt: Date(timeIntervalSince1970: 1_000), groups: [])
+
+  /// Answers `revisions.json` and `groups.json` with `revisions` and `groups`, and
+  /// everything else with a `404`; counts the requests for each file. Holds a request
+  /// for `holding` until it is canceled, as a session waiting for a cheap network does,
+  /// and fails the first `failing` requests, as a path with no network does.
+  private final class Transport: HTTPTransport, @unchecked Sendable {
+    private let revisions: RFCRevisions
+    private let holding: String?
+    private let lock = NSLock()
+    private var sent: [String] = []
+    private var failing: Int
+
+    init(
+      revisions: RFCRevisions = DataFileRefresherTests.revisions, holding: String? = nil,
+      failing: Int = 0
+    ) {
+      self.revisions = revisions
+      self.holding = holding
+      self.failing = failing
+    }
+
+    func requests(for file: String) -> Int {
+      lock.withLock { sent.count(where: { $0 == file }) }
+    }
+
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+      let file = request.url!.lastPathComponent
+      let fails = lock.withLock {
+        sent.append(file)
+        failing -= 1
+        return failing >= 0
+      }
+      if fails { throw URLError(.notConnectedToInternet) }
+      if file == holding {
+        try await Task.sleep(for: .seconds(3_600))
+      }
+      let body: Data? =
+        switch file {
+        case "revisions.json": try revisions.encoded()
+        case "groups.json": try DataFileRefresherTests.groups.encoded()
+        default: nil
+        }
+      let response = HTTPURLResponse(
+        url: request.url!, statusCode: body == nil ? 404 : 200, httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"])!
+      return (body ?? Data(), response)
+    }
+  }
+
+  private func refresher(
+    any: Transport, cheap: Transport, now: @escaping () -> Date = { .now }
+  ) -> DataFileRefresher {
+    DataFileRefresher(
+      store: sandbox.store(), client: RFCEditorClient(transport: any),
+      clientOnCheapNetworks: RFCEditorClient(transport: cheap), now: now)
+  }
+
+  @Test func `with nothing kept, both files are fetched on any network, and kept`() async throws {
+    defer { sandbox.remove() }
+    let any = Transport()
+    let cheap = Transport()
+    let refresher = refresher(any: any, cheap: cheap)
+    await refresher.refreshAll()
+    #expect(refresher.revisions == Self.revisions)
+    #expect(refresher.workingGroups == Self.groups)
+    #expect(any.requests(for: "revisions.json") == 1)
+    #expect(any.requests(for: "groups.json") == 1)
+    #expect(cheap.requests(for: "revisions.json") == 0)
+    #expect(cheap.requests(for: "groups.json") == 0)
+    #expect(await sandbox.store().cachedRevisions()?.value == Self.revisions)
+    #expect(await sandbox.store().cachedWorkingGroups()?.value == Self.groups)
+  }
+
+  /// What #758 is about: a new process no longer counts as never fetched.
+  @Test func `a second launch the same day fetches neither file`() async throws {
+    defer { sandbox.remove() }
+    await refresher(any: Transport(), cheap: Transport()).refreshAll()
+    let any = Transport()
+    let cheap = Transport()
+    let relaunched = refresher(any: any, cheap: cheap)
+    await relaunched.refreshAll()
+    #expect(relaunched.revisions == Self.revisions)
+    #expect(relaunched.workingGroups == Self.groups)
+    for transport in [any, cheap] {
+      #expect(transport.requests(for: "revisions.json") == 0)
+      #expect(transport.requests(for: "groups.json") == 0)
+    }
+  }
+
+  @Test func `a due refresh with a copy kept waits for a cheap network`() async throws {
+    defer { sandbox.remove() }
+    await refresher(any: Transport(), cheap: Transport()).refreshAll()
+    let any = Transport()
+    let cheap = Transport(revisions: Self.newerRevisions)
+    let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
+    let refresher = refresher(any: any, cheap: cheap, now: { nextDay })
+    await refresher.refreshAll()
+    #expect(refresher.revisions == Self.newerRevisions)
+    #expect(cheap.requests(for: "revisions.json") == 1)
+    #expect(cheap.requests(for: "groups.json") == 1)
+    #expect(any.requests(for: "revisions.json") == 0)
+    #expect(any.requests(for: "groups.json") == 0)
+  }
+
+  /// Within a run too: activation after activation asks once a day.
+  @Test func `a refresh after one that fetched asks for nothing`() async throws {
+    defer { sandbox.remove() }
+    let any = Transport()
+    let refresher = refresher(any: any, cheap: Transport())
+    await refresher.refreshAll()
+    await refresher.refreshAll()
+    #expect(any.requests(for: "revisions.json") == 1)
+    #expect(any.requests(for: "groups.json") == 1)
+  }
+
+  @Test func `a failed fetch is asked again at the next refresh`() async throws {
+    defer { sandbox.remove() }
+    let any = Transport(failing: 1)
+    let refresher = refresher(any: any, cheap: Transport())
+    await refresher.refreshRevisions()
+    #expect(refresher.revisions == nil)
+    await refresher.refreshRevisions()
+    #expect(refresher.revisions == Self.revisions)
+    #expect(any.requests(for: "revisions.json") == 2)
+  }
+
+  @Test func `the revisions report the copy kept and each change`() async throws {
+    defer { sandbox.remove() }
+    try await sandbox.store().storeRevisions(Self.revisions.encoded())
+    let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
+    let refresher = refresher(
+      any: Transport(), cheap: Transport(revisions: Self.newerRevisions), now: { nextDay })
+    var reported: [RFCRevisions?] = []
+    refresher.onRevisionsChanged = { reported.append(refresher.revisions) }
+    await refresher.refreshRevisions()
+    #expect(reported == [Self.revisions, Self.newerRevisions])
+  }
+
+  // MARK: - The bookmark refresh
+
+  /// A background refresh on a phone network would otherwise post nothing about a
+  /// revised bookmark (#758, answer 1).
+  @Test func `the bookmark refresh fetches due revisions on any network`() async throws {
+    defer { sandbox.remove() }
+    try await sandbox.store().storeRevisions(Self.revisions.encoded())
+    let any = Transport(revisions: Self.newerRevisions)
+    let cheap = Transport()
+    let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
+    let refresher = refresher(any: any, cheap: cheap, now: { nextDay })
+    await refresher.refreshRevisions(onExpensiveNetworks: true)
+    #expect(refresher.revisions == Self.newerRevisions)
+    #expect(any.requests(for: "revisions.json") == 1)
+    #expect(cheap.requests(for: "revisions.json") == 0)
+  }
+
+  @Test func `the bookmark refresh does not fetch revisions that are not due`() async throws {
+    defer { sandbox.remove() }
+    try await sandbox.store().storeRevisions(Self.revisions.encoded())
+    let any = Transport()
+    let refresher = refresher(any: any, cheap: Transport())
+    await refresher.refreshRevisions(onExpensiveNetworks: true)
+    #expect(refresher.revisions == Self.revisions)
+    #expect(any.requests(for: "revisions.json") == 0)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func `the bookmark refresh replaces a refresh waiting for a cheap network`()
+    async throws
+  {
+    defer { sandbox.remove() }
+    try await sandbox.store().storeRevisions(Self.revisions.encoded())
+    let any = Transport(revisions: Self.newerRevisions)
+    let cheap = Transport(holding: "revisions.json")
+    let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
+    let refresher = refresher(any: any, cheap: cheap, now: { nextDay })
+    let waiting = Task { await refresher.refreshRevisions() }
+    while cheap.requests(for: "revisions.json") == 0 {
+      await Task.yield()
+    }
+    await refresher.refreshRevisions(onExpensiveNetworks: true)
+    #expect(refresher.revisions == Self.newerRevisions)
+    #expect(any.requests(for: "revisions.json") == 1)
+    await waiting.value
+  }
+}
