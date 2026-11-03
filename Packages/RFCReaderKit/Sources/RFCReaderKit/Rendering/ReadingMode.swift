@@ -191,6 +191,35 @@ public struct Folding: Sendable, Equatable {
     return Folding(focusingOn: target.anchor)
   }
 
+  /// Where Next or Previous Section takes the reader whose line is at `line`, outside
+  /// Focus, which steps its focus instead (#711): the heading after the section the
+  /// line is in, or the nearest heading above the line, at any depth, which inside a
+  /// section is its own, as vim's `[[` goes; from above the text, the header's place,
+  /// where `line` is nil, Next goes to the first. In the outline, among the rows it
+  /// shows. Nil in Focus, and with nowhere to go.
+  ///
+  /// A heading's paragraph starting at the line counts as the line's section, so that
+  /// from a heading a jump has just put on the line, Next goes on to the one after it
+  /// and Previous to the one before.
+  public func section(_ step: FocusStep, fromLine line: Int?, in index: FoldingIndex) -> String? {
+    guard mode != .focus else { return nil }
+    let rows =
+      mode == .outline
+      ? zip(index.entries, outline(in: index)).filter(\.1.headingShown).map(\.0)
+      : index.entries
+    let current = line.flatMap { line in rows.lastIndex { $0.paragraph <= line } }
+    switch step {
+    case .next:
+      let next = current.map { $0 + 1 } ?? 0
+      return next < rows.count ? rows[next].anchor : nil
+    case .previous:
+      guard let line, let above = rows.lastIndex(where: { $0.paragraph < line }) else {
+        return nil
+      }
+      return rows[above].anchor
+    }
+  }
+
   /// Focus with no section yet focuses the one the reader's line at `line` is in,
   /// the abstract included; anything else, or a document with no section, is
   /// unchanged.

@@ -14,7 +14,9 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.preferOriginalTextKey == "preferOriginalText")
     #expect(ReaderPreferences.drawDiagramsKey == "drawDiagrams")
     #expect(ReaderPreferences.syntaxThemeKey == "syntaxTheme")
-    #expect(ReaderPreferences.paletteKey == "readerPalette")
+    #expect(ReaderPreferences.appearanceKey == "appearance")
+    #expect(ReaderPreferences.lightPaletteKey == "readerLightPalette")
+    #expect(ReaderPreferences.darkPaletteKey == "readerDarkPalette")
   }
 
   @Test func `the default size is the style's own default`() {

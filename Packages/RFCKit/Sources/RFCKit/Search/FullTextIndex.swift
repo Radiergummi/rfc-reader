@@ -46,7 +46,7 @@ public struct Snippet: Sendable, Hashable {
 ///                                   -- every document indexed, `rfc8999`, when its
 ///                                      body was written, and whether Index All RFCs
 ///                                      indexed it
-///     sections (document, anchor, number, heading, body)   -- FTS5
+///     sections (document, anchor, number, heading, body, label, title)   -- FTS5
 ///     section_rows (row, document)  -- which document each row of `sections` is
 ///
 /// `section_rows` is what a document's rows are found by: `sections` cannot index
@@ -56,7 +56,7 @@ public final class FullTextIndex {
   /// under another version is emptied when it is opened. The app then indexes its
   /// stored bodies again; a document indexed by Index All RFCs, whose body was not
   /// kept, is only back once that run is made again.
-  public static let version = 3
+  public static let version = 4
 
   /// The anchor the reader gives the abstract, which a hit in it opens.
   public static let abstractAnchor = "abstract"
@@ -105,6 +105,7 @@ public final class FullTextIndex {
     );
     CREATE VIRTUAL TABLE sections USING fts5(
       document UNINDEXED, anchor UNINDEXED, number UNINDEXED, heading, body,
+      label UNINDEXED, title UNINDEXED,
       tokenize = 'unicode61 remove_diacritics 2'
     );
     CREATE TABLE section_rows (row INTEGER PRIMARY KEY, document TEXT NOT NULL);
@@ -138,7 +139,10 @@ public final class FullTextIndex {
       ).isEmpty
       try deleteRows(of: id)
       let insert = try database.prepare(
-        "INSERT INTO sections (document, anchor, number, heading, body) VALUES (?, ?, ?, ?, ?)")
+        """
+        INSERT INTO sections (document, anchor, number, heading, body, label, title)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """)
       let record = try database.prepare(
         "INSERT INTO section_rows (row, document) VALUES (last_insert_rowid(), ?)")
       try record.bind(id.fileStem, at: 1)
@@ -149,6 +153,8 @@ public final class FullTextIndex {
         try insert.bind(row.number, at: 3)
         try insert.bind(row.heading, at: 4)
         try insert.bind(row.body, at: 5)
+        try insert.bind(row.label, at: 6)
+        try insert.bind(row.title, at: 7)
         try insert.step()
         try record.reset()
         try record.step()
@@ -221,12 +227,49 @@ public final class FullTextIndex {
     try database.run("DELETE FROM documents WHERE document = ?", id.fileStem)
   }
 
-  /// One row of `sections`, before it is written.
-  struct Row: Equatable {
-    var anchor: String
-    var number: String?
-    var heading: String
-    var body: String
+  /// One row of `sections`: a section's anchor, number, heading and own text, and
+  /// how the reader names it, which Spotlight shows (#178).
+  public struct Row: Equatable, Sendable {
+    public var anchor: String
+    public var number: String?
+    public var heading: String
+    public var body: String
+    /// `4.2` or `Appendix A`: the number as a heading names it (`Section.numberLabel`).
+    public var label: String?
+    /// `4.2. Title` or `Appendix A. Title` (`Section.displayTitle`).
+    public var title: String
+
+    public init(
+      anchor: String, number: String?, heading: String, body: String, label: String? = nil,
+      title: String
+    ) {
+      self.anchor = anchor
+      self.number = number
+      self.heading = heading
+      self.body = body
+      self.label = label
+      self.title = title
+    }
+  }
+
+  /// What is indexed of `id`, in the order it was written: what Spotlight indexes of
+  /// it (#178), with no body to parse again. None for a document not indexed.
+  public func indexedRows(of id: DocumentID) throws -> [Row] {
+    let statement = try database.prepare(
+      """
+      SELECT anchor, number, heading, body, label, title FROM sections
+      WHERE rowid IN (SELECT row FROM section_rows WHERE document = ?) ORDER BY rowid
+      """)
+    try statement.bind(id.fileStem, at: 1)
+    var rows: [Row] = []
+    while try statement.step() {
+      rows.append(
+        Row(
+          anchor: statement.text(at: 0) ?? "", number: statement.text(at: 1),
+          heading: statement.text(at: 2) ?? "", body: statement.text(at: 3) ?? "",
+          label: statement.text(at: 4), title: statement.text(at: 5) ?? ""))
+    }
+    return rows
   }
 
   /// What is indexed of `document`: the abstract, unless a section of the body is
@@ -243,12 +286,12 @@ public final class FullTextIndex {
       rows.append(
         Row(
           anchor: abstractAnchor, number: nil, heading: "Abstract",
-          body: text(of: document.header.abstract)))
+          body: text(of: document.header.abstract), title: "Abstract"))
     }
     rows += sections.map { section in
       Row(
         anchor: section.anchor, number: section.number, heading: section.headingWords.plainText,
-        body: text(of: section.blocks))
+        body: text(of: section.blocks), label: section.numberLabel, title: section.displayTitle)
     }
     return rows
   }

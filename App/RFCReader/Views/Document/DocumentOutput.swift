@@ -55,8 +55,8 @@
             for: id, as: format, section: section, paperSize: PrintLayout.paperSize(for: .current),
             library: library)
           exported = ExportedFile(
-            data: data, format: format,
-            fileStem: ExportFormat.fileStem(
+            data: data, contentType: format.contentType,
+            fileStem: format.fileStem(
               for: id, section: ExportScope.currentSection.section(section, for: format)))
         } catch {
           isExporting = false

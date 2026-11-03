@@ -67,8 +67,8 @@ Reference
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.
 - **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
-- **Highlights and notes**, synced, exportable as Markdown with citations attached. *Highlights shipped (#522); notes, export and sync to come.*
-- **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs *(shipped; sections are #178)*; Handoff between iPhone, iPad and Mac.
+- **Highlights and notes**, synced, exportable as Markdown with citations attached. *Highlights (#522), notes (#523) and their Markdown export (#524) shipped; sync to come.*
+- **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs *(shipped, with the sections of the documents the app holds, #178)*; Handoff between iPhone, iPad and Mac.
 - **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open in RFC Reader" and "Replace with RFC Link" on selected text) *(shipped)*, Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".
 - **Coding agents.** A local MCP server, so the agent beside the code reads the same anchored, status-aware text the reader shows: search, sections, requirements with stable IDs, definitions, citations, and the reader's own library. It answers with sources, never generated text. Design: `docs/superpowers/specs/2026-10-02-mcp-server-design.md`.
@@ -135,7 +135,7 @@ RFC numbers passed 10000 in 2026 (RFC 10050 was published on 19 September 2026).
 - **Legacy text parsing will never be perfect.** Definition lists with hanging indents, nested lists, and tables drawn in ASCII are hard to classify. Mitigation: bias toward preformatted (never mangle), keep the original text one toggle away, and let users report a misrendered section.
 - **Rendering performance.** Settled: the reader body is one TextKit 2 text storage per document in `UITextView`/`NSTextView`, not a lazy stack of SwiftUI views; [the decision](decisions/2026-09-20-textkit-2-for-the-reader-body.md) says why.
 - **Search latency.** Metadata search scans the whole index per query, in memory (the "Search" benchmarks of `make benchmark` measure it). It fits in a frame, so it stays a scan rather than moving into the full-text index, until a device shows otherwise ([the decision](decisions/2026-10-19-the-metadata-search-stays-a-scan.md)).
-- **Business model.** The app will be public and possibly sold. AGPL open source plus a paid App Store build is a legitimate combination (the source is free, the convenience and signing are not). This makes the licensing of the legacy XML pack a real question rather than a formality; see DATA_PIPELINE.md.
+- **Business model.** Settled: the app is public, and the App Store build is one free, universal purchase with nothing to buy inside it ([the decision](decisions/2026-10-24-the-app-store-builds-are-a-target-without-sparkle-uploaded-from-ci.md)). Distributing it still makes the licensing of the legacy XML pack a real question rather than a formality; see DATA_PIPELINE.md.
 - **Name.** "RFC Reader" is descriptive and probably taken. Worth a short list of alternatives before the App Store listing exists.
 
 ## Roadmap sketch

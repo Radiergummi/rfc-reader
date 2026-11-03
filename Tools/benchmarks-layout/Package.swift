@@ -24,7 +24,7 @@ let package = Package(
   ],
   dependencies: [
     // No traits: the default ones include the malloc interposer.
-    .package(url: "https://github.com/ordo-one/package-benchmark", exact: "1.38.0", traits: []),
+    .package(url: "https://github.com/ordo-one/package-benchmark", exact: "1.38.1", traits: []),
     .package(path: "../../Packages/RFCKit"),
     .package(path: "../../Packages/RFCReaderKit"),
   ],

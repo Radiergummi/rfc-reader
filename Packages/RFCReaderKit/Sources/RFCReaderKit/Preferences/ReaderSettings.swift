@@ -10,8 +10,9 @@ import SwiftUI
 /// through `@ReaderSettingsValue`; elsewhere, `init(defaults:)`.
 ///
 /// Each setting is either build-time, part of the `ReadingStyle` `style(column:textSize:)`
-/// makes, and a change rebuilds the document; or draw-time, part of `palette`, and
-/// a change only redraws. See
+/// makes, and a change rebuilds the document; or draw-time, part of the palette
+/// `palette(for:)` picks, and a change only redraws; or, like the original text and
+/// the keys, neither. See
 /// `docs/decisions/2026-10-03-reader-settings-are-a-build-time-style-and-a-draw-time-palette.md`.
 public struct ReaderSettings: Sendable, Hashable {
   /// The reader's body size, as it reads at the system's default text size. Always
@@ -26,7 +27,16 @@ public struct ReaderSettings: Sendable, Hashable {
   /// Draw a diagram the reader can render; a figure's own menu overrides it.
   public var drawDiagrams: Bool
   public var syntaxTheme: SyntaxTheme
-  public var palette: ReaderPalette
+  /// The app's appearance, which also picks the page theme drawn (#704).
+  public var appearance: AppearancePreference
+  /// The page theme drawn while the app is light: one offered in light.
+  public var lightPalette: ReaderPalette
+  /// The page theme drawn while the app is dark: one offered in dark.
+  public var darkPalette: ReaderPalette
+  /// The vim-style keys in the reader (#711).
+  public var vimKeys: Bool
+  /// Tab and Shift-Tab through the reader's links (#711).
+  public var tabsThroughLinks: Bool
   /// What a copy cites in, and where its links point (#712). Neither builds nor
   /// draws anything: read when something is copied or shared.
   public var citationStyle: CitationStyle
@@ -36,6 +46,11 @@ public struct ReaderSettings: Sendable, Hashable {
   /// Whether a copied heading keeps its number as a prefix (#712).
   public var copiesSectionNumbers: Bool
 
+  /// Which of the reader's keys are on.
+  public var keys: ReaderKeys.Options {
+    ReaderKeys.Options(vimKeys: vimKeys, tabsThroughLinks: tabsThroughLinks)
+  }
+
   public init(
     fontSize: Double = ReaderPreferences.defaultFontSize,
     underlineLinks: Bool = ReaderPreferences.defaultUnderlineLinks,
@@ -43,7 +58,11 @@ public struct ReaderSettings: Sendable, Hashable {
     preferOriginalText: Bool = ReaderPreferences.defaultPreferOriginalText,
     drawDiagrams: Bool = ReaderPreferences.defaultDrawDiagrams,
     syntaxTheme: SyntaxTheme = .standard,
-    palette: ReaderPalette = .automatic,
+    appearance: AppearancePreference = ReaderPreferences.defaultAppearance,
+    lightPalette: ReaderPalette = .automatic,
+    darkPalette: ReaderPalette = .automatic,
+    vimKeys: Bool = ReaderPreferences.defaultVimKeys,
+    tabsThroughLinks: Bool = ReaderPreferences.defaultTabsThroughLinks,
     citationStyle: CitationStyle = ReaderPreferences.defaultCitationStyle,
     linkSite: LinkSite = ReaderPreferences.defaultLinkSite,
     copyFormat: CopyFormat = ReaderPreferences.defaultCopyFormat,
@@ -55,17 +74,27 @@ public struct ReaderSettings: Sendable, Hashable {
     self.preferOriginalText = preferOriginalText
     self.drawDiagrams = drawDiagrams
     self.syntaxTheme = syntaxTheme
-    self.palette = palette
+    self.appearance = appearance
+    self.lightPalette = lightPalette
+    self.darkPalette = darkPalette
+    self.vimKeys = vimKeys
+    self.tabsThroughLinks = tabsThroughLinks
     self.citationStyle = citationStyle
     self.linkSite = linkSite
     self.copyFormat = copyFormat
     self.copiesSectionNumbers = copiesSectionNumbers
   }
 
-  /// What `defaults` holds, each setting falling back to its default where nothing
-  /// is stored, or something of the wrong type, or a theme this version does not
-  /// know.
+  /// The settings the reader draws: what `defaults` holds, under the active Focus
+  /// filter's `FocusOverride` if there is one (#714).
   public init(defaults: UserDefaults) {
+    self = ReaderSettings(storedIn: defaults).overridden(by: FocusOverride.stored(in: defaults))
+  }
+
+  /// The reader's own settings, as `defaults` holds them, whatever a Focus filter
+  /// overrides: each setting falling back to its default where nothing is stored, or
+  /// something of the wrong type, or a theme this version does not know.
+  public init(storedIn defaults: UserDefaults) {
     typealias Keys = ReaderPreferences
     self.init(
       fontSize: defaults.object(forKey: Keys.fontSizeKey) as? Double ?? Keys.defaultFontSize,
@@ -78,7 +107,13 @@ public struct ReaderSettings: Sendable, Hashable {
       drawDiagrams: defaults.object(forKey: Keys.drawDiagramsKey) as? Bool
         ?? Keys.defaultDrawDiagrams,
       syntaxTheme: .named(defaults.string(forKey: Keys.syntaxThemeKey)),
-      palette: .named(defaults.string(forKey: Keys.paletteKey)),
+      appearance: defaults.string(forKey: Keys.appearanceKey).flatMap(AppearancePreference.init)
+        ?? Keys.defaultAppearance,
+      lightPalette: .named(defaults.string(forKey: Keys.lightPaletteKey), in: .light),
+      darkPalette: .named(defaults.string(forKey: Keys.darkPaletteKey), in: .dark),
+      vimKeys: defaults.object(forKey: Keys.vimKeysKey) as? Bool ?? Keys.defaultVimKeys,
+      tabsThroughLinks: defaults.object(forKey: Keys.tabsThroughLinksKey) as? Bool
+        ?? Keys.defaultTabsThroughLinks,
       citationStyle: defaults.string(forKey: Keys.citationStyleKey).flatMap(CitationStyle.init)
         ?? Keys.defaultCitationStyle,
       linkSite: defaults.string(forKey: Keys.linkSiteKey).flatMap(LinkSite.init)
@@ -93,7 +128,33 @@ public struct ReaderSettings: Sendable, Hashable {
   /// Writes to `defaults` the settings that differ from `old`, and only those, so
   /// that a setting the reader never touched stays unstored and follows its default
   /// if that changes.
+  ///
+  /// While a Focus filter is active, a setting it overrides is changed in the Focus's
+  /// override, and the reader's own stays as it was, to be drawn again when the Focus
+  /// ends (#714).
   public func write(to defaults: UserDefaults, replacing old: ReaderSettings) {
+    guard let focus = FocusOverride.stored(in: defaults) else {
+      writeStored(to: defaults, replacing: old)
+      return
+    }
+    let stored = ReaderSettings(storedIn: defaults)
+    let split = focus.absorbing(self, over: stored)
+    split.stored.writeStored(to: defaults, replacing: stored)
+    if split.focus != focus { split.focus.write(to: defaults) }
+  }
+
+  /// Reads the settings from `defaults`, lets `change` change them, and writes what
+  /// changed: for what has no `@ReaderSettingsValue`, such as an App Intent (#714).
+  public static func change(
+    in defaults: UserDefaults = .standard, _ change: (inout ReaderSettings) -> Void
+  ) {
+    let old = ReaderSettings(defaults: defaults)
+    var new = old
+    change(&new)
+    new.write(to: defaults, replacing: old)
+  }
+
+  private func writeStored(to defaults: UserDefaults, replacing old: ReaderSettings) {
     typealias Keys = ReaderPreferences
     if fontSize != old.fontSize { defaults.set(fontSize, forKey: Keys.fontSizeKey) }
     if underlineLinks != old.underlineLinks {
@@ -109,7 +170,19 @@ public struct ReaderSettings: Sendable, Hashable {
     if syntaxTheme != old.syntaxTheme {
       defaults.set(syntaxTheme.id, forKey: Keys.syntaxThemeKey)
     }
-    if palette != old.palette { defaults.set(palette.id, forKey: Keys.paletteKey) }
+    if appearance != old.appearance {
+      defaults.set(appearance.rawValue, forKey: Keys.appearanceKey)
+    }
+    if lightPalette != old.lightPalette {
+      defaults.set(lightPalette.id, forKey: Keys.lightPaletteKey)
+    }
+    if darkPalette != old.darkPalette {
+      defaults.set(darkPalette.id, forKey: Keys.darkPaletteKey)
+    }
+    if vimKeys != old.vimKeys { defaults.set(vimKeys, forKey: Keys.vimKeysKey) }
+    if tabsThroughLinks != old.tabsThroughLinks {
+      defaults.set(tabsThroughLinks, forKey: Keys.tabsThroughLinksKey)
+    }
     if citationStyle != old.citationStyle {
       defaults.set(citationStyle.rawValue, forKey: Keys.citationStyleKey)
     }
@@ -119,6 +192,15 @@ public struct ReaderSettings: Sendable, Hashable {
     }
     if copiesSectionNumbers != old.copiesSectionNumbers {
       defaults.set(copiesSectionNumbers, forKey: Keys.copiesSectionNumbersKey)
+    }
+  }
+
+  /// The draw-time half: the page theme drawn while the app is in `appearance`,
+  /// the one the system's or the override makes effective.
+  public func palette(for appearance: PaletteAppearance) -> ReaderPalette {
+    switch appearance {
+    case .light: lightPalette
+    case .dark: darkPalette
     }
   }
 
@@ -155,11 +237,18 @@ public struct ReaderSettingsValue: DynamicProperty {
   @AppStorage private var preferOriginalText: Bool
   @AppStorage private var drawDiagrams: Bool
   @AppStorage private var syntaxTheme: String
-  @AppStorage private var palette: String
+  @AppStorage private var appearance: AppearancePreference
+  @AppStorage private var lightPalette: String
+  @AppStorage private var darkPalette: String
+  @AppStorage private var vimKeys: Bool
+  @AppStorage private var tabsThroughLinks: Bool
   @AppStorage private var citationStyle: CitationStyle
   @AppStorage private var linkSite: LinkSite
   @AppStorage private var copyFormat: CopyFormat
   @AppStorage private var copiesSectionNumbers: Bool
+  /// The active Focus filter's settings (#714), so that a Focus starting or ending
+  /// updates the view as a change to a setting does.
+  @AppStorage private var focusOverride: Data?
   private let defaults: UserDefaults
 
   public init(store defaults: UserDefaults = .standard) {
@@ -176,7 +265,15 @@ public struct ReaderSettingsValue: DynamicProperty {
       wrappedValue: Keys.defaultDrawDiagrams, Keys.drawDiagramsKey, store: defaults)
     _syntaxTheme = AppStorage(
       wrappedValue: Keys.defaultSyntaxTheme, Keys.syntaxThemeKey, store: defaults)
-    _palette = AppStorage(wrappedValue: Keys.defaultPalette, Keys.paletteKey, store: defaults)
+    _appearance = AppStorage(
+      wrappedValue: Keys.defaultAppearance, Keys.appearanceKey, store: defaults)
+    _lightPalette = AppStorage(
+      wrappedValue: Keys.defaultPalette, Keys.lightPaletteKey, store: defaults)
+    _darkPalette = AppStorage(
+      wrappedValue: Keys.defaultPalette, Keys.darkPaletteKey, store: defaults)
+    _vimKeys = AppStorage(wrappedValue: Keys.defaultVimKeys, Keys.vimKeysKey, store: defaults)
+    _tabsThroughLinks = AppStorage(
+      wrappedValue: Keys.defaultTabsThroughLinks, Keys.tabsThroughLinksKey, store: defaults)
     _citationStyle = AppStorage(
       wrappedValue: Keys.defaultCitationStyle, Keys.citationStyleKey, store: defaults)
     _linkSite = AppStorage(wrappedValue: Keys.defaultLinkSite, Keys.linkSiteKey, store: defaults)
@@ -185,6 +282,13 @@ public struct ReaderSettingsValue: DynamicProperty {
     _copiesSectionNumbers = AppStorage(
       wrappedValue: Keys.defaultCopiesSectionNumbers, Keys.copiesSectionNumbersKey,
       store: defaults)
+    _focusOverride = AppStorage(Keys.focusOverrideKey, store: defaults)
+  }
+
+  /// The active Focus filter's settings, or nil while none is: Settings says under
+  /// each control a Focus sets that it does (#714).
+  @MainActor public var focus: FocusOverride? {
+    FocusOverride.decoded(focusOverride)
   }
 
   /// The settings. Setting them writes what changed to user defaults.
@@ -193,9 +297,13 @@ public struct ReaderSettingsValue: DynamicProperty {
       ReaderSettings(
         fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
         preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
-        syntaxTheme: .named(syntaxTheme), palette: .named(palette),
-        citationStyle: citationStyle, linkSite: linkSite, copyFormat: copyFormat,
-        copiesSectionNumbers: copiesSectionNumbers)
+        syntaxTheme: .named(syntaxTheme), appearance: appearance,
+        lightPalette: .named(lightPalette, in: .light),
+        darkPalette: .named(darkPalette, in: .dark), vimKeys: vimKeys,
+        tabsThroughLinks: tabsThroughLinks, citationStyle: citationStyle, linkSite: linkSite,
+        copyFormat: copyFormat, copiesSectionNumbers: copiesSectionNumbers
+      )
+      .overridden(by: FocusOverride.decoded(focusOverride))
     }
     nonmutating set {
       newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))

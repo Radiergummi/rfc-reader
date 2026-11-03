@@ -84,6 +84,7 @@ enum IntentExportFormat: String, AppEnum {
   case text
   case xml
   case abnf
+  case annotations
 
   static let typeDisplayRepresentation: TypeDisplayRepresentation = "Format"
 
@@ -95,6 +96,7 @@ enum IntentExportFormat: String, AppEnum {
     .text: "Plain Text",
     .xml: "XML",
     .abnf: "ABNF Grammar",
+    .annotations: "Highlights and Notes",
   ]
 
   /// The other way, a switch over the export's own formats: a format added there
@@ -109,6 +111,7 @@ enum IntentExportFormat: String, AppEnum {
       case .text: .text
       case .xml: .xml
       case .abnf: .abnf
+      case .annotations: .annotations
       }
   }
 
@@ -121,6 +124,7 @@ enum IntentExportFormat: String, AppEnum {
     case .text: .text
     case .xml: .xml
     case .abnf: .abnf
+    case .annotations: .annotations
     }
   }
 }

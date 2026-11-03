@@ -104,6 +104,37 @@ struct RFCReaderShortcuts: AppShortcutsProvider {
       shortTitle: "Find Requirements",
       systemImageName: "checklist"
     )
+    // The reader's appearance (#714). Get Reader Settings has no phrase: it is for
+    // a shortcut to read, not for asking aloud.
+    AppShortcut(
+      intent: SetReaderThemeIntent(),
+      phrases: [
+        "Use the \(\.$theme) theme in \(.applicationName)",
+        "Change the theme in \(.applicationName)",
+      ],
+      shortTitle: "Set Reader Theme",
+      systemImageName: "paintpalette"
+    )
+    AppShortcut(
+      intent: SetAppearanceIntent(),
+      phrases: [
+        "Switch \(.applicationName) to \(\.$appearance)",
+        "Change the appearance of \(.applicationName)",
+      ],
+      shortTitle: "Set Appearance",
+      systemImageName: "circle.lefthalf.filled"
+    )
+    // The change named in the phrase, not preset on the intent: the shortcuts'
+    // metadata records no parameter an intent is made with. No phrase without it,
+    // which would step bigger without asking.
+    AppShortcut(
+      intent: SetTextSizeIntent(),
+      phrases: [
+        "Make the text \(\.$change) in \(.applicationName)"
+      ],
+      shortTitle: "Set Text Size",
+      systemImageName: "textformat.size"
+    )
   }
 
   /// Tells the system the RFCs a phrase can name have changed: once the index has

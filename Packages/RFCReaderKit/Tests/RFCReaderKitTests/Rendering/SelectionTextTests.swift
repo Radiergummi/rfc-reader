@@ -208,6 +208,23 @@ struct SelectionTextTests {
     }
   #endif
 
+  /// The page theme is the reader's, not the document's (#704): a rich copy carries
+  /// the system's label colors, as it did before themes, not the theme's text color
+  /// resolved at the moment of the copy.
+  @Test func `a rich copy carries the system's text colors, not the theme's`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: ReadingStyle())
+    let rich = SelectionText.richCopy(of: built.text, publicURL: { _ in nil })
+    var colors: [PlatformColor] = []
+    rich.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: rich.length)) {
+      value, _, _ in
+      if let color = value as? PlatformColor { colors.append(color) }
+    }
+    #expect(!colors.contains { $0 === ReaderPalette.themedText })
+    #expect(!colors.contains { $0 === ReaderPalette.themedSecondaryText })
+    #expect(colors.contains { $0 == RFCColors.label })
+    #expect(colors.contains { $0 == RFCColors.secondaryLabel })
+  }
+
   /// A rich paste of a rendered diagram would otherwise carry its grid as characters
   /// in a clear color: the field names pasted, every border invisible.
   @Test func `a rich copy shows the borders a rendered diagram hides`() throws {

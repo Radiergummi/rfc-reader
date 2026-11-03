@@ -41,6 +41,26 @@ struct IntentAnswerTests {
         == "HTTP status 499 is in IANA's registry, which names no RFC for it.")
   }
 
+  /// Set Reader Theme says which slot it set (#714), since a dark theme set while
+  /// the app is light shows nothing.
+  @Test func `a theme set names the slot it took`() {
+    #expect(
+      IntentAnswer.theme("Sepia", setFor: [.light], locale: .english)
+        == "Sepia is now the light theme.")
+    #expect(
+      IntentAnswer.theme("Black", setFor: [.dark], locale: .english)
+        == "Black is now the dark theme.")
+    #expect(
+      IntentAnswer.theme("High Contrast", setFor: [.light, .dark], locale: .english)
+        == "High Contrast is now the light and the dark theme.")
+    #expect(
+      IntentAnswer.theme("Sepia", notOfferedFor: .dark, locale: .english)
+        == "Sepia is not a dark theme.")
+    #expect(
+      IntentAnswer.theme("Night", notOfferedFor: .light, locale: .english)
+        == "Night is not a light theme.")
+  }
+
   @Test func `a request is taken once, by its own document's reader`() {
     var request: DocumentRequest<String>? = DocumentRequest(id: .rfc(9110), value: "requirements")
     #expect(DocumentRequest.take(&request, for: .rfc(9112)) == nil)

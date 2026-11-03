@@ -148,15 +148,15 @@ struct SpotlightEntryTests {
     activity.userInfo = [
       CSSearchableItemActivityIdentifier: SpotlightEntry(Self.semantics).identifier
     ]
-    #expect(SpotlightEntry.documentID(from: activity) == .rfc(9110))
+    #expect(SpotlightEntry.link(from: activity) == RFCLink(id: .rfc(9110)))
   }
 
   @Test func `an activity that is not a chosen result names nothing`() {
     let other = NSUserActivity(activityType: "me.mazetti.rfc-reader.other")
     other.userInfo = [CSSearchableItemActivityIdentifier: "rfc9110"]
-    #expect(SpotlightEntry.documentID(from: other) == nil)
+    #expect(SpotlightEntry.link(from: other) == nil)
     let foreign = NSUserActivity(activityType: CSSearchableItemActionType)
     foreign.userInfo = [CSSearchableItemActivityIdentifier: "not a document"]
-    #expect(SpotlightEntry.documentID(from: foreign) == nil)
+    #expect(SpotlightEntry.link(from: foreign) == nil)
   }
 }

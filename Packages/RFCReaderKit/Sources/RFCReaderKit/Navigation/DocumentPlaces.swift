@@ -9,8 +9,8 @@ import RFCKit
 /// it is by section, so a jump to a figure is still where the reader is while the
 /// reader reports the figure's section.
 public struct DocumentPlaces: Sendable {
-  private let document: RFCDocument
-  private let anchors: AnchorIndex
+  let document: RFCDocument
+  let anchors: AnchorIndex
 
   public init(document: RFCDocument, anchors: AnchorIndex) {
     self.document = document

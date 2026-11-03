@@ -44,10 +44,15 @@ struct DocumentInspector: View {
   /// Both are derived once per document by `DocumentView` rather than here, where
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
+  /// What the body names an appendix by, which the contents name it by too (#940).
+  let appendixLabels: RFCKit.Section.AppendixLabels
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
-  /// Where the build on screen placed each highlight (#522).
+  /// Where the build on screen placed each highlight (#522) and note (#523).
   let highlightStatuses: [UUID: HighlightPlacement.Status]?
+  let notePlacement: NotePlacement?
+  /// Opens a note's editor in the reader.
+  let openNote: (NoteRequest) -> Void
   let info: DocumentInfo?
   /// Whether the body is here. Without it, a document the index describes still has
   /// its Info, and the navigation pane's lists say why they are empty (#325).
@@ -88,7 +93,8 @@ struct DocumentInspector: View {
       let infoView = InfoView(
         info: info, document: document, library: library, open: openDocument,
         openDraft: openDraft, search: search, showReadingPath: showReadingPath,
-        sections: sections, selectSection: selectSection)
+        sections: InspectorPane.infoSections(sections, readsAsOriginal: publishedOriginal != nil),
+        selectSection: selectSection)
       #if os(macOS)
         infoView
       #else
@@ -172,6 +178,7 @@ struct DocumentInspector: View {
   /// its own text but the original or a translation.
   private func annotations() -> some View {
     let highlights = document.map { library.annotations.highlights(of: $0) } ?? []
+    let notes = document.map { library.annotations.notes(of: $0) } ?? []
     let note: String? =
       highlightStatuses != nil
       ? nil
@@ -179,8 +186,10 @@ struct DocumentInspector: View {
         ? String(localized: "Highlights are shown in the document's own text.")
         : String(localized: "The document is unavailable, so its highlights cannot be shown in it.")
     return AnnotationsView(
-      highlights: highlights, statuses: highlightStatuses, note: note, sections: sections,
-      library: library, select: selectSection)
+      highlights: highlights, notes: notes, statuses: highlightStatuses,
+      notePlacement: notePlacement, note: note, sections: sections,
+      appendixLabels: appendixLabels, library: library,
+      select: selectSection, openNote: openNote)
   }
 
   @ViewBuilder
@@ -213,19 +222,24 @@ struct DocumentInspector: View {
       // Opened at the section being read rather than at the top: from §15 of a long
       // RFC, the top of the list is a long way from where the reader is.
       ScrollViewReader { proxy in
-        TableOfContentsView(sections: sections, current: current, select: selectSection)
-          // A filter typed for one document is not carried to the next, which the
-          // panel stays open for (#325).
-          .id(document)
-          // Again when a place first arrives, not on every crossing: a panel left
-          // open from the previous document shows this list before the new one
-          // has reported where it is (#325).
-          .task(id: current != nil) {
-            // A turn later, once the list has rows to scroll to: a timing guess,
-            // since `List` offers no initial scroll position to declare instead.
-            await Task.yield()
-            if let current { proxy.scrollTo(current, anchor: .center) }
-          }
+        TableOfContentsView(
+          sections: sections, appendixLabels: appendixLabels, current: current,
+          select: selectSection,
+          addNote: highlightStatuses == nil
+            ? nil : { openNote(.new(.target(.section($0)))) }
+        )
+        // A filter typed for one document is not carried to the next, which the
+        // panel stays open for (#325).
+        .id(document)
+        // Again when a place first arrives, not on every crossing: a panel left
+        // open from the previous document shows this list before the new one
+        // has reported where it is (#325).
+        .task(id: current != nil) {
+          // A turn later, once the list has rows to scroll to: a timing guess,
+          // since `List` offers no initial scroll position to declare instead.
+          await Task.yield()
+          if let current { proxy.scrollTo(current, anchor: .center) }
+        }
       }
     case .references:
       // A document with no bibliography says so here rather than being steered
@@ -317,12 +331,15 @@ struct PanelHost: View {
     if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
+        appendixLabels: reader.appendixLabels,
         // In Focus, what the focused section cites, pinned beside it (#699); the whole
         // bibliography for an entry asked for that the section does not cite.
         groups: FocusCitations.shown(
           reader.focusGroups, revealing: reader.revealedReference?.anchor) ?? reader.groups,
         requirements: reader.requirements,
         highlightStatuses: reader.highlightStatuses,
+        notePlacement: reader.notePlacement,
+        openNote: { reader.openNote($0) },
         info: reader.info,
         hasBody: reader.hasDocument,
         isLoading: reader.isLoading,

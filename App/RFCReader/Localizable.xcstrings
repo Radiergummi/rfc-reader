@@ -116,6 +116,46 @@
         }
       }
     },
+    "%lld Notes" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notiz"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Note"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld RFCs" : {
       "localizations" : {
         "de" : {
@@ -356,6 +396,16 @@
         }
       }
     },
+    "%lld pt" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pt"
+          }
+        }
+      }
+    },
     "%lld sections" : {
       "localizations" : {
         "de" : {
@@ -389,6 +439,46 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld sections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld themes" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Thema"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Themen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld theme"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld themes"
                 }
               }
             }
@@ -432,6 +522,26 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "A Focus filter is setting these until the Focus ends." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Fokusfilter legt diese fest, bis der Fokus endet."
+          }
+        }
+      }
+    },
+    "A Focus filter is setting this until the Focus ends." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Fokusfilter legt dies fest, bis der Fokus endet."
           }
         }
       }
@@ -512,6 +622,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Figure" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zur Abbildung hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Paragraph" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zum Absatz hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zum Abschnitt hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Note to Table" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz zur Tabelle hinzufügen"
           }
         }
       }
@@ -636,6 +796,16 @@
         }
       }
     },
+    "Automatic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch"
+          }
+        }
+      }
+    },
     "Available Offline" : {
       "localizations" : {
         "de" : {
@@ -686,6 +856,26 @@
         }
       }
     },
+    "Black" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schwarz"
+          }
+        }
+      }
+    },
+    "Bold" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fett"
+          }
+        }
+      }
+    },
     "Bookmark" : {
       "localizations" : {
         "de" : {
@@ -726,6 +916,16 @@
         }
       }
     },
+    "Bulleted List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzählung"
+          }
+        }
+      }
+    },
     "Cancel" : {
       "localizations" : {
         "de" : {
@@ -742,6 +942,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorsitz: %@"
+          }
+        }
+      }
+    },
+    "Change" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderung"
           }
         }
       }
@@ -1216,6 +1426,36 @@
         }
       }
     },
+    "Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkel"
+          }
+        }
+      }
+    },
+    "Dark Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkles Thema"
+          }
+        }
+      }
+    },
+    "Decrease Indent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einzug verkleinern"
+          }
+        }
+      }
+    },
     "Defined In" : {
       "localizations" : {
         "de" : {
@@ -1252,6 +1492,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markierung löschen"
+          }
+        }
+      }
+    },
+    "Delete Highlight and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierung und Notizen löschen"
+          }
+        }
+      }
+    },
+    "Delete Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz löschen"
+          }
+        }
+      }
+    },
+    "Delete the highlight and its notes?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markierung und ihre Notizen löschen?"
           }
         }
       }
@@ -1373,6 +1643,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sammlung bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz bearbeiten"
           }
         }
       }
@@ -1597,6 +1877,16 @@
         }
       }
     },
+    "For" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für"
+          }
+        }
+      }
+    },
     "For Copy Citation, and the line after a quote." : {
       "localizations" : {
         "de" : {
@@ -1667,6 +1957,26 @@
         }
       }
     },
+    "Get Reader Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen abrufen"
+          }
+        }
+      }
+    },
+    "Gets the reader's appearance, light and dark themes and text size, as they are now." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruft die Darstellung, das helle und das dunkle Thema und die Textgröße des Readers ab, wie sie gerade sind."
+          }
+        }
+      }
+    },
     "Go to %@" : {
       "localizations" : {
         "de" : {
@@ -1697,12 +2007,32 @@
         }
       }
     },
+    "Go to Section…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu Abschnitt …"
+          }
+        }
+      }
+    },
     "Goes back to the system's size" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kehrt zur Größe des Systems zurück"
+          }
+        }
+      }
+    },
+    "Gray" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grau"
           }
         }
       }
@@ -1757,6 +2087,16 @@
         }
       }
     },
+    "High Contrast" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoher Kontrast"
+          }
+        }
+      }
+    },
     "Highlight" : {
       "localizations" : {
         "de" : {
@@ -1773,6 +2113,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markierungen"
+          }
+        }
+      }
+    },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
           }
         }
       }
@@ -1823,6 +2173,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Im Text"
+          }
+        }
+      }
+    },
+    "Increase Indent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einzug vergrößern"
           }
         }
       }
@@ -1977,6 +2337,26 @@
         }
       }
     },
+    "Italic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kursiv"
+          }
+        }
+      }
+    },
+    "Its notes are deleted with it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ihre Notizen werden mit ihr gelöscht."
+          }
+        }
+      }
+    },
     "Jump to Selection" : {
       "localizations" : {
         "de" : {
@@ -2027,12 +2407,62 @@
         }
       }
     },
+    "Keyboard" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tastatur"
+          }
+        }
+      }
+    },
     "Library" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bibliothek"
+          }
+        }
+      }
+    },
+    "Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell"
+          }
+        }
+      }
+    },
+    "Light Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helles Thema"
+          }
+        }
+      }
+    },
+    "Light or Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell oder Dunkel"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
           }
         }
       }
@@ -2127,6 +2557,16 @@
         }
       }
     },
+    "Make the text ${change}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text ${change} machen"
+          }
+        }
+      }
+    },
     "Markdown" : {
       "localizations" : {
         "de" : {
@@ -2163,6 +2603,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nach oben"
+          }
+        }
+      }
+    },
+    "Move through links with Tab" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Tabulator durch Links gehen"
           }
         }
       }
@@ -2233,6 +2683,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nächster Abschnitt"
+          }
+        }
+      }
+    },
+    "Night" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nacht"
           }
         }
       }
@@ -2357,6 +2817,16 @@
         }
       }
     },
+    "Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz"
+          }
+        }
+      }
+    },
     "Notes" : {
       "localizations" : {
         "de" : {
@@ -2403,6 +2873,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nummer"
+          }
+        }
+      }
+    },
+    "Numbered List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nummerierte Liste"
           }
         }
       }
@@ -2707,16 +3187,6 @@
         }
       }
     },
-    "Page" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seite"
-          }
-        }
-      }
-    },
     "Page Setup…" : {
       "localizations" : {
         "de" : {
@@ -2733,6 +3203,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenbereich"
+          }
+        }
+      }
+    },
+    "Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier"
           }
         }
       }
@@ -2863,6 +3343,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ allein lesen"
+          }
+        }
+      }
+    },
+    "Reader Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung beim Lesen"
+          }
+        }
+      }
+    },
+    "Reader Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leseeinstellungen"
           }
         }
       }
@@ -3237,6 +3737,16 @@
         }
       }
     },
+    "Section number, such as 4.2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abschnittsnummer, etwa 4.2"
+          }
+        }
+      }
+    },
     "See also" : {
       "localizations" : {
         "de" : {
@@ -3247,12 +3757,12 @@
         }
       }
     },
-    "Select text in the document and choose Highlight." : {
+    "Select text in the document and choose Highlight or Add Note." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle Text im Dokument aus und dann „Markieren“."
+            "value" : "Wähle Text im Dokument aus und dann „Markieren“ oder „Notiz hinzufügen“."
           }
         }
       }
@@ -3263,6 +3773,106 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An Bücher senden"
+          }
+        }
+      }
+    },
+    "Sepia" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sepia"
+          }
+        }
+      }
+    },
+    "Set Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung festlegen"
+          }
+        }
+      }
+    },
+    "Set Reader Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lesethema festlegen"
+          }
+        }
+      }
+    },
+    "Set Text Size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textgröße festlegen"
+          }
+        }
+      }
+    },
+    "Set the appearance to ${appearance}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung auf ${appearance} festlegen"
+          }
+        }
+      }
+    },
+    "Set the text ${change} to ${size}" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${change} des Texts auf ${size} festlegen"
+          }
+        }
+      }
+    },
+    "Sets the app's appearance: the system's, or always light or dark." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt die Darstellung der App fest: die des Systems oder immer hell oder dunkel."
+          }
+        }
+      }
+    },
+    "Sets the page theme: a light theme for when the app is light, a dark theme for when it is dark, or one made for both. Choose Light or Dark to set only that one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt das Seitenthema fest: ein helles Thema für die helle App, ein dunkles für die dunkle oder eines für beide. Wähle Hell oder Dunkel, um nur dieses festzulegen."
+          }
+        }
+      }
+    },
+    "Sets the reader's text size, in points from 12 to 28, or makes it a step bigger or smaller." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt die Textgröße des Readers in Punkt von 12 bis 28 fest oder macht sie eine Stufe größer oder kleiner."
+          }
+        }
+      }
+    },
+    "Sets the reader's theme, appearance and text size while the Focus is on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt Thema, Darstellung und Textgröße des Readers fest, solange der Fokus aktiv ist."
           }
         }
       }
@@ -3313,6 +3923,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Teilen"
+          }
+        }
+      }
+    },
+    "Shift-Tab goes back. Return follows the link, and Space previews it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umschalt-Tabulator geht zurück. Der Zeilenschalter folgt dem Link, die Leertaste zeigt seine Vorschau."
           }
         }
       }
@@ -3397,6 +4017,16 @@
         }
       }
     },
+    "Show Read" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelesene zeigen"
+          }
+        }
+      }
+    },
     "Show Requirements" : {
       "localizations" : {
         "de" : {
@@ -3423,6 +4053,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontaktdaten zeigen"
+          }
+        }
+      }
+    },
+    "Show in Annotations" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Anmerkungen zeigen"
           }
         }
       }
@@ -3503,6 +4143,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seitenleiste"
+          }
+        }
+      }
+    },
+    "Size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Größe"
           }
         }
       }
@@ -3607,6 +4257,26 @@
         }
       }
     },
+    "Strikethrough" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchgestrichen"
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
+    },
     "Tab" : {
       "localizations" : {
         "de" : {
@@ -3633,6 +4303,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Textgröße: %lld"
+          }
+        }
+      }
+    },
+    "That is neither an address nor an RFC." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist weder eine Adresse noch ein RFC."
           }
         }
       }
@@ -3767,6 +4447,16 @@
         }
       }
     },
+    "Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thema"
+          }
+        }
+      }
+    },
     "These RFCs were not exported:" : {
       "localizations" : {
         "de" : {
@@ -3793,6 +4483,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieses Dokument verwendet die Schlüsselwörter aus BCP 14 nicht."
+          }
+        }
+      }
+    },
+    "This document has no section matching “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Dokument hat keinen Abschnitt, der „%@“ entspricht."
+          }
+        }
+      }
+    },
+    "This passage is in several places in this document." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Stelle steht mehrmals in diesem Dokument."
           }
         }
       }
@@ -3834,6 +4544,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erneut versuchen"
+          }
+        }
+      }
+    },
+    "URL or RFC, as RFC 9110 Section 4.2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL oder RFC, etwa RFC 9110 Section 4.2"
           }
         }
       }
@@ -3888,12 +4608,32 @@
         }
       }
     },
+    "Use the ${theme} theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thema ${theme} verwenden"
+          }
+        }
+      }
+    },
     "Use the full window width for text" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die ganze Fensterbreite für Text verwenden"
+          }
+        }
+      }
+    },
+    "Use vim-style keys" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tasten wie in vim verwenden"
           }
         }
       }
@@ -3974,6 +4714,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "und %lld weitere"
+          }
+        }
+      }
+    },
+    "j and k scroll a line, d and u half a page, gg and G go to the top and the end, ]] and [[ to the next and previous section, ]r and [r to the next and previous link, / finds, and n and N go to the next and previous match." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "j und k blättern eine Zeile, d und u eine halbe Seite, gg und G gehen an den Anfang und ans Ende, ]] und [[ zum nächsten und vorherigen Abschnitt, ]r und [r zum nächsten und vorherigen Link, / sucht, und n und N gehen zum nächsten und vorherigen Treffer."
           }
         }
       }

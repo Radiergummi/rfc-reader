@@ -68,6 +68,16 @@
         }
       }
     },
+    "%@ Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Markierungen und Notizen"
+          }
+        }
+      }
+    },
     "%@ has no grammar to export." : {
       "localizations" : {
         "de" : {
@@ -100,6 +110,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ steht in der Registry der IANA, die keinen RFC dafür nennt."
+          }
+        }
+      }
+    },
+    "%@ is not a dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist kein dunkles Thema."
+          }
+        }
+      }
+    },
+    "%@ is not a light theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist kein helles Thema."
+          }
+        }
+      }
+    },
+    "%@ is now the dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das dunkle Thema."
+          }
+        }
+      }
+    },
+    "%@ is now the light and the dark theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das helle und das dunkle Thema."
+          }
+        }
+      }
+    },
+    "%@ is now the light theme." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist jetzt das helle Thema."
           }
         }
       }
@@ -1178,6 +1238,16 @@
         }
       }
     },
+    "Delete Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz löschen"
+          }
+        }
+      }
+    },
     "Details" : {
       "localizations" : {
         "de" : {
@@ -1344,6 +1414,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gemeldete Fehler in einem veröffentlichten RFC, die der RFC Editor daneben erfasst, da sich der RFC selbst nie ändert."
+          }
+        }
+      }
+    },
+    "Every RFC in this list is obsolete, and Show Obsolete is off." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder RFC in dieser Liste ist veraltet, und „Veraltete zeigen“ ist aus."
           }
         }
       }
@@ -1538,6 +1618,16 @@
         }
       }
     },
+    "Go to Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu Abschnitt"
+          }
+        }
+      }
+    },
     "Gray" : {
       "localizations" : {
         "de" : {
@@ -1574,6 +1664,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Für die nächste Revision vorgemerkt"
+          }
+        }
+      }
+    },
+    "Hidden by View Options" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch Darstellungsoptionen ausgeblendet"
           }
         }
       }
@@ -1654,6 +1754,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markiert, gelb"
+          }
+        }
+      }
+    },
+    "Highlights and Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markierungen und Notizen"
           }
         }
       }
@@ -2088,12 +2198,12 @@
         }
       }
     },
-    "Next Section, in Focus" : {
+    "Next Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nächster Abschnitt, im Fokus"
+            "value" : "Nächster Abschnitt"
           }
         }
       }
@@ -2528,12 +2638,12 @@
         }
       }
     },
-    "Previous Section, in Focus" : {
+    "Previous Section" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vorheriger Abschnitt, im Fokus"
+            "value" : "Vorheriger Abschnitt"
           }
         }
       }
@@ -3228,6 +3338,16 @@
         }
       }
     },
+    "Show Obsolete is off and Hide Read is on, which hide every RFC in this list." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Veraltete zeigen“ ist aus und „Gelesene ausblenden“ ist an, was jeden RFC in dieser Liste ausblendet."
+          }
+        }
+      }
+    },
     "Show as Figure" : {
       "localizations" : {
         "de" : {
@@ -3394,22 +3514,22 @@
         }
       }
     },
-    "The IETF doesn't have this draft, or this revision of it." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
-          }
-        }
-      }
-    },
     "Text" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Text"
+          }
+        }
+      }
+    },
+    "The IETF doesn't have this draft, or this revision of it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die IETF hat diesen Draft oder diese Revision davon nicht."
           }
         }
       }
@@ -4182,6 +4302,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gelb"
+          }
+        }
+      }
+    },
+    "You have read every RFC in this list, and Hide Read is on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast jeden RFC in dieser Liste gelesen, und „Gelesene ausblenden“ ist an."
           }
         }
       }

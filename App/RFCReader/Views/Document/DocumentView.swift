@@ -259,7 +259,9 @@ struct DocumentView: View {
   /// not over the original text, which nothing folds.
   private func updateFolding() {
     guard showsReaderState else { return }
+    // Not over a text the original-only page loaded but does not show (#1022).
     guard [.focus, .outline].contains(reader.folding.mode), !reader.showOriginal,
+      reader.offersSections,
       let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
@@ -369,6 +371,16 @@ struct DocumentView: View {
       .onChange(of: controller.highlightStatuses) { _, statuses in
         writer.highlightStatuses = statuses
       }
+      .modifier(
+        NoteReports(
+          placement: controller.notePlacement, request: reader.noteRequest,
+          report: { writer.notePlacement = $0 },
+          open: { request in
+            guard isShown else { return }
+            writer.noteRequest = nil
+            controller.openNote(request)
+          })
+      )
       // A section the text view opened or closed itself: a heading toggled, a jump
       // into folded text.
       .onChange(of: controller.foldingRequest) {
@@ -405,6 +417,18 @@ struct DocumentView: View {
       // A pack installed while the document is open can make it a pointer (#316).
       .onChange(of: library.pointersInPack) {
         session.markPublishedOriginal(into: writer, library: library)
+      }
+      // Focus and the outline, off over a text the original-only page loaded but does
+      // not show, which the index may say only after the text built (#1022). So is Go
+      // to Section's field, if it was opened before. And a jump that waited for the
+      // text is settled as not shown (#1031): known a pointer only once its text
+      // loaded, the page shows no text view whose arrival would follow it.
+      .onChange(of: reader.publishedOriginal) {
+        if !reader.offersSections {
+          reader.isGoingToSection = false
+          if let request = navigation.scrollRequest, request.isUnrecorded { follow(request) }
+        }
+        updateFolding()
       }
       .onChange(of: library.revisions) {
         session.deriveInfo(into: writer, library: library)
@@ -476,9 +500,11 @@ struct DocumentView: View {
     } else {
       #if os(macOS)
         requestingContent.navigationTitle(identity.displayName)
+          .overlay(alignment: .top) { goToSectionAnchor.padding(.top, toolbarInset) }
       #else
         if let rfc = id.rfc, let rfcIdentity = identity.rfc {
           withReaderBeside
+            .overlay(alignment: .top) { goToSectionAnchor }
             .navigationTitle(identity.displayName)
             .modifier(
               IOSDocumentChrome(
@@ -490,6 +516,7 @@ struct DocumentView: View {
           // A draft (#728): none of an RFC's actions, which bookmark, keep, export
           // and print what the index lists.
           requestingContent
+            .overlay(alignment: .top) { goToSectionAnchor }
             .navigationTitle(identity.displayName)
             .modifier(
               IOSDraftChrome(
@@ -499,6 +526,30 @@ struct DocumentView: View {
         }
       #endif
     }
+  }
+
+  /// Where Go to Section's field points from (#711): the top of the reader, below the
+  /// bars, a point wide so its arrow points at the middle. The reader on screen's
+  /// alone, as the window's reader state is.
+  private var goToSectionAnchor: some View {
+    Color.clear
+      .frame(width: 1, height: 1)
+      .popover(
+        isPresented: Binding(
+          get: { showsReaderState && reader.isGoingToSection },
+          set: { reader.isGoingToSection = $0 }),
+        arrowEdge: .top
+      ) {
+        GoToSectionField(sections: reader.sections) { anchor in
+          navigation.jump(toSection: anchor)
+        }
+        // However it went: a document opened under it takes the popover with its
+        // view and never sets the binding, and the next would open it unasked.
+        .onDisappear { reader.isGoingToSection = false }
+        #if !os(macOS)
+          .presentationCompactAdaptation(.popover)
+        #endif
+      }
   }
 
   #if !os(macOS)
@@ -842,15 +893,16 @@ struct DocumentView: View {
   /// An anchor the body does not hold scrolls nowhere: a document already open stays
   /// where the reader is, and one just opened stays at its top (#276). In a document
   /// already open, a place naming a bibliography entry shows it; see
-  /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
+  /// `LinkDestination.landing(at:in:bibliography:anchors:)`. On an RFC read as its
+  /// original, no place is shown, so none scrolls (#1031).
   private func jump(toSection section: String?, revealingReferences: Bool = false) {
     guard let section else { return }
-    switch landing(at: section) {
-    case .reference(let anchor) where revealingReferences:
+    switch landing(at: section, in: places) {
+    case .inText(.reference(let anchor)) where revealingReferences:
       reader.reveal(reference: anchor)
-    case .reference(let anchor), .jump(let anchor):
+    case .inText(.reference(let anchor)), .inText(.jump(let anchor)):
       controller.scroll(to: anchor)
-    case .document, .unhandled, nil:
+    case .inText(.document), .inText(.unhandled), .notShown, nil:
       break
     }
   }
@@ -859,24 +911,29 @@ struct DocumentView: View {
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
   /// leaves the history as it is. Nil while there is no build to look in, and
-  /// otherwise whether the place was one the document holds (#762).
+  /// otherwise whether the place was one the document holds (#762), or one in a
+  /// text the reader does not show, as on a pointer's original-only page (#1031).
   @discardableResult
   private func follow(_ place: String) -> NavigationModel.JumpOutcome? {
     // Not while fading out over the next document's reader, nor under the top of
     // the stack: the place is the reader on screen's.
-    guard isShown, let document = session.state.document,
-      let built = session.state.built
-    else { return nil }
-    switch landing(at: place) {
-    case .jump(let anchor):
-      navigation.recordJump(
-        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+    guard isShown else { return nil }
+    let places = self.places
+    switch landing(at: place, in: places) {
+    case .inText(.jump(let anchor)):
+      // `PlaceLanding` lands in the text only with its build.
+      guard let places else { preconditionFailure("Landed in a text with no build") }
+      navigation.recordJump(to: anchor, in: places)
       return .landed
-    case .reference(let anchor):
+    case .inText(.reference(let anchor)):
       reader.reveal(reference: anchor)
       return .landed
-    case .document, .unhandled, nil:
+    case .notShown:
+      return .notShown
+    case .inText(.document), .inText(.unhandled):
       return .noSuchPlace
+    case nil:
+      return nil
     }
   }
 
@@ -941,6 +998,7 @@ struct DocumentView: View {
     if let anchor = controller.section { showSection(anchor) }
     // Where its build placed the highlights, which reinstating cleared too (#522).
     writer.highlightStatuses = controller.highlightStatuses
+    writer.notePlacement = controller.notePlacement
     updateFolding()
   }
 
@@ -952,13 +1010,20 @@ struct DocumentView: View {
     return DraftStatus(shown: shown, info: session.draftInfo)
   }
 
-  /// Nil while there is no build to find the place in.
-  private func landing(at place: String) -> LinkDestination? {
+  /// The places of the build; nil while there is none.
+  private var places: DocumentPlaces? {
     guard let document = session.state.document, let built = session.state.built else {
       return nil
     }
-    return LinkDestination.landing(
-      at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
+    return DocumentPlaces(document: document, anchors: built.anchors)
+  }
+
+  /// Nil while the text a place would be found in has no build (`places`). On an RFC
+  /// read as its original, no place is shown, build or none (#1031).
+  private func landing(at place: String, in places: DocumentPlaces?) -> PlaceLanding? {
+    PlaceLanding.landing(
+      at: place, in: places, bibliography: reader.groups,
+      readAsOriginal: reader.publishedOriginal?.kind)
   }
 
   /// Cross references arrive as URLs from the attributed text, through the text
@@ -1017,6 +1082,24 @@ struct DocumentView: View {
     }
   }
 #endif
+
+/// Where the text view placed the notes, into the window's reader state, and a note
+/// asked for from the panel, to the text view (#523). Its own modifier, so the
+/// view's chain stays one the compiler can check.
+private struct NoteReports: ViewModifier {
+  let placement: NotePlacement?
+  let request: PanelNoteRequest?
+  let report: (NotePlacement?) -> Void
+  let open: (NoteRequest) -> Void
+
+  func body(content: Content) -> some View {
+    content
+      .onChange(of: placement) { _, placement in report(placement) }
+      .onChange(of: request) { _, request in
+        if let request { open(request.request) }
+      }
+  }
+}
 
 /// Calls `show` when an App Intent's request arrives, and when the reader comes to
 /// have a document it could show it beside; see `DocumentView.requestingContent`.

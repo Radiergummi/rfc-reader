@@ -15,6 +15,9 @@ nonisolated enum IntentFailure: Error, CustomLocalizedStringResourceConvertible 
   case noSuchSection(SectionIdentifier)
   /// The document loaded, and could not be exported for the reason given (#384).
   case notExported(DocumentID, reason: String)
+  /// Set Reader Theme was asked for a slot the theme is not made for (#714), in
+  /// `IntentAnswer`'s words.
+  case themeNotOffered(String)
 
   var localizedStringResource: LocalizedStringResource {
     switch self {
@@ -28,6 +31,8 @@ nonisolated enum IntentFailure: Error, CustomLocalizedStringResourceConvertible 
       "\(identifier.document.displayName) has no section \(identifier.anchor)."
     case .notExported(let id, let reason):
       "\(id.displayName) couldn't be exported: \(reason)"
+    case .themeNotOffered(let answer):
+      .verbatim(answer)
     }
   }
 }

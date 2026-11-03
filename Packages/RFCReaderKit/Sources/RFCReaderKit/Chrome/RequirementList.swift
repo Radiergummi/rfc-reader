@@ -76,6 +76,14 @@ public enum RequirementList {
 
   /// The checklist as a Markdown task list, one requirement a line, each citing the
   /// section it is in and linking to it.
+  ///
+  /// A sentence is escaped as Copy as Quote escapes a line (#1023). That escapes a
+  /// line on its own, and is as safe in the middle of this one: the sentence is a
+  /// single line, a space stands on either side of it as at a line's ends, and a
+  /// backslash before a block marker it escapes at its start shows as nothing.
+  /// Nothing after it holds a `*`, `_`, `~` or backtick that a run it leaves
+  /// unescaped could pair with, and the citation's link makes inactive a `[` it
+  /// leaves open. A change to what follows the sentence must keep both true.
   public static func markdownChecklist(_ requirements: [Requirement], document: DocumentID)
     -> String
   {
@@ -83,8 +91,9 @@ public enum RequirementList {
     if let note = note(for: requirements) { lines += ["> \(note)", ""] }
     for requirement in requirements {
       let (citation, link) = cite(requirement, in: document)
+      let sentence = QuoteCitation.escapedMarkdownLine(requirement.sentence)
       lines.append(
-        "- [ ] **\(keywordList(requirement))** \(requirement.sentence) ([\(citation)](\(link)))")
+        "- [ ] **\(keywordList(requirement))** \(sentence) ([\(citation)](\(link)))")
     }
     return lines.joined(separator: "\n") + "\n"
   }
