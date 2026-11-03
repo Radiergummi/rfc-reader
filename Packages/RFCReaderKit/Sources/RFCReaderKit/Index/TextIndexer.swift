@@ -69,13 +69,6 @@ public actor TextIndexer {
     self.index = try FullTextIndex(contentsOf: url)
   }
 
-  /// The app's indexer, at `defaultURL`, opened off the caller's actor: opening may
-  /// make the folder and the tables.
-  @concurrent
-  public static func opening(store: DocumentStore) async throws -> TextIndexer {
-    try TextIndexer(contentsOf: defaultURL, store: store)
-  }
-
   /// Reconciles once, then again after each change to the store's bodies, until the
   /// task is cancelled. `changed` is called whenever the index has changed, for a
   /// search on show to be made again: after each reconcile that changed it, and every
