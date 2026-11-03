@@ -80,11 +80,10 @@ public enum CollectionStore {
 
   /// The collection and its items, in one save. The documents are untouched.
   public static func delete(_ identifier: UUID, in context: ModelContext) throws {
-    // Both fetched before anything is deleted, so a failed fetch leaves nothing pending.
-    let collection = try collection(identifier, in: context)
-    let items = try items(in: identifier, context: context)
-    context.delete(collection)
-    items.forEach(context.delete)
+    context.delete(try collection(identifier, in: context))
+    for item in try items(in: identifier, context: context) {
+      context.delete(item)
+    }
     try context.saveOrRollBack()
   }
 
