@@ -23,23 +23,6 @@ struct DocumentCommands: Commands {
 
     private var navigation: NavigationModel? { active.controller?.navigation }
     private var reader: ReaderState? { active.controller?.reader }
-    /// A document is on screen, not just selected: a selection is also showing while
-    /// it loads and when it failed to, and `hasDocument` stays true after the
-    /// selection is cleared. An RFC or a draft (#728), whose text has Find, Reading
-    /// Mode, Focus and the Outline as an RFC's does.
-    private var showsDocument: Bool {
-      navigation?.shownDocument != nil && reader?.hasDocument == true
-    }
-    /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
-    /// (#728). The Document menu offers a draft its text's toggles.
-    private var showsRFC: Bool {
-      navigation?.selection != nil && reader?.hasDocument == true
-    }
-    /// A document on screen that Print and Export offer: not one read as its PDF or
-    /// PostScript original (#207).
-    private var offersPrintAndExport: Bool {
-      navigation?.selection != nil && reader?.offersPrintAndExport == true
-    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -55,19 +38,19 @@ struct DocumentCommands: Commands {
         || reader?.sideBySide?.reader.hasSelection == true
     }
 
-    /// Whether Copy as Quote and Highlight have a selection of the RFC's own words: in
-    /// the reader's text or beside a compared document's, never the original text's
-    /// or a translation's.
-    private var hasQuotableSelection: Bool {
-      showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
-        && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
-    }
-
     /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
     private func paneTitle(_ pane: InspectorPane) -> String {
       InspectorPane.menuTitle(
         pane, isOpen: active.isPanelOpen, showing: active.controller?.reader.pane ?? .navigation)
     }
+
+    private func press(_ pane: InspectorPane) { active.controller?.press(pane) }
+
+    /// As the toolbar's button is: on whatever the index describes, a document still
+    /// loading or one that failed to included (#325), and nothing else, where the
+    /// panel is an empty strip. Not `showsDocument`, which also needs a selection:
+    /// the chord has to be able to close a panel that is still open.
+    private func offersPane(_ pane: InspectorPane) -> Bool { reader?.canDescribe == true }
 
     /// What an item of the Document menu does, as the toolbar's Cite and More do it.
     private func perform(_ action: DocumentMenus.Action) {
@@ -76,21 +59,60 @@ struct DocumentCommands: Commands {
 
     private var citedDocument: CitedDocument? { active.controller?.citedDocument }
 
-    private func copyCitation() { active.controller?.copyCitation() }
+    private func exportDocument() { active.controller?.output.exportDocument() }
+    private func exportCurrentSection() { active.controller?.output.exportCurrentSection() }
+    private func printDocument() { active.controller?.output.printDocument() }
 
-    /// Whether Copy As has a selection to copy: the reader's, or the one beside a
-    /// compared document's.
-    private var hasSelection: Bool {
-      reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true
-    }
+    private func copyCitation() { active.controller?.copyCitation() }
+    private func newCollection() { active.controller?.newCollection() }
+    private func saveAsCollection() { active.controller?.saveAsCollection() }
+    private func copyAsText() { active.controller?.copyAsText() }
+    private func copyAsQuote() { active.controller?.copyAsQuote() }
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
+    @FocusedValue(\.searchLibraryAction) private var searchLibrary
+    /// The reader on screen's Export and Print (#764), nil with none.
+    @FocusedValue(\.exportDocumentAction) private var exportDocumentAction
+    @FocusedValue(\.printDocumentAction) private var printDocumentAction
+
+    private func exportDocument() { exportDocumentAction?(nil) }
+    private func exportCurrentSection() {
+      guard let section = reader?.exportableSection else { return }
+      exportDocumentAction?(section)
+    }
+    private func printDocument() { printDocumentAction?() }
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
     /// The focused scene's reader, for the title a new bookmark is filed under.
     @FocusedValue(\.readerState) private var reader
+    /// The focused scene's panel, which View ▸ Show Contents and Show Info open and
+    /// close (#764).
+    @FocusedBinding(\.showsInspector) private var showsInspector
+
+    /// View ▸ Show or Hide Contents and Info: what the item will do, as on the Mac.
+    private func paneTitle(_ pane: InspectorPane) -> String {
+      InspectorPane.menuTitle(
+        pane, isOpen: showsInspector == true, showing: reader?.pane ?? .navigation)
+    }
+
+    /// As the bottom bar's buttons do (`DocumentToolbar.press`).
+    private func press(_ pane: InspectorPane) {
+      guard let reader, let isOpen = showsInspector else { return }
+      let result = InspectorPane.pressing(pane, isOpen: isOpen, showing: reader.pane)
+      reader.pane = result.pane
+      withAnimation(.snappy) { showsInspector = result.isOpen }
+    }
+
+    /// As the bottom bars offer them: over a document on screen, which `canDescribe`
+    /// outlives, and Info over an RFC's only, as a draft's bar has none. Wherever the
+    /// panel is open too, so the chord can close it.
+    private func offersPane(_ pane: InspectorPane) -> Bool {
+      guard reader?.canDescribe == true else { return false }
+      if showsInspector == true { return true }
+      return pane == .info ? navigation?.selection != nil : navigation?.shownDocument != nil
+    }
 
     private var isBookmarked: Bool {
       navigation?.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
@@ -106,6 +128,24 @@ struct DocumentCommands: Commands {
       navigation?.selection.flatMap(library.citedDocument)
     }
 
+    /// File ▸ New Collection… and Save as Collection… (#764): the editor, which the
+    /// scene presents. The sidebar, which lists the collection made, is beside the
+    /// reader or, in a single column, where Back leads.
+    private func newCollection() { navigation?.collectionEditor = .create(adding: nil) }
+    private func saveAsCollection() { navigation?.saveAsCollection() }
+
+    /// Edit ▸ Copy As (#764), sent to the first responder: the reader's text that
+    /// holds the selection, the one beside a compared document's included.
+    private func copyAsText() {
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyAsText), to: nil, from: nil, for: nil)
+    }
+
+    private func copyAsQuote() {
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyAsQuote), to: nil, from: nil, for: nil)
+    }
+
     /// Edit ▸ Copy Citation (#712): of the section the selection starts in, where the
     /// reader's text has the focus and a selection, as on the Mac, and otherwise of
     /// the section being read.
@@ -119,6 +159,43 @@ struct DocumentCommands: Commands {
     }
   #endif
 
+  /// A document is on screen, not just selected: a selection is also showing while
+  /// it loads and when it failed to, and `hasDocument` stays true after the
+  /// selection is cleared. An RFC or a draft (#728), whose text has Find, Reading
+  /// Mode, Focus and the Outline as an RFC's does.
+  private var showsDocument: Bool {
+    navigation?.shownDocument != nil && reader?.hasDocument == true
+  }
+  /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
+  /// (#728). The Document menu offers a draft its text's toggles.
+  private var showsRFC: Bool {
+    navigation?.selection != nil && reader?.hasDocument == true
+  }
+
+  /// Whether Copy As has a selection to copy: the reader's, or the one beside a
+  /// compared document's.
+  private var hasSelection: Bool {
+    reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true
+  }
+
+  /// Whether Copy as Quote and Highlight have a selection of the RFC's own words: in
+  /// the reader's text or beside a compared document's, never the original text's
+  /// or a translation's.
+  private var hasQuotableSelection: Bool {
+    showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
+      && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
+  }
+
+  /// A document on screen that Print and Export offer: not one read as its PDF or
+  /// PostScript original (#207). On iOS, also one whose reader has published its
+  /// Export and Print (#764).
+  private var offersPrintAndExport: Bool {
+    #if !os(macOS)
+      guard exportDocumentAction != nil, printDocumentAction != nil else { return false }
+    #endif
+    return navigation?.selection != nil && reader?.offersPrintAndExport == true
+  }
+
   /// Whether a note's editor is open over the reader, or over the one beside it: the
   /// reader's Edit commands are not its, and are grayed out until it closes (#1007).
   private var editsNote: Bool {
@@ -130,36 +207,32 @@ struct DocumentCommands: Commands {
       Button("Go to RFC…") { openDocument?() }
         .keyboardShortcut(ReaderShortcut.goToRFC.keyboardShortcut)
         .disabled(openDocument == nil)
-      #if os(macOS)
-        Button("New Collection…") { active.controller?.newCollection() }
-          .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
-          .disabled(navigation == nil)
-        // The search on show, kept as a collection made from a query (#355).
-        Button("Save as Collection…") { active.controller?.saveAsCollection() }
-          .disabled(navigation?.savedQuery == nil)
-      #endif
+      // On the iPad too, with ⇧⌘N (#764).
+      Button("New Collection…") { newCollection() }
+        .keyboardShortcut(ReaderShortcut.newCollection.keyboardShortcut)
+        .disabled(navigation == nil)
+      // The search on show, kept as a collection made from a query (#355).
+      Button("Save as Collection…") { saveAsCollection() }
+        .disabled(navigation?.savedQuery == nil)
     }
     // The Mac's toolbar buttons are AppKit's, so their keyboard shortcuts have to be
     // menu items: an `NSToolbarItem` carries no key equivalent of its own. ⌘D is one
     // on the iPad too, rather than the toolbar button's, so its title in the menu bar
     // and the hold-⌘ overlay can follow the action as the Mac's does (#278).
     CommandGroup(after: .pasteboard) {
-      #if os(macOS)
-        // Every format, whichever Copy copies (#712). Handed to the reader's text view
-        // (#186); see `ReaderWindowController.copyAsQuote()`. Grayed out without a
-        // selection, as Copy is; the original text is not the reader's, and has no
-        // quote to copy, and a translation's words are not the RFC's (#749).
-        Menu("Copy As") {
-          Button(CopyFormat.text.title()) {
-            active.controller?.copyAsText()
-          }
+      // Every format, whichever Copy copies (#712). On the Mac handed to the reader's
+      // text view (#186), see `ReaderWindowController.copyAsQuote()`; on the iPad
+      // (#764) sent to the first responder, the text holding the selection. Grayed
+      // out without a selection, as Copy is; the original text is not the reader's,
+      // and has no quote to copy, and a translation's words are not the RFC's (#749).
+      Menu("Copy As") {
+        Button(CopyFormat.text.title()) { copyAsText() }
           .disabled(!showsDocument || editsNote || reader?.showOriginal == true || !hasSelection)
-          Button(CopyFormat.quote.title()) {
-            active.controller?.copyAsQuote()
-          }
+        Button(CopyFormat.quote.title()) { copyAsQuote() }
           .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
           .disabled(!hasQuotableSelection)
-        }
+      }
+      #if os(macOS)
         // The selection, in the color last used (#522): Books' shortcut, and grayed out
         // where Copy as Quote is, for the same reasons.
         Button("Highlight") {
@@ -195,24 +268,25 @@ struct DocumentCommands: Commands {
         #endif
       }
     }
-    #if os(macOS)
-      // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
-      CommandGroup(replacing: .importExport) {
-        Button("Export…") { active.controller?.output.exportDocument() }
-          .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
-          .disabled(!offersPrintAndExport)
-        // Chosen here, not in the save panel, which cannot rename the file (#386).
-        Button("Export Current Section…") {
-          active.controller?.output.exportCurrentSection()
-        }
+    // File > Export… (#376), where a Mac app keeps it: after Save, before Print. On
+    // the iPad too, choosing the format before Save to Files (#764).
+    CommandGroup(replacing: .importExport) {
+      Button("Export…") { exportDocument() }
+        .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
+        .disabled(!offersPrintAndExport)
+      // Chosen here, not in the save panel, which cannot rename the file (#386).
+      Button("Export Current Section…") { exportCurrentSection() }
         .disabled(!offersPrintAndExport || reader?.exportableSection == nil)
+      #if os(macOS)
         // The document as an EPUB, opened with Books, which imports it (#408).
         Button("Send to Books") { active.controller?.output.sendToBooks() }
           .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }
           .disabled(!showsRFC)
-      }
+      #endif
+    }
+    #if os(macOS)
       // The document's own actions, the toolbar's Cite and More menus rendered from
       // the same sections, so the two cannot drift (#761): with the toolbar hidden or
       // in full screen they were nowhere else. One menu, as the toolbar keeps them
@@ -244,17 +318,20 @@ struct DocumentCommands: Commands {
         }
         .disabled(!showsDocument)
       }
-      // File > Page Setup… and Print…, which a SwiftUI app has only for a document
-      // scene (#375). Print is disabled unless a document is on screen.
-      CommandGroup(replacing: .printItem) {
+    #endif
+    // File > Page Setup… and Print…, which a SwiftUI app has only for a document
+    // scene (#375). Print is disabled unless a document is on screen. The iPad's
+    // print sheet chooses the paper itself, so it has no Page Setup (#764).
+    CommandGroup(replacing: .printItem) {
+      #if os(macOS)
         Button("Page Setup…") { active.controller?.output.runPageSetup() }
           .keyboardShortcut(ReaderShortcut.pageSetup.keyboardShortcut)
           .disabled(active.controller == nil)
-        Button("Print…") { active.controller?.output.printDocument() }
-          .keyboardShortcut(ReaderShortcut.print.keyboardShortcut)
-          .disabled(!offersPrintAndExport)
-      }
-    #endif
+      #endif
+      Button("Print…") { printDocument() }
+        .keyboardShortcut(ReaderShortcut.print.keyboardShortcut)
+        .disabled(!offersPrintAndExport)
+    }
     CommandGroup(after: .toolbar) {
       // View > Bigger, Smaller and Actual Size (#153), the reader's own size on top
       // of the system's. A setting of the app's rather than the window's, as the
@@ -309,13 +386,18 @@ struct DocumentCommands: Commands {
           CompareItems(id: document, library: controller.library, reader: reader)
         }
       #else
-        // Next and Previous Section and Go to Section (#711), in the menu bar and the
-        // hold-⌘ overlay of an iPad's keyboard.
+        // View ▸ Reading Mode (#764), and Next and Previous Section and Go to
+        // Section (#711), in the menu bar and the hold-⌘ overlay of an iPad's
+        // keyboard, with Expand and Collapse Section in the outline, as the Mac's
+        // View menu has them.
         if let reader {
           Section {
+            ReadingModePicker(reader: reader)
             SectionSteps(reader: reader)
+            OutlineSectionItems(reader: reader)
           }
-          .disabled(navigation?.selection == nil || !reader.hasDocument)
+          // A draft's too, as on the Mac (#728).
+          .disabled(!showsDocument)
         }
       #endif
     }
@@ -337,23 +419,17 @@ struct DocumentCommands: Commands {
         .disabled(active.controller == nil)
       #endif
       Section {
-        #if os(macOS)
-          // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
-          // which every tabbed Mac app gives to reopening the last closed tab
-          // (#157).
-          Button(paneTitle(.navigation)) { active.controller?.press(.navigation) }
-            .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
-            // As the toolbar's button is: on whatever the index describes, a
-            // document still loading or one that failed to included (#325), and
-            // nothing else, where the panel is an empty strip. Not `showsDocument`,
-            // which also needs a selection: the chord has to be able to close a
-            // panel that is still open.
-            .disabled(reader?.canDescribe != true)
-          // ⌘I, Get Info in Finder and Preview.
-          Button(paneTitle(.info)) { active.controller?.press(.info) }
-            .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
-            .disabled(reader?.canDescribe != true)
-        #endif
+        // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
+        // which every tabbed Mac app gives to reopening the last closed tab
+        // (#157). On the iPad too, where the bottom bar's buttons had it, and lost
+        // it with the bar while reading on (#764).
+        Button(paneTitle(.navigation)) { press(.navigation) }
+          .keyboardShortcut(ReaderShortcut.contents.keyboardShortcut)
+          .disabled(!offersPane(.navigation))
+        // ⌘I, Get Info in Finder and Preview.
+        Button(paneTitle(.info)) { press(.info) }
+          .keyboardShortcut(ReaderShortcut.info.keyboardShortcut)
+          .disabled(!offersPane(.info))
         // On the Mac ⌘[ and ⌘], as Safari's and Finder's menus list them (#761). Not
         // the arrows: AppKit gives a menu item its key before a text field, and ⌘←
         // and ⌘→ are a field's line start and end. The reader window answers them
@@ -418,6 +494,12 @@ struct DocumentCommands: Commands {
             .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
         }
         .disabled(navigation?.shownDocument == nil || reader?.offersFind != true)
+        // ⌥⌘F, as on the Mac (#764).
+        Section {
+          Button("Search Library") { searchLibrary?() }
+            .keyboardShortcut(ReaderShortcut.searchLibrary.keyboardShortcut)
+            .disabled(searchLibrary == nil)
+        }
       }
     #endif
   }

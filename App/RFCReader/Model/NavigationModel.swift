@@ -108,6 +108,9 @@ final class NavigationModel: Identifiable {
     return options
   }
   var isShowingGoToSheet = false
+  /// Whether the iOS sidebar's search field is active: Search Library (⌥⌘F) asks for
+  /// it from the menu bar (#764). The Mac's field is AppKit's, focused by its window.
+  var isSearchPresented = false
   /// The collection sheet on show, if any: creating one — perhaps to add a document
   /// to — or editing one (#349). On the model rather than a view's state so the
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for

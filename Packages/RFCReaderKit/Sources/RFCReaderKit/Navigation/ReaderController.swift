@@ -125,8 +125,8 @@ public final class ReaderController {
 
   /// The section the reader is in: the contents' highlight.
   public private(set) var section: String?
-  /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
-  /// without one, as Copy is (#186). Reported on macOS only.
+  /// Whether the reader's text has a selection: Edit ▸ Copy As is grayed out without
+  /// one, as Copy is (#186), in the Mac's menu bar and the iPad's (#764).
   public private(set) var hasSelection = false
   /// Whether reading on has put the bars away, on iPhone; see `ReaderChrome`.
   public private(set) var barsHidden = false

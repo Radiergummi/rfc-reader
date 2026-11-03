@@ -85,7 +85,9 @@ struct SidebarView: View {
       // shows; this one searches the library (#345). Both bind the one text.
       // Just "Search…": the syntax is taught by the filters an empty field suggests
       // (#781).
-      .filterSearchable(navigation: navigation, prompt: String(localized: "Search…"))
+      .filterSearchable(
+        navigation: navigation, prompt: String(localized: "Search…"), searchesLibrary: true
+      )
       .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {

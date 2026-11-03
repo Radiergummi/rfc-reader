@@ -997,6 +997,9 @@ struct DocumentView: View {
     // Where its build placed the highlights, which reinstating cleared too (#522).
     writer.highlightStatuses = controller.highlightStatuses
     writer.notePlacement = controller.notePlacement
+    // Whether its text has a selection, for Copy As (#764): the controller reports
+    // only a change, and the text kept its selection while it was under the top.
+    writer.hasSelection = controller.hasSelection
     updateFolding()
   }
 

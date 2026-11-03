@@ -2,9 +2,9 @@ import RFCReaderKit
 import SwiftUI
 import TipKit
 
-/// The Reading Mode menu (#698): View > Reading Mode on the Mac, and in the reader's
-/// More menu on iOS. The Mac's More menu has it too, as AppKit items
-/// (`ReaderToolbar`), both through `ReaderState.choose(_:)`.
+/// The Reading Mode menu (#698): View > Reading Mode on the Mac and in an iPad's menu
+/// bar (#764), and in the reader's More menu on iOS. The Mac's More menu has it too,
+/// as AppKit items (`ReaderToolbar`), all through `ReaderState.choose(_:)`.
 struct ReadingModePicker: View {
   let reader: ReaderState
 

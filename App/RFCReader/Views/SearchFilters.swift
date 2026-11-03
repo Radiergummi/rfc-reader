@@ -65,8 +65,14 @@ import SwiftUI
   extension View {
     /// A search field over the one search text whose finished filters are tokens
     /// and whose qualifiers are completed as they are typed (#21).
-    func filterSearchable(navigation: NavigationModel, prompt: String) -> some View {
-      modifier(FilterSearchable(navigation: navigation, prompt: prompt))
+    /// - Parameter searchesLibrary: whether this is the field Search Library (⌥⌘F)
+    ///   activates, through `NavigationModel.isSearchPresented` (#764): the
+    ///   sidebar's, not the list's, which narrows the list.
+    func filterSearchable(
+      navigation: NavigationModel, prompt: String, searchesLibrary: Bool = false
+    ) -> some View {
+      modifier(
+        FilterSearchable(navigation: navigation, prompt: prompt, searchesLibrary: searchesLibrary))
     }
   }
 
@@ -80,10 +86,18 @@ import SwiftUI
     @Environment(LibraryModel.self) private var library
     let navigation: NavigationModel
     let prompt: String
+    let searchesLibrary: Bool
+    /// Whether the field is active, for a field Search Library does not activate.
+    @State private var isPresentedHere = false
+
+    private var isPresented: Binding<Bool> {
+      searchesLibrary ? Bindable(navigation).isSearchPresented : $isPresentedHere
+    }
 
     func body(content: Content) -> some View {
       content
-        .searchable(text: text, tokens: tokens, prompt: prompt) { token in
+        .searchable(text: text, tokens: tokens, isPresented: isPresented, prompt: prompt) {
+          token in
           Text(verbatim: token.label)
         }
         .searchSuggestions {

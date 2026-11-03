@@ -149,14 +149,14 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .backArrow: mac ? Chord(.leftArrow) : nil
     case .forwardArrow: mac ? Chord(.rightArrow) : nil
     case .bookmark: Chord("d")
-    case .newCollection: mac ? Chord("n", [.command, .shift]) : nil
-    case .copyAsQuote: mac ? Chord("c", [.command, .option, .shift]) : nil
+    case .newCollection: Chord("n", [.command, .shift])
+    case .copyAsQuote: Chord("c", [.command, .option, .shift])
     case .highlight: mac ? Chord("h", [.command, .control]) : nil
     // Edit ▸ Copy Citation (#712), on an iPad's keyboard too.
     case .copyCitation: Chord("c", [.command, .shift])
-    case .export: mac ? Chord("e", [.command, .shift]) : nil
+    case .export: Chord("e", [.command, .shift])
     case .pageSetup: mac ? Chord("p", [.command, .shift]) : nil
-    case .print: mac ? Chord("p") : nil
+    case .print: Chord("p")
     case .bigger: Chord("+")
     case .biggerAlternate: Chord("=")
     case .smaller: Chord("-")
@@ -177,7 +177,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .useSelectionForFind: mac ? Chord("e") : nil
     case .jumpToSelection: mac ? Chord("j") : nil
     // ⌥⌘F, the chord Mail and Notes give their search field.
-    case .searchLibrary: mac ? Chord("f", [.command, .option]) : nil
+    case .searchLibrary: Chord("f", [.command, .option])
     case .newWindow: mac ? Chord("n") : nil
     case .newTab: mac ? Chord("t") : nil
     case .help: Chord("?")

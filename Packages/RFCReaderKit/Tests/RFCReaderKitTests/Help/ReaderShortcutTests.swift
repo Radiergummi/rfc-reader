@@ -52,11 +52,11 @@ struct ReaderShortcutTests {
   }
 
   /// The iPad's Back is the arrow, and the Mac's menu-only commands are not listed
-  /// there.
+  /// there: Page Setup is the print sheet's on iOS.
   @Test func `the iPad lists what it answers`() {
     let documents = ReaderShortcut.rows(in: .documents, on: .iOS, locale: .english)
     #expect(documents.first { $0.title == "Back" }?.chords.map(\.symbols) == ["⌘←"])
-    #expect(!documents.contains { $0.title == "Print" })
+    #expect(!documents.contains { $0.title == "Page Setup" })
     #expect(
       ReaderShortcut.rows(in: .windows, on: .iOS, locale: .english).map(\.title) == [
         "RFC Reader Help"
@@ -72,6 +72,18 @@ struct ReaderShortcutTests {
       #expect(view.first { $0.title == "Previous Section" }?.chords.map(\.symbols) == ["⌥⌘↑"])
       #expect(view.first { $0.title == "Go to Section" }?.chords.map(\.symbols) == ["⌥⌘G"])
     }
+  }
+
+  /// The Mac's document commands, on an iPad's keyboard with the Mac's chords
+  /// (#764).
+  @Test(arguments: [
+    ReaderShortcut.searchLibrary, .export, .print, .copyAsQuote, .newCollection,
+  ])
+  func `the iPad answers the Mac's document commands with its chords`(
+    shortcut: ReaderShortcut
+  ) {
+    #expect(shortcut.chord(on: .iOS) != nil)
+    #expect(shortcut.chord(on: .iOS) == shortcut.chord(on: .mac))
   }
 
   /// Edit ▸ Copy Citation (#712), which an iPad's keyboard reaches too.

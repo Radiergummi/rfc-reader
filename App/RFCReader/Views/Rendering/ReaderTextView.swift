@@ -164,14 +164,16 @@ import RFCReaderKit
       set { super.accessibilityCustomActions = newValue }
     }
 
-    /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
-    func copyAsQuote() {
+    /// Copy as Quote, offered in the edit menu beside Copy (`RFCTextViewCoordinator`),
+    /// and Edit ▸ Copy As ▸ Quote sent to the first responder (#764).
+    @objc func copyAsQuote() {
       guard let quote = quoteSelection(selectedRange) else { return }
       Clipboard.write(.quote(quote), announcing: .quote)
     }
 
-    /// Copy as Text, offered in the edit menu where Copy copies a quote (#712).
-    func copyAsText() {
+    /// Copy as Text, offered in the edit menu where Copy copies a quote (#712), and
+    /// Edit ▸ Copy As ▸ Text sent to the first responder (#764).
+    @objc func copyAsText() {
       copyText(nil)
     }
 
