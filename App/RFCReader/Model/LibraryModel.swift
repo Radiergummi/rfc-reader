@@ -1831,6 +1831,21 @@ final class LibraryModel {
     userData.recentlyRead()
   }
 
+  /// `UserDataMirror.recordOpening`.
+  func recordOpening(_ document: ReadableDocument) throws {
+    try userData.recordOpening(document)
+  }
+
+  /// `UserDataMirror.saveReadingPlace`.
+  func saveReadingPlace(_ place: ReadingPlace, for document: ReadableDocument) throws {
+    try userData.saveReadingPlace(place, for: document)
+  }
+
+  /// `UserDataMirror.readingPosition`.
+  func readingPosition(for document: ReadableDocument) throws -> ReadingPosition? {
+    try userData.readingPosition(for: document)
+  }
+
   // MARK: - Reading paths (#189)
 
   enum ReadingPathResult {
