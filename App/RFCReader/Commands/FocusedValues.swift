@@ -24,6 +24,10 @@ import SwiftUI
     typealias Value = () -> Void
   }
 
+  struct ShowSidebarActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+  }
+
   struct ExportDocumentActionKey: FocusedValueKey {
     typealias Value = (_ section: String?) -> Void
   }
@@ -63,6 +67,14 @@ import SwiftUI
     var searchLibraryAction: SearchLibraryActionKey.Value? {
       get { self[SearchLibraryActionKey.self] }
       set { self[SearchLibraryActionKey.self] = newValue }
+    }
+
+    /// Shows the sidebar beside the other columns (#1063), as New Collection… and
+    /// Save as Collection… do first; nil in a single column, where it is where Back
+    /// leads.
+    var showSidebarAction: ShowSidebarActionKey.Value? {
+      get { self[ShowSidebarActionKey.self] }
+      set { self[ShowSidebarActionKey.self] = newValue }
     }
 
     /// File ▸ Export… and Export Current Section… (#764): the formats offered, then
