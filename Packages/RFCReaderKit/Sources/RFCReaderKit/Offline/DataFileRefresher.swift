@@ -120,6 +120,8 @@ public final class DataFileRefresher {
       }
       try await store.storeRevisions(fetched.data)
     } catch {
+      // A refresh replaced by the bookmark refresh's is canceled on purpose.
+      guard !Self.isCancellation(error) else { return }
       dataFileLog.error(
         "refreshing revisions failed: \(String(describing: error), privacy: .public)")
     }
@@ -160,6 +162,10 @@ public final class DataFileRefresher {
     -> RFCEditorClient
   {
     fetch == .anyNetwork || onExpensiveNetworks ? client : clientOnCheapNetworks
+  }
+
+  private static func isCancellation(_ error: any Error) -> Bool {
+    error is CancellationError || (error as? URLError)?.code == .cancelled
   }
 
   // MARK: - Errata
@@ -235,8 +241,7 @@ public final class DataFileRefresher {
   /// (#769, #579).
   public func refreshRegistriesIfDue() {
     guard let checked = registriesCheckedAt else {
-      // Immediate, so the check is marked before an intent asking meanwhile looks.
-      Task.immediate(name: "Load registries") { await refreshRegistries() }
+      loadRegistriesUnlessChecked()
       return
     }
     guard RegistryRefresh.isDue(checkedAt: checked, now: now()) else { return }

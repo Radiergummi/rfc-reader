@@ -844,7 +844,8 @@ final class LibraryModel {
   /// neither expensive nor constrained (#314), which on a phone network can outlast
   /// iOS's background task. Due revisions are fetched on any network, for the same
   /// reason (#758). Canceling this, as iOS does when that task expires,
-  /// cancels the check, or the person's refresh it joined.
+  /// cancels the check, or the person's refresh it joined, but not the revisions'
+  /// fetch, which runs on as a launch's does.
   func refreshForBookmarks() async {
     await bootstrap()
     await indexLoaded.wait()

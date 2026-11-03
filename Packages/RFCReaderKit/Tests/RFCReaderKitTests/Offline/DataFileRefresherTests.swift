@@ -18,6 +18,18 @@ struct DataFileRefresherTests {
     generatedAt: Date(timeIntervalSince1970: 2_000), revisions: [:])
   nonisolated private static let groups = WorkingGroups(
     generatedAt: Date(timeIntervalSince1970: 1_000), groups: [])
+  /// A registry in the shape IANA serves, with one record.
+  nonisolated private static let statusCodes = """
+    <?xml version='1.0' encoding='UTF-8'?>
+    <registry xmlns="http://www.iana.org/assignments" id="http-status-codes">
+      <registry id="http-status-codes-1">
+        <record>
+          <value>425</value>
+          <description>Too Early</description>
+        </record>
+      </registry>
+    </registry>
+    """
 
   /// Answers `revisions.json` and `groups.json` with `revisions` and `groups`, and
   /// everything else with a `404`; counts the requests for each file. Holds a request
@@ -58,11 +70,14 @@ struct DataFileRefresherTests {
         switch file {
         case "revisions.json": try revisions.encoded()
         case "groups.json": try DataFileRefresherTests.groups.encoded()
+        case "http-status-codes.xml": Data(DataFileRefresherTests.statusCodes.utf8)
         default: nil
         }
       let response = HTTPURLResponse(
         url: request.url!, statusCode: body == nil ? 404 : 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+        headerFields: [
+          "Content-Type": file.hasSuffix(".xml") ? "application/xml" : "application/json"
+        ])!
       return (body ?? Data(), response)
     }
   }
@@ -151,7 +166,7 @@ struct DataFileRefresherTests {
     let refresher = refresher(
       any: Transport(), cheap: Transport(revisions: Self.newerRevisions), now: { nextDay })
     var reported: [RFCRevisions?] = []
-    refresher.onRevisionsChanged = { reported.append(refresher.revisions) }
+    refresher.onRevisionsChanged = { [weak refresher] in reported.append(refresher?.revisions) }
     await refresher.refreshRevisions()
     #expect(reported == [Self.revisions, Self.newerRevisions])
   }
@@ -201,5 +216,33 @@ struct DataFileRefresherTests {
     #expect(refresher.revisions == Self.newerRevisions)
     #expect(any.requests(for: "revisions.json") == 1)
     await waiting.value
+  }
+
+  // MARK: - Registries
+
+  /// The first fetch of a registry takes any network, and an intent waits for it;
+  /// one that fails leaves the others readable.
+  @Test func `registries never kept are fetched on any network for who waits`() async throws {
+    defer { sandbox.remove() }
+    let any = Transport()
+    let cheap = Transport()
+    let refresher = refresher(any: any, cheap: cheap)
+    let entries = await refresher.loadedRegistryEntries()
+    #expect(entries.map(\.value) == ["425"])
+    #expect(refresher.registryMatches(for: "425").map(\.value) == ["425"])
+    #expect(any.requests(for: "http-status-codes.xml") == 1)
+    #expect(cheap.requests(for: "http-status-codes.xml") == 0)
+  }
+
+  @Test func `registries kept within their age are read, not fetched`() async throws {
+    defer { sandbox.remove() }
+    try await sandbox.store().storeRegistry(Data(Self.statusCodes.utf8), for: .httpStatusCodes)
+    let any = Transport()
+    let cheap = Transport()
+    let refresher = refresher(any: any, cheap: cheap)
+    let entries = await refresher.loadedRegistryEntries()
+    #expect(entries.map(\.value) == ["425"])
+    #expect(any.requests(for: "http-status-codes.xml") == 0)
+    #expect(cheap.requests(for: "http-status-codes.xml") == 0)
   }
 }
