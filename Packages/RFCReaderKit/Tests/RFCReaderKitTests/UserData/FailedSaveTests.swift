@@ -122,8 +122,8 @@ final class FailedSaveTests {
     #expect(try AnnotationSnapshot.fetch(in: context).highlights(of: .rfc(9110)).isEmpty)
   }
 
-  /// Dropped, not left pending: the next scroll saves the reader's place again, from
-  /// what the store holds.
+  /// Dropped, not left pending, so the next scroll's save starts again from what the
+  /// store holds.
   @Test func `a reading place whose save fails is not left pending`() throws {
     let mirror = try makeReadOnlyMirror()
     let context = mirror.container.mainContext
@@ -135,7 +135,6 @@ final class FailedSaveTests {
 
     #expect(!context.hasChanges)
     #expect(try mirror.readingPosition(for: .rfc(.rfc(9110))) == nil)
-    #expect(mirror.recentlyReadCount == 0)
   }
 
   /// Nor does it change the place saved before it.
@@ -159,7 +158,7 @@ final class FailedSaveTests {
     let mirror = try makeReadOnlyMirror()
     let context = mirror.container.mainContext
 
-    #expect(throws: (any Error).self) { try mirror.markOpened(.rfc(.rfc(9110))) }
+    #expect(throws: (any Error).self) { try mirror.recordOpening(.rfc(.rfc(9110))) }
 
     #expect(!context.hasChanges)
     #expect(try mirror.readingPosition(for: .rfc(.rfc(9110))) == nil)

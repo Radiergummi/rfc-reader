@@ -220,7 +220,7 @@ struct DocumentView: View {
   private var metadata: RFCMetadata? { id.rfc.flatMap(library.metadata) }
 
   private var positions: ReadingPositionKeeper {
-    ReadingPositionKeeper(id: identity, userData: library.userData)
+    ReadingPositionKeeper(id: identity, library: library)
   }
 
   /// The document's verified and held errata, where the reader marks them (#387):

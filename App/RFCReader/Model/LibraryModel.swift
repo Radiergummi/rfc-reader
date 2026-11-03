@@ -120,9 +120,9 @@ final class LibraryModel {
     name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
-  /// The sets read from the user's data, and where a bookmark, a collection or a
-  /// reading position is changed (#595).
-  @ObservationIgnored let userData: UserDataMirror
+  /// The sets read from the user's data, and where a bookmark or a collection is
+  /// changed (#595).
+  @ObservationIgnored private let userData: UserDataMirror
 
   /// `UserDataMirror.bookmarkedDocuments`.
   var bookmarkedDocuments: Set<DocumentID> { userData.bookmarkedDocuments }
@@ -1829,6 +1829,21 @@ final class LibraryModel {
   /// `UserDataMirror.recentlyRead`.
   func recentlyRead() -> [DocumentID] {
     userData.recentlyRead()
+  }
+
+  /// `UserDataMirror.recordOpening`.
+  func recordOpening(_ document: ReadableDocument) throws {
+    try userData.recordOpening(document)
+  }
+
+  /// `UserDataMirror.saveReadingPlace`.
+  func saveReadingPlace(_ place: ReadingPlace, for document: ReadableDocument) throws {
+    try userData.saveReadingPlace(place, for: document)
+  }
+
+  /// `UserDataMirror.readingPosition`.
+  func readingPosition(for document: ReadableDocument) throws -> ReadingPosition? {
+    try userData.readingPosition(for: document)
   }
 
   // MARK: - Reading paths (#189)

@@ -12,11 +12,12 @@ import os
 struct ReadingPositionKeeper {
   /// An RFC, or a draft's revision (#728).
   let id: ReadableDocument
-  let userData: UserDataMirror
+  /// Where the place is read and saved: `UserDataMirror`, through the library.
+  let library: LibraryModel
 
   func markOpened() {
     do {
-      try userData.markOpened(id)
+      try library.recordOpening(id)
     } catch {
       readerLog.error(
         "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
@@ -31,7 +32,7 @@ struct ReadingPositionKeeper {
   func save(_ reader: ReaderController) {
     guard let anchor = reader.anchor else { return }
     do {
-      try userData.saveReadingPlace(
+      try library.saveReadingPlace(
         reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id)
     } catch {
       readerLog.error(
@@ -41,7 +42,7 @@ struct ReadingPositionKeeper {
 
   func stored() -> ReadingPosition? {
     do {
-      return try userData.readingPosition(for: id)
+      return try library.readingPosition(for: id)
     } catch {
       readerLog.error(
         "reading the position failed: \(String(describing: error), privacy: .public)")

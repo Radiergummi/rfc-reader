@@ -321,7 +321,7 @@ public final class UserDataMirror {
   /// Dates the document's reading position as it opens, listing it as read
   /// (`ReadingPositionStore.markOpened`), in a context of its own. A failure is thrown
   /// for the caller to log, and changes nothing.
-  public func markOpened(_ document: ReadableDocument) throws {
+  public func recordOpening(_ document: ReadableDocument) throws {
     try ReadingPositionStore.markOpened(document, in: changeContext())
   }
 

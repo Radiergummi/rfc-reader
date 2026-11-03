@@ -88,7 +88,7 @@ struct UserDataMirrorTests {
   }
 
   /// Saved in a context of its own, read back on the main one, which holds nothing
-  /// pending; a later save moves the place, and an opening dates it and leaves it.
+  /// pending; a later save moves the place, and an opening leaves it.
   @Test func `a reading place saved is read back and moved by the next`() throws {
     let mirror = try makeMirror(reporting: Reports())
     mirror.start()
@@ -98,7 +98,7 @@ struct UserDataMirrorTests {
     try mirror.saveReadingPlace(first, for: .rfc(.rfc(9110)))
     #expect(try mirror.readingPosition(for: .rfc(.rfc(9110)))?.place == first)
     try mirror.saveReadingPlace(second, for: .rfc(.rfc(9110)))
-    try mirror.markOpened(.rfc(.rfc(9110)))
+    try mirror.recordOpening(.rfc(.rfc(9110)))
 
     #expect(try mirror.readingPosition(for: .rfc(.rfc(9110)))?.place == second)
     #expect(!mirror.container.mainContext.hasChanges)
@@ -110,7 +110,7 @@ struct UserDataMirrorTests {
     let mirror = try makeMirror(reporting: Reports())
     mirror.start()
 
-    try mirror.markOpened(.rfc(.rfc(9110)))
+    try mirror.recordOpening(.rfc(.rfc(9110)))
 
     let position = try #require(try mirror.readingPosition(for: .rfc(.rfc(9110))))
     #expect(position.place == nil)
