@@ -76,7 +76,7 @@ struct ReaderShortcutTests {
 
   /// The Mac's document commands, on an iPad's keyboard with the Mac's chords
   /// (#764).
-  @Test(arguments: [ReaderShortcut.searchLibrary, .export, .print])
+  @Test(arguments: [ReaderShortcut.searchLibrary, .export, .print, .copyAsQuote])
   func `the iPad answers the Mac's document commands with its chords`(
     shortcut: ReaderShortcut
   ) {

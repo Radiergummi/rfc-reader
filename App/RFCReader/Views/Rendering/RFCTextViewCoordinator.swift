@@ -197,12 +197,13 @@ final class RFCTextViewCoordinator: NSObject {
   /// See `RFCTextView.onChoosePresentation`.
   var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
   /// Tells the controller whether anything is selected: whenever the selection
-  /// changes, and after an install, which may clear it without saying so. macOS only,
-  /// where Edit ▸ Copy as Quote observes it; on iOS the item is in the selection's own
-  /// edit menu (#186).
+  /// changes, and after an install, which may clear it without saying so. Edit ▸
+  /// Copy As observes it, in the Mac's menu bar and the iPad's (#186, #764).
   func reportSelection() {
-    #if !canImport(UIKit)
-      guard let textView else { return }
+    guard let textView else { return }
+    #if canImport(UIKit)
+      controller?.reportSelection(textView.selectedRange.length > 0)
+    #else
       controller?.reportSelection(textView.selectedRange().length > 0)
     #endif
   }
@@ -596,6 +597,10 @@ final class RFCTextViewCoordinator: NSObject {
         guard let self, self.referencePreviewHost === shown else { return }
         self.referencePreviewHost = nil
       }
+    }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+      reportSelection()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

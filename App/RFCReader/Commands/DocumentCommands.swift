@@ -23,18 +23,6 @@ struct DocumentCommands: Commands {
 
     private var navigation: NavigationModel? { active.controller?.navigation }
     private var reader: ReaderState? { active.controller?.reader }
-    /// A document is on screen, not just selected: a selection is also showing while
-    /// it loads and when it failed to, and `hasDocument` stays true after the
-    /// selection is cleared. An RFC or a draft (#728), whose text has Find, Reading
-    /// Mode, Focus and the Outline as an RFC's does.
-    private var showsDocument: Bool {
-      navigation?.shownDocument != nil && reader?.hasDocument == true
-    }
-    /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
-    /// (#728). The Document menu offers a draft its text's toggles.
-    private var showsRFC: Bool {
-      navigation?.selection != nil && reader?.hasDocument == true
-    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -48,14 +36,6 @@ struct DocumentCommands: Commands {
     private var hasFindableSelection: Bool {
       reader?.showOriginal == true || reader?.hasSelection == true
         || reader?.sideBySide?.reader.hasSelection == true
-    }
-
-    /// Whether Copy as Quote and Highlight have a selection of the RFC's own words: in
-    /// the reader's text or beside a compared document's, never the original text's
-    /// or a translation's.
-    private var hasQuotableSelection: Bool {
-      showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
-        && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
     }
 
     /// View ▸ Show or Hide Contents and Info: what the item will do (#761).
@@ -78,12 +58,8 @@ struct DocumentCommands: Commands {
     private func printDocument() { active.controller?.output.printDocument() }
 
     private func copyCitation() { active.controller?.copyCitation() }
-
-    /// Whether Copy As has a selection to copy: the reader's, or the one beside a
-    /// compared document's.
-    private var hasSelection: Bool {
-      reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true
-    }
+    private func copyAsText() { active.controller?.copyAsText() }
+    private func copyAsQuote() { active.controller?.copyAsQuote() }
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
@@ -135,6 +111,18 @@ struct DocumentCommands: Commands {
       navigation?.selection.flatMap(library.citedDocument)
     }
 
+    /// Edit ▸ Copy As (#764), sent to the first responder: the reader's text that
+    /// holds the selection, the one beside a compared document's included.
+    private func copyAsText() {
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyAsText), to: nil, from: nil, for: nil)
+    }
+
+    private func copyAsQuote() {
+      _ = UIApplication.shared.sendAction(
+        #selector(ReaderTextView.copyAsQuote), to: nil, from: nil, for: nil)
+    }
+
     /// Edit ▸ Copy Citation (#712): of the section the selection starts in, where the
     /// reader's text has the focus and a selection, as on the Mac, and otherwise of
     /// the section being read.
@@ -147,6 +135,33 @@ struct DocumentCommands: Commands {
         .perform(.copyPreferredCitation)
     }
   #endif
+
+  /// A document is on screen, not just selected: a selection is also showing while
+  /// it loads and when it failed to, and `hasDocument` stays true after the
+  /// selection is cleared. An RFC or a draft (#728), whose text has Find, Reading
+  /// Mode, Focus and the Outline as an RFC's does.
+  private var showsDocument: Bool {
+    navigation?.shownDocument != nil && reader?.hasDocument == true
+  }
+  /// An RFC on screen, what Share and Copy as Quote act on: a draft has neither
+  /// (#728). The Document menu offers a draft its text's toggles.
+  private var showsRFC: Bool {
+    navigation?.selection != nil && reader?.hasDocument == true
+  }
+
+  /// Whether Copy As has a selection to copy: the reader's, or the one beside a
+  /// compared document's.
+  private var hasSelection: Bool {
+    reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true
+  }
+
+  /// Whether Copy as Quote and Highlight have a selection of the RFC's own words: in
+  /// the reader's text or beside a compared document's, never the original text's
+  /// or a translation's.
+  private var hasQuotableSelection: Bool {
+    showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
+      && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
+  }
 
   /// A document on screen that Print and Export offer: not one read as its PDF or
   /// PostScript original (#207).
@@ -182,22 +197,19 @@ struct DocumentCommands: Commands {
     // on the iPad too, rather than the toolbar button's, so its title in the menu bar
     // and the hold-⌘ overlay can follow the action as the Mac's does (#278).
     CommandGroup(after: .pasteboard) {
-      #if os(macOS)
-        // Every format, whichever Copy copies (#712). Handed to the reader's text view
-        // (#186); see `ReaderWindowController.copyAsQuote()`. Grayed out without a
-        // selection, as Copy is; the original text is not the reader's, and has no
-        // quote to copy, and a translation's words are not the RFC's (#749).
-        Menu("Copy As") {
-          Button(CopyFormat.text.title()) {
-            active.controller?.copyAsText()
-          }
+      // Every format, whichever Copy copies (#712). Handed to the reader's text view
+      // (#186); see `ReaderWindowController.copyAsQuote()`. Grayed out without a
+      // selection, as Copy is; the original text is not the reader's, and has no
+      // quote to copy, and a translation's words are not the RFC's (#749). On the
+      // iPad too, with ⌥⇧⌘C (#764).
+      Menu("Copy As") {
+        Button(CopyFormat.text.title()) { copyAsText() }
           .disabled(!showsDocument || editsNote || reader?.showOriginal == true || !hasSelection)
-          Button(CopyFormat.quote.title()) {
-            active.controller?.copyAsQuote()
-          }
+        Button(CopyFormat.quote.title()) { copyAsQuote() }
           .keyboardShortcut(ReaderShortcut.copyAsQuote.keyboardShortcut)
           .disabled(!hasQuotableSelection)
-        }
+      }
+      #if os(macOS)
         // The selection, in the color last used (#522): Books' shortcut, and grayed out
         // where Copy as Quote is, for the same reasons.
         Button("Highlight") {
