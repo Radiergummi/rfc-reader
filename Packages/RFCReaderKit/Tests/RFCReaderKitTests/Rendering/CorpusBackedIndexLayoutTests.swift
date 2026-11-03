@@ -48,6 +48,22 @@ struct CorpusBackedIndexLayoutTests {
   }
 
   @Test(arguments: documents)
+  func `the position map accounts for every model character, the index's hidden`(stem: String)
+    throws
+  {
+    let built = DocumentTextBuilder.build(try CorpusXML.document(stem), style: ReadingStyle())
+    let map = built.positions
+    var accounted = [Bool](repeating: false, count: map.model.length)
+    for run in map.runs {
+      for offset in run.model..<run.model + run.length { accounted[offset] = true }
+    }
+    for range in map.hidden {
+      for offset in range { accounted[offset] = true }
+    }
+    #expect(accounted.filter { !$0 }.isEmpty, "\(stem)")
+  }
+
+  @Test(arguments: documents)
   func `no locator keeps prep's long label`(stem: String) throws {
     let built = DocumentTextBuilder.build(try CorpusXML.document(stem), style: ReadingStyle())
     let index = (built.text.string as NSString).substring(with: built.indexMap.range)

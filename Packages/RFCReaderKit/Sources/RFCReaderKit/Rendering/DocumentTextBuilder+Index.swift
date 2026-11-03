@@ -16,7 +16,13 @@ extension DocumentTextBuilder {
   ///
   /// A document has one index; a second would set the same way, and the map keeps
   /// the first.
+  ///
+  /// Its model text, the plain blocks (`ModelText`), is hidden, not shown: nothing in
+  /// the index takes a note or a highlight, and what follows it maps from past it.
   func appendIndex(_ index: IndexBlock, indent: CGFloat) {
+    var model = ModelText.Writer()
+    model.blocks(Self.plainBlocks(of: index))
+    skipModel(model.units.count)
     let start = output.length
     mark(IndexBlock.anchor)
     var groups: [IndexMap.Group] = []
@@ -56,6 +62,8 @@ extension DocumentTextBuilder {
     ].merging(Self.headingLevel(depth: 2)) { current, _ in current }
     var label = attributes
     label[.kern] = style.captionFont.pointSize * 0.08
+    // On a printed page, as a heading does, the letter stays with its first entry.
+    keepsWithNext.insert(output.length)
     append(group.label, label)
     append("\n", attributes)
   }

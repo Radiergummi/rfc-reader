@@ -146,6 +146,44 @@ struct BuilderIndexTests {
     #expect(built.indexMap.isEmpty)
   }
 
+  @Test func `a group's letter keeps with its first entry on a printed page`() {
+    let built = built()
+    for group in built.indexMap.groups {
+      #expect(built.keepsWithNext.contains(group.labelRange.location), "\(group.label)")
+    }
+  }
+
+  /// The index's model text is its plain blocks (`ModelText`), which the reader does
+  /// not show: hidden, so the position map accounts for every character of it, and
+  /// what follows the index maps to its own model text.
+  @Test func `the index's model text is hidden, and what follows it maps to its own`() throws {
+    let after = "Text after the index."
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.index(Self.index), .paragraph(Paragraph([.text(after)]))), style: style)
+    let map = built.positions
+    var accounted = [Bool](repeating: false, count: map.model.length)
+    for run in map.runs {
+      for offset in run.model..<run.model + run.length { accounted[offset] = true }
+    }
+    for range in map.hidden {
+      for offset in range { accounted[offset] = true }
+    }
+    #expect(accounted.allSatisfy { $0 })
+    let storage = try Fixtures.offset(of: after, in: built.text)
+    let model = try #require(
+      map.modelRange(forStorage: NSRange(location: storage, length: after.utf16.count)))
+    #expect(map.model.text(in: model) == after)
+  }
+
+  @Test func `nothing in the index takes a note, its letters included`() throws {
+    let built = built()
+    for group in built.indexMap.groups {
+      #expect(NoteBlock(at: group.labelRange.location, in: built) == nil, "\(group.label)")
+    }
+    let term = try Fixtures.offset(of: "cache", in: built.text)
+    #expect(NoteBlock(at: term, in: built) == nil)
+  }
+
   @Test func `a key folds case and diacritics`() {
     #expect(IndexMap.key("Échec") == "echec")
   }

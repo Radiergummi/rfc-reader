@@ -52,6 +52,15 @@ struct IndexRailTests {
     #expect(rail.group(at: 10) == nil)
   }
 
+  @Test func `no room makes no rail`() {
+    for available: CGFloat in [0, -20] {
+      let rail = IndexRail(labels: Self.letters, available: available)
+      #expect(rail.rows.isEmpty)
+      #expect(rail.height == 0)
+      #expect(rail.group(at: 0) == nil)
+    }
+  }
+
   @Test func `the rail sits in the trailing gutter, clear of what covers its edge`() {
     // A 1000-point view, a 712-point column: a 144-point gutter each side.
     #expect(IndexRail.centerX(viewWidth: 1000, column: 712, trailingObstruction: 0) == 928)

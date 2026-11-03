@@ -321,9 +321,9 @@ import RFCReaderKit
     /// takes its own keys.
     var handleKey: (ReaderKeys.Key) -> Bool = { _ in false }
 
-    /// An unmodified key goes to type-select first, Shift and Caps Lock aside, so over
-    /// an index a letter selects an entry rather than being a vim-style key; what it
-    /// does not take, a space with nothing typed, goes to the reader's keys.
+    /// An unmodified key goes to type-select first, Shift and Caps Lock aside; what it
+    /// does not take, a space with nothing typed, or every key while the vim-style keys
+    /// are on, goes to the reader's keys.
     override func keyDown(with event: NSEvent) {
       willHandleKey()
       let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)

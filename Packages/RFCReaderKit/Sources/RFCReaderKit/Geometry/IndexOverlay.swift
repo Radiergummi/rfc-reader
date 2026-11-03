@@ -78,7 +78,8 @@ public struct IndexRail: Equatable {
   /// The rail for `labels`, in at most `available` points of height.
   public init(labels: [String], available: CGFloat) {
     groupCount = labels.count
-    guard !labels.isEmpty else {
+    // No room, as in a pane too short for the margins, makes no rail either.
+    guard !labels.isEmpty, available > 0 else {
       rows = []
       height = 0
       return

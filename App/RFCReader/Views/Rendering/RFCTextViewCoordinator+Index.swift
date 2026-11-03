@@ -32,7 +32,14 @@ extension RFCTextViewCoordinator {
       else { return nil }
       return fragment.layoutFragmentFrame.minY - top
     }
-    let height = indexOverlay.stickyHeight(width: column)
+    // The pinned letter starts where the letters in the text do, the section number's
+    // hang in from the container (#433), and covers the rest of the container's width.
+    let labelIndent =
+      (built.text.attribute(
+        .paragraphStyle, at: map.groups[0].labelRange.location, effectiveRange: nil)
+      as? NSParagraphStyle)?.firstLineHeadIndent ?? 0
+    let stickyWidth = column + (laidOutReach ?? 0) - labelIndent
+    let height = indexOverlay.stickyHeight(width: stickyWidth)
     let offset = group.flatMap {
       StickyLetter.offset(
         currentLabelTop: labelTop($0), nextLabelTop: labelTop($0 + 1), height: height)
@@ -49,7 +56,8 @@ extension RFCTextViewCoordinator {
         in: textView,
         stickyFrame: offset.map {
           CGRect(
-            x: textView.textContainerInset.left, y: originY + $0, width: column, height: height)
+            x: textView.textContainerInset.left + labelIndent, y: originY + $0,
+            width: stickyWidth, height: height)
         },
         group: group, layout: rail,
         railFrame: CGRect(
@@ -71,8 +79,8 @@ extension RFCTextViewCoordinator {
         stickyFrame: offset.map {
           scrollView.convert(
             CGRect(
-              x: textView.textContainerOrigin.x, y: uncoveredTop + $0, width: column, height: height
-            ),
+              x: textView.textContainerOrigin.x + labelIndent, y: uncoveredTop + $0,
+              width: stickyWidth, height: height),
             from: textView)
         },
         group: group, layout: rail,
@@ -97,9 +105,11 @@ extension RFCTextViewCoordinator {
     return NSRange(location: start, length: max(end - start, 0))
   }
 
-  /// Puts a group's letter at the top, from the rail.
+  /// Puts a group's letter at the top, from the rail. In a side-by-side reading, this
+  /// side leads, as it does for a key (#187).
   func jumpToIndexGroup(_ group: Int) {
     guard let built, built.indexMap.groups.indices.contains(group) else { return }
+    takeLead()
     let offset = built.indexMap.groups[group].labelRange.location
     if !show(offset) {
       engine.jump(toOffset: offset)
@@ -111,17 +121,22 @@ extension RFCTextViewCoordinator {
 extension RFCTextViewCoordinator {
   /// Characters typed to the reader while its index shows: the entry they select is
   /// scrolled into view and flashed. Answers whether they were type-select's; when
-  /// not, the key does what it did before (a space pages).
+  /// not, the key does what it did before (a space pages). Off while the vim-style
+  /// keys are on, whose letters keep their meaning over an index too (#711).
   func typeSelect(_ characters: String, at time: TimeInterval) -> Bool {
-    guard commitsOnClick == nil, indexOverlay.isShowing, let built, let textView else {
+    guard commitsOnClick == nil, indexOverlay.isShowing, let built, let textView,
+      !ReaderSettings(defaults: .standard).keys.vimKeys
+    else {
       return false
     }
     guard indexOverlay.typeSelect.type(characters, at: time) else { return false }
     guard let entry = indexOverlay.typeSelect.match(in: indexOverlay.keys) else { return true }
     let range = built.indexMap.entries[entry].termRange
     // Not `scrollRangeToVisible`, whose least scroll up puts the term at the top,
-    // under the group's pinned letter.
-    engine.bringIntoView(range.location)
+    // under the group's pinned letter. Into folded text, the section opens first.
+    if !show(range.location) {
+      engine.bringIntoView(range.location)
+    }
     reportVisibleAnchor()
     #if canImport(UIKit)
       flash(range, in: textView)

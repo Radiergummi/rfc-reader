@@ -45,6 +45,7 @@ final class IndexOverlayController {
       return label
     }
     rail?.labels = labels
+    rail?.currentGroup = nil
     rail?.onSelect = onSelect
     measured = nil
     hide()
