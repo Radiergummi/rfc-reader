@@ -329,11 +329,15 @@ struct DocumentCommands: Commands {
           CompareItems(id: document, library: controller.library, reader: reader)
         }
       #else
-        // Next and Previous Section and Go to Section (#711), in the menu bar and the
-        // hold-⌘ overlay of an iPad's keyboard.
+        // View ▸ Reading Mode (#764), and Next and Previous Section and Go to
+        // Section (#711), in the menu bar and the hold-⌘ overlay of an iPad's
+        // keyboard, with Expand and Collapse Section in the outline, as the Mac's
+        // View menu has them.
         if let reader {
           Section {
+            ReadingModePicker(reader: reader)
             SectionSteps(reader: reader)
+            OutlineSectionItems(reader: reader)
           }
           .disabled(navigation?.selection == nil || !reader.hasDocument)
         }
