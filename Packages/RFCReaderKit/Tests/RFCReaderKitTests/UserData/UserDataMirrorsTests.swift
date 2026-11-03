@@ -132,7 +132,7 @@ struct UserDataMirrorsTests {
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
     let saves = try recordingSaves(of: context) {
-      try CollectionStore.add(.rfc(9000), to: id, in: context)
+      try CollectionStore.add([.rfc(9000)], to: id, in: context)
     }
     #expect(!saves.isEmpty)
     #expect(saves.allSatisfy { UserDataMirrors.changed(byEntities: $0) == .collections })
