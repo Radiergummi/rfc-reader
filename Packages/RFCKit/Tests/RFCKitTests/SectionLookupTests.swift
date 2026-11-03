@@ -21,6 +21,20 @@ struct SectionLookupTests {
     #expect(SectionIdentifier("RFC 9110#section-1") == nil)
   }
 
+  /// A section chosen in Spotlight comes back as its identifier, and opens as the
+  /// link to it would (#178): by number where its anchor spells one.
+  @Test func `an identifier opens its section by number, or else by anchor`() {
+    #expect(
+      RFCLink(SectionIdentifier(document: .rfc(9110), anchor: "section-10.2.3"))
+        == RFCLink(id: .rfc(9110), section: "10.2.3"))
+    #expect(
+      RFCLink(SectionIdentifier(document: .rfc(9110), anchor: "appendix-A"))
+        == RFCLink(id: .rfc(9110), section: "A"))
+    #expect(
+      RFCLink(SectionIdentifier(document: .rfc(9110), anchor: "acknowledgements"))
+        == RFCLink(id: .rfc(9110), anchor: "acknowledgements"))
+  }
+
   @Test func `a number in any spelling names its section`() throws {
     let document = try Fixtures.document("rfc8999.xml")
     for spelling in [

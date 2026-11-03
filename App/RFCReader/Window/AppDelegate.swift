@@ -158,13 +158,14 @@
       }
     }
 
-    /// An RFC chosen in Spotlight (#178), routed the way a link from outside is.
+    /// An RFC or a section chosen in Spotlight (#178), routed the way a link from
+    /// outside is.
     func application(
       _ application: NSApplication, continue userActivity: NSUserActivity,
       restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
     ) -> Bool {
-      guard let id = SpotlightEntry.documentID(from: userActivity) else { return false }
-      LibraryModel.shared.route(RFCLink(id: id))
+      guard let link = SpotlightEntry.link(from: userActivity) else { return false }
+      LibraryModel.shared.route(link)
       return true
     }
 

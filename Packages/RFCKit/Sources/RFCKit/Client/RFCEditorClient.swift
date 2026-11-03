@@ -449,6 +449,7 @@ public struct RFCEditorClient: Sendable {
   ///
   /// `onExpensiveNetworks` false is a refresh of a registry already kept, which
   /// nobody is waiting for, as with `fetchIndexData(unlessMatching:onExpensiveNetworks:)`.
+  @concurrent
   public func fetchRegistry(_ registry: IANARegistry, onExpensiveNetworks: Bool) async throws -> (
     entries: [RegistryEntry], data: Data
   ) {

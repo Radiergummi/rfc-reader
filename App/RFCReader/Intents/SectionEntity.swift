@@ -38,6 +38,18 @@ struct SectionEntity: AppEntity {
     documentName = document.displayName
   }
 
+  /// A section as Spotlight indexes it (#178), from the full-text index rather than
+  /// a loaded document, titled and linked as the query's entity for it is.
+  init(_ entry: SpotlightSection) {
+    id = entry.identifier.description
+    document = entry.identifier.document
+    anchor = entry.identifier.anchor
+    link = RFCLink(entry.identifier)
+    number = entry.number
+    title = entry.displayTitle
+    documentName = document.displayName
+  }
+
   var displayRepresentation: DisplayRepresentation {
     // Data, not language: no key for the catalog.
     DisplayRepresentation(
