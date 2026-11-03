@@ -507,6 +507,10 @@ struct ReferencesView: View {
   /// The revealed entry, marked for a moment so the eye finds it in the list. The
   /// reveal rather than its anchor, so revealing the same entry again marks it anew.
   @State private var highlighted: ReaderState.RevealedReference?
+  #if canImport(UIKit)
+    /// The window, which a row's long-press preview is measured against.
+    @State private var windowSize = WindowSizeReader()
+  #endif
 
   var body: some View {
     if groups.isEmpty {
@@ -519,15 +523,20 @@ struct ReferencesView: View {
               ForEach(group.entries) { entry in
                 // Identified by its anchor already (`Reference.id`), which is
                 // what the reveal scrolls to.
-                ReferenceRow(entry: entry, open: open, menu: menu)
-                  .listRowBackground(
-                    highlighted?.anchor == entry.anchor
-                      ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
+                ReferenceRow(
+                  entry: entry, open: open, menu: menu, previewSize: previewSize
+                )
+                .listRowBackground(
+                  highlighted?.anchor == entry.anchor
+                    ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
               }
             }
           }
         }
         .listStyle(.sidebar)
+        #if canImport(UIKit)
+          .reading(windowSize)
+        #endif
         // A sidebar list is announced as "Sidebar", which is the window's own (#300).
         .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
@@ -544,6 +553,32 @@ struct ReferencesView: View {
       }
     }
   }
+
+  /// A row's document preview, at the press: a context menu's on iOS, fitted to the
+  /// window as the reader's are, and the popover's full size on the Mac.
+  private func previewSize() -> CGSize {
+    #if canImport(UIKit)
+      if let size = windowSize.size { return LinkPreview.documentSize(fitting: size) }
+    #endif
+    return LinkPreview.documentSize
+  }
+}
+
+/// A References panel row's preview of its RFC (#580). A view of its own, so that what
+/// it resolves and the size it asks for are worked out when the preview shows, at the
+/// press: iOS's context menu builds its preview's view with the row, before the row
+/// is in a window to be measured against.
+private struct ReferenceRowPreview: View {
+  let entry: Reference
+  let library: LibraryModel
+  let size: () -> CGSize
+  let commit: () -> Void
+
+  var body: some View {
+    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.index) {
+      DocumentPreview(library: library, id: id, place: place, size: size(), commit: commit)
+    }
+  }
 }
 
 /// One entry, as a row rather than the four stacked indented paragraphs the body
@@ -551,8 +586,23 @@ struct ReferencesView: View {
 struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
-  /// What the row offers on a right click or a long press; nil for none.
+  /// What the row offers on a right click or a long press, and the preview of its
+  /// RFC on a long press or a force click; nil for neither.
   let menu: ReferenceMenu?
+  /// The size of that preview of the RFC, asked at the press.
+  var previewSize: () -> CGSize = { LinkPreview.documentSize }
+
+  #if os(macOS)
+    /// Whether a click pressed through to the preview, so its release does not open
+    /// the RFC as well (`ForceClickReader`).
+    @State private var forceClick = ForceClickTracker()
+    @State private var isPreviewing = false
+  #else
+    /// Handed to the preview, which UIKit hosts outside this environment, as the
+    /// prose's is: a lookup in it would trap.
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
+  #endif
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -560,16 +610,47 @@ struct ReferenceRow: View {
       // not announce the row as one and Full Keyboard Access could not press it
       // (#156). An entry that names no RFC opens nothing and stays plain text.
       if let id = entry.documentID {
-        Button {
+        let button = Button {
+          #if os(macOS)
+            // Not the release of the click that pressed through to the preview.
+            guard forceClick.opensOnRelease() else { return }
+          #endif
           open(id)
         } label: {
           entryDescription.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
-          if let menu {
-            menu.items(for: id)
-          }
+        if let menu {
+          #if os(macOS)
+            button
+              .contextMenu { menu.items(for: id) }
+              .background(
+                ForceClickReader(tracker: forceClick, report: { isPreviewing = true })
+              )
+              .popover(isPresented: $isPreviewing, arrowEdge: .leading) {
+                // A click in it opens what the row does, as the prose's opens what
+                // its reference does.
+                documentPreview(library: menu.library) {
+                  isPreviewing = false
+                  open(id)
+                }
+              }
+          #else
+            // UIKit's tap on a SwiftUI menu's preview closes it and commits nothing:
+            // the row's own tap opens the RFC.
+            button.contextMenu {
+              menu.items(for: id)
+            } preview: {
+              // Opaque, as the reader's own previews are: the preview has no
+              // background of its own, the Mac's popover supplying one.
+              documentPreview(library: menu.library) {}
+                .background(Color(uiColor: .systemBackground))
+                .readerEnvironment(
+                  ReaderEnvironment(library: menu.library, navigation: navigation, reader: reader))
+            }
+          #endif
+        } else {
+          button
         }
       } else {
         // Not a button, so the combined element needs a role of its own, or macOS
@@ -602,6 +683,13 @@ struct ReferenceRow: View {
       // than the denser macOS inspector gives them (#248).
       .padding(.vertical, 8)
     #endif
+  }
+
+  /// What a citation of the entry previews in the prose (#580): the RFC it names.
+  private func documentPreview(library: LibraryModel, commit: @escaping () -> Void)
+    -> some View
+  {
+    ReferenceRowPreview(entry: entry, library: library, size: previewSize, commit: commit)
   }
 
   private var entryDescription: some View {

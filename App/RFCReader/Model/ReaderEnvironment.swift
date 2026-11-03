@@ -11,7 +11,8 @@ import SwiftUI
 /// cannot be made without all of them. What the compiler cannot check is that a new
 /// hosting controller applies it at all; one that hosts a view reading any of these
 /// must, as every such host in `ReaderWindowController`, `ContentView`,
-/// `RFCTextView` and `RFCTextViewCoordinator` does.
+/// `RFCTextView` and `RFCTextViewCoordinator` does, and the preview of
+/// `DocumentInspector`'s `ReferenceRow`, which UIKit hosts.
 struct ReaderEnvironment {
   let library: LibraryModel
   /// The tab's own; see `NavigationModel`.
