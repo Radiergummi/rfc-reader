@@ -139,10 +139,10 @@ struct CollectionEditorSheet: View {
     library.editCollections { context in
       switch mode {
       case .create(let document):
-        let collection = try CollectionStore.create(named: name, color: color, in: context)
-        if let document {
-          try CollectionStore.add(document, to: collection.identifier, in: context)
-        }
+        // In one save: the context is thrown away when a save fails (#1002), and a
+        // second save failing would leave the collection made without the document.
+        try CollectionStore.create(
+          named: name, color: color, documents: document.map { [$0] } ?? [], in: context)
       case .save:
         try CollectionStore.create(named: name, color: color, query: query, in: context)
       case .edit(let identifier):
