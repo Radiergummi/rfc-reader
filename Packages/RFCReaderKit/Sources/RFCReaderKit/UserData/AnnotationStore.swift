@@ -291,11 +291,14 @@ public enum AnnotationStore {
       MainActor.assumeIsolated {
         do {
           // A highlight taken away takes its notes, made since, with it; the redo
-          // brings them back with it.
+          // brings them back with it. Every note deleted comes back as it was when
+          // deleted, not as `redo` saw it: it may have been edited since (#1050).
           let removed = try replace(after, with: before, in: context)
+          let removedNotes = Set(removed.map(\.identifier))
+          let notes = redo.notes.filter { !removedNotes.contains($0.identifier) } + removed
           registerUndo(
             replacing: before.identifiers,
-            with: Rows(highlights: redo.highlights, notes: redo.notes + removed), redo: before,
+            with: Rows(highlights: redo.highlights, notes: notes), redo: before,
             actionName: actionName,
             edit: Edit(context, undoManager: undoManager, onUndoFailure: onUndoFailure))
         } catch {
@@ -308,7 +311,8 @@ public enum AnnotationStore {
 
   /// Deletes the rows named `identifiers` that `rows` does not hold, and makes every
   /// row in `rows` as it says, inserting it where it is gone. A highlight deleted
-  /// takes the notes on it that `rows` does not hold; answers them, as they were.
+  /// takes the notes on it that `rows` does not hold. Answers every note deleted, as
+  /// it was.
   @discardableResult
   private static func replace(
     _ identifiers: Identifiers, with rows: Rows, in context: ModelContext
@@ -326,7 +330,9 @@ public enum AnnotationStore {
       context.delete(row)
     }
     for identifier in identifiers.notes where !keptNotes.contains(identifier) {
-      if let row = try note(identifier, in: context) { context.delete(row) }
+      guard let row = try note(identifier, in: context) else { continue }
+      removed.append(NoteValues(row))
+      context.delete(row)
     }
     for value in rows.highlights {
       if let row = try highlight(value.identifier, in: context) {
