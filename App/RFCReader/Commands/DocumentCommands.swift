@@ -88,6 +88,7 @@ struct DocumentCommands: Commands {
   #else
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
+    @FocusedValue(\.searchLibraryAction) private var searchLibrary
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
@@ -436,6 +437,12 @@ struct DocumentCommands: Commands {
             .keyboardShortcut(ReaderShortcut.findPrevious.keyboardShortcut)
         }
         .disabled(navigation?.shownDocument == nil || reader?.offersFind != true)
+        // ⌥⌘F, as on the Mac (#764).
+        Section {
+          Button("Search Library") { searchLibrary?() }
+            .keyboardShortcut(ReaderShortcut.searchLibrary.keyboardShortcut)
+            .disabled(searchLibrary == nil)
+        }
       }
     #endif
   }

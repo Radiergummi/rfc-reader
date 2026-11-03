@@ -83,7 +83,10 @@ import SwiftUI
 
     func body(content: Content) -> some View {
       content
-        .searchable(text: text, tokens: tokens, prompt: prompt) { token in
+        .searchable(
+          text: text, tokens: tokens, isPresented: Bindable(navigation).isSearchPresented,
+          prompt: prompt
+        ) { token in
           Text(verbatim: token.label)
         }
         .searchSuggestions {

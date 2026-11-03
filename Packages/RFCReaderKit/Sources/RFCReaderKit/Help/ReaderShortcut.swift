@@ -177,7 +177,7 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .useSelectionForFind: mac ? Chord("e") : nil
     case .jumpToSelection: mac ? Chord("j") : nil
     // ⌥⌘F, the chord Mail and Notes give their search field.
-    case .searchLibrary: mac ? Chord("f", [.command, .option]) : nil
+    case .searchLibrary: Chord("f", [.command, .option])
     case .newWindow: mac ? Chord("n") : nil
     case .newTab: mac ? Chord("t") : nil
     case .help: Chord("?")

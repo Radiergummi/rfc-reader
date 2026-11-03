@@ -74,6 +74,16 @@ struct ReaderShortcutTests {
     }
   }
 
+  /// The Mac's document commands, on an iPad's keyboard with the Mac's chords
+  /// (#764).
+  @Test(arguments: [ReaderShortcut.searchLibrary])
+  func `the iPad answers the Mac's document commands with its chords`(
+    shortcut: ReaderShortcut
+  ) {
+    #expect(shortcut.chord(on: .iOS) != nil)
+    #expect(shortcut.chord(on: .iOS) == shortcut.chord(on: .mac))
+  }
+
   /// Edit ▸ Copy Citation (#712), which an iPad's keyboard reaches too.
   @Test(arguments: ReaderShortcut.Platform.allCases)
   func `copy citation is shift command C on both platforms`(platform: ReaderShortcut.Platform) {

@@ -44,6 +44,20 @@ import TipKit
       navigation.shownDocument?.displayName ?? library.title(for: navigation.filter)
     }
 
+    /// Search Library (⌥⌘F, #764): the sidebar's field, as on the Mac, with the
+    /// sidebar shown first beside the other columns. In a single column only while
+    /// the sidebar is the one on screen: it cannot be brought back from here.
+    private var searchLibrary: (() -> Void)? {
+      guard
+        !chrome.isCollapsed
+          || (navigation.sidebarSelection == nil && navigation.shownDocument == nil)
+      else { return nil }
+      return {
+        columnVisibility = .all
+        navigation.isSearchPresented = true
+      }
+    }
+
     /// The scene's chrome, worked out here once and read by every view inside it
     /// that lays itself out by it (#257).
     private var chrome: SceneChrome {
@@ -215,6 +229,7 @@ import TipKit
       .focusedSceneValue(\.navigationModel, navigation)
       .focusedSceneValue(\.readerState, reader)
       .focusedSceneValue(\.showsInspector, $showsInspector)
+      .focusedSceneValue(\.searchLibraryAction, searchLibrary)
       // Outermost, and it has to be: an environment value reaches what is *inside*
       // the modifier that sets it, and a presentation is the content of the
       // modifier that presents it. Written on the split view, this covered the

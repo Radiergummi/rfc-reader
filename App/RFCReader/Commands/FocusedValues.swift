@@ -20,6 +20,10 @@ import SwiftUI
     typealias Value = ReaderState
   }
 
+  struct SearchLibraryActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+  }
+
   struct ShowsInspectorKey: FocusedValueKey {
     typealias Value = Binding<Bool>
   }
@@ -44,6 +48,13 @@ import SwiftUI
     var readerState: ReaderState? {
       get { self[ReaderStateKey.self] }
       set { self[ReaderStateKey.self] = newValue }
+    }
+
+    /// Puts the focus in the sidebar's search field (#764); nil where the sidebar
+    /// cannot be shown.
+    var searchLibraryAction: SearchLibraryActionKey.Value? {
+      get { self[SearchLibraryActionKey.self] }
+      set { self[SearchLibraryActionKey.self] = newValue }
     }
 
     /// Whether the scene's panel is open, for View ▸ Show Contents and Show Info
