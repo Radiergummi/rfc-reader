@@ -106,6 +106,23 @@ final class FailedSaveTests {
     #expect(try CollectionSnapshot.fetch(in: context).collections.map(\.id) == [identifier])
   }
 
+  /// A drop of several documents is one change (#1051): none of them joins.
+  @Test func `a drop on a collection whose save fails adds none of it`() throws {
+    let mirror = try makeReadOnlyMirror {
+      _ = try CollectionStore.create(named: "HTTP", color: .blue, in: $0)
+    }
+    let context = mirror.container.mainContext
+    let identifier = try #require(mirror.collections.collections.first?.id)
+
+    let isSaved = mirror.editCollections {
+      try CollectionStore.add([.rfc(9110), .rfc(9111), .rfc(9112)], to: identifier, in: $0)
+    }
+
+    #expect(!isSaved)
+    #expect(!context.hasChanges)
+    #expect(try CollectionSnapshot.fetch(in: context)[identifier]?.members == [])
+  }
+
   @Test func `a highlight whose save fails is not left pending`() throws {
     let mirror = try makeReadOnlyMirror()
     let context = mirror.container.mainContext

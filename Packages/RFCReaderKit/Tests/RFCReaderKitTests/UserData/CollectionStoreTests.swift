@@ -140,7 +140,7 @@ struct CollectionStoreTests {
       named: "QUIC", color: .blue, query: "wg:quic", in: context)
 
     #expect(throws: CollectionStore.Failure.dynamic) {
-      try CollectionStore.add(.rfc(9000), to: made.identifier, in: context)
+      try CollectionStore.add([.rfc(9000)], to: made.identifier, in: context)
     }
     #expect(try members(of: made.identifier, in: context).isEmpty)
   }
@@ -175,11 +175,33 @@ struct CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
-    try CollectionStore.add(.rfc(9114), to: id, in: context)
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
+    try CollectionStore.add([.rfc(9114)], to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
 
     #expect(try members(of: id, in: context) == [.rfc(9000), .rfc(9114)])
+  }
+
+  /// Several rows dropped on a collection (#1051): one save, so a failed one adds
+  /// none of them, and what one at a time would leave out is left out.
+  @Test func `several documents are added in their order, in one save`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let id = try CollectionStore.create(
+      named: "HTTP/3", color: .blue, documents: [.rfc(9000)], in: context
+    ).identifier
+    let saves = SaveCount()
+    let observer = NotificationCenter.default.addObserver(
+      forName: ModelContext.didSave, object: context, queue: nil
+    ) { _ in MainActor.assumeIsolated { saves.count += 1 } }
+    defer { NotificationCenter.default.removeObserver(observer) }
+
+    try CollectionStore.add(
+      [.rfc(9114), DocumentID(series: .bcp, number: 14), .rfc(9110), .rfc(9000), .rfc(9114)],
+      to: id, in: context)
+
+    #expect(try members(of: id, in: context) == [.rfc(9000), .rfc(9114), .rfc(9110)])
+    #expect(saves.count == 1)
   }
 
   /// A reading path saved as a collection (#189).
@@ -208,7 +230,7 @@ struct CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     #expect(throws: CollectionStore.Failure.noSuchCollection) {
-      try CollectionStore.add(.rfc(9000), to: UUID(), in: context)
+      try CollectionStore.add([.rfc(9000)], to: UUID(), in: context)
     }
   }
 
@@ -236,8 +258,8 @@ struct CollectionStoreTests {
     let context = container.mainContext
     let doomed = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
     let kept = try CollectionStore.create(named: "DNS", color: .green, in: context).identifier
-    try CollectionStore.add(.rfc(9000), to: doomed, in: context)
-    try CollectionStore.add(.rfc(1035), to: kept, in: context)
+    try CollectionStore.add([.rfc(9000)], to: doomed, in: context)
+    try CollectionStore.add([.rfc(1035)], to: kept, in: context)
 
     try CollectionStore.delete(doomed, in: context)
 
@@ -250,7 +272,7 @@ struct CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    for number in [1, 2, 3] { try CollectionStore.add(.rfc(number), to: id, in: context) }
+    for number in [1, 2, 3] { try CollectionStore.add([.rfc(number)], to: id, in: context) }
 
     try CollectionStore.move(
       .rfc(3), in: id, afterVisible: .rfc(1), beforeVisible: .rfc(2), in: context)
@@ -353,8 +375,8 @@ struct CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.add(DocumentID(series: .bcp, number: 14), to: id, in: context)
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    try CollectionStore.add([DocumentID(series: .bcp, number: 14)], to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
 
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
     #expect(try members(of: id, in: context) == [.rfc(9000)])
@@ -368,13 +390,13 @@ struct CollectionStoreTests {
     let undoManager = UndoManager()
     undoManager.groupsByEvent = false
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
 
     undoManager.beginUndoGrouping()
     try CollectionStore.remove(
       .rfc(9000), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed, in: context)
     undoManager.endUndoGrouping()
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
     undoManager.undo()
     #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
 
@@ -393,7 +415,7 @@ struct CollectionStoreTests {
     let undoManager = UndoManager()
     undoManager.groupsByEvent = false
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    for number in [1, 2] { try CollectionStore.add(.rfc(number), to: id, in: context) }
+    for number in [1, 2] { try CollectionStore.add([.rfc(number)], to: id, in: context) }
 
     undoManager.beginUndoGrouping()
     try CollectionStore.remove(
@@ -413,7 +435,7 @@ struct CollectionStoreTests {
     let undoManager = UndoManager()
     undoManager.groupsByEvent = false
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    for number in [1, 2, 3] { try CollectionStore.add(.rfc(number), to: id, in: context) }
+    for number in [1, 2, 3] { try CollectionStore.add([.rfc(number)], to: id, in: context) }
 
     undoManager.beginUndoGrouping()
     try CollectionStore.remove(
@@ -435,7 +457,7 @@ extension CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    try CollectionStore.add([.rfc(9000)], to: id, in: context)
     weak var released: UndoManager?
     try autoreleasepool {
       let undoManager = UndoManager()
