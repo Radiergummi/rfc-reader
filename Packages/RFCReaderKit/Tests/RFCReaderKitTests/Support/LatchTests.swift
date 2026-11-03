@@ -18,7 +18,7 @@ struct LatchTests {
     #expect(latch.isOpen)
   }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test(.hangGuard)
   func `opening resumes everything that waited`() async {
     let latch = Latch()
     let log = Log()

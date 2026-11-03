@@ -112,3 +112,72 @@ custom_rules:
       - doccomment
     message: 'Make the font with PlatformFont.monospacedFont(ofSize:weight:): while none is alive, monospaced fonts made on many threads at once can crash CoreText (#732).'
     severity: error
+  # Assigning `NSTextContentStorage.attributedString` renders perfectly but drops the
+  # text storage, and with it selection, copy and link clicks (docs/ARCHITECTURE.md,
+  # "TextKit 2 traps"). StorageInstallTests assigns it on purpose, to pin the trap.
+  storage_install:
+    name: Install through the text storage
+    included:
+      - App/.*\.swift
+      - Packages/RFCReaderKit/.*\.swift
+      - Tools/benchmarks-layout/.*\.swift
+    excluded:
+      - Packages/RFCReaderKit/Tests/RFCReaderKitTests/Rendering/StorageInstallTests\.swift
+    regex: '\.attributedString\s*=(?!=)'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Install text with NSTextContentStorage.install(_:); assigning attributedString drops the text storage.'
+    severity: error
+  # `effectiveRange:` returns the storage run, not the attribute's run, and turns a
+  # decorated block into a staircase of cards (docs/ARCHITECTURE.md, "TextKit 2 traps").
+  # A point lookup with `effectiveRange: nil` is fine.
+  longest_effective_range:
+    name: Longest effective range
+    included:
+      - App/.*\.swift
+      - Packages/RFCReaderKit/Sources/.*\.swift
+    regex: 'effectiveRange:\s*&'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Ask for an extent with attribute(_:at:longestEffectiveRange:in:); effectiveRange stops at any attribute change.'
+    severity: error
+  # A bare `String(localized: "…")` in RFCReaderKit looks in the app's catalog, never
+  # finds the key and stays English.
+  kit_string_lookup:
+    name: RFCReaderKit string lookup
+    included:
+      - Packages/RFCReaderKit/Sources/.*\.swift
+    regex: '\bString\(\s*localized\s*:\s*"'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'In RFCReaderKit, look a string up with String(kit: "…", locale: locale).'
+    severity: error
+  # The app target is main-actor by default; work off the main actor is an
+  # `@concurrent` function.
+  no_task_detached:
+    name: No detached task
+    included:
+      - App/.*\.swift
+    regex: '\bTask\.detached\b'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Move work off the main actor with an @concurrent function, not Task.detached.'
+    severity: error
+  # A test is named with a raw identifier that says what it pins,
+  # @Test func `a canonical label loses its brackets`(), not a display-name string
+  # and not a camel-cased sentence.
+  test_raw_identifier_name:
+    name: Test named by a raw identifier
+    included:
+      - Packages/.*/Tests/.*\.swift
+      - Tools/.*/Tests/.*\.swift
+    regex: '@Test(\(\s*"|(\([^()]*\))?\s+func\s+[A-Za-z_])'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: 'Name the test with a raw identifier, @Test func `what it pins`(), not a display-name string or a camel-cased name.'
+    severity: error

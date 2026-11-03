@@ -93,9 +93,8 @@ public enum QuoteCitation {
   ) -> Quote {
     let blocks = blocks(of: selection, keepingSectionNumbers: settings.copiesSectionNumbers)
     let quoted = blocks.map { block in
-      // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
-      // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
-      // it becomes HTML. A fence is taken literally, so its lines are left as drawn.
+      // Prose is escaped where it would render as markup (`escapedMarkdownLine`). A
+      // fence is taken literally, so its lines are left as drawn.
       let lines: [String]
       if let box = block.box {
         // Longer than any run of backticks in the block, or its own fence line would
@@ -104,7 +103,7 @@ public enum QuoteCitation {
         let info = box.content.kind == .sourceCode ? box.content.type ?? "" : ""
         lines = [fence + info] + block.lines + [fence]
       } else {
-        lines = block.lines.map { $0.replacingOccurrences(of: "<", with: "&lt;") }
+        lines = block.lines.map(escapedMarkdownLine)
       }
       return lines.map { $0.isEmpty ? ">" : "> \($0)" }.joined(separator: "\n")
     }
@@ -173,7 +172,8 @@ public enum QuoteCitation {
     var isVerbatim: Bool { box != nil }
   }
 
-  private static func longestBacktickRun(in lines: [String]) -> Int {
+  /// The longest run of backticks in `lines`, which a fence around them outruns.
+  static func longestBacktickRun(in lines: [String]) -> Int {
     var longest = 0
     for line in lines {
       var run = 0

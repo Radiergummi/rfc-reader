@@ -15,37 +15,6 @@ import Testing
 @Suite("Pin recipe")
 @MainActor
 struct PinRecipeTests {
-  /// A scroll view reduced to what the recipe uses: a top, and a viewport that lays
-  /// out what it covers, as the text view's viewport layout controller does.
-  final class Surface: PinSurface {
-    let layout: NSTextLayoutManager
-    let height: CGFloat = 900
-    var containerTop: CGFloat = 0
-
-    init(layout: NSTextLayoutManager) { self.layout = layout }
-
-    func scroll(toContainerY target: CGFloat) { containerTop = max(0, target) }
-
-    func layOutViewport() {
-      let top = containerTop
-      guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
-      layout.enumerateTextLayoutFragments(
-        from: first.rangeInElement.location, options: [.ensuresLayout]
-      ) {
-        $0.layoutFragmentFrame.minY < top + self.height
-      }
-    }
-
-    /// What is at the top, read from the fragments as the engine reads it.
-    func anchor() -> (anchor: ReaderAnchor, line: NSRange)? {
-      guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: containerTop)) else {
-        return nil
-      }
-      return PinRecipe.anchor(
-        atContainerTop: containerTop, in: layout, from: first.rangeInElement.location)
-    }
-  }
-
   /// A scroll view whose viewport moves as UIKit's does (#625): it remembers the
   /// fragment it put at the top and the y it put it at, and a scroll walks from there
   /// by the distance scrolled, through the fragments' heights. When a layout from the
@@ -56,6 +25,7 @@ struct PinRecipeTests {
   final class AnchoredSurface: PinSurface {
     let layout: NSTextLayoutManager
     var containerTop: CGFloat = 0
+    let isInLiveResize = false
     private var remembered: (offset: Int, y: CGFloat)?
 
     init(layout: NSTextLayoutManager) { self.layout = layout }
@@ -81,7 +51,7 @@ struct PinRecipeTests {
       self.remembered = (start(of: fragment), y)
     }
 
-    func layOutViewport() {
+    func forceViewportLayout() {
       guard remembered == nil,
         let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: containerTop))
       else { return }
@@ -139,7 +109,7 @@ struct PinRecipeTests {
   @Test func `a settle at the end of the text lands on its last line`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let length = built.text.length
     PinRecipe.settle(ReaderAnchor(characterOffset: length), in: fixture.layout, on: surface)
     let landed = try #require(surface.anchor())
@@ -151,7 +121,7 @@ struct PinRecipeTests {
   @Test func `a jump lands its target at the top from wherever the last one left`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let sections = built.anchors.sections.entries
     // Far, near, backwards, forwards: every kind of move from every kind of state.
     let order =
@@ -169,7 +139,7 @@ struct PinRecipeTests {
   @Test func `a change of column keeps the line at the top`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let middle = built.anchors.sections.entries[built.anchors.sections.entries.count / 2]
     PinRecipe.pin(
       ReaderAnchor(characterOffset: middle.offset + 40, fraction: 0.3), in: fixture.layout,
@@ -195,7 +165,7 @@ struct PinRecipeTests {
   @Test func `a header inset change keeps the line at the top`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     var keeper = AnchorKeeper()
     let sections = built.anchors.sections.entries
     keeper.jumped(to: ReaderAnchor(characterOffset: sections[sections.count / 2].offset))
@@ -227,7 +197,7 @@ struct PinRecipeTests {
   @Test func `a lookup that starts past the top finds nothing`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let sections = built.anchors.sections.entries
     PinRecipe.pin(
       ReaderAnchor(characterOffset: sections[1].offset), in: fixture.layout, on: surface)
@@ -246,7 +216,7 @@ struct PinRecipeTests {
   @Test func `a settled line is where the whole document's layout puts it`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let target = try #require(built.anchors.sections.entries.last).offset
     PinRecipe.settle(ReaderAnchor(characterOffset: target), in: fixture.layout, on: surface)
     let settled = surface.containerTop
@@ -259,7 +229,7 @@ struct PinRecipeTests {
 
   @Test func `pinning an empty document does nothing`() {
     let fixture = LayoutFixture(text: NSAttributedString(), width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     #expect(PinRecipe.pin(ReaderAnchor(characterOffset: 0), in: fixture.layout, on: surface) == 0)
     #expect(surface.containerTop == 0)
   }
@@ -267,10 +237,21 @@ struct PinRecipeTests {
   @Test func `a pin never takes more than its passes`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
-    let surface = Surface(layout: fixture.layout)
+    let surface = HeadlessPinSurface(layout: fixture.layout)
     let last = try #require(built.anchors.sections.entries.last)
     let passes = PinRecipe.pin(
       ReaderAnchor(characterOffset: last.offset), in: fixture.layout, on: surface)
     #expect(passes <= PinRecipe.maximumPasses)
+  }
+}
+
+extension HeadlessPinSurface {
+  /// What is at the top, read from the fragments as the engine reads it.
+  func anchor() -> (anchor: ReaderAnchor, line: NSRange)? {
+    guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: containerTop)) else {
+      return nil
+    }
+    return PinRecipe.anchor(
+      atContainerTop: containerTop, in: layout, from: first.rangeInElement.location)
   }
 }

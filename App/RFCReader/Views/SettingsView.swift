@@ -17,8 +17,11 @@ struct SettingsView: View {
   var body: some View {
     TabView {
       Tab("Reading", systemImage: "textformat.size") {
-        Form { ReadingSettings() }
-          .formStyle(.grouped)
+        Form {
+          ReadingSettings()
+          Section("Keyboard") { KeyboardSettings() }
+        }
+        .formStyle(.grouped)
       }
       Tab("Appearance", systemImage: "paintpalette") {
         Form { AppearanceSettings() }
@@ -69,6 +72,7 @@ struct SettingsScreen: View {
     NavigationStack {
       Form {
         Section("Reading") { ReadingSettings() }
+        Section("Keyboard") { KeyboardSettings() }
         Section("Appearance") { AppearanceSettings() }
         Section("General") { GeneralSettings() }
         Section("Sharing") { SharingSettings() }
@@ -116,6 +120,12 @@ private struct ReadingSettings: View {
       Image(systemName: "textformat.size.larger")
     }
     .accessibilityValue(ReaderPreferences.percentage(of: settings.fontSize))
+    // A change made now lasts as long as the Focus does (#714).
+    if _settings.focus?.overridesFontSize == true {
+      Text("A Focus filter is setting this until the Focus ends.")
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
     Toggle(isOn: usesFullWidth) {
       Text("Use the full window width for text")
       Text("Otherwise lines stop at a comfortable reading length, and the text is centered.")
@@ -130,17 +140,57 @@ private struct ReadingSettings: View {
   }
 }
 
-/// The colors: the page's, which only redraw, and the code's. Each picker lists
-/// what the reader offers, one choice each until page themes (#704) and syntax
-/// themes (#707) add theirs.
+/// The reader's keys (#711), with a hardware keyboard on iOS. Here until the
+/// registry of Advanced settings (#706) lands, which they move into.
+private struct KeyboardSettings: View {
+  @ReaderSettingsValue private var settings
+
+  var body: some View {
+    Toggle(isOn: $settings.tabsThroughLinks) {
+      Text("Move through links with Tab")
+      Text("Shift-Tab goes back. Return follows the link, and Space previews it.")
+    }
+    Toggle(isOn: $settings.vimKeys) {
+      Text("Use vim-style keys")
+      Text(
+        """
+        j and k scroll a line, d and u half a page, gg and G go to the top and the end, \
+        ]] and [[ to the next and previous section, ]r and [r to the next and previous link, \
+        / finds, and n and N go to the next and previous match.
+        """
+      )
+    }
+  }
+}
+
+/// The colors: the app's appearance, the page themes for light and dark, which only
+/// redraw (#704), and the code's. The appearance picks which of the two themes is
+/// drawn, and is the whole app's, as Apple Books' is.
 private struct AppearanceSettings: View {
   @ReaderSettingsValue private var settings
 
   var body: some View {
-    Picker("Page", selection: $settings.palette) {
-      ForEach(ReaderPalette.all) { palette in
+    Picker("Appearance", selection: $settings.appearance) {
+      ForEach(AppearancePreference.allCases, id: \.self) { appearance in
+        Text(appearance.title).tag(appearance)
+      }
+    }
+    Picker("Light Theme", selection: $settings.lightPalette) {
+      ForEach(ReaderPalette.offered(in: .light)) { palette in
         Text(palette.title).tag(palette)
       }
+    }
+    Picker("Dark Theme", selection: $settings.darkPalette) {
+      ForEach(ReaderPalette.offered(in: .dark)) { palette in
+        Text(palette.title).tag(palette)
+      }
+    }
+    // What the pickers show is the Focus's, and a change made now lasts as long as
+    // it does (#714): without this, a choice that seems not to stick.
+    if _settings.focus?.overridesAppearance == true {
+      Text("A Focus filter is setting these until the Focus ends.")
+        .font(.footnote)
+        .foregroundStyle(.secondary)
     }
     Picker("Code", selection: $settings.syntaxTheme) {
       ForEach(SyntaxTheme.all) { theme in
@@ -257,16 +307,6 @@ private struct AdvancedSettings: View {
     Toggle(isOn: $settings.copiesSectionNumbers) {
       Text("Copy section numbers")
       Text("A copied heading keeps its number, as in “4.2. Overview”.")
-    }
-  }
-}
-
-extension ReaderPalette {
-  /// What Settings calls it.
-  fileprivate var title: String {
-    switch id {
-    case ReaderPalette.automatic.id: "Automatic"
-    default: id.capitalized
     }
   }
 }

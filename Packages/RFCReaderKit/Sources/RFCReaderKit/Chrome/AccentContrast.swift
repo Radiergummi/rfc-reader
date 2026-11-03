@@ -80,6 +80,18 @@ public enum AccentContrast {
   /// accent's chips keep the full ``chipTint`` on every card, as they do on the page.
   public static let cardLink = (light: readerLink.light, dark: SRGBColor(hex: 0x70_B4FF))
 
+  /// The reader's link color under the system's Increase Contrast (#867): High
+  /// Contrast's, which clears 7:1 on the page.
+  public static let increasedContrastReaderLink = (
+    light: PaletteColors.highContrast.light.link, dark: PaletteColors.highContrast.dark.link
+  )
+
+  /// The link color on a card in dark under Increase Contrast, as ``cardLink``'s
+  /// dark is at the standard contrast: lightened to clear 7:1 on the Mac's aside and
+  /// iOS's elevated one, whose pages are lighter than High Contrast's black. In
+  /// light a card's link is the page's.
+  public static let increasedContrastDarkCardLink = SRGBColor(hex: 0xC0_DFFF)
+
   /// The status banner's row symbols, stated as `StatusPalette`'s colors are.
   public enum BannerSymbol: Sendable, CaseIterable {
     /// Red: the system red, which already clears 3:1 on the banner.

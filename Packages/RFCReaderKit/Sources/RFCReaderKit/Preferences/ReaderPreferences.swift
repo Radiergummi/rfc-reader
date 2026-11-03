@@ -35,12 +35,11 @@ public enum ReaderPreferences {
     (size / defaultFontSize).formatted(.percent.precision(.fractionLength(0)).locale(locale))
   }
 
-  /// View ▸ Bigger, for a caller with no `@AppStorage` of its own to step: the Mac
-  /// reader window's ⌘=. What `@AppStorage` reads when nothing is stored is the
-  /// default, so that is where a first step starts.
+  /// View ▸ Bigger, for a caller with no `@ReaderSettingsValue` of its own to step:
+  /// the Mac reader window's ⌘=. Through `ReaderSettings`, so under a Focus filter
+  /// that sets the size it steps the Focus's (#714).
   public static func stepFontSizeUp(in defaults: UserDefaults = .standard) {
-    let size = defaults.object(forKey: fontSizeKey) as? Double ?? defaultFontSize
-    defaults.set(fontSize(steppingUp: size), forKey: fontSizeKey)
+    ReaderSettings.change(in: defaults) { $0.fontSize = fontSize(steppingUp: $0.fontSize) }
   }
 
   static func clamped(_ size: Double) -> Double {
@@ -61,6 +60,18 @@ public enum ReaderPreferences {
   /// with. A choice made in a figure's own menu overrides it for that figure.
   public static let drawDiagramsKey = "drawDiagrams"
   public static let defaultDrawDiagrams = true
+
+  /// The vim-style keys in the reader (#711): `j` and `k` for a line, `gg` and `G`
+  /// for the top and end, `]]` and `[[` for the sections, and the rest of
+  /// `ReaderKeys`. Off until turned on in Settings ▸ Reading.
+  public static let vimKeysKey = "readerVimKeys"
+  public static let defaultVimKeys = false
+
+  /// Tab and Shift-Tab move a visible focus through the reader's links (#711), which
+  /// Return follows. Off until the reader turns it on: Tab leaves the reader for the
+  /// next key view, as it always has.
+  public static let tabsThroughLinksKey = "readerTabsThroughLinks"
+  public static let defaultTabsThroughLinks = false
 
   /// Notify when a bookmarked RFC is obsoleted or updated, a draft starts to revise
   /// it or reaches the RFC Editor queue, or errata are listed for it (#191). Off
@@ -86,9 +97,21 @@ public enum ReaderPreferences {
   public static let syntaxThemeKey = "syntaxTheme"
   public static let defaultSyntaxTheme = SyntaxTheme.standard.id
 
-  /// The page palette's `ReaderPalette.id`.
-  public static let paletteKey = "readerPalette"
+  /// The app's appearance: an `AppearancePreference`'s raw value (#704).
+  public static let appearanceKey = "appearance"
+  public static let defaultAppearance = AppearancePreference.system
+
+  /// The page theme drawn while the app is light: a `ReaderPalette.id` offered in
+  /// light (#704).
+  public static let lightPaletteKey = "readerLightPalette"
+  /// The page theme drawn while the app is dark: a `ReaderPalette.id` offered in
+  /// dark.
+  public static let darkPaletteKey = "readerDarkPalette"
   public static let defaultPalette = ReaderPalette.automatic.id
+
+  /// The settings a Focus filter overrides while its Focus is on (#714): a
+  /// `FocusOverride` as JSON, absent while none is.
+  public static let focusOverrideKey = "readerFocusOverride"
 
   /// The style of Copy Citation, and of Copy as Quote's citation line (#712): a
   /// `CitationStyle`'s raw value. Markdown, the line a quote had before the setting.

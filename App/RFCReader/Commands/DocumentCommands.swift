@@ -10,8 +10,9 @@ import SwiftUI
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
-  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-    .defaultFontSize
+  /// The text size Bigger and Smaller step, through the settings, so a Focus filter's
+  /// size is the one stepped (#714).
+  @ReaderSettingsValue private var settings
 
   #if os(macOS)
     /// The key window's navigation, so Back and Forward act on the tab the reader is
@@ -58,7 +59,7 @@ struct DocumentCommands: Commands {
     /// the reader's text or beside a compared document's, never the original text's
     /// or a translation's.
     private var hasQuotableSelection: Bool {
-      showsRFC && reader?.showOriginal != true && reader?.readsTranslation != true
+      showsRFC && !editsNote && reader?.showOriginal != true && reader?.readsTranslation != true
         && (reader?.hasSelection == true || reader?.sideBySide?.reader.hasSelection == true)
     }
 
@@ -118,6 +119,12 @@ struct DocumentCommands: Commands {
     }
   #endif
 
+  /// Whether a note's editor is open over the reader, or over the one beside it: the
+  /// reader's Edit commands are not its, and are grayed out until it closes (#1007).
+  private var editsNote: Bool {
+    reader?.editsNote == true || reader?.sideBySide?.reader.editsNote == true
+  }
+
   var body: some Commands {
     CommandGroup(after: .newItem) {
       Button("Go to RFC…") { openDocument?() }
@@ -146,7 +153,7 @@ struct DocumentCommands: Commands {
           Button(CopyFormat.text.title()) {
             active.controller?.copyAsText()
           }
-          .disabled(!showsDocument || reader?.showOriginal == true || !hasSelection)
+          .disabled(!showsDocument || editsNote || reader?.showOriginal == true || !hasSelection)
           Button(CopyFormat.quote.title()) {
             active.controller?.copyAsQuote()
           }
@@ -165,7 +172,7 @@ struct DocumentCommands: Commands {
       // style Settings chose. A citation is made from the index's entry.
       Button("Copy Citation") { copyCitation() }
         .keyboardShortcut(ReaderShortcut.copyCitation.keyboardShortcut)
-        .disabled(citedDocument == nil || navigation?.shown == nil)
+        .disabled(citedDocument == nil || navigation?.shown == nil || editsNote)
       Section {
         // Says what it will do, as the toolbar's glyph does: both read the
         // library's set of bookmarked documents, which the menu observes.
@@ -260,15 +267,20 @@ struct DocumentCommands: Commands {
       // ⌘= is Bigger too, and not here: on the Mac, SwiftUI left a hidden item out
       // of the menu, shortcut and all -- measured. `ReaderWindow` answers it on the
       // Mac, an invisible button in `ContentView` on the iPad.
-      Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-        .keyboardShortcut(ReaderShortcut.bigger.keyboardShortcut)
-        .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
-      Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
-        .keyboardShortcut(ReaderShortcut.smaller.keyboardShortcut)
-        .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
-      Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
+      Button("Bigger") {
+        settings.fontSize = ReaderPreferences.fontSize(steppingUp: settings.fontSize)
+      }
+      .keyboardShortcut(ReaderShortcut.bigger.keyboardShortcut)
+      .disabled(ReaderPreferences.fontSize(steppingUp: settings.fontSize) == settings.fontSize)
+      Button("Smaller") {
+        settings.fontSize = ReaderPreferences.fontSize(steppingDown: settings.fontSize)
+      }
+      .keyboardShortcut(ReaderShortcut.smaller.keyboardShortcut)
+      .disabled(
+        ReaderPreferences.fontSize(steppingDown: settings.fontSize) == settings.fontSize)
+      Button("Actual Size") { settings.fontSize = ReaderPreferences.defaultFontSize }
         .keyboardShortcut(ReaderShortcut.actualSize.keyboardShortcut)
-        .disabled(fontSize == ReaderPreferences.defaultFontSize)
+        .disabled(settings.fontSize == ReaderPreferences.defaultFontSize)
       #if os(macOS)
         // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
         // list's view options before.
@@ -285,7 +297,7 @@ struct DocumentCommands: Commands {
         if let reader {
           ReadingModePicker(reader: reader)
             .disabled(!showsDocument)
-          FocusSteps(reader: reader)
+          SectionSteps(reader: reader)
             .disabled(!showsDocument)
           OutlineSectionItems(reader: reader)
             .disabled(!showsDocument)
@@ -295,6 +307,15 @@ struct DocumentCommands: Commands {
           let document = controller.navigation.shown, showsDocument
         {
           CompareItems(id: document, library: controller.library, reader: reader)
+        }
+      #else
+        // Next and Previous Section and Go to Section (#711), in the menu bar and the
+        // hold-⌘ overlay of an iPad's keyboard.
+        if let reader {
+          Section {
+            SectionSteps(reader: reader)
+          }
+          .disabled(navigation?.selection == nil || !reader.hasDocument)
         }
       #endif
     }

@@ -19,15 +19,34 @@ public enum IndexSnapshot {
     try JSONDecoder().decode(RFCIndex.self, from: data)
   }
 
-  /// Whether a snapshot written at `written` still describes the index.
+  /// Whether a snapshot written at `written` still describes the index: not when the
+  /// index is newer, which a refresh or a new bundled copy makes it.
   ///
-  /// Not when the index is newer, which a refresh or a new bundled copy makes it.
-  /// And not when the app is newer either: a snapshot is the model as the app that
-  /// wrote it coded it, and a build that adds a field would otherwise decode the
-  /// old snapshot without complaint and show the field empty until the index next
-  /// changed. A new build costs one parse, the first time it launches.
-  public static func isCurrent(written: Date?, index: Date, app: Date) -> Bool {
+  /// Whether the build reading it wrote it is the snapshot's name, `fileName(build:)`.
+  public static func isCurrent(written: Date?, index: Date) -> Bool {
     guard let written else { return false }
-    return written >= index && written >= app
+    return written >= index
+  }
+
+  /// The name of the snapshot `build` writes and reads, `DocumentStore`'s build: a
+  /// snapshot is the model as the build that wrote it coded it, and a build that adds
+  /// a field would otherwise decode another's snapshot without complaint and show the
+  /// field empty until the index next changed. A name of its own rather than a
+  /// comparison of dates: a snapshot newer than the app's executable used to count as
+  /// current, so an install whose executable kept an older build date read another
+  /// build's snapshot (#758). A new build costs one parse, the first time it launches.
+  public static func fileName(build: String) -> String {
+    let safe = String(build.map { $0.isLetter || $0.isNumber || $0 == "." ? $0 : "-" })
+    return "\(prefix)\(safe).json"
+  }
+
+  private static let prefix = "rfc-index-snapshot-"
+  /// What every build named its snapshot before `fileName(build:)`.
+  private static let unkeyedName = "rfc-index.json"
+
+  /// Whether `fileName` is a snapshot's, whichever build wrote it: what the store
+  /// removes once its own build has written one.
+  public static func isSnapshot(fileName: String) -> Bool {
+    fileName == unkeyedName || (fileName.hasPrefix(prefix) && fileName.hasSuffix(".json"))
   }
 }

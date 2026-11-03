@@ -554,7 +554,8 @@
         case .noSuchPlace:
           ScriptError.report("The RFC has no section “\(section)”.", in: command)
         case .notShown:
-          ScriptError.report("The RFC could not be shown to jump in.", in: command)
+          ScriptError.report(
+            "The RFC's text isn't shown, so there is nothing to jump in.", in: command)
         case .interrupted:
           ScriptError.report(
             "The jump to section “\(section)” was interrupted before it was made.", in: command)
@@ -582,7 +583,8 @@
       let code = (evaluatedArguments?["format"] as? NSNumber)?.uint32Value
       guard let format = code.flatMap(ExportFormat.init(scriptCode:)) else {
         ScriptError.report(
-          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML or ABNF.", in: self)
+          "Which format? Export as PDF, EPUB, HTML, Markdown, plain text, XML, ABNF or highlights and notes.",
+          in: self)
         return
       }
       guard let file = evaluatedArguments?["file"] as? URL, file.isFileURL else {

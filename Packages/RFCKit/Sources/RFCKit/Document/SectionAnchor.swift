@@ -1,3 +1,5 @@
+import Foundation
+
 /// The anchor a numbered section goes by where its source names none: `section-4.2`,
 /// and `appendix-A.1` for a number that starts with a letter, as an appendix's does.
 ///
@@ -61,5 +63,25 @@ enum SectionAnchor {
     }
     let rest = place.dropFirst()
     return first.isNumber || (first.isLetter && (rest.isEmpty || rest.first == "."))
+  }
+}
+
+/// What someone types to go to a section (#711) in Go to Section… on the Mac and the
+/// iPad. A section number, read as the App Intents read one
+/// (`SectionLookup.section(numbered:in:)`, #1015): `4.2`, `Section 4.2.`, `§4.2`,
+/// `Appendix A.1`; or an anchor as a link spells it, `section-4.2`.
+public enum SectionInput {
+  /// The anchor of the section among `sections`, or their subsections, that `typed`
+  /// names: by its number, or by an anchor that spells one, which a section whose
+  /// source gave it an anchor of its own goes by too. Nil where it names none of them.
+  public static func anchor(_ typed: String, in sections: [Section]) -> String? {
+    if let numbered = SectionLookup.section(numbered: typed, in: sections) {
+      return numbered.anchor
+    }
+    var place = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+    if place.hasSuffix(".") { place.removeLast() }
+    guard let number = SectionAnchor.sectionNumber(fromAnchor: place) else { return nil }
+    return sections.lazy.flatMap(\.withSubsections)
+      .first { $0.anchor == place || $0.number == number }?.anchor
   }
 }

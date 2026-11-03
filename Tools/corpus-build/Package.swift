@@ -12,17 +12,23 @@ let swiftSettings: [SwiftSetting] = [
   .treatAllWarnings(as: .error),
 ]
 
-// The command line is built unoptimized by a Swift 6.3 or 6.4 compiler, in every
-// build. 6.4 crashes while LLVM splits the commands' async `run`s into their coroutine
-// parts, and `@_optimize(none)` on them compiles but gives every document of a fetch
-// the ID 0 (#371). 6.3, the Linux toolchain, builds them but miscompiles the same way
-// without a word: a fetch saves the documents under garbage names, losing most of them,
-// and reports success. The work is RFCKit's and RFCCorpusKit's, which stay optimized.
-// By the compiler, not the platform, because the bug is the toolchain's; #490 tracks
-// dropping this once a toolchain fixes it. A later compiler builds optimized again, so
-// one that fixed it is not left unoptimized; #490's check of each new toolchain is what
-// says whether it did.
-#if compiler(>=6.3) && !compiler(>=6.5)
+// The command line is built unoptimized by a Swift 6.3 compiler or any later one, in
+// every build. 6.4 crashes while LLVM splits the commands' async `run`s into their
+// coroutine parts, and `@_optimize(none)` on them compiles but gives every document of
+// a fetch the ID 0 (#371). 6.3, the Linux toolchain, builds them but miscompiles the
+// same way without a word: a fetch saves the documents under garbage names, losing
+// most of them, and reports success (#794). The work is RFCKit's and RFCCorpusKit's,
+// which stay optimized.
+//
+// The gate is by the compiler, not the platform, because the bug is the toolchain's,
+// and it has no upper bound: a new toolchain stays unoptimized until someone has
+// verified it, because a silent miscompile is worse than a slow command line. To
+// verify one (#490), remove this setting, `swift build -c release` this package,
+// run `corpus-build fetch --out <dir> --limit 60`, and check that text.noindex in it
+// holds 60 files, each named `rfcN.txt` and holding RFC N. Only when every toolchain
+// that builds this package in release (locally and in CI's Linux image) passes does
+// the setting go.
+#if compiler(>=6.3)
   let commandLineSettings = swiftSettings + [.unsafeFlags(["-Onone"])]
 #else
   let commandLineSettings = swiftSettings
@@ -43,9 +49,9 @@ let package = Package(
   dependencies: [
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
-    .package(url: "https://github.com/apple/swift-log", exact: "1.16.1"),
+    .package(url: "https://github.com/apple/swift-log", exact: "1.16.2"),
     // SHA-256 for the manifest: CryptoKit on Apple platforms, BoringSSL on Linux.
-    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.1"),
+    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.3"),
   ],
   targets: [
     .target(

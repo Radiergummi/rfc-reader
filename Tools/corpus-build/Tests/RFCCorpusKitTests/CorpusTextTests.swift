@@ -23,3 +23,20 @@ import Testing
     }
   }
 }
+
+/// A document fetched locally, by `make corpus`, but not on the Makefile's list is
+/// refused before its file is looked for: CI fetches only the listed ones (#986).
+@Suite(
+  "Corpus-backed: documents not listed or not fetched",
+  .enabled(if: CorpusText.isAvailable && CorpusText.listedDocuments != nil))
+struct CorpusBackedUnlistedDocumentTests {
+  @Test func `a document not on the list is refused as not listed`() {
+    #expect(throws: CorpusTextError.notListed("rfc0")) { try CorpusText.text("rfc0") }
+  }
+
+  @Test func `a listed document that is not fetched is refused as not fetched`() {
+    #expect(throws: CorpusTextError.notFetched("rfc0")) {
+      try CorpusText.text("rfc0", listed: ["rfc0"])
+    }
+  }
+}

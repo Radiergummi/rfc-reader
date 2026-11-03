@@ -30,7 +30,7 @@ struct DocumentLabelsTests {
     let labels = DocumentLabels(translating: Self.german)
     #expect(labels.figure == "Abbildung")
     #expect(labels.table == "Tabelle")
-    #expect(labels.appendix == "Anhang")
+    #expect(labels.appendixLabels.appendix == "Anhang")
     #expect(labels.backlinksCaption(count: 1) == "Ein Rückverweis")
     #expect(labels.backlinksCaption(count: 12) == "12 Rückverweise")
   }

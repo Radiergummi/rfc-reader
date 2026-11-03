@@ -3,7 +3,8 @@ import RFCKit
 import SwiftData
 
 /// The reader's own data: bookmarks, reading positions (#152), collections (#349),
-/// Keep Offline marks (#358), highlights (#522) and followed working groups (#731).
+/// Keep Offline marks (#358), highlights (#522), followed working groups (#731) and
+/// reading notes (#523).
 ///
 /// Versioned from the start, so a change to the schema is a migration rather than a
 /// store that no longer opens. `SchemaV6` is the one the app uses, V3's keys and
@@ -20,6 +21,7 @@ public typealias DocumentCollectionItem = SchemaV6.DocumentCollectionItem
 public typealias OfflineMark = SchemaV6.OfflineMark
 public typealias FollowedGroup = SchemaV6.FollowedGroup
 public typealias Highlight = SchemaV6.Highlight
+public typealias Note = SchemaV6.Note
 
 /// Today's models as they were before #152, exactly: a bare RFC number, unique.
 public enum SchemaV1: VersionedSchema {
@@ -370,16 +372,16 @@ public enum SchemaV5: VersionedSchema {
   }
 }
 
-/// V5, a collection's query (#355), the highlights (#522) and the followed working
-/// groups (#731). Its own copies of V5's models, identical to them but for
-/// `DocumentCollection.query`, for the reason V4 has its own of V3's, and the two
-/// that V5 has not: `Highlight` and `FollowedGroup`.
+/// V5, a collection's query (#355), the highlights (#522), the followed working
+/// groups (#731) and the notes (#523). Its own copies of V5's models, identical to
+/// them but for `DocumentCollection.query`, for the reason V4 has its own of V3's,
+/// and the three that V5 has not: `Highlight`, `FollowedGroup` and `Note`.
 public enum SchemaV6: VersionedSchema {
   public static let versionIdentifier = Schema.Version(6, 0, 0)
   public static var models: [any PersistentModel.Type] {
     [
       Bookmark.self, ReadingPosition.self, DocumentCollection.self, DocumentCollectionItem.self,
-      OfflineMark.self, Highlight.self, FollowedGroup.self,
+      OfflineMark.self, Highlight.self, FollowedGroup.self, Note.self,
     ]
   }
 
@@ -570,6 +572,54 @@ public enum SchemaV6: VersionedSchema {
 
     public var document: DocumentID? { DocumentID(fileStem: documentKey) }
   }
+
+  /// A reading note (#523): Markdown, on a highlight, or on a target of its own, a
+  /// section (`sectionAnchor`) or a range of the model text with its quote, as a
+  /// highlight has. Rows linked by identifier, in CloudKit's shape, as a highlight is:
+  /// several notes may name one highlight.
+  ///
+  /// A note on a highlight keeps the highlight's range and quote as they were when the
+  /// note was made, in the range fields: a note whose highlight is gone, as when a
+  /// merge on another device deleted it, finds the highlight that covers it by them.
+  @Model
+  public final class Note {
+    public var identifier: UUID = UUID()
+    /// The document's `fileStem`: `rfc9110`.
+    public var documentKey: String = ""
+    /// The highlight it is on; nil for a note on a target of its own.
+    public var highlightIdentifier: UUID?
+    /// The section it is on, for a note on a whole section.
+    public var sectionAnchor: String?
+    /// Where it was made, for a note on a range. Never overwritten by relocation.
+    public var startAnchor: String?
+    public var startOffset: Int?
+    public var endAnchor: String?
+    public var endOffset: Int?
+    /// Where relocation found it since, when it moved or a finer anchor holds it now.
+    public var relocatedStartAnchor: String?
+    public var relocatedStartOffset: Int?
+    public var relocatedEndAnchor: String?
+    public var relocatedEndOffset: Int?
+    public var quoteExact: String?
+    public var quotePrefix: String?
+    public var quoteSuffix: String?
+    public var quoteLength: Int?
+    public var quoteDigest: String?
+    /// Restricted CommonMark (`NoteBody`).
+    public var body: String = ""
+    public var createdAt: Date = Date.distantPast
+    public var modifiedAt: Date = Date.distantPast
+
+    public init(identifier: UUID, document: DocumentID, body: String, createdAt: Date = .now) {
+      self.identifier = identifier
+      self.documentKey = document.fileStem
+      self.body = body
+      self.createdAt = createdAt
+      self.modifiedAt = createdAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
 }
 
 /// V1 to V3 by way of V2 (#152). Every row survives, as `rfcN`, and a section
@@ -603,8 +653,8 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
     fromVersion: SchemaV4.self, toVersion: SchemaV5.self)
 
   /// Adds a collection's query, nil for every collection there is, which is manual
-  /// (#355), the highlights' entity (#522) and the followed working groups' entity
-  /// (#731), and changes nothing else.
+  /// (#355), the highlights' entity (#522), the followed working groups' entity
+  /// (#731) and the notes' entity (#523), and changes nothing else.
   static let v5ToV6 = MigrationStage.lightweight(
     fromVersion: SchemaV5.self, toVersion: SchemaV6.self)
 
@@ -668,6 +718,10 @@ public enum UserData {
     let highlights = try context.fetch(
       FetchDescriptor<Highlight>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
     removeDuplicates(highlights, keyedBy: \.identifier.uuidString, in: context)
+    // One row per note, the latest edit kept.
+    let notes = try context.fetch(
+      FetchDescriptor<Note>(sortBy: [SortDescriptor(\.modifiedAt, order: .reverse)]))
+    removeDuplicates(notes, keyedBy: \.identifier.uuidString, in: context)
     if context.hasChanges { try context.save() }
   }
 

@@ -17,6 +17,8 @@ struct RFCReaderApp: App {
       BookmarkNotifications.install()
       // Before any scene, whose toolbars anchor the tips (#782).
       ReaderTips.configure()
+      // A Focus filter's settings the app outlived the Focus of (#714).
+      ReaderFocusFilter.clearWhenEnded()
     }
   #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
@@ -52,6 +54,8 @@ struct RFCReaderApp: App {
       // interface at all — so this cannot carry the link for a new tab.
       WindowGroup {
         ContentView(library: library)
+          // The appearance chosen in Settings, for every window (#704).
+          .modifier(AppAppearance())
           .task { await library.bootstrap() }
           // Here rather than in `init`, which is before the `.backgroundTask` below.
           .task { await BookmarkNotifications.scheduleRefreshUnlessPending() }
@@ -67,10 +71,10 @@ struct RFCReaderApp: App {
               library.route(link)
             }
           }
-          // An RFC chosen in Spotlight (#178), routed the same way.
+          // An RFC or a section chosen in Spotlight (#178), routed the same way.
           .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            if let id = SpotlightEntry.documentID(from: activity) {
-              library.route(RFCLink(id: id))
+            if let link = SpotlightEntry.link(from: activity) {
+              library.route(link)
             }
           }
       }

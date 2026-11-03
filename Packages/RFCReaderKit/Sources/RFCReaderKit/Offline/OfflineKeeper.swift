@@ -22,7 +22,15 @@ public final class OfflineKeeper {
   /// Where each wanted document stands, for Available Offline's rows: as the last
   /// run planned it, and every fetch since. Its `failed` are the documents no run
   /// fetches again until Retry or a run that forgets them.
-  public private(set) var status = OfflineStatus()
+  public private(set) var status = OfflineStatus() {
+    // Observation reports no assignment of an equal value.
+    didSet { kept = status.kept }
+  }
+
+  /// `status.kept`, the documents whose body is on the device, observed apart from
+  /// the rest of `status`: what a library row marks as offline (#936), so a download
+  /// starting or ending redraws no row that only marks it.
+  public private(set) var kept: Set<DocumentID> = []
 
   @ObservationIgnored private let store: DocumentStore
   /// For a fetch somebody waits for: Keep Offline tapped, Download Now, Retry.

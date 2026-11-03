@@ -308,9 +308,17 @@ final class LibraryModel {
       powerChanged: { [weak self] in self?.reconcileOffline() })
   }
 
-  /// Whether Available Offline lists `id`: what a library row marks as offline
-  /// (#769). Only an RFC: the list holds the RFCs a series names, not the series.
+  /// Whether Available Offline lists `id` and its body is on the device: what a
+  /// library row marks as offline (#769). Not while the body waits, downloads or
+  /// failed, which only Available Offline's own rows say (#936). Both, because `kept`
+  /// learns of an unmark only once the run it starts has read the disk, and the list
+  /// at once. Only an RFC: the list holds the RFCs a series names, not the series.
   func isAvailableOffline(_ id: DocumentID) -> Bool {
+    isWantedOffline(id) && offlineKeeper.kept.contains(id)
+  }
+
+  /// Whether Available Offline lists `id`.
+  private func isWantedOffline(_ id: DocumentID) -> Bool {
     id.series == .rfc && availableOfflineNumbers.contains(id.number)
   }
 
@@ -510,8 +518,9 @@ final class LibraryModel {
       self?.textIndexChanged()
       await indexer.run(changed: changed)
     }
-    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
-    // fetch them for nothing.
+    // On the Mac at launch, where ⌘L may come first thing. iOS reads them as its Go
+    // to RFC sheet opens (`refreshRegistriesIfDue()`): most launches of an iPhone
+    // never open it.
     #if os(macOS)
       // Unless an intent has read them already (#192). Immediate, as the intent's is,
       // so the check is marked before either can look.
@@ -525,18 +534,31 @@ final class LibraryModel {
 
   /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
   /// the palette asks on each keystroke, and nothing on screen lists them.
-  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+  /// `registriesVersion` tells it when they change.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = [] {
+    didSet { registriesVersion += 1 }
+  }
 
-  /// When the registries were last checked, nil until launch first checks them.
+  /// Counts the changes to the registry values, observed, so that Go to RFC lists
+  /// those that arrive while it is open: on iOS, its first open is what reads them
+  /// (#579).
+  private(set) var registriesVersion = 0
+
+  /// When the registries were last checked, nil until they first are.
   @ObservationIgnored private var registriesCheckedAt: Date?
 
   /// Checks the registries again if the last check is older than
   /// `RegistryRefresh.maximumAge`: the palette asks as it opens, since the app may
-  /// stay open for weeks after the check at launch.
+  /// stay open for weeks after the check at launch. Reads them first when nothing
+  /// has: iOS does not at launch, and its Go to RFC sheet lists registry values too
+  /// (#769, #579).
   func refreshRegistriesIfDue() {
-    guard let checked = registriesCheckedAt,
-      RegistryRefresh.isDue(checkedAt: checked, now: .now)
-    else { return }
+    guard let checked = registriesCheckedAt else {
+      // Immediate, so the check is marked before an intent asking meanwhile looks.
+      Task.immediate(name: "Load registries") { await refreshRegistries() }
+      return
+    }
+    guard RegistryRefresh.isDue(checkedAt: checked, now: .now) else { return }
     Task(name: "Refresh registries") { await refreshRegistries() }
   }
 
@@ -581,9 +603,10 @@ final class LibraryModel {
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,
-  /// `application/dns-message`.
+  /// `application/dns-message`, read as a pasted reference is: `425.` and `(425)`
+  /// name what `425` does.
   func registryMatches(for query: String) -> [RegistryEntry] {
-    RegistryLookup.matches(query, in: registryEntries)
+    DocumentReference.registryMatches(for: query, in: registryEntries)
   }
 
   /// Open once the registries are readable, for `loadedRegistryEntries()`: the
@@ -770,6 +793,7 @@ final class LibraryModel {
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
+    indexSectionsForSpotlight()
     settleIndex()
     compareBookmarks()
     // What waited for the formats the index lists.
@@ -841,6 +865,39 @@ final class LibraryModel {
     }
   }
 
+  /// The indexing of sections for Spotlight under way (#178).
+  @ObservationIgnored private var spotlightSectionIndexing: Task<Void, Never>?
+  /// Whether the full-text index changed since the indexing under way began.
+  @ObservationIgnored private var spotlightSectionsChanged = false
+  /// Whether the next indexing empties Spotlight's sections and indexes them all.
+  @ObservationIgnored private var spotlightSectionsRebuild = false
+
+  /// Brings Spotlight's sections to what the full-text index holds from stored
+  /// bodies, once both it and the index, which names each section's document, are
+  /// there. Coalesced: a change during an indexing runs one more once it is done,
+  /// so a batch is never thrown away and two never write the record at once.
+  /// `rebuilding`, for rows that changed under the dates they had.
+  private func indexSectionsForSpotlight(rebuilding: Bool = false) {
+    spotlightSectionsChanged = true
+    spotlightSectionsRebuild = spotlightSectionsRebuild || rebuilding
+    guard spotlightSectionIndexing == nil else { return }
+    spotlightSectionIndexing = Task(name: "Index sections for Spotlight", priority: .utility) {
+      [weak self] in
+      await self?.indexSectionsWhileChanged()
+    }
+  }
+
+  private func indexSectionsWhileChanged() async {
+    while spotlightSectionsChanged, let textIndexer, let index {
+      spotlightSectionsChanged = false
+      let rebuilding = spotlightSectionsRebuild
+      spotlightSectionsRebuild = false
+      await SpotlightIndexer.updateSections(
+        from: textIndexer, rfcs: index.rfcs, rebuilding: rebuilding)
+    }
+    spotlightSectionIndexing = nil
+  }
+
   /// On activation: an app left running past its items' `lifetime` would otherwise
   /// lose every RFC from Spotlight, since only a newer index checks. Once a week at
   /// most, and the indexer skips an unchanged state.
@@ -866,7 +923,7 @@ final class LibraryModel {
 
   private func loadRevisions() async {
     if revisions == nil, let cached = await store.cachedRevisions() {
-      revisions = cached
+      revisions = cached.value
       compareBookmarks()
     }
     guard DataFileCheck.isDue(fetchedAt: revisionsFetchedAt, now: .now) else { return }
@@ -1005,7 +1062,7 @@ final class LibraryModel {
 
   private func loadWorkingGroups() async {
     if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
-      workingGroups = cached
+      workingGroups = cached.value
     }
     guard DataFileCheck.isDue(fetchedAt: workingGroupsFetchedAt, now: .now) else { return }
     do {
@@ -1184,6 +1241,7 @@ final class LibraryModel {
 
   private func textIndexChanged() {
     textIndexVersion += 1
+    indexSectionsForSpotlight()
   }
 
   /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
@@ -1292,7 +1350,7 @@ final class LibraryModel {
     return await Self.suggestions(in: search, for: query, limit: limit)
   }
 
-  /// What the Go to RFC palette and sheet list under what was typed, once the reader
+  /// What the Mac's Go to RFC palette lists under what was typed, once the reader
   /// has paused: run per change of the query and canceled by the next (`Debounce`).
   ///
   /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
@@ -1570,8 +1628,18 @@ final class LibraryModel {
     let entry = index?[id]
     let document = try await store.document(
       id, formats: entry?.formats ?? [], entry: entry, client: client)
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return document
+  }
+
+  /// A load of a document wanted offline writes its body into the kept tier, which
+  /// the keeper, and so the row's mark, learns of only by running again (#936). Only
+  /// when the body is kept now: a load that wrote nothing does not start a run.
+  private func reconcileIfBodyKept(_ id: DocumentID) async {
+    guard isWantedOffline(id), !offlineKeeper.kept.contains(id) else { return }
+    guard await store.isKept(id) else { return }
+    reconcileOffline()
   }
 
   /// An RFC as `document(for:)` reads it, or a draft's revision (#728): the newest
@@ -1608,19 +1676,25 @@ final class LibraryModel {
     await refreshPointersInPack()
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
     await textIndexer?.legacyPackInstalled(changed: changed)
+    // The RFCs read from the pack now are indexed again with its anchors, under the
+    // dates their bodies had: only a rebuild takes Spotlight's sections to them.
+    indexSectionsForSpotlight(rebuilding: true)
     return pack
   }
 
-  /// The RFC Editor's own file of `id` in `format`, byte for byte, for an export of
-  /// it (#377).
+  /// The RFC Editor's own file of `id` in `format`, byte for byte, from the copy kept
+  /// on disk when there is one: for an export of it (#377), and what a format row's
+  /// Download saves, to Downloads on a Mac (#25) and to Files on iOS (#577).
   func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
     let data = try await store.publishedFile(id, format: format, client: client)
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return data
   }
 
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
+    await reconcileIfBodyKept(id)
     await evictIfGrown()
     return text
   }
@@ -1822,7 +1896,7 @@ final class LibraryModel {
     /// own name, or numbered when that is taken, and the Dock's Downloads stack told,
     /// so it bounces. What Option-clicking a format in the Info pane does (#25).
     func saveToDownloads(_ id: DocumentID, format: FileFormat) async throws {
-      let data = try await client.fetchDocumentData(id, format: format)
+      let data = try await publishedFile(for: id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
       // Not private API, but not documented either: the notification Safari posts,

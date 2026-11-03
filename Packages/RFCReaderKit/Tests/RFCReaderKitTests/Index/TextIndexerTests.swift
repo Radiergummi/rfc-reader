@@ -8,7 +8,7 @@ import Testing
 /// The full-text index kept to what the store holds (#37): a body stored is indexed,
 /// and one removed, evicted or purged leaves the index. Each test has a store and an
 /// index of its own.
-@Suite("Text indexer", .timeLimit(.minutes(1)))
+@Suite("Text indexer", .hangGuard)
 struct TextIndexerTests {
   typealias Sandbox = DocumentStoreTests.Sandbox
   typealias GatedFetcher = DocumentStoreTests.GatedFetcher
@@ -271,6 +271,44 @@ struct TextIndexerTests {
     let found = try await indexer.search("intermediaries")
     #expect(Set(found.hits.map(\.document)) == [id, .rfc(1)])
     #expect(found.searched == 2)
+  }
+
+  /// Spotlight indexes the sections of what the app holds (#178): a document Index
+  /// All RFCs indexed without keeping its body is searched in the app, not there.
+  @Test func `the documents for Spotlight are those indexed from a stored body`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id, .rfc(1)]) { try fetch($0) }
+
+    let documents = try #require(await indexer.spotlightDocuments())
+    #expect(Set(documents.keys) == [id])
+    #expect(try await indexer.indexedRows(of: id).contains { $0.anchor == "connection-id" })
+  }
+
+  /// A retained document stays indexed when its body goes, but leaves Spotlight's
+  /// documents: the reconcile says so, for Spotlight to follow (#178).
+  @Test func `a retained document's body leaving is a change`() async throws {
+    let sandbox = Sandbox()
+    defer { sandbox.remove() }
+    let store = sandbox.store()
+    let indexer = try TextIndexer(contentsOf: indexURL(in: sandbox), store: store)
+    let fetch = CountingFetch()
+    _ = await indexer.indexAll([id]) { try fetch($0) }
+    try await storeBody(in: store)
+    await indexer.reconcile()
+    #expect(await store.evict(pinned: [], bound: 0) == [id])
+
+    let changes = Mutex(0)
+    await indexer.reconcile { changes.withLock { $0 += 1 } }
+
+    #expect(changes.withLock { $0 } > 0)
+    #expect(try #require(await indexer.spotlightDocuments()).isEmpty)
+    #expect(try await indexer.search("intermediaries").hits.map(\.document) == [id])
   }
 
   /// Its documents have no body in the store, which a reconcile would otherwise read

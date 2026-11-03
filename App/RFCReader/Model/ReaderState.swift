@@ -30,6 +30,11 @@ final class ReaderState {
   /// Where the build on screen placed each of the document's highlights (#522), which
   /// the Annotations tab lists: nil until a build has, or when there is none.
   var highlightStatuses: [UUID: HighlightPlacement.Status]?
+  /// Where it placed each of the document's notes (#523): nil as for the highlights.
+  var notePlacement: NotePlacement?
+  /// A note's editor asked for from the panel (#523): the Annotations tab, or a
+  /// section's row in the contents. The reader on screen takes it to its text view.
+  var noteRequest: PanelNoteRequest?
   /// What the open RFC can be saved as: `ExportFormat.everyDocument`, and its grammar where it has one
   /// (#185). Set once the document has loaded.
   var exportFormats: [ExportFormat] = ExportFormat.everyDocument
@@ -48,6 +53,35 @@ final class ReaderState {
   /// In Focus, the References tab's groups with only what the focused section cites
   /// (#699); nil out of Focus, and for a section that cites nothing.
   var focusGroups: [ReferenceGroup]?
+
+  /// The text view of the reader on screen, which Next and Previous Section act on
+  /// outside Focus (#711): it knows the reader's line. It sets itself as it is
+  /// updated, as Find's text view does; a preview's never does.
+  @ObservationIgnored weak var keyboardReader: RFCTextViewCoordinator?
+  /// Whether Go to Section's field shows (#711).
+  var isGoingToSection = false
+
+  /// Next Section and Previous Section (#711): in Focus the focus steps; in any other
+  /// mode the reader goes to the heading after or before the section it is in, or in
+  /// the outline the row.
+  func stepSection(_ step: Folding.FocusStep) {
+    if folding.mode == .focus {
+      stepFocus(step)
+    } else {
+      keyboardReader?.perform(.section(step))
+    }
+  }
+
+  /// Whether Next or Previous Section has somewhere to go. Outside Focus that depends
+  /// on the reader's line, which nothing observes, so the items are there whenever
+  /// the reader's text with its sections is, in every mode: not `foldingIndex`, which
+  /// only Focus and the outline keep (#1032). Not while a note's editor is open, over
+  /// this reader or the one beside it, as the Edit commands are not (#1007).
+  func canStepSection(_ step: Folding.FocusStep) -> Bool {
+    guard !editsNote, sideBySide?.reader.editsNote != true else { return false }
+    guard folding.mode != .focus else { return canStepFocus(step) }
+    return hasDocument && !showOriginal && !sections.isEmpty && offersSections
+  }
 
   /// Next Section and Previous Section, in Focus (#699). The reader's line goes to
   /// the new section's heading, which the text view does for any change of focus.
@@ -126,6 +160,11 @@ final class ReaderState {
   /// `ReaderController.hasSelection`.
   var hasSelection = false
 
+  /// Whether a note's editor is open over the reader's text (#1007): on the Mac it
+  /// is a popover, its own key window, and the reader's Edit commands do nothing
+  /// there, so they are grayed out. Written by the coordinator that opened it.
+  var editsNote = false
+
   /// A document read beside this one, scrolling with it (#187); nil when it is
   /// read alone. Only the window's own reader has one: the reader beside it is
   /// `SideBySide`'s, and has only the coupling.
@@ -172,6 +211,9 @@ final class ReaderState {
   /// Whether the build on screen is the translation, which has no quote to copy:
   /// not until it is made, though `showTranslation` is on.
   var readsTranslation = false
+  /// What the build on screen named an appendix by (#940), which the contents name
+  /// it by too: a translation's labels, or English.
+  var appendixLabels = RFCKit.Section.AppendixLabels.english
   /// The older document the reader marks what changed since (#729): another
   /// revision of the draft on screen, or the draft the RFC on screen was. Set from
   /// the header, read by the reader, which builds the redline once both are here.
@@ -190,6 +232,12 @@ final class ReaderState {
   var offersPrintAndExport: Bool {
     PublishedOriginalPage.offersPrintAndExport(
       hasDocument: hasDocument, kind: publishedOriginal?.kind)
+  }
+
+  /// Whether Go to Section, Focus and the outline offer the loaded text's sections:
+  /// not for an RFC read as its original (#1022).
+  var offersSections: Bool {
+    PublishedOriginalPage.offersSections(kind: publishedOriginal?.kind)
   }
 
   /// Who says how far the title has come into the toolbar, and the one place its
@@ -298,13 +346,21 @@ final class ReaderState {
     openPanel()
   }
 
+  /// Opens a note's editor in the reader on screen.
+  func openNote(_ request: NoteRequest) {
+    noteRequest = PanelNoteRequest(request: request)
+  }
+
   func clear() {
     titleOwnership.close()
     sections = []
     readsTranslation = false
+    appendixLabels = .english
     groups = []
     requirements = nil
     highlightStatuses = nil
+    notePlacement = nil
+    noteRequest = nil
     exportFormats = ExportFormat.everyDocument
     folding.expanded = []
     folding.openAsides = []
@@ -339,4 +395,11 @@ extension ReaderState {
   ) -> Writer {
     ScopedWriter(self) { navigation.shows(document, at: depth) }
   }
+}
+
+/// A note's editor asked for from the panel: each a request of its own, so asking for
+/// the same note again is a change the reader sees (#523).
+struct PanelNoteRequest: Equatable {
+  let id = UUID()
+  let request: NoteRequest
 }

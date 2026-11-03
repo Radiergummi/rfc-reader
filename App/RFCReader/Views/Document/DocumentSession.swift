@@ -455,6 +455,7 @@ final class DocumentSession {
       reader {
         $0.sections = rebuilt.reachableSections(of: shown)
         $0.readsTranslation = rebuilt.isTranslation
+        $0.appendixLabels = rebuilt.appendixLabels
       }
     }
   }

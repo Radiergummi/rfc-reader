@@ -311,7 +311,9 @@ final class NavigationModel: Identifiable {
     case landed
     /// The document holds no such place.
     case noSuchPlace
-    /// There was no document to jump in: none on screen, or it failed to load.
+    /// There was no text to jump in: no document on screen, one that failed to load,
+    /// or an RFC read as its original, whose page shows no text even where its
+    /// pointer text loaded (#1031).
     case notShown
     /// The document was hidden, the tab went somewhere else, or another jump was
     /// asked for, before the reader made it.

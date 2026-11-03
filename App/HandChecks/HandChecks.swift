@@ -172,6 +172,49 @@ final class HandChecks: XCTestCase {
     screenshot("5 still on")
   }
 
+  // MARK: - Page themes (#704)
+
+  /// A page theme chosen while a document is open recolors it in place, page and
+  /// text, and the appearance override with a dark theme darkens the whole app.
+  /// The screenshots are what to look at: the text is drawn, not read here.
+  func testPageThemeSwitchWhileReading() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    screenshot("1 automatic")
+
+    chooseInReadingSettings([("Light Theme", "Sepia")])
+    waitForReader("RFC 8174")
+    screenshot("2 sepia")
+
+    chooseInReadingSettings([("Appearance", "Dark"), ("Dark Theme", "Black")])
+    waitForReader("RFC 8174")
+    screenshot("3 dark, black")
+
+    chooseInReadingSettings([("Appearance", "System"), ("Light Theme", "Automatic")])
+    waitForReader("RFC 8174")
+    screenshot("4 back to automatic")
+  }
+
+  /// Opens Reading Settings from the reader, picks each picker's choice, and closes
+  /// it again.
+  private func chooseInReadingSettings(_ choices: [(picker: String, choice: String)]) {
+    app.buttons["Text Size"].tap()
+    app.buttons["Reading Settings…"].tap()
+    for (picker, choice) in choices {
+      // A menu picker's row is a button labeled with its title and its choice.
+      let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", picker))
+        .firstMatch
+      if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+      XCTAssertTrue(row.waitForExistence(timeout: 5), "no \(picker) picker")
+      row.tap()
+      let option = app.buttons[choice]
+      XCTAssertTrue(option.waitForExistence(timeout: 5), "no \(choice) in \(picker)")
+      option.tap()
+    }
+    screenshot("settings: " + choices.map(\.choice).joined(separator: ", "))
+    app.buttons["Done"].tap()
+  }
+
   // MARK: - Find (#943)
 
   /// More ▸ Find in Document is offered over a text and nowhere else: not over the
@@ -218,6 +261,105 @@ final class HandChecks: XCTestCase {
   /// Dismisses an open menu with a tap outside it, at the top of the screen.
   private func closeMenu() {
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+  }
+
+  // MARK: - The Info pane (#577)
+
+  /// A long press on a format row offers Open, Share and Download; Download fetches
+  /// the file and offers it to Save to Files, and once that is done, a Download from
+  /// another row of the card offers its file in turn.
+  func testFormatRowDownload() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    app.buttons["Info"].tap()
+
+    // RFC 8174 is published as text and HTML only.
+    let text = app.buttons["Plain Text"].firstMatch
+    XCTAssertTrue(text.waitForExistence(timeout: 10), "no Plain Text row in the Info pane")
+    // The Formats card is below the medium sheet's fold.
+    for _ in 0..<5 where !text.isHittable {
+      app.swipeUp()
+    }
+    text.press(forDuration: 1.5)
+    XCTAssertTrue(app.buttons["Open"].waitForExistence(timeout: 5), "no menu")
+    XCTAssertTrue(app.buttons["Share…"].exists)
+    XCTAssertTrue(app.buttons["Download"].exists)
+    screenshot("1 long press")
+
+    for (step, row) in [(2, text), (4, app.buttons["HTML"].firstMatch)] {
+      if step > 2 {
+        row.press(forDuration: 1.5)
+        XCTAssertTrue(app.buttons["Download"].waitForExistence(timeout: 5), "no menu on HTML")
+      }
+      app.buttons["Download"].tap()
+      // Save to Files is the system's document picker, which saves with Save.
+      let save = app.buttons["Save"].firstMatch
+      XCTAssertTrue(save.waitForExistence(timeout: 30), "no Save to Files, step \(step)")
+      screenshot("\(step) Save to Files")
+      save.tap()
+      XCTAssertTrue(save.waitForNonExistence(timeout: 10), "Save to Files stayed, step \(step)")
+      screenshot("\(step + 1) saved")
+    }
+  }
+
+  // MARK: - Go to RFC (#579)
+
+  /// The library's # opens Go to RFC on a text keyboard; `BCP 14` lists its members
+  /// and not RFC 14, and Open opens the first.
+  func testGoToRFC() throws {
+    app.launch()
+    dismissStoreWarning()
+    waitForIndex()
+    // The bar's button, at the foot of the screen: the keyboard command of the same
+    // name is listed too, at the screen's middle.
+    let goTo = try XCTUnwrap(
+      app.buttons.matching(identifier: "Go to RFC").allElementsBoundByIndex
+        .max { $0.frame.minY < $1.frame.minY }, "no Go to RFC button")
+    goTo.tap()
+
+    let field = app.textFields["RFC number, BCP 14, or a link"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "no Go to RFC sheet")
+    // A text keyboard: letters as well as digits.
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard")
+    XCTAssertTrue(app.keyboards.keys["q"].exists)
+    screenshot("1 keyboard")
+
+    field.typeText("BCP 14")
+    XCTAssertTrue(
+      app.buttons["RFC 2119"].waitForExistence(timeout: 5)
+        || app.staticTexts["RFC 2119"].waitForExistence(timeout: 1), "RFC 2119 not listed")
+    XCTAssertTrue(app.staticTexts["RFC 8174"].exists, "RFC 8174 not listed")
+    XCTAssertFalse(app.staticTexts["RFC 14"].exists, "BCP 14 listed RFC 14")
+    screenshot("2 typed BCP 14")
+
+    app.buttons["Open"].tap()
+    waitForReader("RFC 2119")
+    screenshot("3 opened")
+  }
+
+  // MARK: - The References panel (#580)
+
+  /// A long press on a References row shows its RFC's preview above the row's menu,
+  /// as a citation's in the prose does.
+  func testReferenceRowPreview() {
+    launch(opening: "rfc://8174")
+    waitForReader("RFC 8174")
+    app.buttons["Contents"].firstMatch.tap()
+    let references = app.buttons["References"].firstMatch
+    XCTAssertTrue(references.waitForExistence(timeout: 10), "no References tab")
+    references.tap()
+
+    let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "RFC 2119"))
+      .firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 10), "no RFC 2119 row in References")
+    screenshot("1 references")
+    row.press(forDuration: 1.5)
+    XCTAssertTrue(app.buttons["Copy Link"].waitForExistence(timeout: 5), "no menu")
+    // The preview is RFC 2119's, whose title is there once it has loaded.
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Requirement Levels"))
+        .firstMatch.waitForExistence(timeout: 30), "no preview of RFC 2119")
+    screenshot("2 long press")
   }
 
   // MARK: - Steps

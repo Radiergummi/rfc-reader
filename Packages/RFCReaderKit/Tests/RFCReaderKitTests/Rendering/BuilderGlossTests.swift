@@ -67,7 +67,7 @@ struct BuilderGlossTests {
     let underline = text.attribute(.underlineStyle, at: offset, effectiveRange: nil) as? Int
     #expect(underline == NSUnderlineStyle.single.union(.patternDot).rawValue)
     let color = text.attribute(.underlineColor, at: offset, effectiveRange: nil) as? PlatformColor
-    #expect(color == RFCColors.secondaryLabel)
+    #expect(color == ReaderPalette.themedSecondaryText)
   }
 
   #if canImport(UIKit)

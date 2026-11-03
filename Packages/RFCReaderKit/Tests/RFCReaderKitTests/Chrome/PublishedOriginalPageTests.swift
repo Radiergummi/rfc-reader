@@ -96,6 +96,17 @@ struct PublishedOriginalActionsTests {
         == .pointer)
   }
 
+  /// A pointer's loaded text is not the RFC, nor on its page (#1022): Go to Section
+  /// does not list its sections, nor Focus and the outline step through them.
+  @Test func `only an RFC read as its text offers its sections`() {
+    let pointerKind = PublishedOriginalPage.Status(
+      .rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)?.kind
+    let scanKind = PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)?.kind
+    #expect(!PublishedOriginalPage.offersSections(kind: pointerKind))
+    #expect(!PublishedOriginalPage.offersSections(kind: scanKind))
+    #expect(PublishedOriginalPage.offersSections(kind: nil))
+  }
+
   /// A script, a shortcut or a collection's export is refused what Print and Export
   /// do not offer (#383): a scan, and a pointer, in the words the panel says it with.
   @Test func `an RFC read as its original is not exported`() {

@@ -11,6 +11,8 @@ public protocol ReaderTextDriving: AnyObject {
   func scroll(to anchor: String, offset: Int)
   /// The header's heading moved: the toolbar's title is worked out again.
   func headingDidMove()
+  /// Opens a note's editor beside what it is on (#523).
+  func openNote(_ request: NoteRequest)
 }
 
 /// Where the reader is, and what it was asked to do: the one interface between a
@@ -136,6 +138,9 @@ public final class ReaderController {
   /// where it is, or why it is drawn nowhere. The Annotations tab lists it. Nil where
   /// the build places none, as a translation's does.
   public private(set) var highlightStatuses: [UUID: HighlightPlacement.Status]?
+  /// What became of each note of the document in the build on screen (#523). Nil
+  /// where the build places none.
+  public private(set) var notePlacement: NotePlacement?
 
   public init() {}
 
@@ -168,6 +173,17 @@ public final class ReaderController {
   /// Where the build on screen placed the document's highlights.
   public func reportHighlights(_ statuses: [UUID: HighlightPlacement.Status]?) {
     publish(.highlights(statuses))
+  }
+
+  /// Where the build on screen placed the document's notes.
+  public func reportNotes(_ placement: NotePlacement?) {
+    publish(.notes(placement))
+  }
+
+  /// Opens a note's editor in the text view (#523): from the Annotations tab, or the
+  /// contents panel's Add Note to Section. Nothing without a text view.
+  public func openNote(_ request: NoteRequest) {
+    driver?.openNote(request)
   }
 
   /// The text view changed the folding itself, and the scene is to follow.
@@ -234,6 +250,7 @@ public final class ReaderController {
     case bars(Bool)
     case folding(Folding)
     case highlights([UUID: HighlightPlacement.Status]?)
+    case notes(NotePlacement?)
   }
 
   /// The one hop: what the coordinator reports from inside SwiftUI's update reaches
@@ -250,6 +267,8 @@ public final class ReaderController {
     case .folding(let folding): foldingRequest = folding
     case .highlights(let statuses):
       if statuses != highlightStatuses { highlightStatuses = statuses }
+    case .notes(let placement):
+      if placement != notePlacement { notePlacement = placement }
     }
   }
 }
