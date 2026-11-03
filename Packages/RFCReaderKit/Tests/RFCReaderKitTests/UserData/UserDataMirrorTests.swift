@@ -87,6 +87,37 @@ struct UserDataMirrorTests {
     #expect(mirror.recentlyRead() == [.rfc(9110)])
   }
 
+  /// Saved in a context of its own, read back on the main one, which holds nothing
+  /// pending; a later save moves the place, and an opening dates it and leaves it.
+  @Test func `a reading place saved is read back and moved by the next`() throws {
+    let mirror = try makeMirror(reporting: Reports())
+    mirror.start()
+    let first = ReadingPlace(anchor: "section-1", offset: 0)
+    let second = ReadingPlace(anchor: "section-2", offset: 4)
+
+    try mirror.saveReadingPlace(first, for: .rfc(.rfc(9110)))
+    #expect(try mirror.readingPosition(for: .rfc(.rfc(9110)))?.place == first)
+    try mirror.saveReadingPlace(second, for: .rfc(.rfc(9110)))
+    try mirror.markOpened(.rfc(.rfc(9110)))
+
+    #expect(try mirror.readingPosition(for: .rfc(.rfc(9110)))?.place == second)
+    #expect(!mirror.container.mainContext.hasChanges)
+    #expect(mirror.recentlyReadCount == 1)
+  }
+
+  /// An opening lists a document as read before it has a place.
+  @Test func `an opening is saved without a place`() throws {
+    let mirror = try makeMirror(reporting: Reports())
+    mirror.start()
+
+    try mirror.markOpened(.rfc(.rfc(9110)))
+
+    let position = try #require(try mirror.readingPosition(for: .rfc(.rfc(9110))))
+    #expect(position.place == nil)
+    #expect(!mirror.container.mainContext.hasChanges)
+    #expect(mirror.recentlyRead() == [.rfc(9110)])
+  }
+
   @Test func `a collection edited is mirrored and reported with its snapshot`() throws {
     let reports = Reports()
     let mirror = try makeMirror(reporting: reports)
