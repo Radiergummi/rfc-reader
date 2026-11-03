@@ -162,7 +162,8 @@ struct SetTextSizeIntent: AppIntent {
   var size: Double?
 
   static var parameterSummary: some ParameterSummary {
-    When(\.$change, .equalTo, .size) {
+    // The root is named: Xcode 26's compiler can't infer it here.
+    When(\SetTextSizeIntent.$change, .equalTo, .size) {
       Summary("Set the text \(\.$change) to \(\.$size)")
     } otherwise: {
       Summary("Make the text \(\.$change)")
