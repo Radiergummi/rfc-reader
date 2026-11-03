@@ -49,7 +49,9 @@ enum AppData {
       }
     }
     do {
-      try UserData.deduplicate(container.mainContext)
+      // In a context of its own, so a failed save leaves nothing pending on the main
+      // context for its autosave to commit (#1002).
+      try UserData.deduplicate(ModelContext(container))
     } catch {
       dataLog.error(
         "merging duplicate rows failed: \(String(describing: error), privacy: .public)")
