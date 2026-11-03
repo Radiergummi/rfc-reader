@@ -59,8 +59,8 @@ enum SpotlightIndexer {
   /// says: the documents gone or written again are deleted, then the new ones are
   /// indexed from the full-text index's rows, in `SpotlightSection.Batches`, each
   /// recording what the index then holds (`sectionRecordURL`, with its digest as the
-  /// client state). `rebuilding` empties the index and indexes everything, whatever
-  /// the record says.
+  /// client state). `rebuilding` deletes the record first, so the index is emptied
+  /// and everything indexed, by this indexing or, should it end early, the next.
   ///
   /// Off the main actor but for making each batch's items (`submit`): they carry
   /// `SectionEntity`, which is the main actor's.
@@ -68,13 +68,19 @@ enum SpotlightIndexer {
   static func updateSections(
     from indexer: TextIndexer, rfcs: [RFCMetadata], rebuilding: Bool
   ) async {
-    guard CSSearchableIndex.isIndexingAvailable(), let recordURL = sectionRecordURL,
-      let held = await indexer.spotlightDocuments()
-    else { return }
+    guard CSSearchableIndex.isIndexingAvailable(), let recordURL = sectionRecordURL else {
+      return
+    }
+    if rebuilding {
+      // Before anything that can end this early: without a record, whichever
+      // indexing comes next rebuilds, so the request outlives this one.
+      try? FileManager.default.removeItem(at: recordURL)
+    }
+    guard let held = await indexer.spotlightDocuments() else { return }
     let index = CSSearchableIndex(name: SpotlightSection.domain)
     do {
       let plan = SpotlightSection.Plan(
-        held: held, record: rebuilding ? nil : try? Data(contentsOf: recordURL),
+        held: held, record: try? Data(contentsOf: recordURL),
         clientState: try await index.fetchLastClientState())
       guard !plan.isEmpty else { return }
       let interval = signposter.beginInterval(
