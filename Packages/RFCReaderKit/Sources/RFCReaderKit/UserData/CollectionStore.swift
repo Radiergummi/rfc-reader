@@ -140,7 +140,8 @@ public enum CollectionStore {
       addedAt: first.addedAt)
     removed.forEach(context.delete)
     try context.save()
-    undoManager?.registerUndo(withTarget: context) { context in
+    // The context is held strongly, as `BookmarkStore`'s is.
+    undoManager?.registerUndo(withTarget: context) { [context] _ in
       // An undo manager runs what is registered on the thread that calls its undo()
       // or redo(). The App's come from SwiftUI's environment and are driven by the
       // Edit menu and the shake gesture, on the main thread; the tests drive theirs
@@ -186,7 +187,7 @@ public enum CollectionStore {
         collection: identifier, document: document, position: removal.position,
         addedAt: removal.addedAt))
     try context.save()
-    undoManager?.registerUndo(withTarget: context) { context in
+    undoManager?.registerUndo(withTarget: context) { [context] _ in
       // On the main thread, for the reason `remove` gives.
       MainActor.assumeIsolated {
         do {

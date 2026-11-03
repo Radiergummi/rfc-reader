@@ -16,8 +16,11 @@ private let mirrorLog = Logger(
 /// found, as until it their emptiness meant nothing
 /// (`knowsWantedOffline(keepsBookmarks:)`).
 ///
-/// Also where a bookmark or a collection is changed, on the container's main context,
-/// whose save the mirror then reads.
+/// Also where the user's data is changed, each change in a context of its own, whose
+/// save the mirror then reads. A change whose save fails is thrown away with its
+/// context (#1002): left pending on the main context, the next save of anything
+/// committed it, and a retry found it there. Rolling the main context back instead did
+/// not reliably undo what its fetches answer.
 @MainActor @Observable
 public final class UserDataMirror {
   /// Every bookmarked document: one set for the toolbars, scripts and lists alike, so
@@ -241,14 +244,20 @@ public final class UserDataMirror {
 
   // MARK: - Changes
 
-  /// Runs a change to collections on the main context. A failure is logged rather
+  /// A context for one change, thrown away with whatever it holds when its save fails.
+  /// An undo registered on it holds it.
+  private func changeContext() -> ModelContext {
+    ModelContext(container)
+  }
+
+  /// Runs a change to collections in a context of its own. A failure is logged rather
   /// than shown (#125): every change the interface offers is one the store accepts,
   /// and an empty name is refused before it gets here. Answers whether it was made,
   /// for a view that says it was.
   @discardableResult
   public func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
     do {
-      try change(container.mainContext)
+      try change(changeContext())
       return true
     } catch {
       mirrorLog.error(
@@ -257,12 +266,12 @@ public final class UserDataMirror {
     }
   }
 
-  /// Runs a change to annotations on the main context, logged rather than shown when
+  /// Runs a change to annotations in a context of its own, logged rather than shown when
   /// it fails, as a collection's is (#125). Answers whether it was made.
   @discardableResult
   public func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
     do {
-      try change(container.mainContext)
+      try change(changeContext())
       return true
     } catch {
       mirrorLog.error(
@@ -278,11 +287,10 @@ public final class UserDataMirror {
     )
   }
 
-  /// Adds the bookmark or removes it, on the main context, titled `title`. A failure
-  /// is logged rather than shown, as a collection's is (#125). A failed lookup
-  /// changes nothing; a failed save leaves the change pending in the context, saved
-  /// with the next save that succeeds. A removal registers its undo with
-  /// `undoManager` (#769), whose own failures are logged too.
+  /// Adds the bookmark or removes it, in a context of its own, titled `title`. A
+  /// failure is logged rather than shown, as a collection's is (#125), and changes
+  /// nothing. A removal registers its undo with `undoManager` (#769), whose own
+  /// failures are logged too.
   public func toggleBookmark(_ id: DocumentID, title: String, undoManager: UndoManager? = nil) {
     do {
       try BookmarkStore.toggle(
@@ -291,37 +299,35 @@ public final class UserDataMirror {
           mirrorLog.error(
             "undoing or redoing a bookmark's removal failed: \(String(describing: error), privacy: .public)"
           )
-        }, in: container.mainContext)
+        }, in: changeContext())
     } catch {
       mirrorLog.error(
         "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
     }
   }
 
-  /// Marks the document Keep Offline, or removes its mark (#358). A failure is thrown
-  /// for the caller to log.
+  /// Marks the document Keep Offline, or removes its mark (#358), in a context of its
+  /// own. A failure is thrown for the caller to log, and changes nothing.
   public func setMarked(_ id: DocumentID, _ isMarked: Bool) throws {
-    try OfflineMarkStore.setMarked(id, isMarked, in: container.mainContext)
+    try OfflineMarkStore.setMarked(id, isMarked, in: changeContext())
   }
 
-  /// Follows the working group, or stops following it (#731). A failure is thrown for
-  /// the caller to log.
+  /// Follows the working group, or stops following it (#731), in a context of its own.
+  /// A failure is thrown for the caller to log, and changes nothing.
   public func setFollowed(_ group: String, _ isFollowed: Bool) throws {
-    try FollowedGroupStore.setFollowed(group, isFollowed, in: container.mainContext)
+    try FollowedGroupStore.setFollowed(group, isFollowed, in: changeContext())
   }
 
   /// Removes every Keep Offline mark, on every device, since marks are synced, as
   /// Settings' Remove All Offline Documents does (#358), and reports the marks once.
   /// `first` runs before the removal, so what it changes is what that one report sees.
-  /// The removal is made in a context of its own, discarded with it when the save
-  /// fails, since rolling back the main context would discard whatever else waits
-  /// there to be saved, such as a bookmark whose save failed. A failure is thrown,
-  /// after `first` ran, and nothing is reported.
+  /// The removal is made in a context of its own, as every change is. A failure is
+  /// thrown, after `first` ran, and nothing is reported.
   public func removeAllOfflineMarks(first: () -> Void) throws {
     let marks = offlineMarks
     first()
     // The save's notification reads the marks again, and reports them when they changed.
-    try OfflineMarkStore.removeAll(in: ModelContext(container))
+    try OfflineMarkStore.removeAll(in: changeContext())
     refreshOfflineMarks()
     // When none were removed nothing changed, and what `first` changed is reported here.
     if offlineMarks == marks { onOfflineMarksChanged() }

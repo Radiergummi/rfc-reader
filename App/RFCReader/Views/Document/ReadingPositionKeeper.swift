@@ -7,14 +7,19 @@ import os
 /// the place saved when the reader leaves, and that place asked for when it comes
 /// back (#599). A failure is logged and otherwise dropped: the reader then opens at
 /// the top, as it does for a document never read.
+///
+/// Each write is made in a context of its own, thrown away when its save fails, as
+/// `UserDataMirror` makes every change (#1002): left pending on `context`, the next
+/// save of anything there would commit it.
 struct ReadingPositionKeeper {
   /// An RFC, or a draft's revision (#728).
   let id: ReadableDocument
+  /// Where the stored place is read.
   let context: ModelContext
 
   func markOpened() {
     do {
-      try ReadingPositionStore.markOpened(id, in: context)
+      try ReadingPositionStore.markOpened(id, in: ModelContext(context.container))
     } catch {
       readerLog.error(
         "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
@@ -30,7 +35,8 @@ struct ReadingPositionKeeper {
     guard let anchor = reader.anchor else { return }
     do {
       try ReadingPositionStore.save(
-        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id, in: context)
+        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id,
+        in: ModelContext(context.container))
     } catch {
       readerLog.error(
         "saving the position failed: \(String(describing: error), privacy: .public)")

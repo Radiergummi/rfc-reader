@@ -75,14 +75,16 @@ public enum BookmarkStore {
 
     /// Registers `action` as the undo. Its undo and redo run long after the toggle
     /// returns, so they hand what they throw to `onFailure`, as
-    /// `CollectionStore.remove`'s do. The manager is held weakly: it holds this.
+    /// `CollectionStore.remove`'s do. The manager is held weakly: it holds this. The
+    /// context strongly: the manager holds its target weakly, and the change's context
+    /// is its own, held by nothing else once the change returns (#1002).
     func register(
       in context: ModelContext, _ action: @escaping @MainActor (ModelContext, Undo) throws -> Void
     ) {
       guard let manager else { return }
       let name = name
       let onFailure = onFailure
-      manager.registerUndo(withTarget: context) { [weak manager] context in
+      manager.registerUndo(withTarget: context) { [weak manager, context] _ in
         // On the main thread, for the reason `CollectionStore.remove` gives.
         MainActor.assumeIsolated {
           do {
@@ -102,11 +104,11 @@ public enum BookmarkStore {
     guard try bookmarks(for: entry.document, in: context).isEmpty else { return }
     context.insert(
       Bookmark(document: entry.document, title: entry.title, createdAt: entry.createdAt))
+    try context.save()
     undo.register(in: context) { context, undo in
       try remove(
         bookmarks(for: entry.document, in: context), putBack: entry, undo: undo, in: context)
     }
-    try context.save()
   }
 
   /// Removes `existing`, every row naming the document, since nothing stops there
@@ -116,16 +118,16 @@ public enum BookmarkStore {
   ) throws {
     guard !existing.isEmpty else { return }
     existing.forEach(context.delete)
-    // Registered before the save: a failed save leaves the removal pending in the
-    // context, saved with the next save that succeeds, and still undoable.
-    undo.register(in: context) { context, undo in
-      try put(entry, undo: undo, in: context)
-    }
     // Explicitly, rather than leaving it to autosave on one platform and not the
     // other: on macOS the sidebar's list and the reader's toolbar are separate
     // hosting roots reading the same store, and the glyph should not be able to
     // disagree with the list behind it while a save is still pending.
     try context.save()
+    // Registered after the save: a removal whose save failed was thrown away with
+    // its context (#1002), and there is nothing to undo.
+    undo.register(in: context) { context, undo in
+      try put(entry, undo: undo, in: context)
+    }
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do

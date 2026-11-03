@@ -3,8 +3,8 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 
-// Highlights (#522) and notes (#523), made and changed on the main context through
-// `AnnotationStore`,
+// Highlights (#522) and notes (#523), made and changed in a context of their own
+// (`UserDataMirror.editAnnotations`) through `AnnotationStore`,
 // which decides what each change does; a failure is logged, as a collection's is.
 
 extension LibraryModel {
