@@ -34,15 +34,19 @@ struct DataFileRefresherTests {
   /// Answers `revisions.json` and `groups.json` with `revisions` and `groups`, and
   /// everything else with a `404`; counts the requests for each file. Holds a request
   /// for `holding` until it is canceled, as a session waiting for a cheap network does,
-  /// or times out after a few seconds, so a refresh that is never canceled fails the
-  /// test rather than hanging it: the time limit cancels the test, not the refresh's
-  /// own task. Fails the first `failing` requests, as a path with no network does.
+  /// and says so on `held`. Gives up on it after half a minute, so a refresh that is
+  /// never canceled fails the test rather than hanging it: the time limit cancels the
+  /// test, not the refresh's own task. Fails the first `failing` requests, as a path
+  /// with no network does.
   private final class Transport: HTTPTransport, @unchecked Sendable {
     private let revisions: RFCRevisions
     private let holding: String?
     private let lock = NSLock()
     private var sent: [String] = []
     private var failing: Int
+    private let heldRequests = AsyncStream<Void>.makeStream()
+    /// Yields when a request for `holding` is being held.
+    var held: AsyncStream<Void> { heldRequests.stream }
 
     init(
       revisions: RFCRevisions = DataFileRefresherTests.revisions, holding: String? = nil,
@@ -66,7 +70,8 @@ struct DataFileRefresherTests {
       }
       if fails { throw URLError(.notConnectedToInternet) }
       if file == holding {
-        try await Task.sleep(for: .seconds(5))
+        heldRequests.continuation.yield()
+        try await Task.sleep(for: .seconds(30))
         throw URLError(.timedOut)
       }
       let body: Data? =
@@ -231,11 +236,12 @@ struct DataFileRefresherTests {
     let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
     let refresher = refresher(any: any, cheap: cheap, now: { nextDay })
     let waiting = Task { await refresher.refreshRevisions() }
-    // Bounded, so a refresh that never asks the cheap-network client fails here
-    // rather than spinning past the time limit, which a yield does not notice.
-    for _ in 0..<10_000 where cheap.requests(for: "revisions.json") == 0 {
-      await Task.yield()
-    }
+    // Awaited rather than polled: a loop yielding the main actor took this past the
+    // time limit when the whole suite ran on the iOS Simulator in CI. A
+    // refresh that never asks the cheap-network client ends at the time limit, which
+    // cancels the wait.
+    var held = cheap.held.makeAsyncIterator()
+    await held.next()
     try #require(cheap.requests(for: "revisions.json") == 1)
     await refresher.refreshRevisions(onExpensiveNetworks: true)
     #expect(refresher.revisions == Self.newerRevisions)
