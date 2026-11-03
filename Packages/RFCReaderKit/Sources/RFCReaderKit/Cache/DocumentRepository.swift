@@ -210,11 +210,8 @@ public final class DocumentRepository {
     let annotated = try AnnotationStore.annotatedDocuments(in: context)
     return CacheEviction.pinned(
       bookmarked: bookmarked.union(annotated), read: read, marked: marked,
-      open: openRFCs, withMembers: withMembers(of:))
+      open: Set(openDocuments().compactMap(\.rfc)), withMembers: withMembers(of:))
   }
-
-  private var openRFCs: Set<DocumentID> { Set(openDocuments().compactMap(\.rfc)) }
-  private var openDrafts: Set<DraftID> { Set(openDocuments().compactMap(\.draft)) }
 
   // MARK: - Storage (#358)
 
@@ -226,8 +223,9 @@ public final class DocumentRepository {
   /// open (#728).
   public func storageUsage() async -> StorageReport {
     await offlineKeeper.untilRunsEnd()
-    let spared = sparedFromClearing()
-    let draftUsage = await drafts.storageUsage(sparing: openDrafts)
+    let open = openDocuments()
+    let spared = sparedFromClearing(open: open)
+    let draftUsage = await drafts.storageUsage(sparing: Set(open.compactMap(\.draft)))
     var report = await store.storageUsage(sparing: spared ?? [])
     report.cache = report.cache.adding(draftUsage.cache)
     report.clearable =
@@ -240,10 +238,11 @@ public final class DocumentRepository {
   /// drafts read, but for those open; when what to spare cannot be told, nothing is
   /// removed.
   public func clearCache() async {
-    guard let spared = sparedFromClearing() else { return }
+    let open = openDocuments()
+    guard let spared = sparedFromClearing(open: open) else { return }
     let removed = await store.clearCache(sparing: spared)
     if !removed.isEmpty { onRemoved(removed) }
-    await drafts.clear(sparing: openDrafts)
+    await drafts.clear(sparing: Set(open.compactMap(\.draft)))
   }
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
@@ -251,7 +250,7 @@ public final class DocumentRepository {
   /// runs; nil when they cannot be read, or when what is wanted offline is not known
   /// yet, which would spare none of the bookmarks kept offline, nor a marked BCP's
   /// members.
-  private func sparedFromClearing() -> Set<DocumentID>? {
+  private func sparedFromClearing(open: [ReadableDocument]) -> Set<DocumentID>? {
     guard userData.knowsWantedOffline(keepsBookmarks: keepsBookmarksOffline) else {
       repositoryLog.error(
         "Clear Cache spares everything, what is wanted offline has not been read")
@@ -260,7 +259,7 @@ public final class DocumentRepository {
     do {
       return CacheEviction.spared(
         marked: try OfflineMarkStore.markedDocuments(in: userData.container.mainContext),
-        wantedOffline: wantedOffline, open: openRFCs)
+        wantedOffline: wantedOffline, open: Set(open.compactMap(\.rfc)))
     } catch {
       repositoryLog.error(
         "Clear Cache spares everything, reading the marks failed: \(String(describing: error), privacy: .public)"

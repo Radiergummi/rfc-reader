@@ -73,18 +73,23 @@ struct DocumentRepositoryTests {
       fetcher = await Fetcher()
     }
 
-    /// A repository over this setup, its eviction bound at nothing, so a load
-    /// evicts everything nothing pins, with the index of the fixtures and a network that
-    /// lets every fetch go ahead. Wired to the mirror as `LibraryModel` wires it.
-    func repository(cacheBound: Int = 0) -> DocumentRepository {
+    /// A repository over this setup, with the index of the fixtures. Its eviction
+    /// bound is nothing unless `cacheBound` says otherwise, so a load evicts
+    /// everything nothing pins, and its network lets a fetch nobody waits for go ahead
+    /// as `network` decides. Wired to the mirror as `LibraryModel` wires it, and the
+    /// mirror started, unless `wired` is false.
+    func repository(
+      cacheBound: Int = 0, network: FetchPolicy.Decision = .fetch, wired: Bool = true
+    ) -> DocumentRepository {
       let index = DocumentRepositoryTests.index
       let repository = DocumentRepository(
         store: sandbox.store(), client: fetcher, clientFailingOnExpensiveNetworks: fetcher,
         drafts: DraftStore(directory: sandbox.root.appending(path: "Drafts")),
         userData: userData, defaults: defaults, isStoredInMemory: false,
         index: { index }, openDocuments: { [open] in open.value },
-        networkDecision: { _ in .fetch }, cacheBound: cacheBound)
+        networkDecision: { _ in network }, cacheBound: cacheBound)
       repository.onRemoved = { [removed] in removed.value.append($0) }
+      guard wired else { return repository }
       userData.onOfflineMarksChanged = { [weak repository] in
         repository?.wantedOfflineChanged()
       }
@@ -95,7 +100,7 @@ struct DocumentRepositoryTests {
 
     func remove() {
       sandbox.remove()
-      UserDefaults.standard.removePersistentDomain(forName: suiteName)
+      defaults.removePersistentDomain(forName: suiteName)
     }
   }
 
@@ -181,13 +186,7 @@ struct DocumentRepositoryTests {
   @Test func `clearing the cache removes nothing before the marks have been read`() async throws {
     let setup = try await Setup()
     defer { setup.remove() }
-    let repository = DocumentRepository(
-      store: setup.sandbox.store(), client: setup.fetcher,
-      clientFailingOnExpensiveNetworks: setup.fetcher,
-      drafts: DraftStore(directory: setup.sandbox.root.appending(path: "Drafts")),
-      userData: setup.userData, defaults: setup.defaults, isStoredInMemory: false,
-      index: { Self.index }, openDocuments: { [] }, networkDecision: { _ in .fetch },
-      cacheBound: CacheEviction.defaultBound)
+    let repository = setup.repository(cacheBound: CacheEviction.defaultBound, wired: false)
     _ = try await repository.document(for: .rfc(.rfc(8999)))
 
     await repository.clearCache()
@@ -213,6 +212,24 @@ struct DocumentRepositoryTests {
     #expect(setup.sandbox.exists(.rfc(8999), format: .xml, in: .kept))
   }
 
+  /// #936: a load writes the body of a document wanted offline into the kept tier,
+  /// which the keeper, and so the row's mark, learns of only by running again.
+  @Test func `a load of a document wanted offline marks it available offline`() async throws {
+    let setup = try await Setup()
+    defer { setup.remove() }
+    // Waiting for Wi-Fi, so the mark alone fetches nothing.
+    let repository = setup.repository(network: .deferred(.waitingForWiFi))
+    try setup.userData.setMarked(.rfc(8999), true)
+    _ = await repository.storageUsage()
+    #expect(!repository.isAvailableOffline(.rfc(8999)))
+
+    _ = try await repository.document(for: .rfc(.rfc(8999)))
+    _ = await repository.storageUsage()
+
+    #expect(setup.sandbox.exists(.rfc(8999), format: .xml, in: .kept))
+    #expect(repository.isAvailableOffline(.rfc(8999)))
+  }
+
   /// Per device, as storage is, so read from and written to user defaults.
   @Test func `keeping bookmarks offline is remembered, and lists the bookmarks`() async throws {
     let setup = try await Setup()
@@ -225,7 +242,7 @@ struct DocumentRepositoryTests {
     repository.setKeepsBookmarksOffline(true)
 
     #expect(repository.availableOfflineNumbers == [2119, 8174])
-    #expect(setup.repository().keepsBookmarksOffline)
+    #expect(setup.repository(wired: false).keepsBookmarksOffline)
   }
 
   @Test func `removing every offline document removes the marks and stops keeping bookmarks`()
