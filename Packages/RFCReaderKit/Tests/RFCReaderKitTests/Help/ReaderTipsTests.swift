@@ -52,6 +52,12 @@ struct ReaderTipsTests {
     #expect(GoToRFCTip.words(on: .iOS, locale: .english).message.contains("Go to RFC"))
   }
 
+  /// iOS's sheet takes no title words (#579), so its tip does not promise them.
+  @Test func `the iOS tip offers what the sheet takes`() {
+    #expect(GoToRFCTip.words(on: .mac, locale: .english).message.contains("title"))
+    #expect(!GoToRFCTip.words(on: .iOS, locale: .english).message.contains("title"))
+  }
+
   @Test func `every tip has words in English and in German`() {
     for platform in ReaderShortcut.Platform.allCases {
       let english = [

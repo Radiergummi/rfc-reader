@@ -6,7 +6,9 @@ import RFCReaderKit
 /// Go to RFC's glue, shared by the iOS sheet and the Mac's palette, which keep only
 /// their layouts (#769): what is typed, its exact resolution and the search for it,
 /// and opening what was chosen. The two had copied it and drifted: only the Mac
-/// listed registry values and marked obsolete documents.
+/// listed registry values and marked obsolete documents. Only the Mac's palette
+/// searches titles: iOS's sheet sits beside a search field that already finds by
+/// keyword (#579).
 @MainActor
 @Observable
 final class QuickOpenController {
@@ -15,15 +17,19 @@ final class QuickOpenController {
   private let dismiss: () -> Void
 
   private(set) var input = ""
-  private(set) var results = QuickOpenResults()
+  private(set) var results: QuickOpenResults
   /// Set by the first thing that closes the view. The search goes on through a
   /// dismiss animation, and a ↵ it was holding must not open a second document
   /// after Cancel or a chosen row.
   private var isClosing = false
 
-  init(library: LibraryModel, navigation: NavigationModel, dismiss: @escaping () -> Void) {
+  init(
+    library: LibraryModel, navigation: NavigationModel, searches: Bool = true,
+    dismiss: @escaping () -> Void
+  ) {
     self.library = library
     self.navigation = navigation
+    results = QuickOpenResults(searches: searches)
     self.dismiss = dismiss
   }
 
