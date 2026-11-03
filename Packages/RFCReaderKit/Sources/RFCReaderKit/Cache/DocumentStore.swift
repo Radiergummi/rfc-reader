@@ -55,10 +55,10 @@ public actor DocumentStore {
     let entry: RFCMetadata?
   }
 
-  /// The app's build, which keys the parses kept encoded beside their bodies (#606):
-  /// a model written by another build is parsed again, whatever in the model or a
-  /// parser changed between them. Nil keeps none, as in tests that do not ask for them.
-  /// See `appBuild`.
+  /// The app's build, which keys the parses kept encoded beside their bodies (#606)
+  /// and the index snapshot (#758): a model or a snapshot written by another build is
+  /// parsed again, whatever in the model or a parser changed between them. Nil keeps
+  /// none, as in tests that do not ask for them. See `appBuild`.
   private let build: String?
 
   /// The last model write, which the next one waits for, as snapshots do.
@@ -114,8 +114,9 @@ public actor DocumentStore {
   private let bodiesChangedContinuation: AsyncStream<Void>.Continuation
 
   /// Where the index snapshot lives: in Caches, because it is made again from one
-  /// parse, so it stays out of backups.
-  private let snapshotURL: URL
+  /// parse, so it stays out of backups. Named for the build, which reads only its own
+  /// (`IndexSnapshot.fileName(build:)`); nil without a build, which keeps none.
+  private let snapshotURL: URL?
 
   /// The last snapshot write, which the next one waits for, so a snapshot of an
   /// older index never lands after a newer one.
@@ -171,12 +172,13 @@ public actor DocumentStore {
 
   /// The app's build number, `CFBundleVersion`, and when its executable was built:
   /// every local build is build 1 (`project.yml`), and a parser changed in one must
-  /// still reach the documents an earlier one parsed.
+  /// still reach the documents an earlier one parsed. Nil, which keeps no parse and no
+  /// snapshot, when either cannot be read: the number alone is every local build's.
   private static var appBuild: String? {
-    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    guard let number = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+      let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
     else { return nil }
-    let built = Bundle.main.executableURL.flatMap(Self.modificationDate(of:))
-    return built.map { "\(number) \($0.timeIntervalSinceReferenceDate)" } ?? number
+    return "\(number) \(built.timeIntervalSinceReferenceDate)"
   }
 
   /// The store above, with `parsing` awaited at the start of each look at the disk
@@ -205,7 +207,7 @@ public actor DocumentStore {
     }
     try? Self.createFolder(keptDirectory, for: .kept)
     try? Self.createFolder(cacheDirectory, for: .cache)
-    snapshotURL = caches.appending(path: "rfc-index.json")
+    snapshotURL = build.map { caches.appending(path: IndexSnapshot.fileName(build: $0)) }
   }
 
   /// What the volume holding `folder` has free: for important usage for the kept
@@ -268,12 +270,12 @@ public actor DocumentStore {
     } else {
       return nil
     }
-    let isCurrent = IndexSnapshot.isCurrent(
-      written: Self.modificationDate(of: snapshotURL),
-      index: Self.modificationDate(of: url) ?? .distantFuture,
-      app: Bundle.main.executableURL.flatMap(Self.modificationDate(of:)) ?? .distantFuture
-    )
-    return CachedIndex(url: url, updatedAt: updatedAt, snapshot: isCurrent ? snapshotURL : nil)
+    let snapshot = snapshotURL.flatMap { snapshot in
+      IndexSnapshot.isCurrent(
+        written: Self.modificationDate(of: snapshot),
+        index: Self.modificationDate(of: url) ?? .distantFuture) ? snapshot : nil
+    }
+    return CachedIndex(url: url, updatedAt: updatedAt, snapshot: snapshot)
   }
 
   /// Keeps a refreshed index, its snapshot made from the same parse, and what
@@ -333,10 +335,16 @@ public actor DocumentStore {
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   public func writeSnapshot(of index: RFCIndex) {
-    snapshotWrite = Task(name: "Write index snapshot") { [snapshotURL, snapshotWrite] in
+    guard let snapshotURL else { return }
+    snapshotWrite = Task(name: "Write index snapshot") { [snapshotWrite] in
       await snapshotWrite?.value
       await Self.write(index, to: snapshotURL)
     }
+  }
+
+  /// Waits for the snapshot being written, for a test to read it.
+  func untilSnapshotWritten() async {
+    await snapshotWrite?.value
   }
 
   @concurrent
@@ -348,56 +356,71 @@ public actor DocumentStore {
     } catch {
       storeLog.error(
         "writing the index snapshot failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    // Another build's snapshot is never read again, and is the size of the index.
+    let folder = url.deletingLastPathComponent()
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+    for name in names
+    where name != url.lastPathComponent && IndexSnapshot.isSnapshot(fileName: name) {
+      try? FileManager.default.removeItem(at: folder.appending(path: name))
     }
   }
 
-  private static func modificationDate(of url: URL) -> Date? {
+  static func modificationDate(of url: URL) -> Date? {
     try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
   }
 
   // MARK: - Revisions
 
-  private var revisionsURL: URL { directory.appending(path: "revisions.json") }
+  private var revisionsFile: KeptFile<RFCRevisions> {
+    KeptFile(url: directory.appending(path: "revisions.json")) { try RFCRevisions.decode($0) }
+  }
 
-  /// The last good `revisions.json`. Nil when there is none, or it no longer decodes
-  /// (a newer version, after a downgrade).
-  public func cachedRevisions() -> RFCRevisions? {
-    guard let data = try? Data(contentsOf: revisionsURL) else { return nil }
-    return try? RFCRevisions.decode(data)
+  /// The last good `revisions.json`, and when it was kept, which is when it was
+  /// fetched (#758). Nil when there is none, or it no longer decodes (a newer
+  /// version, after a downgrade).
+  public func cachedRevisions() -> (value: RFCRevisions, keptAt: Date)? {
+    revisionsFile.read()
   }
 
   public func storeRevisions(_ data: Data) throws {
-    try data.write(to: revisionsURL, options: .atomic)
+    try revisionsFile.write(data)
   }
 
   // MARK: - Bookmark baseline
 
-  private var bookmarkBaselineURL: URL { directory.appending(path: "bookmark-baseline.json") }
+  private var bookmarkBaselineFile: KeptFile<BookmarkBaseline> {
+    KeptFile(url: directory.appending(path: "bookmark-baseline.json")) {
+      try BookmarkBaseline.decode($0)
+    }
+  }
 
   /// What the bookmarked RFCs looked like at the last comparison (#191). Nil when
   /// there is none, or it no longer decodes, which the next comparison takes as a
   /// first one: it reports nothing and starts again from what it sees.
   public func bookmarkBaseline() -> BookmarkBaseline? {
-    guard let data = try? Data(contentsOf: bookmarkBaselineURL) else { return nil }
-    return try? BookmarkBaseline.decode(data)
+    bookmarkBaselineFile.read()?.value
   }
 
   public func storeBookmarkBaseline(_ baseline: BookmarkBaseline) throws {
-    try baseline.encoded().write(to: bookmarkBaselineURL, options: .atomic)
+    try bookmarkBaselineFile.write(baseline.encoded())
   }
 
   // MARK: - Working groups
 
-  private var workingGroupsURL: URL { directory.appending(path: "groups.json") }
+  private var workingGroupsFile: KeptFile<WorkingGroups> {
+    KeptFile(url: directory.appending(path: "groups.json")) { try WorkingGroups.decode($0) }
+  }
 
-  /// The last good `groups.json` (#363), as `cachedRevisions()` keeps its file.
-  public func cachedWorkingGroups() -> WorkingGroups? {
-    guard let data = try? Data(contentsOf: workingGroupsURL) else { return nil }
-    return try? WorkingGroups.decode(data)
+  /// The last good `groups.json` (#363), and when it was kept, as `cachedRevisions()`
+  /// reads its file.
+  public func cachedWorkingGroups() -> (value: WorkingGroups, keptAt: Date)? {
+    workingGroupsFile.read()
   }
 
   public func storeWorkingGroups(_ data: Data) throws {
-    try data.write(to: workingGroupsURL, options: .atomic)
+    try workingGroupsFile.write(data)
   }
 
   // MARK: - Errata
@@ -470,25 +493,48 @@ public actor DocumentStore {
 
   /// Every cached registry's entries, and which registries are due a fetch: never
   /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
-  /// entries are still returned, to use until the fetch succeeds.
-  public func cachedRegistries(maximumAge: TimeInterval) -> (
+  /// entries are still returned, to use until the fetch succeeds. The "Read cached
+  /// registries" signpost measures it.
+  ///
+  /// The files are read on this actor and parsed off it, as `parseCached` parses
+  /// bodies: parsed here, a document opened meanwhile, a restored tab or an `rfc://`
+  /// link, waited behind the parse (#758).
+  public func cachedRegistries(maximumAge: TimeInterval) async -> (
     entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
   ) {
+    let interval = signposter.beginInterval("Read cached registries")
+    defer { signposter.endInterval("Read cached registries", interval) }
+    let kept = IANARegistry.allCases.map { registry in
+      let url = registryURL(registry)
+      return KeptRegistry(
+        registry: registry, data: try? Data(contentsOf: url),
+        keptAt: Self.modificationDate(of: url))
+    }
+    return await Self.parseRegistries(kept, maximumAge: maximumAge, now: .now)
+  }
+
+  /// A registry's file as read from the disk: nil data when there is none.
+  private struct KeptRegistry: Sendable {
+    let registry: IANARegistry
+    let data: Data?
+    let keptAt: Date?
+  }
+
+  @concurrent
+  private static func parseRegistries(
+    _ kept: [KeptRegistry], maximumAge: TimeInterval, now: Date
+  ) async -> (entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]) {
     var entries: [IANARegistry: [RegistryEntry]] = [:]
     var stale: [IANARegistry] = []
-    for registry in IANARegistry.allCases {
-      let url = registryURL(registry)
-      guard let data = try? Data(contentsOf: url),
-        let parsed = try? IANARegistry.parse(data, as: registry)
+    for file in kept {
+      guard let data = file.data, let parsed = try? IANARegistry.parse(data, as: file.registry)
       else {
-        stale.append(registry)
+        stale.append(file.registry)
         continue
       }
-      entries[registry] = parsed
-      let fetched = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-        .contentModificationDate
-      if (fetched ?? .distantPast).timeIntervalSinceNow < -maximumAge {
-        stale.append(registry)
+      entries[file.registry] = parsed
+      if now.timeIntervalSince(file.keptAt ?? .distantPast) > maximumAge {
+        stale.append(file.registry)
       }
     }
     return (entries, stale)
