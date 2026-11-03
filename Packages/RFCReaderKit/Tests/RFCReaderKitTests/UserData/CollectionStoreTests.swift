@@ -426,3 +426,29 @@ struct CollectionStoreTests {
     #expect(try members(of: id, in: context) == [.rfc(1), .rfc(2), .rfc(3)])
   }
 }
+
+extension CollectionStoreTests {
+  /// Nor does it keep the change's context alive with it, which the undo holds (#1002).
+  @Test func `what an undone removal would put back does not keep its undo manager alive`()
+    throws
+  {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    weak var released: UndoManager?
+    try autoreleasepool {
+      let undoManager = UndoManager()
+      undoManager.groupsByEvent = false
+      undoManager.beginUndoGrouping()
+      try CollectionStore.remove(
+        .rfc(9000), from: id, undoManager: undoManager, onUndoFailure: Self.undoFailed,
+        in: context)
+      undoManager.endUndoGrouping()
+      // And what its undo registers in turn, for the redo.
+      undoManager.undo()
+      released = undoManager
+    }
+    #expect(released == nil)
+  }
+}
