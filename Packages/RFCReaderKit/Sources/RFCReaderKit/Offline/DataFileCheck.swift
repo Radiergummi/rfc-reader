@@ -1,16 +1,15 @@
 import Foundation
 
 /// When the data files beside the index are fetched again: the revisions and the
-/// working groups once a day, by this run's last fetch (`isDue`, #363) or by the copy
-/// kept, which a new launch remembers (`fetch`, #758); the errata once a day as the
-/// index is (#314, #387).
+/// working groups once a day, by the copy kept, which a new launch remembers, and by
+/// this run's last fetch (`fetch`, #363, #758); the errata once a day as the index is
+/// (#314, #387).
 public enum DataFileCheck {
-  /// Whether a file this launch last fetched at `fetchedAt`, nil when it has not,
-  /// is due at `now`: once `IndexCheck.interval` has passed. A day to the second is
-  /// due (`>=`), where `IndexCheck.isDue` waits for more than a day (`>`).
-  public static func isDue(fetchedAt: Date?, now: Date) -> Bool {
-    guard let fetchedAt else { return true }
-    return now.timeIntervalSince(fetchedAt) >= IndexCheck.interval
+  /// Whether a file last fetched at `fetchedAt` is due at `now`: once
+  /// `IndexCheck.interval` has passed. A day to the second is due (`>=`), where
+  /// `IndexCheck.isDue` waits for more than a day (`>`).
+  private static func isDue(fetchedAt: Date, now: Date) -> Bool {
+    now.timeIntervalSince(fetchedAt) >= IndexCheck.interval
   }
 
   /// Which networks a fetch of the revisions or the working groups may take, when
