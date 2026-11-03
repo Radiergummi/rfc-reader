@@ -53,7 +53,6 @@ public final class DocumentRepository {
   @ObservationIgnored private let index: () -> RFCIndex?
   @ObservationIgnored private let openDocuments: () -> [ReadableDocument]
   @ObservationIgnored private let networkDecision: (FetchPolicy.Cause) -> FetchPolicy.Decision?
-  @ObservationIgnored private let now: () -> Date
   /// The bytes the reading cache holds before eviction trims it.
   @ObservationIgnored private let cacheBound: Int
 
@@ -77,7 +76,7 @@ public final class DocumentRepository {
     userData: UserDataMirror, defaults: UserDefaults = .standard, isStoredInMemory: Bool,
     index: @escaping () -> RFCIndex?, openDocuments: @escaping () -> [ReadableDocument],
     networkDecision: @escaping (FetchPolicy.Cause) -> FetchPolicy.Decision?,
-    cacheBound: Int = CacheEviction.defaultBound, now: @escaping () -> Date = { .now }
+    cacheBound: Int = CacheEviction.defaultBound
   ) {
     self.store = store
     self.client = client
@@ -88,7 +87,6 @@ public final class DocumentRepository {
     self.index = index
     self.openDocuments = openDocuments
     self.networkDecision = networkDecision
-    self.now = now
     self.cacheBound = cacheBound
     keepsBookmarksOffline =
       (defaults.object(forKey: ReaderPreferences.keepBookmarksOfflineKey) as? Bool)
@@ -202,7 +200,7 @@ public final class DocumentRepository {
   private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = userData.container.mainContext
     let read = try ReadingPositionStore.read(
-      since: CacheEviction.readCutoff(now: now()), in: context)
+      since: CacheEviction.readCutoff(now: .now), in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     // Read here, as the store learns them only when the keeper first runs.
     let marked = try OfflineMarkStore.markedDocuments(in: context)
@@ -236,13 +234,13 @@ public final class DocumentRepository {
 
   /// Empties the reading cache, but for what `sparedFromClearing` spares, and the
   /// drafts read, but for those open; when what to spare cannot be told, nothing is
-  /// removed.
+  /// removed. The drafts open are read once the RFCs are cleared, so a draft opened
+  /// meanwhile is spared too.
   public func clearCache() async {
-    let open = openDocuments()
-    guard let spared = sparedFromClearing(open: open) else { return }
+    guard let spared = sparedFromClearing(open: openDocuments()) else { return }
     let removed = await store.clearCache(sparing: spared)
     if !removed.isEmpty { onRemoved(removed) }
-    await drafts.clear(sparing: Set(open.compactMap(\.draft)))
+    await drafts.clear(sparing: Set(openDocuments().compactMap(\.draft)))
   }
 
   /// What Clear Cache leaves in the reading cache, `CacheEviction.spared`. The marks
