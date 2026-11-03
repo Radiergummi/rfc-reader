@@ -172,7 +172,8 @@ struct DocumentCommands: Commands {
   }
 
   /// A document on screen that Print and Export offer: not one read as its PDF or
-  /// PostScript original (#207).
+  /// PostScript original (#207). On iOS, also one whose reader has published its
+  /// Export and Print (#764).
   private var offersPrintAndExport: Bool {
     #if !os(macOS)
       guard exportDocumentAction != nil, printDocumentAction != nil else { return false }
@@ -204,11 +205,11 @@ struct DocumentCommands: Commands {
     // on the iPad too, rather than the toolbar button's, so its title in the menu bar
     // and the hold-⌘ overlay can follow the action as the Mac's does (#278).
     CommandGroup(after: .pasteboard) {
-      // Every format, whichever Copy copies (#712). Handed to the reader's text view
-      // (#186); see `ReaderWindowController.copyAsQuote()`. Grayed out without a
-      // selection, as Copy is; the original text is not the reader's, and has no
-      // quote to copy, and a translation's words are not the RFC's (#749). On the
-      // iPad too, with ⌥⇧⌘C (#764).
+      // Every format, whichever Copy copies (#712). On the Mac handed to the reader's
+      // text view (#186), see `ReaderWindowController.copyAsQuote()`; on the iPad
+      // (#764) sent to the first responder, the text holding the selection. Grayed
+      // out without a selection, as Copy is; the original text is not the reader's,
+      // and has no quote to copy, and a translation's words are not the RFC's (#749).
       Menu("Copy As") {
         Button(CopyFormat.text.title()) { copyAsText() }
           .disabled(!showsDocument || editsNote || reader?.showOriginal == true || !hasSelection)
@@ -380,7 +381,8 @@ struct DocumentCommands: Commands {
             SectionSteps(reader: reader)
             OutlineSectionItems(reader: reader)
           }
-          .disabled(navigation?.selection == nil || !reader.hasDocument)
+          // A draft's too, as on the Mac (#728).
+          .disabled(!showsDocument)
         }
       #endif
     }
