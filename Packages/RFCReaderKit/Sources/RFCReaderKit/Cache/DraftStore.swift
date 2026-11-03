@@ -73,10 +73,14 @@ public actor DraftStore {
     }
     if let fetch = infoFetches[id.name] { return try await fetch.value }
     let url = infoURL(for: id)
+    let now = now
     let fetch = Task {
       do {
         let fetched = try await client.fetchDraftInfo(id)
         try? fetched.data.write(to: url, options: .atomic)
+        // Dated by the store's clock, which `info` measures its age against (#1060).
+        try? FileManager.default.setAttributes(
+          [.modificationDate: now()], ofItemAtPath: url.path(percentEncoded: false))
         return fetched.info
       } catch {
         if let kept { return kept.info }

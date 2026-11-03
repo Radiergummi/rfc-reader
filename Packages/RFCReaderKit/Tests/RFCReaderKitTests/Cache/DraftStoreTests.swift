@@ -61,10 +61,11 @@ struct DraftStoreTests {
     }
   }
 
-  /// A clock a test moves on.
+  /// A clock a test moves on. It starts years from the real clock, so nothing the
+  /// store dates by the real clock instead of this one can pass by chance (#1060).
   private final class Clock: @unchecked Sendable {
     private let lock = NSLock()
-    private var current = Date()
+    private var current = Date(timeIntervalSinceReferenceDate: 0)
     var now: Date { lock.withLock { current } }
     func advance(by interval: TimeInterval) { lock.withLock { current += interval } }
   }
