@@ -1,20 +1,23 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import os
 
 /// Where a document was left, kept in the user's data: marked read when it opens,
 /// the place saved when the reader leaves, and that place asked for when it comes
 /// back (#599). A failure is logged and otherwise dropped: the reader then opens at
 /// the top, as it does for a document never read.
+///
+/// The store's part, each write in a context of its own that a failed save throws
+/// away (#1002), is `UserDataMirror`'s.
 struct ReadingPositionKeeper {
   /// An RFC, or a draft's revision (#728).
   let id: ReadableDocument
-  let context: ModelContext
+  /// Where the place is read and saved: `UserDataMirror`, through the library.
+  let library: LibraryModel
 
   func markOpened() {
     do {
-      try ReadingPositionStore.markOpened(id, in: context)
+      try library.recordOpening(id)
     } catch {
       readerLog.error(
         "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
@@ -29,8 +32,8 @@ struct ReadingPositionKeeper {
   func save(_ reader: ReaderController) {
     guard let anchor = reader.anchor else { return }
     do {
-      try ReadingPositionStore.save(
-        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id, in: context)
+      try library.saveReadingPlace(
+        reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id)
     } catch {
       readerLog.error(
         "saving the position failed: \(String(describing: error), privacy: .public)")
@@ -39,7 +42,7 @@ struct ReadingPositionKeeper {
 
   func stored() -> ReadingPosition? {
     do {
-      return try ReadingPositionStore.position(for: id, in: context)
+      return try library.readingPosition(for: id)
     } catch {
       readerLog.error(
         "reading the position failed: \(String(describing: error), privacy: .public)")

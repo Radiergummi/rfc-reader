@@ -3,8 +3,8 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 
-// Highlights (#522) and notes (#523), made and changed on the main context through
-// `AnnotationStore`,
+// Highlights (#522) and notes (#523), made and changed in a context of their own
+// (`UserDataMirror.editAnnotations`) through `AnnotationStore`,
 // which decides what each change does; a failure is logged, as a collection's is.
 
 extension LibraryModel {
@@ -79,11 +79,15 @@ extension LibraryModel {
 
   // MARK: - Notes
 
-  /// Saves a note's text: made the first time it has some, deleted when it has none.
-  func saveNote(_ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String) {
+  /// Saves a note's text: made the first time it has some, deleted, undoably, when it
+  /// has none.
+  func saveNote(
+    _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
+    undoManager: UndoManager?
+  ) {
     editAnnotations { context in
       try AnnotationStore.saveNote(
-        identifier, on: owner, of: document, body: body, context: context)
+        identifier, on: owner, of: document, body: body, edit: Self.edit(context, undoManager))
     }
   }
 

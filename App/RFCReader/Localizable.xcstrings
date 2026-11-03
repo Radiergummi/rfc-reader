@@ -2187,6 +2187,16 @@
         }
       }
     },
+    "Index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Index"
+          }
+        }
+      }
+    },
     "Index All RFCs" : {
       "localizations" : {
         "de" : {
@@ -2613,6 +2623,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mit Tabulator durch Links gehen"
+          }
+        }
+      }
+    },
+    "Moves through the index by letter." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Springt im Index von Buchstabe zu Buchstabe."
           }
         }
       }

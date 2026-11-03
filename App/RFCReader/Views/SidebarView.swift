@@ -391,11 +391,7 @@ struct SidebarView: View {
       // A collection holds RFCs: a series row dragged here is not taken (#321).
       let documents = keys.compactMap(DocumentID.init(fileStem:)).filter { $0.series == .rfc }
       guard !documents.isEmpty else { return false }
-      library.editCollections { context in
-        for document in documents {
-          try CollectionStore.add(document, to: entry.id, in: context)
-        }
-      }
+      library.editCollections { try CollectionStore.add(documents, to: entry.id, in: $0) }
       return true
     }
   }

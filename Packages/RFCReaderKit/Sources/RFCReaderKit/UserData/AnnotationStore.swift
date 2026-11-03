@@ -187,19 +187,18 @@ public enum AnnotationStore {
 
   /// Saves a note's body (#523): the note `identifier`, made on `owner` the first time
   /// it has text, and deleted when its text is gone, so a note left empty is never
-  /// kept. The editor's own undo covers its text; nothing is registered here.
+  /// kept. The editor's own undo covers its text; deleting it is undone as
+  /// `deleteNote`'s is, so an undo of an earlier change does not bring it back (#1057).
   public static func saveNote(
     _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
-    context: ModelContext
+    edit: Edit
   ) throws {
-    let existing = try note(identifier, in: context)
+    let context = edit.context
     guard !NoteBody(markdown: body).isEmpty else {
-      if let existing {
-        context.delete(existing)
-        try context.save()
-      }
+      try deleteNote(identifier, edit: edit)
       return
     }
+    let existing = try note(identifier, in: context)
     if let existing {
       guard existing.body != body else { return }
       existing.body = body
@@ -283,17 +282,22 @@ public enum AnnotationStore {
   ) {
     guard let undoManager = edit.undoManager else { return }
     let onUndoFailure = edit.onUndoFailure
-    // The manager is held weakly, as `BookmarkStore`'s is: it holds this.
-    undoManager.registerUndo(withTarget: edit.context) { [weak undoManager] context in
+    // The manager is held weakly, as `BookmarkStore`'s is: it holds this. The context
+    // strongly, as `BookmarkStore`'s is.
+    undoManager.registerUndo(withTarget: edit.context) {
+      [weak undoManager, context = edit.context] _ in
       // On the main thread, which drives the Edit menu and the shake gesture.
       MainActor.assumeIsolated {
         do {
           // A highlight taken away takes its notes, made since, with it; the redo
-          // brings them back with it.
+          // brings them back with it. Every note deleted comes back as it was when
+          // deleted, not as `redo` saw it: it may have been edited since (#1050).
           let removed = try replace(after, with: before, in: context)
+          let removedNotes = Set(removed.map(\.identifier))
+          let notes = redo.notes.filter { !removedNotes.contains($0.identifier) } + removed
           registerUndo(
             replacing: before.identifiers,
-            with: Rows(highlights: redo.highlights, notes: redo.notes + removed), redo: before,
+            with: Rows(highlights: redo.highlights, notes: notes), redo: before,
             actionName: actionName,
             edit: Edit(context, undoManager: undoManager, onUndoFailure: onUndoFailure))
         } catch {
@@ -306,7 +310,8 @@ public enum AnnotationStore {
 
   /// Deletes the rows named `identifiers` that `rows` does not hold, and makes every
   /// row in `rows` as it says, inserting it where it is gone. A highlight deleted
-  /// takes the notes on it that `rows` does not hold; answers them, as they were.
+  /// takes the notes on it that `rows` does not hold. Answers every note deleted, as
+  /// it was.
   @discardableResult
   private static func replace(
     _ identifiers: Identifiers, with rows: Rows, in context: ModelContext
@@ -324,7 +329,9 @@ public enum AnnotationStore {
       context.delete(row)
     }
     for identifier in identifiers.notes where !keptNotes.contains(identifier) {
-      if let row = try note(identifier, in: context) { context.delete(row) }
+      guard let row = try note(identifier, in: context) else { continue }
+      removed.append(NoteValues(row))
+      context.delete(row)
     }
     for value in rows.highlights {
       if let row = try highlight(value.identifier, in: context) {

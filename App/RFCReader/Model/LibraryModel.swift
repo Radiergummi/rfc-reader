@@ -253,7 +253,7 @@ final class LibraryModel {
   /// mirrored, which compares at once (`init`).
   func toggleFollowed(_ group: String) {
     do {
-      try FollowedGroupStore.setFollowed(group, !isFollowed(group), in: container.mainContext)
+      try userData.setFollowed(group, !isFollowed(group))
     } catch {
       libraryLog.error(
         "following a working group failed: \(String(describing: error), privacy: .public)")
@@ -1831,6 +1831,21 @@ final class LibraryModel {
     userData.recentlyRead()
   }
 
+  /// `UserDataMirror.recordOpening`.
+  func recordOpening(_ document: ReadableDocument) throws {
+    try userData.recordOpening(document)
+  }
+
+  /// `UserDataMirror.saveReadingPlace`.
+  func saveReadingPlace(_ place: ReadingPlace, for document: ReadableDocument) throws {
+    try userData.saveReadingPlace(place, for: document)
+  }
+
+  /// `UserDataMirror.readingPosition`.
+  func readingPosition(for document: ReadableDocument) throws -> ReadingPosition? {
+    try userData.readingPosition(for: document)
+  }
+
   // MARK: - Reading paths (#189)
 
   enum ReadingPathResult {
@@ -1883,7 +1898,7 @@ final class LibraryModel {
   /// whether it was saved.
   private func mark(_ id: DocumentID, keptOffline isKept: Bool) -> Bool {
     do {
-      try OfflineMarkStore.setMarked(id, isKept, in: container.mainContext)
+      try userData.setMarked(id, isKept)
     } catch {
       libraryLog.failure(of: id, "marking Keep Offline failed", error)
       return false
