@@ -225,7 +225,7 @@ struct DataFileRefresherTests {
     #expect(any.requests(for: "revisions.json") == 0)
   }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test(.hangGuard)
   func `the bookmark refresh replaces a refresh waiting for a cheap network`()
     async throws
   {
@@ -238,7 +238,7 @@ struct DataFileRefresherTests {
     let waiting = Task { await refresher.refreshRevisions() }
     // Awaited rather than polled: a loop yielding the main actor took this past the
     // time limit when the whole suite ran on the iOS Simulator in CI. A
-    // refresh that never asks the cheap-network client ends at the time limit, which
+    // refresh that never asks the cheap-network client ends at the hang guard, which
     // cancels the wait.
     var held = cheap.held.makeAsyncIterator()
     await held.next()
