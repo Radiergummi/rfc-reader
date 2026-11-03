@@ -160,7 +160,8 @@ extension RFCTextViewCoordinator {
     let model = NoteEditorModel(
       body: body, font: Self.noteFont,
       save: { body in
-        library.saveNote(identifier, on: owner, of: documentID, body: body)
+        library.saveNote(
+          identifier, on: owner, of: documentID, body: body, undoManager: undoManager)
       },
       delete: { [weak self] in
         library.deleteNote(identifier, undoManager: undoManager)
