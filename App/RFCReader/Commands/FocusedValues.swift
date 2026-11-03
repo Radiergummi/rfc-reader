@@ -24,6 +24,14 @@ import SwiftUI
     typealias Value = () -> Void
   }
 
+  struct ExportDocumentActionKey: FocusedValueKey {
+    typealias Value = (_ section: String?) -> Void
+  }
+
+  struct PrintDocumentActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+  }
+
   struct ShowsInspectorKey: FocusedValueKey {
     typealias Value = Binding<Bool>
   }
@@ -55,6 +63,20 @@ import SwiftUI
     var searchLibraryAction: SearchLibraryActionKey.Value? {
       get { self[SearchLibraryActionKey.self] }
       set { self[SearchLibraryActionKey.self] = newValue }
+    }
+
+    /// File ▸ Export… and Export Current Section… (#764): the formats offered, then
+    /// Save to Files, for the whole document or the section with this anchor. The
+    /// reader on screen's, which holds its `DocumentOutput`.
+    var exportDocumentAction: ExportDocumentActionKey.Value? {
+      get { self[ExportDocumentActionKey.self] }
+      set { self[ExportDocumentActionKey.self] = newValue }
+    }
+
+    /// File ▸ Print… (#764): the reader on screen's print sheet.
+    var printDocumentAction: PrintDocumentActionKey.Value? {
+      get { self[PrintDocumentActionKey.self] }
+      set { self[PrintDocumentActionKey.self] = newValue }
     }
 
     /// Whether the scene's panel is open, for View ▸ Show Contents and Show Info

@@ -154,9 +154,9 @@ public enum ReaderShortcut: CaseIterable, Sendable {
     case .highlight: mac ? Chord("h", [.command, .control]) : nil
     // Edit ▸ Copy Citation (#712), on an iPad's keyboard too.
     case .copyCitation: Chord("c", [.command, .shift])
-    case .export: mac ? Chord("e", [.command, .shift]) : nil
+    case .export: Chord("e", [.command, .shift])
     case .pageSetup: mac ? Chord("p", [.command, .shift]) : nil
-    case .print: mac ? Chord("p") : nil
+    case .print: Chord("p")
     case .bigger: Chord("+")
     case .biggerAlternate: Chord("=")
     case .smaller: Chord("-")

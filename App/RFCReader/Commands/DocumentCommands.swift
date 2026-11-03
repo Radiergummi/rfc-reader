@@ -35,11 +35,6 @@ struct DocumentCommands: Commands {
     private var showsRFC: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
-    /// A document on screen that Print and Export offer: not one read as its PDF or
-    /// PostScript original (#207).
-    private var offersPrintAndExport: Bool {
-      navigation?.selection != nil && reader?.offersPrintAndExport == true
-    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -78,6 +73,10 @@ struct DocumentCommands: Commands {
 
     private var citedDocument: CitedDocument? { active.controller?.citedDocument }
 
+    private func exportDocument() { active.controller?.output.exportDocument() }
+    private func exportCurrentSection() { active.controller?.output.exportCurrentSection() }
+    private func printDocument() { active.controller?.output.printDocument() }
+
     private func copyCitation() { active.controller?.copyCitation() }
 
     /// Whether Copy As has a selection to copy: the reader's, or the one beside a
@@ -89,6 +88,16 @@ struct DocumentCommands: Commands {
     let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
     @FocusedValue(\.searchLibraryAction) private var searchLibrary
+    /// The reader on screen's Export and Print (#764), nil with none.
+    @FocusedValue(\.exportDocumentAction) private var exportDocumentAction
+    @FocusedValue(\.printDocumentAction) private var printDocumentAction
+
+    private func exportDocument() { exportDocumentAction?(nil) }
+    private func exportCurrentSection() {
+      guard let section = reader?.exportableSection else { return }
+      exportDocumentAction?(section)
+    }
+    private func printDocument() { printDocumentAction?() }
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
@@ -138,6 +147,15 @@ struct DocumentCommands: Commands {
         .perform(.copyPreferredCitation)
     }
   #endif
+
+  /// A document on screen that Print and Export offer: not one read as its PDF or
+  /// PostScript original (#207).
+  private var offersPrintAndExport: Bool {
+    #if !os(macOS)
+      guard exportDocumentAction != nil, printDocumentAction != nil else { return false }
+    #endif
+    return navigation?.selection != nil && reader?.offersPrintAndExport == true
+  }
 
   /// Whether a note's editor is open over the reader, or over the one beside it: the
   /// reader's Edit commands are not its, and are grayed out until it closes (#1007).
@@ -215,24 +233,25 @@ struct DocumentCommands: Commands {
         #endif
       }
     }
-    #if os(macOS)
-      // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
-      CommandGroup(replacing: .importExport) {
-        Button("Export…") { active.controller?.output.exportDocument() }
-          .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
-          .disabled(!offersPrintAndExport)
-        // Chosen here, not in the save panel, which cannot rename the file (#386).
-        Button("Export Current Section…") {
-          active.controller?.output.exportCurrentSection()
-        }
+    // File > Export… (#376), where a Mac app keeps it: after Save, before Print. On
+    // the iPad too, choosing the format before Save to Files (#764).
+    CommandGroup(replacing: .importExport) {
+      Button("Export…") { exportDocument() }
+        .keyboardShortcut(ReaderShortcut.export.keyboardShortcut)
+        .disabled(!offersPrintAndExport)
+      // Chosen here, not in the save panel, which cannot rename the file (#386).
+      Button("Export Current Section…") { exportCurrentSection() }
         .disabled(!offersPrintAndExport || reader?.exportableSection == nil)
+      #if os(macOS)
         // The document as an EPUB, opened with Books, which imports it (#408).
         Button("Send to Books") { active.controller?.output.sendToBooks() }
           .disabled(!offersPrintAndExport)
         // The toolbar's Share, for a hidden toolbar or a reader who looks here (#761).
         Button("Share…") { active.controller?.share() }
           .disabled(!showsRFC)
-      }
+      #endif
+    }
+    #if os(macOS)
       // The document's own actions, the toolbar's Cite and More menus rendered from
       // the same sections, so the two cannot drift (#761): with the toolbar hidden or
       // in full screen they were nowhere else. One menu, as the toolbar keeps them
@@ -264,17 +283,20 @@ struct DocumentCommands: Commands {
         }
         .disabled(!showsDocument)
       }
-      // File > Page Setup… and Print…, which a SwiftUI app has only for a document
-      // scene (#375). Print is disabled unless a document is on screen.
-      CommandGroup(replacing: .printItem) {
+    #endif
+    // File > Page Setup… and Print…, which a SwiftUI app has only for a document
+    // scene (#375). Print is disabled unless a document is on screen. The iPad's
+    // print sheet chooses the paper itself, so it has no Page Setup (#764).
+    CommandGroup(replacing: .printItem) {
+      #if os(macOS)
         Button("Page Setup…") { active.controller?.output.runPageSetup() }
           .keyboardShortcut(ReaderShortcut.pageSetup.keyboardShortcut)
           .disabled(active.controller == nil)
-        Button("Print…") { active.controller?.output.printDocument() }
-          .keyboardShortcut(ReaderShortcut.print.keyboardShortcut)
-          .disabled(!offersPrintAndExport)
-      }
-    #endif
+      #endif
+      Button("Print…") { printDocument() }
+        .keyboardShortcut(ReaderShortcut.print.keyboardShortcut)
+        .disabled(!offersPrintAndExport)
+    }
     CommandGroup(after: .toolbar) {
       // View > Bigger, Smaller and Actual Size (#153), the reader's own size on top
       // of the system's. A setting of the app's rather than the window's, as the

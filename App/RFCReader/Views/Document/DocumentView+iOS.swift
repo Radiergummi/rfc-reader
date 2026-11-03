@@ -23,9 +23,36 @@
     let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
+    /// File ▸ Export…'s choice of format, while it is on show (#764); the More
+    /// menu's Export lists the formats itself.
+    @State private var exportChoice: ExportChoice?
+
+    /// What File ▸ Export… exports: the whole document, or the section with this
+    /// anchor.
+    private struct ExportChoice {
+      let section: String?
+    }
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { chrome.isCollapsed }
+
+    private func printDocument() {
+      output.printDocument(
+        id, original: reader.showOriginal, title: reader.documentTitle ?? metadata?.title,
+        library: library)
+    }
+
+    /// File ▸ Export… and Print… (#764), for the reader on screen only: the ones
+    /// below it in the stack keep theirs to themselves.
+    private var exportDocumentAction: ((String?) -> Void)? {
+      guard isShown else { return nil }
+      return { exportChoice = ExportChoice(section: $0) }
+    }
+
+    private var printDocumentAction: (() -> Void)? {
+      guard isShown else { return nil }
+      return printDocument
+    }
 
     func body(content: Content) -> some View {
       content
@@ -52,11 +79,7 @@
             exportDocument: {
               output.exportDocument(id, as: $0, section: $1, library: library)
             },
-            printDocument: {
-              output.printDocument(
-                id, original: reader.showOriginal,
-                title: reader.documentTitle ?? metadata?.title, library: library)
-            },
+            printDocument: printDocument,
             showsBottomBar: !barsHidden)
         }
         // The top bar, which leaves the status bar; the bottom one goes by losing
@@ -72,6 +95,24 @@
             navigation: navigation, showsInspector: $showsInspector,
             isPresented: isCompact && isShown)
         )
+        .focusedSceneValue(\.exportDocumentAction, exportDocumentAction)
+        .focusedSceneValue(\.printDocumentAction, printDocumentAction)
+        // The formats, as the Mac's save panel offers them in its pop-up.
+        .confirmationDialog(
+          "Export",
+          isPresented: Binding(
+            get: { exportChoice != nil },
+            set: { if !$0 { exportChoice = nil } }),
+          presenting: exportChoice
+        ) { choice in
+          ForEach(
+            choice.section == nil ? reader.exportFormats : reader.exportFormats.filter(\.narrows)
+          ) { format in
+            Button(format.name()) {
+              output.exportDocument(id, as: format, section: choice.section, library: library)
+            }
+          }
+        }
         .fileExporter(
           isPresented: Binding(
             get: { output.exported != nil },
