@@ -11,15 +11,23 @@ import Testing
 /// holds.
 @Suite("Failed saves of the user's data")
 @MainActor
-struct FailedSaveTests {
+final class FailedSaveTests {
+  /// Where a test's store on disk is made, removed with the test.
+  private let directory = FileManager.default.temporaryDirectory
+    .appending(path: "failed-save-\(UUID().uuidString)")
+
+  deinit {
+    try? FileManager.default.removeItem(at: directory)
+  }
+
   /// A mirror of a store on disk holding what `seed` saved, opened again refusing
   /// every save. Each test holds the mirror, which holds the container: a context
   /// does not keep its container alive, and one freed under it traps.
   private func makeReadOnlyMirror(seed: (ModelContext) throws -> Void = { _ in }) throws
     -> UserDataMirror
   {
-    let url = FileManager.default.temporaryDirectory
-      .appending(path: "failed-save-\(UUID().uuidString).store")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appending(path: "user.store")
     do {
       let writable = try UserData.container(configurations: ModelConfiguration(url: url))
       try seed(writable.mainContext)

@@ -118,10 +118,8 @@ public enum BookmarkStore {
   ) throws {
     guard !existing.isEmpty else { return }
     existing.forEach(context.delete)
-    // Explicitly, rather than leaving it to autosave on one platform and not the
-    // other: on macOS the sidebar's list and the reader's toolbar are separate
-    // hosting roots reading the same store, and the glyph should not be able to
-    // disagree with the list behind it while a save is still pending.
+    // The change's context is its own and never autosaves (#1002): without this save
+    // the removal is thrown away with it.
     try context.save()
     // Registered after the save: a removal whose save failed was thrown away with
     // its context (#1002), and there is nothing to undo.
