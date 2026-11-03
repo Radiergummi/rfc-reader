@@ -34,7 +34,9 @@ struct DataFileRefresherTests {
   /// Answers `revisions.json` and `groups.json` with `revisions` and `groups`, and
   /// everything else with a `404`; counts the requests for each file. Holds a request
   /// for `holding` until it is canceled, as a session waiting for a cheap network does,
-  /// and fails the first `failing` requests, as a path with no network does.
+  /// or times out after a few seconds, so a refresh that is never canceled fails the
+  /// test rather than hanging it: the time limit cancels the test, not the refresh's
+  /// own task. Fails the first `failing` requests, as a path with no network does.
   private final class Transport: HTTPTransport, @unchecked Sendable {
     private let revisions: RFCRevisions
     private let holding: String?
@@ -64,7 +66,8 @@ struct DataFileRefresherTests {
       }
       if fails { throw URLError(.notConnectedToInternet) }
       if file == holding {
-        try await Task.sleep(for: .seconds(3_600))
+        try await Task.sleep(for: .seconds(5))
+        throw URLError(.timedOut)
       }
       let body: Data? =
         switch file {
@@ -159,6 +162,25 @@ struct DataFileRefresherTests {
     #expect(any.requests(for: "revisions.json") == 2)
   }
 
+  /// The fetch is recorded before the write, so a copy that cannot be kept is not
+  /// downloaded again at every activation.
+  @Test func `a fetch whose copy cannot be kept is not asked again the same day`()
+    async throws
+  {
+    defer { sandbox.remove() }
+    // A folder where the file goes, so neither a read nor a write of it succeeds.
+    let blocked = sandbox.directory.appending(path: "revisions.json", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true)
+    try Data().write(to: blocked.appending(path: "occupied"))
+    let any = Transport()
+    let cheap = Transport()
+    let refresher = refresher(any: any, cheap: cheap)
+    await refresher.refreshRevisions()
+    await refresher.refreshRevisions()
+    #expect(refresher.revisions == Self.revisions)
+    #expect(any.requests(for: "revisions.json") + cheap.requests(for: "revisions.json") == 1)
+  }
+
   @Test func `the revisions report the copy kept and each change`() async throws {
     defer { sandbox.remove() }
     try await sandbox.store().storeRevisions(Self.revisions.encoded())
@@ -209,9 +231,12 @@ struct DataFileRefresherTests {
     let nextDay = Date.now.addingTimeInterval(IndexCheck.interval + 60)
     let refresher = refresher(any: any, cheap: cheap, now: { nextDay })
     let waiting = Task { await refresher.refreshRevisions() }
-    while cheap.requests(for: "revisions.json") == 0 {
+    // Bounded, so a refresh that never asks the cheap-network client fails here
+    // rather than spinning past the time limit, which a yield does not notice.
+    for _ in 0..<10_000 where cheap.requests(for: "revisions.json") == 0 {
       await Task.yield()
     }
+    try #require(cheap.requests(for: "revisions.json") == 1)
     await refresher.refreshRevisions(onExpensiveNetworks: true)
     #expect(refresher.revisions == Self.newerRevisions)
     #expect(any.requests(for: "revisions.json") == 1)
