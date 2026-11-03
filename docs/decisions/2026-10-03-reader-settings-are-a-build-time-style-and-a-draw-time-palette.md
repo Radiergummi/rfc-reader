@@ -41,3 +41,12 @@ A rich copy maps them back to the system's label colors (`SelectionText.richCopy
 Links keep the layout manager delegate's path (`LinkRendering`), which the same probe found holds at draw time; the page is the scroll view's background, and on macOS the selection is the text view's selected-text attributes.
 A print and an exported PDF build with the system's label colors (`ReadingStyle.followsPageTheme` off), so paper keeps the paper palette whatever the screen's theme.
 The syntax colors (#707) are to take the same path.
+
+## Amended: a Focus filter's layer (#714, November 2026)
+
+A Focus filter (`ReaderFocusFilter`, iOS and macOS) sets a theme, an appearance and a text size while its Focus is on, and must not write over the reader's own.
+What it sets is a `FocusOverride`, stored as JSON under its own key, which `ReaderSettings(defaults:)` puts over the stored settings (`overridden(by:)`); `ReaderSettings(storedIn:)` is the reader's own.
+The system performs the filter with every parameter empty when the Focus ends, which removes the override, and the reader's own settings are drawn again exactly.
+A change made while the Focus is on, to a setting it overrides, changes the Focus's value and not the reader's own (`write(to:replacing:)`, the maintainer's ruling on #714); any other change is stored as usual.
+`@ReaderSettingsValue` observes the override's key, so a Focus starting or ending reaches every reader as a change in Settings does: a theme or appearance redraws, a size rebuilds.
+The App Intents that set the appearance, a theme and the size go through `ReaderSettings` for the same reason, and what reads a single setting outside a view, such as the macOS appearance observer (`ReaderSettings.appearance(in:)`) and ⌘= (`ReaderPreferences.stepFontSizeUp`), reads it through the layer.

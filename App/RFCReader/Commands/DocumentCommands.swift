@@ -10,8 +10,9 @@ import SwiftUI
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
-  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-    .defaultFontSize
+  /// The text size Bigger and Smaller step, through the settings, so a Focus filter's
+  /// size is the one stepped (#714).
+  @ReaderSettingsValue private var settings
 
   #if os(macOS)
     /// The key window's navigation, so Back and Forward act on the tab the reader is
@@ -266,15 +267,20 @@ struct DocumentCommands: Commands {
       // ⌘= is Bigger too, and not here: on the Mac, SwiftUI left a hidden item out
       // of the menu, shortcut and all -- measured. `ReaderWindow` answers it on the
       // Mac, an invisible button in `ContentView` on the iPad.
-      Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-        .keyboardShortcut(ReaderShortcut.bigger.keyboardShortcut)
-        .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
-      Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
-        .keyboardShortcut(ReaderShortcut.smaller.keyboardShortcut)
-        .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
-      Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
+      Button("Bigger") {
+        settings.fontSize = ReaderPreferences.fontSize(steppingUp: settings.fontSize)
+      }
+      .keyboardShortcut(ReaderShortcut.bigger.keyboardShortcut)
+      .disabled(ReaderPreferences.fontSize(steppingUp: settings.fontSize) == settings.fontSize)
+      Button("Smaller") {
+        settings.fontSize = ReaderPreferences.fontSize(steppingDown: settings.fontSize)
+      }
+      .keyboardShortcut(ReaderShortcut.smaller.keyboardShortcut)
+      .disabled(
+        ReaderPreferences.fontSize(steppingDown: settings.fontSize) == settings.fontSize)
+      Button("Actual Size") { settings.fontSize = ReaderPreferences.defaultFontSize }
         .keyboardShortcut(ReaderShortcut.actualSize.keyboardShortcut)
-        .disabled(fontSize == ReaderPreferences.defaultFontSize)
+        .disabled(settings.fontSize == ReaderPreferences.defaultFontSize)
       #if os(macOS)
         // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
         // list's view options before.

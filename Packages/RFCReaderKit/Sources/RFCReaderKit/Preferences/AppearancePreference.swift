@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// A setting, stored by its raw value, so the case names are what user defaults
 /// hold.
-public enum AppearancePreference: String, CaseIterable, Sendable {
+public enum AppearancePreference: String, CaseIterable, Codable, Sendable {
   case system
   case light
   case dark

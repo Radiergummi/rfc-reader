@@ -35,12 +35,11 @@ public enum ReaderPreferences {
     (size / defaultFontSize).formatted(.percent.precision(.fractionLength(0)).locale(locale))
   }
 
-  /// View ▸ Bigger, for a caller with no `@AppStorage` of its own to step: the Mac
-  /// reader window's ⌘=. What `@AppStorage` reads when nothing is stored is the
-  /// default, so that is where a first step starts.
+  /// View ▸ Bigger, for a caller with no `@ReaderSettingsValue` of its own to step:
+  /// the Mac reader window's ⌘=. Through `ReaderSettings`, so under a Focus filter
+  /// that sets the size it steps the Focus's (#714).
   public static func stepFontSizeUp(in defaults: UserDefaults = .standard) {
-    let size = defaults.object(forKey: fontSizeKey) as? Double ?? defaultFontSize
-    defaults.set(fontSize(steppingUp: size), forKey: fontSizeKey)
+    ReaderSettings.change(in: defaults) { $0.fontSize = fontSize(steppingUp: $0.fontSize) }
   }
 
   static func clamped(_ size: Double) -> Double {
@@ -109,6 +108,10 @@ public enum ReaderPreferences {
   /// dark.
   public static let darkPaletteKey = "readerDarkPalette"
   public static let defaultPalette = ReaderPalette.automatic.id
+
+  /// The settings a Focus filter overrides while its Focus is on (#714): a
+  /// `FocusOverride` as JSON, absent while none is.
+  public static let focusOverrideKey = "readerFocusOverride"
 
   /// The style of Copy Citation, and of Copy as Quote's citation line (#712): a
   /// `CitationStyle`'s raw value. Markdown, the line a quote had before the setting.

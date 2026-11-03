@@ -17,6 +17,8 @@ struct RFCReaderApp: App {
       BookmarkNotifications.install()
       // Before any scene, whose toolbars anchor the tips (#782).
       ReaderTips.configure()
+      // A Focus filter's settings the app outlived the Focus of (#714).
+      ReaderFocusFilter.clearWhenEnded()
     }
   #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
