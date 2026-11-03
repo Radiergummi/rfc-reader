@@ -94,31 +94,20 @@ final class LibraryModel {
   /// unowned.
   @ObservationIgnored private let recentRefresh = SharedRefresh(name: "Refresh recent RFCs")
 
-  /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
-  /// until the cached copy or a fetch has arrived.
-  private(set) var revisions: RFCRevisions?
-  /// When this launch last fetched it; nil until it has.
-  @ObservationIgnored private var revisionsFetchedAt: Date?
-  /// The refresh under way, which a second call joins rather than repeats.
-  @ObservationIgnored private let revisionsRefresh = SharedRefresh(name: "Refresh revisions")
-  /// `groups.json`: the groups the index names, for a working group's card (#363).
-  /// Nil until the cached copy or a fetch has arrived.
-  private(set) var workingGroups: WorkingGroups?
-  /// Every RFC's errata (#387), from the RFC Editor's feed: the copy kept first, then
-  /// a check once a day. Nil until either has been read.
-  private(set) var errata: Errata?
-  /// The refresh under way, which a second call leaves to finish alone.
-  @ObservationIgnored private let errataRefresh = SharedRefresh(name: "Refresh errata")
-  /// When this run last had an answer from the RFC Editor for the feed, whatever came
-  /// of it: a feed that fails to decode or to be kept records no check, and would
-  /// otherwise be downloaded again at every activation. A request that fails is asked
-  /// again at the next activation, as the other refreshes are.
-  @ObservationIgnored private var errataAskedAt: Date?
-  @ObservationIgnored private var workingGroupsFetchedAt: Date?
-  /// The refresh under way, which a second call leaves to finish alone.
-  @ObservationIgnored private let workingGroupsRefresh = SharedRefresh(
-    name: "Refresh working groups")
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
+
+  /// The revisions, the working groups, the errata and the registries, read from the
+  /// copies kept and fetched when due (#595).
+  @ObservationIgnored private let dataFiles: DataFileRefresher
+
+  /// `DataFileRefresher.revisions`.
+  var revisions: RFCRevisions? { dataFiles.revisions }
+  /// `DataFileRefresher.workingGroups`.
+  var workingGroups: WorkingGroups? { dataFiles.workingGroups }
+  /// `DataFileRefresher.errata`.
+  var errata: Errata? { dataFiles.errata }
+  /// `DataFileRefresher.registriesVersion`.
+  var registriesVersion: Int { dataFiles.registriesVersion }
 
   /// The sets read from the user's data, and where a bookmark or a collection is
   /// changed (#595).
@@ -265,6 +254,16 @@ final class LibraryModel {
 
   private init(container: ModelContainer) {
     userData = UserDataMirror(container: container)
+    let store = DocumentStore()
+    let client = RFCEditorClient()
+    let clientOnCheapNetworks = RFCEditorClient(
+      transport: URLSessionTransport(session: .rfcEditorOnCheapNetworks))
+    self.store = store
+    self.client = client
+    self.clientOnCheapNetworks = clientOnCheapNetworks
+    dataFiles = DataFileRefresher(
+      store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
+    dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
     userData.onBookmarksChanged = { [weak self] in self?.bookmarksChanged() }
     userData.onCollectionsChanged = { [weak self] snapshot in
       // A collection deleted in another tab, or on another device, is not left on
@@ -294,9 +293,7 @@ final class LibraryModel {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         guard let self else { return }
-        Task(name: "Refresh revisions") { await self.refreshRevisions() }
-        Task(name: "Refresh working groups") { await self.refreshWorkingGroups() }
-        Task(name: "Refresh errata") { await self.refreshErrata() }
+        Task(name: "Refresh data files") { await self.dataFiles.refreshAll() }
         self.recheckSpotlight()
       }
     }
@@ -438,12 +435,11 @@ final class LibraryModel {
     hasCitationIndex = hasIndex
   }
 
-  private let client = RFCEditorClient()
+  private let client: RFCEditorClient
   /// For the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode instead of failing (#314).
-  private let clientOnCheapNetworks = RFCEditorClient(
-    transport: URLSessionTransport(session: .rfcEditorOnCheapNetworks))
-  private let store = DocumentStore()
+  private let clientOnCheapNetworks: RFCEditorClient
+  private let store: DocumentStore
   /// The Internet-Drafts read (#728), apart from the RFCs.
   private let drafts = DraftStore()
   private var search: IndexSearch?
@@ -498,9 +494,7 @@ final class LibraryModel {
     }
     // Only the Reading Path items wait for it, so not the list.
     Task(name: "Look for a citation index") { await refreshCitationIndex() }
-    Task(name: "Refresh revisions") { await refreshRevisions() }
-    Task(name: "Refresh working groups") { await refreshWorkingGroups() }
-    Task(name: "Refresh errata") { await refreshErrata() }
+    Task(name: "Refresh data files") { await dataFiles.refreshAll() }
     let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
     Task(name: "Index the text", priority: .utility) { [weak self, store] in
       let indexer: TextIndexer
@@ -522,110 +516,26 @@ final class LibraryModel {
     // to RFC sheet opens (`refreshRegistriesIfDue()`): most launches of an iPhone
     // never open it.
     #if os(macOS)
-      // Unless an intent has read them already (#192). Immediate, as the intent's is,
-      // so the check is marked before either can look.
-      if registriesCheckedAt == nil {
-        Task.immediate(name: "Load registries") { await refreshRegistries() }
-      }
+      // Unless an intent has read them already (#192).
+      dataFiles.loadRegistriesUnlessChecked()
     #endif
   }
 
   // MARK: - Registries
 
-  /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
-  /// the palette asks on each keystroke, and nothing on screen lists them.
-  /// `registriesVersion` tells it when they change.
-  @ObservationIgnored private var registryEntries: [RegistryEntry] = [] {
-    didSet { registriesVersion += 1 }
-  }
-
-  /// Counts the changes to the registry values, observed, so that Go to RFC lists
-  /// those that arrive while it is open: on iOS, its first open is what reads them
-  /// (#579).
-  private(set) var registriesVersion = 0
-
-  /// When the registries were last checked, nil until they first are.
-  @ObservationIgnored private var registriesCheckedAt: Date?
-
-  /// Checks the registries again if the last check is older than
-  /// `RegistryRefresh.maximumAge`: the palette asks as it opens, since the app may
-  /// stay open for weeks after the check at launch. Reads them first when nothing
-  /// has: iOS does not at launch, and its Go to RFC sheet lists registry values too
-  /// (#769, #579).
+  /// `DataFileRefresher.refreshRegistriesIfDue()`.
   func refreshRegistriesIfDue() {
-    guard let checked = registriesCheckedAt else {
-      // Immediate, so the check is marked before an intent asking meanwhile looks.
-      Task.immediate(name: "Load registries") { await refreshRegistries() }
-      return
-    }
-    guard RegistryRefresh.isDue(checkedAt: checked, now: .now) else { return }
-    Task(name: "Refresh registries") { await refreshRegistries() }
+    dataFiles.refreshRegistriesIfDue()
   }
 
-  /// Reads the cached registries, then fetches those that are due: a first fetch on
-  /// any network, a refresh only on a cheap one (`RegistryRefresh`). A registry that
-  /// cannot be fetched keeps its cached entries, and is logged rather than shown
-  /// (#125): the palette still finds RFCs without it.
-  private func refreshRegistries() async {
-    // Set before the first suspension, so a palette opened meanwhile does not start
-    // a second check.
-    registriesCheckedAt = .now
-    var cached = await store.cachedRegistries(maximumAge: RegistryRefresh.maximumAge)
-    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
-    let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
-    for fetch in fetches {
-      // The first fetches come first (`RegistryRefresh`): what is left are refreshes.
-      if !fetch.onExpensiveNetworks { registriesReadable.open() }
-      let registry = fetch.registry
-      let fetched: (entries: [RegistryEntry], data: Data)
-      do {
-        fetched = try await (fetch.onExpensiveNetworks ? client : clientOnCheapNetworks)
-          .fetchRegistry(registry, onExpensiveNetworks: fetch.onExpensiveNetworks)
-      } catch {
-        libraryLog.error(
-          "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
-        )
-        continue
-      }
-      // Listed as soon as it is read, not after the slowest of the others, and
-      // whether or not it can be kept for the next launch.
-      cached.entries[registry] = fetched.entries
-      registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
-      do {
-        try await store.storeRegistry(fetched.data, for: registry)
-      } catch {
-        libraryLog.error(
-          "caching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
-        )
-      }
-    }
-    registriesReadable.open()
-  }
-
-  /// The registry values `query` names exactly: `425`, `tls alert 70`,
-  /// `application/dns-message`, read as a pasted reference is: `425.` and `(425)`
-  /// name what `425` does.
+  /// `DataFileRefresher.registryMatches(for:)`.
   func registryMatches(for query: String) -> [RegistryEntry] {
-    DocumentReference.registryMatches(for: query, in: registryEntries)
+    dataFiles.registryMatches(for: query)
   }
 
-  /// Open once the registries are readable, for `loadedRegistryEntries()`: the
-  /// cached ones read, and the ones never fetched fetched, or failed to be. Not the
-  /// refreshes after them, which may wait for a cheap network.
-  @ObservationIgnored private let registriesReadable = Latch()
-
-  /// The registry entries an App Intent asks for (#192), once they are readable.
-  /// Only the Mac reads them at launch, and an intent may be the first to ask on
-  /// either platform, so this starts the read when nothing has, in a task of its own,
-  /// as `settledSearch()` starts the index's.
+  /// `DataFileRefresher.loadedRegistryEntries()`.
   func loadedRegistryEntries() async -> [RegistryEntry] {
-    // Immediate, so the check is marked before this suspends and a second query
-    // asking meanwhile does not read them again.
-    if registriesCheckedAt == nil {
-      Task.immediate(name: "Load registries") { await refreshRegistries() }
-    }
-    await registriesReadable.wait()
-    return registryEntries
+    await dataFiles.loadedRegistryEntries()
   }
 
   #if DEBUG
@@ -910,37 +820,6 @@ final class LibraryModel {
 
   // MARK: - Revisions
 
-  /// Loads the cached file first, so the banner is right offline. Then fetches, once a
-  /// launch and again when the last fetch is a day old: launch and every activation
-  /// call this, and the first to get here does the fetch. A failure keeps the cached
-  /// copy, leaves the next call to try again, and is logged, not shown (#125).
-  ///
-  /// A call while one is under way waits for that one, so that a background refresh
-  /// that asks returns only once the file is in (#191).
-  func refreshRevisions() async {
-    await revisionsRefresh.join { await self.loadRevisions() }
-  }
-
-  private func loadRevisions() async {
-    if revisions == nil, let cached = await store.cachedRevisions() {
-      revisions = cached.value
-      compareBookmarks()
-    }
-    guard DataFileCheck.isDue(fetchedAt: revisionsFetchedAt, now: .now) else { return }
-    do {
-      let fetched = try await client.fetchRevisions()
-      try await store.storeRevisions(fetched.data)
-      revisionsFetchedAt = .now
-      if fetched.revisions != revisions {
-        revisions = fetched.revisions
-        compareBookmarks()
-      }
-    } catch {
-      libraryLog.error(
-        "fetching revisions failed: \(String(describing: error), privacy: .public)")
-    }
-  }
-
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
     RevisionsSummary(revisions, for: id, now: .now)
@@ -963,12 +842,13 @@ final class LibraryModel {
   ///
   /// The revisions come first because the index check waits for a network that is
   /// neither expensive nor constrained (#314), which on a phone network can outlast
-  /// iOS's background task. Canceling this, as iOS does when that task expires,
+  /// iOS's background task. Due revisions are fetched on any network, for the same
+  /// reason (#758). Canceling this, as iOS does when that task expires,
   /// cancels the check, or the person's refresh it joined.
   func refreshForBookmarks() async {
     await bootstrap()
     await indexLoaded.wait()
-    await refreshRevisions()
+    await dataFiles.refreshRevisions(onExpensiveNetworks: true)
     await bookmarkComparison?.value
     guard indexState.isCheckDue(now: .now) else { return }
     let check = checkIndex()
@@ -1051,31 +931,6 @@ final class LibraryModel {
     await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
   }
 
-  // MARK: - Working groups
-
-  /// As `refreshRevisions()` does for its file, and when it does: the cached copy
-  /// first, so a card works offline, then a fetch once a day. A failure keeps the
-  /// cached copy and is logged, not shown.
-  func refreshWorkingGroups() async {
-    await workingGroupsRefresh.runUnlessUnderWay { await self.loadWorkingGroups() }
-  }
-
-  private func loadWorkingGroups() async {
-    if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
-      workingGroups = cached.value
-    }
-    guard DataFileCheck.isDue(fetchedAt: workingGroupsFetchedAt, now: .now) else { return }
-    do {
-      let fetched = try await client.fetchWorkingGroups()
-      try await store.storeWorkingGroups(fetched.data)
-      workingGroupsFetchedAt = .now
-      if fetched.groups != workingGroups { workingGroups = fetched.groups }
-    } catch {
-      libraryLog.error(
-        "fetching working groups failed: \(String(describing: error), privacy: .public)")
-    }
-  }
-
   // MARK: - Just Published
 
   /// The feed kept, then a newer one if the RFC Editor has it, asked for only on a
@@ -1092,50 +947,7 @@ final class LibraryModel {
     }
   }
 
-  // MARK: - Errata
-
-  /// The copy of the errata feed kept, read the first time, then the RFC Editor asked
-  /// for a newer one once a day, as the index is (#314): with the validators of the
-  /// one kept, so an unchanged feed is a `304`, and on a network that is neither
-  /// metered nor in Low Data Mode, since nobody is waiting for it. A failure keeps
-  /// what there is and is logged, not shown.
-  func refreshErrata() async {
-    await errataRefresh.runUnlessUnderWay { await self.loadErrata() }
-  }
-
-  private func loadErrata() async {
-    if errata == nil, let data = await store.cachedErrata() {
-      errata = try? await Self.decodeErrata(data)
-    }
-    // Without a feed in memory, a `304` would leave nothing to show.
-    let kept = errata == nil ? nil : store.errataCheck()
-    guard
-      DataFileCheck.isErrataDue(
-        keptCheckedAt: kept?.checkedAt, askedAt: errataAskedAt, now: .now)
-    else { return }
-    do {
-      let fetched = try await clientOnCheapNetworks.fetchErrataData(
-        unlessMatching: kept?.validators(at: .now), onExpensiveNetworks: false)
-      errataAskedAt = .now
-      switch fetched {
-      case .unchanged:
-        if let kept { try await store.recordUnchangedErrata(kept) }
-      case .changed(let data, let validators):
-        // Shown before it is kept, so a failed write loses only the copy on disk.
-        errata = try await Self.decodeErrata(data)
-        try await store.storeErrata(data, validators: validators)
-      }
-    } catch {
-      libraryLog.error(
-        "refreshing the errata failed: \(String(describing: error), privacy: .public)")
-    }
-  }
-
-  /// Off the main actor: the feed is every erratum ever reported.
-  @concurrent
-  private static func decodeErrata(_ data: Data) async throws -> Errata {
-    try Errata.decode(data)
-  }
+  // MARK: - Working groups
 
   /// What a working group's card says: the group as the file describes it, if it
   /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
