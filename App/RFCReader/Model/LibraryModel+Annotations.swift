@@ -79,11 +79,15 @@ extension LibraryModel {
 
   // MARK: - Notes
 
-  /// Saves a note's text: made the first time it has some, deleted when it has none.
-  func saveNote(_ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String) {
+  /// Saves a note's text: made the first time it has some, deleted, undoably, when it
+  /// has none.
+  func saveNote(
+    _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
+    undoManager: UndoManager?
+  ) {
     editAnnotations { context in
       try AnnotationStore.saveNote(
-        identifier, on: owner, of: document, body: body, edit: Self.edit(context, nil))
+        identifier, on: owner, of: document, body: body, edit: Self.edit(context, undoManager))
     }
   }
 

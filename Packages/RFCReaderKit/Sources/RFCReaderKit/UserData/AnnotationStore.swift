@@ -187,20 +187,18 @@ public enum AnnotationStore {
 
   /// Saves a note's body (#523): the note `identifier`, made on `owner` the first time
   /// it has text, and deleted when its text is gone, so a note left empty is never
-  /// kept. The editor's own undo covers its text; nothing is registered here.
+  /// kept. The editor's own undo covers its text; deleting it is undone as
+  /// `deleteNote`'s is, so an undo of an earlier change does not bring it back (#1057).
   public static func saveNote(
     _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
     edit: Edit
   ) throws {
     let context = edit.context
-    let existing = try note(identifier, in: context)
     guard !NoteBody(markdown: body).isEmpty else {
-      if let existing {
-        context.delete(existing)
-        try context.save()
-      }
+      try deleteNote(identifier, edit: edit)
       return
     }
+    let existing = try note(identifier, in: context)
     if let existing {
       guard existing.body != body else { return }
       existing.body = body
