@@ -312,6 +312,26 @@ extension AnnotationStoreTests {
     #expect(try notes().first { $0.id == identifier }?.body == "A thought.")
   }
 
+  @Test func `a deleted highlight's note brought back keeps what it was edited to since`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let highlight = try highlight("brown fox")
+    let identifier = try note("as deleted", on: .highlight(highlight))
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.delete(highlight, edit: edit(undoManager))
+    undoManager.endUndoGrouping()
+    undoManager.undo()
+    try AnnotationStore.saveNote(
+      identifier, on: .highlight(highlight), of: .rfc(9110), body: "edited since",
+      context: context)
+    undoManager.redo()
+    #expect(try notes().isEmpty)
+    undoManager.undo()
+    #expect(try notes().map(\.body) == ["edited since"])
+  }
+
   @Test func `undoing a highlight takes the note made on it since, and redoing brings both`()
     throws
   {
@@ -341,6 +361,45 @@ extension AnnotationStoreTests {
     #expect(try notes().isEmpty)
     undoManager.undo()
     #expect(try notes().first?.target == block)
+  }
+
+  @Test func `a deleted note brought back keeps what it was edited to between undo and redo`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let identifier = try note("as deleted", on: .target(.section("p-1")))
+    undoManager.beginUndoGrouping()
+    try AnnotationStore.deleteNote(identifier, edit: edit(undoManager))
+    undoManager.endUndoGrouping()
+    undoManager.undo()
+    try AnnotationStore.saveNote(
+      identifier, on: .target(.section("p-1")), of: .rfc(9110), body: "edited since",
+      context: context)
+    undoManager.redo()
+    #expect(try notes().isEmpty)
+    undoManager.undo()
+    #expect(try notes().map(\.body) == ["edited since"])
+  }
+
+  @Test func `a note made on a redone highlight keeps what it was edited to through undo and redo`()
+    throws
+  {
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    undoManager.beginUndoGrouping()
+    let highlight = try highlight("brown fox", undoManager: undoManager)
+    undoManager.endUndoGrouping()
+    let identifier = try note("as made", on: .highlight(highlight))
+    undoManager.undo()
+    undoManager.redo()
+    try AnnotationStore.saveNote(
+      identifier, on: .highlight(highlight), of: .rfc(9110), body: "edited since",
+      context: context)
+    undoManager.undo()
+    #expect(try notes().isEmpty)
+    undoManager.redo()
+    #expect(try notes().map(\.body) == ["edited since"])
   }
 
   @Test func `a note is put on another highlight without being edited`() throws {
