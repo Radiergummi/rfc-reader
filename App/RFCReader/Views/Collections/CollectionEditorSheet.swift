@@ -30,7 +30,11 @@ struct CollectionEditorSheet: View {
 
   /// Deleted elsewhere while being edited — another window, a script, sync.
   private var isGone: Bool {
-    if case .edit(let identifier) = mode { library.collections[identifier] == nil } else { false }
+    if case .edit(let identifier) = mode {
+      library.userData.collections[identifier] == nil
+    } else {
+      false
+    }
   }
 
   /// The store refuses a name of only spaces, and an empty query; the button says
@@ -123,7 +127,7 @@ struct CollectionEditorSheet: View {
   private func load() {
     switch mode {
     case .edit(let identifier):
-      guard let entry = library.collections[identifier] else { break }
+      guard let entry = library.userData.collections[identifier] else { break }
       name = entry.name
       color = entry.color
       query = entry.query
@@ -136,7 +140,7 @@ struct CollectionEditorSheet: View {
   }
 
   private func save() {
-    library.editCollections { context in
+    library.userData.editCollections { context in
       switch mode {
       case .create(let document):
         // In one save: the context is thrown away when a save fails (#1002), and a

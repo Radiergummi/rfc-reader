@@ -17,7 +17,7 @@ struct ReadingPositionKeeper {
 
   func markOpened() {
     do {
-      try library.recordOpening(id)
+      try library.userData.recordOpening(id)
     } catch {
       readerLog.error(
         "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
@@ -32,7 +32,7 @@ struct ReadingPositionKeeper {
   func save(_ reader: ReaderController) {
     guard let anchor = reader.anchor else { return }
     do {
-      try library.saveReadingPlace(
+      try library.userData.saveReadingPlace(
         reader.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id)
     } catch {
       readerLog.error(
@@ -42,7 +42,7 @@ struct ReadingPositionKeeper {
 
   func stored() -> ReadingPosition? {
     do {
-      return try library.readingPosition(for: id)
+      return try library.userData.readingPosition(for: id)
     } catch {
       readerLog.error(
         "reading the position failed: \(String(describing: error), privacy: .public)")

@@ -37,7 +37,7 @@ final class QuickOpenController {
   var query: String { input.normalizedQuery }
 
   /// What the view says in place of rows, if anything.
-  var message: String? { results.message(indexState: library.indexState) }
+  var message: String? { results.message(indexState: library.indexes.indexState) }
 
   /// What a search depends on. The index is part of it so that a view opened before
   /// the index loaded searches again once it has.
@@ -46,7 +46,7 @@ final class QuickOpenController {
     var hasIndex: Bool
   }
 
-  var searchKey: SearchKey { SearchKey(query: query, hasIndex: library.index != nil) }
+  var searchKey: SearchKey { SearchKey(query: query, hasIndex: library.indexes.index != nil) }
 
   /// Takes what was typed, and resolves it on the keystroke itself, before any ↵
   /// queued behind it can read the selection: an `onChange` or the search's task
@@ -60,18 +60,18 @@ final class QuickOpenController {
   /// typed before it is listed as its members.
   func resolve() {
     let exact = DocumentReference.link(from: query)
-    let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
+    let members = exact.flatMap { library.indexes.index?.series($0.id)?.members } ?? []
     results.show(
       query: query, exact: exact,
       draft: exact == nil ? DocumentReference.draft(from: query) : nil, members: members,
-      registry: library.registryMatches(for: query),
-      isObsolete: { [library] in library.metadata($0)?.isObsolete ?? false })
+      registry: library.dataFiles.registryMatches(for: query),
+      isObsolete: { [library] in library.indexes.metadata($0)?.isObsolete ?? false })
   }
 
   /// Searches for what is typed, and opens what a ↵ held while it ran asked for.
   func search() async {
     let query = query
-    guard let hits = await library.quickOpenHits(for: query) else { return }
+    guard let hits = await library.indexes.quickOpenHits(for: query) else { return }
     if let opening = results.show(hits: hits, for: query) {
       open(opening.link, activation: opening.activation)
     }

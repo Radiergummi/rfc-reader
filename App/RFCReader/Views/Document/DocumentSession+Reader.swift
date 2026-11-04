@@ -48,8 +48,8 @@ extension DocumentSession {
     // the pack lists (#316), whose XML it left out. A draft always has a text.
     if let rfc = id.rfc,
       !PublishedOriginalPage.loadsText(
-        rfc, formats: library.metadata(rfc)?.formats,
-        pointerInPack: library.pointersInPack.contains(rfc))
+        rfc, formats: library.indexes.metadata(rfc)?.formats,
+        pointerInPack: library.indexes.pointersInPack.contains(rfc))
     {
       skipLoad()
       guard isShown else { return }
@@ -59,7 +59,7 @@ extension DocumentSession {
       // Recorded as a loaded text would be: Recently Read lists a scan, and a
       // pointer with a pack or without. Here, so once per opening, like a load's.
       positions.markOpened()
-      Task(name: "Mark opened") { [library] in await library.markOpened(rfc) }
+      Task(name: "Mark opened") { [library] in await library.documents.markOpened(rfc) }
       return
     }
     startDraftInfoLoad(from: library)
@@ -171,10 +171,10 @@ extension DocumentSession {
   ) -> PublishedOriginalPage.Status? {
     // A draft is never a scan.
     guard let id = id.rfc else { return nil }
-    return library.metadata(id).flatMap {
+    return library.indexes.metadata(id).flatMap {
       PublishedOriginalPage.Status(
         id, formats: $0.formats, text: document,
-        pointerInPack: library.pointersInPack.contains(id))
+        pointerInPack: library.indexes.pointersInPack.contains(id))
     }
   }
 
@@ -183,9 +183,9 @@ extension DocumentSession {
     for id: ReadableDocument, authors: [Author]?, in library: LibraryModel
   ) -> DocumentInfo? {
     guard let id = id.rfc else { return nil }
-    return library.metadata(id).map {
+    return library.indexes.metadata(id).map {
       DocumentInfo(
-        $0, authors: authors, in: library.index,
+        $0, authors: authors, in: library.indexes.index,
         revisions: library.revisionsSummary(for: $0.id))
     }
   }

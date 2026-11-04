@@ -386,9 +386,9 @@ struct StorageSettings: View {
 
   private var keepsBookmarks: Binding<Bool> {
     Binding(
-      get: { library.keepsBookmarksOffline },
+      get: { library.documents.keepsBookmarksOffline },
       set: {
-        library.setKeepsBookmarksOffline($0)
+        library.documents.setKeepsBookmarksOffline($0)
         Task { await refresh() }
       }
     )
@@ -404,12 +404,12 @@ struct StorageSettings: View {
       Button("Remove All Offline Documents…", role: .destructive) {
         confirmsRemoval = true
       }
-      .disabled(library.offlineMarks.isEmpty && !library.keepsBookmarksOffline)
+      .disabled(library.userData.offlineMarks.isEmpty && !library.documents.keepsBookmarksOffline)
       .confirmationDialog(
         "Remove all offline documents?", isPresented: $confirmsRemoval, titleVisibility: .visible
       ) {
         Button("Remove All", role: .destructive) {
-          library.removeAllOffline()
+          library.documents.removeAllOffline()
           Task { await refresh() }
         }
       } message: {
@@ -420,7 +420,7 @@ struct StorageSettings: View {
       LabeledContent("Reading Cache") { UsageValue(usage: usage?.cache) }
       Button("Clear Cache") {
         Task {
-          await library.clearCache()
+          await library.documents.clearCache()
           await refresh()
         }
       }
@@ -436,7 +436,7 @@ struct StorageSettings: View {
         .foregroundStyle(.secondary)
       }
       LabeledContent("Full-Text Index") { UsageValue(usage: textIndex?.usage) }
-      if unindexed == 0, library.index != nil, !library.indexAllRun.isRunning {
+      if unindexed == 0, library.indexes.index != nil, !library.indexes.indexAllRun.isRunning {
         Text("All RFCs are indexed.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -447,8 +447,8 @@ struct StorageSettings: View {
         confirmsIndexRemoval = true
       }
       .disabled(
-        library.indexAllRun.isRemoving
-          || (textIndex?.retained ?? 0) == 0 && !library.indexAllRun.isRunning
+        library.indexes.indexAllRun.isRemoving
+          || (textIndex?.retained ?? 0) == 0 && !library.indexes.indexAllRun.isRunning
       )
       .confirmationDialog(
         "Remove the full-text index?", isPresented: $confirmsIndexRemoval,
@@ -456,7 +456,7 @@ struct StorageSettings: View {
       ) {
         Button("Remove", role: .destructive) {
           Task {
-            await library.removeIndexOfAllRFCs()
+            await library.indexes.removeIndexOfAllRFCs()
             await refreshTextIndex()
           }
         }
@@ -467,16 +467,18 @@ struct StorageSettings: View {
       }
     }
     .task { await refresh() }
-    .task(id: [library.textIndexVersion, library.indexVersion]) { await refreshTextIndex() }
+    .task(id: [library.indexes.textIndexVersion, library.indexes.indexVersion]) {
+      await refreshTextIndex()
+    }
   }
 
   private func refresh() async {
-    usage = await library.storageUsage()
+    usage = await library.documents.storageUsage()
   }
 
   private func refreshTextIndex() async {
-    textIndex = await library.textIndexUsage()
-    unindexed = await library.unindexedRFCCount()
+    textIndex = await library.indexes.textIndexUsage()
+    unindexed = await library.indexes.unindexedRFCCount()
   }
 }
 

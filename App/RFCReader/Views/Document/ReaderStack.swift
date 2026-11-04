@@ -64,7 +64,7 @@
           .id(ShownReader(reader: reader, shown: reader.document))
         case .rfc(let id):
           // A BCP, STD or FYI shows its first member, once the index names it (#656).
-          if let shown = library.documentShown(for: id) {
+          if let shown = library.indexes.documentShown(for: id) {
             DocumentView(
               id: .rfc(shown), identity: reader.document, depth: reader.depth,
               showsInspector: $showsInspector

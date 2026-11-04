@@ -57,8 +57,8 @@
               .lineLimit(2)
               .foregroundStyle(.secondary)
               .frame(maxWidth: .infinity, alignment: .leading)
-            if case .failed = library.indexState {
-              Button("Retry") { library.retryIndex() }
+            if case .failed = library.indexes.indexState {
+              Button("Retry") { library.indexes.retry() }
             }
           }
           .padding(.horizontal, 18)
@@ -68,9 +68,9 @@
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
       // The check at launch alone goes stale in an app left open for weeks.
-      .onAppear { library.refreshRegistriesIfDue() }
+      .onAppear { library.dataFiles.refreshRegistriesIfDue() }
       // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { controller.resolve() }
+      .onChange(of: library.indexes.index != nil) { controller.resolve() }
       .task(id: controller.searchKey) { await controller.search() }
     }
 
@@ -144,7 +144,7 @@
       let link = row.link
       let isSelected = row == results.selected
       let title = QuickOpenResults.title(
-        library.metadata(link.id)?.title, isIndexLoaded: library.index != nil)
+        library.indexes.metadata(link.id)?.title, isIndexLoaded: library.indexes.index != nil)
       return HStack(spacing: 12) {
         if let entry = row.entry {
           // What was looked up, then where it is defined: "HTTP status 425 · Too

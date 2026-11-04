@@ -116,7 +116,7 @@ struct DocumentCommands: Commands {
     }
 
     private var isBookmarked: Bool {
-      navigation?.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
+      navigation?.selection.map { library.userData.bookmarkedDocuments.contains($0) } ?? false
     }
 
     private func toggleBookmark() {
@@ -126,7 +126,7 @@ struct DocumentCommands: Commands {
 
     /// The document the tab opened, cited as itself, a series too (#656).
     private var citedDocument: CitedDocument? {
-      navigation?.selection.flatMap(library.citedDocument)
+      navigation?.selection.flatMap(library.indexes.citedDocument)
     }
 
     /// File ▸ New Collection… and Save as Collection… (#764): the editor, which the
@@ -320,8 +320,10 @@ struct DocumentCommands: Commands {
               : DocumentMenus.more(
                 showsOriginal: reader?.showOriginal == true,
                 showsTranslation: reader?.showTranslation == true,
-                errata: navigation?.shown.flatMap { active.controller?.library.metadata($0) }?
-                  .errataURL,
+                errata: navigation?.shown.flatMap {
+                  active.controller?.library.indexes.metadata($0)
+                }?
+                .errataURL,
                 precedingDraft: reader?.precedingDraft),
             perform: perform)
         }

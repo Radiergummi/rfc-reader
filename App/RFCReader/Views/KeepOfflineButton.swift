@@ -8,11 +8,11 @@ struct KeepOfflineButton: View {
   let document: DocumentID
   let library: LibraryModel
 
-  private var isKept: Bool { library.offlineMarks.contains(document) }
+  private var isKept: Bool { library.userData.offlineMarks.contains(document) }
 
   var body: some View {
     Button {
-      library.setKeptOfflineInBackground(document, !isKept)
+      library.documents.setKeptOfflineInBackground(document, !isKept)
     } label: {
       Label(
         DocumentActions.keepOfflineCommand(isKept: isKept),

@@ -13,7 +13,7 @@ struct IndexAllRFCsControl: View {
   @State private var remaining: Int?
 
   var body: some View {
-    let run = library.indexAllRun
+    let run = library.indexes.indexAllRun
     if run.isRunning {
       HStack {
         if let progress = run.progress {
@@ -30,15 +30,15 @@ struct IndexAllRFCsControl: View {
       VStack(alignment: .leading, spacing: 4) {
         Button("Index All RFCs…") {
           Task {
-            remaining = await library.unindexedRFCCount()
+            remaining = await library.indexes.unindexedRFCCount()
             confirms = true
           }
         }
-        .disabled(!library.hasTextIndex || library.index == nil || run.isRemoving)
+        .disabled(!library.indexes.hasTextIndex || library.indexes.index == nil || run.isRemoving)
         .confirmationDialog(
           "Index all RFCs?", isPresented: $confirms, titleVisibility: .visible
         ) {
-          Button("Index All RFCs") { library.indexAllRFCs() }
+          Button("Index All RFCs") { library.indexes.indexAllRFCs() }
         } message: {
           if let remaining {
             Text(

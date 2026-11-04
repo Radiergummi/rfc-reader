@@ -37,7 +37,7 @@ extension LibraryModel {
   ) -> UUID? {
     lastHighlightColor = color
     var made: UUID?
-    editAnnotations { context in
+    userData.editAnnotations { context in
       made = try AnnotationStore.highlight(
         range, of: document, in: model, color: color, edit: Self.edit(context, undoManager))
     }
@@ -46,14 +46,14 @@ extension LibraryModel {
 
   func setHighlightColor(_ color: HighlightColor, of identifier: UUID, undoManager: UndoManager?) {
     lastHighlightColor = color
-    editAnnotations { context in
+    userData.editAnnotations { context in
       try AnnotationStore.setColor(
         color, of: identifier, edit: Self.edit(context, undoManager))
     }
   }
 
   func deleteHighlight(_ identifier: UUID, undoManager: UndoManager?) {
-    editAnnotations { context in
+    userData.editAnnotations { context in
       try AnnotationStore.delete(
         identifier, edit: Self.edit(context, undoManager))
     }
@@ -61,7 +61,7 @@ extension LibraryModel {
 
   /// Puts an ambiguous highlight at the place the reader chose.
   func placeHighlight(_ identifier: UUID, at target: Target, undoManager: UndoManager?) {
-    editAnnotations { context in
+    userData.editAnnotations { context in
       try AnnotationStore.place(
         identifier, at: target, edit: Self.edit(context, undoManager))
     }
@@ -70,7 +70,7 @@ extension LibraryModel {
   /// Where a reader's build found highlights that moved, kept beside where they were
   /// made, so relocation does not run again on every open.
   func recordHighlightRelocations(_ relocations: [UUID: Target]) {
-    editAnnotations { context in
+    userData.editAnnotations { context in
       for (identifier, target) in relocations {
         try AnnotationStore.recordRelocation(of: identifier, at: target, context: context)
       }
@@ -85,14 +85,14 @@ extension LibraryModel {
     _ identifier: UUID, on owner: NoteOwner, of document: DocumentID, body: String,
     undoManager: UndoManager?
   ) {
-    editAnnotations { context in
+    userData.editAnnotations { context in
       try AnnotationStore.saveNote(
         identifier, on: owner, of: document, body: body, edit: Self.edit(context, undoManager))
     }
   }
 
   func deleteNote(_ identifier: UUID, undoManager: UndoManager?) {
-    editAnnotations { context in
+    userData.editAnnotations { context in
       try AnnotationStore.deleteNote(identifier, edit: Self.edit(context, undoManager))
     }
   }
@@ -101,7 +101,7 @@ extension LibraryModel {
   /// highlight is gone, put on the highlight that covers them.
   func recordNotePlacement(_ placement: NotePlacement) {
     guard !placement.relocations.isEmpty || !placement.repoints.isEmpty else { return }
-    editAnnotations { context in
+    userData.editAnnotations { context in
       for (identifier, target) in placement.relocations {
         try AnnotationStore.recordNoteRelocation(of: identifier, at: target, context: context)
       }

@@ -65,7 +65,9 @@ import SwiftUI
         provideUpdatedSuggestions responseHandler:
           @escaping (NSSuggestionItemResponse<Pick>) -> Void
       ) {
-        guard let index = library.index else { return responseHandler(NSSuggestionItemResponse()) }
+        guard let index = library.indexes.index else {
+          return responseHandler(NSSuggestionItemResponse())
+        }
         let items = SearchQuery.suggestionsWhileTyping(for: textField.stringValue, in: index).map {
           suggestion in
           var item = NSSuggestionItem(

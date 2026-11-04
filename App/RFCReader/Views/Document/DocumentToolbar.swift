@@ -175,7 +175,8 @@ import SwiftUI
     /// `CollectionActionPerformer`'s.
     private func perform(_ action: DocumentMenus.Action) {
       DocumentActionPerformer(
-        id: id, cited: library.citedDocument(identity), reader: reader, open: { openURL($0) }
+        id: id, cited: library.indexes.citedDocument(identity), reader: reader,
+        open: { openURL($0) }
       ).perform(action)
     }
 

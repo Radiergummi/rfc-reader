@@ -1,5 +1,6 @@
 #if os(macOS)
   import RFCKit
+  import RFCReaderKit
   import SwiftUI
 
   /// What the detail column of `NavigationSplitView` used to hold, and the scene's
@@ -14,7 +15,7 @@
       Group {
         if let selection = navigation.selection {
           // A BCP, STD or FYI shows its first member, once the index names it (#656).
-          if let shown = library.documentShown(for: selection) {
+          if let shown = library.indexes.documentShown(for: selection) {
             DocumentView(id: .rfc(shown), identity: .rfc(selection))
               // Made again when the RFC shown changes for the same selection, as an
               // index arriving after one that failed changes a series' (#656).

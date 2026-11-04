@@ -85,7 +85,7 @@
           // The one field of the Save as PDF sheet a print can fill: its Author,
           // Subject and Keywords have no public setting (#375).
           let title = PrintFurniture.jobTitle(
-            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+            id: id, title: reader.documentTitle ?? library.indexes.metadata(id)?.title)
           guard let pdf = PDFDocument(data: data),
             let operation = Self.printOperation(
               of: (pdf, title), makeSection: makeSection, printInfo: printInfo)
@@ -166,7 +166,7 @@
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true
-      panel.tagNames = ExportFormat.tagNames(for: library.metadata(id))
+      panel.tagNames = ExportFormat.tagNames(for: library.indexes.metadata(id))
       isExporting = true
       panel.beginSheetModal(for: window) { [library] response in
         guard response == .OK, let url = panel.url else {

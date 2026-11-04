@@ -77,7 +77,7 @@ final class NavigationModel: Identifiable {
   struct TextFound {
     let list: LibraryList
     /// Nil when the search has nothing to say of the list: there is no index, or the
-    /// list asks the text nothing (`LibraryModel.textSearch`).
+    /// list asks the text nothing (`IndexRepository.textSearch`).
     let found: TextIndexer.Found?
   }
 
@@ -92,7 +92,7 @@ final class NavigationModel: Identifiable {
       // never in Recently Read, which Hide Read leaves alone and whose order is
       // taken on entering it.
       if listOptions.hidesRead, !oldValue.hidesRead, filter != .recent {
-        recentOrder = library.recentlyRead()
+        recentOrder = library.userData.recentlyRead()
       }
     }
   }
@@ -125,7 +125,7 @@ final class NavigationModel: Identifiable {
   /// and while its search names its filter's qualifier again, which no query keeps.
   var savedQuery: String? {
     guard let list = listed?.list, !list.query.isUnsearchedQuery,
-      let query = list.savedQuery(in: library.collections)
+      let query = list.savedQuery(in: library.userData.collections)
     else { return nil }
     // Not a search for a section, which a collection's list never shows.
     return CollectionStore.isValidQuery(query) ? query : nil
@@ -136,7 +136,7 @@ final class NavigationModel: Identifiable {
   /// list.
   var collectionQuery: String? {
     guard case .collection(let identifier) = filter else { return nil }
-    return library.collections[identifier]?.query
+    return library.userData.collections[identifier]?.query
   }
 
   /// Whether the tab lists a collection made from a query (#355).
@@ -195,8 +195,8 @@ final class NavigationModel: Identifiable {
 
   /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
-    recentOrder = library.recentlyRead()
-    downloaded = library.availableOfflineNumbers
+    recentOrder = library.userData.recentlyRead()
+    downloaded = library.documents.availableOfflineNumbers
   }
 
   /// What the list lists: the last filter chosen, whether or not the sidebar still
@@ -301,7 +301,7 @@ final class NavigationModel: Identifiable {
   /// member of the BCP, STD or FYI selected; nil while a series waits for the index.
   /// What acts on the text -- Print, Export, Cite, a collection -- acts on this, and
   /// what keeps the place -- Bookmark, Recently Read, the history -- on `selection`.
-  var shown: DocumentID? { selection.flatMap(library.documentShown) }
+  var shown: DocumentID? { selection.flatMap(library.indexes.documentShown) }
 
   /// What the reader on screen is asked to scroll to: `requests.current`, published
   /// only when it changes.
@@ -379,7 +379,7 @@ final class NavigationModel: Identifiable {
     // is later than this open, and stays.
     let held = history.current
     newestRevisionLookup = Task { [weak self, library] in
-      draft.id = await library.revision(of: draft.id)
+      draft.id = await library.documents.revision(of: draft.id)
       guard let self, !Task.isCancelled, history.current == held else { return }
       follow(.draft(draft), arrival: arrival)
     }
@@ -407,7 +407,7 @@ final class NavigationModel: Identifiable {
       sidebarSelection = .all
       searchText = ""
       // Only where it is what hides the row: it is the reader's choice for the tab.
-      if let row, library.metadata(row)?.isObsolete == true {
+      if let row, library.indexes.metadata(row)?.isObsolete == true {
         listOptions.showsObsolete = true
       }
       if let row, listOptions.hidesRead, recentOrder.contains(row) {
@@ -486,7 +486,7 @@ final class NavigationModel: Identifiable {
   /// must have before the gesture ends or it puts the row back and moves it again.
   func listNow() {
     guard let request = request(), !shows(request),
-      let made = library.listedNow(request.list, hits: knownHits(for: request))
+      let made = library.indexes.listedNow(request.list, hits: knownHits(for: request))
     else { return }
     listed = made
   }
@@ -497,7 +497,7 @@ final class NavigationModel: Identifiable {
   func rowsNow() -> [LibraryRow] {
     guard let request = request() else { return [] }
     if shows(request), let listed { return listed.rows }
-    return library.listedNow(request.list, hits: knownHits(for: request))?.rows ?? []
+    return library.indexes.listedNow(request.list, hits: knownHits(for: request))?.rows ?? []
   }
 
   /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
@@ -530,11 +530,11 @@ final class NavigationModel: Identifiable {
   /// What the inputs ask for, read so that only what this filter lists from is
   /// observed (`LibraryList.reading`). Nil while there is no index.
   private func request() -> ListRequest? {
-    guard library.index != nil else { return nil }
+    guard library.indexes.index != nil else { return nil }
     return ListRequest(
       list: LibraryList.reading(
         filter, query: requestedQuery, options: listOptionsInForce, from: self),
-      indexVersion: library.indexVersion)
+      indexVersion: library.indexes.indexVersion)
   }
 
   /// Whether the list on show is what `request` asks for (`ListedRows.shows`).
@@ -557,7 +557,8 @@ final class NavigationModel: Identifiable {
     listing = Task(name: "List") { [weak self] in
       for await request in requests {
         guard let request, let self, !self.shows(request) else { continue }
-        let made = await self.library.listed(request.list, hits: self.knownHits(for: request))
+        let made = await self.library.indexes.listed(
+          request.list, hits: self.knownHits(for: request))
         // Overtaken by a newer request, which comes next, or by `listNow()`.
         guard let made, !Task.isCancelled, self.request() == request, !self.shows(request)
         else { continue }
@@ -575,7 +576,7 @@ final class NavigationModel: Identifiable {
 
   private func textRequest() -> TextRequest? {
     guard let list = listed?.list else { return nil }
-    return TextRequest(list: list, textIndexVersion: library.textIndexVersion)
+    return TextRequest(list: list, textIndexVersion: library.indexes.textIndexVersion)
   }
 
   /// Searches the text again whenever the list on show or the full-text index
@@ -585,7 +586,7 @@ final class NavigationModel: Identifiable {
     textSearching = Task(name: "Search the text") { [weak self] in
       for await request in requests {
         guard let request, let self else { continue }
-        let found = await self.library.textSearch(request.list)
+        let found = await self.library.indexes.textSearch(request.list)
         // Kept while the index changed under it, as the first pass changes it every
         // few documents: it is newer than what is on show, and the next search follows.
         guard !Task.isCancelled, self.textRequest()?.list == request.list else { continue }
@@ -751,7 +752,7 @@ final class NavigationModel: Identifiable {
   /// deleted while the tab is open does.
   func restore(_ snapshot: SceneSnapshot, into reader: ReaderState) {
     history = NavigationHistory(snapshot.history)
-    sidebarSelection = KeptFilter.filter(snapshot.filter, keeping: library.collections)
+    sidebarSelection = KeptFilter.filter(snapshot.filter, keeping: library.userData.collections)
     reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
   }
 }
@@ -759,19 +760,19 @@ final class NavigationModel: Identifiable {
 /// What this tab's list may list from: the inputs it took on entering the filter,
 /// and the library's bookmarks and collections as they stand.
 extension NavigationModel: ListSources {
-  var bookmarked: Set<DocumentID> { library.bookmarkedDocuments }
+  var bookmarked: Set<DocumentID> { library.userData.bookmarkedDocuments }
   var recentlyRead: [DocumentID] { recentOrder }
 
   func members(of collection: UUID) -> [Int] {
-    library.collections[collection]?.rfcNumbers ?? []
+    library.userData.collections[collection]?.rfcNumbers ?? []
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collection(named: name)?.id
+    library.userData.collections.collection(named: name)?.id
   }
 
   func query(of collection: UUID) -> String? {
-    library.collections[collection]?.query
+    library.userData.collections[collection]?.query
   }
 
   /// The query `filter` lists, if it is a dynamic collection's (#355): what the

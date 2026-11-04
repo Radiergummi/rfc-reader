@@ -101,7 +101,7 @@ import SwiftUI
           Text(verbatim: token.label)
         }
         .searchSuggestions {
-          if let index = library.index {
+          if let index = library.indexes.index {
             ForEach(suggestions(in: index), id: \.self) {
               suggestion in
               if suggestion.isUnknown {
@@ -126,10 +126,12 @@ import SwiftUI
 
     private var text: Binding<String> {
       Binding {
-        SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups).text
+        SearchQuery.tokenized(
+          navigation.searchText, workingGroups: library.indexes.knownWorkingGroups
+        ).text
       } set: { text in
         navigation.searchText = SearchQuery.replacingText(
-          in: navigation.searchText, with: text, workingGroups: library.knownWorkingGroups)
+          in: navigation.searchText, with: text, workingGroups: library.indexes.knownWorkingGroups)
       }
     }
 
@@ -142,7 +144,7 @@ import SwiftUI
           definition: navigation.definition(of: navigation.searchedFilter)
         ).tokens()
         let terms = SearchQuery.tokenized(
-          navigation.searchText, workingGroups: library.knownWorkingGroups
+          navigation.searchText, workingGroups: library.indexes.knownWorkingGroups
         ).terms
         return scope.map(FieldToken.scope) + terms.map(FieldToken.term)
       } set: { tokens in
@@ -156,7 +158,7 @@ import SwiftUI
         }
         navigation.searchText = SearchQuery.replacingTerms(
           in: navigation.searchText, with: tokens.compactMap(\.term),
-          workingGroups: library.knownWorkingGroups)
+          workingGroups: library.indexes.knownWorkingGroups)
       }
     }
   }

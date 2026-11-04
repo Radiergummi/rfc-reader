@@ -23,7 +23,7 @@ struct AddToCollectionItems: View {
       document: document, library: library, navigation: navigation, undoManager: undoManager,
       onNewCollection: onNewCollection)
     MenuSections(
-      sections: DocumentMenus.addToCollection(document, in: library.collections),
+      sections: DocumentMenus.addToCollection(document, in: library.userData.collections),
       perform: performer.perform)
   }
 }

@@ -170,14 +170,16 @@ final class RFCTextViewCoordinator: NSObject {
   func quote(of range: NSRange) -> QuoteCitation.Quote? {
     guard let citing, let built else { return nil }
     return QuoteCitation.quote(
-      of: range, in: built, document: citing, cited: environment?.library.citedDocument(citing),
+      of: range, in: built, document: citing,
+      cited: environment?.library.indexes.citedDocument(citing),
       settings: ReaderSettings(defaults: .standard))
   }
 
   /// Copy Citation's citation of the section `range` starts in, in the style Settings
   /// chose (#712), or nil where the index has no entry to cite from.
   func citation(of range: NSRange) -> String? {
-    guard let citing, let built, let cited = environment?.library.citedDocument(citing) else {
+    guard let citing, let built, let cited = environment?.library.indexes.citedDocument(citing)
+    else {
       return nil
     }
     let settings = ReaderSettings(defaults: .standard)
@@ -191,7 +193,8 @@ final class RFCTextViewCoordinator: NSObject {
   func publicURL(for link: URL, site: LinkSite) -> URL? {
     guard let documentID else { return nil }
     return LinkCopy.publicURL(
-      for: link, from: documentID, in: environment?.library.index, bibliography: bibliography,
+      for: link, from: documentID, in: environment?.library.indexes.index,
+      bibliography: bibliography,
       site: site)
   }
   /// See `RFCTextView.onChoosePresentation`.
@@ -539,7 +542,7 @@ final class RFCTextViewCoordinator: NSObject {
       let menu = referenceMenu(defaultMenu, for: url, from: textView, at: range)
       guard let environment, let documentID, let box = reference?.box,
         let target = LinkPreview.resolve(
-          box.reference, linkedTo: url, from: documentID, in: environment.library.index)
+          box.reference, linkedTo: url, from: documentID, in: environment.library.indexes.index)
       else { return menu.map { .init(menu: $0) } }
       let host: UIHostingController<AnyView>
       switch target {

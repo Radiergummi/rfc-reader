@@ -50,7 +50,7 @@ struct InfoView: View {
               .id(info.number)
             }
           }
-          if let document, let errata = library.errata?[document], !errata.isEmpty {
+          if let document, let errata = library.dataFiles.errata?[document], !errata.isEmpty {
             // The sections the reader draws, as the chips find them.
             let summary = ErrataSummary(errata: errata, sections: ErrataMarks.drawn(sections))
             // Errata of only a status a later feed adds are neither listed nor counted.
@@ -59,7 +59,7 @@ struct InfoView: View {
             }
           }
           // Without a citation index a reading path can only say there is none.
-          if let document, document.series == .rfc, library.hasCitationIndex {
+          if let document, document.series == .rfc, library.documents.hasCitationIndex {
             InfoSection(title: String(localized: "Reading Path")) {
               Button("What to Read First", systemImage: "list.number") {
                 showReadingPath(document)
@@ -679,7 +679,7 @@ private struct LinkRow: View {
       isDownloading = true
       Task {
         do {
-          let data = try await library.publishedFile(for: document, format: format)
+          let data = try await library.documents.publishedFile(for: document, format: format)
           // The RFC Editor's own name, as the Mac saves it to Downloads.
           downloaded = ExportedFile(
             data: data, contentType: format.contentType, fileStem: document.fileStem)
@@ -752,14 +752,14 @@ private struct OfflineSection: View {
   #endif
 
   private var isKept: Bool {
-    document.series == .rfc && library.offlineMarks.contains(document)
+    document.series == .rfc && library.userData.offlineMarks.contains(document)
   }
 
   /// Whether Available Offline lists it and its body is on the device, which the
   /// status says as a row's mark does (#769, #936): kept by its mark, or as a bookmark
   /// while bookmarks are kept. The control stays the mark's.
   private var isAvailable: Bool {
-    library.isAvailableOffline(document)
+    library.documents.isAvailableOffline(document)
   }
 
   var body: some View {
@@ -796,7 +796,7 @@ private struct OfflineSection: View {
         size = nil
         return
       }
-      let size = await library.keptSize(document)
+      let size = await library.documents.keptSize(document)
       // A wait that outlasted the mark reads a size that is no longer shown.
       if !Task.isCancelled { self.size = size }
     }
@@ -847,7 +847,7 @@ private struct OfflineSection: View {
     isWorking = true
     Task {
       do {
-        try await library.setKeptOffline(document, keeps)
+        try await library.documents.setKeptOffline(document, keeps)
       } catch is CancellationError {
         // Unmarked elsewhere while it downloaded: nothing failed.
       } catch {

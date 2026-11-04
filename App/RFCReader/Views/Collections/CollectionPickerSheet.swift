@@ -28,16 +28,16 @@ struct CollectionPickerSheet: View {
   }
 
   var body: some View {
-    let members = Set(library.collections[collection]?.members ?? [])
+    let members = Set(library.userData.collections[collection]?.members ?? [])
     let listing = Listing(
       list: LibraryList.reading(.all, query: query, options: ListOptions(), from: navigation),
-      indexVersion: library.indexVersion)
+      indexVersion: library.indexes.indexVersion)
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     NavigationStack {
       List(rows.prefix(limit)) { row in
         let isMember = members.contains(row.id)
         Button {
-          library.editCollections {
+          library.userData.editCollections {
             try CollectionStore.toggle(
               row.id, in: collection, undoManager: undoManager,
               onUndoFailure: library.collectionUndoFailed, in: $0)
@@ -62,14 +62,14 @@ struct CollectionPickerSheet: View {
       .task(id: listing) {
         let list = listing.list
         guard await Debounce.outlasted(AppliedSearch.pause(before: list.query)),
-          let listed = await library.listed(list), !Task.isCancelled
+          let listed = await library.indexes.listed(list), !Task.isCancelled
         else { return }
         // A collection holds RFCs: `is:bookmarked` lists a bookmarked series too.
         rows = listed.rows.filter { $0.rfc != nil }
       }
       // Deleted elsewhere — another window, a script, sync — there is nothing left
       // to add to.
-      .onChange(of: library.collections[collection] == nil) { _, isGone in
+      .onChange(of: library.userData.collections[collection] == nil) { _, isGone in
         if isGone { dismiss() }
       }
       .navigationTitle("Add to \(library.title(for: .collection(collection)))")

@@ -81,7 +81,7 @@
     /// member (#656). Bookmark is the window controller's, and bookmarks the series.
     private var id: DocumentID? { navigation.shown }
     private var library: LibraryModel { controller.library }
-    private var metadata: RFCMetadata? { id.flatMap { library.metadata($0) } }
+    private var metadata: RFCMetadata? { id.flatMap { library.indexes.metadata($0) } }
 
     init(controller: ReaderWindowController) {
       self.controller = controller
@@ -382,7 +382,7 @@
         menu.addItem(.separator())
         menu.addItem(readingModeItem())
       case collectionMenu:
-        add(DocumentMenus.addToCollection(id, in: library.collections), to: menu)
+        add(DocumentMenus.addToCollection(id, in: library.userData.collections), to: menu)
       default:
         return
       }

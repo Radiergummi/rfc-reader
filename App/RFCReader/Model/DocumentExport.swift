@@ -23,7 +23,7 @@ enum DocumentExport {
     return switch format {
     case .pdf:
       try await DocumentPDF.export(id, section: section, paperSize: paperSize, library: library)
-    case .text: try await library.publishedFile(for: id, format: .text)
+    case .text: try await library.documents.publishedFile(for: id, format: .text)
     case .xml: try await xml(of: id, library: library)
     case .annotations: try await annotations(of: id, library: library)
     case .epub, .html, .markdown, .abnf:
@@ -34,7 +34,7 @@ enum DocumentExport {
   /// The document's highlights and notes (#524), as the store has them now.
   private static func annotations(of id: DocumentID, library: LibraryModel) async throws -> Data {
     let document = try await library.document(for: id)
-    let annotations = library.annotations
+    let annotations = library.userData.annotations
     let text = await markdown(of: document, id: id, annotations: annotations)
     return Data(text.utf8)
   }
@@ -53,12 +53,12 @@ enum DocumentExport {
   /// (`PublishedOriginalPage.NotExportable`). The text is read only for an RFC the
   /// index lists an original of beside it, as the export would read it anyway.
   private static func checkExportable(_ id: DocumentID, library: LibraryModel) async throws {
-    let formats = library.metadata(id)?.formats
+    let formats = library.indexes.metadata(id)?.formats
     let text =
       PublishedOriginalPage.exportReadsText(id, formats: formats)
       ? try await library.document(for: id) : nil
     try PublishedOriginalPage.checkExportable(
-      id, formats: formats, text: text, pointerInPack: library.pointersInPack.contains(id))
+      id, formats: formats, text: text, pointerInPack: library.indexes.pointersInPack.contains(id))
   }
 
   /// The book, the page, the Markdown or the collected grammar (#185); the grammar is offered
@@ -86,10 +86,10 @@ enum DocumentExport {
   /// text where it did not: a legacy RFC's index entry lists no XML, and one the
   /// index has not named yet is asked for, and converted when there is none.
   private static func xml(of id: DocumentID, library: LibraryModel) async throws -> Data {
-    let formats = library.metadata(id)?.formats
+    let formats = library.indexes.metadata(id)?.formats
     if !RFCEditorClient.textIsTheDocument(availableFormats: formats) {
       do {
-        return try await library.publishedFile(for: id, format: .xml)
+        return try await library.documents.publishedFile(for: id, format: .xml)
       } catch RFCEditorClient.ClientError.notFound {
         // Never published as XML: converted below.
       }

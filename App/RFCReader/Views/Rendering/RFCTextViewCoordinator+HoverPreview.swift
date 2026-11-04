@@ -100,7 +100,8 @@
       guard let reference = target.reference, let documentID,
         let url = link(at: target.range.location),
         let resolved = LinkPreview.resolve(
-          reference.reference, linkedTo: url, from: documentID, in: environment?.library.index)
+          reference.reference, linkedTo: url, from: documentID,
+          in: environment?.library.indexes.index)
       else { return nil }
       switch resolved {
       case .card:
@@ -131,7 +132,7 @@
     private func documentPreview(for target: HoverTarget) -> ReferenceHoverController.Popover? {
       guard let documentID, let environment, let url = link(at: target.range.location),
         case .document(let id, let place)? = LinkPreview.resolve(
-          url, from: documentID, in: environment.library.index),
+          url, from: documentID, in: environment.library.indexes.index),
         let rect = referenceRect(for: target.range)
       else { return nil }
       let preview = DocumentPreview(library: environment.library, id: id, place: place) {

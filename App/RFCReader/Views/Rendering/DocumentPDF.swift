@@ -51,7 +51,7 @@ nonisolated enum DocumentPDF {
   ) async throws -> Data {
     let content: Content
     if original {
-      content = .original(try await library.originalText(for: id))
+      content = .original(try await library.documents.originalText(for: .rfc(id)))
     } else {
       let document = try ExportedPart(
         of: try await library.document(for: id), section: section
@@ -61,7 +61,7 @@ nonisolated enum DocumentPDF {
           document: document,
           choices: library.presentationChoices(
             for: .rfc(id), drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
-        PrintFurniture(header: document.header, metadata: library.metadata(id)))
+        PrintFurniture(header: document.header, metadata: library.indexes.metadata(id)))
     }
     // A print whose window closed while the document was fetched builds nothing.
     try Task.checkCancellation()
