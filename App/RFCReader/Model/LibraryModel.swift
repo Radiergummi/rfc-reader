@@ -224,7 +224,7 @@ final class LibraryModel {
     indexes = IndexRepository(
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
     dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
-    indexes.onApplied = { [weak self] in self?.indexApplied() }
+    indexes.onApplied = { [weak self] index in self?.indexApplied(index) }
     // A link held for the index goes to its tab now (#241), where
     // `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first RFC.
     indexes.onSettled = { [weak self] in self?.deliverLinksHeldForIndex() }
@@ -371,7 +371,8 @@ final class LibraryModel {
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
-    // Starts the parse of the index kept before it first suspends (#367).
+    // Nothing above awaits: the repository starts the parse of the index kept before
+    // its first suspension, so that it runs beside the first window (#367).
     await indexes.bootstrap()
     // Only the Reading Path items wait for it, so not the list.
     Task(name: "Look for a citation index") { await documents.refreshCitationIndex() }
@@ -442,8 +443,7 @@ final class LibraryModel {
   #endif
 
   /// What an index applied means beyond the index itself.
-  private func indexApplied() {
-    guard let index else { return }
+  private func indexApplied(_ index: RFCIndex) {
     indexForSpotlight(index.rfcs)
     indexSectionsForSpotlight()
     compareBookmarks()

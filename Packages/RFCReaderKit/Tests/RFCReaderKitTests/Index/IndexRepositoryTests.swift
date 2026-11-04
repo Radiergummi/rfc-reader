@@ -88,7 +88,7 @@ struct IndexRepositoryTests {
       store: sandbox.store(), client: RFCEditorClient(transport: any),
       clientOnCheapNetworks: RFCEditorClient(transport: cheap), textIndexLocation: nil,
       now: now)
-    repository.onApplied = { calls.made.append("applied") }
+    repository.onApplied = { _ in calls.made.append("applied") }
     repository.onSettled = { calls.made.append("settled") }
     return repository
   }
@@ -112,8 +112,8 @@ struct IndexRepositoryTests {
     #expect(any.indexRequests == 1)
     #expect(cheap.indexRequests == 0)
     #expect(sandbox.store().indexCheck()?.validators?.entityTag == Self.entityTag)
-    // Spotlight and the bookmarks before the links held for the index.
-    #expect(calls.made == ["applied", "settled"])
+    // The links held for the index before Spotlight and the bookmarks.
+    #expect(calls.made == ["settled", "applied"])
   }
 
   @Test func `a launch with the index kept reads it without asking the RFC Editor`() async {
@@ -144,7 +144,7 @@ struct IndexRepositoryTests {
     #expect(cheap.sentEntityTag == [true])
     #expect(relaunched.indexState.isReady)
     #expect(relaunched.indexVersion == 1)
-    #expect(calls.made == ["applied", "settled"])
+    #expect(calls.made == ["settled", "applied"])
   }
 
   @Test func `a first fetch that fails settles the index as failed, with no search`() async throws {
@@ -243,6 +243,6 @@ struct IndexRepositoryTests {
     await repository.bootstrap()
     await repository.bootstrap()
     #expect(any.indexRequests == 1)
-    #expect(calls.made == ["applied", "settled"])
+    #expect(calls.made == ["settled", "applied"])
   }
 }

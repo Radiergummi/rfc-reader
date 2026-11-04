@@ -6,21 +6,14 @@ import os
 private let indexLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
-/// The index's intervals, in the app's Points of Interest lane: the same subsystem
-/// and category as the app's `signposter`, so `make trace` reads them as before.
-private let signposter = OSSignposter(
-  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader",
-  category: .pointsOfInterest
-)
-
 /// The index and its search (#595): the index read from the copy kept at launch, or
 /// fetched when there is none, checked once a day on a cheap network, and fetched
 /// again on any network when a person asks; what is worked out from it once per
 /// index; the full-text index (#37) and Index All RFCs; and Just Published (#421).
 ///
-/// What the app does once an index is in, Spotlight and the bookmark comparison, comes
-/// through `onApplied`, and what it does once the index has arrived or failed to, the
-/// links held for it, through `onSettled`. A change to the full-text index is told
+/// What the app does once the index has arrived or failed to, the links held for it,
+/// comes through `onSettled`, and what it does once an index is in, Spotlight and the
+/// bookmark comparison, through `onApplied`. A change to the full-text index is told
 /// through `onTextIndexChanged`.
 @MainActor @Observable
 public final class IndexRepository {
@@ -37,10 +30,10 @@ public final class IndexRepository {
   @ObservationIgnored public private(set) var indexableRFCs: [RFCMetadata] = []
   /// Which index is installed, counted: what a tab compares to tell whether the
   /// rows and hits it has were made over the index there is now (#597), where
-  /// comparing two indexes would compare 9,842 entries.
+  /// comparing two indexes would compare every entry.
   public private(set) var indexVersion = 0
   /// Each working group's RFCs, worked out once per index for its card (#363): the
-  /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
+  /// list's body asks on every pass, and each answer scans the whole index.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
   public private(set) var indexState: IndexState = .idle {
     didSet {
@@ -83,7 +76,7 @@ public final class IndexRepository {
   /// Working groups with the most RFCs, for the sidebar.
   ///
   /// Derived once per index rather than per read: `SidebarView.body` reads this, so
-  /// as a computed property it counted all 9,842 RFCs and sorted them again on every
+  /// as a computed property it counted every RFC and sorted them again on every
   /// body pass, dozens of times a session.
   /// `PreparedIndex` counts them.
   public private(set) var topWorkingGroups: [String] = []
@@ -112,9 +105,9 @@ public final class IndexRepository {
   /// Whether the full-text index has opened, for Index All RFCs to be offered.
   public private(set) var hasTextIndex = false
 
-  /// Called once an index is in, from the copy kept or fetched, before the links
-  /// held for it are delivered (`onSettled`).
-  @ObservationIgnored public var onApplied: () -> Void = {}
+  /// Called with the index once it is in, from the copy kept or fetched, after the
+  /// links held for it were delivered (`onSettled`).
+  @ObservationIgnored public var onApplied: (RFCIndex) -> Void = { _ in }
   /// Called once the index has arrived or failed to.
   @ObservationIgnored public var onSettled: () -> Void = {}
   /// Called after each change to the full-text index, and once it has opened.
@@ -290,7 +283,7 @@ public final class IndexRepository {
   }
 
   /// Asks the RFC Editor for the index, sending what identifies the one kept so an
-  /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
+  /// unchanged index is a `304` rather than the whole index (#314). `onExpensiveNetworks`
   /// false is the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
   /// and fails at once when there is none.
@@ -379,8 +372,9 @@ public final class IndexRepository {
     self.indexCounts = prepared.counts
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
-    onApplied()
+    // The links held for the index first: a person is waiting for those (#241).
     settle()
+    onApplied(prepared.index)
   }
 
   private func settle() {
