@@ -149,13 +149,14 @@ struct IndexRepositoryTests {
     #expect(calls.made == ["applied", "settled"])
   }
 
-  @Test func `a first fetch that fails settles the index as failed, with no search`() async {
+  @Test func `a first fetch that fails settles the index as failed, with no search`() async throws {
     defer { sandbox.remove() }
     let calls = Calls()
     let repository = repository(any: Transport(failing: 1), cheap: Transport(), calls: calls)
     await repository.bootstrap()
     #expect(repository.indexState.isFailed)
-    #expect(repository.hasSettled)
+    // Required: waiting on an index that never settles would outlast the time limit.
+    try #require(repository.hasSettled)
     #expect(await repository.settledSearch() == nil)
     #expect(calls.made == ["settled"])
   }
@@ -176,14 +177,14 @@ struct IndexRepositoryTests {
 
   /// A `304` with nothing kept sent no validators: there is no index to wait for, so
   /// what waits for it goes ahead, though the state stays loading (#758).
-  @Test func `a 304 to a first fetch settles the index with none`() async {
+  @Test func `a 304 to a first fetch settles the index with none`() async throws {
     defer { sandbox.remove() }
     let any = Transport(answersUnchanged: true)
     let repository = repository(any: any, cheap: Transport())
     await repository.bootstrap()
     #expect(any.sentEntityTag == [false])
     #expect(repository.indexState == .loading)
-    #expect(repository.hasSettled)
+    try #require(repository.hasSettled)
     #expect(await repository.settledSearch() == nil)
   }
 
