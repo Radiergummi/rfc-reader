@@ -129,9 +129,7 @@ struct IndexRepositoryTests {
     #expect(cheap.indexRequests == 0)
   }
 
-  @Test
-  func
-    `a day later, launch checks on a cheap network with the validators, and a 304 keeps the index`()
+  @Test func `a day later, a check on a cheap network with the validators keeps the index`()
     async throws
   {
     defer { sandbox.remove() }
@@ -161,7 +159,7 @@ struct IndexRepositoryTests {
     #expect(calls.made == ["settled"])
   }
 
-  @Test func `Retry after a failure fetches on any network and shows the index`() async {
+  @Test func `a retry after a failure fetches on any network and shows the index`() async {
     defer { sandbox.remove() }
     let any = Transport(failing: 1)
     let repository = repository(any: any, cheap: Transport())
