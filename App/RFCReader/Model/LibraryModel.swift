@@ -225,8 +225,6 @@ final class LibraryModel {
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
     dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
     indexes.onApplied = { [weak self] index in self?.indexApplied(index) }
-    // A link held for the index goes to its tab now (#241), where
-    // `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first RFC.
     indexes.onSettled = { [weak self] in self?.deliverLinksHeldForIndex() }
     indexes.onTextIndexChanged = { [weak self] in self?.indexSectionsForSpotlight() }
     // What is gone from the disk goes from memory too.
@@ -409,8 +407,8 @@ final class LibraryModel {
     /// Logged, not shown: nothing on screen asked for it.
     private func installPackFromLaunchArgument() {
       let legacy = UserDefaults.standard.string(forKey: "installPack")
-      let indexes = UserDefaults.standard.string(forKey: "installIndexesPack")
-      guard legacy != nil || indexes != nil else { return }
+      let indexesPack = UserDefaults.standard.string(forKey: "installIndexesPack")
+      guard legacy != nil || indexesPack != nil else { return }
       // Installed on every launch the argument is set for, which is what a
       // developer setting it in a scheme wants while iterating on a pack. One after
       // the other, since the store installs one pack at a time, and each whether or
@@ -427,10 +425,10 @@ final class LibraryModel {
               "installing a data pack failed: \(String(describing: error), privacy: .public)")
           }
         }
-        if let indexes {
+        if let indexesPack {
           do {
             let pack = try await store.installIndexesPack(
-              from: PackInstaller.source(fromArgument: indexes))
+              from: PackInstaller.source(fromArgument: indexesPack))
             await documents.refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {

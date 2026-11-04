@@ -108,6 +108,8 @@ struct IndexRepositoryTests {
     #expect(repository.indexState.isReady)
     #expect(repository.metadata(.rfc(2119)) != nil)
     #expect(repository.indexVersion == 1)
+    // Required: waiting on an index that never settles would outlast the time limit.
+    try #require(repository.hasSettled)
     #expect(await repository.settledSearch() != nil)
     #expect(any.indexRequests == 1)
     #expect(cheap.indexRequests == 0)
@@ -207,12 +209,14 @@ struct IndexRepositoryTests {
     #expect(relaunched.indexVersion == 2)
   }
 
-  @Test func `an intent that asks before launch waits for the index`() async {
+  @Test func `an intent that asks before launch waits for the index`() async throws {
     defer { sandbox.remove() }
     let repository = repository(any: Transport(), cheap: Transport())
     let asked = Task { await repository.settledSearch() }
     #expect(!repository.hasSettled)
     await repository.bootstrap()
+    // Required: waiting on an index that never settles would outlast the time limit.
+    try #require(repository.hasSettled)
     #expect(await asked.value != nil)
   }
 
