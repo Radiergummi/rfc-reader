@@ -223,7 +223,7 @@ final class LibraryModel {
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
     indexes = IndexRepository(
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
-    dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
+    dataFiles.onRevisionsChanged = { [weak self] in self?.bookmarkWatcher.compare() }
     indexes.onApplied = { [weak self] index in self?.indexApplied(index) }
     indexes.onSettled = { [weak self] in self?.deliverLinksHeldForIndex() }
     indexes.onTextIndexChanged = { [weak self] in self?.indexSectionsForSpotlight() }
@@ -244,7 +244,7 @@ final class LibraryModel {
     // group followed on another device included: a group followed reports nothing it
     // published before (`BookmarkBaseline`), and left to the next refresh of the
     // index, what that refresh brings would count as before (#731).
-    userData.onFollowedGroupsChanged = { [weak self] in self?.compareBookmarks() }
+    userData.onFollowedGroupsChanged = { [weak self] in self?.bookmarkWatcher.compare() }
     userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
@@ -342,7 +342,7 @@ final class LibraryModel {
     documents.bookmarksChanged()
     // So that the baseline holds a new bookmark from now on, and reports a change to
     // it from the next refresh rather than taking it for one from before (#191).
-    compareBookmarks()
+    bookmarkWatcher.compare()
   }
 
   private let client: RFCEditorClient
@@ -444,7 +444,7 @@ final class LibraryModel {
   private func indexApplied(_ index: RFCIndex) {
     indexForSpotlight(index.rfcs)
     indexSectionsForSpotlight()
-    compareBookmarks()
+    bookmarkWatcher.compare()
     // What waited for the formats the index lists.
     documents.reconcileOffline()
     // The RFCs a phrase can name are the ones read recently, which need the index.
@@ -559,35 +559,13 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The comparison under way. Each waits for the one before, so two never read the
-  /// same baseline and both report what changed since.
-  @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
-
-  /// What a background refresh does (#191): the revisions, then the index when its
-  /// daily check is due, each of which compares the bookmarks when it changes; and
-  /// waits for each comparison, so the system does not suspend the app before it
-  /// has posted.
-  ///
-  /// The revisions come first because the index check waits for a network that is
-  /// neither expensive nor constrained (#314), which on a phone network can outlast
-  /// iOS's background task. Due revisions are fetched on any network, for the same
-  /// reason (#758). Canceling this, as iOS does when that task expires,
-  /// cancels the check, or the person's refresh it joined, but not the revisions'
-  /// fetch, which runs on as a launch's does.
-  func refreshForBookmarks() async {
-    await bootstrap()
-    await indexes.loaded()
-    await dataFiles.refreshRevisions(onExpensiveNetworks: true)
-    await bookmarkComparison?.value
-    guard indexState.isCheckDue(now: .now) else { return }
-    let check = indexes.check()
-    await withTaskCancellationHandler {
-      await check.value
-    } onCancel: {
-      check.cancel()
-    }
-    await bookmarkComparison?.value
-  }
+  /// The bookmark comparison and the background refresh that drives it (#191, #595).
+  /// Lazy, as its launch is `bootstrap()`, read through `self`.
+  @ObservationIgnored private(set) lazy var bookmarkWatcher = BookmarkWatcher(
+    store: store, container: container, indexes: indexes, dataFiles: dataFiles,
+    isStoredInMemory: AppData.isStoredInMemory,
+    bootstrap: { [weak self] in await self?.bootstrap() },
+    post: { await BookmarkNotifications.post($0) })
 
   /// `IndexRepository.retry()`.
   func retryIndex() {
@@ -597,54 +575,6 @@ final class LibraryModel {
   /// `IndexRepository.refreshNow()`.
   func refreshIndexNow() async {
     await indexes.refreshNow()
-  }
-
-  /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
-  /// baseline, after every change to the index or the revisions, and posts what
-  /// changed (`BookmarkNotifications`). Runs whether notifications are on or not, so
-  /// the baseline is current when they are turned on.
-  private func compareBookmarks() {
-    let previous = bookmarkComparison
-    bookmarkComparison = Task(name: "Compare bookmarks") {
-      await previous?.value
-      await compareBookmarksNow()
-    }
-  }
-
-  private func compareBookmarksNow() async {
-    // A store that fell back to memory (#152) reads as no bookmarks, which would
-    // start every one afresh at the next launch that opens the real one.
-    guard !AppData.isStoredInMemory else { return }
-    let bookmarks: Set<DocumentID>
-    let groups: Set<String>
-    do {
-      // Read here rather than taken from `bookmarkedDocuments` and `followedGroups`,
-      // which a failed read leaves empty: a baseline of none would start every one
-      // afresh.
-      bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
-      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "reading bookmarks or followed groups to compare failed: \(String(describing: error), privacy: .public)"
-      )
-      return
-    }
-    let previous = await store.bookmarkBaseline()
-    let baseline = BookmarkBaseline(
-      bookmarks: bookmarks, followedGroups: groups, index: index, revisions: revisions,
-      carryingOver: previous)
-    guard baseline != previous else { return }
-    do {
-      // Kept before anything is posted: a baseline that cannot be kept would report
-      // the same changes on every refresh.
-      try await store.storeBookmarkBaseline(baseline)
-    } catch {
-      libraryLog.error(
-        "keeping the bookmark baseline failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    let events = BookmarkEvents.between(previous, baseline)
-    await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
   }
 
   // MARK: - Working groups

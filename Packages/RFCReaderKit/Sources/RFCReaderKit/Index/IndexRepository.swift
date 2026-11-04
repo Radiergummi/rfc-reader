@@ -35,12 +35,7 @@ public final class IndexRepository {
   /// Each working group's RFCs, worked out once per index for its card (#363): the
   /// list's body asks on every pass, and each answer scans the whole index.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
-  public private(set) var indexState: IndexState = .idle {
-    didSet {
-      guard indexState != .loading, indexState != .idle else { return }
-      indexLoaded.open()
-    }
-  }
+  public private(set) var indexState: IndexState = .idle
   /// The bytes the index's download has received, while one is under way with no
   /// index to show (#770); nil otherwise.
   public private(set) var indexBytesReceived: Int64?
@@ -52,12 +47,10 @@ public final class IndexRepository {
     IndexPlaceholder(
       state: indexState, hasIndex: index != nil, bytesReceived: indexBytesReceived)
   }
-  /// Open once the index is ready or has failed, for a background refresh that
-  /// arrived while launch was still loading it (#191).
-  @ObservationIgnored private let indexLoaded = Latch()
   /// Open once the index has arrived or failed to, opened by `settle()`: from then on
-  /// an intent takes what there is rather than waiting in `settledSearch()`. Not
-  /// `indexState`, which a launch whose fetch answers nothing leaves loading.
+  /// an intent takes what there is rather than waiting in `settledSearch()`, and the
+  /// bookmark refresh goes on (`settled()`). Not `indexState`, which a launch whose
+  /// fetch answers nothing leaves loading (#758).
   @ObservationIgnored private let indexSettled = Latch()
 
   /// Just Published, as the feed kept and then the RFC Editor's newer one have it.
@@ -276,10 +269,10 @@ public final class IndexRepository {
     await indexRefresh.join { await self.refresh(onExpensiveNetworks: true) }
   }
 
-  /// Until the index is ready or has failed, for a background refresh that arrived
-  /// while launch was still loading it (#191).
-  public func loaded() async {
-    await indexLoaded.wait()
+  /// Until the index has arrived or failed to (`settle()`), for a background refresh
+  /// that arrived while launch was still loading it (#191).
+  public func settled() async {
+    await indexSettled.wait()
   }
 
   /// Asks the RFC Editor for the index, sending what identifies the one kept so an
