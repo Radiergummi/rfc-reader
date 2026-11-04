@@ -22,7 +22,7 @@
     }
 
     private var metadata: RFCMetadata? {
-      LibraryModel.shared.metadata(id)
+      LibraryModel.shared.indexes.metadata(id)
     }
 
     @objc var number: Int { id.number }
@@ -34,7 +34,7 @@
     @objc var isObsolete: Bool { metadata?.isObsolete ?? false }
 
     @objc var isBookmarked: Bool {
-      get { LibraryModel.shared.bookmarkedDocuments.contains(id) }
+      get { LibraryModel.shared.userData.bookmarkedDocuments.contains(id) }
       set {
         // Applied, as the window applies it, but not kept: a script is told, rather
         // than seeing a success that is gone at the next launch (#318). Told when
@@ -52,13 +52,13 @@
     /// a download it starts goes on after; the store being in memory is reported as
     /// a bookmark's is.
     @objc var isKeptOffline: Bool {
-      get { LibraryModel.shared.offlineMarks.contains(id) }
+      get { LibraryModel.shared.userData.offlineMarks.contains(id) }
       set {
         if AppData.isStoredInMemory {
           ScriptError.report(AppData.storeWarning.message)
         }
         guard newValue != isKeptOffline else { return }
-        LibraryModel.shared.setKeptOfflineInBackground(id, newValue)
+        LibraryModel.shared.documents.setKeptOfflineInBackground(id, newValue)
       }
     }
 
@@ -100,7 +100,7 @@
     }
 
     private var entry: CollectionSnapshot.Entry? {
-      identifier.flatMap { LibraryModel.shared.collections[$0] }
+      identifier.flatMap { LibraryModel.shared.userData.collections[$0] }
     }
 
     @objc var uniqueID: String { identifier?.uuidString ?? "" }
@@ -116,7 +116,7 @@
           ScriptError.report("A collection's name can't be empty.")
           return
         }
-        let saved = LibraryModel.shared.editCollections {
+        let saved = LibraryModel.shared.userData.editCollections {
           try CollectionStore.update(entry.id, name: newValue, color: entry.color, in: $0)
         }
         if !saved { ScriptError.report("The collection's name could not be saved.") }
@@ -140,7 +140,7 @@
           ScriptError.report(refusal)
           return
         }
-        let saved = LibraryModel.shared.editCollections {
+        let saved = LibraryModel.shared.userData.editCollections {
           try CollectionStore.update(
             entry.id, name: entry.name, color: entry.color, query: newValue, in: $0)
         }
@@ -190,7 +190,7 @@
       let name = specifier.name
       // Indices, as NSNumber is not Sendable to Xcode 26's SDK.
       let indices: [Int]? = MainActor.assumeIsolated {
-        let collections = LibraryModel.shared.collections
+        let collections = LibraryModel.shared.userData.collections
         let named = ScriptCollectionName(
           name, collections: collections,
           workingGroups: Set(AppDelegate.settledIndex?.rfcs.compactMap(\.workingGroup) ?? []))
@@ -219,13 +219,13 @@
 
     /// Every collection, in the sidebar's order.
     @objc var scriptCollections: [ScriptableCollection] {
-      LibraryModel.shared.collections.collections.map { ScriptableCollection($0.id) }
+      LibraryModel.shared.userData.collections.collections.map { ScriptableCollection($0.id) }
     }
 
     @objc(valueInScriptCollectionsWithUniqueID:)
     func valueInScriptCollections(withUniqueID uniqueID: Any) -> ScriptableCollection? {
       guard let string = uniqueID as? String, let identifier = UUID(uuidString: string),
-        LibraryModel.shared.collections[identifier] != nil
+        LibraryModel.shared.userData.collections[identifier] != nil
       else { return nil }
       return ScriptableCollection(identifier)
     }
@@ -248,7 +248,7 @@
         ScriptError.report(refusal)
         return
       }
-      let saved = LibraryModel.shared.editCollections {
+      let saved = LibraryModel.shared.userData.editCollections {
         collection.identifier = try CollectionStore.create(
           named: name, color: .default, query: query, in: $0
         ).identifier
@@ -268,10 +268,10 @@
       if AppData.isStoredInMemory {
         ScriptError.report(AppData.storeWarning.message)
       }
-      let collections = LibraryModel.shared.collections.collections
+      let collections = LibraryModel.shared.userData.collections.collections
       guard collections.indices.contains(index) else { return }
       let entry = collections[index]
-      let saved = LibraryModel.shared.editCollections {
+      let saved = LibraryModel.shared.userData.editCollections {
         try CollectionStore.delete(entry.id, in: $0)
       }
       if !saved { ScriptError.report("“\(entry.name)” could not be deleted.") }
@@ -315,10 +315,10 @@
     static var settledIndex: RFCIndex? {
       let library = LibraryModel.shared
       let deadline = indexDeadline
-      while !library.hasIndexSettled, Date.now < deadline {
+      while !library.indexes.hasSettled, Date.now < deadline {
         RunLoop.current.run(mode: .default, before: min(deadline, .now.addingTimeInterval(0.05)))
       }
-      return library.index
+      return library.indexes.index
     }
 
     /// Until when scripts wait for the index before they find none: 30 s from the
@@ -362,7 +362,7 @@
         // In English, whatever the interface's language: the names a script sets a
         // filter by are (LibraryFilter(scriptName:)).
         controller.map {
-          $0.navigation.filter.title(in: LibraryModel.shared.collections, locale: .english)
+          $0.navigation.filter.title(in: LibraryModel.shared.userData.collections, locale: .english)
         } ?? ""
       }
       set {
@@ -372,7 +372,7 @@
         guard
           let filter = LibraryFilter(
             scriptName: newValue, workingGroups: groups,
-            collections: library.collections.collections)
+            collections: library.userData.collections.collections)
         else {
           ScriptError.report("There is no collection named “\(newValue)”.")
           return
@@ -506,7 +506,7 @@
       suspendExecution()
       nonisolated(unsafe) let command = self
       Task {
-        draft.id = await LibraryModel.shared.revision(of: draft.id)
+        draft.id = await LibraryModel.shared.documents.revision(of: draft.id)
         LibraryModel.shared.open(.draft(draft), placement: placement)
         command.resumeExecution(withResult: nil)
       }
@@ -606,7 +606,8 @@
             for: id, as: format, paperSize: NSPrintInfo.shared.paperSize,
             library: LibraryModel.shared)
           try await Self.write(
-            data, to: file, tags: ExportFormat.tagNames(for: LibraryModel.shared.metadata(id)))
+            data, to: file,
+            tags: ExportFormat.tagNames(for: LibraryModel.shared.indexes.metadata(id)))
         } catch is ExportFormat.NoGrammar {
           ScriptError.report("\(id.displayName) has no grammar to export as ABNF.", in: command)
         } catch let original as PublishedOriginalPage.NotExportable {

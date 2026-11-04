@@ -24,7 +24,7 @@ struct CollectionExportSheet: View {
   @State private var isChoosingFolder = false
   @State private var folderError: String?
 
-  private var entry: CollectionSnapshot.Entry? { library.collections[request.collection] }
+  private var entry: CollectionSnapshot.Entry? { library.userData.collections[request.collection] }
 
   var body: some View {
     content

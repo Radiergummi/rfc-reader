@@ -73,13 +73,13 @@ struct SidebarView: View {
             Label("New Collection", systemImage: "folder.badge.plus")
           }
         }
-        if !library.collections.collections.isEmpty {
+        if !library.userData.collections.collections.isEmpty {
           ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
       }
       // Edit leaves with the last collection, since its button does.
-      .onChange(of: library.collections.collections.isEmpty) {
-        if library.collections.collections.isEmpty { editMode?.wrappedValue = .inactive }
+      .onChange(of: library.userData.collections.collections.isEmpty) {
+        if library.userData.collections.collections.isEmpty { editMode?.wrappedValue = .inactive }
       }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
@@ -91,7 +91,7 @@ struct SidebarView: View {
       .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
-        if isSearchingInPlace, library.indexState.isReady,
+        if isSearchingInPlace, library.indexes.indexState.isReady,
           navigation.listed?.librarySearch.isEmpty == true
         {
           ContentUnavailableView.search(text: navigation.appliedQuery)
@@ -119,7 +119,7 @@ struct SidebarView: View {
       presenting: deleting
     ) { entry in
       Button("Delete Collection", role: .destructive) {
-        library.editCollections { try CollectionStore.delete(entry.id, in: $0) }
+        library.userData.editCollections { try CollectionStore.delete(entry.id, in: $0) }
       }
     } message: { entry in
       // The count the sidebar shows, in words that agree with it: "The 1
@@ -158,15 +158,15 @@ struct SidebarView: View {
         .help(AppData.storeWarning.message)
       }
     }
-    if !library.collections.collections.isEmpty {
+    if !library.userData.collections.collections.isEmpty {
       group("Collections", isExpanded: $collectionsExpanded) {
-        ForEach(library.collections.collections) { entry in
+        ForEach(library.userData.collections.collections) { entry in
           collectionRow(entry)
         }
         .onMove(perform: moveCollections)
         #if !os(macOS)
           .onDelete { offsets in
-            deleting = offsets.first.map { library.collections.collections[$0] }
+            deleting = offsets.first.map { library.userData.collections.collections[$0] }
           }
         #endif
       }
@@ -259,7 +259,7 @@ struct SidebarView: View {
     @ViewBuilder
     private var searchResults: some View {
       let results = navigation.listed?.librarySearch ?? []
-      let bookmarked = library.bookmarkedDocuments
+      let bookmarked = library.userData.bookmarkedDocuments
       Section {
         ForEach(results.prefix(Self.searchResultLimit)) { row in
           Button {
@@ -267,7 +267,7 @@ struct SidebarView: View {
           } label: {
             RFCRow(
               row: row, isBookmarked: bookmarked.contains(row.id),
-              isAvailableOffline: library.isAvailableOffline(row.id))
+              isAvailableOffline: library.documents.isAvailableOffline(row.id))
           }
           .buttonStyle(.plain)
         }
@@ -375,11 +375,11 @@ struct SidebarView: View {
 
     init(library: LibraryModel, entry: CollectionSnapshot.Entry) {
       query = entry.query
-      collections = library.collections
-      bookmarked = library.bookmarkedDocuments
-      downloaded = library.availableOfflineNumbers
-      recentlyReadCount = library.recentlyReadCount
-      indexVersion = library.indexVersion
+      collections = library.userData.collections
+      bookmarked = library.userData.bookmarkedDocuments
+      downloaded = library.documents.availableOfflineNumbers
+      recentlyReadCount = library.userData.recentlyReadCount
+      indexVersion = library.indexes.indexVersion
     }
   }
 
@@ -391,7 +391,7 @@ struct SidebarView: View {
       // A collection holds RFCs: a series row dragged here is not taken (#321).
       let documents = keys.compactMap(DocumentID.init(fileStem:)).filter { $0.series == .rfc }
       guard !documents.isEmpty else { return false }
-      library.editCollections { try CollectionStore.add(documents, to: entry.id, in: $0) }
+      library.userData.editCollections { try CollectionStore.add(documents, to: entry.id, in: $0) }
       return true
     }
   }
@@ -415,11 +415,11 @@ struct SidebarView: View {
   }
 
   private func moveCollections(from source: IndexSet, to destination: Int) {
-    let identifiers = library.collections.collections.map(\.id)
+    let identifiers = library.userData.collections.collections.map(\.id)
     guard let drop = CollectionOrder.drop(from: source, to: destination, in: identifiers) else {
       return
     }
-    library.editCollections {
+    library.userData.editCollections {
       try CollectionStore.moveCollection(
         drop.moved, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
@@ -430,10 +430,10 @@ struct SidebarView: View {
   /// filter it lists nothing in.
   private func count(_ filter: LibraryFilter) -> Int? {
     switch filter {
-    case .bookmarks: library.bookmarkedDocuments.count
-    case .downloaded: library.availableOfflineNumbers.count
-    case .recent: library.recentlyReadCount
-    default: library.indexCounts[filter]
+    case .bookmarks: library.userData.bookmarkedDocuments.count
+    case .downloaded: library.documents.availableOfflineNumbers.count
+    case .recent: library.userData.recentlyReadCount
+    default: library.indexes.indexCounts[filter]
     }
   }
 

@@ -12,7 +12,7 @@ nonisolated private let notificationLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "notifications")
 
 /// Local notifications about bookmarked RFCs (#191). What changed is
-/// `BookmarkEvents`', worked out in `LibraryModel.compareBookmarks()` after every
+/// `BookmarkEvents`', worked out in `BookmarkWatcher.compare()` after every
 /// refresh of the index or the revisions; this only asks for permission, posts, and
 /// arranges the daily refresh: a `BGAppRefreshTask` on iOS, and on macOS a loop
 /// that lasts as long as the app runs, with no login item.
@@ -53,7 +53,9 @@ enum BookmarkNotifications {
           // Not waited for: the index check waits for a cheap network (#314) for as
           // long as the Mac is on an expensive one, and the next hour's look at the
           // revisions should not wait with it. A refresh still under way is joined.
-          Task(name: "Refresh for bookmarks") { await LibraryModel.shared.refreshForBookmarks() }
+          Task(name: "Refresh for bookmarks") {
+            await LibraryModel.shared.bookmarkWatcher.refresh()
+          }
         }
       }
     #endif
@@ -144,7 +146,7 @@ enum BookmarkNotifications {
   static func refreshInBackground() async {
     guard isEnabled else { return }
     scheduleRefresh()
-    await LibraryModel.shared.refreshForBookmarks()
+    await LibraryModel.shared.bookmarkWatcher.refresh()
   }
 }
 

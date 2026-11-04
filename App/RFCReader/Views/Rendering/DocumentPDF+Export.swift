@@ -31,7 +31,7 @@ nonisolated extension DocumentPDF {
     let whole = try await library.document(for: id)
     let part = try ExportedPart(of: whole, section: section)
     return await renderExport(
-      part.document, metadata: library.metadata(id),
+      part.document, metadata: library.indexes.metadata(id),
       choices: library.presentationChoices(
         for: .rfc(id), drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
       paperSize: paperSize,

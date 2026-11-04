@@ -70,7 +70,7 @@ nonisolated struct RFCEntityQuery: EntityStringQuery {
   /// What was read last: also what a phrase can name (`RFCReaderShortcuts`).
   func suggestedEntities() async throws -> [RFCEntity] {
     guard let search = await LibraryModel.shared.settledSearch() else { return [] }
-    let read = await LibraryModel.shared.recentlyRead()
+    let read = await LibraryModel.shared.userData.recentlyRead()
     return Array(read.lazy.compactMap { search.index[$0] }.prefix(Self.suggestionCount))
       .map(RFCEntity.init)
   }

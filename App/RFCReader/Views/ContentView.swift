@@ -373,12 +373,12 @@ struct EmptyDetailView: View {
         // Found: its tip has no more to say (#782).
         GoToRFCTip().invalidate(reason: .actionPerformed)
         // The check at launch alone goes stale in an app left open for weeks.
-        library.refreshRegistriesIfDue()
+        library.dataFiles.refreshRegistriesIfDue()
       }
       // A series typed before the index loaded is listed as its members once it has.
-      .onChange(of: library.index != nil) { controller.resolve() }
+      .onChange(of: library.indexes.index != nil) { controller.resolve() }
       // So do registry values that arrive while it is open: its first open reads them.
-      .onChange(of: library.registriesVersion) { controller.resolve() }
+      .onChange(of: library.dataFiles.registriesVersion) { controller.resolve() }
     }
 
     /// Said while nothing is listed: what the field takes, or, once ↵ found nothing,
@@ -398,7 +398,7 @@ struct EmptyDetailView: View {
 
     private func row(for row: QuickOpenResults.Row) -> some View {
       let title = QuickOpenResults.title(
-        library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
+        library.indexes.metadata(row.link.id)?.title, isIndexLoaded: library.indexes.index != nil)
       return Button {
         controller.open(row.link)
       } label: {

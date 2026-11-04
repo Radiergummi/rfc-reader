@@ -59,10 +59,10 @@ final class SideBySide {
     alignment = .aligning
     aligning = Task(name: "Align \(pair.old.displayName) with \(pair.new.displayName)") {
       [weak self, pair] in
-      let oldSuccessors = library.metadata(pair.old)?.obsoletedBy ?? []
-      let newPredecessors = library.metadata(pair.new)?.obsoletes ?? []
+      let oldSuccessors = library.indexes.metadata(pair.old)?.obsoletedBy ?? []
+      let newPredecessors = library.indexes.metadata(pair.new)?.obsoletes ?? []
       var available: Set<DocumentID> = []
-      for id in oldSuccessors + newPredecessors where await library.isDownloaded(id) {
+      for id in oldSuccessors + newPredecessors where await library.documents.isDownloaded(id) {
         available.insert(id)
       }
       let ids = pair.alignedAmong(

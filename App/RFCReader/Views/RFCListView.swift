@@ -81,7 +81,7 @@ struct RFCListView: View {
 
   private func place(_ drop: CollectionOrder.Drop<DocumentID>?) {
     guard let collection, let drop else { return }
-    library.editCollections {
+    library.userData.editCollections {
       try CollectionStore.move(
         drop.moved, in: collection, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
@@ -91,7 +91,7 @@ struct RFCListView: View {
   /// Out of the collection, undoably, back to the same place.
   private func remove(_ document: DocumentID) {
     guard let collection else { return }
-    library.editCollections {
+    library.userData.editCollections {
       try CollectionStore.remove(
         document, from: collection, undoManager: undoManager,
         onUndoFailure: library.collectionUndoFailed, in: $0)
@@ -109,7 +109,7 @@ struct RFCListView: View {
     // Once, and shared by every row: `RFCRow` used to scan the whole bookmark list
     // itself, which is a linear search per row over a list that can be 9,842 rows
     // long.
-    let bookmarked = library.bookmarkedDocuments
+    let bookmarked = library.userData.bookmarkedDocuments
     // Only Available Offline's rows say where their bodies stand (#358).
     let showsOfflineState = shown.filter == .downloaded
     // Once, and shared by everything below and the overlay.
@@ -125,13 +125,13 @@ struct RFCListView: View {
     // it does not have does not read as "no RFC says this".
     let searched = textFound.map { found in
       SectionResults.searched(
-        found.searched, of: found.narrowedTo ?? library.indexableRFCs.count)
+        found.searched, of: found.narrowedTo ?? library.indexes.indexableRFCs.count)
     }
     // While the index holds fewer than the search could look in, the one way to have
     // it look in the rest.
     let offersIndexAll =
       textFound.map { found in
-        found.searched < (found.narrowedTo ?? library.indexableRFCs.count)
+        found.searched < (found.narrowedTo ?? library.indexes.indexableRFCs.count)
       } ?? false
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
@@ -144,9 +144,9 @@ struct RFCListView: View {
         RFCRow(
           row: row, isBookmarked: bookmarked.contains(row.id),
           // Available Offline's own rows say where their bodies stand instead.
-          isAvailableOffline: !showsOfflineState && library.isAvailableOffline(row.id),
+          isAvailableOffline: !showsOfflineState && library.documents.isAvailableOffline(row.id),
           showsYear: showsYear, filter: shown.filter, offline: offline
-        ) { library.downloadNow(row.id) }
+        ) { library.documents.downloadNow(row.id) }
       }
       .tag(ReadableDocument.rfc(row.id))
       // A combined element with no trait has the role AXUnknown on macOS, which
@@ -246,7 +246,7 @@ struct RFCListView: View {
             Button {
               navigation.select(hit)
             } label: {
-              SectionHitRow(hit: hit, title: library.index?[hit.document]?.title)
+              SectionHitRow(hit: hit, title: library.indexes.index?[hit.document]?.title)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
             }
@@ -295,7 +295,7 @@ struct RFCListView: View {
         // check its spelling.
         let isUnsearched = shown.query.isUnsearchedQuery
         // A query naming something unknown says which term, and why (#355).
-        if let notice = library.index.flatMap({
+        if let notice = library.indexes.index.flatMap({
           UnknownTermsNotice(shown.unknownTerms(in: $0))
         }) {
           ContentUnavailableView {
@@ -328,7 +328,7 @@ struct RFCListView: View {
           // Not over a working group's card, which says what the group has.
           ContentUnavailableView {
             Label(
-              shown.filter.emptyTitle(in: library.collections),
+              shown.filter.emptyTitle(in: library.userData.collections),
               systemImage: shown.filter.systemImage)
           } description: {
             if let description = shown.filter.emptyDescription() {
@@ -425,7 +425,7 @@ struct RFCListView: View {
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .filterSearchable(
         navigation: navigation,
-        prompt: navigation.filter.searchPrompt(in: library.collections)
+        prompt: navigation.filter.searchPrompt(in: library.userData.collections)
       )
       .onSubmit(of: .search) { navigation.commitSearch() }
       .toolbar {
@@ -448,7 +448,7 @@ struct RFCListView: View {
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
-      .refreshable { await library.refreshIndexNow() }
+      .refreshable { await library.indexes.refreshNow() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
       .sheet(isPresented: $showsSettings) { SettingsScreen(library: library) }
       .sheet(isPresented: $showsHelp) { HelpSheet() }
@@ -558,7 +558,7 @@ private struct IndexStatusRow: View {
   @Environment(LibraryModel.self) private var library
 
   var body: some View {
-    if library.indexPlaceholder == nil {
+    if library.indexes.indexPlaceholder == nil {
       IndexStatusView()
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -575,7 +575,7 @@ private struct IndexPlaceholderView: View {
   @Environment(LibraryModel.self) private var library
 
   var body: some View {
-    switch library.indexPlaceholder {
+    switch library.indexes.indexPlaceholder {
     case .downloading(let bytesReceived):
       ContentUnavailableView {
         Label("Downloading the RFC Index", systemImage: "arrow.down.circle")
@@ -597,7 +597,7 @@ private struct IndexPlaceholderView: View {
         Text(verbatim: message)
         Text(verbatim: kind.recoverySuggestion(for: .index))
       } actions: {
-        Button("Try Again") { library.retryIndex() }
+        Button("Try Again") { library.indexes.retry() }
         #if !os(macOS)
           if kind == .cellularDenied {
             Button("Open Settings", action: CellularSettings.open)
@@ -618,7 +618,7 @@ struct IndexStatusView: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      switch library.indexState {
+      switch library.indexes.indexState {
       case .idle, .loading:
         ProgressView().controlSize(.mini)
         Text("Loading index…")
@@ -638,7 +638,7 @@ struct IndexStatusView: View {
               .buttonStyle(.borderless)
           }
         #endif
-        Button("Retry") { library.retryIndex() }
+        Button("Retry") { library.indexes.retry() }
           .buttonStyle(.borderless)
       }
     }
@@ -657,7 +657,7 @@ private struct OfflineStated<Content: View>: View {
   @ViewBuilder let content: (OfflineRowState?) -> Content
 
   var body: some View {
-    content(isShown ? library.offlineStatus.state(of: document) : nil)
+    content(isShown ? library.documents.offlineStatus.state(of: document) : nil)
   }
 }
 

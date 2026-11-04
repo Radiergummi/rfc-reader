@@ -33,13 +33,18 @@ nonisolated private let libraryLog = Logger(
   }
 #endif
 
-/// The library, one per process: the index and its search, the lists drawn from
-/// it, the document cache, and the registry of open tabs a link is routed through.
+/// The library, one per process. It composes the parts in RFCReaderKit (#595), which
+/// callers reach directly, each `@Observable` itself: `indexes` (the index, its search
+/// and lists, the full-text index, Just Published), `dataFiles` (the revisions, the
+/// working groups, the errata and the registries), `documents` (loads, eviction,
+/// Clear Cache, Keep Offline, the reading path), `userData` (the sets read from the
+/// user's SwiftData that every tab shows) and `bookmarkWatcher` (the bookmark
+/// comparison and the background refresh).
 ///
-/// Navigation is each tab's own (`NavigationModel`), and what the reader shows is
-/// each window's (`ReaderState`). The user's own data — bookmarks, reading
-/// positions, collections — is SwiftData's; `userData` holds the sets read from it
-/// that every tab shows, and this answers for them.
+/// What is left here is what joins them, or needs the App target: launch, Spotlight,
+/// the registry of open tabs a link is routed through, the previews kept, and the
+/// presentations chosen. Navigation is each tab's own (`NavigationModel`), and what
+/// the reader shows is each window's (`ReaderState`).
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
@@ -52,44 +57,17 @@ final class LibraryModel {
   static let shared = LibraryModel(container: AppData.container)
 
   /// The index and its search, the full-text index and Just Published (#595).
-  @ObservationIgnored private let indexes: IndexRepository
-
-  /// `IndexRepository.index`.
-  var index: RFCIndex? { indexes.index }
-  /// `IndexRepository.indexableRFCs`.
-  var indexableRFCs: [RFCMetadata] { indexes.indexableRFCs }
-  /// `IndexRepository.indexVersion`.
-  var indexVersion: Int { indexes.indexVersion }
-  /// `IndexRepository.indexState`.
-  var indexState: IndexState { indexes.indexState }
-  /// `IndexRepository.indexBytesReceived`.
-  var indexBytesReceived: Int64? { indexes.indexBytesReceived }
-  /// `IndexRepository.indexPlaceholder`.
-  var indexPlaceholder: IndexPlaceholder? { indexes.indexPlaceholder }
-  /// `IndexRepository.recent`.
-  var recent: [RecentRFC] { indexes.recent }
+  @ObservationIgnored let indexes: IndexRepository
 
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// The revisions, the working groups, the errata and the registries, read from the
   /// copies kept and fetched when due (#595).
-  @ObservationIgnored private let dataFiles: DataFileRefresher
-
-  /// `DataFileRefresher.revisions`.
-  var revisions: RFCRevisions? { dataFiles.revisions }
-  /// `DataFileRefresher.workingGroups`.
-  var workingGroups: WorkingGroups? { dataFiles.workingGroups }
-  /// `DataFileRefresher.errata`.
-  var errata: Errata? { dataFiles.errata }
-  /// `DataFileRefresher.registriesVersion`.
-  var registriesVersion: Int { dataFiles.registriesVersion }
+  @ObservationIgnored let dataFiles: DataFileRefresher
 
   /// The sets read from the user's data, and where a bookmark or a collection is
   /// changed (#595).
-  @ObservationIgnored private let userData: UserDataMirror
-
-  /// `UserDataMirror.bookmarkedDocuments`.
-  var bookmarkedDocuments: Set<DocumentID> { userData.bookmarkedDocuments }
+  @ObservationIgnored let userData: UserDataMirror
 
   /// The presentation the reader chose from a block's menu, per document, for the
   /// app's session. Here rather than in `DocumentSession`, which goes when the
@@ -109,32 +87,15 @@ final class LibraryModel {
     chosenPresentations[id, default: [:]][key] = presentation
   }
 
-  /// `UserDataMirror.collections`.
-  var collections: CollectionSnapshot { userData.collections }
-
-  /// `UserDataMirror.annotations`: every highlight (#522).
-  var annotations: AnnotationSnapshot { userData.annotations }
-
-  /// `UserDataMirror.editAnnotations`.
-  @discardableResult
-  func editAnnotations(_ change: (ModelContext) throws -> Void) -> Bool {
-    userData.editAnnotations(change)
-  }
-
-  /// `UserDataMirror.offlineMarks`. With the bookmarks when `keepsBookmarksOffline`
-  /// is on, what is wanted offline, and what Available Offline lists, whether or not
-  /// a body has arrived yet.
-  var offlineMarks: Set<DocumentID> { userData.offlineMarks }
-
   /// The documents' bodies on the device: loads, eviction, Clear Cache, Keep Offline
   /// and the reading path (#595). Lazy, as its closures read the index and the open
   /// tabs through `self`.
-  @ObservationIgnored private lazy var documents = DocumentRepository(
+  @ObservationIgnored private(set) lazy var documents = DocumentRepository(
     store: store, client: client,
     clientFailingOnExpensiveNetworks: RFCEditorClient(
       transport: URLSessionTransport(session: .rfcEditorFailingOnExpensiveNetworks)),
     drafts: DraftStore(), userData: userData, isStoredInMemory: AppData.isStoredInMemory,
-    index: { [weak self] in self?.index },
+    index: { [weak self] in self?.indexes.index },
     openDocuments: { [weak self] in
       self?.sceneRegistry.open.flatMap { scene in
         [scene.shown.map(ReadableDocument.rfc), scene.shownDraft.map(ReadableDocument.draft)]
@@ -142,9 +103,6 @@ final class LibraryModel {
       } ?? []
     },
     networkDecision: { [weak self] in self?.network.decision(for: $0) })
-
-  /// `DocumentRepository.keepsBookmarksOffline`.
-  var keepsBookmarksOffline: Bool { documents.keepsBookmarksOffline }
 
   /// "Show April 1st RFCs", from Settings' Advanced tab (#713): every tab's list
   /// and Just Published follow it as it changes, so it is held here, observed,
@@ -159,40 +117,22 @@ final class LibraryModel {
 
   /// Just Published, less the April 1st RFCs while they are hidden.
   var justPublished: [RecentRFC] {
-    AprilFirstRFCs.justPublished(recent, showsAprilFirst: showsAprilFirst)
+    AprilFirstRFCs.justPublished(indexes.recent, showsAprilFirst: showsAprilFirst)
   }
-
-  /// `DocumentRepository.availableOfflineNumbers`.
-  var availableOfflineNumbers: Set<Int> { documents.availableOfflineNumbers }
-
-  /// `DocumentRepository.offlineStatus`.
-  var offlineStatus: OfflineStatus { documents.offlineStatus }
 
   /// The path and Low Power Mode, which decide whether the keeper fetches a mark
   /// that arrived from another device now or waits.
   @ObservationIgnored private let network = NetworkConditions()
 
-  /// `IndexRepository.pointersInPack`.
-  var pointersInPack: Set<DocumentID> { indexes.pointersInPack }
-
-  /// `DocumentRepository.hasCitationIndex`.
-  var hasCitationIndex: Bool { documents.hasCitationIndex }
-
-  /// `UserDataMirror.recentlyReadCount`.
-  var recentlyReadCount: Int { userData.recentlyReadCount }
-
-  /// `UserDataMirror.followedGroups`: the working groups the reader follows (#731),
-  /// by acronym in lower case.
-  var followedGroups: Set<String> { userData.followedGroups }
-
   /// The Working Groups section of the sidebar: the followed groups, then the
   /// busiest of the rest.
   var sidebarWorkingGroups: [String] {
-    WorkingGroupFollowing.sidebarGroups(followed: followedGroups, top: topWorkingGroups)
+    WorkingGroupFollowing.sidebarGroups(
+      followed: userData.followedGroups, top: indexes.topWorkingGroups)
   }
 
   func isFollowed(_ group: String) -> Bool {
-    followedGroups.contains(group.lowercased())
+    userData.followedGroups.contains(group.lowercased())
   }
 
   /// Follows the group or stops following it. A failure is logged rather than shown,
@@ -207,9 +147,6 @@ final class LibraryModel {
     }
   }
 
-  /// The user's data, which `userData` reads its sets from.
-  var container: ModelContainer { userData.container }
-
   private init(container: ModelContainer) {
     userData = UserDataMirror(container: container)
     let store = DocumentStore()
@@ -223,7 +160,7 @@ final class LibraryModel {
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
     indexes = IndexRepository(
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
-    dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
+    dataFiles.onRevisionsChanged = { [weak self] in self?.bookmarkWatcher.compare() }
     indexes.onApplied = { [weak self] index in self?.indexApplied(index) }
     indexes.onSettled = { [weak self] in self?.deliverLinksHeldForIndex() }
     indexes.onTextIndexChanged = { [weak self] in self?.indexSectionsForSpotlight() }
@@ -244,7 +181,7 @@ final class LibraryModel {
     // group followed on another device included: a group followed reports nothing it
     // published before (`BookmarkBaseline`), and left to the next refresh of the
     // index, what that refresh brings would count as before (#731).
-    userData.onFollowedGroupsChanged = { [weak self] in self?.compareBookmarks() }
+    userData.onFollowedGroupsChanged = { [weak self] in self?.bookmarkWatcher.compare() }
     userData.start()
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
     // SwiftUI's scene environment.
@@ -270,31 +207,16 @@ final class LibraryModel {
       powerChanged: { [weak self] in self?.documents.reconcileOffline() })
   }
 
-  /// `DocumentRepository.isAvailableOffline`.
-  func isAvailableOffline(_ id: DocumentID) -> Bool {
-    documents.isAvailableOffline(id)
-  }
-
-  /// `DocumentRepository.setKeepsBookmarksOffline`.
-  func setKeepsBookmarksOffline(_ isOn: Bool) {
-    documents.setKeepsBookmarksOffline(isOn)
-  }
-
-  /// `DocumentRepository.downloadNow`.
-  func downloadNow(_ id: DocumentID) {
-    documents.downloadNow(id)
-  }
-
   /// What a filter is called, wherever it is shown, against the collections as they
   /// are now.
   func title(for filter: LibraryFilter) -> String {
-    filter.title(in: collections)
+    filter.title(in: userData.collections)
   }
 
   /// How many of a collection's documents the index knows, for the sidebar. Nil
   /// until the index has loaded.
   func count(of entry: CollectionSnapshot.Entry) -> Int? {
-    guard let index else { return nil }
+    guard let index = indexes.index else { return nil }
     return entry.rfcNumbers.count(where: { index[$0] != nil })
   }
 
@@ -309,17 +231,11 @@ final class LibraryModel {
   /// How many documents `list` lists, made off the main actor as a tab's list is. Nil
   /// while there is no index.
   func count(of list: LibraryList) async -> Int? {
-    await listed(list)?.rows.count
-  }
-
-  /// `UserDataMirror.editCollections`.
-  @discardableResult
-  func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
-    userData.editCollections(change)
+    await indexes.listed(list)?.rows.count
   }
 
   /// What an undone or redone removal from a collection does with its failure:
-  /// logged, as `editCollections` logs the change's own (#759).
+  /// logged, as `UserDataMirror.editCollections` logs the change's own (#759).
   func collectionUndoFailed(_ error: any Error) {
     libraryLog.error(
       "undoing or redoing a removal from a collection failed: \(String(describing: error), privacy: .public)"
@@ -333,7 +249,7 @@ final class LibraryModel {
     _ id: DocumentID, documentTitle: String? = nil, undoManager: UndoManager? = nil
   ) {
     let title = DocumentActions.bookmarkTitle(
-      metadata: metadata(id), documentTitle: documentTitle, id: id)
+      metadata: indexes.metadata(id), documentTitle: documentTitle, id: id)
     userData.toggleBookmark(id, title: title, undoManager: undoManager)
   }
 
@@ -342,7 +258,7 @@ final class LibraryModel {
     documents.bookmarksChanged()
     // So that the baseline holds a new bookmark from now on, and reports a change to
     // it from the next refresh rather than taking it for one from before (#191).
-    compareBookmarks()
+    bookmarkWatcher.compare()
   }
 
   private let client: RFCEditorClient
@@ -351,21 +267,12 @@ final class LibraryModel {
   private let clientOnCheapNetworks: RFCEditorClient
   private let store: DocumentStore
 
-  /// `IndexRepository.textIndexVersion`.
-  var textIndexVersion: Int { indexes.textIndexVersion }
-
-  /// `IndexRepository.indexAllRun`.
-  var indexAllRun: IndexAllRun { indexes.indexAllRun }
-
-  /// `IndexRepository.hasTextIndex`.
-  var hasTextIndex: Bool { indexes.hasTextIndex }
-
   // MARK: - Bootstrap
 
   /// The index (`IndexRepository.bootstrap()`), then what waits for it: the
   /// citation index, the data files and, on the Mac, the registries.
   func bootstrap() async {
-    guard indexState == .idle else { return }
+    guard indexes.indexState == .idle else { return }
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
@@ -376,29 +283,12 @@ final class LibraryModel {
     Task(name: "Look for a citation index") { await documents.refreshCitationIndex() }
     Task(name: "Refresh data files") { await dataFiles.refreshAll() }
     // On the Mac at launch, where ⌘L may come first thing. iOS reads them as its Go
-    // to RFC sheet opens (`refreshRegistriesIfDue()`): most launches of an iPhone
+    // to RFC sheet opens (`DataFileRefresher.refreshRegistriesIfDue()`): most launches of an iPhone
     // never open it.
     #if os(macOS)
       // Unless an intent has read them already (#192).
       dataFiles.loadRegistriesUnlessChecked()
     #endif
-  }
-
-  // MARK: - Registries
-
-  /// `DataFileRefresher.refreshRegistriesIfDue()`.
-  func refreshRegistriesIfDue() {
-    dataFiles.refreshRegistriesIfDue()
-  }
-
-  /// `DataFileRefresher.registryMatches(for:)`.
-  func registryMatches(for query: String) -> [RegistryEntry] {
-    dataFiles.registryMatches(for: query)
-  }
-
-  /// `DataFileRefresher.loadedRegistryEntries()`.
-  func loadedRegistryEntries() async -> [RegistryEntry] {
-    await dataFiles.loadedRegistryEntries()
   }
 
   #if DEBUG
@@ -444,7 +334,7 @@ final class LibraryModel {
   private func indexApplied(_ index: RFCIndex) {
     indexForSpotlight(index.rfcs)
     indexSectionsForSpotlight()
-    compareBookmarks()
+    bookmarkWatcher.compare()
     // What waited for the formats the index lists.
     documents.reconcileOffline()
     // The RFCs a phrase can name are the ones read recently, which need the index.
@@ -453,16 +343,13 @@ final class LibraryModel {
 
   // MARK: - App Intents
 
-  /// `IndexRepository.hasSettled`.
-  var hasIndexSettled: Bool { indexes.hasSettled }
-
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
   /// intent alone, before anything started the load, so this starts it then: in a
   /// task of its own, since the load is the app's, and a query the system gives up
   /// on must not cancel it.
   func settledSearch() async -> IndexSearch? {
-    if indexState == .idle {
+    if indexes.indexState == .idle {
       Task(name: "Bootstrap library") { await bootstrap() }
     }
     return await indexes.settledSearch()
@@ -530,7 +417,9 @@ final class LibraryModel {
   }
 
   private func indexSectionsWhileChanged() async {
-    while spotlightSectionsChanged, let textIndexer = indexes.textIndexer, let index {
+    while spotlightSectionsChanged, let textIndexer = indexes.textIndexer,
+      let index = indexes.index
+    {
       spotlightSectionsChanged = false
       let rebuilding = spotlightSectionsRebuild
       spotlightSectionsRebuild = false
@@ -544,7 +433,7 @@ final class LibraryModel {
   /// lose every RFC from Spotlight, since only a newer index checks. Once a week at
   /// most, and the indexer skips an unchanged state.
   private func recheckSpotlight() {
-    guard let index, let spotlightCheckedAt,
+    guard let index = indexes.index, let spotlightCheckedAt,
       SpotlightEntry.isRecheckDue(lastCheckedAt: spotlightCheckedAt, now: .now)
     else { return }
     indexForSpotlight(index.rfcs)
@@ -554,98 +443,18 @@ final class LibraryModel {
 
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
-    RevisionsSummary(revisions, for: id, now: .now)
+    RevisionsSummary(dataFiles.revisions, for: id, now: .now)
   }
 
   // MARK: - Bookmark notifications
 
-  /// The comparison under way. Each waits for the one before, so two never read the
-  /// same baseline and both report what changed since.
-  @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
-
-  /// What a background refresh does (#191): the revisions, then the index when its
-  /// daily check is due, each of which compares the bookmarks when it changes; and
-  /// waits for each comparison, so the system does not suspend the app before it
-  /// has posted.
-  ///
-  /// The revisions come first because the index check waits for a network that is
-  /// neither expensive nor constrained (#314), which on a phone network can outlast
-  /// iOS's background task. Due revisions are fetched on any network, for the same
-  /// reason (#758). Canceling this, as iOS does when that task expires,
-  /// cancels the check, or the person's refresh it joined, but not the revisions'
-  /// fetch, which runs on as a launch's does.
-  func refreshForBookmarks() async {
-    await bootstrap()
-    await indexes.loaded()
-    await dataFiles.refreshRevisions(onExpensiveNetworks: true)
-    await bookmarkComparison?.value
-    guard indexState.isCheckDue(now: .now) else { return }
-    let check = indexes.check()
-    await withTaskCancellationHandler {
-      await check.value
-    } onCancel: {
-      check.cancel()
-    }
-    await bookmarkComparison?.value
-  }
-
-  /// `IndexRepository.retry()`.
-  func retryIndex() {
-    indexes.retry()
-  }
-
-  /// `IndexRepository.refreshNow()`.
-  func refreshIndexNow() async {
-    await indexes.refreshNow()
-  }
-
-  /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
-  /// baseline, after every change to the index or the revisions, and posts what
-  /// changed (`BookmarkNotifications`). Runs whether notifications are on or not, so
-  /// the baseline is current when they are turned on.
-  private func compareBookmarks() {
-    let previous = bookmarkComparison
-    bookmarkComparison = Task(name: "Compare bookmarks") {
-      await previous?.value
-      await compareBookmarksNow()
-    }
-  }
-
-  private func compareBookmarksNow() async {
-    // A store that fell back to memory (#152) reads as no bookmarks, which would
-    // start every one afresh at the next launch that opens the real one.
-    guard !AppData.isStoredInMemory else { return }
-    let bookmarks: Set<DocumentID>
-    let groups: Set<String>
-    do {
-      // Read here rather than taken from `bookmarkedDocuments` and `followedGroups`,
-      // which a failed read leaves empty: a baseline of none would start every one
-      // afresh.
-      bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
-      groups = try FollowedGroupStore.followedGroups(in: container.mainContext)
-    } catch {
-      libraryLog.error(
-        "reading bookmarks or followed groups to compare failed: \(String(describing: error), privacy: .public)"
-      )
-      return
-    }
-    let previous = await store.bookmarkBaseline()
-    let baseline = BookmarkBaseline(
-      bookmarks: bookmarks, followedGroups: groups, index: index, revisions: revisions,
-      carryingOver: previous)
-    guard baseline != previous else { return }
-    do {
-      // Kept before anything is posted: a baseline that cannot be kept would report
-      // the same changes on every refresh.
-      try await store.storeBookmarkBaseline(baseline)
-    } catch {
-      libraryLog.error(
-        "keeping the bookmark baseline failed: \(String(describing: error), privacy: .public)")
-      return
-    }
-    let events = BookmarkEvents.between(previous, baseline)
-    await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
-  }
+  /// The bookmark comparison and the background refresh that drives it (#191, #595).
+  /// Lazy, as its launch is `bootstrap()`, read through `self`.
+  @ObservationIgnored private(set) lazy var bookmarkWatcher = BookmarkWatcher(
+    store: store, container: userData.container, indexes: indexes, dataFiles: dataFiles,
+    isStoredInMemory: AppData.isStoredInMemory,
+    bootstrap: { [weak self] in await self?.bootstrap() },
+    post: { await BookmarkNotifications.post($0) })
 
   // MARK: - Working groups
 
@@ -655,39 +464,10 @@ final class LibraryModel {
   func workingGroupSummary(_ acronym: String) -> WorkingGroupSummary {
     let rfcs = indexes.rfcs(ofGroup: acronym)
     return WorkingGroupSummary(
-      acronym: acronym, group: workingGroups?.group(acronym), rfcs: rfcs)
+      acronym: acronym, group: dataFiles.workingGroups?.group(acronym), rfcs: rfcs)
   }
 
   // MARK: - Lists
-
-  /// `IndexRepository.metadata(_:)`.
-  func metadata(_ id: DocumentID) -> RFCMetadata? {
-    indexes.metadata(id)
-  }
-
-  /// `IndexRepository.citedDocument(_:)`.
-  func citedDocument(_ id: DocumentID) -> CitedDocument? {
-    indexes.citedDocument(id)
-  }
-
-  /// `IndexRepository.seriesMembers(_:)`.
-  func seriesMembers(_ id: DocumentID) -> String? {
-    indexes.seriesMembers(id)
-  }
-
-  /// `IndexRepository.documentShown(for:)`.
-  func documentShown(for id: DocumentID) -> DocumentID? {
-    indexes.documentShown(for: id)
-  }
-
-  /// `IndexRepository.topWorkingGroups`.
-  var topWorkingGroups: [String] { indexes.topWorkingGroups }
-
-  /// `IndexRepository.knownWorkingGroups`.
-  var knownWorkingGroups: Set<String> { indexes.knownWorkingGroups }
-
-  /// `IndexRepository.indexCounts`.
-  var indexCounts: [LibraryFilter: Int] { indexes.indexCounts }
 
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
@@ -720,56 +500,11 @@ final class LibraryModel {
     previews.removeAll { documents.contains($0.document) }
   }
 
-  /// `IndexRepository.listed(_:hits:)`.
-  func listed(_ list: LibraryList, hits: [RFCMetadata]? = nil) async -> ListedRows? {
-    await indexes.listed(list, hits: hits)
-  }
-
-  /// `IndexRepository.indexAllRFCs()`.
-  func indexAllRFCs() {
-    indexes.indexAllRFCs()
-  }
-
-  /// `IndexRepository.unindexedRFCCount()`.
-  func unindexedRFCCount() async -> Int? {
-    await indexes.unindexedRFCCount()
-  }
-
-  /// `IndexRepository.textIndexUsage()`.
-  func textIndexUsage() async -> TextIndexer.Usage? {
-    await indexes.textIndexUsage()
-  }
-
-  /// `IndexRepository.removeIndexOfAllRFCs()`.
-  func removeIndexOfAllRFCs() async {
-    await indexes.removeIndexOfAllRFCs()
-  }
-
-  /// `IndexRepository.textSearch(_:)`.
-  func textSearch(_ list: LibraryList) async -> TextIndexer.Found? {
-    await indexes.textSearch(list)
-  }
-
-  /// `IndexRepository.listedNow(_:hits:)`.
-  func listedNow(_ list: LibraryList, hits: [RFCMetadata]? = nil) -> ListedRows? {
-    indexes.listedNow(list, hits: hits)
-  }
-
   /// The subtitle under the list's title: how many documents it shows. Empty until
   /// the list is first made — "0 Documents" would be a claim about the library, not a
   /// list that has not arrived yet.
   func listSubtitle(for scene: NavigationModel) -> String {
     scene.listed.map { DocumentCount.label($0.rows.count) } ?? ""
-  }
-
-  /// `IndexRepository.suggestions(for:limit:)`.
-  func suggestions(for query: String, limit: Int) async -> [DocumentID] {
-    await indexes.suggestions(for: query, limit: limit)
-  }
-
-  /// `IndexRepository.quickOpenHits(for:)`.
-  func quickOpenHits(for query: String) async -> [DocumentID]? {
-    await indexes.quickOpenHits(for: query)
   }
 
   // MARK: - Scene routing
@@ -1018,7 +753,7 @@ final class LibraryModel {
   /// `DocumentRepository.document(for:)`. A series is read as its first member, the
   /// RFC its reader shows (#656).
   func document(for id: DocumentID) async throws -> RFCDocument {
-    try await documents.document(for: .rfc(documentShown(for: id) ?? id))
+    try await documents.document(for: .rfc(indexes.documentShown(for: id) ?? id))
   }
 
   /// An RFC as `document(for:)` reads it, or a draft's revision (#728).
@@ -1027,21 +762,6 @@ final class LibraryModel {
     case .rfc(let id): try await self.document(for: id)
     case .draft: try await documents.document(for: document)
     }
-  }
-
-  /// `DocumentRepository.draftInfo(for:)`.
-  func draftInfo(for id: DraftID) async throws -> DraftInfo {
-    try await documents.draftInfo(for: id)
-  }
-
-  /// `DocumentRepository.revision(of:)`.
-  func revision(of id: DraftID) async -> DraftID {
-    await documents.revision(of: id)
-  }
-
-  /// `DocumentRepository.markOpened(_:)`.
-  func markOpened(_ id: DocumentID) async {
-    await documents.markOpened(id)
   }
 
   /// `IndexRepository.installLegacyPack(from:)`.
@@ -1053,93 +773,12 @@ final class LibraryModel {
     return pack
   }
 
-  /// `DocumentRepository.publishedFile(for:format:)`.
-  func publishedFile(for id: DocumentID, format: FileFormat) async throws -> Data {
-    try await documents.publishedFile(for: id, format: format)
-  }
-
-  /// `DocumentRepository.originalText(for:)`.
-  func originalText(for id: DocumentID) async throws -> String {
-    try await documents.originalText(for: .rfc(id))
-  }
-
-  /// `DocumentRepository.originalText(for:)`.
-  func originalText(for document: ReadableDocument) async throws -> String {
-    try await documents.originalText(for: document)
-  }
-
-  // MARK: - Storage (#358)
-
-  /// `DocumentRepository.storageUsage()`.
-  func storageUsage() async -> StorageReport {
-    await documents.storageUsage()
-  }
-
-  /// `DocumentRepository.clearCache()`.
-  func clearCache() async {
-    await documents.clearCache()
-  }
-
-  /// `DocumentRepository.removeAllOffline()`.
-  func removeAllOffline() {
-    documents.removeAllOffline()
-  }
-
-  /// `DocumentRepository.isDownloaded(_:)`.
-  func isDownloaded(_ id: DocumentID) async -> Bool {
-    await documents.isDownloaded(id)
-  }
-
-  /// `DocumentRepository.keptSize(_:)`.
-  func keptSize(_ id: DocumentID) async -> Int? {
-    await documents.keptSize(id)
-  }
-
-  /// `UserDataMirror.recentlyRead`.
-  func recentlyRead() -> [DocumentID] {
-    userData.recentlyRead()
-  }
-
-  /// `UserDataMirror.recordOpening`.
-  func recordOpening(_ document: ReadableDocument) throws {
-    try userData.recordOpening(document)
-  }
-
-  /// `UserDataMirror.saveReadingPlace`.
-  func saveReadingPlace(_ place: ReadingPlace, for document: ReadableDocument) throws {
-    try userData.saveReadingPlace(place, for: document)
-  }
-
-  /// `UserDataMirror.readingPosition`.
-  func readingPosition(for document: ReadableDocument) throws -> ReadingPosition? {
-    try userData.readingPosition(for: document)
-  }
-
-  // MARK: - Reading paths (#189)
-
-  /// `DocumentRepository.readingPath(from:depth:)`.
-  func readingPath(from root: DocumentID, depth: Int) async
-    -> DocumentRepository.ReadingPathResult
-  {
-    await documents.readingPath(from: root, depth: depth)
-  }
-
-  /// `DocumentRepository.setKeptOffline`.
-  func setKeptOffline(_ id: DocumentID, _ isKept: Bool) async throws {
-    try await documents.setKeptOffline(id, isKept)
-  }
-
-  /// `DocumentRepository.setKeptOfflineInBackground`.
-  func setKeptOfflineInBackground(_ id: DocumentID, _ isKept: Bool) {
-    documents.setKeptOfflineInBackground(id, isKept)
-  }
-
   #if os(macOS)
     /// A format of a document saved to Downloads, as Safari saves a file: under its
     /// own name, or numbered when that is taken, and the Dock's Downloads stack told,
     /// so it bounces. What Option-clicking a format in the Info pane does (#25).
     func saveToDownloads(_ id: DocumentID, format: FileFormat) async throws {
-      let data = try await publishedFile(for: id, format: format)
+      let data = try await documents.publishedFile(for: id, format: format)
       let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
       let file = try await Self.writeToDownloads(data, named: name)
       // Not private API, but not documented either: the notification Safari posts,
@@ -1172,19 +811,19 @@ final class LibraryModel {
 private struct LibrarySources: ListSources {
   let library: LibraryModel
 
-  var bookmarked: Set<DocumentID> { library.bookmarkedDocuments }
-  var recentlyRead: [DocumentID] { library.recentlyRead() }
-  var downloaded: Set<Int> { library.availableOfflineNumbers }
+  var bookmarked: Set<DocumentID> { library.userData.bookmarkedDocuments }
+  var recentlyRead: [DocumentID] { library.userData.recentlyRead() }
+  var downloaded: Set<Int> { library.documents.availableOfflineNumbers }
 
   func members(of collection: UUID) -> [Int] {
-    library.collections[collection]?.rfcNumbers ?? []
+    library.userData.collections[collection]?.rfcNumbers ?? []
   }
 
   func collection(named name: String) -> UUID? {
-    library.collections.collection(named: name)?.id
+    library.userData.collections.collection(named: name)?.id
   }
 
   func query(of collection: UUID) -> String? {
-    library.collections[collection]?.query
+    library.userData.collections[collection]?.query
   }
 }

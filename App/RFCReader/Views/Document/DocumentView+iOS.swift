@@ -64,7 +64,7 @@
           ToolbarItem(placement: .principal) {
             DocumentTitle(
               title: identity.displayName,
-              subtitle: library.seriesMembers(identity)
+              subtitle: library.indexes.seriesMembers(identity)
                 ?? DocumentActions.subtitle(
                   metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
               reader: reader, isShown: isShown)
@@ -74,7 +74,7 @@
           DocumentToolbar(
             id: id, identity: identity, metadata: metadata, library: library,
             navigation: navigation, reader: reader,
-            isBookmarked: library.bookmarkedDocuments.contains(identity),
+            isBookmarked: library.userData.bookmarkedDocuments.contains(identity),
             showsInspector: $showsInspector,
             exportDocument: {
               output.exportDocument(id, as: $0, section: $1, library: library)

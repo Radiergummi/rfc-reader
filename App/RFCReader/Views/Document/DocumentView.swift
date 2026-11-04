@@ -217,7 +217,7 @@ struct DocumentView: View {
   }
 
   /// The RFC's index entry; nil for a draft (#728), which is in no index.
-  private var metadata: RFCMetadata? { id.rfc.flatMap(library.metadata) }
+  private var metadata: RFCMetadata? { id.rfc.flatMap(library.indexes.metadata) }
 
   private var positions: ReadingPositionKeeper {
     ReadingPositionKeeper(id: identity, library: library)
@@ -229,7 +229,7 @@ struct DocumentView: View {
   /// lists them all.
   private var errataMarks: ErrataMarks {
     guard session.state.document != nil, originalOnlyPage == nil else { return .none }
-    return session.errataMarks(for: id.rfc.flatMap { library.errata?[$0] })
+    return session.errataMarks(for: id.rfc.flatMap { library.dataFiles.errata?[$0] })
   }
 
   private var buildInputs: BuildInputs {
@@ -408,12 +408,12 @@ struct DocumentView: View {
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
-      .onChange(of: library.indexState) {
+      .onChange(of: library.indexes.indexState) {
         session.deriveInfo(into: writer, library: library)
         session.markPublishedOriginal(into: writer, library: library)
       }
       // A pack installed while the document is open can make it a pointer (#316).
-      .onChange(of: library.pointersInPack) {
+      .onChange(of: library.indexes.pointersInPack) {
         session.markPublishedOriginal(into: writer, library: library)
       }
       // Focus and the outline, off over a text the original-only page loaded but does
@@ -428,7 +428,7 @@ struct DocumentView: View {
         }
         updateFolding()
       }
-      .onChange(of: library.revisions) {
+      .onChange(of: library.dataFiles.revisions) {
         session.deriveInfo(into: writer, library: library)
       }
       .onChange(of: navigation.scrollRequest) { _, request in
@@ -655,7 +655,8 @@ struct DocumentView: View {
     guard let metadata else { return nil }
     return PublishedOriginalPage(
       metadata.id, formats: metadata.formats, showsOriginal: showsOriginal,
-      text: session.state.document, pointerInPack: library.pointersInPack.contains(metadata.id))
+      text: session.state.document,
+      pointerInPack: library.indexes.pointersInPack.contains(metadata.id))
   }
 
   @ViewBuilder
@@ -797,7 +798,7 @@ struct DocumentView: View {
             revisions: library.revisionsSummary(for: metadata.id),
             // No body to mark: every erratum is the whole document's.
             documentErrata: session.errataMarks(
-              for: library.errata?[metadata.id], drawsBody: false
+              for: library.dataFiles.errata?[metadata.id], drawsBody: false
             )
             .document),
           reader: controller

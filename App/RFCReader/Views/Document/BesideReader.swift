@@ -109,7 +109,7 @@ struct CompareItems: View {
       Button("Stop Comparing with \(beside.pair.other.displayName)") {
         reader.endComparison()
       }
-    } else if let metadata = library.metadata(id) {
+    } else if let metadata = library.indexes.metadata(id) {
       let offered = SideBySidePair.offered(for: metadata)
       if !offered.isEmpty {
         Menu("Compare Side by Side", systemImage: "rectangle.split.2x1") {

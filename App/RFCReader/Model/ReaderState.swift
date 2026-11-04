@@ -189,7 +189,7 @@ final class ReaderState {
   }
 
   /// The title the document gives itself, for the one caller the index cannot
-  /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
+  /// serve: `DocumentActions.bookmarkTitle` when `library.indexes.metadata` has nothing.
   /// Here for the same reason `currentSection` is — the toolbar needs one string
   /// out of a document it is not inside, and handing it the document instead would
   /// be a far larger thing to share for it.

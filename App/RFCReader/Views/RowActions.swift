@@ -53,7 +53,7 @@ import SwiftUI
           // `DocumentMenus.rowActions`, the table the Mac's menu renders too (#761).
           let sections = DocumentMenus.rowActions(
             isRFC: rfc != nil, opensTabs: false, opensWindows: library.opensNewWindows,
-            inCollection: false, hasCitationIndex: library.hasCitationIndex)
+            inCollection: false, hasCitationIndex: library.documents.hasCitationIndex)
           DividedSections(sections: sections, item: item)
         } preview: {
           preview

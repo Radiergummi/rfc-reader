@@ -64,7 +64,7 @@ struct DocumentPreview: View {
     HStack(spacing: 8) {
       Text(id.displayName)
         .fontWeight(.semibold)
-      if let title = library.metadata(id)?.title {
+      if let title = library.indexes.metadata(id)?.title {
         Text(title)
           .foregroundStyle(.secondary)
           .lineLimit(1)
@@ -89,7 +89,7 @@ struct DocumentPreview: View {
         controller: controller,
         onLink: { _, _ in true },
         headerIdentity: DocumentHeaderView.Identity(
-          header: loaded.document.header, metadata: library.metadata(id)),
+          header: loaded.document.header, metadata: library.indexes.metadata(id)),
         header: { EmptyView() }
       )
     } else if let failure {

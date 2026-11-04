@@ -294,9 +294,9 @@
         // A series names its members (#656).
         subtitle: navigation.selection
           .flatMap {
-            library.seriesMembers($0)
+            library.indexes.seriesMembers($0)
               ?? DocumentActions.subtitle(
-                metadata: library.metadata($0), documentTitle: reader.documentTitle)
+                metadata: library.indexes.metadata($0), documentTitle: reader.documentTitle)
           }?
           .truncated(to: Self.subtitleLimit)
           ?? (navigation.shownDraft != nil
@@ -307,7 +307,7 @@
         documentTitle: navigation.shownDocument?.displayName ?? "",
         // A draft has no index entry: its header's title (#728).
         documentSubtitle: navigation.selection.flatMap {
-          library.seriesMembers($0) ?? library.metadata($0)?.title
+          library.indexes.seriesMembers($0) ?? library.indexes.metadata($0)?.title
         } ?? (navigation.shownDraft != nil ? reader.documentTitle ?? "" : ""),
         isBookmarked: isBookmarked
       )
@@ -479,7 +479,7 @@
     /// a bookmark toggled in another tab shows here too (#141). Read by the title's
     /// observation, which re-runs when the selection or the set changes.
     var isBookmarked: Bool {
-      navigation.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
+      navigation.selection.map { library.userData.bookmarkedDocuments.contains($0) } ?? false
     }
 
     /// Puts focus in the text on screen, for Find. Nothing else focuses it: after a
@@ -565,7 +565,7 @@
     /// What a citation of the document is made from: the document the tab opened, a
     /// series as itself (#656). Nil before the index names it.
     var citedDocument: CitedDocument? {
-      navigation.selection.flatMap(library.citedDocument)
+      navigation.selection.flatMap(library.indexes.citedDocument)
     }
 
     private var quotedText: ReaderTextView? {

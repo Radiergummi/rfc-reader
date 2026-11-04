@@ -49,7 +49,7 @@ struct ReferencePreview: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if let metadata = documentID.flatMap(library.metadata) {
+      if let metadata = documentID.flatMap(library.indexes.metadata) {
         HStack(alignment: .firstTextBaseline) {
           Text(metadata.title).font(.headline).lineLimit(dynamicTypeSize.lines(2))
           Spacer()

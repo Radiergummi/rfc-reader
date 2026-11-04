@@ -156,7 +156,7 @@ final class DocumentSession {
     draftInfoLoad?.cancel()
     draftInfoLoad = Task(name: "Load draft info") { [weak self] in
       do {
-        let info = try await library.draftInfo(for: draft)
+        let info = try await library.documents.draftInfo(for: draft)
         guard let self, !Task.isCancelled else { return }
         draftInfo = info
       } catch {
@@ -301,7 +301,7 @@ final class DocumentSession {
     originalTextFailure = nil
     originalTextLoad = Task(name: "Load original text") { [weak self, id] in
       do {
-        let text = try await library.originalText(for: id)
+        let text = try await library.documents.originalText(for: id)
         guard let self, !Task.isCancelled else { return }
         originalText = text
       } catch {

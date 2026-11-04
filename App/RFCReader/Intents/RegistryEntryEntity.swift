@@ -58,12 +58,12 @@ struct RegistryEntryEntity: AppEntity {
 /// `tls alert 70`, `Retry-After`.
 struct RegistryEntryQuery: EntityStringQuery {
   func entities(for identifiers: [RegistryEntryEntity.ID]) async throws -> [RegistryEntryEntity] {
-    let entries = await LibraryModel.shared.loadedRegistryEntries()
+    let entries = await LibraryModel.shared.dataFiles.loadedRegistryEntries()
     return await entities(RegistryLookup.entries(identifiedBy: identifiers, in: entries))
   }
 
   func entities(matching string: String) async throws -> [RegistryEntryEntity] {
-    let entries = await LibraryModel.shared.loadedRegistryEntries()
+    let entries = await LibraryModel.shared.dataFiles.loadedRegistryEntries()
     return await entities(RegistryLookup.matches(string, in: entries))
   }
 

@@ -177,8 +177,8 @@ struct DocumentInspector: View {
   /// and why they are not placed: the document is not here, or what is shown is not
   /// its own text but the original or a translation.
   private func annotations() -> some View {
-    let highlights = document.map { library.annotations.highlights(of: $0) } ?? []
-    let notes = document.map { library.annotations.notes(of: $0) } ?? []
+    let highlights = document.map { library.userData.annotations.highlights(of: $0) } ?? []
+    let notes = document.map { library.userData.annotations.notes(of: $0) } ?? []
     let note: String? =
       highlightStatuses != nil
       ? nil
@@ -575,7 +575,7 @@ private struct ReferenceRowPreview: View {
   let commit: () -> Void
 
   var body: some View {
-    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.index) {
+    if case .document(let id, let place)? = LinkPreview.resolve(entry, in: library.indexes.index) {
       DocumentPreview(library: library, id: id, place: place, size: size(), commit: commit)
     }
   }
@@ -742,7 +742,7 @@ struct ReferenceMenu {
   func items(for id: DocumentID) -> some View {
     let sections = DocumentMenus.referenceActions(
       opensTabs: openInNewTab != nil, opensWindows: openInNewWindow != nil,
-      describes: library.metadata(id) != nil)
+      describes: library.indexes.metadata(id) != nil)
     DividedSections(sections: sections) { item($0, for: id) }
   }
 
@@ -782,7 +782,7 @@ struct ReferenceMenu {
   private func perform(_ action: DocumentMenus.Action, for id: DocumentID) {
     guard
       case .copy(let text, let feedback) = action.effect(
-        for: id, citing: library.citedDocument(id), section: nil,
+        for: id, citing: library.indexes.citedDocument(id), section: nil,
         settings: ReaderSettings(defaults: .standard))
     else { return }
     Clipboard.copy(text, announcing: feedback)

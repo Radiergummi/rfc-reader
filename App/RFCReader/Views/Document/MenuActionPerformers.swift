@@ -9,7 +9,7 @@ struct DocumentActionPerformer {
   /// The RFC acted on; nil for a draft (#728), whose text has only its toggles.
   let id: DocumentID?
   /// What a citation is made from: the document the tab opened, a series as itself
-  /// (#656), as `LibraryModel.citedDocument` has it.
+  /// (#656), as `IndexRepository.citedDocument` has it.
   let cited: CitedDocument?
   let reader: ReaderState
   let open: (URL) -> Void
@@ -42,7 +42,7 @@ struct CollectionActionPerformer {
   func perform(_ action: DocumentMenus.CollectionAction) {
     switch action {
     case .toggleCollection(let collection):
-      library.editCollections {
+      library.userData.editCollections {
         try CollectionStore.toggle(
           document, in: collection, undoManager: undoManager,
           onUndoFailure: library.collectionUndoFailed, in: $0)

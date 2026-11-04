@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -27,7 +28,7 @@ struct ReaderEnvironment {
     self.library = library
     self.navigation = navigation
     self.reader = reader
-    container = library.container
+    container = library.userData.container
   }
 }
 
