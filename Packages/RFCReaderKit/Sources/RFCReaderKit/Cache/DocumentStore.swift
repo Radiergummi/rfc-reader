@@ -7,13 +7,6 @@ import os
 private let storeLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "store")
 
-/// The store's intervals, in the app's Points of Interest lane: the same subsystem
-/// and category as the app's `signposter`, so `make trace` reads them as before.
-private let signposter = OSSignposter(
-  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader",
-  category: .pointsOfInterest
-)
-
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents, and
 /// each body's parse kept encoded beside it for the next launch (#606).
 ///

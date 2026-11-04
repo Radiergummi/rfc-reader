@@ -51,48 +51,23 @@ final class LibraryModel {
   /// in a `ReaderEnvironment`.
   static let shared = LibraryModel(container: AppData.container)
 
-  private(set) var index: RFCIndex? {
-    didSet {
-      groupRFCs = [:]
-      indexVersion += 1
-      indexableRFCs = index.map { IndexAllRun.indexable($0.rfcs) } ?? []
-    }
-  }
+  /// The index and its search, the full-text index and Just Published (#595).
+  @ObservationIgnored private let indexes: IndexRepository
 
-  /// The RFCs Index All RFCs can index (`IndexAllRun.indexable`), worked out once per
-  /// index: the footer and Settings count them as they draw.
-  @ObservationIgnored private(set) var indexableRFCs: [RFCMetadata] = []
-  /// Which index is installed, counted: what a tab compares to tell whether the
-  /// rows and hits it has were made over the index there is now (#597), where
-  /// comparing two indexes would compare 9,842 entries.
-  private(set) var indexVersion = 0
-  /// Each working group's RFCs, worked out once per index for its card (#363): the
-  /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
-  @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
-  private(set) var indexState: IndexState = .idle {
-    didSet {
-      guard indexState != .loading, indexState != .idle else { return }
-      indexLoaded.open()
-    }
-  }
-  /// The bytes the index's download has received, while one is under way with no
-  /// index to show (#770); nil otherwise.
-  private(set) var indexBytesReceived: Int64?
-  /// Counts the index's downloads, so the bytes a download reports after it has ended
-  /// are not taken for the next one's.
-  @ObservationIgnored private var indexDownloads = 0
-  /// What the list shows in place of its rows while there is no index (#770).
-  var indexPlaceholder: IndexPlaceholder? {
-    IndexPlaceholder(
-      state: indexState, hasIndex: index != nil, bytesReceived: indexBytesReceived)
-  }
-  /// Open once the index is ready or has failed, for a background refresh that
-  /// arrived while launch was still loading it (#191).
-  @ObservationIgnored private let indexLoaded = Latch()
-  private(set) var recent: [RecentRFC] = []
-  /// Just Published's refresh at launch (#421), held rather than left to run
-  /// unowned.
-  @ObservationIgnored private let recentRefresh = SharedRefresh(name: "Refresh recent RFCs")
+  /// `IndexRepository.index`.
+  var index: RFCIndex? { indexes.index }
+  /// `IndexRepository.indexableRFCs`.
+  var indexableRFCs: [RFCMetadata] { indexes.indexableRFCs }
+  /// `IndexRepository.indexVersion`.
+  var indexVersion: Int { indexes.indexVersion }
+  /// `IndexRepository.indexState`.
+  var indexState: IndexState { indexes.indexState }
+  /// `IndexRepository.indexBytesReceived`.
+  var indexBytesReceived: Int64? { indexes.indexBytesReceived }
+  /// `IndexRepository.indexPlaceholder`.
+  var indexPlaceholder: IndexPlaceholder? { indexes.indexPlaceholder }
+  /// `IndexRepository.recent`.
+  var recent: [RecentRFC] { indexes.recent }
 
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
@@ -197,10 +172,8 @@ final class LibraryModel {
   /// that arrived from another device now or waits.
   @ObservationIgnored private let network = NetworkConditions()
 
-  /// The RFCs the installed legacy pack lists as text that only points to its
-  /// original (#316): the reader shows their original without a load, offline too.
-  /// Kept here so the reader can ask while it lays out, not across the store's actor.
-  private(set) var pointersInPack: Set<DocumentID> = []
+  /// `IndexRepository.pointersInPack`.
+  var pointersInPack: Set<DocumentID> { indexes.pointersInPack }
 
   /// `DocumentRepository.hasCitationIndex`.
   var hasCitationIndex: Bool { documents.hasCitationIndex }
@@ -248,7 +221,12 @@ final class LibraryModel {
     self.clientOnCheapNetworks = clientOnCheapNetworks
     dataFiles = DataFileRefresher(
       store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
+    indexes = IndexRepository(
+      store: store, client: client, clientOnCheapNetworks: clientOnCheapNetworks)
     dataFiles.onRevisionsChanged = { [weak self] in self?.compareBookmarks() }
+    indexes.onApplied = { [weak self] index in self?.indexApplied(index) }
+    indexes.onSettled = { [weak self] in self?.deliverLinksHeldForIndex() }
+    indexes.onTextIndexChanged = { [weak self] in self?.indexSectionsForSpotlight() }
     // What is gone from the disk goes from memory too.
     documents.onRemoved = { [weak self] removed in self?.forgetPreviews(of: removed) }
     userData.onBookmarksChanged = { [weak self] in self?.bookmarksChanged() }
@@ -367,87 +345,36 @@ final class LibraryModel {
     compareBookmarks()
   }
 
-  private func refreshPointersInPack() async {
-    let pointers = await store.pointersInPack()
-    guard pointers != pointersInPack else { return }
-    pointersInPack = pointers
-  }
-
   private let client: RFCEditorClient
   /// For the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode instead of failing (#314).
   private let clientOnCheapNetworks: RFCEditorClient
   private let store: DocumentStore
-  private var search: IndexSearch?
 
-  /// The full-text index (#37), kept to the bodies `store` holds. Nil until bootstrap
-  /// has opened it, off the main actor, and when it could not be opened, which leaves
-  /// the search to the index's metadata.
-  @ObservationIgnored private var textIndexer: TextIndexer?
+  /// `IndexRepository.textIndexVersion`.
+  var textIndexVersion: Int { indexes.textIndexVersion }
 
-  /// Counts the full-text index's changes, for a tab to search the text again once
-  /// a document is added to it or removed.
-  private(set) var textIndexVersion = 0
+  /// `IndexRepository.indexAllRun`.
+  var indexAllRun: IndexAllRun { indexes.indexAllRun }
 
-  /// Index All RFCs (#37), which Settings and the search's footer start and stop.
-  let indexAllRun = IndexAllRun()
-
-  /// Whether the full-text index has opened, for Index All RFCs to be offered.
-  private(set) var hasTextIndex = false
+  /// `IndexRepository.hasTextIndex`.
+  var hasTextIndex: Bool { indexes.hasTextIndex }
 
   // MARK: - Bootstrap
 
+  /// The index (`IndexRepository.bootstrap()`), then what waits for it: the
+  /// citation index, the data files and, on the Mac, the registries.
   func bootstrap() async {
     guard indexState == .idle else { return }
-    indexState = .loading
-    // Before anything is awaited, so that the parse is already running when this
-    // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
-    // makes the first window at that suspension: the window holds the main thread
-    // until the "First window made" signpost, and the parse, which needs nothing from
-    // it, runs beside it rather than after it (#367). Every `await` stays below this line.
-    async let cached = Self.loadCachedIndex(from: store)
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
-    // Just Published needs neither the index nor the downloads, so it starts beside
-    // them rather than after the index is applied.
-    recentRefresh.start { await self.refreshRecent() }
-    await refreshPointersInPack()
-    do {
-      if let (prepared, updatedAt) = try await cached {
-        apply(prepared, updatedAt: updatedAt)
-        // Check in the background if the index was last checked over a day ago:
-        // only on a cheap network, since nobody is waiting for it (#314).
-        if IndexCheck.isDue(checkedAt: updatedAt, now: .now) {
-          checkIndex()
-        }
-      } else {
-        await refreshIndexNow()
-      }
-    } catch {
-      indexState = .failed(error)
-      settleIndex()
-    }
+    // Nothing above awaits: the repository starts the parse of the index kept before
+    // its first suspension, so that it runs beside the first window (#367).
+    await indexes.bootstrap()
     // Only the Reading Path items wait for it, so not the list.
     Task(name: "Look for a citation index") { await documents.refreshCitationIndex() }
     Task(name: "Refresh data files") { await dataFiles.refreshAll() }
-    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    Task(name: "Index the text", priority: .utility) { [weak self, store] in
-      let indexer: TextIndexer
-      do {
-        indexer = try await TextIndexer.opening(store: store)
-      } catch {
-        libraryLog.error(
-          "the full-text index did not open: \(String(describing: error), privacy: .public)")
-        return
-      }
-      self?.textIndexer = indexer
-      self?.hasTextIndex = true
-      // A list made before the index opened has no section hits, and an index that is
-      // already up to date never reports a change: its tabs search the text now.
-      self?.textIndexChanged()
-      await indexer.run(changed: changed)
-    }
     // On the Mac at launch, where ⌘L may come first thing. iOS reads them as its Go
     // to RFC sheet opens (`refreshRegistriesIfDue()`): most launches of an iPhone
     // never open it.
@@ -480,8 +407,8 @@ final class LibraryModel {
     /// Logged, not shown: nothing on screen asked for it.
     private func installPackFromLaunchArgument() {
       let legacy = UserDefaults.standard.string(forKey: "installPack")
-      let indexes = UserDefaults.standard.string(forKey: "installIndexesPack")
-      guard legacy != nil || indexes != nil else { return }
+      let indexesPack = UserDefaults.standard.string(forKey: "installIndexesPack")
+      guard legacy != nil || indexesPack != nil else { return }
       // Installed on every launch the argument is set for, which is what a
       // developer setting it in a scheme wants while iterating on a pack. One after
       // the other, since the store installs one pack at a time, and each whether or
@@ -498,10 +425,10 @@ final class LibraryModel {
               "installing a data pack failed: \(String(describing: error), privacy: .public)")
           }
         }
-        if let indexes {
+        if let indexesPack {
           do {
             let pack = try await store.installIndexesPack(
-              from: PackInstaller.source(fromArgument: indexes))
+              from: PackInstaller.source(fromArgument: indexesPack))
             await documents.refreshCitationIndex()
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
           } catch {
@@ -513,134 +440,10 @@ final class LibraryModel {
     }
   #endif
 
-  /// The cached index, parsed and prepared off the main actor and off the store's —
-  /// the search and the working groups with it. Nil when there is none.
-  @concurrent
-  private static func loadCachedIndex(from store: DocumentStore) async throws
-    -> (prepared: PreparedIndex, updatedAt: Date)?
-  {
-    guard let cached = store.cachedIndexLocation() else { return nil }
-    let interval = signposter.beginInterval("Read cached index")
-    defer { signposter.endInterval("Read cached index", interval) }
-    if let snapshot = cached.snapshot {
-      do {
-        let index = try signposter.withIntervalSignpost("Decode index snapshot") {
-          try IndexSnapshot.decode(Data(contentsOf: snapshot))
-        }
-        return (PreparedIndex(index: index), cached.updatedAt)
-      } catch {
-        libraryLog.error(
-          "decoding the index snapshot failed: \(String(describing: error), privacy: .public)")
-      }
-    }
-    let prepared = try signposter.withIntervalSignpost("Parse index XML") {
-      try PreparedIndex.parse(Data(contentsOf: cached.url))
-    }
-    // Parsed from the XML, so the next launch reads a snapshot of it instead.
-    await store.writeSnapshot(of: prepared.index)
-    return (prepared, cached.updatedAt)
-  }
-
-  @concurrent
-  private static func parse(_ data: Data) async throws -> PreparedIndex {
-    try signposter.withIntervalSignpost("Parse index") {
-      try PreparedIndex.parse(data)
-    }
-  }
-
-  /// Asks the RFC Editor for the index, sending what identifies the one kept so an
-  /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
-  /// false is the automatic daily check, which waits for a network that is neither
-  /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
-  /// and fails at once when there is none.
-  private func refreshIndex(onExpensiveNetworks: Bool) async {
-    do {
-      // Only with an index in memory: without one, a `304` would leave nothing to
-      // show, so the whole index is asked for.
-      let kept = index == nil ? nil : store.indexCheck()
-      let validators = kept?.validators(at: .now)
-      // With no index to show, the list shows the download instead (#770), until
-      // the index downloaded has been applied or has failed. Not the automatic
-      // check's, which may wait for a cheap network for as long as there is none:
-      // it runs under the failure, and its Try Again, until it has the index.
-      let isFirstDownload = index == nil && onExpensiveNetworks
-      var onReceived: (@Sendable (Int64) -> Void)?
-      if isFirstDownload {
-        indexBytesReceived = 0
-        indexDownloads += 1
-        let download = indexDownloads
-        // Off the main actor, every packet: only the steps the list shows go over
-        // to it.
-        let steps = OSAllocatedUnfairLock(initialState: IndexPlaceholder.ProgressSteps())
-        onReceived = { [weak self] bytes in
-          guard steps.withLock({ $0.isStep(bytes) }) else { return }
-          Task { @MainActor in
-            self?.indexReceived(bytes, in: download)
-          }
-        }
-      }
-      defer {
-        if isFirstDownload {
-          indexBytesReceived = nil
-        }
-      }
-      let interval = signposter.beginInterval("Fetch index")
-      let fetched: IndexFetch
-      do {
-        // Ended on a throw too, so an offline refresh does not leave it open.
-        defer { signposter.endInterval("Fetch index", interval) }
-        fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
-          .fetchIndexData(
-            unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks,
-            onReceived: onReceived)
-      }
-      switch IndexRefreshOutcome(fetched, kept: kept) {
-      case .recordUnchanged(let kept):
-        indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
-      case .settle:
-        settleIndex()
-      case .install(let data, let validators):
-        // Off the main actor: the parse, with what is built from it, is the "Parse
-        // index" signpost (#124).
-        let prepared = try await Self.parse(data)
-        try await store.storeIndex(data, parsed: prepared.index, validators: validators)
-        apply(prepared, updatedAt: .now)
-      }
-    } catch {
-      // With an index already showing, the failure is not shown, but it is not
-      // discarded either.
-      libraryLog.error(
-        "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      // A refresh canceled, the automatic check that a person's replaced (#983) or
-      // one iOS's background task ended, leaves the failure already shown as it was
-      // rather than showing its cancellation.
-      if index == nil, !(Task.isCancelled && indexState.isFailed) {
-        indexState = .failed(error)
-        settleIndex()
-      }
-    }
-  }
-
-  /// Records the bytes `download` has received; ignored once it has ended.
-  private func indexReceived(_ bytes: Int64, in download: Int) {
-    guard download == indexDownloads, let shown = indexBytesReceived, bytes > shown else {
-      return
-    }
-    indexBytesReceived = bytes
-  }
-
-  /// Only assigns: everything in `prepared` was built off the main actor.
-  private func apply(_ prepared: PreparedIndex, updatedAt: Date) {
-    self.index = prepared.index
-    self.search = prepared.search
-    self.topWorkingGroups = prepared.topWorkingGroups
-    self.knownWorkingGroups = prepared.knownWorkingGroups
-    self.indexCounts = prepared.counts
-    indexState = .ready(updatedAt: updatedAt)
-    signposter.emitEvent("Index ready")
-    indexForSpotlight(prepared.index.rfcs)
+  /// What an index applied means beyond the index itself.
+  private func indexApplied(_ index: RFCIndex) {
+    indexForSpotlight(index.rfcs)
     indexSectionsForSpotlight()
-    settleIndex()
     compareBookmarks()
     // What waited for the formats the index lists.
     documents.reconcileOffline()
@@ -650,14 +453,8 @@ final class LibraryModel {
 
   // MARK: - App Intents
 
-  /// Open once the index has arrived or failed to, opened by `settleIndex()`: from
-  /// then on an intent takes what there is rather than waiting in `settledSearch()`.
-  /// Not `indexState`, which a launch whose fetch answers nothing leaves loading.
-  @ObservationIgnored private let indexSettled = Latch()
-
-  /// Whether the index has loaded or failed to, for a caller that cannot wait for
-  /// `settledSearch()`: a script's accessor (#762).
-  var hasIndexSettled: Bool { indexSettled.isOpen }
+  /// `IndexRepository.hasSettled`.
+  var hasIndexSettled: Bool { indexes.hasSettled }
 
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
@@ -668,8 +465,7 @@ final class LibraryModel {
     if indexState == .idle {
       Task(name: "Bootstrap library") { await bootstrap() }
     }
-    await indexSettled.wait()
-    return search
+    return await indexes.settledSearch()
   }
 
   /// A tab of the navigation pane an App Intent asked to show beside a document
@@ -734,7 +530,7 @@ final class LibraryModel {
   }
 
   private func indexSectionsWhileChanged() async {
-    while spotlightSectionsChanged, let textIndexer, let index {
+    while spotlightSectionsChanged, let textIndexer = indexes.textIndexer, let index {
       spotlightSectionsChanged = false
       let rebuilding = spotlightSectionsRebuild
       spotlightSectionsRebuild = false
@@ -763,10 +559,6 @@ final class LibraryModel {
 
   // MARK: - Bookmark notifications
 
-  /// The refresh of the index under way, the automatic daily check's or a person's,
-  /// which a second one joins, except that a person's replaces the automatic check
-  /// (#983).
-  @ObservationIgnored private let indexRefresh = SharedRefresh(name: "Refresh index")
   /// The comparison under way. Each waits for the one before, so two never read the
   /// same baseline and both report what changed since.
   @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
@@ -784,11 +576,11 @@ final class LibraryModel {
   /// fetch, which runs on as a launch's does.
   func refreshForBookmarks() async {
     await bootstrap()
-    await indexLoaded.wait()
+    await indexes.loaded()
     await dataFiles.refreshRevisions(onExpensiveNetworks: true)
     await bookmarkComparison?.value
     guard indexState.isCheckDue(now: .now) else { return }
-    let check = checkIndex()
+    let check = indexes.check()
     await withTaskCancellationHandler {
       await check.value
     } onCancel: {
@@ -797,27 +589,14 @@ final class LibraryModel {
     await bookmarkComparison?.value
   }
 
-  /// The automatic daily check of the index, only on a cheap network (#314): the one
-  /// under way, or a new one.
-  @discardableResult
-  private func checkIndex() -> Task<Void, Never> {
-    indexRefresh.start(replaceable: true) {
-      await self.refreshIndex(onExpensiveNetworks: false)
-    }
-  }
-
-  /// Retry, after the index failed: on any network, as a person asked for it. It
-  /// joins a person's refresh already under way rather than fetching the index beside
-  /// it, and replaces the automatic check, which may wait for a cheap network for as
-  /// long as there is none (#983).
+  /// `IndexRepository.retry()`.
   func retryIndex() {
-    indexRefresh.start { await self.refreshIndex(onExpensiveNetworks: true) }
+    indexes.retry()
   }
 
-  /// The index fetched now, on any network, by the rule of `retryIndex`, and waited
-  /// for: pull to refresh and the first launch (#984).
+  /// `IndexRepository.refreshNow()`.
   func refreshIndexNow() async {
-    await indexRefresh.join { await self.refreshIndex(onExpensiveNetworks: true) }
+    await indexes.refreshNow()
   }
 
   /// Compares the bookmarked RFCs, and the followed groups' RFCs (#731), with the last
@@ -868,85 +647,47 @@ final class LibraryModel {
     await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
   }
 
-  // MARK: - Just Published
-
-  /// The feed kept, then a newer one if the RFC Editor has it, asked for only on a
-  /// cheap network (`RecentFeedRefresh`). It is decoration: a failure keeps what is
-  /// shown, and is logged rather than shown (#125).
-  private func refreshRecent() async {
-    do {
-      try await RecentFeedRefresh.run(store: store, client: clientOnCheapNetworks) { feed in
-        if feed != recent { recent = feed }
-      }
-    } catch {
-      libraryLog.error(
-        "refreshing recent RFCs failed: \(String(describing: error), privacy: .public)")
-    }
-  }
-
   // MARK: - Working groups
 
   /// What a working group's card says: the group as the file describes it, if it
   /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
   /// whatever the list's options hide: the card describes the group, not the list.
   func workingGroupSummary(_ acronym: String) -> WorkingGroupSummary {
-    let rfcs: [RFCMetadata]
-    if let cached = groupRFCs[acronym] {
-      rfcs = cached
-    } else {
-      let filter = LibraryFilter.workingGroup(acronym)
-      rfcs = index?.rfcs.filter { filter.includes($0) == true } ?? []
-      groupRFCs[acronym] = rfcs
-    }
+    let rfcs = indexes.rfcs(ofGroup: acronym)
     return WorkingGroupSummary(
       acronym: acronym, group: workingGroups?.group(acronym), rfcs: rfcs)
   }
 
   // MARK: - Lists
 
+  /// `IndexRepository.metadata(_:)`.
   func metadata(_ id: DocumentID) -> RFCMetadata? {
-    index?[id]
+    indexes.metadata(id)
   }
 
-  /// What a citation of `id` is made from (#712): its entry in the index, or a
-  /// series' members'. Nil before the index names it.
+  /// `IndexRepository.citedDocument(_:)`.
   func citedDocument(_ id: DocumentID) -> CitedDocument? {
-    index.flatMap { CitedDocument(id, in: $0) }
+    indexes.citedDocument(id)
   }
 
-  /// "RFC 2119 and RFC 8174", the members of a series, for its reader's subtitle
-  /// (#656); nil for an RFC, or before the index names them.
+  /// `IndexRepository.seriesMembers(_:)`.
   func seriesMembers(_ id: DocumentID) -> String? {
-    index.flatMap { SeriesTitle.members(of: id, in: $0) }
+    indexes.seriesMembers(id)
   }
 
-  /// The RFC whose text the reader shows for `id` (#656), a series' first member;
-  /// see `RFCIndex.documentShown(for:)`. Nil for a series while the index loads,
-  /// which names its members. A series the index doesn't list, or any once the index
-  /// has failed, is shown from its own file, as before.
+  /// `IndexRepository.documentShown(for:)`.
   func documentShown(for id: DocumentID) -> DocumentID? {
-    guard id.series != .rfc else { return id }
-    if let index { return index.documentShown(for: id) ?? id }
-    if case .failed = indexState { return id }
-    return nil
+    indexes.documentShown(for: id)
   }
 
-  /// Working groups with the most RFCs, for the sidebar.
-  ///
-  /// Derived once per index rather than per read: `SidebarView.body` reads this, so
-  /// as a computed property it counted all 9,842 RFCs and sorted them again on every
-  /// body pass, dozens of times a session.
-  /// `PreparedIndex` counts them.
-  private(set) var topWorkingGroups: [String] = []
+  /// `IndexRepository.topWorkingGroups`.
+  var topWorkingGroups: [String] { indexes.topWorkingGroups }
 
-  /// Every working group the index names, folded, derived with the index for the
-  /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
-  /// them on every body pass (#21).
-  private(set) var knownWorkingGroups: Set<String> = []
+  /// `IndexRepository.knownWorkingGroups`.
+  var knownWorkingGroups: Set<String> { indexes.knownWorkingGroups }
 
-  /// How many RFCs each filter the index decides lists, derived with the index for
-  /// the same reason `topWorkingGroups` is (#344).
-  private(set) var indexCounts: [LibraryFilter: Int] = [:]
+  /// `IndexRepository.indexCounts`.
+  var indexCounts: [LibraryFilter: Int] { indexes.indexCounts }
 
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
@@ -979,107 +720,39 @@ final class LibraryModel {
     previews.removeAll { documents.contains($0.document) }
   }
 
-  /// `list` over the index as it stands, made off the main actor: what a tab stores
-  /// and its list reads (#597). `hits` are the search's for `list.query` over this
-  /// index, if a listing found them already. Nil while there is no index.
+  /// `IndexRepository.listed(_:hits:)`.
   func listed(_ list: LibraryList, hits: [RFCMetadata]? = nil) async -> ListedRows? {
-    guard let index else { return nil }
-    return await Self.listed(
-      list, in: index, indexVersion: indexVersion, search: search, hits: hits)
+    await indexes.listed(list, hits: hits)
   }
 
-  private func textIndexChanged() {
-    textIndexVersion += 1
-    indexSectionsForSpotlight()
-  }
-
-  /// Index All RFCs: downloads every one of `indexableRFCs` that is not indexed yet,
-  /// on a network that is neither metered nor in Low Data Mode, and indexes it without
-  /// keeping its body.
+  /// `IndexRepository.indexAllRFCs()`.
   func indexAllRFCs() {
-    guard let textIndexer else { return }
-    let entries = Dictionary(
-      indexableRFCs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-    let client = clientOnCheapNetworks
-    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    indexAllRun.start(
-      entries.keys.sorted(), indexer: textIndexer,
-      fetch: { id in
-        let entry = entries[id]
-        return try await client.fetchPreferredDocument(
-          id, availableFormats: entry?.formats, entry: entry
-        ).document
-      }, changed: changed)
+    indexes.indexAllRFCs()
   }
 
-  /// How many of `indexableRFCs` Index All RFCs would download; nil while the
-  /// full-text index has not opened.
+  /// `IndexRepository.unindexedRFCCount()`.
   func unindexedRFCCount() async -> Int? {
-    await textIndexer?.unindexed(indexableRFCs.map(\.id))
+    await indexes.unindexedRFCCount()
   }
 
-  /// What the full-text index holds, and how much of the disk it takes; nil while it
-  /// has not opened.
+  /// `IndexRepository.textIndexUsage()`.
   func textIndexUsage() async -> TextIndexer.Usage? {
-    await textIndexer?.usage()
+    await indexes.textIndexUsage()
   }
 
-  /// Remove Full-Text Index: stops Index All RFCs, and keeps in the index only the
-  /// RFCs whose bodies are stored.
+  /// `IndexRepository.removeIndexOfAllRFCs()`.
   func removeIndexOfAllRFCs() async {
-    guard let textIndexer else { return }
-    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    await indexAllRun.remove(from: textIndexer, changed: changed)
+    await indexes.removeIndexOfAllRFCs()
   }
 
-  /// What the full-text search finds for `list` (#37): its section hits, narrowed as
-  /// its RFC rows are. Nil while there is no index, or when the list asks the text
-  /// nothing (`LibraryList.textQuery`).
+  /// `IndexRepository.textSearch(_:)`.
   func textSearch(_ list: LibraryList) async -> TextIndexer.Found? {
-    guard let index, let textIndexer,
-      let query = await Self.textQuery(list, in: index, search: search)
-    else { return nil }
-    do {
-      return try await textIndexer.search(
-        query.words, section: query.section, in: query.documents)
-    } catch {
-      libraryLog.error(
-        "the full-text search failed: \(String(describing: error), privacy: .public)")
-      return nil
-    }
+    await indexes.textSearch(list)
   }
 
-  @concurrent
-  private static func textQuery(
-    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?
-  ) async -> LibraryList.TextQuery? {
-    list.textQuery(in: index, search: search)
-  }
-
-  /// `listed(_:hits:)` on the main actor, for a script, which reads the list
-  /// straight after changing what it lists.
+  /// `IndexRepository.listedNow(_:hits:)`.
   func listedNow(_ list: LibraryList, hits: [RFCMetadata]? = nil) -> ListedRows? {
-    guard let index else { return nil }
-    return Self.signposted(list) {
-      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
-    }
-  }
-
-  @concurrent
-  private static func listed(
-    _ list: LibraryList, in index: RFCIndex, indexVersion: Int, search: IndexSearch?,
-    hits: [RFCMetadata]?
-  ) async -> ListedRows {
-    signposted(list) {
-      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
-    }
-  }
-
-  private nonisolated static func signposted(
-    _ list: LibraryList, _ make: () -> ListedRows
-  ) -> ListedRows {
-    signposter.withIntervalSignpost(
-      "List", id: signposter.makeSignpostID(), "\(list.query, privacy: .public)", around: make)
+    indexes.listedNow(list, hits: hits)
   }
 
   /// The subtitle under the list's title: how many documents it shows. Empty until
@@ -1089,42 +762,14 @@ final class LibraryModel {
     scene.listed.map { DocumentCount.label($0.rows.count) } ?? ""
   }
 
-  /// The Go to RFC palette's candidates for what was typed, best first.
-  ///
-  /// Off the main actor: a short query like `http` scans every title and abstract
-  /// (the "Search: http" benchmark of `make benchmark`), and this runs as the reader
-  /// types.
+  /// `IndexRepository.suggestions(for:limit:)`.
   func suggestions(for query: String, limit: Int) async -> [DocumentID] {
-    guard let search else { return [] }
-    return await Self.suggestions(in: search, for: query, limit: limit)
+    await indexes.suggestions(for: query, limit: limit)
   }
 
-  /// What the Mac's Go to RFC palette lists under what was typed, once the reader
-  /// has paused: run per change of the query and canceled by the next (`Debounce`).
-  ///
-  /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
-  ///   without searching, for a link, which names its document outright and which
-  ///   no title or abstract contains, and while the index is still loading.
+  /// `IndexRepository.quickOpenHits(for:)`.
   func quickOpenHits(for query: String) async -> [DocumentID]? {
-    guard !query.isEmpty else { return nil }
-    if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
-    // A draft is in no index (#728).
-    if DocumentReference.draft(from: query) != nil { return [] }
-    guard index != nil else { return [] }
-    guard await Debounce.outlasted(.milliseconds(120)) else { return nil }
-    let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
-    return Task.isCancelled ? nil : hits
-  }
-
-  @concurrent
-  private static func suggestions(
-    in search: IndexSearch, for query: String, limit: Int
-  ) async -> [DocumentID] {
-    signposter.withIntervalSignpost(
-      "Suggest", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
-    ) {
-      search.search(query, limit: limit).map(\.id)
-    }
+    await indexes.quickOpenHits(for: query)
   }
 
   // MARK: - Scene routing
@@ -1161,8 +806,7 @@ final class LibraryModel {
   /// The index has arrived, or failed to: a link held for it goes to its tab now
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
-  private func settleIndex() {
-    indexSettled.open()
+  private func deliverLinksHeldForIndex() {
     let preferred = preferredScene
     sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
   }
@@ -1400,13 +1044,9 @@ final class LibraryModel {
     await documents.markOpened(id)
   }
 
-  /// Installs the legacy XML pack from an `.aar`, a folder or a URL; see
-  /// `DocumentStore.installLegacyPack(from:)`. A developer's path for now (#36).
+  /// `IndexRepository.installLegacyPack(from:)`.
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
-    let pack = try await store.installLegacyPack(from: source)
-    await refreshPointersInPack()
-    let changed: @Sendable () async -> Void = { [weak self] in await self?.textIndexChanged() }
-    await textIndexer?.legacyPackInstalled(changed: changed)
+    let pack = try await indexes.installLegacyPack(from: source)
     // The RFCs read from the pack now are indexed again with its anchors, under the
     // dates their bodies had: only a rebuild takes Spotlight's sections to them.
     indexSectionsForSpotlight(rebuilding: true)
