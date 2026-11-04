@@ -63,13 +63,14 @@ struct BookmarkWatcherTests {
     }
   }
 
-  /// The parts the watcher reads, wired as `LibraryModel` wires them, over an
-  /// in-memory store holding a bookmark of RFC 2119.
-  /// How many comparisons got as far as posting.
+  /// How many comparisons changed the baseline and handed its notices, none or some,
+  /// to `post`.
   private final class Posts {
     var count = 0
   }
 
+  /// The parts the watcher reads, wired as `LibraryModel` wires them, over an
+  /// in-memory store holding a bookmark of RFC 2119.
   private struct Parts {
     let posts: Posts
     let indexes: IndexRepository
@@ -143,9 +144,10 @@ struct BookmarkWatcherTests {
     #expect(cheap.requests(for: "revisions.json") == 0)
   }
 
-  /// The system may suspend the app once the refresh returns, so the comparisons it
-  /// started, the index's at launch and the revisions', have posted and kept their
-  /// baseline by then.
+  /// The system may suspend the app once the refresh returns, so the comparisons
+  /// before then, the index's at launch and the revisions', have each kept their
+  /// baseline and handed it to `post`: the first baseline, then the one with the
+  /// revisions in it.
   @Test func `the refresh waits for the comparison, which keeps the baseline`() async throws {
     defer { sandbox.remove() }
     let parts = try parts(any: Transport(), cheap: Transport())
