@@ -18,20 +18,33 @@ struct BookmarkWatcherTests {
   nonisolated private static let newerRevisions = RFCRevisions(
     generatedAt: Date(timeIntervalSince1970: 2_000), revisions: [:])
 
-  /// Answers the index with the committed sample, or with a `304` when
-  /// `answersUnchanged`, and `revisions.json` with `revisions`; everything else with a
-  /// `404`. Counts the requests for each file.
+  /// How `Transport` answers the index.
+  private enum IndexAnswer {
+    /// The committed sample.
+    case sample
+    /// A `304`.
+    case unchanged
+    /// No network.
+    case failing
+    /// Held until canceled, as a session waiting for a cheap network holds it, saying
+    /// so on `Transport.held`; given up on after half a minute, so one never canceled
+    /// fails the test rather than hanging it.
+    case held
+  }
+
+  /// Answers the index as `index` says, and `revisions.json` with `revisions`;
+  /// everything else with a `404`. Counts the requests for each file.
   private final class Transport: HTTPTransport, @unchecked Sendable {
-    private let answersUnchanged: Bool
+    private let index: IndexAnswer
     private let revisions: RFCRevisions
     private let lock = NSLock()
     private var sent: [String] = []
+    private let heldRequests = AsyncStream<Void>.makeStream()
+    /// Yields when an index request is being held.
+    var held: AsyncStream<Void> { heldRequests.stream }
 
-    init(
-      answersUnchanged: Bool = false,
-      revisions: RFCRevisions = BookmarkWatcherTests.revisions
-    ) {
-      self.answersUnchanged = answersUnchanged
+    init(index: IndexAnswer = .sample, revisions: RFCRevisions = BookmarkWatcherTests.revisions) {
+      self.index = index
       self.revisions = revisions
     }
 
@@ -44,12 +57,18 @@ struct BookmarkWatcherTests {
       lock.withLock { sent.append(file) }
       let status: Int
       let body: Data
-      switch file {
-      case "rfc-index.xml" where answersUnchanged:
-        (status, body) = (304, Data())
-      case "rfc-index.xml":
+      switch (file, index) {
+      case ("rfc-index.xml", .sample):
         (status, body) = (200, try Fixtures.rfcKitData("rfc-index-sample.xml"))
-      case "revisions.json":
+      case ("rfc-index.xml", .unchanged):
+        (status, body) = (304, Data())
+      case ("rfc-index.xml", .failing):
+        throw URLError(.notConnectedToInternet)
+      case ("rfc-index.xml", .held):
+        heldRequests.continuation.yield()
+        try await Task.sleep(for: .seconds(30))
+        throw URLError(.timedOut)
+      case ("revisions.json", _):
         (status, body) = (200, try revisions.encoded())
       default:
         (status, body) = (404, Data())
@@ -111,7 +130,7 @@ struct BookmarkWatcherTests {
   /// never comes (#758).
   @Test func `the refresh returns after a 304 with nothing kept`() async throws {
     defer { sandbox.remove() }
-    let any = Transport(answersUnchanged: true)
+    let any = Transport(index: .unchanged)
     let parts = try parts(any: any, cheap: Transport())
     await parts.indexes.bootstrap()
     try #require(parts.indexes.indexState == .loading)
@@ -162,6 +181,31 @@ struct BookmarkWatcherTests {
     let baseline = try #require(await sandbox.store().bookmarkBaseline())
     #expect(baseline.index?[.rfc(2119)] != nil)
     #expect(baseline.revisions != nil)
+  }
+
+  /// Canceled, as iOS cancels it when the background task expires, the refresh
+  /// cancels the index check it is waiting for, which may wait for a cheap network
+  /// for as long as there is none (#314), and returns. The revisions fetched before
+  /// are kept, and the failure shown is left as it was.
+  @Test func `a canceled refresh cancels the index check and returns`() async throws {
+    defer { sandbox.remove() }
+    let cheap = Transport(index: .held)
+    let parts = try parts(any: Transport(index: .failing), cheap: cheap)
+    await parts.indexes.bootstrap()
+    // A failed index is checked at every refresh.
+    try #require(parts.indexes.indexState.isFailed)
+
+    let refreshing = Task { await parts.watcher.refresh() }
+    var held = cheap.held.makeAsyncIterator()
+    await held.next()
+    let canceled = ContinuousClock.now
+    refreshing.cancel()
+    await refreshing.value
+
+    // Well short of the half minute a check left running is held for.
+    #expect(ContinuousClock.now - canceled < .seconds(10))
+    #expect(parts.indexes.indexState.isFailed)
+    #expect(parts.dataFiles.revisions == Self.revisions)
   }
 
   /// A store that fell back to memory reads as no bookmarks: a baseline of none would
