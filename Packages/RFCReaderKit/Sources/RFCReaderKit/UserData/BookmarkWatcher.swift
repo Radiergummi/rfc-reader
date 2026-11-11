@@ -50,8 +50,9 @@ public final class BookmarkWatcher {
   /// waits for each comparison, so the system does not suspend the app before it
   /// has posted.
   ///
-  /// It waits for the index to settle, which every outcome of launch's load does,
-  /// a `304` that leaves nothing to show included (#758), not for it to be ready.
+  /// It waits for the index to settle, which every outcome of launch's load does
+  /// (#758), not for it to be ready. A load that failed, a `304` that holds no index
+  /// included, is due for its check, so the refresh asks again (#1073).
   ///
   /// The revisions come first because the index check waits for a network that is
   /// neither expensive nor constrained (#314), which on a phone network can outlast

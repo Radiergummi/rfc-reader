@@ -175,15 +175,19 @@ struct IndexRepositoryTests {
     #expect(any.indexRequests == 2)
   }
 
-  /// A `304` with nothing kept sent no validators: there is no index to wait for, so
-  /// what waits for it goes ahead, though the state stays loading (#758).
-  @Test func `a 304 to a first fetch settles the index with none`() async throws {
+  /// A `304` with nothing kept sent no validators, so it holds no index: what waits
+  /// for the index goes ahead (#758), and the index has failed, so the next check, a
+  /// background refresh or Retry asks again rather than nothing asking until the next
+  /// launch (#1073).
+  @Test func `a 304 to a first fetch fails the index, so the next check asks again`()
+    async throws
+  {
     defer { sandbox.remove() }
     let any = Transport(answersUnchanged: true)
     let repository = repository(any: any, cheap: Transport())
     await repository.bootstrap()
     #expect(any.sentEntityTag == [false])
-    #expect(repository.indexState == .loading)
+    #expect(repository.indexState.isFailed)
     try #require(repository.hasSettled)
     #expect(await repository.settledSearch() == nil)
   }

@@ -49,8 +49,8 @@ public final class IndexRepository {
   }
   /// Open once the index has arrived or failed to, opened by `settle()`: from then on
   /// an intent takes what there is rather than waiting in `settledSearch()`, and the
-  /// bookmark refresh goes on (`settled()`). Not `indexState`, which a launch whose
-  /// fetch answers nothing leaves loading (#758).
+  /// bookmark refresh goes on (`settled()`). A latch rather than `indexState`, which
+  /// cannot be waited for (#758).
   @ObservationIgnored private let indexSettled = Latch()
 
   /// Just Published, as the feed kept and then the RFC Editor's newer one have it.
@@ -324,8 +324,8 @@ public final class IndexRepository {
       switch IndexRefreshOutcome(fetched, kept: kept) {
       case .recordUnchanged(let kept):
         indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
-      case .settle:
-        settle()
+      case .noIndex:
+        throw RFCEditorClient.ClientError.invalidResponse(RFCEditorEndpoints.index)
       case .install(let data, let validators):
         // Off the main actor: the parse, with what is built from it, is the "Parse
         // index" signpost (#124).
