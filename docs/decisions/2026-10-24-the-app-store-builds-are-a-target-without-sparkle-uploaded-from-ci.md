@@ -68,7 +68,7 @@ It gates the first TestFlight or App Store build that contains sync (#655). Buil
   - The converted legacy RFCs, the `legacy-xml` pack.
 
   Only the pack is a modified text, the case #215 asked the IETF Trust about. Nothing in a release build downloads it today, so **#215 doesn't gate a first submission** as long as "Read everything offline" isn't in it. *Update (2026-11-11): the Trust answered #215. The pack may ship as structure sidecars, which carry no RFC text (#1076); the converted XML is not cleared.*
-- **The Trust is asked in the same correspondence as #215**, about the app's listing in the App Store and about the bundled index's abstracts of RFCs from before November 2008. That answers the content-rights question with a letter rather than a reading of the licenses. *Update (2026-11-11): the Trust's answer spoke only to the legacy pack, so this stays open.*
+- **The Trust is asked in the same correspondence as #215**, about the app's listing in the App Store and about the bundled index's abstracts of RFCs from before November 2008. That answers the content-rights question with a letter rather than a reading of the licenses. *Update (2026-11-11): both were asked, and the Trust's answer raised no objection to either; it spoke only to the legacy pack. That is the answer to App Store Connect's content-rights question.*
 - **The name is "RFC Reader" if it is free.** VISION.md expects it to be taken. An App Store name is unique across the store and is reserved by making the app record, so making the record is how it is tried. If it is taken, a name is chosen from a short list before any metadata is written.
 - **The app is one free, universal purchase.** Free, with no purchase inside it, and one record for the Mac and iOS apps, which the shared bundle ID allows. A free app needs no Paid Applications agreement, and no tax or banking forms.
 
@@ -78,7 +78,7 @@ The builds are distributed in this order: TestFlight on iOS, then the App Store 
 
 - [ ] **(maintainer)** Make the app record in App Store Connect for `me.mazetti.rfc-reader` (iOS and macOS), as one free, universal purchase, to reserve "RFC Reader". If the name is taken, choose one from a short list before any metadata is written.
 - [ ] **(maintainer)** Choose the countries the app is offered in.
-- [ ] **(maintainer)** Write to the IETF Trust about the App Store listing and the bundled index's abstracts of RFCs from before November 2008, in the same correspondence as #215.
+- [x] **(maintainer)** Write to the IETF Trust about the App Store listing and the bundled index's abstracts of RFCs from before November 2008, in the same correspondence as #215.
 - [ ] Add `ITSAppUsesNonExemptEncryption: false` to `project.yml`, and settle whether `NSContactsUsageDescription` stays.
 - [ ] Build the `RFCReaderAppStore` target, its `APP_STORE` condition and its entitlements, with a CI build of it, unsigned, beside the Developer ID one.
 - [ ] **(maintainer)** Make the second App Store Connect API key, for uploads and profiles, and store it as a secret.
