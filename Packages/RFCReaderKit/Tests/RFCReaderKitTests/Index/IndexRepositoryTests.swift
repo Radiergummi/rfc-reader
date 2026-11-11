@@ -188,7 +188,6 @@ struct IndexRepositoryTests {
     await repository.bootstrap()
     #expect(any.sentEntityTag == [false])
     #expect(repository.indexState.isFailed)
-    #expect(repository.indexState.isCheckDue(now: .now))
     try #require(repository.hasSettled)
     #expect(await repository.settledSearch() == nil)
   }

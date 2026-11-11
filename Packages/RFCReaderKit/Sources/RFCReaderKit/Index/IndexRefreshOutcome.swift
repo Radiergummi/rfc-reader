@@ -5,9 +5,9 @@ import RFCKit
 public enum IndexRefreshOutcome: Equatable, Sendable {
   /// A `304` for the index kept: it is current as of now.
   case recordUnchanged(IndexCheck)
-  /// A `304` with nothing kept, which sent no validators: there is no index to
-  /// wait for.
-  case settle
+  /// A `304` with nothing kept, which sent no validators: an answer that holds no
+  /// index, so the refresh failed, and the next one asks again (#1073).
+  case noIndex
   /// A new index, parsed, kept and shown.
   case install(Data, validators: CacheValidators?)
 
@@ -16,7 +16,7 @@ public enum IndexRefreshOutcome: Equatable, Sendable {
   public init(_ fetched: IndexFetch, kept: IndexCheck?) {
     switch fetched {
     case .unchanged:
-      self = kept.map { .recordUnchanged($0) } ?? .settle
+      self = kept.map { .recordUnchanged($0) } ?? .noIndex
     case .changed(let data, let validators):
       self = .install(data, validators: validators)
     }

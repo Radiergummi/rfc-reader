@@ -125,15 +125,18 @@ struct BookmarkWatcherTests {
       posts: posts, indexes: indexes, dataFiles: dataFiles, watcher: watcher, container: container)
   }
 
-  /// A `304` to a request that sent no validators settles the index with none and
-  /// leaves it loading: the refresh goes on rather than waiting for an index that
-  /// never comes (#758).
-  @Test func `the refresh returns after a 304 with nothing kept`() async throws {
+  /// A `304` to a request that sent no validators settles the index as failed: the
+  /// refresh goes on rather than waiting for an index that never comes (#758), and
+  /// asks for the index again (#1073).
+  @Test func `the refresh after a 304 with nothing kept asks for the index again`()
+    async throws
+  {
     defer { sandbox.remove() }
     let any = Transport(index: .unchanged)
-    let parts = try parts(any: any, cheap: Transport())
+    let cheap = Transport()
+    let parts = try parts(any: any, cheap: cheap)
     await parts.indexes.bootstrap()
-    try #require(parts.indexes.indexState == .loading)
+    try #require(parts.indexes.indexState.isFailed)
     // Required: a refresh waiting on an index that never settles would outlast the
     // time limit, which cannot end the wait.
     try #require(parts.indexes.hasSettled)
@@ -142,6 +145,8 @@ struct BookmarkWatcherTests {
 
     #expect(parts.dataFiles.revisions == Self.revisions)
     #expect(any.requests(for: "revisions.json") == 1)
+    #expect(cheap.requests(for: "rfc-index.xml") == 1)
+    #expect(parts.indexes.indexState.isReady)
   }
 
   /// A background refresh on a phone network would otherwise post nothing about a

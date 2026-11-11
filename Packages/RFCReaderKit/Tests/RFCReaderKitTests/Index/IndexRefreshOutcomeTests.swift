@@ -19,9 +19,9 @@ struct IndexRefreshOutcomeTests {
   }
 
   /// A `304` answers only a request that sent validators, which come from the index
-  /// kept: one that answers none leaves no index to wait for.
-  @Test func `an unchanged answer with nothing kept settles`() {
-    #expect(IndexRefreshOutcome(.unchanged, kept: nil) == .settle)
+  /// kept: one that answers none holds no index (#1073).
+  @Test func `an unchanged answer with nothing kept holds no index`() {
+    #expect(IndexRefreshOutcome(.unchanged, kept: nil) == .noIndex)
   }
 
   @Test func `a changed index is installed, kept or not`() {
