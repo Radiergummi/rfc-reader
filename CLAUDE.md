@@ -25,7 +25,7 @@ Read `docs/ARCHITECTURE.md` (above all "TextKit 2 traps") and the records in `do
 
 ## Tests and RFC text
 
-- **Never commit RFC text**: no new fixtures, no excerpts or trimmed copies of committed ones, no override snapshots. Licensing is open with the IETF Trust. A test may locate text with a few words (a rule name, a term), never a sentence. Anything else is fetched into the gitignored `corpus/` at run time.
+- **Never commit RFC text**: no new fixtures, no excerpts or trimmed copies of committed ones, no override snapshots. The IETF Trust has cleared structure sidecars only, not RFC text (`docs/DATA_PIPELINE.md`). A test may locate text with a few words (a rule name, a term), never a sentence. Anything else is fetched into the gitignored `corpus/` at run time.
 - A test that calls `parse` feeds it a real RFC: a fixture already committed in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` (through `Fixtures`) or a corpus document (through `CorpusText`). Only a guard-level test of a pure function may take hand-written lines, written in RFC shape, not quoted.
 - `LegacyTextParser` changes risk regressions across 8,457 documents. Write the test first: guard-level, then committed fixture, then a corpus-backed suite: a `CorpusBacked…` type (`make test-corpus` filters on that) displayed as `Corpus-backed: <topic>`. A new corpus document goes in the Makefile's `CORPUS_TEST_DOCUMENTS`, `CORPUS_TEST_XML_DOCUMENTS` or, for RFCReaderKit, `CORPUS_TEST_APP_TEXT_DOCUMENTS`.
 - Fix the heuristic when a class of documents is wrong. When exactly one is, patch it in `corpus/overrides/rfcNNNN.xml` (rules in its README). For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` with the previous run.

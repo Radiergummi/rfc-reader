@@ -94,7 +94,7 @@ For each home-grown candidate in the inventory (a lexer engine, an XML DOM, a ca
 - Untrusted input: every document, index and feed arrives from the network. External entities, entity expansion, nesting depth and document size in the XML parsers; regular expressions that backtrack on a hostile line; URLs and `rfc://` links from outside the app (`RFCLink`), App Intents parameters and AppleScript commands as entry points that must validate.
 - What leaves the device: requests that reveal what the person reads, to whom, and whether `VISION.md`'s "never their reading history to us" holds in code (analytics, crash reporters, third-party hosts).
 - Private API or undocumented behavior the app relies on (private subviews, KVC on underscored keys, selectors by name): a rejection risk and a break in the next OS.
-- The licensing question `docs/DATA_PIPELINE.md` leaves open, as it bears on shipping data packs through the App Store.
+- The licensing in `docs/DATA_PIPELINE.md`, as it bears on shipping data packs through the App Store: the IETF Trust cleared structure sidecars of legacy RFCs, not their text.
 
 ## 12. Localization and internationalization
 
